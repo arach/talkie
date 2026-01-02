@@ -32,9 +32,15 @@ struct DictationCaptureSettingsView: View {
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 // MARK: - Shortcuts Section
                 VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text("SHORTCUTS")
-                        .font(Theme.current.fontXSBold)
-                        .foregroundColor(Theme.current.foregroundSecondary)
+                    HStack(spacing: Spacing.sm) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.cyan)
+                            .frame(width: 3, height: 14)
+
+                        Text("SHORTCUTS")
+                            .font(Theme.current.fontXSBold)
+                            .foregroundColor(Theme.current.foregroundSecondary)
+                    }
 
                     HStack(alignment: .top, spacing: Spacing.lg) {
                         // Toggle Hotkey
@@ -79,16 +85,23 @@ struct DictationCaptureSettingsView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    .padding(Spacing.sm)
+                    .background(Theme.current.surface1)
+                    .cornerRadius(CornerRadius.sm)
                 }
-
-                Divider()
-                    .opacity(Opacity.medium)
+                .settingsSectionCard(padding: Spacing.md)
 
                 // MARK: - Audio Input Section
                 VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text("AUDIO INPUT")
-                        .font(Theme.current.fontXSBold)
-                        .foregroundColor(Theme.current.foregroundSecondary)
+                    HStack(spacing: Spacing.sm) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.green)
+                            .frame(width: 3, height: 14)
+
+                        Text("AUDIO INPUT")
+                            .font(Theme.current.fontXSBold)
+                            .foregroundColor(Theme.current.foregroundSecondary)
+                    }
 
                     Text("Select which microphone to use for recording.")
                         .font(Theme.current.fontXS)
@@ -96,13 +109,15 @@ struct DictationCaptureSettingsView: View {
 
                     AudioDeviceSelector()
                 }
-
-                Divider()
-                    .opacity(Opacity.medium)
+                .settingsSectionCard(padding: Spacing.md)
 
                 // MARK: - Audio Feedback Section
                 VStack(alignment: .leading, spacing: Spacing.sm) {
-                    HStack {
+                    HStack(spacing: Spacing.sm) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.purple)
+                            .frame(width: 3, height: 14)
+
                         Text("AUDIO FEEDBACK")
                             .font(Theme.current.fontXSBold)
                             .foregroundColor(Theme.current.foregroundSecondary)
@@ -153,15 +168,19 @@ struct DictationCaptureSettingsView: View {
                         }
                     }())
                 }
-
-                Divider()
-                    .opacity(Opacity.medium)
+                .settingsSectionCard(padding: Spacing.md)
 
                 // MARK: - Visual Feedback with Preview
                 VStack(alignment: .leading, spacing: Spacing.md) {
-                    Text("VISUAL FEEDBACK")
-                        .font(Theme.current.fontXSBold)
-                        .foregroundColor(Theme.current.foregroundSecondary)
+                    HStack(spacing: Spacing.sm) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.orange)
+                            .frame(width: 3, height: 14)
+
+                        Text("VISUAL FEEDBACK")
+                            .font(Theme.current.fontXSBold)
+                            .foregroundColor(Theme.current.foregroundSecondary)
+                    }
 
                     // Main layout: Preview LEFT, Settings RIGHT
                     HStack(alignment: .top, spacing: Spacing.xl) {
@@ -295,9 +314,7 @@ struct DictationCaptureSettingsView: View {
                     // Settings summary
                     LiveSettingsSummary()
                 }
-
-                Divider()
-                    .opacity(Opacity.medium)
+                .settingsSectionCard(padding: Spacing.md)
 
                 // MARK: - Settings Recap (JSON)
                 CaptureSettingsRecap()

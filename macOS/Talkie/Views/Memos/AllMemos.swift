@@ -996,10 +996,6 @@ struct MemoRowPreview: View {
 
     @State private var isHovering = false
 
-    private static let selectedBg = Color.accentColor.opacity(0.12)
-    private static let hoverBg = TalkieTheme.hover
-    private static let cardBg = TalkieTheme.surface
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Top row: Title + Duration
@@ -1016,14 +1012,13 @@ struct MemoRowPreview: View {
 
                 Spacer()
 
-                // Duration pill
+                // Duration pill with glass effect
                 Text(formatDuration(memo.duration))
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundColor(TalkieTheme.textMuted)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(TalkieTheme.hover)
-                    .cornerRadius(4)
+                    .liquidGlassPill(depth: .subtle)
             }
 
             // Transcript preview
@@ -1058,13 +1053,53 @@ struct MemoRowPreview: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isSelected ? Self.selectedBg : (isHovering ? Self.hoverBg : Self.cardBg))
+            ZStack {
+                // Base glass card
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .fill(.ultraThinMaterial)
+
+                // Selection/hover state overlay
+                if isSelected {
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .fill(Color.accentColor.opacity(0.15))
+                } else if isHovering {
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .fill(Color.white.opacity(0.05))
+                }
+
+                // Top highlight gradient for glass depth
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(isHovering ? 0.12 : 0.08),
+                                Color.white.opacity(0.02),
+                                Color.clear
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+            }
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(isSelected ? Color.accentColor.opacity(0.3) : TalkieTheme.borderSubtle, lineWidth: 1)
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            isSelected ? Color.accentColor.opacity(0.5) : Color.white.opacity(isHovering ? 0.2 : 0.12),
+                            isSelected ? Color.accentColor.opacity(0.2) : Color.white.opacity(0.05)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 0.5
+                )
         )
+        .shadow(color: .black.opacity(isHovering ? 0.15 : 0.1), radius: isHovering ? 8 : 4, y: isHovering ? 4 : 2)
+        .scaleEffect(isHovering ? 1.01 : 1.0)
+        .animation(.easeOut(duration: 0.15), value: isHovering)
+        .animation(.easeOut(duration: 0.15), value: isSelected)
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
         .buttonStyle(.plain)
@@ -1092,15 +1127,17 @@ struct MemoRowEnhanced: View {
 
     @State private var isHovering = false
 
-    // Pre-computed colors
-    private static let selectedBg = Color.accentColor.opacity(0.12)
-    private static let hoverBg = TalkieTheme.hover
-
     var body: some View {
         Button {
             onSelect(NSApp.currentEvent)
         } label: {
             HStack(spacing: 0) {
+                // Selection accent bar (left edge indicator)
+                Rectangle()
+                    .fill(isSelected ? Color.accentColor : Color.clear)
+                    .frame(width: 3)
+                    .animation(.easeOut(duration: 0.15), value: isSelected)
+
                 // Checkbox - only in multi-select mode, with animation
                 if isMultiSelected {
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
@@ -1110,7 +1147,7 @@ struct MemoRowEnhanced: View {
                         .transition(.scale.combined(with: .opacity))
                 }
 
-                // Source icon (color-coded)
+                // Source icon (color-coded) with glass effect
                 sourceIcon
                     .padding(.trailing, 10)
 
@@ -1141,17 +1178,38 @@ struct MemoRowEnhanced: View {
         .onHover { isHovering = $0 }
         .overlay(
             Rectangle()
-                .fill(TalkieTheme.borderSubtle)
-                .frame(height: 1),
+                .fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.06), Color.white.opacity(0.02)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(height: 0.5),
             alignment: .bottom
         )
     }
 
-    // Source icon - color-coded rounded square
+    // Source icon - color-coded rounded square with subtle glass
     private var sourceIcon: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 6)
-                .fill(memo.source.color.opacity(0.12))
+                .fill(.ultraThinMaterial)
+                .frame(width: 28, height: 28)
+
+            RoundedRectangle(cornerRadius: 6)
+                .fill(memo.source.color.opacity(0.15))
+                .frame(width: 28, height: 28)
+
+            // Top highlight
+            RoundedRectangle(cornerRadius: 6)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.1), Color.clear],
+                        startPoint: .top,
+                        endPoint: .center
+                    )
+                )
                 .frame(width: 28, height: 28)
 
             Image(systemName: memo.source.icon)
@@ -1160,7 +1218,7 @@ struct MemoRowEnhanced: View {
         }
     }
 
-    // Duration badge with waveform
+    // Duration badge with waveform and subtle glass
     private var durationBadge: some View {
         HStack(spacing: 3) {
             Image(systemName: "waveform")
@@ -1171,14 +1229,55 @@ struct MemoRowEnhanced: View {
         .foregroundColor(TalkieTheme.textMuted)
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
-        .background(TalkieTheme.hover)
-        .cornerRadius(4)
+        .background(
+            ZStack {
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.08), Color.white.opacity(0.02)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                Capsule()
+                    .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+            }
+        )
     }
 
-    private var rowBackground: Color {
-        if isSelected { return Self.selectedBg }
-        if isHovering { return Self.hoverBg }
-        return .clear
+    @ViewBuilder
+    private var rowBackground: some View {
+        ZStack {
+            // Base - subtle alternating rows
+            if isEvenRow {
+                Color.white.opacity(0.02)
+            }
+
+            // Selection state with glass-like gradient
+            if isSelected {
+                LinearGradient(
+                    colors: [
+                        Color.accentColor.opacity(0.15),
+                        Color.accentColor.opacity(0.08)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            } else if isHovering {
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.06),
+                        Color.white.opacity(0.03)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
+        }
+        .animation(.easeOut(duration: 0.12), value: isHovering)
+        .animation(.easeOut(duration: 0.12), value: isSelected)
     }
 
     private func formatDuration(_ duration: Double) -> String {

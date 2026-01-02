@@ -409,6 +409,45 @@ struct SettingsSidebarSection<Content: View>: View {
                 .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: .infinity)
+        .padding(.vertical, isActive ? Spacing.xs : 0)
+        .padding(.horizontal, isActive ? Spacing.xxs : 0)
+        .background(
+            Group {
+                if isActive {
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: CornerRadius.sm)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(0.06),
+                                            Color.white.opacity(0.02)
+                                        ],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: CornerRadius.sm)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(0.12),
+                                            Color.white.opacity(0.04)
+                                        ],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    ),
+                                    lineWidth: 0.5
+                                )
+                        )
+                        .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+                }
+            }
+        )
+        .animation(.easeOut(duration: 0.2), value: isActive)
     }
 }
 
@@ -427,12 +466,22 @@ struct SettingsSidebarItem: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Left accent bar (matches native SidebarRow)
-            RoundedRectangle(cornerRadius: 1.5)
-                .fill(isSelected ? accentColor : Color.clear)
-                .frame(width: 3)
-                .padding(.vertical, 2)
-                .animation(.easeOut(duration: 0.15), value: isSelected)
+            // Left accent bar (matches native SidebarRow) - enhanced with glow
+            ZStack {
+                // Glow effect when selected
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .fill(accentColor)
+                        .frame(width: 3)
+                        .blur(radius: 4)
+                        .opacity(0.6)
+                }
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(isSelected ? accentColor : Color.clear)
+                    .frame(width: 3)
+            }
+            .padding(.vertical, 2)
+            .animation(.easeOut(duration: 0.15), value: isSelected)
 
             HStack(spacing: 6) {
                 Image(systemName: icon)
@@ -452,8 +501,40 @@ struct SettingsSidebarItem: View {
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: CornerRadius.xs)
-                .fill(isSelected ? Theme.current.backgroundTertiary : (isHovered ? Theme.current.backgroundTertiary.opacity(0.5) : Color.clear))
+            ZStack {
+                // Base fill
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
+                    .fill(isSelected ? Theme.current.backgroundTertiary : (isHovered ? Theme.current.backgroundTertiary.opacity(0.5) : Color.clear))
+
+                // Selected state: subtle inner glow
+                if isSelected {
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    accentColor.opacity(0.08),
+                                    accentColor.opacity(0.02)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+
+                    // Top highlight
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.08),
+                                    Color.white.opacity(0.02)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 0.5
+                        )
+                }
+            }
         )
         .contentShape(Rectangle())
         .onTapGesture {

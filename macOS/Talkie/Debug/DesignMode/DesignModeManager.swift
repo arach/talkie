@@ -97,6 +97,73 @@ final class DesignModeManager {
     /// Pixel zoom magnification level (0 = disabled, 2 = 2x, 4 = 4x)
     var pixelZoomLevel: Int = 0
 
+    // MARK: - Liquid Glass Tuning
+
+    /// Whether glass tuning overrides are active
+    var glassOverrideEnabled: Bool = false
+
+    /// Material opacity (0.0 = fully transparent, 1.0 = opaque)
+    /// Controls how much you can see through the glass
+    var glassMaterialOpacity: Double = 0.7 {
+        didSet { glassMaterialOpacity = min(1.0, max(0.0, glassMaterialOpacity)) }
+    }
+
+    /// Blur intensity multiplier (0.5 = half blur, 2.0 = double blur)
+    /// Higher values = more frosted/blurred background
+    var glassBlurMultiplier: Double = 1.0 {
+        didSet { glassBlurMultiplier = min(3.0, max(0.0, glassBlurMultiplier)) }
+    }
+
+    /// Highlight/reflection opacity at top edge (0.0 - 1.0)
+    var glassHighlightOpacity: Double = 0.30 {
+        didSet { glassHighlightOpacity = min(1.0, max(0.0, glassHighlightOpacity)) }
+    }
+
+    /// Border glow opacity (0.0 - 1.0)
+    var glassBorderOpacity: Double = 0.40 {
+        didSet { glassBorderOpacity = min(1.0, max(0.0, glassBorderOpacity)) }
+    }
+
+    /// Inner glow radius for extreme shimmer effect
+    var glassInnerGlowRadius: CGFloat = 8.0 {
+        didSet { glassInnerGlowRadius = min(20.0, max(0.0, glassInnerGlowRadius)) }
+    }
+
+    /// Tint color intensity (0.0 = no tint, 1.0 = full tint)
+    var glassTintIntensity: Double = 0.25 {
+        didSet { glassTintIntensity = min(1.0, max(0.0, glassTintIntensity)) }
+    }
+
+    /// Reset glass tuning to extreme defaults
+    func resetGlassTuning() {
+        glassMaterialOpacity = 0.7
+        glassBlurMultiplier = 1.0
+        glassHighlightOpacity = 0.30
+        glassBorderOpacity = 0.40
+        glassInnerGlowRadius = 8.0
+        glassTintIntensity = 0.25
+    }
+
+    /// Preset: Subtle glass (minimal effects)
+    func applySubtleGlass() {
+        glassMaterialOpacity = 0.85
+        glassBlurMultiplier = 0.5
+        glassHighlightOpacity = 0.08
+        glassBorderOpacity = 0.12
+        glassInnerGlowRadius = 0
+        glassTintIntensity = 0.10
+    }
+
+    /// Preset: Maximum glass (push to the limit)
+    func applyMaxGlass() {
+        glassMaterialOpacity = 0.4
+        glassBlurMultiplier = 2.0
+        glassHighlightOpacity = 0.50
+        glassBorderOpacity = 0.60
+        glassInnerGlowRadius = 12
+        glassTintIntensity = 0.35
+    }
+
     // MARK: - Convenience
 
     /// Whether any decorator is currently active
