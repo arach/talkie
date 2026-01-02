@@ -48,6 +48,7 @@ struct ActionButtonMac: View {
     let action: () -> Void
 
     @State private var triggered = false
+    @State private var isHovered = false
 
     var body: some View {
         Button(action: triggerAction) {
@@ -56,7 +57,7 @@ struct ActionButtonMac: View {
                     // Main icon
                     Image(systemName: icon)
                         .font(Theme.current.fontTitle)
-                        .foregroundColor(triggered ? .accentColor : Theme.current.foregroundSecondary)
+                        .foregroundColor(triggered ? .accentColor : (isHovered ? Theme.current.foreground : Theme.current.foregroundSecondary))
                         .frame(width: 20, height: 20)
                         .scaleEffect(triggered ? 1.2 : 1.0)
 
@@ -73,23 +74,77 @@ struct ActionButtonMac: View {
 
                 Text(title)
                     .font(Theme.current.fontXSMedium)
-                    .foregroundColor(triggered ? .accentColor : Theme.current.foregroundSecondary)
+                    .foregroundColor(triggered ? .accentColor : (isHovered ? Theme.current.foreground : Theme.current.foregroundSecondary))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, Spacing.sm)
-            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: CornerRadius.sm))
+            .background(
+                ZStack {
+                    // Base glass material
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .fill(.ultraThinMaterial)
+
+                    // Hover/active state
+                    if isHovered {
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .fill(Color.white.opacity(0.04))
+                    }
+
+                    // Top highlight gradient
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(isHovered ? 0.1 : 0.06),
+                                    Color.white.opacity(0.02),
+                                    Color.clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                }
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(isHovered ? 0.15 : 0.1),
+                                Color.white.opacity(0.04)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 0.5
+                    )
+            )
+            .shadow(color: .black.opacity(isHovered ? 0.1 : 0.06), radius: isHovered ? 4 : 2, y: isHovered ? 2 : 1)
+            .scaleEffect(isHovered ? 1.02 : 1.0)
         }
         .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovered)
         .overlay(alignment: .topTrailing) {
-            // Run count badge
+            // Run count badge with glass effect
             if runCount > 0 {
                 Text("\(runCount)")
                     .font(.techLabelSmall)
                     .foregroundColor(Theme.current.foreground.opacity(Opacity.prominent))
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
-                    .background(SettingsManager.shared.surfaceSelected)
-                    .clipShape(Capsule())
+                    .background(
+                        ZStack {
+                            Capsule()
+                                .fill(.ultraThinMaterial)
+                            Capsule()
+                                .fill(Color.accentColor.opacity(0.2))
+                        }
+                    )
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                    )
                     .offset(x: -4, y: 4)
             }
         }
@@ -419,18 +474,49 @@ struct BrowseWorkflowsButton: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, Spacing.sm)
             .background(
-                RoundedRectangle(cornerRadius: CornerRadius.sm)
-                    .fill(Color.accentColor.opacity(isHovering ? Opacity.medium : Opacity.light))
+                ZStack {
+                    // Base glass
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .fill(.ultraThinMaterial)
+
+                    // Accent tint
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .fill(Color.accentColor.opacity(isHovering ? 0.2 : 0.12))
+
+                    // Top highlight
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(isHovering ? 0.12 : 0.08),
+                                    Color.clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .center
+                            )
+                        )
+                }
             )
             .overlay(
                 RoundedRectangle(cornerRadius: CornerRadius.sm)
-                    .strokeBorder(Color.accentColor.opacity(Opacity.strong), lineWidth: 1)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.accentColor.opacity(isHovering ? 0.6 : 0.4),
+                                Color.accentColor.opacity(0.2)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 1
+                    )
             )
+            .shadow(color: Color.accentColor.opacity(isHovering ? 0.2 : 0.1), radius: isHovering ? 6 : 3, y: isHovering ? 3 : 1)
+            .scaleEffect(isHovering ? 1.02 : 1.0)
         }
         .buttonStyle(.plain)
-        .onHover { hovering in
-            isHovering = hovering
-        }
+        .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovering)
         .help("Browse all workflows")
     }
 }
@@ -1056,20 +1142,58 @@ struct AudioPlayerCard: View {
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
-            // Play/Pause button
+            // Play/Pause button with glass effect
             Button(action: onTogglePlayback) {
                 ZStack {
+                    // Glass base
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .frame(width: 36, height: 36)
+
+                    // State-based fill
                     Circle()
                         .fill(playButtonBackground)
+                        .frame(width: 36, height: 36)
+
+                    // Highlight gradient
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(isPlayButtonHovered ? 0.15 : 0.1),
+                                    Color.clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .center
+                            )
+                        )
+                        .frame(width: 36, height: 36)
+
+                    // Border
+                    Circle()
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(isPlaying ? 0.3 : 0.15),
+                                    Color.white.opacity(0.05)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 0.5
+                        )
                         .frame(width: 36, height: 36)
 
                     Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: 12))
                         .foregroundColor(playButtonForeground)
                 }
+                .shadow(color: isPlaying ? Color.accentColor.opacity(0.3) : .black.opacity(0.1), radius: isPlaying ? 6 : 3, y: 2)
+                .scaleEffect(isPlayButtonHovered ? 1.05 : 1.0)
             }
             .buttonStyle(.plain)
             .onHover { isPlayButtonHovered = $0 }
+            .animation(.easeOut(duration: 0.12), value: isPlayButtonHovered)
 
             // Waveform + timeline
             VStack(spacing: Spacing.xs) {
@@ -1123,16 +1247,15 @@ struct AudioPlayerCard: View {
         }
         .padding(.horizontal, Spacing.md)
         .padding(.vertical, Spacing.sm)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: CornerRadius.sm))
         .onAppear {
             volume = SettingsManager.shared.playbackVolume
         }
     }
 
     private var playButtonBackground: Color {
-        if isPlaying { return Color.accentColor.opacity(Opacity.strong) }
-        if isPlayButtonHovered { return Color(nsColor: .controlBackgroundColor).opacity(Opacity.prominent) }
-        return Color(nsColor: .separatorColor).opacity(Opacity.strong)
+        if isPlaying { return Color.accentColor.opacity(0.4) }
+        if isPlayButtonHovered { return Color.white.opacity(0.08) }
+        return Color.white.opacity(0.04)
     }
 
     private var playButtonForeground: Color {

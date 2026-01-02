@@ -74,6 +74,7 @@ struct TranscriptionModelsSettingsView: View {
                 }
             }
         }
+        .settingsSectionCard(padding: Spacing.md)
     }
 
     private func parakeetCard(for meta: ParakeetModelMetadata) -> some View {
@@ -123,6 +124,7 @@ struct TranscriptionModelsSettingsView: View {
                 }
             }
         }
+        .settingsSectionCard(padding: Spacing.md)
     }
 
     private func whisperCard(for meta: WhisperModelMetadata) -> some View {

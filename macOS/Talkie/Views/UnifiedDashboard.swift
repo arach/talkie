@@ -11,7 +11,7 @@ import AppKit
 
 // MARK: - Card Style Modifier
 
-/// Unified card styling - uses shadow for depth instead of borders
+/// Unified card styling - uses Liquid Glass on macOS 26+, falls back to shadow-based on older
 struct CardStyle: ViewModifier {
     var cornerRadius: CGFloat = 12
     var padding: CGFloat = Spacing.md
@@ -19,11 +19,7 @@ struct CardStyle: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(padding)
-            .background(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .fill(Theme.current.surface1)
-                    .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
-            )
+            .liquidGlassCard(cornerRadius: cornerRadius)
     }
 }
 
@@ -313,11 +309,7 @@ struct UnifiedDashboard: View {
                     }
                 }
             }
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Theme.current.surface1)
-                    .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
-            )
+            .liquidGlassCard(cornerRadius: 10)
         }
         .frame(maxWidth: .infinity)
     }
@@ -356,11 +348,7 @@ struct UnifiedDashboard: View {
                     }
                 }
             }
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Theme.current.surface1)
-                    .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
-            )
+            .liquidGlassCard(cornerRadius: 10)
         }
         .frame(maxWidth: .infinity)
     }
@@ -568,24 +556,17 @@ struct UnifiedDashboard: View {
                 Button("Set Up Hotkey") {
                     NotificationCenter.default.post(name: .navigateToSettings, object: nil)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.adaptiveGlassProminent)
 
                 Button("Learn More") {
                     // Show onboarding
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.adaptiveGlass)
             }
         }
         .frame(maxWidth: .infinity)
         .padding(48)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Theme.current.surface1)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .strokeBorder(Theme.current.divider, lineWidth: 1)
-                )
-        )
+        .liquidGlassCard(cornerRadius: 16)
     }
 
     // MARK: - Data Loading
@@ -941,11 +922,7 @@ struct CompactStatCard: View {
         }
         .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Theme.current.surface1)
-                .shadow(color: .black.opacity(0.15), radius: isHovered ? 8 : 4, y: isHovered ? 4 : 2)
-        )
+        .liquidGlassCard(cornerRadius: 12, tint: color.opacity(0.2), isInteractive: true, depth: .prominent)
         .scaleEffect(isHovered ? 1.02 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovered)
         .onHover { hovering in
@@ -1067,14 +1044,7 @@ struct DashboardActionCard: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(isHovered ? color.opacity(0.1) : Theme.current.surface1)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .strokeBorder(isHovered ? color.opacity(0.3) : Theme.current.divider, lineWidth: 1)
-                    )
-            )
+            .liquidGlassCard(cornerRadius: 10, tint: isHovered ? color.opacity(0.25) : color.opacity(0.08), isInteractive: true, depth: .standard)
         }
         .buttonStyle(.plain)
         .onHover { hovering in
@@ -1108,14 +1078,7 @@ struct SystemStatusPill: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(
-            Capsule()
-                .fill(Theme.current.surface1)
-                .overlay(
-                    Capsule()
-                        .strokeBorder(Theme.current.divider, lineWidth: 1)
-                )
-        )
+        .liquidGlassPill(tint: isActive ? .green.opacity(0.2) : nil, depth: .standard)
     }
 }
 
@@ -1254,20 +1217,9 @@ struct EmptyStateView: View {
                 Text(buttonTitle)
                     .font(Theme.current.fontSMMedium)
                     .foregroundColor(.white)
-                    .padding(.horizontal, Spacing.lg)
-                    .padding(.vertical, Spacing.sm)
-                    .background(
-                        Capsule()
-                            .fill(LinearGradient(
-                                colors: gradientColors,
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            ))
-                            .shadow(color: gradientColors[0].opacity(isButtonHovered ? 0.4 : 0), radius: 8, y: 2)
-                    )
                     .scaleEffect(isButtonHovered ? 1.05 : 1.0)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.adaptiveGlassProminent)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isButtonHovered)
             .onHover { hovering in
                 isButtonHovered = hovering

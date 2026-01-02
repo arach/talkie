@@ -287,9 +287,7 @@ struct PermissionsSettingsView: View {
                     .padding(.top, Spacing.xs)
                 }
             }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
+            .settingsSectionCard(padding: Spacing.md)
 
             // MARK: - Info Note
             VStack(alignment: .leading, spacing: Spacing.sm) {

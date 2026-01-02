@@ -131,6 +131,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         StartupProfiler.shared.markEarly("appDelegate.didFinishLaunching")
         let launchState = signposter.beginInterval("App Launch")
 
+        // Configure glass effects from user preference (load-time only)
+        GlassConfig.enableGlassEffects = SettingsManager.shared.enableGlassEffects
+
         // CRITICAL: Check for debug mode SYNCHRONOUSLY before initialization
         // Debug commands need isolated execution without CloudKit/helpers running
         let arguments = ProcessInfo.processInfo.arguments

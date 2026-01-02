@@ -319,9 +319,7 @@ struct APISettingsView: View {
                     )
                 }
             }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
+            .settingsSectionCard(padding: Spacing.md)
 
             // MARK: - Security Info
             HStack(spacing: Spacing.sm) {
@@ -530,9 +528,7 @@ struct APIKeyRow: View {
                 }
             }
         }
-        .padding(Spacing.md)
-        .background(Theme.current.surface2)
-        .cornerRadius(CornerRadius.sm)
+        .settingsSectionCard(padding: Spacing.md)
         .overlay(
             RoundedRectangle(cornerRadius: CornerRadius.sm)
                 .stroke(Theme.current.foreground.opacity(Opacity.light), lineWidth: 1)

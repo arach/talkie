@@ -139,7 +139,7 @@ struct MemoDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.md) {
+            VStack(alignment: .leading, spacing: Spacing.lg) {
                 MemoDetailHeaderSection(
                     showHeader: showHeader,
                     memoTitle: memoTitle,
@@ -219,7 +219,22 @@ struct MemoDetailView: View {
             .padding(Spacing.lg)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Theme.current.background)
+        .background(
+            // Glass background for inspector
+            ZStack {
+                Theme.current.background
+                // Subtle gradient overlay for depth
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.02),
+                        Color.clear,
+                        Color.black.opacity(0.02)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
+        )
         .quickOpenShortcuts(content: memo.currentTranscript ?? "", enabled: memo.currentTranscript != nil)
         .onAppear {
             editedTitle = memoTitle
@@ -1157,7 +1172,42 @@ private struct MemoDetailTranscriptDisplayView: View {
                 .padding(14)
                 .padding(.top, 32)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: CornerRadius.md))
+                .background(
+                    ZStack {
+                        // Base glass material
+                        RoundedRectangle(cornerRadius: CornerRadius.md)
+                            .fill(.ultraThinMaterial)
+
+                        // Subtle inner highlight gradient
+                        RoundedRectangle(cornerRadius: CornerRadius.md)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.06),
+                                        Color.white.opacity(0.02),
+                                        Color.clear
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                    }
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: CornerRadius.md)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.12),
+                                    Color.white.opacity(0.04)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 0.5
+                        )
+                )
+                .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
                 .contextMenu {
                     MemoDetailTranscriptContextMenu(
                         memo: memo,
@@ -1289,57 +1339,122 @@ private struct MemoDetailRecentRunsSection: View {
                     Text("\(runs.count) runs")
                         .font(.techLabelSmall)
                         .foregroundColor(Theme.current.foregroundSecondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.white.opacity(0.08))
+                        .clipShape(Capsule())
                 }
             }
 
             VStack(spacing: Spacing.xs) {
                 ForEach(Array(runs.prefix(3)), id: \.id) { run in
-                    Button(action: { onSelect(run) }) {
-                        HStack(spacing: Spacing.sm) {
-                            Image(systemName: run.workflowIcon ?? "bolt.fill")
-                                .font(Theme.current.fontSM)
-                                .foregroundColor(.accentColor)
-                                .frame(width: 20)
-
-                            Text(run.workflowName)
-                                .font(Theme.current.fontBodyMedium)
-                                .foregroundColor(Theme.current.foreground)
-                                .lineLimit(1)
-
-                            Spacer()
-
-                            if run.status == .completed {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(Theme.current.fontSM)
-                                    .foregroundColor(.green)
-                            } else if run.status == .failed {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(Theme.current.fontSM)
-                                    .foregroundColor(.red)
-                            } else {
-                                ProgressView()
-                                    .controlSize(.mini)
-                            }
-
-                            RelativeTimeLabel(
-                                date: run.runDate,
-                                formatter: formatTimeAgo
-                            )
-                            .font(Theme.current.fontXS)
-                            .foregroundColor(Theme.current.foregroundSecondary)
-
-                            Image(systemName: "chevron.right")
-                                .font(Theme.current.fontXS)
-                                .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.half))
-                        }
-                        .padding(.horizontal, Spacing.sm)
-                        .padding(.vertical, Spacing.sm)
-                        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: CornerRadius.sm))
-                    }
-                    .buttonStyle(.plain)
+                    RecentRunRow(run: run, onSelect: onSelect, formatTimeAgo: formatTimeAgo)
                 }
             }
         }
+    }
+}
+
+private struct RecentRunRow: View {
+    let run: WorkflowRunModel
+    let onSelect: (WorkflowRunModel) -> Void
+    let formatTimeAgo: (Date) -> String
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: { onSelect(run) }) {
+            HStack(spacing: Spacing.sm) {
+                // Workflow icon with glass background
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(.ultraThinMaterial)
+                        .frame(width: 28, height: 28)
+
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.accentColor.opacity(0.15))
+                        .frame(width: 28, height: 28)
+
+                    Image(systemName: run.workflowIcon ?? "bolt.fill")
+                        .font(Theme.current.fontSM)
+                        .foregroundColor(.accentColor)
+                }
+
+                Text(run.workflowName)
+                    .font(Theme.current.fontBodyMedium)
+                    .foregroundColor(Theme.current.foreground)
+                    .lineLimit(1)
+
+                Spacer()
+
+                if run.status == .completed {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(Theme.current.fontSM)
+                        .foregroundColor(.green)
+                } else if run.status == .failed {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(Theme.current.fontSM)
+                        .foregroundColor(.red)
+                } else {
+                    ProgressView()
+                        .controlSize(.mini)
+                }
+
+                RelativeTimeLabel(
+                    date: run.runDate,
+                    formatter: formatTimeAgo
+                )
+                .font(Theme.current.fontXS)
+                .foregroundColor(Theme.current.foregroundSecondary)
+
+                Image(systemName: "chevron.right")
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(Theme.current.foregroundSecondary.opacity(isHovered ? 0.8 : 0.5))
+            }
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, Spacing.sm)
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .fill(.ultraThinMaterial)
+
+                    if isHovered {
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .fill(Color.white.opacity(0.04))
+                    }
+
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(isHovered ? 0.08 : 0.05),
+                                    Color.white.opacity(0.02)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                }
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(isHovered ? 0.15 : 0.1),
+                                Color.white.opacity(0.04)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 0.5
+                    )
+            )
+            .shadow(color: .black.opacity(isHovered ? 0.1 : 0.06), radius: isHovered ? 4 : 2, y: isHovered ? 2 : 1)
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovered)
     }
 }
 
@@ -1359,9 +1474,18 @@ private struct MemoDetailNotesSection: View {
                 Spacer()
 
                 if showNotesSaved {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(Theme.current.fontXS)
-                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.half))
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(Theme.current.fontXS)
+                        Text("Saved")
+                            .font(Theme.current.fontXS)
+                    }
+                    .foregroundColor(.green.opacity(0.7))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.green.opacity(0.1))
+                    .clipShape(Capsule())
+                    .transition(.opacity.combined(with: .scale))
                 }
             }
 
@@ -1371,7 +1495,39 @@ private struct MemoDetailNotesSection: View {
                 .scrollContentBackground(.hidden)
                 .frame(minHeight: 80)
                 .padding(Spacing.sm)
-                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: CornerRadius.sm))
+                .background(
+                    ZStack {
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .fill(.ultraThinMaterial)
+
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.05),
+                                        Color.white.opacity(0.02)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                    }
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.1),
+                                    Color.white.opacity(0.04)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 0.5
+                        )
+                )
+                .shadow(color: .black.opacity(0.06), radius: 3, y: 1)
                 .onChange(of: editedNotes) { _, _ in
                     onNotesChange()
                 }
@@ -1402,6 +1558,7 @@ private struct MemoDetailPlaybackSection: View {
                 onSeek: onSeek,
                 onVolumeChange: onVolumeChange
             )
+            .liquidGlassCard(cornerRadius: CornerRadius.sm, depth: .subtle)
         }
     }
 }

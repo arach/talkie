@@ -94,13 +94,8 @@ struct TTSVoicesSettingsView: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(10)
-        .background(Color.green.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: CornerRadius.sm))
-        .overlay(
-            RoundedRectangle(cornerRadius: CornerRadius.sm)
-                .stroke(Color.green.opacity(0.3), lineWidth: 1)
-        )
+        .padding(Spacing.sm)
+        .liquidGlassCard(cornerRadius: CornerRadius.sm, tint: Color.green.opacity(0.15), depth: .subtle)
     }
 
     // MARK: - Kokoro Section
@@ -126,6 +121,7 @@ struct TTSVoicesSettingsView: View {
                 }
             }
         }
+        .settingsSectionCard(padding: Spacing.md)
     }
 
     // MARK: - Section Header

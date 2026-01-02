@@ -142,9 +142,7 @@ struct LocalFilesSettingsView: View {
                     .cornerRadius(CornerRadius.sm)
                 }
             }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
+            .settingsSectionCard(padding: Spacing.md)
 
             // MARK: - Audio Section
             VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -242,9 +240,7 @@ struct LocalFilesSettingsView: View {
                     .cornerRadius(CornerRadius.sm)
                 }
             }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
+            .settingsSectionCard(padding: Spacing.md)
 
             // Stats and actions (only show if any local files enabled)
             if settingsManager.localFilesEnabled {
@@ -295,9 +291,7 @@ struct LocalFilesSettingsView: View {
                         )
                     }
                 }
-                .padding(Spacing.md)
-                .background(Theme.current.surface2)
-                .cornerRadius(CornerRadius.sm)
+                .settingsSectionCard(padding: Spacing.md)
 
                 // MARK: - Quick Actions
                 VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -340,9 +334,7 @@ struct LocalFilesSettingsView: View {
                     .background(Theme.current.surface1)
                     .cornerRadius(CornerRadius.sm)
                 }
-                .padding(Spacing.md)
-                .background(Theme.current.surface2)
-                .cornerRadius(CornerRadius.sm)
+                .settingsSectionCard(padding: Spacing.md)
             }
         }
         .fileImporter(

@@ -82,9 +82,7 @@ struct AutomationsSettingsView: View {
                 .background(Theme.current.surface1)
                 .cornerRadius(CornerRadius.sm)
             }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
+            .settingsSectionCard(padding: Spacing.md)
 
             if settingsManager.autoRunWorkflowsEnabled {
                 // MARK: - Auto-run Workflows Section
@@ -173,9 +171,7 @@ struct AutomationsSettingsView: View {
                         }
                     }
                 }
-                .padding(Spacing.md)
-                .background(Theme.current.surface2)
-                .cornerRadius(CornerRadius.sm)
+                .settingsSectionCard(padding: Spacing.md)
 
                 // MARK: - How It Works Section
                 VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -202,9 +198,7 @@ struct AutomationsSettingsView: View {
                     .background(Theme.current.surface1)
                     .cornerRadius(CornerRadius.sm)
                 }
-                .padding(Spacing.md)
-                .background(Theme.current.surface2)
-                .cornerRadius(CornerRadius.sm)
+                .settingsSectionCard(padding: Spacing.md)
             }
         }
     }

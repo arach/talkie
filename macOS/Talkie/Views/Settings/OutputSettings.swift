@@ -129,9 +129,7 @@ struct OutputSettingsView: View {
                 .background(Theme.current.surface1)
                 .cornerRadius(CornerRadius.sm)
             }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
+            .settingsSectionCard(padding: Spacing.md)
 
             // MARK: - Path Aliases Section
             VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -253,9 +251,7 @@ struct OutputSettingsView: View {
                 .background(Color.yellow.opacity(Opacity.light))
                 .cornerRadius(CornerRadius.xs)
             }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
+            .settingsSectionCard(padding: Spacing.md)
         }
         .fileImporter(
             isPresented: $showingFolderPicker,

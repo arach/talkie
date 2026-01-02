@@ -365,6 +365,7 @@ final class LiveSettings {
             case .minimal: return .minimal
             case .warm: return .warm
             case .classic: return .live
+            case .liquidGlass: return .midnight  // Deep dark for glass to pop
             }
         }
         set {

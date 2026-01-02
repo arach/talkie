@@ -72,9 +72,7 @@ struct QuickActionsSettingsView: View {
                     }
                 }
             }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
+            .settingsSectionCard(padding: Spacing.md)
 
             // MARK: - Available Workflows
             VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -123,9 +121,7 @@ struct QuickActionsSettingsView: View {
                     }
                 }
             }
-            .padding(Spacing.md)
-            .background(Theme.current.surface2)
-            .cornerRadius(CornerRadius.sm)
+            .settingsSectionCard(padding: Spacing.md)
 
             // MARK: - Info
             HStack(spacing: Spacing.sm) {

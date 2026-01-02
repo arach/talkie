@@ -56,9 +56,7 @@ struct WorkflowsView: View {
                     }
                 }
             }
-            .padding(16)
-            .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .settingsSectionCard(padding: 16, cornerRadius: 8)
 
             // MARK: - Coming Soon Section
             VStack(alignment: .leading, spacing: 12) {
@@ -113,9 +111,7 @@ struct WorkflowsView: View {
                 .background(Theme.current.surface1)
                 .cornerRadius(8)
             }
-            .padding(16)
-            .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .settingsSectionCard(padding: 16, cornerRadius: 8)
 
             // MARK: - Learn More
             HStack(spacing: 8) {
@@ -267,9 +263,7 @@ struct ActivityLogView: View {
                 .background(Theme.current.surface1)
                 .cornerRadius(8)
             }
-            .padding(16)
-            .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .settingsSectionCard(padding: 16, cornerRadius: 8)
         }
     }
 }
@@ -365,9 +359,7 @@ struct AllowedCommandsView: View {
                 .background(Theme.current.surface1)
                 .cornerRadius(8)
             }
-            .padding(16)
-            .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .settingsSectionCard(padding: 16, cornerRadius: 8)
 
             // MARK: - Custom Commands Section
             VStack(alignment: .leading, spacing: 12) {
@@ -438,9 +430,7 @@ struct AllowedCommandsView: View {
                     }
                 }
             }
-            .padding(16)
-            .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .settingsSectionCard(padding: 16, cornerRadius: 8)
 
             // MARK: - Built-in Commands Section
             VStack(alignment: .leading, spacing: 12) {
@@ -483,9 +473,7 @@ struct AllowedCommandsView: View {
                 .background(Theme.current.surface1)
                 .cornerRadius(8)
             }
-            .padding(16)
-            .background(Theme.current.surface2)
-            .cornerRadius(8)
+            .settingsSectionCard(padding: 16, cornerRadius: 8)
 
             // MARK: - Security Note
             HStack(spacing: 8) {

@@ -25,9 +25,21 @@ struct QuickOpenSettingsView: View {
         } content: {
             // Enabled targets
             VStack(alignment: .leading, spacing: Spacing.sm) {
-                Text("ENABLED APPS")
-                    .font(Theme.current.fontXSBold)
-                    .foregroundColor(Theme.current.foregroundSecondary)
+                HStack(spacing: Spacing.sm) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.green)
+                        .frame(width: 3, height: 14)
+
+                    Text("ENABLED APPS")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+
+                    Spacer()
+
+                    Text("\(quickOpenService.enabledTargets.count) ACTIVE")
+                        .font(.techLabelSmall)
+                        .foregroundColor(.green)
+                }
 
                 if quickOpenService.enabledTargets.isEmpty {
                     HStack(spacing: Spacing.sm) {
@@ -53,15 +65,19 @@ struct QuickOpenSettingsView: View {
                     }
                 }
             }
-
-            Divider()
-                .background(Theme.current.divider)
+            .settingsSectionCard(padding: Spacing.md)
 
             // Disabled targets
             VStack(alignment: .leading, spacing: Spacing.sm) {
-                Text("AVAILABLE APPS")
-                    .font(Theme.current.fontXSBold)
-                    .foregroundColor(Theme.current.foregroundSecondary)
+                HStack(spacing: Spacing.sm) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.orange)
+                        .frame(width: 3, height: 14)
+
+                    Text("AVAILABLE APPS")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                }
 
                 let disabledTargets = quickOpenService.targets.filter { !$0.isEnabled }
                 if disabledTargets.isEmpty {
@@ -88,15 +104,19 @@ struct QuickOpenSettingsView: View {
                     }
                 }
             }
-
-            Divider()
-                .background(Theme.current.divider)
+            .settingsSectionCard(padding: Spacing.md)
 
             // Info section
             VStack(alignment: .leading, spacing: Spacing.sm) {
-                Text("HOW IT WORKS")
-                    .font(Theme.current.fontXSBold)
-                    .foregroundColor(Theme.current.foregroundSecondary)
+                HStack(spacing: Spacing.sm) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.cyan)
+                        .frame(width: 3, height: 14)
+
+                    Text("HOW IT WORKS")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                }
 
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     infoRow(icon: "doc.on.clipboard", text: "Content is copied to clipboard")
@@ -107,6 +127,7 @@ struct QuickOpenSettingsView: View {
                 .background(Theme.current.surface1)
                 .cornerRadius(CornerRadius.sm)
             }
+            .settingsSectionCard(padding: Spacing.md)
         }
     }
 
