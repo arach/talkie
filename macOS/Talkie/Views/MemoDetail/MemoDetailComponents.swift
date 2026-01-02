@@ -837,22 +837,22 @@ extension Notification.Name {
 
 struct WorkflowPickerSheet: View {
     let memo: MemoModel
-    let onSelect: (WorkflowDefinition) -> Void
+    let onSelect: (Workflow) -> Void
     let onCancel: () -> Void
 
-    private let workflowManager = WorkflowManager.shared
-    @State private var selectedWorkflow: WorkflowDefinition?
+    private let workflowService = WorkflowService.shared
+    @State private var selectedWorkflow: Workflow?
     @State private var searchText = ""
 
     /// Workflows available to run (exclude system workflows like Hey Talkie)
-    private var availableWorkflows: [WorkflowDefinition] {
-        workflowManager.workflows.filter { workflow in
+    private var availableWorkflows: [Workflow] {
+        workflowService.workflows.filter { workflow in
             workflow.id != WorkflowDefinition.heyTalkieWorkflowId &&
             workflow.isEnabled
         }
     }
 
-    private var filteredWorkflows: [WorkflowDefinition] {
+    private var filteredWorkflows: [Workflow] {
         if searchText.isEmpty {
             return availableWorkflows
         }
@@ -987,7 +987,7 @@ struct WorkflowPickerSheet: View {
 }
 
 struct WorkflowPickerRow: View {
-    let workflow: WorkflowDefinition
+    let workflow: Workflow
     let isSelected: Bool
 
     var body: some View {

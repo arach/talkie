@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		03FB3D02D6CD4F749F589531 /* SimpleWorkflowLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CCDBF4AA2C847468FC9E887 /* SimpleWorkflowLoader.swift */; };
+		29D3085AF5254E7182DE0DB9 /* WorkflowService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F0E09315F564EF28939F8A4 /* WorkflowService.swift */; };
+		B25E07E47EC94233B8A26BDC /* WorkflowPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E6FB8464A3C4277B53D3930 /* WorkflowPreferences.swift */; };
+		8CB927BC3D624A259247B6BF /* WorkflowFileRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F6FAB72FBC4775A846B9E3 /* WorkflowFileRepository.swift */; };
+		601E80B3F53640818B2968BA /* WorkflowEditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F7DE165363A40F9BC179482 /* WorkflowEditorViewModel.swift */; };
+		C3F1CA68712347BE8E30F119 /* EnvironmentCrashTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = F27B2BCFE787421B8AAC280C /* EnvironmentCrashTest.swift */; };
 		19854BACDC1E4E8F864DF3D0 /* APIKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56A632BC7AAB4BE4A5DCAC28 /* APIKeyStore.swift */; };
 		E70B85D4A1BE44518892942C /* RadioButtonRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = C14D7861F4B14F6CB942F04F /* RadioButtonRow.swift */; };
 		0E5DFF0FB4C0437BACAEF540 /* TTSVoicesSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 728B25DE3B5B4697947A1CB0 /* TTSVoicesSettingsView.swift */; };
@@ -228,7 +234,6 @@
 		DF90361B1D0677CA2E23E506 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = D0D2AC46F2B1EE67539FDB0B /* MLXLMCommon */; };
 		DFD7BC125136392000FC1C63 /* AutomationsSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = BADBB832DB3FA8A73480B2EA /* AutomationsSettings.swift */; };
 		E010BCFDCC99C7587A73FEB3 /* OnAirIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0548E348F68DC718F12DC401 /* OnAirIndicator.swift */; };
-		E111B4E4E4F135881F1E138E /* TWFLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0152A90AD692E6C4E8BA106 /* TWFLoader.swift */; };
 		E36FBDD35D8FF8986BE97535 /* Router.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD24716F168F4322F19E871C /* Router.swift */; };
 		E3767418F34D7E49DC7ABB59 /* CloudSyncActionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C87582601C4D7DD15D04110 /* CloudSyncActionModel.swift */; };
 		E53F8AF247ABE5D564B03022 /* AppRoutes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 689B674C42F0798D4CF74568 /* AppRoutes.swift */; };
@@ -257,6 +262,12 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		2CCDBF4AA2C847468FC9E887 /* SimpleWorkflowLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleWorkflowLoader.swift; sourceTree = "<group>"; };
+		0F0E09315F564EF28939F8A4 /* WorkflowService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowService.swift; sourceTree = "<group>"; };
+		5E6FB8464A3C4277B53D3930 /* WorkflowPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowPreferences.swift; sourceTree = "<group>"; };
+		D4F6FAB72FBC4775A846B9E3 /* WorkflowFileRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowFileRepository.swift; sourceTree = "<group>"; };
+		2F7DE165363A40F9BC179482 /* WorkflowEditorViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowEditorViewModel.swift; sourceTree = "<group>"; };
+		F27B2BCFE787421B8AAC280C /* EnvironmentCrashTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentCrashTest.swift; sourceTree = "<group>"; };
 		56A632BC7AAB4BE4A5DCAC28 /* APIKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeyStore.swift; sourceTree = "<group>"; };
 		C14D7861F4B14F6CB942F04F /* RadioButtonRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioButtonRow.swift; sourceTree = "<group>"; };
 		728B25DE3B5B4697947A1CB0 /* TTSVoicesSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSVoicesSettingsView.swift; sourceTree = "<group>"; };
@@ -471,7 +482,6 @@
 		DBC1AA5999188EF8471202B3 /* EphemeralTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EphemeralTranscriber.swift; sourceTree = "<group>"; };
 		DCEE257B3F23FA688379E9D3 /* TalkieWorkflowSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieWorkflowSchema.swift; sourceTree = "<group>"; };
 		DF1520C9EE3998CF59A7F93B /* SystemLogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemLogsView.swift; sourceTree = "<group>"; };
-		E0152A90AD692E6C4E8BA106 /* TWFLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TWFLoader.swift; sourceTree = "<group>"; };
 		E0CEC1D425A68FF0A280F2CE /* DebugCommandHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugCommandHandler.swift; sourceTree = "<group>"; };
 		E211EB17B9591531C8D9EECE /* AudioDeviceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDeviceManager.swift; sourceTree = "<group>"; };
 		E30DDF9CB041E54430249019 /* AppleSpeechService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSpeechService.swift; sourceTree = "<group>"; };
@@ -792,12 +802,16 @@
 		976DB5AE94679723D8726EDE /* Workflow */ = {
 			isa = PBXGroup;
 			children = (
+				2CCDBF4AA2C847468FC9E887 /* SimpleWorkflowLoader.swift */,
+				0F0E09315F564EF28939F8A4 /* WorkflowService.swift */,
+				5E6FB8464A3C4277B53D3930 /* WorkflowPreferences.swift */,
+				D4F6FAB72FBC4775A846B9E3 /* WorkflowFileRepository.swift */,
+				2F7DE165363A40F9BC179482 /* WorkflowEditorViewModel.swift */,
 				08F216C6C2F9B2D0EB686BC8 /* AutoRunProcessor.swift */,
 				75EDCF1634C7AEDAAB6BCA80 /* ExecutionBackend.swift */,
 				7BC24D654BAC9F767187582F /* LocalSwiftBackend.swift */,
 				93CA8FB3CB08FEF2F6B4A917 /* TalkieWorkflowConverter.swift */,
 				DCEE257B3F23FA688379E9D3 /* TalkieWorkflowSchema.swift */,
-				E0152A90AD692E6C4E8BA106 /* TWFLoader.swift */,
 				8C69CE9634E7DC4E79F02F7F /* VERCEL_MIGRATION_COMPLETE.md */,
 				6D67DA29760754EBFB9F512E /* WFKIT_ARCHITECTURE.md */,
 				4AB3F77AA2B23FD9AF76A698 /* WFKIT_USAGE_EXAMPLES.md */,
@@ -994,6 +1008,7 @@
 		CF255B7C16461CF1674389DB /* Debug */ = {
 			isa = PBXGroup;
 			children = (
+				F27B2BCFE787421B8AAC280C /* EnvironmentCrashTest.swift */,
 				E0CEC1D425A68FF0A280F2CE /* DebugCommandHandler.swift */,
 				E75FED0DCD51602D30AD94C8 /* DesignAuditor.swift */,
 				747E93097A0C9385E2389936 /* SettingsStoryboardGenerator.swift */,
@@ -1198,6 +1213,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				03FB3D02D6CD4F749F589531 /* SimpleWorkflowLoader.swift in Sources */,
+				29D3085AF5254E7182DE0DB9 /* WorkflowService.swift in Sources */,
+				B25E07E47EC94233B8A26BDC /* WorkflowPreferences.swift in Sources */,
+				8CB927BC3D624A259247B6BF /* WorkflowFileRepository.swift in Sources */,
+				601E80B3F53640818B2968BA /* WorkflowEditorViewModel.swift in Sources */,
+				C3F1CA68712347BE8E30F119 /* EnvironmentCrashTest.swift in Sources */,
 				19854BACDC1E4E8F864DF3D0 /* APIKeyStore.swift in Sources */,
 				E70B85D4A1BE44518892942C /* RadioButtonRow.swift in Sources */,
 				0E5DFF0FB4C0437BACAEF540 /* TTSVoicesSettingsView.swift in Sources */,
@@ -1372,7 +1393,6 @@
 				5842DDC6618D6D3F13964AB2 /* SyncRecordSerializer.swift in Sources */,
 				866E7512C9DC8FEC49A8B3BC /* SystemLogsView.swift in Sources */,
 				0627F8BFAC164C159B8DEA10 /* SystemRoutes.swift in Sources */,
-				E111B4E4E4F135881F1E138E /* TWFLoader.swift in Sources */,
 				A23C030ECADDC780B883F3E2 /* TalkieApp.swift in Sources */,
 				266718FBC0A9B1F4E58C9E6A /* TalkieComponents.swift in Sources */,
 				3A84FE35A80A8764AA263AC5 /* TalkieData.swift in Sources */,

@@ -40,7 +40,7 @@ struct MemoDetailView: View {
 
     // Repository for GRDB operations - views save here, sync layer handles cloud
     private let repository = LocalRepository()
-    private let workflowManager = WorkflowManager.shared
+    private let workflowService = WorkflowService.shared
     @State private var processingWorkflowIDs: Set<UUID> = []
     @State private var showingWorkflowPicker = false
     @State private var cachedQuickActionItems: [QuickActionItem] = []
@@ -53,7 +53,7 @@ struct MemoDetailView: View {
 
     /// Represents a quick action slot (either pinned workflow or built-in action)
     enum QuickActionItem: Identifiable {
-        case workflow(WorkflowDefinition)
+        case workflow(Workflow)
         case builtIn(BuiltInAction)
 
         var id: String {
@@ -93,7 +93,7 @@ struct MemoDetailView: View {
         var items: [QuickActionItem] = []
 
         // Add pinned workflows first (up to 5)
-        let pinnedWorkflows = workflowManager.workflows
+        let pinnedWorkflows = workflowService.workflows
             .filter { $0.isPinned && $0.isEnabled }
             .prefix(5)
         for workflow in pinnedWorkflows {
@@ -247,7 +247,7 @@ struct MemoDetailView: View {
                 notesInitialized = true
             }
         }
-        .onChange(of: workflowManager.workflows) { _, _ in
+        .onChange(of: workflowService.workflows.count) { _, _ in
             // Refresh quick actions when workflows change
             cachedQuickActionItems = computeQuickActionItems()
         }
@@ -755,23 +755,23 @@ struct MemoDetailView: View {
     }
 
     /// Check if this workflow has been run on this memo
-    private func hasCompletedRun(for workflow: WorkflowDefinition) -> Bool {
+    private func hasCompletedRun(for workflow: Workflow) -> Bool {
         cachedWorkflowRuns.contains { $0.workflowId == workflow.id && $0.status == .completed }
     }
 
     /// Count how many times this workflow has been run (completed) on this memo
-    private func runCount(for workflow: WorkflowDefinition) -> Int {
+    private func runCount(for workflow: Workflow) -> Int {
         cachedWorkflowRuns.filter { $0.workflowId == workflow.id && $0.status == .completed }.count
     }
 
-    /// Execute a custom workflow definition
-    private func executeCustomWorkflow(_ workflow: WorkflowDefinition) {
+    /// Execute a custom workflow
+    private func executeCustomWorkflow(_ workflow: Workflow) {
         processingWorkflowIDs.insert(workflow.id)
 
         Task {
             do {
                 _ = try await WorkflowExecutor.shared.executeWorkflow(
-                    workflow,
+                    workflow.definition,
                     for: memo
                 )
                 // Refresh workflow runs after execution

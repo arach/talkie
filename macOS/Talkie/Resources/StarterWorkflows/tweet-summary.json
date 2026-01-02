@@ -1,0 +1,38 @@
+{
+  "name": "Tweet Summary",
+  "description": "280-character summary, perfect for sharing or notifications",
+  "icon": "text.bubble",
+  "color": "cyan",
+  "maintainer": "talkie",
+  "steps": [
+    {
+      "type": "llm",
+      "outputKey": "draft",
+      "costTier": "budget",
+      "prompt": "Summarize this voice memo in 280 characters or less. Output ONLY the summary, no quotes, no labels, no explanation.\n\n{{TRANSCRIPT}}",
+      "temperature": 0.5,
+      "maxTokens": 100
+    },
+    {
+      "type": "llm",
+      "outputKey": "polished",
+      "costTier": "budget",
+      "prompt": "Clean up this summary. Keep it under 280 characters. Fix any awkward phrasing. Output ONLY the final text, nothing else.\n\n{{draft}}",
+      "temperature": 0.3,
+      "maxTokens": 100
+    },
+    {
+      "type": "clipboard",
+      "outputKey": "copied",
+      "content": "{{polished}}"
+    },
+    {
+      "type": "iOSPush",
+      "outputKey": "notified",
+      "title": "{{TITLE}}",
+      "body": "{{polished}}",
+      "sound": true,
+      "includeOutput": false
+    }
+  ]
+}

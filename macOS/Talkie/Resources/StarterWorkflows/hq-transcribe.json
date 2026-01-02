@@ -1,0 +1,32 @@
+{
+  "name": "HQ Transcribe",
+  "description": "Upgrade transcription quality using Whisper Large V3 (requires ~750MB download)",
+  "icon": "waveform.badge.magnifyingglass",
+  "color": "purple",
+  "maintainer": "talkie",
+  "steps": [
+    {
+      "type": "transcribe",
+      "outputKey": "transcript",
+      "qualityTier": "high",
+      "fallbackStrategy": "automatic",
+      "overwriteExisting": true,
+      "saveAsVersion": true
+    },
+    {
+      "type": "llm",
+      "outputKey": "polished",
+      "costTier": "budget",
+      "prompt": "Clean up this transcript. Fix punctuation, add paragraph breaks at natural pauses, correct obvious transcription errors. Preserve the original meaning exactly.\n\n{{transcript}}",
+      "temperature": 0.2,
+      "maxTokens": 4096
+    },
+    {
+      "type": "notification",
+      "outputKey": "notified",
+      "title": "HQ transcription complete",
+      "body": "{{TITLE}} - Large V3 model",
+      "sound": true
+    }
+  ]
+}

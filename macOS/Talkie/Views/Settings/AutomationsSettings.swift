@@ -14,18 +14,15 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 
 struct AutomationsSettingsView: View {
     @Environment(SettingsManager.self) private var settingsManager: SettingsManager
-    private let workflowManager = WorkflowManager.shared
+    private let workflowService = WorkflowService.shared
     @State private var selectedWorkflowId: UUID?
 
-    private var autoRunWorkflows: [WorkflowDefinition] {
-        workflowManager.workflows
-            .filter { $0.autoRun }
-            .sorted { $0.autoRunOrder < $1.autoRunOrder }
+    private var autoRunWorkflows: [Workflow] {
+        workflowService.autoRunWorkflows
     }
 
-    private var availableWorkflows: [WorkflowDefinition] {
-        workflowManager.workflows
-            .filter { !$0.autoRun }
+    private var availableWorkflows: [Workflow] {
+        workflowService.workflows.filter { !$0.autoRun }
     }
 
     var body: some View {
@@ -227,51 +224,44 @@ struct AutomationsSettingsView: View {
         }
     }
 
-    private func enableAutoRun(_ workflow: WorkflowDefinition) {
-        var updated = workflow
-        updated.autoRun = true
-        updated.autoRunOrder = (autoRunWorkflows.map { $0.autoRunOrder }.max() ?? -1) + 1
-        workflowManager.updateWorkflow(updated)
+    private func enableAutoRun(_ workflow: Workflow) {
+        let nextOrder = (autoRunWorkflows.map { $0.autoRunOrder }.max() ?? -1) + 1
+        Task {
+            try? await workflowService.setAutoRun(true, for: workflow.id, order: nextOrder)
+        }
     }
 
-    private func disableAutoRun(_ workflow: WorkflowDefinition) {
-        var updated = workflow
-        updated.autoRun = false
-        updated.autoRunOrder = 0
-        workflowManager.updateWorkflow(updated)
+    private func disableAutoRun(_ workflow: Workflow) {
+        Task {
+            try? await workflowService.setAutoRun(false, for: workflow.id, order: 0)
+        }
     }
 
-    private func moveWorkflowUp(_ workflow: WorkflowDefinition) {
+    private func moveWorkflowUp(_ workflow: Workflow) {
         guard let index = autoRunWorkflows.firstIndex(where: { $0.id == workflow.id }), index > 0 else { return }
         let previous = autoRunWorkflows[index - 1]
 
-        var updatedCurrent = workflow
-        var updatedPrevious = previous
-        let tempOrder = updatedCurrent.autoRunOrder
-        updatedCurrent.autoRunOrder = updatedPrevious.autoRunOrder
-        updatedPrevious.autoRunOrder = tempOrder
-
-        workflowManager.updateWorkflow(updatedCurrent)
-        workflowManager.updateWorkflow(updatedPrevious)
+        let tempOrder = workflow.autoRunOrder
+        Task {
+            try? await workflowService.setAutoRun(true, for: workflow.id, order: previous.autoRunOrder)
+            try? await workflowService.setAutoRun(true, for: previous.id, order: tempOrder)
+        }
     }
 
-    private func moveWorkflowDown(_ workflow: WorkflowDefinition) {
+    private func moveWorkflowDown(_ workflow: Workflow) {
         guard let index = autoRunWorkflows.firstIndex(where: { $0.id == workflow.id }), index < autoRunWorkflows.count - 1 else { return }
         let next = autoRunWorkflows[index + 1]
 
-        var updatedCurrent = workflow
-        var updatedNext = next
-        let tempOrder = updatedCurrent.autoRunOrder
-        updatedCurrent.autoRunOrder = updatedNext.autoRunOrder
-        updatedNext.autoRunOrder = tempOrder
-
-        workflowManager.updateWorkflow(updatedCurrent)
-        workflowManager.updateWorkflow(updatedNext)
+        let tempOrder = workflow.autoRunOrder
+        Task {
+            try? await workflowService.setAutoRun(true, for: workflow.id, order: next.autoRunOrder)
+            try? await workflowService.setAutoRun(true, for: next.id, order: tempOrder)
+        }
     }
 }
 
 struct AutoRunWorkflowRow: View {
-    let workflow: WorkflowDefinition
+    let workflow: Workflow
     let onDisable: () -> Void
     let onMoveUp: (() -> Void)?
     let onMoveDown: (() -> Void)?

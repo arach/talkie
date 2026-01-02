@@ -12,7 +12,7 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 
 // MARK: - Workflows View
 struct WorkflowsView: View {
-    private let workflowManager = WorkflowManager.shared
+    private let workflowService = WorkflowService.shared
 
     var body: some View {
         SettingsPageContainer {
@@ -35,19 +35,19 @@ struct WorkflowsView: View {
 
                     Spacer()
 
-                    Text("\(workflowManager.workflows.count) WORKFLOWS")
+                    Text("\(workflowService.workflows.count) WORKFLOWS")
                         .font(.system(size: 9, weight: .medium, design: .monospaced))
                         .foregroundColor(.purple.opacity(0.8))
                 }
 
                 VStack(spacing: 8) {
-                    ForEach(workflowManager.workflows.prefix(5)) { workflow in
+                    ForEach(workflowService.workflows.prefix(5)) { workflow in
                         WorkflowPreviewRow(workflow: workflow)
                     }
 
-                    if workflowManager.workflows.count > 5 {
+                    if workflowService.workflows.count > 5 {
                         HStack {
-                            Text("+ \(workflowManager.workflows.count - 5) more workflows")
+                            Text("+ \(workflowService.workflows.count - 5) more workflows")
                                 .font(Theme.current.fontXS)
                                 .foregroundColor(Theme.current.foregroundSecondary)
                             Spacer()
@@ -136,7 +136,7 @@ struct WorkflowsView: View {
 
 // MARK: - Workflow Preview Row
 private struct WorkflowPreviewRow: View {
-    let workflow: WorkflowDefinition
+    let workflow: Workflow
 
     var body: some View {
         HStack(spacing: 12) {
