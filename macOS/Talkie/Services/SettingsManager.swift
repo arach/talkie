@@ -217,35 +217,29 @@ enum FontSizeOption: String, CaseIterable {
 
 // MARK: - Curated Theme Presets
 enum ThemePreset: String, CaseIterable {
-    case talkiePro = "talkiePro"
-    case linear = "linear"
-    case terminal = "terminal"
-    case minimal = "minimal"
-    case classic = "classic"
-    case warm = "warm"
-    case liquidGlass = "liquidGlass"
+    case talkiePro = "talkiePro"    // Professional dark theme (default)
+    case linear = "linear"          // True black, Vercel-inspired
+    case terminal = "terminal"      // Ghostty-style: clean, monospace, sharp
+    case minimal = "minimal"        // Light mode, system-adaptive
+    case liquidGlass = "liquidGlass" // Experimental glass effects
 
     var displayName: String {
         switch self {
-        case .talkiePro: return "Talkie Pro"
+        case .talkiePro: return "Pro"
         case .linear: return "Linear"
         case .terminal: return "Terminal"
         case .minimal: return "Minimal"
-        case .classic: return "Classic"
-        case .warm: return "Warm"
         case .liquidGlass: return "Liquid Glass"
         }
     }
 
     var description: String {
         switch self {
-        case .talkiePro: return "Sharp, professional, high contrast"
+        case .talkiePro: return "Professional dark theme with balanced contrast"
         case .linear: return "True black, minimal, Vercel-inspired"
-        case .terminal: return "Terminal vibes with green accents"
-        case .minimal: return "Clean and subtle, adapts to system"
-        case .classic: return "Comfortable defaults with blue accents"
-        case .warm: return "Cozy dark mode with orange tones"
-        case .liquidGlass: return "EXPERIMENTAL: Maximum glass effects"
+        case .terminal: return "Clean monospace, sharp corners, no frills"
+        case .minimal: return "Light and subtle, adapts to system"
+        case .liquidGlass: return "Experimental: maximum glass effects"
         }
     }
 
@@ -255,8 +249,6 @@ enum ThemePreset: String, CaseIterable {
         case .linear: return "square.stack.3d.up"
         case .terminal: return "terminal"
         case .minimal: return "circle"
-        case .classic: return "star"
-        case .warm: return "flame"
         case .liquidGlass: return "drop.fill"
         }
     }
@@ -264,25 +256,16 @@ enum ThemePreset: String, CaseIterable {
     var previewColors: (bg: Color, fg: Color, accent: Color) {
         switch self {
         case .talkiePro:
-            // fg: white*0.85 = 0.85
             return (Color(white: 0.08), Color(white: 0.85), Color(red: 0.4, green: 0.7, blue: 1.0))
         case .linear:
             // True black with pure white text, cyan accent (Vercel/Linear style)
             return (Color.black, Color.white, Color(red: 0.0, green: 0.83, blue: 1.0))
         case .terminal:
-            // fg: green*0.9 ≈ (0, 0.9*0.85, 0) = (0, 0.765, 0)
-            return (Color.black, Color(red: 0, green: 0.765, blue: 0), Color.green)
+            // Ghostty-style: black bg, light gray text, subtle gray accent
+            return (Color.black, Color(white: 0.85), Color(white: 0.5))
         case .minimal:
-            // fg: black*0.8 = 0.2
             return (Color(white: 0.96), Color(white: 0.2), Color.gray)
-        case .classic:
-            // fg: white*0.9 = 0.9
-            return (Color(white: 0.15), Color(white: 0.9), Color.blue)
-        case .warm:
-            // fg: white*0.9 = 0.9
-            return (Color(red: 0.1, green: 0.08, blue: 0.06), Color(white: 0.9), Color.orange)
         case .liquidGlass:
-            // Deep dark with cyan/blue glow
             return (Color(white: 0.05), Color.white, Color.cyan)
         }
     }
@@ -293,48 +276,40 @@ enum ThemePreset: String, CaseIterable {
         case .talkiePro: return .dark
         case .linear: return .dark
         case .terminal: return .dark
-        case .minimal: return .system  // Respects system light/dark
-        case .classic: return .dark
-        case .warm: return .dark
-        case .liquidGlass: return .dark  // Glass looks best on dark
+        case .minimal: return .system
+        case .liquidGlass: return .dark
         }
     }
 
     /// UI chrome font style (labels, headers, buttons, badges)
     var uiFontStyle: FontStyleOption {
         switch self {
-        case .talkiePro: return .system     // SF Pro - clean, professional
-        case .linear: return .system        // Clean geometric sans-serif
-        case .terminal: return .monospace
-        case .minimal: return .system       // Clean system font
-        case .classic: return .system
-        case .warm: return .system
-        case .liquidGlass: return .system   // Clean for glass
+        case .talkiePro: return .system
+        case .linear: return .system
+        case .terminal: return .monospace   // Full monospace UI
+        case .minimal: return .system
+        case .liquidGlass: return .system
         }
     }
 
     /// Content font style (transcripts, notes, markdown)
     var contentFontStyle: FontStyleOption {
         switch self {
-        case .talkiePro: return .system     // SF Pro - readable, luxurious
-        case .linear: return .system        // Clean, readable content
-        case .terminal: return .monospace   // Full terminal experience
-        case .minimal: return .system       // Clean system font for content
-        case .classic: return .system       // Standard system font
-        case .warm: return .monospace       // Monospace content for warm theme
-        case .liquidGlass: return .system   // Clean for glass
+        case .talkiePro: return .system
+        case .linear: return .system
+        case .terminal: return .monospace
+        case .minimal: return .system
+        case .liquidGlass: return .system
         }
     }
 
     var accentColor: AccentColorOption {
         switch self {
         case .talkiePro: return .blue
-        case .linear: return .blue          // Cyan-ish blue like Linear
-        case .terminal: return .green
+        case .linear: return .blue
+        case .terminal: return .gray        // No gimmicks, just gray
         case .minimal: return .gray
-        case .classic: return .blue
-        case .warm: return .orange
-        case .liquidGlass: return .blue     // Cyan/blue for glass glow
+        case .liquidGlass: return .blue
         }
     }
 
@@ -343,19 +318,16 @@ enum ThemePreset: String, CaseIterable {
         switch self {
         case .talkiePro: return .medium
         case .linear: return .medium
-        case .terminal: return .medium
+        case .terminal: return .small       // Condensed, information-dense
         case .minimal: return .medium
-        case .classic: return .medium
-        case .warm: return .medium
         case .liquidGlass: return .medium
         }
     }
 
-    /// Whether this theme uses true black backgrounds (for OLED optimization)
+    /// Whether this theme uses true black backgrounds
     var usesTrueBlack: Bool {
         switch self {
-        case .linear, .terminal: return true
-        case .liquidGlass: return true      // True black makes glass pop
+        case .linear, .terminal, .liquidGlass: return true
         default: return false
         }
     }
@@ -364,7 +336,37 @@ enum ThemePreset: String, CaseIterable {
     var glassDepth: GlassDepth {
         switch self {
         case .liquidGlass: return .extreme
-        default: return .standard
+        case .linear: return .prominent     // Floating cards
+        case .talkiePro: return .standard
+        case .minimal: return .subtle
+        case .terminal: return .subtle      // Flat, minimal glass
+        }
+    }
+
+    /// Corner radius style for this theme
+    var cornerRadiusMultiplier: CGFloat {
+        switch self {
+        case .terminal: return 0.25         // Minimal corners (2pt instead of 8pt)
+        case .minimal: return 0.75          // Slightly reduced
+        default: return 1.0                 // Standard
+        }
+    }
+
+    /// Whether to use light font weights
+    var usesLightFonts: Bool {
+        switch self {
+        case .terminal: return true         // Thin, clean lines
+        case .linear: return true           // Vercel uses light fonts
+        default: return false
+        }
+    }
+
+    /// Border width for this theme
+    var borderWidth: CGFloat {
+        switch self {
+        case .terminal: return 0.5          // Thin 1px borders
+        case .linear: return 0.5
+        default: return 1.0
         }
     }
 }
@@ -405,7 +407,7 @@ class SettingsManager {
 
     /// Whether to use light/thin font weights (for sharp aesthetics)
     var useLightFonts: Bool {
-        currentTheme == .talkiePro
+        currentTheme?.usesLightFonts ?? false
     }
 
     /// Whether current theme uses high-contrast colors
@@ -428,24 +430,24 @@ class SettingsManager {
         currentTheme == .terminal
     }
 
-    /// Check if warm theme is active
-    var isWarmTheme: Bool {
-        currentTheme == .warm
-    }
-
     /// Check if liquid glass theme is active
     var isLiquidGlassTheme: Bool {
         currentTheme == .liquidGlass
     }
 
-    /// Current glass depth based on theme (extreme for Liquid Glass, standard otherwise)
+    /// Current glass depth based on theme
     var currentGlassDepth: GlassDepth {
         currentTheme?.glassDepth ?? .standard
     }
 
-    /// Check if classic theme is active
-    var isClassicTheme: Bool {
-        currentTheme == .classic
+    /// Current corner radius multiplier based on theme
+    var currentCornerRadiusMultiplier: CGFloat {
+        currentTheme?.cornerRadiusMultiplier ?? 1.0
+    }
+
+    /// Current border width based on theme
+    var currentBorderWidth: CGFloat {
+        currentTheme?.borderWidth ?? 1.0
     }
 
     /// Whether currently in dark mode (respects manual override)
@@ -610,16 +612,8 @@ class SettingsManager {
             return isDarkMode ? Color(white: 0.11) : Color(white: 0.97)
         }
         if isTerminalTheme {
-            // Terminal: Black in dark, paper-white in light
-            return isDarkMode ? Color.black : Color(white: 0.97)
-        }
-        if isWarmTheme {
-            // Warm: Rich brown-black in dark, warm cream in light
-            return isDarkMode ? Color(red: 0.08, green: 0.06, blue: 0.04) : Color(red: 0.99, green: 0.97, blue: 0.94)
-        }
-        if isClassicTheme {
-            // Classic: Dark gray in dark, clean white in light
-            return isDarkMode ? Color(white: 0.12) : Color(white: 0.98)
+            // Terminal: True black - Ghostty style
+            return Color.black
         }
         return Color(NSColor.windowBackgroundColor)
     }
@@ -637,13 +631,8 @@ class SettingsManager {
             return isDarkMode ? Color(white: 0.14) : Color(white: 0.94)
         }
         if isTerminalTheme {
-            return isDarkMode ? Color(white: 0.06) : Color(white: 0.94)
-        }
-        if isWarmTheme {
-            return isDarkMode ? Color(red: 0.12, green: 0.09, blue: 0.06) : Color(red: 0.96, green: 0.94, blue: 0.90)
-        }
-        if isClassicTheme {
-            return isDarkMode ? Color(white: 0.15) : Color(white: 0.95)
+            // Terminal: Very subtle elevation
+            return Color(white: 0.04)
         }
         return Color(NSColor.controlBackgroundColor)
     }
@@ -661,13 +650,8 @@ class SettingsManager {
             return isDarkMode ? Color(white: 0.18) : Color(white: 0.91)
         }
         if isTerminalTheme {
-            return isDarkMode ? Color(white: 0.10) : Color(white: 0.91)
-        }
-        if isWarmTheme {
-            return isDarkMode ? Color(red: 0.16, green: 0.12, blue: 0.08) : Color(red: 0.93, green: 0.90, blue: 0.86)
-        }
-        if isClassicTheme {
-            return isDarkMode ? Color(white: 0.18) : Color(white: 0.92)
+            // Terminal: Subtle card surface
+            return Color(white: 0.08)
         }
         return isDarkMode ? Color(white: 0.13) : Color(white: 0.94)
     }
@@ -685,15 +669,8 @@ class SettingsManager {
             return isDarkMode ? Color(white: 0.92) : Color(white: 0.12)
         }
         if isTerminalTheme {
-            // Terminal: Green in dark, dark green in light
-            return isDarkMode ? Color(red: 0.0, green: 0.85, blue: 0.0) : Color(red: 0.0, green: 0.35, blue: 0.0)
-        }
-        if isWarmTheme {
-            // Warm: Warm white in dark, rich brown in light
-            return isDarkMode ? Color(red: 1.0, green: 0.95, blue: 0.88) : Color(red: 0.25, green: 0.18, blue: 0.12)
-        }
-        if isClassicTheme {
-            return isDarkMode ? Color(white: 0.95) : Color(white: 0.10)
+            // Terminal: Light gray - clean, no gimmicks (Ghostty style)
+            return Color(white: 0.85)
         }
         return Color.primary
     }
@@ -711,13 +688,8 @@ class SettingsManager {
             return isDarkMode ? Color(white: 0.65) : Color(white: 0.38)
         }
         if isTerminalTheme {
-            return isDarkMode ? Color(red: 0.0, green: 0.65, blue: 0.0) : Color(red: 0.0, green: 0.45, blue: 0.0)
-        }
-        if isWarmTheme {
-            return isDarkMode ? Color(red: 0.85, green: 0.78, blue: 0.68) : Color(red: 0.45, green: 0.38, blue: 0.30)
-        }
-        if isClassicTheme {
-            return isDarkMode ? Color(white: 0.70) : Color(white: 0.35)
+            // Terminal: Dim gray - clean, no gimmicks
+            return Color(white: 0.55)
         }
         return Color.secondary
     }
@@ -735,13 +707,8 @@ class SettingsManager {
             return isDarkMode ? Color(white: 0.48) : Color(white: 0.50)
         }
         if isTerminalTheme {
-            return isDarkMode ? Color(red: 0.0, green: 0.45, blue: 0.0) : Color(red: 0.0, green: 0.55, blue: 0.0)
-        }
-        if isWarmTheme {
-            return isDarkMode ? Color(red: 0.65, green: 0.58, blue: 0.48) : Color(red: 0.55, green: 0.48, blue: 0.40)
-        }
-        if isClassicTheme {
-            return isDarkMode ? Color(white: 0.50) : Color(white: 0.50)
+            // Terminal: Subtle gray
+            return Color(white: 0.40)
         }
         return isDarkMode ? Color(white: 0.42) : Color(white: 0.58)
     }
@@ -759,13 +726,8 @@ class SettingsManager {
             return isDarkMode ? Color(white: 0.22) : Color(white: 0.88)
         }
         if isTerminalTheme {
-            return isDarkMode ? Color(red: 0.0, green: 0.3, blue: 0.0) : Color(red: 0.0, green: 0.6, blue: 0.0).opacity(0.3)
-        }
-        if isWarmTheme {
-            return isDarkMode ? Color(red: 0.3, green: 0.22, blue: 0.15) : Color(red: 0.85, green: 0.80, blue: 0.72)
-        }
-        if isClassicTheme {
-            return isDarkMode ? Color(white: 0.25) : Color(white: 0.85)
+            // Terminal: Thin gray border - minimal separation
+            return Color.white.opacity(0.12)
         }
         return Color(NSColor.separatorColor)
     }

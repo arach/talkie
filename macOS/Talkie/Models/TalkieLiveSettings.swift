@@ -23,32 +23,29 @@ typealias OverlayPosition = IndicatorPosition
 // MARK: - Visual Theme (Color Schemes)
 
 enum VisualTheme: String, CaseIterable, Codable {
-    case live = "live"
-    case midnight = "midnight"
+    case live = "live"          // Maps to talkiePro
+    case midnight = "midnight"  // Maps to talkiePro (legacy)
     case linear = "linear"
     case terminal = "terminal"
-    case warm = "warm"
     case minimal = "minimal"
 
     var displayName: String {
         switch self {
-        case .live: return "Live"
-        case .midnight: return "Midnight"
+        case .live: return "Pro"
+        case .midnight: return "Pro"
         case .linear: return "Linear"
         case .terminal: return "Terminal"
-        case .warm: return "Warm"
         case .minimal: return "Minimal"
         }
     }
 
     var description: String {
         switch self {
-        case .live: return "Default blue accent"
-        case .midnight: return "Deep black, high contrast"
+        case .live: return "Professional dark theme"
+        case .midnight: return "Professional dark theme"
         case .linear: return "True black, Vercel-inspired"
-        case .terminal: return "Green on black"
-        case .warm: return "Cozy orange tones"
-        case .minimal: return "Clean and subtle"
+        case .terminal: return "Clean monospace, sharp corners"
+        case .minimal: return "Light and subtle"
         }
     }
 
@@ -58,8 +55,7 @@ enum VisualTheme: String, CaseIterable, Codable {
         case .live: return .blue
         case .midnight: return .blue
         case .linear: return .blue
-        case .terminal: return .green
-        case .warm: return .orange
+        case .terminal: return .gray    // No gimmicks
         case .minimal: return .gray
         }
     }
@@ -71,7 +67,6 @@ enum VisualTheme: String, CaseIterable, Codable {
         case .midnight: return .dark
         case .linear: return .dark
         case .terminal: return .dark
-        case .warm: return .dark
         case .minimal: return .system
         }
     }
@@ -80,17 +75,16 @@ enum VisualTheme: String, CaseIterable, Codable {
     var previewColors: (bg: Color, fg: Color, accent: Color) {
         switch self {
         case .live:
-            return (Color(white: 0.1), Color.white.opacity(0.9), Color.blue)
+            return (Color(white: 0.08), Color.white.opacity(0.85), Color.blue)
         case .midnight:
-            return (Color.black, Color.white.opacity(0.85), Color(red: 0.4, green: 0.7, blue: 1.0))
+            return (Color(white: 0.08), Color.white.opacity(0.85), Color(red: 0.4, green: 0.7, blue: 1.0))
         case .linear:
             return (Color.black, Color.white, Color(red: 0.0, green: 0.83, blue: 1.0))
         case .terminal:
-            return (Color.black, Color.green.opacity(0.9), Color.green)
-        case .warm:
-            return (Color(red: 0.1, green: 0.08, blue: 0.06), Color.white.opacity(0.9), Color.orange)
+            // Ghostty-style: black bg, light gray text, subtle gray accent
+            return (Color.black, Color(white: 0.85), Color(white: 0.5))
         case .minimal:
-            return (Color(white: 0.95), Color.black.opacity(0.8), Color.gray)
+            return (Color(white: 0.96), Color(white: 0.2), Color.gray)
         }
     }
 }
@@ -363,19 +357,16 @@ final class LiveSettings {
             case .linear: return .linear
             case .terminal: return .terminal
             case .minimal: return .minimal
-            case .warm: return .warm
-            case .classic: return .live
             case .liquidGlass: return .midnight  // Deep dark for glass to pop
             }
         }
         set {
             let preset: ThemePreset
             switch newValue {
-            case .live: preset = .classic
+            case .live: preset = .talkiePro
             case .midnight: preset = .talkiePro
             case .linear: preset = .linear
             case .terminal: preset = .terminal
-            case .warm: preset = .warm
             case .minimal: preset = .minimal
             }
             SettingsManager.shared.applyTheme(preset)
