@@ -9,7 +9,7 @@
          name = "Logs">
       </FileSystemSynchronizedGroup>
       <FileRef
-         location = "group:Talkie/Talkie-iOS.xcodeproj">
+         location = "group:Talkie/Talkie.xcodeproj">
       </FileRef>
       <FileRef
          location = "group:TalkieLive/TalkieLive.xcodeproj">
