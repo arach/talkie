@@ -194,7 +194,7 @@ struct PendingActionsView: View {
         // Find the workflow and memo
         Task {
             // Load workflow
-            guard let workflow = WorkflowManager.shared.workflows.first(where: { $0.id == workflowId }) else {
+            guard let workflow = WorkflowService.shared.workflow(byID: workflowId) else {
                 await SystemEventManager.shared.log(.error, "Retry failed", detail: "Workflow not found")
                 return
             }
@@ -213,7 +213,7 @@ struct PendingActionsView: View {
 
                 // Re-run the workflow
                 await SystemEventManager.shared.log(.workflow, "Retrying: \(workflow.name)", detail: "Memo: \(memoModel.title ?? "Untitled")")
-                _ = try await WorkflowExecutor.shared.executeWorkflow(workflow, for: memoModel)
+                _ = try await WorkflowExecutor.shared.executeWorkflow(workflow.definition, for: memoModel)
 
             } catch {
                 await SystemEventManager.shared.log(.error, "Retry failed", detail: error.localizedDescription)

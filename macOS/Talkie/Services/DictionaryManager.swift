@@ -2,8 +2,8 @@
 //  DictionaryManager.swift
 //  Talkie
 //
-//  Manages personal dictionary storage and operations
-//  Talkie owns the dictionary, syncs to Engine for processing
+//  Manages multiple dictionaries - coordinates between UI and file storage
+//  Syncs enabled entries to Engine for processing
 //
 
 import Foundation
@@ -17,235 +17,231 @@ final class DictionaryManager: ObservableObject {
 
     // MARK: - Published State
 
-    @Published private(set) var entries: [DictionaryEntry] = []
+    @Published private(set) var dictionaries: [TalkieDictionary] = []
     @Published private(set) var isLoaded: Bool = false
+    @Published private(set) var isLoading: Bool = false
 
-    /// Whether dictionary processing is enabled in Engine
-    /// This is the control Talkie uses to enable/disable dictionary globally
-    @Published var isEnabled: Bool {
+    /// Global enable/disable for dictionary processing
+    @Published var isGloballyEnabled: Bool {
         didSet {
-            UserDefaults.standard.set(isEnabled, forKey: "dictionaryEnabled")
-            syncEnabledState()
+            UserDefaults.standard.set(isGloballyEnabled, forKey: "dictionaryEnabled")
+            syncToEngine()
         }
     }
 
-    // MARK: - Storage
+    // MARK: - Computed
 
-    private let fileURL: URL = {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let talkieDir = appSupport.appendingPathComponent("Talkie", isDirectory: true)
+    /// Total entry count across all dictionaries
+    var totalEntryCount: Int {
+        dictionaries.reduce(0) { $0 + $1.entries.count }
+    }
 
-        // Ensure directory exists
-        try? FileManager.default.createDirectory(at: talkieDir, withIntermediateDirectories: true)
+    /// Total enabled entry count
+    var enabledEntryCount: Int {
+        dictionaries
+            .filter { $0.isEnabled }
+            .reduce(0) { $0 + $1.enabledEntryCount }
+    }
 
-        return talkieDir.appendingPathComponent("dictionary.json")
-    }()
+    /// All enabled entries from enabled dictionaries (for Engine)
+    var allEnabledEntries: [DictionaryEntry] {
+        dictionaries
+            .filter { $0.isEnabled }
+            .flatMap { $0.enabledEntries }
+    }
 
     // MARK: - Init
 
     private init() {
-        // Load enabled state from UserDefaults
-        self.isEnabled = UserDefaults.standard.bool(forKey: "dictionaryEnabled")
-        load()
-        // Sync enabled state to Engine on startup
-        syncEnabledState()
+        self.isGloballyEnabled = UserDefaults.standard.bool(forKey: "dictionaryEnabled")
     }
 
-    // MARK: - CRUD Operations
+    // MARK: - Load
 
-    func addEntry(_ entry: DictionaryEntry) {
-        entries.append(entry)
-        save()
-        syncToEngine()
-        log.info("Dictionary entry added", detail: "'\(entry.trigger)' -> '\(entry.replacement)'")
-    }
-
-    func updateEntry(_ entry: DictionaryEntry) {
-        guard let index = entries.firstIndex(where: { $0.id == entry.id }) else { return }
-        entries[index] = entry
-        save()
-        syncToEngine()
-        log.debug("Dictionary entry updated", detail: entry.trigger)
-    }
-
-    func deleteEntry(_ entry: DictionaryEntry) {
-        entries.removeAll { $0.id == entry.id }
-        save()
-        syncToEngine()
-        log.info("Dictionary entry deleted", detail: entry.trigger)
-    }
-
-    func deleteEntry(at offsets: IndexSet) {
-        let toDelete = offsets.map { entries[$0].trigger }
-        entries.remove(atOffsets: offsets)
-        save()
-        syncToEngine()
-        log.info("Dictionary entries deleted", detail: toDelete.joined(separator: ", "))
-    }
-
-    func toggleEntry(_ entry: DictionaryEntry) {
-        guard let index = entries.firstIndex(where: { $0.id == entry.id }) else { return }
-        entries[index].isEnabled.toggle()
-        save()
-        syncToEngine()
-    }
-
-    func incrementUsageCount(for entryId: UUID) {
-        guard let index = entries.firstIndex(where: { $0.id == entryId }) else { return }
-        entries[index].usageCount += 1
-        // Don't save on every increment - batch save periodically
-    }
-
-    func batchIncrementUsage(for entryIds: [UUID]) {
-        for id in entryIds {
-            if let index = entries.firstIndex(where: { $0.id == id }) {
-                entries[index].usageCount += 1
-            }
-        }
-        save()
-    }
-
-    // MARK: - Enabled Entries
-
-    var enabledEntries: [DictionaryEntry] {
-        entries.filter { $0.isEnabled }
-    }
-
-    // MARK: - Persistence
-
-    func load() {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            log.info("No dictionary file found, starting fresh")
-            isLoaded = true
-            return
-        }
+    func load() async {
+        guard !isLoading else { return }
+        isLoading = true
 
         do {
-            let data = try Data(contentsOf: fileURL)
-            entries = try JSONDecoder().decode([DictionaryEntry].self, from: data)
+            // Load manifest first
+            try await DictionaryFileManager.shared.loadManifest()
+
+            // Migrate legacy format if needed
+            try await DictionaryFileManager.shared.migrateFromLegacyFormat()
+
+            // Reload manifest after migration
+            try await DictionaryFileManager.shared.loadManifest()
+
+            // Load all dictionaries
+            let loaded = try await DictionaryFileManager.shared.loadAllDictionaries()
+            dictionaries = loaded
             isLoaded = true
-            log.info("Dictionary loaded", detail: "\(entries.count) entries")
-            // Sync to Engine on load
+
+            log.info("Dictionaries loaded", detail: "\(dictionaries.count) dictionaries, \(totalEntryCount) total entries")
+
+            // Sync to engine
+            syncToEngine()
+
+        } catch {
+            log.error("Failed to load dictionaries", error: error)
+            isLoaded = true
+        }
+
+        isLoading = false
+    }
+
+    // MARK: - Dictionary CRUD
+
+    func createDictionary(name: String, description: String? = nil) async {
+        do {
+            let dictionary = try await DictionaryFileManager.shared.createDictionary(
+                name: name,
+                description: description
+            )
+            dictionaries.append(dictionary)
+            log.info("Dictionary created", detail: name)
+        } catch {
+            log.error("Failed to create dictionary", error: error)
+        }
+    }
+
+    func updateDictionary(_ dictionary: TalkieDictionary) async {
+        do {
+            var updated = dictionary
+            updated.modifiedAt = Date()
+            try await DictionaryFileManager.shared.saveDictionary(updated)
+
+            if let index = dictionaries.firstIndex(where: { $0.id == dictionary.id }) {
+                dictionaries[index] = updated
+            }
+
+            syncToEngine()
+            log.debug("Dictionary updated", detail: dictionary.name)
+        } catch {
+            log.error("Failed to update dictionary", error: error)
+        }
+    }
+
+    func deleteDictionary(_ dictionary: TalkieDictionary) async {
+        do {
+            try await DictionaryFileManager.shared.deleteDictionary(id: dictionary.id)
+            dictionaries.removeAll { $0.id == dictionary.id }
+            syncToEngine()
+            log.info("Dictionary deleted", detail: dictionary.name)
+        } catch {
+            log.error("Failed to delete dictionary", error: error)
+        }
+    }
+
+    func toggleDictionary(_ dictionary: TalkieDictionary) async {
+        do {
+            try await DictionaryFileManager.shared.toggleDictionary(id: dictionary.id)
+
+            if let index = dictionaries.firstIndex(where: { $0.id == dictionary.id }) {
+                dictionaries[index].isEnabled.toggle()
+            }
+
             syncToEngine()
         } catch {
-            log.error("Failed to load dictionary", error: error)
-            isLoaded = true
+            log.error("Failed to toggle dictionary", error: error)
         }
     }
 
-    func save() {
-        do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let data = try encoder.encode(entries)
-            try data.write(to: fileURL, options: .atomic)
-            log.debug("Dictionary saved", detail: "\(entries.count) entries")
-        } catch {
-            log.error("Failed to save dictionary", error: error)
-        }
+    // MARK: - Entry CRUD
+
+    func addEntry(to dictionaryId: UUID, entry: DictionaryEntry) async {
+        guard let index = dictionaries.firstIndex(where: { $0.id == dictionaryId }) else { return }
+
+        dictionaries[index].entries.append(entry)
+        dictionaries[index].modifiedAt = Date()
+
+        await updateDictionary(dictionaries[index])
+        log.info("Entry added", detail: "'\(entry.trigger)' -> '\(entry.replacement)'")
+    }
+
+    func updateEntry(in dictionaryId: UUID, entry: DictionaryEntry) async {
+        guard let dictIndex = dictionaries.firstIndex(where: { $0.id == dictionaryId }) else { return }
+        guard let entryIndex = dictionaries[dictIndex].entries.firstIndex(where: { $0.id == entry.id }) else { return }
+
+        dictionaries[dictIndex].entries[entryIndex] = entry
+        dictionaries[dictIndex].modifiedAt = Date()
+
+        await updateDictionary(dictionaries[dictIndex])
+        log.debug("Entry updated", detail: entry.trigger)
+    }
+
+    func deleteEntry(from dictionaryId: UUID, entry: DictionaryEntry) async {
+        guard let dictIndex = dictionaries.firstIndex(where: { $0.id == dictionaryId }) else { return }
+
+        dictionaries[dictIndex].entries.removeAll { $0.id == entry.id }
+        dictionaries[dictIndex].modifiedAt = Date()
+
+        await updateDictionary(dictionaries[dictIndex])
+        log.info("Entry deleted", detail: entry.trigger)
+    }
+
+    func toggleEntry(in dictionaryId: UUID, entry: DictionaryEntry) async {
+        guard let dictIndex = dictionaries.firstIndex(where: { $0.id == dictionaryId }) else { return }
+        guard let entryIndex = dictionaries[dictIndex].entries.firstIndex(where: { $0.id == entry.id }) else { return }
+
+        dictionaries[dictIndex].entries[entryIndex].isEnabled.toggle()
+        dictionaries[dictIndex].modifiedAt = Date()
+
+        await updateDictionary(dictionaries[dictIndex])
+    }
+
+    // MARK: - Import
+
+    func importDictionary(from url: URL) async throws -> TalkieDictionary {
+        let dictionary = try await DictionaryFileManager.shared.importDictionary(from: url)
+        dictionaries.append(dictionary)
+        syncToEngine()
+        log.info("Dictionary imported", detail: "\(dictionary.name) with \(dictionary.entries.count) entries")
+        return dictionary
+    }
+
+    func importDictionary(from data: Data, name: String? = nil) async throws -> TalkieDictionary {
+        let dictionary = try await DictionaryFileManager.shared.importDictionary(from: data, name: name)
+        dictionaries.append(dictionary)
+        syncToEngine()
+        log.info("Dictionary imported", detail: "\(dictionary.name) with \(dictionary.entries.count) entries")
+        return dictionary
     }
 
     // MARK: - Engine Sync
 
-    /// Sync dictionary content to Engine
     private func syncToEngine() {
+        guard isGloballyEnabled else {
+            // Disable dictionary in engine
+            Task {
+                await EngineClient.shared.setDictionaryEnabled(false)
+            }
+            return
+        }
+
+        let entries = allEnabledEntries
         Task {
             do {
-                try await EngineClient.shared.updateDictionary(enabledEntries)
-                log.debug("Dictionary synced to Engine", detail: "\(enabledEntries.count) entries")
+                try await EngineClient.shared.updateDictionary(entries)
+                await EngineClient.shared.setDictionaryEnabled(true)
+                log.debug("Dictionary synced to Engine", detail: "\(entries.count) entries")
             } catch {
                 log.warning("Failed to sync dictionary to Engine", error: error)
             }
         }
     }
 
-    /// Sync enabled state to Engine
-    private func syncEnabledState() {
-        Task {
-            await EngineClient.shared.setDictionaryEnabled(isEnabled)
-            log.debug("Dictionary enabled state synced", detail: "\(isEnabled)")
-        }
+    /// Force reload dictionaries from disk and sync to Engine
+    func reload() async {
+        isLoaded = false
+        await load()
     }
 
-    // MARK: - Import/Export
+    // MARK: - Quick Actions
 
-    func exportJSON() -> Data? {
-        do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            encoder.dateEncodingStrategy = .iso8601
-            return try encoder.encode(entries)
-        } catch {
-            log.error("Failed to export dictionary", error: error)
-            return nil
-        }
-    }
-
-    func importJSON(_ data: Data, merge: Bool = true) throws -> Int {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-
-        let imported = try decoder.decode([DictionaryEntry].self, from: data)
-
-        if merge {
-            // Merge: add new entries, skip duplicates (by trigger)
-            let existingTriggers = Set(entries.map { $0.trigger.lowercased() })
-            let newEntries = imported.filter { !existingTriggers.contains($0.trigger.lowercased()) }
-            entries.append(contentsOf: newEntries)
-            save()
-            syncToEngine()
-            log.info("Dictionary imported (merge)", detail: "\(newEntries.count) new entries")
-            return newEntries.count
-        } else {
-            // Replace all
-            entries = imported
-            save()
-            syncToEngine()
-            log.info("Dictionary imported (replace)", detail: "\(imported.count) entries")
-            return imported.count
-        }
-    }
-
-    // MARK: - Presets
-
-    func addCommonPresets() {
-        let presets: [(String, String)] = [
-            ("ios", "iOS"),
-            ("macos", "macOS"),
-            ("iphone", "iPhone"),
-            ("ipad", "iPad"),
-            ("wifi", "WiFi"),
-            ("api", "API"),
-            ("url", "URL"),
-            ("html", "HTML"),
-            ("css", "CSS"),
-            ("json", "JSON"),
-            ("sql", "SQL"),
-        ]
-
-        let existingTriggers = Set(entries.map { $0.trigger.lowercased() })
-
-        for (trigger, replacement) in presets {
-            if !existingTriggers.contains(trigger.lowercased()) {
-                let entry = DictionaryEntry(
-                    trigger: trigger,
-                    replacement: replacement,
-                    matchType: .exact,
-                    category: "Tech"
-                )
-                entries.append(entry)
-            }
-        }
-
-        save()
-        syncToEngine()
-        log.info("Added common presets")
-    }
-
-    func clearAll() {
-        entries.removeAll()
-        save()
-        syncToEngine()
-        log.info("Dictionary cleared")
+    /// Create a default personal dictionary if none exist
+    func ensureDefaultDictionary() async {
+        guard dictionaries.isEmpty else { return }
+        await createDictionary(name: "Personal", description: "Your personal word replacements")
     }
 }

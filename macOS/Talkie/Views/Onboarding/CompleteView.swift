@@ -13,7 +13,7 @@ struct CompleteView: View {
     let onComplete: () -> Void
     @Bindable private var manager = OnboardingManager.shared
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(LiveSettings.self) private var liveSettings
+    private var liveSettings: LiveSettings { LiveSettings.shared }
     @State private var scale: CGFloat = 0.5
     @State private var rotation: Double = 0
     @State private var showCelebration = false

@@ -28,6 +28,7 @@ enum VisualTheme: String, CaseIterable, Codable {
     case linear = "linear"
     case terminal = "terminal"
     case minimal = "minimal"
+    case warm = "warm"          // Maps to warm theme
 
     var displayName: String {
         switch self {
@@ -36,6 +37,7 @@ enum VisualTheme: String, CaseIterable, Codable {
         case .linear: return "Linear"
         case .terminal: return "Terminal"
         case .minimal: return "Minimal"
+        case .warm: return "Warm"
         }
     }
 
@@ -46,6 +48,7 @@ enum VisualTheme: String, CaseIterable, Codable {
         case .linear: return "True black, Vercel-inspired"
         case .terminal: return "Clean monospace, sharp corners"
         case .minimal: return "Light and subtle"
+        case .warm: return "Cozy dark mode with orange tones"
         }
     }
 
@@ -57,6 +60,7 @@ enum VisualTheme: String, CaseIterable, Codable {
         case .linear: return .blue
         case .terminal: return .gray    // No gimmicks
         case .minimal: return .gray
+        case .warm: return .orange
         }
     }
 
@@ -68,6 +72,7 @@ enum VisualTheme: String, CaseIterable, Codable {
         case .linear: return .dark
         case .terminal: return .dark
         case .minimal: return .system
+        case .warm: return .dark
         }
     }
 
@@ -85,6 +90,8 @@ enum VisualTheme: String, CaseIterable, Codable {
             return (Color.black, Color(white: 0.85), Color(white: 0.5))
         case .minimal:
             return (Color(white: 0.96), Color(white: 0.2), Color.gray)
+        case .warm:
+            return (Color(red: 0.1, green: 0.08, blue: 0.06), Color(white: 0.9), Color.orange)
         }
     }
 }
@@ -357,6 +364,8 @@ final class LiveSettings {
             case .linear: return .linear
             case .terminal: return .terminal
             case .minimal: return .minimal
+            case .classic: return .live
+            case .warm: return .warm
             case .liquidGlass: return .midnight  // Deep dark for glass to pop
             }
         }
@@ -368,6 +377,7 @@ final class LiveSettings {
             case .linear: preset = .linear
             case .terminal: preset = .terminal
             case .minimal: preset = .minimal
+            case .warm: preset = .warm
             }
             SettingsManager.shared.applyTheme(preset)
         }

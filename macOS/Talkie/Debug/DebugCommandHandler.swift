@@ -56,6 +56,9 @@ class DebugCommandHandler {
         case "design-audit":
             await runDesignAudit()
 
+        case "environment-crash":
+            await triggerEnvironmentCrash()
+
         case "help":
             printHelp()
             exit(0)
@@ -139,6 +142,33 @@ class DebugCommandHandler {
         exit(0)
     }
 
+    private func triggerEnvironmentCrash() async {
+        print("""
+        🔴 Environment Crash Test
+        =========================
+
+        This reproduces the crash from the crash report where:
+        - A view uses @Environment(LiveSettings.self)
+        - But LiveSettings is NOT provided via .environment()
+        - SwiftUI crashes with: "No Observable object of type X found"
+
+        The crash happens because @Environment(Type.self) for @Observable
+        objects has NO default value - it MUST be provided.
+
+        Triggering crash in 2 seconds...
+        """)
+
+        // Give time to read the message
+        try? await Task.sleep(for: .seconds(2))
+
+        // Trigger the crash
+        EnvironmentCrashTestView.triggerImmediateCrash()
+
+        // Keep app running long enough for window to render and crash
+        try? await Task.sleep(for: .seconds(5))
+        exit(0)
+    }
+
     // MARK: - Help
 
     private func printHelp() {
@@ -168,6 +198,11 @@ class DebugCommandHandler {
                 - report.html (interactive report)
                 - report.md (markdown report)
                 - screenshots/ (all settings pages)
+
+          environment-crash
+              Trigger a crash by rendering a view that uses
+              @Environment(LiveSettings.self) without providing it.
+              This reproduces the crash from the crash report.
 
           help
               Show this help message

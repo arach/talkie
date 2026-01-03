@@ -12,7 +12,7 @@ struct LiveModePitchView: View {
     let onNext: () -> Void
     @Bindable private var manager = OnboardingManager.shared
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(LiveSettings.self) private var liveSettings
+    private var liveSettings: LiveSettings { LiveSettings.shared }
     @State private var animationPhase: Int = 0
 
     private var colors: OnboardingColors {

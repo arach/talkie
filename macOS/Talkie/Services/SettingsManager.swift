@@ -292,6 +292,8 @@ enum ThemePreset: String, CaseIterable {
     case linear = "linear"          // True black, Vercel-inspired
     case terminal = "terminal"      // Ghostty-style: clean, monospace, sharp
     case minimal = "minimal"        // Light mode, system-adaptive
+    case classic = "classic"        // Comfortable defaults with blue accents
+    case warm = "warm"              // Cozy dark mode with orange tones
     case liquidGlass = "liquidGlass" // Experimental glass effects
 
     var displayName: String {
@@ -300,6 +302,8 @@ enum ThemePreset: String, CaseIterable {
         case .linear: return "Linear"
         case .terminal: return "Terminal"
         case .minimal: return "Minimal"
+        case .classic: return "Classic"
+        case .warm: return "Warm"
         case .liquidGlass: return "Liquid Glass"
         }
     }
@@ -310,6 +314,8 @@ enum ThemePreset: String, CaseIterable {
         case .linear: return "True black, minimal, Vercel-inspired"
         case .terminal: return "Clean monospace, sharp corners, no frills"
         case .minimal: return "Light and subtle, adapts to system"
+        case .classic: return "Comfortable defaults with blue accents"
+        case .warm: return "Cozy dark mode with orange tones"
         case .liquidGlass: return "Experimental: maximum glass effects"
         }
     }
@@ -320,6 +326,8 @@ enum ThemePreset: String, CaseIterable {
         case .linear: return "square.stack.3d.up"
         case .terminal: return "terminal"
         case .minimal: return "circle"
+        case .classic: return "star"
+        case .warm: return "flame"
         case .liquidGlass: return "drop.fill"
         }
     }
@@ -336,6 +344,10 @@ enum ThemePreset: String, CaseIterable {
             return (Color.black, Color(white: 0.85), Color(white: 0.5))
         case .minimal:
             return (Color(white: 0.96), Color(white: 0.2), Color.gray)
+        case .classic:
+            return (Color(white: 0.15), Color(white: 0.9), Color.blue)
+        case .warm:
+            return (Color(red: 0.1, green: 0.08, blue: 0.06), Color(white: 0.9), Color.orange)
         case .liquidGlass:
             return (Color(white: 0.05), Color.white, Color.cyan)
         }
@@ -348,6 +360,8 @@ enum ThemePreset: String, CaseIterable {
         case .linear: return .dark
         case .terminal: return .dark
         case .minimal: return .system
+        case .classic: return .dark
+        case .warm: return .dark
         case .liquidGlass: return .dark
         }
     }
@@ -359,6 +373,8 @@ enum ThemePreset: String, CaseIterable {
         case .linear: return .system
         case .terminal: return .jetbrainsMono   // JetBrains Mono throughout
         case .minimal: return .system
+        case .classic: return .system
+        case .warm: return .system
         case .liquidGlass: return .system
         }
     }
@@ -370,6 +386,8 @@ enum ThemePreset: String, CaseIterable {
         case .linear: return .system
         case .terminal: return .jetbrainsMono   // JetBrains Mono throughout
         case .minimal: return .system
+        case .classic: return .system
+        case .warm: return .monospace           // Monospace content for warm theme
         case .liquidGlass: return .system
         }
     }
@@ -380,6 +398,8 @@ enum ThemePreset: String, CaseIterable {
         case .linear: return .blue
         case .terminal: return .gray        // No gimmicks, just gray
         case .minimal: return .gray
+        case .classic: return .blue
+        case .warm: return .orange
         case .liquidGlass: return .blue
         }
     }
@@ -391,6 +411,8 @@ enum ThemePreset: String, CaseIterable {
         case .linear: return .medium
         case .terminal: return .small       // Condensed, information-dense
         case .minimal: return .medium
+        case .classic: return .medium
+        case .warm: return .medium
         case .liquidGlass: return .medium
         }
     }
@@ -409,6 +431,8 @@ enum ThemePreset: String, CaseIterable {
         case .liquidGlass: return .extreme
         case .linear: return .prominent     // Floating cards
         case .talkiePro: return .standard
+        case .classic: return .standard
+        case .warm: return .standard
         case .minimal: return .subtle
         case .terminal: return .subtle      // Flat, minimal glass
         }
@@ -512,6 +536,16 @@ class SettingsManager {
     /// Check if liquid glass theme is active
     var isLiquidGlassTheme: Bool {
         currentTheme == .liquidGlass
+    }
+
+    /// Check if classic theme is active
+    var isClassicTheme: Bool {
+        currentTheme == .classic
+    }
+
+    /// Check if warm theme is active
+    var isWarmTheme: Bool {
+        currentTheme == .warm
     }
 
     /// Current glass depth based on theme
@@ -1330,6 +1364,7 @@ class SettingsManager {
     // MARK: - Audio Playback
 
     private let playbackVolumeKey = "playbackVolume"
+    private let keepTTSEngineWarmKey = "keepTTSEngineWarm"
 
     /// Audio playback volume (0.0 to 1.0, default 1.0)
     var playbackVolume: Float = 1.0 {
@@ -1339,6 +1374,18 @@ class SettingsManager {
                 UserDefaults.standard.set(volume, forKey: self.playbackVolumeKey)
             }
             NotificationCenter.default.post(name: .playbackVolumeDidChange, object: nil)
+        }
+    }
+
+    /// Keep TTS engine loaded after synthesis (default: false)
+    /// - ON: Keep TalkieEnginePod running after TTS (fast subsequent calls, ~800MB memory)
+    /// - OFF: Kill pod after TTS completes (reclaim memory)
+    var keepTTSEngineWarm: Bool = false {
+        didSet {
+            let value = keepTTSEngineWarm
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(value, forKey: self.keepTTSEngineWarmKey)
+            }
         }
     }
 
@@ -1587,6 +1634,10 @@ class SettingsManager {
         } else {
             self.playbackVolume = 1.0
         }
+
+        // Initialize TTS engine warm setting
+        // Default: false (release ~800MB after TTS completes)
+        self.keepTTSEngineWarm = UserDefaults.standard.object(forKey: keepTTSEngineWarmKey) as? Bool ?? false
 
         // Initialize TTS voice
         // Default: kokoro:default (local Kokoro voice)

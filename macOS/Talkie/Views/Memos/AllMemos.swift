@@ -261,7 +261,7 @@ struct AllMemos: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
             .background(TalkieTheme.hover)
-            .cornerRadius(CornerRadius.xs)
+            .cornerRadius(6)
 
             // Inline filter chips
             filterChip(filter: .shortRecordings, label: "Short", icon: "clock")
@@ -356,7 +356,7 @@ struct AllMemos: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(
-                RoundedRectangle(cornerRadius: CornerRadius.xs)
+                RoundedRectangle(cornerRadius: 4)
                     .fill(viewModel.sortField == field ? TalkieTheme.surfaceCard : Color.clear)
             )
         }
@@ -732,7 +732,7 @@ struct AllMemos: View {
                         .foregroundColor(viewMode == mode ? TalkieTheme.textPrimary : TalkieTheme.textMuted)
                         .frame(width: 24, height: 20)
                         .background(viewMode == mode ? TalkieTheme.surfaceCard : Color.clear)
-                        .cornerRadius(CornerRadius.xs)
+                        .cornerRadius(4)
                 }
                 .buttonStyle(.plain)
                 .help(mode.rawValue)
@@ -740,7 +740,7 @@ struct AllMemos: View {
         }
         .padding(2)
         .background(TalkieTheme.hover)
-        .cornerRadius(CornerRadius.xs)
+        .cornerRadius(6)
     }
 
     private func iconForMode(_ mode: ViewMode) -> String {
@@ -1193,16 +1193,16 @@ struct MemoRowEnhanced: View {
     // Source icon - color-coded rounded square with subtle glass
     private var sourceIcon: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: CornerRadius.xs)
+            RoundedRectangle(cornerRadius: 6)
                 .fill(.ultraThinMaterial)
                 .frame(width: 28, height: 28)
 
-            RoundedRectangle(cornerRadius: CornerRadius.xs)
+            RoundedRectangle(cornerRadius: 6)
                 .fill(memo.source.color.opacity(0.15))
                 .frame(width: 28, height: 28)
 
             // Top highlight
-            RoundedRectangle(cornerRadius: CornerRadius.xs)
+            RoundedRectangle(cornerRadius: 6)
                 .fill(
                     LinearGradient(
                         colors: [Color.white.opacity(0.1), Color.clear],
@@ -1480,7 +1480,7 @@ struct MemoSourceBadgeV2: View {
         .padding(.horizontal, size.padding)
         .padding(.vertical, 2)
         .background(source.color.opacity(0.12))
-        .cornerRadius(CornerRadius.xs)
+        .cornerRadius(4)
     }
 }
 

@@ -1586,6 +1586,13 @@ class WorkflowExecutor {
                 playImmediately: config.playImmediately,
                 outputURL: fileURL
             )
+
+        case .local:
+            // Use TalkieEnginePod (Kokoro) - on-device, free
+            audioFileURL = try await generateWithLocalTTS(
+                text: textToSpeak,
+                voice: config.voice ?? "default"
+            )
         }
 
         // Play audio file immediately (non-blocking)
@@ -1641,6 +1648,38 @@ class WorkflowExecutor {
         return cafURL
     }
 
+    /// Generate audio using local TalkieEnginePod (Kokoro)
+    /// On-device, free, ~800MB memory when loaded
+    private func generateWithLocalTTS(text: String, voice: String) async throws -> URL? {
+        logger.info("🗣️ Generating audio with local TTS (Kokoro)")
+
+        let voiceId = "kokoro:\(voice)"
+
+        do {
+            let audioPath = try await EngineClient.shared.synthesize(
+                text: text,
+                voiceId: voiceId
+            )
+
+            logger.info("Generated local TTS audio: \(audioPath)")
+
+            // Unload TTS if user doesn't want to keep it warm
+            if !SettingsManager.shared.keepTTSEngineWarm {
+                Task {
+                    let unloaded = await EngineClient.shared.unloadTTS()
+                    if unloaded {
+                        logger.info("🗣️ TTS engine unloaded (keepTTSEngineWarm=false)")
+                    }
+                }
+            }
+
+            return URL(fileURLWithPath: audioPath)
+        } catch {
+            logger.error("Local TTS failed: \(error.localizedDescription)")
+            throw WorkflowError.executionFailed("Local TTS failed: \(error.localizedDescription)")
+        }
+    }
+
     /// Generate audio using SpeakEasy CLI
     private func generateWithSpeakEasy(
         text: String,
@@ -1669,6 +1708,9 @@ class WorkflowExecutor {
             speakeasyProvider = "elevenlabs"
         case .system:
             speakeasyProvider = "system"
+        case .local:
+            // Local TTS is handled by generateWithLocalTTS, not SpeakEasy
+            fatalError("Local TTS should not use SpeakEasy path")
         }
         args.append("--provider")
         args.append(speakeasyProvider)
@@ -2133,13 +2175,13 @@ class WorkflowExecutor {
             var workflow: WorkflowDefinition?
 
             if let workflowId = intent.workflowId {
-                workflow = WorkflowManager.shared.workflows.first(where: { $0.id == workflowId })
+                workflow = WorkflowService.shared.workflow(byID: workflowId)?.definition
             }
 
             // Fallback: match intent action to workflow by name
             if workflow == nil {
                 let intentLower = intent.action.lowercased()
-                workflow = WorkflowManager.shared.workflows.first { wf in
+                workflow = WorkflowService.shared.workflows.first { wf in
                     let nameLower = wf.name.lowercased()
                     // Match if workflow name contains intent action or vice versa
                     return nameLower.contains(intentLower) ||
@@ -2148,7 +2190,7 @@ class WorkflowExecutor {
                            (intentLower == "todo" && (nameLower.contains("task") || nameLower.contains("todo"))) ||
                            (intentLower == "remind" && nameLower.contains("remind")) ||
                            (intentLower == "note" && nameLower.contains("note"))
-                }
+                }?.definition
                 if let wf = workflow {
                     logger.info("📋 Matched intent '\(intent.action)' to workflow '\(wf.name)' by name")
                 }

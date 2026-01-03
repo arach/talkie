@@ -186,6 +186,13 @@ final class StartupCoordinator {
             signposter.emitEvent("Service Monitor")
             ServiceManager.shared.startMonitoring(interval: 30.0)
 
+            // WorkflowService - loads workflow JSON files and GRDB preferences
+            signposter.emitEvent("Workflows")
+            let workflowStart = CFAbsoluteTimeGetCurrent()
+            await WorkflowService.shared.initialize()
+            let workflowElapsed = (CFAbsoluteTimeGetCurrent() - workflowStart) * 1000
+            logger.info("⏱️ Workflow service: \(String(format: "%.0f", workflowElapsed))ms")
+
             // CloudKit sync manager - UI reads from GRDB, this just syncs to cloud
             signposter.emitEvent("Sync Manager")
             let syncStart = CFAbsoluteTimeGetCurrent()

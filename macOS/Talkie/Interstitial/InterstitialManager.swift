@@ -12,10 +12,10 @@ import os
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Interstitial")
 
-/// View state for the interstitial panel
-enum InterstitialViewState {
+/// View mode for the interstitial panel (aligned with VoiceEditorMode)
+enum InterstitialViewMode {
     case editing      // Normal text editing mode
-    case reviewing    // Diff review mode after polish
+    case reviewing    // Diff review mode after revision
 }
 
 @MainActor
@@ -42,7 +42,7 @@ final class InterstitialManager {
     var hasSelectionContext: Bool { originalSelectedText != nil && sourceAppBundleID != nil }
 
     // View state (editing vs reviewing diff)
-    var viewState: InterstitialViewState = .editing
+    var viewState: InterstitialViewMode = .editing
     private(set) var prePolishText: String = ""  // Text before last polish
 
     /// Computed diff between pre-polish and current edited text
@@ -51,15 +51,15 @@ final class InterstitialManager {
         return DiffEngine.diff(original: prePolishText, proposed: editedText)
     }
 
-    // MARK: - Edit History (in-memory micro-history)
+    // MARK: - Revision History (in-memory micro-history)
 
-    /// A snapshot of an edit in the session
-    struct EditSnapshot: Identifiable {
+    /// A snapshot of a revision in the session (aligned with VoiceEditor.Revision)
+    struct Revision: Identifiable {
         let id = UUID()
         let timestamp: Date
         let instruction: String      // What prompt/instruction was used
-        let textBefore: String       // Text before this edit
-        let textAfter: String        // Text after this edit
+        let textBefore: String       // Text before this revision
+        let textAfter: String        // Text after this revision
         let changeCount: Int         // Number of changes in the diff
 
         var timeAgo: String {
@@ -76,46 +76,46 @@ final class InterstitialManager {
         }
     }
 
-    private(set) var editHistory: [EditSnapshot] = []
-    var previewingSnapshot: EditSnapshot? = nil  // Currently previewing (not applied)
+    private(set) var revisions: [Revision] = []
+    var previewingRevision: Revision? = nil  // Currently previewing (not applied)
 
-    /// Preview a snapshot (doesn't change anything, just for viewing)
-    func previewSnapshot(_ snapshot: EditSnapshot) {
-        previewingSnapshot = snapshot
+    /// Preview a revision (doesn't change anything, just for viewing)
+    func previewRevision(_ revision: Revision) {
+        previewingRevision = revision
     }
 
     /// Stop previewing, return to normal view
     func dismissPreview() {
-        previewingSnapshot = nil
+        previewingRevision = nil
     }
 
-    /// Actually restore from a snapshot (user explicitly chose to)
+    /// Actually restore from a revision (user explicitly chose to)
     /// This creates a NEW history entry, doesn't delete anything
-    func restoreFromSnapshot(_ snapshot: EditSnapshot) {
+    func restoreFromRevision(_ revision: Revision) {
         let currentText = editedText
 
-        // Record this restoration as a new edit
-        let restorationSnapshot = EditSnapshot(
+        // Record this restoration as a new revision
+        let restorationRevision = Revision(
             timestamp: Date(),
-            instruction: "Restored to: \(snapshot.shortInstruction)",
+            instruction: "Restored to: \(revision.shortInstruction)",
             textBefore: currentText,
-            textAfter: snapshot.textAfter,
-            changeCount: DiffEngine.diff(original: currentText, proposed: snapshot.textAfter).changeCount
+            textAfter: revision.textAfter,
+            changeCount: DiffEngine.diff(original: currentText, proposed: revision.textAfter).changeCount
         )
-        editHistory.append(restorationSnapshot)
+        revisions.append(restorationRevision)
 
         // Apply the restoration
-        editedText = snapshot.textAfter
-        previewingSnapshot = nil
+        editedText = revision.textAfter
+        previewingRevision = nil
         viewState = .editing
 
-        logger.info("Restored from snapshot: \(snapshot.shortInstruction)")
+        logger.info("Restored from revision: \(revision.shortInstruction)")
     }
 
     /// Clear all history (called on dismiss)
     private func clearHistory() {
-        editHistory.removeAll()
-        previewingSnapshot = nil
+        revisions.removeAll()
+        previewingRevision = nil
     }
 
     // Voice guidance state
@@ -527,37 +527,37 @@ final class InterstitialManager {
 
     // MARK: - Diff Review Actions
 
-    /// Accept the polished changes and return to editing mode
-    func acceptChanges() {
+    /// Accept the revision and return to editing mode
+    func acceptRevision() {
         // Record to history before clearing prePolishText
         if !prePolishText.isEmpty {
             let diff = DiffEngine.diff(original: prePolishText, proposed: editedText)
-            let instruction = voiceInstruction ?? "Polish"
+            let instruction = voiceInstruction ?? "Revision"
 
-            let snapshot = EditSnapshot(
+            let revision = Revision(
                 timestamp: Date(),
                 instruction: instruction,
                 textBefore: prePolishText,
                 textAfter: editedText,
                 changeCount: diff.changeCount
             )
-            editHistory.append(snapshot)
-            logger.info("Recorded edit to history: \(instruction.prefix(30))... (\(diff.changeCount) changes)")
+            revisions.append(revision)
+            logger.info("Recorded revision to history: \(instruction.prefix(30))... (\(diff.changeCount) changes)")
         }
 
         viewState = .editing
         prePolishText = ""
         voiceInstruction = nil  // Clear after recording
-        logger.info("Accepted polish changes")
+        logger.info("Accepted revision")
     }
 
-    /// Reject the polished changes, revert to pre-polish text
-    func rejectChanges() {
+    /// Reject the revision, revert to pre-revision text
+    func rejectRevision() {
         editedText = prePolishText
         viewState = .editing
         prePolishText = ""
         voiceInstruction = nil
-        logger.info("Rejected polish changes, reverted to pre-polish text")
+        logger.info("Rejected revision, reverted to previous text")
     }
 
     // MARK: - Save as Memo (Promote to Memo)

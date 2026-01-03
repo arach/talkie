@@ -1,0 +1,63 @@
+{
+  "name": "Cloud Transcribe",
+  "description": "High-quality transcription using OpenAI Whisper API",
+  "icon": "cloud",
+  "color": "mint",
+  "maintainer": "talkie",
+  "steps": [
+    {
+      "type": "shell",
+      "outputKey": "apiResponse",
+      "executable": "/usr/bin/curl",
+      "arguments": [
+        "-s",
+        "https://api.openai.com/v1/audio/transcriptions",
+        "-H", "Authorization: Bearer {{OPENAI_API_KEY}}",
+        "-F", "file=@{{AUDIO_PATH}}",
+        "-F", "model=whisper-1",
+        "-F", "response_format=verbose_json",
+        "-F", "timestamp_granularities[]=word"
+      ],
+      "timeout": 120,
+      "captureStderr": true
+    },
+    {
+      "type": "transform",
+      "outputKey": "transcript",
+      "operation": "extractJSON",
+      "parameters": {
+        "path": "$.text",
+        "fallback": ""
+      }
+    },
+    {
+      "type": "conditional",
+      "outputKey": "hasTranscript",
+      "condition": "{{transcript}}.length > 0",
+      "thenSteps": [3, 4],
+      "elseSteps": [5]
+    },
+    {
+      "type": "llm",
+      "outputKey": "formatted",
+      "costTier": "budget",
+      "prompt": "Clean up this transcript. Fix obvious errors, add punctuation, format into paragraphs. Keep the original meaning exactly.\n\n{{transcript}}",
+      "temperature": 0.2,
+      "maxTokens": 4096
+    },
+    {
+      "type": "notification",
+      "outputKey": "success",
+      "title": "Cloud transcription complete",
+      "body": "{{TITLE}} transcribed with Whisper API",
+      "sound": true
+    },
+    {
+      "type": "notification",
+      "outputKey": "failure",
+      "title": "Transcription failed",
+      "body": "Check API key or try again",
+      "sound": true
+    }
+  ]
+}

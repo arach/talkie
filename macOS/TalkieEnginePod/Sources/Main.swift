@@ -56,7 +56,13 @@ struct PodShell {
         let configJson = args.count >= 3 ? args[2] : "{}"
 
         // Set friendly process name for Activity Monitor
-        let friendlyName = "Talkie \(capabilityName.uppercased()) Pod"
+        let friendlyName: String
+        switch capabilityName.lowercased() {
+        case "tts":
+            friendlyName = "Talkie Speech Engine"
+        default:
+            friendlyName = "Talkie \(capabilityName.capitalized) Engine"
+        }
         friendlyName.withCString { setprogname($0) }
 
         // Create capability

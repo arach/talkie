@@ -106,8 +106,8 @@ struct InterstitialEditorView: View {
             if let diff = manager.currentDiff {
                 DiffReviewView(
                     diff: diff,
-                    onAccept: { manager.acceptChanges() },
-                    onReject: { manager.rejectChanges() }
+                    onAccept: { manager.acceptRevision() },
+                    onReject: { manager.rejectRevision() }
                 )
             } else {
                 // Fallback - shouldn't happen, but just in case
@@ -132,7 +132,7 @@ struct InterstitialEditorView: View {
                         ProgressView()
                             .scaleEffect(0.5)
                             .frame(width: 8, height: 8)
-                        Text("POLISHING")
+                        Text("REVISING")
                             .font(Theme.current.fontXSBold)
                             .foregroundColor(textMuted)
                     }
@@ -145,7 +145,7 @@ struct InterstitialEditorView: View {
                 }
 
                 // History button (only show if there's history)
-                if !manager.editHistory.isEmpty {
+                if !manager.revisions.isEmpty {
                     historyButton
                 }
 
@@ -250,7 +250,7 @@ struct InterstitialEditorView: View {
             HStack(spacing: 4) {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.system(size: 10, weight: .medium))
-                Text("\(manager.editHistory.count)")
+                Text("\(manager.revisions.count)")
                     .font(.system(size: 10, weight: .semibold))
             }
             .foregroundColor(textMuted)
@@ -266,7 +266,7 @@ struct InterstitialEditorView: View {
             )
         }
         .buttonStyle(.plain)
-        .help("Edit history (\(manager.editHistory.count) edits)")
+        .help("Edit history (\(manager.revisions.count) edits)")
         .popover(isPresented: $showHistory) {
             historyPopover
         }
@@ -280,7 +280,7 @@ struct InterstitialEditorView: View {
                     .font(Theme.current.fontXSBold)
                     .foregroundColor(textMuted)
                 Spacer()
-                Text("\(manager.editHistory.count) edits")
+                Text("\(manager.revisions.count) edits")
                     .font(Theme.current.fontXS)
                     .foregroundColor(textMuted)
             }
@@ -290,14 +290,14 @@ struct InterstitialEditorView: View {
             Divider()
 
             // Timeline or Preview
-            if let previewing = manager.previewingSnapshot {
-                snapshotPreview(previewing)
+            if let previewing = manager.previewingRevision {
+                revisionPreview(previewing)
             } else {
                 // Timeline list
                 ScrollView {
                     VStack(alignment: .leading, spacing: 2) {
-                        ForEach(manager.editHistory.reversed()) { snapshot in
-                            historyRow(snapshot)
+                        ForEach(manager.revisions.reversed()) { revision in
+                            historyRow(revision)
                         }
                     }
                     .padding(Spacing.sm)
@@ -309,9 +309,9 @@ struct InterstitialEditorView: View {
         .background(panelBackground)
     }
 
-    private func historyRow(_ snapshot: InterstitialManager.EditSnapshot) -> some View {
+    private func historyRow(_ revision: InterstitialManager.Revision) -> some View {
         Button(action: {
-            manager.previewSnapshot(snapshot)
+            manager.previewRevision(revision)
         }) {
             HStack(spacing: Spacing.sm) {
                 // Timeline dot
@@ -321,19 +321,19 @@ struct InterstitialEditorView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     // Instruction (truncated)
-                    Text(snapshot.shortInstruction)
+                    Text(revision.shortInstruction)
                         .font(Theme.current.fontSM)
                         .foregroundColor(textPrimary)
                         .lineLimit(1)
 
                     // Metadata
                     HStack(spacing: 6) {
-                        Text("\(snapshot.changeCount) changes")
+                        Text("\(revision.changeCount) changes")
                             .font(Theme.current.fontXS)
                             .foregroundColor(textMuted)
                         Text("•")
                             .foregroundColor(textMuted)
-                        Text(snapshot.timeAgo)
+                        Text(revision.timeAgo)
                             .font(Theme.current.fontXS)
                             .foregroundColor(textMuted)
                     }
@@ -357,7 +357,7 @@ struct InterstitialEditorView: View {
         .buttonStyle(.plain)
     }
 
-    private func snapshotPreview(_ snapshot: InterstitialManager.EditSnapshot) -> some View {
+    private func revisionPreview(_ revision: InterstitialManager.Revision) -> some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             // Back button + title
             HStack {
@@ -374,7 +374,7 @@ struct InterstitialEditorView: View {
 
                 Spacer()
 
-                Text(snapshot.timeAgo)
+                Text(revision.timeAgo)
                     .font(Theme.current.fontXS)
                     .foregroundColor(textMuted)
             }
@@ -382,14 +382,14 @@ struct InterstitialEditorView: View {
             .padding(.top, Spacing.sm)
 
             // Instruction
-            Text(snapshot.instruction)
+            Text(revision.instruction)
                 .font(Theme.current.fontSM)
                 .foregroundColor(textPrimary)
                 .padding(.horizontal, Spacing.md)
 
-            // Text preview (the result of this edit)
+            // Text preview (the result of this revision)
             ScrollView {
-                Text(snapshot.textAfter)
+                Text(revision.textAfter)
                     .font(.system(size: 11))
                     .foregroundColor(textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -407,7 +407,7 @@ struct InterstitialEditorView: View {
                 // Copy text
                 Button(action: {
                     NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(snapshot.textAfter, forType: .string)
+                    NSPasteboard.general.setString(revision.textAfter, forType: .string)
                 }) {
                     HStack(spacing: 4) {
                         Image(systemName: "doc.on.doc")
@@ -429,7 +429,7 @@ struct InterstitialEditorView: View {
 
                 // Use this version
                 Button(action: {
-                    manager.restoreFromSnapshot(snapshot)
+                    manager.restoreFromRevision(revision)
                     showHistory = false
                 }) {
                     HStack(spacing: 4) {

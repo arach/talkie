@@ -77,6 +77,8 @@ targets:
           - "*.md"
       - path: Interstitial
         type: group
+      - path: VoiceEditor
+        type: group
       - path: Models
         type: group
       - path: Resources

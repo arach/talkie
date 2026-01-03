@@ -2,7 +2,7 @@
 //  ScratchPadView.swift
 //  Talkie
 //
-//  Scratch pad for quick text editing with voice dictation and AI polish
+//  Scratch pad for quick text editing with voice dictation and AI-assisted revision
 //  Flow: Talkie → TalkieEngine (direct, no TalkieLive)
 //
 
@@ -13,7 +13,7 @@ private let log = Log(.ui)
 
 struct ScratchPadView: View {
     @Environment(SettingsManager.self) private var settings
-    @State private var polishState = TextPolishState()
+    @State private var editorState = VoiceEditorState()
     @FocusState private var isTextFieldFocused: Bool
 
     // Dictation state (uses EphemeralTranscriber → TalkieEngine directly)
@@ -36,7 +36,7 @@ struct ScratchPadView: View {
                 editorCard
 
                 // Only show quick actions when not reviewing
-                if !polishState.isReviewing {
+                if !editorState.isReviewing {
                     quickActionsSection
                 }
 
@@ -67,8 +67,8 @@ struct ScratchPadView: View {
                     .font(.system(size: 24, weight: .bold))
                     .foregroundColor(Theme.current.foreground)
 
-                if !polishState.text.isEmpty {
-                    Text("\(polishState.text.split(separator: " ").count) words")
+                if !editorState.text.isEmpty {
+                    Text("\(editorState.text.split(separator: " ").count) words")
                         .font(Theme.current.fontSM)
                         .foregroundColor(Theme.current.foregroundMuted)
                 }
@@ -93,11 +93,11 @@ struct ScratchPadView: View {
 
             // Content area: editing or reviewing
             Group {
-                switch polishState.viewState {
+                switch editorState.mode {
                 case .editing:
                     editingContent
                 case .reviewing:
-                    if let diff = polishState.currentDiff {
+                    if let diff = editorState.currentDiff {
                         reviewingContent(diff: diff)
                     } else {
                         editingContent
@@ -125,7 +125,7 @@ struct ScratchPadView: View {
 
     private var editingContent: some View {
         ZStack(alignment: .bottom) {
-            TextEditor(text: $polishState.text)
+            TextEditor(text: $editorState.text)
                 .font(Theme.current.contentFontBody)
                 .foregroundColor(Theme.current.foreground)
                 .scrollContentBackground(.hidden)
@@ -178,7 +178,7 @@ struct ScratchPadView: View {
             .frame(minHeight: 200, maxHeight: 400)
 
             // Voice instruction feedback (what you said)
-            if let voiceInstruction = polishState.voiceInstruction {
+            if let voiceInstruction = editorState.currentInstruction {
                 HStack(spacing: Spacing.xs) {
                     Image(systemName: "mic.fill")
                         .font(.system(size: 10))
@@ -210,7 +210,7 @@ struct ScratchPadView: View {
                 Spacer()
 
                 // Reject
-                Button(action: { polishState.rejectChanges() }) {
+                Button(action: { editorState.rejectRevision() }) {
                     HStack(spacing: 4) {
                         Image(systemName: "xmark")
                             .font(.system(size: 9, weight: .semibold))
@@ -229,7 +229,7 @@ struct ScratchPadView: View {
                 .keyboardShortcut(.escape, modifiers: [])
 
                 // Accept
-                Button(action: { polishState.acceptChanges() }) {
+                Button(action: { editorState.acceptRevision() }) {
                     HStack(spacing: 4) {
                         Image(systemName: "checkmark")
                             .font(.system(size: 9, weight: .semibold))
@@ -288,12 +288,12 @@ struct ScratchPadView: View {
 
             Spacer()
 
-            if polishState.isPolishing {
+            if editorState.isProcessing {
                 HStack(spacing: 4) {
                     ProgressView()
                         .scaleEffect(0.5)
                         .frame(width: 10, height: 10)
-                    Text("POLISHING")
+                    Text("REVISING")
                         .font(Theme.current.fontXSBold)
                         .foregroundColor(Theme.current.foregroundMuted)
                 }
@@ -303,12 +303,12 @@ struct ScratchPadView: View {
             }
 
             // History button (only show if there's history)
-            if !polishState.editHistory.isEmpty {
+            if !editorState.revisions.isEmpty {
                 historyButton
             }
 
-            if !polishState.text.isEmpty && !polishState.isReviewing {
-                Button(action: { polishState.text = "" }) {
+            if !editorState.text.isEmpty && !editorState.isReviewing {
+                Button(action: { editorState.text = "" }) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 14))
                         .foregroundColor(Theme.current.foregroundMuted)
@@ -328,7 +328,7 @@ struct ScratchPadView: View {
             HStack(spacing: 4) {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.system(size: 10, weight: .medium))
-                Text("\(polishState.editHistory.count)")
+                Text("\(editorState.revisions.count)")
                     .font(.system(size: 10, weight: .semibold))
             }
             .foregroundColor(Theme.current.foregroundMuted)
@@ -344,7 +344,7 @@ struct ScratchPadView: View {
             )
         }
         .buttonStyle(.plain)
-        .help("Edit history (\(polishState.editHistory.count) edits)")
+        .help("Edit history (\(editorState.revisions.count) edits)")
         .popover(isPresented: $showHistory) {
             historyPopover
         }
@@ -358,7 +358,7 @@ struct ScratchPadView: View {
                     .font(Theme.current.fontXSBold)
                     .foregroundColor(Theme.current.foregroundMuted)
                 Spacer()
-                Text("\(polishState.editHistory.count) edits")
+                Text("\(editorState.revisions.count) edits")
                     .font(Theme.current.fontXS)
                     .foregroundColor(Theme.current.foregroundMuted)
             }
@@ -368,14 +368,14 @@ struct ScratchPadView: View {
             Divider()
 
             // Timeline or Preview
-            if let previewing = polishState.previewingSnapshot {
-                snapshotPreview(previewing)
+            if let previewing = editorState.previewingRevision {
+                revisionPreview(previewing)
             } else {
                 // Timeline list
                 ScrollView {
                     VStack(alignment: .leading, spacing: 2) {
-                        ForEach(polishState.editHistory.reversed()) { snapshot in
-                            historyRow(snapshot)
+                        ForEach(editorState.revisions.reversed()) { revision in
+                            historyRow(revision)
                         }
                     }
                     .padding(Spacing.sm)
@@ -387,9 +387,9 @@ struct ScratchPadView: View {
         .background(Theme.current.background)
     }
 
-    private func historyRow(_ snapshot: EditSnapshot) -> some View {
+    private func historyRow(_ revision: Revision) -> some View {
         Button(action: {
-            polishState.previewSnapshot(snapshot)
+            editorState.previewRevision(revision)
         }) {
             HStack(spacing: Spacing.sm) {
                 // Timeline dot
@@ -398,18 +398,18 @@ struct ScratchPadView: View {
                     .frame(width: 6, height: 6)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(snapshot.shortInstruction)
+                    Text(revision.shortInstruction)
                         .font(Theme.current.fontSM)
                         .foregroundColor(Theme.current.foreground)
                         .lineLimit(1)
 
                     HStack(spacing: 6) {
-                        Text("\(snapshot.changeCount) changes")
+                        Text("\(revision.changeCount) changes")
                             .font(Theme.current.fontXS)
                             .foregroundColor(Theme.current.foregroundMuted)
                         Text("•")
                             .foregroundColor(Theme.current.foregroundMuted)
-                        Text(snapshot.timeAgo)
+                        Text(revision.timeAgo)
                             .font(Theme.current.fontXS)
                             .foregroundColor(Theme.current.foregroundMuted)
                     }
@@ -432,11 +432,11 @@ struct ScratchPadView: View {
         .buttonStyle(.plain)
     }
 
-    private func snapshotPreview(_ snapshot: EditSnapshot) -> some View {
+    private func revisionPreview(_ revision: Revision) -> some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             // Back button + title
             HStack {
-                Button(action: { polishState.dismissPreview() }) {
+                Button(action: { editorState.dismissPreview() }) {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 10, weight: .semibold))
@@ -449,7 +449,7 @@ struct ScratchPadView: View {
 
                 Spacer()
 
-                Text(snapshot.timeAgo)
+                Text(revision.timeAgo)
                     .font(Theme.current.fontXS)
                     .foregroundColor(Theme.current.foregroundMuted)
             }
@@ -457,14 +457,14 @@ struct ScratchPadView: View {
             .padding(.top, Spacing.sm)
 
             // Instruction
-            Text(snapshot.instruction)
+            Text(revision.instruction)
                 .font(Theme.current.fontSM)
                 .foregroundColor(Theme.current.foreground)
                 .padding(.horizontal, Spacing.md)
 
             // Text preview
             ScrollView {
-                Text(snapshot.textAfter)
+                Text(revision.textAfter)
                     .font(.system(size: 11))
                     .foregroundColor(Theme.current.foregroundSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -481,7 +481,7 @@ struct ScratchPadView: View {
             HStack(spacing: Spacing.sm) {
                 Button(action: {
                     NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(snapshot.textAfter, forType: .string)
+                    NSPasteboard.general.setString(revision.textAfter, forType: .string)
                 }) {
                     HStack(spacing: 4) {
                         Image(systemName: "doc.on.doc")
@@ -502,7 +502,7 @@ struct ScratchPadView: View {
                 Spacer()
 
                 Button(action: {
-                    polishState.restoreFromSnapshot(snapshot)
+                    editorState.restoreFromRevision(revision)
                     showHistory = false
                 }) {
                     HStack(spacing: 4) {
@@ -561,12 +561,12 @@ struct ScratchPadView: View {
                     Menu(provider.name) {
                         ForEach(models, id: \.id) { model in
                             Button(action: {
-                                polishState.providerId = provider.id
-                                polishState.modelId = model.id
+                                editorState.providerId = provider.id
+                                editorState.modelId = model.id
                             }) {
                                 HStack {
                                     Text(model.displayName)
-                                    if polishState.modelId == model.id {
+                                    if editorState.modelId == model.id {
                                         Image(systemName: "checkmark")
                                     }
                                 }
@@ -601,7 +601,7 @@ struct ScratchPadView: View {
     }
 
     private var providerIcon: Image {
-        guard let providerId = polishState.providerId else {
+        guard let providerId = editorState.providerId else {
             return Image(systemName: "cpu")
         }
         switch providerId {
@@ -615,7 +615,7 @@ struct ScratchPadView: View {
     }
 
     private var providerColor: Color {
-        guard let providerId = polishState.providerId else { return Theme.current.foregroundMuted }
+        guard let providerId = editorState.providerId else { return Theme.current.foregroundMuted }
         switch providerId {
         case "openai": return Color(red: 0.3, green: 0.7, blue: 0.5)
         case "anthropic": return Color(red: 0.85, green: 0.55, blue: 0.35)
@@ -627,7 +627,7 @@ struct ScratchPadView: View {
     }
 
     private var displayModelName: String {
-        if let model = polishState.modelId {
+        if let model = editorState.modelId {
             return model
                 .replacingOccurrences(of: "gpt-4o-mini", with: "4o-mini")
                 .replacingOccurrences(of: "gpt-4o", with: "4o")
@@ -645,7 +645,7 @@ struct ScratchPadView: View {
             voicePromptButton
 
             // Selection hint - shows when text is selected
-            if polishState.isTransformingSelection {
+            if editorState.isTransformingSelection {
                 Text("Selection")
                     .font(.system(size: 9, weight: .medium))
                     .foregroundColor(Theme.current.foregroundMuted)
@@ -664,7 +664,7 @@ struct ScratchPadView: View {
 
             Spacer()
 
-            if let error = polishState.polishError {
+            if let error = editorState.error {
                 Text(error)
                     .font(Theme.current.fontXS)
                     .foregroundColor(SemanticColor.error)
@@ -675,7 +675,7 @@ struct ScratchPadView: View {
             Button(action: saveToMemo) {
                 Image(systemName: "square.and.arrow.down")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(polishState.text.isEmpty ? Theme.current.foregroundMuted : Theme.current.foreground)
+                    .foregroundColor(editorState.text.isEmpty ? Theme.current.foregroundMuted : Theme.current.foreground)
                     .frame(width: 28, height: 28)
                     .background(
                         RoundedRectangle(cornerRadius: CornerRadius.xs)
@@ -683,7 +683,7 @@ struct ScratchPadView: View {
                     )
             }
             .buttonStyle(.plain)
-            .disabled(polishState.text.isEmpty)
+            .disabled(editorState.text.isEmpty)
             .help("Save as Memo")
 
             Button(action: copyToClipboard) {
@@ -693,11 +693,11 @@ struct ScratchPadView: View {
                     .frame(width: 28, height: 28)
                     .background(
                         RoundedRectangle(cornerRadius: CornerRadius.xs)
-                            .fill(polishState.text.isEmpty ? Theme.current.foregroundMuted : settings.resolvedAccentColor)
+                            .fill(editorState.text.isEmpty ? Theme.current.foregroundMuted : settings.resolvedAccentColor)
                     )
             }
             .buttonStyle(.plain)
-            .disabled(polishState.text.isEmpty)
+            .disabled(editorState.text.isEmpty)
             .help("Copy to clipboard")
         }
         .padding(.horizontal, Spacing.md)
@@ -742,7 +742,7 @@ struct ScratchPadView: View {
             )
         }
         .buttonStyle(.plain)
-        .disabled(polishState.isPolishing || polishState.text.isEmpty)
+        .disabled(editorState.isProcessing || editorState.text.isEmpty)
         .help("Speak to tell AI what to do with your text")
         .onChange(of: isRecordingInstruction) { _, isRecording in
             if isRecording {
@@ -759,7 +759,7 @@ struct ScratchPadView: View {
 
     private func quickActionChip(_ action: SmartAction) -> some View {
         Button(action: {
-            Task { await polishState.polish(instruction: action.defaultPrompt) }
+            Task { await editorState.requestRevision(instruction: action.defaultPrompt) }
         }) {
             HStack(spacing: 3) {
                 Image(systemName: action.icon)
@@ -776,7 +776,7 @@ struct ScratchPadView: View {
             )
         }
         .buttonStyle(.plain)
-        .disabled(polishState.isPolishing || polishState.text.isEmpty)
+        .disabled(editorState.isProcessing || editorState.text.isEmpty)
     }
 
     // MARK: - Quick Actions Section
@@ -803,7 +803,7 @@ struct ScratchPadView: View {
 
     private func actionCard(_ action: SmartAction) -> some View {
         Button(action: {
-            Task { await polishState.polish(instruction: action.defaultPrompt) }
+            Task { await editorState.requestRevision(instruction: action.defaultPrompt) }
         }) {
             VStack(spacing: Spacing.xs) {
                 Image(systemName: action.icon)
@@ -827,7 +827,7 @@ struct ScratchPadView: View {
             )
         }
         .buttonStyle(.plain)
-        .disabled(polishState.isPolishing || polishState.text.isEmpty)
+        .disabled(editorState.isProcessing || editorState.text.isEmpty)
     }
 
     // MARK: - Actions
@@ -835,8 +835,8 @@ struct ScratchPadView: View {
     private func initializeLLMSettings() {
         Task { @MainActor in
             if let resolved = await LLMProviderRegistry.shared.resolveProviderAndModel() {
-                polishState.providerId = resolved.provider.id
-                polishState.modelId = resolved.modelId
+                editorState.providerId = resolved.provider.id
+                editorState.modelId = resolved.modelId
             }
         }
     }
@@ -868,7 +868,7 @@ struct ScratchPadView: View {
             }
         } catch {
             log.error("Dictation start failed: \(error)")
-            polishState.polishError = error.localizedDescription
+            editorState.error = error.localizedDescription
         }
     }
 
@@ -882,11 +882,11 @@ struct ScratchPadView: View {
                 let transcribedText = try await EphemeralTranscriber.shared.stopAndTranscribe()
 
                 if !transcribedText.isEmpty {
-                    let needsSpace = !polishState.text.isEmpty && !polishState.text.hasSuffix(" ") && !polishState.text.hasSuffix("\n")
+                    let needsSpace = !editorState.text.isEmpty && !editorState.text.hasSuffix(" ") && !editorState.text.hasSuffix("\n")
                     if needsSpace {
-                        polishState.text += " "
+                        editorState.text += " "
                     }
-                    polishState.text += transcribedText
+                    editorState.text += transcribedText
                 }
 
                 dictationPillState = .success
@@ -894,7 +894,7 @@ struct ScratchPadView: View {
                 dictationPillState = .idle
             } catch {
                 log.error("Dictation transcribe failed: \(error)")
-                polishState.polishError = error.localizedDescription
+                editorState.error = error.localizedDescription
                 dictationPillState = .idle
             }
         }
@@ -918,7 +918,7 @@ struct ScratchPadView: View {
             isRecordingInstruction = true
         } catch {
             log.error("Voice prompt capture failed: \(error)")
-            polishState.polishError = error.localizedDescription
+            editorState.error = error.localizedDescription
         }
     }
 
@@ -933,22 +933,22 @@ struct ScratchPadView: View {
             isTranscribingInstruction = false
 
             if !instruction.isEmpty {
-                await polishState.polish(instruction: instruction)
+                await editorState.requestRevision(instruction: instruction)
             }
         } catch {
             log.error("Voice prompt transcribe failed: \(error)")
             isTranscribingInstruction = false
-            polishState.polishError = error.localizedDescription
+            editorState.error = error.localizedDescription
         }
     }
 
     private func copyToClipboard() {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(polishState.text, forType: .string)
+        NSPasteboard.general.setString(editorState.text, forType: .string)
     }
 
     private func saveToMemo() {
-        guard !polishState.text.isEmpty else { return }
+        guard !editorState.text.isEmpty else { return }
 
         Task {
             // Create a new memo from the scratch pad text
@@ -956,10 +956,10 @@ struct ScratchPadView: View {
                 id: UUID(),
                 createdAt: Date(),
                 lastModified: Date(),
-                title: extractTitle(from: polishState.text),
+                title: extractTitle(from: editorState.text),
                 duration: 0,  // No audio
                 sortOrder: 0,
-                transcription: polishState.text,
+                transcription: editorState.text,
                 notes: nil,
                 summary: nil,
                 tasks: nil,
@@ -983,13 +983,13 @@ struct ScratchPadView: View {
 
                 // Clear scratch pad after successful save
                 await MainActor.run {
-                    polishState.text = ""
-                    polishState.clearHistory()
+                    editorState.text = ""
+                    editorState.clearHistory()
                 }
             } catch {
                 log.error("Memo save failed: \(error)")
                 await MainActor.run {
-                    polishState.polishError = "Failed to save: \(error.localizedDescription)"
+                    editorState.error = "Failed to save: \(error.localizedDescription)"
                 }
             }
         }

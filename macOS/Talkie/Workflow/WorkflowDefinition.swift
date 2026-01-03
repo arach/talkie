@@ -26,6 +26,7 @@ struct WorkflowDefinition: Identifiable, Codable, Hashable {
     var description: String
     var icon: String
     var color: WorkflowColor
+    var maintainer: String?  // e.g., "talkie" for official starter pack, "@username" for community
     var steps: [WorkflowStep]
     var isEnabled: Bool
     var isPinned: Bool  // Pinned workflows appear in iOS MAC ACTIONS section
@@ -38,6 +39,16 @@ struct WorkflowDefinition: Identifiable, Codable, Hashable {
     var isSystem: Bool {
         id == WorkflowDefinition.heyTalkieWorkflowId ||
         id == WorkflowDefinition.systemTranscribeWorkflowId
+    }
+
+    /// Returns true if this workflow is maintained by Talkie (official starter pack)
+    var isTalkieMaintained: Bool {
+        maintainer?.lowercased() == "talkie"
+    }
+
+    /// Returns true if this workflow has a maintainer (may be updated externally)
+    var hasMaintainer: Bool {
+        maintainer != nil && !maintainer!.isEmpty
     }
 
     /// Returns true if this workflow starts with a transcription step
@@ -53,6 +64,7 @@ struct WorkflowDefinition: Identifiable, Codable, Hashable {
         description: String,
         icon: String = "wand.and.stars",
         color: WorkflowColor = .blue,
+        maintainer: String? = nil,
         steps: [WorkflowStep] = [],
         isEnabled: Bool = true,
         isPinned: Bool = false,
@@ -66,6 +78,7 @@ struct WorkflowDefinition: Identifiable, Codable, Hashable {
         self.description = description
         self.icon = icon
         self.color = color
+        self.maintainer = maintainer
         self.steps = steps
         self.isEnabled = isEnabled
         self.isPinned = isPinned
@@ -83,6 +96,7 @@ struct WorkflowDefinition: Identifiable, Codable, Hashable {
         description = try container.decode(String.self, forKey: .description)
         icon = try container.decode(String.self, forKey: .icon)
         color = try container.decode(WorkflowColor.self, forKey: .color)
+        maintainer = try container.decodeIfPresent(String.self, forKey: .maintainer)
         steps = try container.decode([WorkflowStep].self, forKey: .steps)
         isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
         isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
@@ -93,7 +107,7 @@ struct WorkflowDefinition: Identifiable, Codable, Hashable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, description, icon, color, steps, isEnabled, isPinned, autoRun, autoRunOrder, createdAt, modifiedAt
+        case id, name, description, icon, color, maintainer, steps, isEnabled, isPinned, autoRun, autoRunOrder, createdAt, modifiedAt
     }
 
     // Built-in system workflows
@@ -453,8 +467,56 @@ struct WorkflowDefinition: Identifiable, Codable, Hashable {
         autoRun: false
     )
 
+    // MARK: - Local TTS Test Workflow
+
+    /// Test workflow for local TTS via TalkieEnginePod (Kokoro)
+    /// Takes a memo, summarizes it dramatically, then speaks the result
+    static let localTTSTest = WorkflowDefinition(
+        id: UUID(uuidString: "00000000-7757-7E57-0000-000000000001")!,
+        name: "Speak Summary",
+        description: "Summarize memo as a movie trailer narrator, then speak it aloud using local TTS",
+        icon: "speaker.wave.2",
+        color: .orange,
+        steps: [
+            // Step 1: Dramatic summary via LLM
+            WorkflowStep(
+                id: UUID(uuidString: "77570001-0000-0000-0000-000000000001")!,
+                type: .llm,
+                config: .llm(LLMStepConfig(
+                    provider: .gemini,
+                    modelId: "gemini-2.0-flash",
+                    prompt: """
+                    Summarize this in 1-2 sentences as if you're a dramatic movie trailer narrator.
+                    Keep it punchy and exciting. No more than 30 words.
+
+                    {{TRANSCRIPT}}
+                    """,
+                    temperature: 0.8,
+                    maxTokens: 100
+                )),
+                outputKey: "dramatic"
+            ),
+            // Step 2: Speak it using local Kokoro TTS
+            WorkflowStep(
+                id: UUID(uuidString: "77570002-0000-0000-0000-000000000002")!,
+                type: .speak,
+                config: .speak(SpeakStepConfig(
+                    text: "{{dramatic}}",
+                    provider: .local,
+                    voice: "default",
+                    playImmediately: true,
+                    saveToFile: false
+                )),
+                outputKey: "spoken"
+            )
+        ],
+        isEnabled: true,
+        isPinned: true,
+        autoRun: false
+    )
+
     // MARK: - Default Workflows (Initial set)
-    static let defaultWorkflows = [summarize, extractTasks, keyInsights, brainDumpProcessor]
+    static let defaultWorkflows = [summarize, extractTasks, keyInsights, brainDumpProcessor, localTTSTest]
 }
 
 // MARK: - Workflow Step
@@ -1839,6 +1901,7 @@ enum TTSProvider: String, Codable, CaseIterable {
     case speakeasy = "speakeasy"    // SpeakEasy CLI (supports openai, elevenlabs, etc.)
     case openai = "openai"          // OpenAI TTS via SpeakEasy
     case elevenlabs = "elevenlabs"  // ElevenLabs via SpeakEasy
+    case local = "local"            // TalkieEnginePod (Kokoro) - on-device, free
 
     var displayName: String {
         switch self {
@@ -1846,6 +1909,7 @@ enum TTSProvider: String, Codable, CaseIterable {
         case .speakeasy: return "SpeakEasy (Default)"
         case .openai: return "OpenAI"
         case .elevenlabs: return "ElevenLabs"
+        case .local: return "Local (Kokoro)"
         }
     }
 }
@@ -1912,6 +1976,15 @@ struct SpeakStepConfig: Codable {
                 ("21m00Tcm4TlvDq8ikWAM", "Rachel"),
                 ("AZnzlk1XvdvUeBnXmlld", "Domi"),
                 ("MF3mGyEYCl7XYWbV9V6O", "Elli")
+            ]
+        case .local:
+            return [
+                ("default", "Default (Kokoro)"),
+                ("af_heart", "Heart"),
+                ("af_bella", "Bella"),
+                ("af_sarah", "Sarah"),
+                ("am_adam", "Adam"),
+                ("am_michael", "Michael")
             ]
         }
     }
@@ -2144,15 +2217,16 @@ class WorkflowManager {
 
     private let userDefaultsKey = "workflows_v2"
     private let iCloudPinnedKey = "pinnedWorkflows"
-    private let twfMigrationKey = "twf_starter_migration_v1"
+    private let starterMigrationKey = "starter_migration_v2"  // Bumped for SimpleWorkflowLoader
 
     private init() {
         loadWorkflows()
 
         // Only load starter workflows ONCE (migration-style)
-        if !UserDefaults.standard.bool(forKey: twfMigrationKey) {
-            loadStarterWorkflowsFromTWF()
-            UserDefaults.standard.set(true, forKey: twfMigrationKey)
+        // Note: This is legacy code. New code should use WorkflowService instead.
+        if !UserDefaults.standard.bool(forKey: starterMigrationKey) {
+            loadStarterWorkflowsFromBundle()
+            UserDefaults.standard.set(true, forKey: starterMigrationKey)
         }
     }
 
@@ -2256,12 +2330,13 @@ class WorkflowManager {
         }
     }
 
-    // MARK: - TWF Starter Workflows
+    // MARK: - Starter Workflows (Legacy)
 
-    /// Load starter workflows from bundled TWF files
+    /// Load starter workflows from bundled JSON files
     /// Only adds workflows that don't already exist (by ID)
-    private func loadStarterWorkflowsFromTWF() {
-        let starterWorkflows = TWFLoader.loadStarterWorkflows()
+    /// Note: This is legacy code. New code should use WorkflowService instead.
+    private func loadStarterWorkflowsFromBundle() {
+        let starterWorkflows = loadBundledStarterWorkflows()
         var added = 0
 
         for starter in starterWorkflows {
@@ -2273,14 +2348,48 @@ class WorkflowManager {
         }
 
         if added > 0 {
-            logger.debug("[WorkflowManager] Added \(added) starter workflows from TWF")
+            logger.debug("[WorkflowManager] Added \(added) starter workflows from bundle")
             saveWorkflows()
         }
     }
 
-    /// Force reload all starter workflows from TWF files (replaces existing ones with same slug)
-    func reloadStarterWorkflowsFromTWF() {
-        let starterWorkflows = TWFLoader.loadStarterWorkflows()
+    /// Load all starter workflows from the StarterWorkflows bundle directory
+    private func loadBundledStarterWorkflows() -> [WorkflowDefinition] {
+        guard let resourcePath = Bundle.main.resourcePath else {
+            logger.debug("[WorkflowManager] No resource path found")
+            return []
+        }
+
+        let starterPath = (resourcePath as NSString).appendingPathComponent("StarterWorkflows")
+        let fileManager = FileManager.default
+        var workflows: [WorkflowDefinition] = []
+
+        do {
+            let files = try fileManager.contentsOfDirectory(atPath: starterPath)
+            let jsonFiles = files.filter { $0.hasSuffix(".json") }
+
+            for filename in jsonFiles {
+                let filePath = (starterPath as NSString).appendingPathComponent(filename)
+                do {
+                    let fileURL = URL(fileURLWithPath: filePath)
+                    let workflow = try SimpleWorkflowLoader.load(from: fileURL)
+                    workflows.append(workflow)
+                    logger.debug("[WorkflowManager] Loaded: \(workflow.name)")
+                } catch {
+                    logger.debug("[WorkflowManager] Failed to load \(filename): \(error)")
+                }
+            }
+        } catch {
+            logger.debug("[WorkflowManager] Failed to read StarterWorkflows: \(error)")
+        }
+
+        return workflows
+    }
+
+    /// Force reload all starter workflows (replaces existing ones with same ID)
+    /// Note: This is legacy code. New code should use WorkflowService instead.
+    func reloadStarterWorkflows() {
+        let starterWorkflows = loadBundledStarterWorkflows()
 
         for starter in starterWorkflows {
             if let index = workflows.firstIndex(where: { $0.id == starter.id }) {
@@ -2306,7 +2415,7 @@ class WorkflowManager {
             }
         }
 
-        logger.debug("[WorkflowManager] Reloaded \(starterWorkflows.count) starter workflows from TWF")
+        logger.debug("[WorkflowManager] Reloaded \(starterWorkflows.count) starter workflows")
         saveWorkflows()
     }
 }

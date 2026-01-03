@@ -199,16 +199,13 @@ class AutoRunProcessor {
 
     /// Get all enabled auto-run workflows, sorted by execution order
     private func getAutoRunWorkflows() -> [WorkflowDefinition] {
-        var workflows = WorkflowManager.shared.workflows
-            .filter { $0.autoRun && $0.isEnabled }
-            .sorted { $0.autoRunOrder < $1.autoRunOrder }
+        // Use WorkflowService's autoRunWorkflows (already sorted by autoRunOrder)
+        var workflows = WorkflowService.shared.autoRunWorkflows.map { $0.definition }
 
         // If no user-configured auto-run workflows, check if default Hey Talkie should be used
         if workflows.isEmpty {
             // Check if user has explicitly disabled the default workflow
-            let hasHeyTalkie = WorkflowManager.shared.workflows.contains {
-                $0.id == WorkflowDefinition.heyTalkieWorkflowId
-            }
+            let hasHeyTalkie = WorkflowService.shared.workflow(byID: WorkflowDefinition.heyTalkieWorkflowId) != nil
 
             // If Hey Talkie isn't in the list at all, add the default
             if !hasHeyTalkie {

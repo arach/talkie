@@ -513,12 +513,12 @@ struct PersistenceController {
 
                 var successCount = 0
                 for workflowId in workflowIds {
-                    if let workflow = WorkflowManager.shared.workflows.first(where: { $0.id == workflowId }) {
+                    if let workflow = WorkflowService.shared.workflow(byID: workflowId) {
                         logger.info("▶️ Running iOS-requested workflow: \(workflow.name)")
                         do {
                             // Convert VoiceMemo to MemoModel for LocalRepository-based execution
                             let memoModel = MemoModel(from: memo)
-                            _ = try await WorkflowExecutor.shared.executeWorkflow(workflow, for: memoModel)
+                            _ = try await WorkflowExecutor.shared.executeWorkflow(workflow.definition, for: memoModel)
                             successCount += 1
                         } catch {
                             logger.error("❌ Workflow '\(workflow.name)' failed: \(error.localizedDescription)")
