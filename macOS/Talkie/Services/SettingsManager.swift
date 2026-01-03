@@ -16,6 +16,52 @@ import TalkieKit
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Settings")
 
+// MARK: - Cached Theme Tokens
+
+/// All theme-derived values calculated once per theme change
+/// Eliminates per-access computation for fonts, colors, etc.
+struct CachedThemeTokens {
+    // MARK: - Font Tokens (UI Chrome)
+    var fontXS: Font
+    var fontXSMedium: Font
+    var fontXSBold: Font
+    var fontSM: Font
+    var fontSMMedium: Font
+    var fontSMBold: Font
+    var fontBody: Font
+    var fontBodyMedium: Font
+    var fontBodyBold: Font
+    var fontTitle: Font
+    var fontTitleMedium: Font
+    var fontTitleBold: Font
+    var fontHeadline: Font
+    var fontHeadlineMedium: Font
+    var fontHeadlineBold: Font
+    var fontDisplay: Font
+    var fontDisplayMedium: Font
+
+    // MARK: - Defaults
+    static let `default` = CachedThemeTokens(
+        fontXS: .system(size: 10),
+        fontXSMedium: .system(size: 10, weight: .medium),
+        fontXSBold: .system(size: 10, weight: .semibold),
+        fontSM: .system(size: 11),
+        fontSMMedium: .system(size: 11, weight: .medium),
+        fontSMBold: .system(size: 11, weight: .semibold),
+        fontBody: .system(size: 13),
+        fontBodyMedium: .system(size: 13, weight: .medium),
+        fontBodyBold: .system(size: 13, weight: .semibold),
+        fontTitle: .system(size: 15),
+        fontTitleMedium: .system(size: 15, weight: .medium),
+        fontTitleBold: .system(size: 15, weight: .bold),
+        fontHeadline: .system(size: 18),
+        fontHeadlineMedium: .system(size: 18, weight: .medium),
+        fontHeadlineBold: .system(size: 18, weight: .bold),
+        fontDisplay: .system(size: 32, weight: .light),
+        fontDisplayMedium: .system(size: 32)
+    )
+}
+
 // MARK: - Appearance Mode
 enum AppearanceMode: String, CaseIterable, CustomStringConvertible {
     case system = "system"
@@ -405,6 +451,11 @@ class SettingsManager {
     /// When true, skip Theme.invalidate() in property didSets (call once at end of batch)
     @ObservationIgnored private var isBatchingUpdates = false
 
+    // MARK: - Cached Theme Tokens (calculated once per theme change)
+
+    /// All computed font/color values - recalculated only when theme changes
+    @ObservationIgnored private(set) var cachedTokens: CachedThemeTokens = .default
+
     // MARK: - Appearance Settings (UserDefaults - device-specific)
 
     private let appearanceModeKey = "appearanceMode"
@@ -591,38 +642,38 @@ class SettingsManager {
         return contentFontStyle.font(size: scaledSize, weight: weight)
     }
 
-    // MARK: - UI Font Tokens
+    // MARK: - UI Font Tokens (Cached - calculated once per theme change)
     // For UI chrome: labels, headers, buttons, badges, navigation
     // Uses uiFontStyle (themed/branded)
 
     /// Extra small UI text - labels, badges (10pt base)
-    var fontXS: Font { themedFont(baseSize: 10, weight: useLightFonts ? .regular : .regular) }
-    var fontXSMedium: Font { themedFont(baseSize: 10, weight: useLightFonts ? .medium : .medium) }
-    var fontXSBold: Font { themedFont(baseSize: 10, weight: useLightFonts ? .semibold : .semibold) }
+    var fontXS: Font { cachedTokens.fontXS }
+    var fontXSMedium: Font { cachedTokens.fontXSMedium }
+    var fontXSBold: Font { cachedTokens.fontXSBold }
 
     /// Small UI text - secondary info, metadata (11pt base)
-    var fontSM: Font { themedFont(baseSize: 11, weight: useLightFonts ? .regular : .regular) }
-    var fontSMMedium: Font { themedFont(baseSize: 11, weight: useLightFonts ? .medium : .medium) }
-    var fontSMBold: Font { themedFont(baseSize: 11, weight: useLightFonts ? .semibold : .semibold) }
+    var fontSM: Font { cachedTokens.fontSM }
+    var fontSMMedium: Font { cachedTokens.fontSMMedium }
+    var fontSMBold: Font { cachedTokens.fontSMBold }
 
     /// Body UI text - primary UI elements (13pt base)
-    var fontBody: Font { themedFont(baseSize: 13, weight: useLightFonts ? .regular : .regular) }
-    var fontBodyMedium: Font { themedFont(baseSize: 13, weight: useLightFonts ? .medium : .medium) }
-    var fontBodyBold: Font { themedFont(baseSize: 13, weight: useLightFonts ? .semibold : .semibold) }
+    var fontBody: Font { cachedTokens.fontBody }
+    var fontBodyMedium: Font { cachedTokens.fontBodyMedium }
+    var fontBodyBold: Font { cachedTokens.fontBodyBold }
 
     /// Title UI text - section headers (15pt base)
-    var fontTitle: Font { themedFont(baseSize: 15, weight: useLightFonts ? .regular : .regular) }
-    var fontTitleMedium: Font { themedFont(baseSize: 15, weight: useLightFonts ? .medium : .medium) }
-    var fontTitleBold: Font { themedFont(baseSize: 15, weight: useLightFonts ? .semibold : .bold) }
+    var fontTitle: Font { cachedTokens.fontTitle }
+    var fontTitleMedium: Font { cachedTokens.fontTitleMedium }
+    var fontTitleBold: Font { cachedTokens.fontTitleBold }
 
     /// Headline UI text - large headers (18pt base)
-    var fontHeadline: Font { themedFont(baseSize: 18, weight: useLightFonts ? .regular : .regular) }
-    var fontHeadlineMedium: Font { themedFont(baseSize: 18, weight: useLightFonts ? .medium : .medium) }
-    var fontHeadlineBold: Font { themedFont(baseSize: 18, weight: useLightFonts ? .semibold : .bold) }
+    var fontHeadline: Font { cachedTokens.fontHeadline }
+    var fontHeadlineMedium: Font { cachedTokens.fontHeadlineMedium }
+    var fontHeadlineBold: Font { cachedTokens.fontHeadlineBold }
 
     /// Display UI text - hero elements (32pt base)
-    var fontDisplay: Font { themedFont(baseSize: 32, weight: .light) }
-    var fontDisplayMedium: Font { themedFont(baseSize: 32, weight: useLightFonts ? .regular : .regular) }
+    var fontDisplay: Font { cachedTokens.fontDisplay }
+    var fontDisplayMedium: Font { cachedTokens.fontDisplayMedium }
 
     // MARK: - Theme Color Tokens
     // Returns themed colors based on active theme, falls back to system colors
@@ -1099,6 +1150,41 @@ class SettingsManager {
         } else {
             ThemeConfig.reset()
         }
+
+        // Recalculate all cached font tokens
+        recalculateCachedTokens()
+    }
+
+    /// Recalculate all cached theme tokens (called once per theme change)
+    private func recalculateCachedTokens() {
+        let lightFonts = useLightFonts
+        let scale = uiFontSize.scale
+        let style = uiFontStyle
+
+        // Helper to create themed font
+        func font(_ baseSize: CGFloat, _ weight: Font.Weight) -> Font {
+            style.font(size: baseSize * scale, weight: weight)
+        }
+
+        cachedTokens = CachedThemeTokens(
+            fontXS: font(10, lightFonts ? .regular : .regular),
+            fontXSMedium: font(10, lightFonts ? .medium : .medium),
+            fontXSBold: font(10, lightFonts ? .semibold : .semibold),
+            fontSM: font(11, lightFonts ? .regular : .regular),
+            fontSMMedium: font(11, lightFonts ? .medium : .medium),
+            fontSMBold: font(11, lightFonts ? .semibold : .semibold),
+            fontBody: font(13, lightFonts ? .regular : .regular),
+            fontBodyMedium: font(13, lightFonts ? .medium : .medium),
+            fontBodyBold: font(13, lightFonts ? .semibold : .semibold),
+            fontTitle: font(15, lightFonts ? .regular : .regular),
+            fontTitleMedium: font(15, lightFonts ? .medium : .medium),
+            fontTitleBold: font(15, lightFonts ? .semibold : .bold),
+            fontHeadline: font(18, lightFonts ? .regular : .regular),
+            fontHeadlineMedium: font(18, lightFonts ? .medium : .medium),
+            fontHeadlineBold: font(18, lightFonts ? .semibold : .bold),
+            fontDisplay: font(32, .light),
+            fontDisplayMedium: font(32, lightFonts ? .regular : .regular)
+        )
     }
 
     func applyAppearanceMode() {
