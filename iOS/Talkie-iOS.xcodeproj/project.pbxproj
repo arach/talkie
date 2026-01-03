@@ -92,9 +92,9 @@
 
 /* Begin PBXFileReference section */
 		531A90C22EEE73370084EC25 /* TalkieWatchWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TalkieWatchWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		539C69312ED39ADE00BC034F /* Talkie OS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Talkie OS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		539C69432ED39ADF00BC034F /* Talkie OSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Talkie OSTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		539C694D2ED39ADF00BC034F /* Talkie OSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Talkie OSUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		539C69312ED39ADE00BC034F /* Talkie.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Talkie.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		539C69432ED39ADF00BC034F /* TalkieTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "TalkieTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		539C694D2ED39ADF00BC034F /* TalkieUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "TalkieUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		53B43EC02EDB539100C09544 /* TalkieWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TalkieWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		53B43EC22EDB539100C09544 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		53B43EC42EDB539200C09544 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
@@ -110,12 +110,12 @@
 			);
 			target = 531A90C12EEE73370084EC25 /* TalkieWatchWidgetExtension */;
 		};
-		539C69FF2ED39ADE00BC034F /* Exceptions for "Talkie iOS" folder in "Talkie OS" target */ = {
+		539C69FF2ED39ADE00BC034F /* Exceptions for "Talkie iOS" folder in "Talkie" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = 539C69302ED39ADE00BC034F /* Talkie OS */;
+			target = 539C69302ED39ADE00BC034F /* Talkie */;
 		};
 		53B43EDA2EDB539400C09544 /* Exceptions for "TalkieWidget" folder in "TalkieWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
@@ -138,7 +138,7 @@
 		539C69332ED39ADE00BC034F /* Talkie iOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				539C69FF2ED39ADE00BC034F /* Exceptions for "Talkie iOS" folder in "Talkie OS" target */,
+				539C69FF2ED39ADE00BC034F /* Exceptions for "Talkie iOS" folder in "Talkie" target */,
 			);
 			path = "Talkie iOS";
 			sourceTree = "<group>";
@@ -224,9 +224,9 @@
 		539C69322ED39ADE00BC034F /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				539C69312ED39ADE00BC034F /* Talkie OS.app */,
-				539C69432ED39ADF00BC034F /* Talkie OSTests.xctest */,
-				539C694D2ED39ADF00BC034F /* Talkie OSUITests.xctest */,
+				539C69312ED39ADE00BC034F /* Talkie.app */,
+				539C69432ED39ADF00BC034F /* TalkieTests.xctest */,
+				539C694D2ED39ADF00BC034F /* TalkieUITests.xctest */,
 				53B43EC02EDB539100C09544 /* TalkieWidgetExtension.appex */,
 				53BF5B8C2EED010000FDEB2A /* TalkieWatch Watch App.app */,
 				531A90C22EEE73370084EC25 /* TalkieWatchWidgetExtension.appex */,
@@ -268,9 +268,9 @@
 			productReference = 531A90C22EEE73370084EC25 /* TalkieWatchWidgetExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
-		539C69302ED39ADE00BC034F /* Talkie OS */ = {
+		539C69302ED39ADE00BC034F /* Talkie */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 539C69572ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "Talkie OS" */;
+			buildConfigurationList = 539C69572ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "Talkie" */;
 			buildPhases = (
 				539C692D2ED39ADE00BC034F /* Sources */,
 				539C692E2ED39ADE00BC034F /* Frameworks */,
@@ -287,16 +287,16 @@
 			fileSystemSynchronizedGroups = (
 				539C69332ED39ADE00BC034F /* Talkie iOS */,
 			);
-			name = "Talkie OS";
+			name = "Talkie";
 			packageProductDependencies = (
 			);
 			productName = talkie;
-			productReference = 539C69312ED39ADE00BC034F /* Talkie OS.app */;
+			productReference = 539C69312ED39ADE00BC034F /* Talkie.app */;
 			productType = "com.apple.product-type.application";
 		};
-		539C69422ED39ADF00BC034F /* Talkie OSTests */ = {
+		539C69422ED39ADF00BC034F /* TalkieTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 539C695A2ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "Talkie OSTests" */;
+			buildConfigurationList = 539C695A2ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "TalkieTests" */;
 			buildPhases = (
 				539C693F2ED39ADF00BC034F /* Sources */,
 				539C69402ED39ADF00BC034F /* Frameworks */,
@@ -307,16 +307,16 @@
 			dependencies = (
 				539C69452ED39ADF00BC034F /* PBXTargetDependency */,
 			);
-			name = "Talkie OSTests";
+			name = "TalkieTests";
 			packageProductDependencies = (
 			);
 			productName = talkieTests;
-			productReference = 539C69432ED39ADF00BC034F /* Talkie OSTests.xctest */;
+			productReference = 539C69432ED39ADF00BC034F /* TalkieTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		539C694C2ED39ADF00BC034F /* Talkie OSUITests */ = {
+		539C694C2ED39ADF00BC034F /* TalkieUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 539C695D2ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "Talkie OSUITests" */;
+			buildConfigurationList = 539C695D2ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "TalkieUITests" */;
 			buildPhases = (
 				539C69492ED39ADF00BC034F /* Sources */,
 				539C694A2ED39ADF00BC034F /* Frameworks */,
@@ -327,11 +327,11 @@
 			dependencies = (
 				539C694F2ED39ADF00BC034F /* PBXTargetDependency */,
 			);
-			name = "Talkie OSUITests";
+			name = "TalkieUITests";
 			packageProductDependencies = (
 			);
 			productName = talkieUITests;
-			productReference = 539C694D2ED39ADF00BC034F /* Talkie OSUITests.xctest */;
+			productReference = 539C694D2ED39ADF00BC034F /* TalkieUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 		53B43EBF2EDB539100C09544 /* TalkieWidgetExtension */ = {
@@ -412,7 +412,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 539C692C2ED39ADE00BC034F /* Build configuration list for PBXProject "Talkie OS" */;
+			buildConfigurationList = 539C692C2ED39ADE00BC034F /* Build configuration list for PBXProject "Talkie" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -426,9 +426,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				539C69302ED39ADE00BC034F /* Talkie OS */,
-				539C69422ED39ADF00BC034F /* Talkie OSTests */,
-				539C694C2ED39ADF00BC034F /* Talkie OSUITests */,
+				539C69302ED39ADE00BC034F /* Talkie */,
+				539C69422ED39ADF00BC034F /* TalkieTests */,
+				539C694C2ED39ADF00BC034F /* TalkieUITests */,
 				53B43EBF2EDB539100C09544 /* TalkieWidgetExtension */,
 				53BF5B8B2EED010000FDEB2A /* TalkieWatch Watch App */,
 				531A90C12EEE73370084EC25 /* TalkieWatchWidgetExtension */,
@@ -534,12 +534,12 @@
 		};
 		539C69452ED39ADF00BC034F /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 539C69302ED39ADE00BC034F /* Talkie OS */;
+			target = 539C69302ED39ADE00BC034F /* Talkie */;
 			targetProxy = 539C69442ED39ADF00BC034F /* PBXContainerItemProxy */;
 		};
 		539C694F2ED39ADF00BC034F /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 539C69302ED39ADE00BC034F /* Talkie OS */;
+			target = 539C69302ED39ADE00BC034F /* Talkie */;
 			targetProxy = 539C694E2ED39ADF00BC034F /* PBXContainerItemProxy */;
 		};
 		53B43ED52EDB539400C09544 /* PBXTargetDependency */ = {
@@ -833,7 +833,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Talkie OS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Talkie OS";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Talkie.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Talkie";
 			};
 			name = Debug;
 		};
@@ -852,7 +852,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Talkie OS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Talkie OS";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Talkie.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Talkie";
 			};
 			name = Release;
 		};
@@ -1026,7 +1026,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		539C692C2ED39ADE00BC034F /* Build configuration list for PBXProject "Talkie OS" */ = {
+		539C692C2ED39ADE00BC034F /* Build configuration list for PBXProject "Talkie" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				539C69552ED39ADF00BC034F /* Debug */,
@@ -1035,7 +1035,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		539C69572ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "Talkie OS" */ = {
+		539C69572ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "Talkie" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				539C69582ED39ADF00BC034F /* Debug */,
@@ -1044,7 +1044,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		539C695A2ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "Talkie OSTests" */ = {
+		539C695A2ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "TalkieTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				539C695B2ED39ADF00BC034F /* Debug */,
@@ -1053,7 +1053,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		539C695D2ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "Talkie OSUITests" */ = {
+		539C695D2ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "TalkieUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				539C695E2ED39ADF00BC034F /* Debug */,

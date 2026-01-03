@@ -15,10 +15,10 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "53BF5B8B2EED010000FDEB2A"
-               BuildableName = "TalkieWatch Watch App.app"
-               BlueprintName = "TalkieWatch Watch App"
-               ReferencedContainer = "container:Talkie OS.xcodeproj">
+               BlueprintIdentifier = "539C69302ED39ADE00BC034F"
+               BuildableName = "Talkie.app"
+               BlueprintName = "Talkie"
+               ReferencedContainer = "container:Talkie-iOS.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
          <BuildActionEntry
@@ -29,10 +29,10 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "539C69302ED39ADE00BC034F"
-               BuildableName = "Talkie OS.app"
-               BlueprintName = "Talkie OS"
-               ReferencedContainer = "container:Talkie OS.xcodeproj">
+               BlueprintIdentifier = "53BF5B8B2EED010000FDEB2A"
+               BuildableName = "TalkieWatch Watch App.app"
+               BlueprintName = "TalkieWatch Watch App"
+               ReferencedContainer = "container:Talkie-iOS.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -43,6 +43,19 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES"
       shouldAutocreateTestPlan = "YES">
+      <Testables>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "539C694C2ED39ADF00BC034F"
+               BuildableName = "TalkieUITests.xctest"
+               BlueprintName = "TalkieUITests"
+               ReferencedContainer = "container:Talkie-iOS.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+      </Testables>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
@@ -58,10 +71,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "53BF5B8B2EED010000FDEB2A"
-            BuildableName = "TalkieWatch Watch App.app"
-            BlueprintName = "TalkieWatch Watch App"
-            ReferencedContainer = "container:Talkie OS.xcodeproj">
+            BlueprintIdentifier = "539C69302ED39ADE00BC034F"
+            BuildableName = "Talkie.app"
+            BlueprintName = "Talkie"
+            ReferencedContainer = "container:Talkie-iOS.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -75,10 +88,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "53BF5B8B2EED010000FDEB2A"
-            BuildableName = "TalkieWatch Watch App.app"
-            BlueprintName = "TalkieWatch Watch App"
-            ReferencedContainer = "container:Talkie OS.xcodeproj">
+            BlueprintIdentifier = "539C69302ED39ADE00BC034F"
+            BuildableName = "Talkie.app"
+            BlueprintName = "Talkie"
+            ReferencedContainer = "container:Talkie-iOS.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>
