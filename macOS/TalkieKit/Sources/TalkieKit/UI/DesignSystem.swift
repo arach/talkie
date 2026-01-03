@@ -37,8 +37,9 @@ public enum ThemeConfig {
         self.borderWidth = borderWidth
         self.customFontName = customFontName
 
-        // Recalculate cached corner radius values
+        // Recalculate all cached design token values
         CornerRadius.recalculate(multiplier: cornerRadiusMultiplier)
+        BorderWidth.recalculate(multiplier: borderWidth)
     }
 
     /// Reset to defaults
@@ -100,6 +101,31 @@ public enum CornerRadius {
         public static let md: CGFloat = 12
         public static let lg: CGFloat = 16
         public static let xl: CGFloat = 24
+    }
+}
+
+// MARK: - Border Width
+
+/// Theme-aware border width values (cached, calculated once per theme change)
+public enum BorderWidth {
+    // Base values (before multiplier)
+    private static let baseThin: CGFloat = 0.5
+    private static let baseNormal: CGFloat = 1.0
+    private static let baseThick: CGFloat = 2.0
+
+    // Cached values
+    /// Thin border (0.5pt base)
+    public private(set) static var thin: CGFloat = 0.5
+    /// Normal border (1pt base)
+    public private(set) static var normal: CGFloat = 1.0
+    /// Thick border (2pt base)
+    public private(set) static var thick: CGFloat = 2.0
+
+    /// Recalculate cached values (called by ThemeConfig.configure)
+    internal static func recalculate(multiplier: CGFloat) {
+        thin = baseThin * multiplier
+        normal = baseNormal * multiplier
+        thick = baseThick * multiplier
     }
 }
 
