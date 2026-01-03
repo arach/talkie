@@ -16,10 +16,15 @@ struct DictionaryTestPlayground: View {
     @State private var replacements: [DictionaryProcessingResult.ReplacementInfo] = []
     @State private var isProcessing: Bool = false
 
-    // Recent memos for loading sample text
+    // Performance metrics
+    @State private var metrics: ProcessingMetrics?
+
+    // Sample text sources
     @State private var recentMemos: [MemoModel] = []
+    @State private var recentDictations: [LiveDictation] = []
     @State private var selectedMemoId: UUID?
-    @State private var isLoadingMemos: Bool = false
+    @State private var selectedDictationId: Int64?
+    @State private var isLoadingSamples: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.lg) {
@@ -31,6 +36,11 @@ struct DictionaryTestPlayground: View {
 
             // Run button
             runButton
+
+            // Performance metrics
+            if let metrics = metrics {
+                metricsSection(metrics)
+            }
 
             // Output section
             outputSection
@@ -44,7 +54,7 @@ struct DictionaryTestPlayground: View {
         }
         .padding(Spacing.lg)
         .task {
-            await loadRecentMemos()
+            await loadSampleSources()
         }
     }
 
@@ -71,25 +81,53 @@ struct DictionaryTestPlayground: View {
                     .font(Theme.current.fontSMMedium)
                     .foregroundColor(Theme.current.foreground)
 
+                if !inputText.isEmpty {
+                    Text("(\(inputText.count) chars, ~\(inputText.split(separator: " ").count) words)")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundMuted)
+                }
+
                 Spacer()
 
-                // Load from recent memo
+                // Load from recent memos
                 if !recentMemos.isEmpty {
-                    Picker("Load from memo", selection: $selectedMemoId) {
-                        Text("Load from memo...").tag(nil as UUID?)
+                    Picker("Memos", selection: $selectedMemoId) {
+                        Text("Load memo...").tag(nil as UUID?)
                         ForEach(recentMemos) { memo in
-                            Text(memo.title ?? memo.createdAt.formatted(date: .abbreviated, time: .shortened))
+                            Text("📝 " + (memo.title ?? memo.createdAt.formatted(date: .abbreviated, time: .shortened)))
                                 .tag(memo.id as UUID?)
                         }
                     }
                     .pickerStyle(.menu)
-                    .frame(maxWidth: 200)
+                    .frame(maxWidth: 150)
                     .onChange(of: selectedMemoId) { _, newValue in
                         if let memoId = newValue,
                            let memo = recentMemos.first(where: { $0.id == memoId }),
                            let transcription = memo.transcription {
                             inputText = transcription
                             selectedMemoId = nil
+                            metrics = nil
+                        }
+                    }
+                }
+
+                // Load from recent dictations
+                if !recentDictations.isEmpty {
+                    Picker("Dictations", selection: $selectedDictationId) {
+                        Text("Load dictation...").tag(nil as Int64?)
+                        ForEach(recentDictations, id: \.id) { dictation in
+                            Text("🎙️ " + dictation.createdAt.formatted(date: .abbreviated, time: .shortened))
+                                .tag(dictation.id as Int64?)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .frame(maxWidth: 150)
+                    .onChange(of: selectedDictationId) { _, newValue in
+                        if let dictationId = newValue,
+                           let dictation = recentDictations.first(where: { $0.id == dictationId }) {
+                            inputText = dictation.text
+                            selectedDictationId = nil
+                            metrics = nil
                         }
                     }
                 }
@@ -203,12 +241,83 @@ struct DictionaryTestPlayground: View {
         }
     }
 
+    // MARK: - Performance Metrics
+
+    private struct ProcessingMetrics {
+        let totalMs: Double
+        let trieMs: Double
+        let regexMs: Double
+        let fuzzyMs: Double
+        let inputChars: Int
+        let inputWords: Int
+        let entryCount: Int
+        let replacementCount: Int
+
+        var throughputCharsPerSec: Double {
+            guard totalMs > 0 else { return 0 }
+            return Double(inputChars) / (totalMs / 1000.0)
+        }
+    }
+
+    private func metricsSection(_ metrics: ProcessingMetrics) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text("Performance")
+                .font(Theme.current.fontSMMedium)
+                .foregroundColor(Theme.current.foreground)
+
+            HStack(spacing: Spacing.lg) {
+                // Total time
+                metricPill(
+                    label: "Total",
+                    value: String(format: "%.2fms", metrics.totalMs),
+                    color: metrics.totalMs < 5 ? .green : (metrics.totalMs < 20 ? .orange : .red)
+                )
+
+                // Breakdown
+                metricPill(label: "Trie", value: String(format: "%.2fms", metrics.trieMs), color: .blue)
+                metricPill(label: "Regex", value: String(format: "%.2fms", metrics.regexMs), color: .purple)
+                metricPill(label: "Fuzzy", value: String(format: "%.2fms", metrics.fuzzyMs), color: .cyan)
+
+                Spacer()
+
+                // Throughput
+                Text(String(format: "%.0f chars/sec", metrics.throughputCharsPerSec))
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(Theme.current.foregroundMuted)
+            }
+
+            // Summary
+            Text("\(metrics.inputWords) words • \(metrics.entryCount) dictionary entries • \(metrics.replacementCount) replacements")
+                .font(Theme.current.fontXS)
+                .foregroundColor(Theme.current.foregroundMuted)
+        }
+        .padding(Spacing.sm)
+        .background(Theme.current.backgroundSecondary)
+        .cornerRadius(CornerRadius.sm)
+    }
+
+    private func metricPill(label: String, value: String, color: Color) -> some View {
+        HStack(spacing: 4) {
+            Text(label)
+                .font(.system(size: 9))
+                .foregroundColor(Theme.current.foregroundMuted)
+            Text(value)
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundColor(color)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(color.opacity(0.1))
+        .cornerRadius(4)
+    }
+
     // MARK: - Actions
 
-    private func loadRecentMemos() async {
-        isLoadingMemos = true
-        defer { isLoadingMemos = false }
+    private func loadSampleSources() async {
+        isLoadingSamples = true
+        defer { isLoadingSamples = false }
 
+        // Load memos
         do {
             let repository = LocalRepository()
             let memos = try await repository.fetchTranscribedMemos(limit: 20)
@@ -216,7 +325,12 @@ struct DictionaryTestPlayground: View {
                 recentMemos = memos
             }
         } catch {
-            // Silently fail - user can still type manually
+            // Silently fail
+        }
+
+        // Load live dictations
+        await MainActor.run {
+            recentDictations = LiveDatabase.recent(limit: 20).filter { !$0.text.isEmpty }
         }
     }
 
@@ -224,25 +338,33 @@ struct DictionaryTestPlayground: View {
         guard !inputText.isEmpty else { return }
 
         isProcessing = true
-        let result = processWithLocalRules(inputText)
+        let (result, timing) = processWithLocalRulesAndTiming(inputText)
         outputText = result.processed
         replacements = result.replacements
+        metrics = timing
         isProcessing = false
     }
 
-    /// Process text locally using DictionaryManager's entries
-    /// Mirrors TextPostProcessor logic for testing
-    private func processWithLocalRules(_ text: String) -> DictionaryProcessingResult {
+    /// Process text with timing metrics
+    private func processWithLocalRulesAndTiming(_ text: String) -> (DictionaryProcessingResult, ProcessingMetrics) {
         let entries = manager.allEnabledEntries
+        let wordCount = text.split(separator: " ").count
 
         guard !entries.isEmpty else {
-            return DictionaryProcessingResult(original: text, processed: text, replacements: [])
+            let emptyMetrics = ProcessingMetrics(
+                totalMs: 0, trieMs: 0, regexMs: 0, fuzzyMs: 0,
+                inputChars: text.count, inputWords: wordCount,
+                entryCount: 0, replacementCount: 0
+            )
+            return (DictionaryProcessingResult(original: text, processed: text, replacements: []), emptyMetrics)
         }
 
+        let totalStart = CFAbsoluteTimeGetCurrent()
         var result = text
         var replacementInfos: [DictionaryProcessingResult.ReplacementInfo] = []
 
-        // Process word/phrase types
+        // Step 1: Trie (word/phrase) matching
+        let trieStart = CFAbsoluteTimeGetCurrent()
         let trieEntries = entries.filter { $0.matchType == .word || $0.matchType == .phrase }
         for entry in trieEntries {
             let (newResult, count) = applyTrieReplacement(entry, to: result)
@@ -255,8 +377,10 @@ struct DictionaryTestPlayground: View {
                 ))
             }
         }
+        let trieMs = (CFAbsoluteTimeGetCurrent() - trieStart) * 1000
 
-        // Process regex types
+        // Step 2: Regex matching
+        let regexStart = CFAbsoluteTimeGetCurrent()
         let regexEntries = entries.filter { $0.matchType == .regex }
         for entry in regexEntries {
             let (newResult, count) = applyRegexReplacement(entry, to: result)
@@ -269,16 +393,33 @@ struct DictionaryTestPlayground: View {
                 ))
             }
         }
+        let regexMs = (CFAbsoluteTimeGetCurrent() - regexStart) * 1000
 
-        // Process fuzzy types
+        // Step 3: Fuzzy matching
+        let fuzzyStart = CFAbsoluteTimeGetCurrent()
         let fuzzyEntries = entries.filter { $0.matchType == .fuzzy }
         if !fuzzyEntries.isEmpty {
             let (newResult, fuzzyInfos) = applyFuzzyMatching(to: result, entries: fuzzyEntries)
             result = newResult
             replacementInfos.append(contentsOf: fuzzyInfos)
         }
+        let fuzzyMs = (CFAbsoluteTimeGetCurrent() - fuzzyStart) * 1000
 
-        return DictionaryProcessingResult(original: text, processed: result, replacements: replacementInfos)
+        let totalMs = (CFAbsoluteTimeGetCurrent() - totalStart) * 1000
+        let totalReplacements = replacementInfos.reduce(0) { $0 + $1.count }
+
+        let metrics = ProcessingMetrics(
+            totalMs: totalMs,
+            trieMs: trieMs,
+            regexMs: regexMs,
+            fuzzyMs: fuzzyMs,
+            inputChars: text.count,
+            inputWords: wordCount,
+            entryCount: entries.count,
+            replacementCount: totalReplacements
+        )
+
+        return (DictionaryProcessingResult(original: text, processed: result, replacements: replacementInfos), metrics)
     }
 
     private func applyTrieReplacement(_ entry: DictionaryEntry, to text: String) -> (String, Int) {
