@@ -101,6 +101,7 @@ enum FontStyleOption: String, CaseIterable {
     case monospace = "monospace"
     case rounded = "rounded"
     case serif = "serif"
+    case jetbrainsMono = "jetbrainsMono"
 
     var displayName: String {
         switch self {
@@ -108,6 +109,7 @@ enum FontStyleOption: String, CaseIterable {
         case .monospace: return "Monospace"
         case .rounded: return "Rounded"
         case .serif: return "Serif"
+        case .jetbrainsMono: return "JetBrains Mono"
         }
     }
 
@@ -117,6 +119,7 @@ enum FontStyleOption: String, CaseIterable {
         case .monospace: return "chevron.left.forwardslash.chevron.right"
         case .rounded: return "a.circle"
         case .serif: return "text.book.closed"
+        case .jetbrainsMono: return "terminal"
         }
     }
 
@@ -130,6 +133,28 @@ enum FontStyleOption: String, CaseIterable {
             return .system(size: size, weight: weight, design: .rounded)
         case .serif:
             return .system(size: size, weight: weight, design: .serif)
+        case .jetbrainsMono:
+            // JetBrains Mono - falls back to system monospace if not installed
+            let fontName: String
+            switch weight {
+            case .ultraLight, .thin, .light:
+                fontName = "JetBrainsMono-Light"
+            case .regular:
+                fontName = "JetBrainsMono-Regular"
+            case .medium:
+                fontName = "JetBrainsMono-Medium"
+            case .semibold:
+                fontName = "JetBrainsMono-SemiBold"
+            case .bold, .heavy, .black:
+                fontName = "JetBrainsMono-Bold"
+            default:
+                fontName = "JetBrainsMono-Regular"
+            }
+            if let _ = NSFont(name: fontName, size: size) {
+                return .custom(fontName, size: size)
+            }
+            // Fallback to system monospace
+            return .system(size: size, weight: weight, design: .monospaced)
         }
     }
 }
@@ -286,7 +311,7 @@ enum ThemePreset: String, CaseIterable {
         switch self {
         case .talkiePro: return .system
         case .linear: return .system
-        case .terminal: return .monospace   // Full monospace UI
+        case .terminal: return .jetbrainsMono   // JetBrains Mono throughout
         case .minimal: return .system
         case .liquidGlass: return .system
         }
@@ -297,7 +322,7 @@ enum ThemePreset: String, CaseIterable {
         switch self {
         case .talkiePro: return .system
         case .linear: return .system
-        case .terminal: return .monospace
+        case .terminal: return .jetbrainsMono   // JetBrains Mono throughout
         case .minimal: return .system
         case .liquidGlass: return .system
         }
@@ -346,7 +371,7 @@ enum ThemePreset: String, CaseIterable {
     /// Corner radius style for this theme
     var cornerRadiusMultiplier: CGFloat {
         switch self {
-        case .terminal: return 0.25         // Minimal corners (2pt instead of 8pt)
+        case .terminal: return 0            // Sharp corners - no rounding
         case .minimal: return 0.75          // Slightly reduced
         default: return 1.0                 // Standard
         }
