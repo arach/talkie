@@ -25,6 +25,10 @@ struct DictionarySettingsView: View {
     @State private var showSuggestions = false
     @State private var showURLExtract = false
 
+    // Presets
+    @State private var availablePresets: [PresetInfo] = []
+    @State private var isLoadingPresets = false
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.lg) {
@@ -36,6 +40,11 @@ struct DictionarySettingsView: View {
 
                 // Dictionary list
                 dictionaryList
+
+                // Presets section
+                if !availablePresets.isEmpty {
+                    presetsSection
+                }
 
                 // Drop zone + import info
                 importSection
@@ -62,6 +71,7 @@ struct DictionarySettingsView: View {
             Task {
                 await manager.load()
                 await manager.ensureDefaultDictionary()
+                await loadPresets()
             }
         }
         .onDrop(of: [.json, .fileURL], isTargeted: $isDragOver) { providers in
@@ -142,6 +152,56 @@ struct DictionarySettingsView: View {
                 subtitle: "from URL",
                 action: { showURLExtract = true }
             )
+        }
+    }
+
+    // MARK: - Presets Section
+
+    private var presetsSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text("PRESETS")
+                .font(Theme.current.fontXSBold)
+                .foregroundColor(Theme.current.foregroundSecondary)
+
+            VStack(spacing: Spacing.xs) {
+                ForEach(availablePresets) { preset in
+                    PresetRow(
+                        preset: preset,
+                        onInstall: { installPreset(preset) },
+                        onUninstall: { uninstallPreset(preset) }
+                    )
+                }
+            }
+        }
+    }
+
+    private func loadPresets() async {
+        isLoadingPresets = true
+        availablePresets = await DictionaryFileManager.shared.listAvailablePresets()
+        isLoadingPresets = false
+    }
+
+    private func installPreset(_ preset: PresetInfo) {
+        Task {
+            do {
+                _ = try await DictionaryFileManager.shared.installPreset(id: preset.id)
+                await manager.load()  // Reload dictionaries
+                await loadPresets()   // Refresh preset status
+            } catch {
+                print("Failed to install preset: \(error)")
+            }
+        }
+    }
+
+    private func uninstallPreset(_ preset: PresetInfo) {
+        Task {
+            do {
+                try await DictionaryFileManager.shared.uninstallPreset(name: preset.name)
+                await manager.load()  // Reload dictionaries
+                await loadPresets()   // Refresh preset status
+            } catch {
+                print("Failed to uninstall preset: \(error)")
+            }
         }
     }
 
@@ -786,6 +846,78 @@ struct InlineEntryEditor: View {
             usageCount: entry?.usageCount ?? 0
         )
         onSave(newEntry)
+    }
+}
+
+// MARK: - Preset Row
+
+private struct PresetRow: View {
+    let preset: PresetInfo
+    let onInstall: () -> Void
+    let onUninstall: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            // Icon
+            Image(systemName: preset.isInstalled ? "checkmark.circle.fill" : "arrow.down.circle")
+                .font(.system(size: 14))
+                .foregroundColor(preset.isInstalled ? .green : Theme.current.foregroundMuted)
+
+            // Info
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: Spacing.xs) {
+                    Text(preset.name)
+                        .font(Theme.current.fontSMMedium)
+                        .foregroundColor(Theme.current.foreground)
+
+                    if let version = preset.version {
+                        Text("v\(version)")
+                            .font(.system(size: 9))
+                            .foregroundColor(Theme.current.foregroundMuted)
+                    }
+                }
+
+                HStack(spacing: Spacing.xs) {
+                    Text("\(preset.entryCount) entries")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundMuted)
+
+                    if let description = preset.description {
+                        Text("•")
+                            .foregroundColor(Theme.current.foregroundMuted)
+                        Text(description)
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundMuted)
+                            .lineLimit(1)
+                    }
+                }
+            }
+
+            Spacer()
+
+            // Install/Uninstall button
+            if preset.isInstalled {
+                Button(action: onUninstall) {
+                    Text("Remove")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            } else {
+                Button(action: onInstall) {
+                    Text("Install")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+        }
+        .padding(Spacing.sm)
+        .background(isHovered ? Theme.current.backgroundTertiary : Theme.current.backgroundSecondary)
+        .cornerRadius(CornerRadius.md)
+        .onHover { isHovered = $0 }
     }
 }
 

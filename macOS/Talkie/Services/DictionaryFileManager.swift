@@ -386,6 +386,102 @@ actor DictionaryFileManager {
         let dictionaries = try await loadAllEnabledDictionaries()
         return dictionaries.flatMap { $0.enabledEntries }
     }
+
+    // MARK: - Presets
+
+    /// Directory containing bundled preset dictionaries
+    private var presetsDirectory: URL? {
+        Bundle.main.url(forResource: "Presets", withExtension: nil)
+    }
+
+    /// List all available presets from the app bundle
+    func listAvailablePresets() async -> [PresetInfo] {
+        guard let presetsDir = presetsDirectory else {
+            log.warning("Presets directory not found in bundle")
+            return []
+        }
+
+        var presets: [PresetInfo] = []
+
+        do {
+            let contents = try FileManager.default.contentsOfDirectory(
+                at: presetsDir,
+                includingPropertiesForKeys: nil
+            )
+
+            for fileURL in contents where fileURL.pathExtension == "json" && fileURL.lastPathComponent.contains(".dict.") {
+                do {
+                    let data = try Data(contentsOf: fileURL)
+                    let preset = try JSONDecoder().decode(PresetDictionary.self, from: data)
+
+                    // Check if already installed by matching name
+                    let isInstalled = manifest.dictionaries.contains { entry in
+                        entry.source == .preset && entry.name == preset.name
+                    }
+
+                    let presetId = fileURL.deletingPathExtension().deletingPathExtension().lastPathComponent
+                    presets.append(PresetInfo(
+                        id: presetId,
+                        name: preset.name,
+                        description: preset.description,
+                        version: preset.version,
+                        entryCount: preset.entries.count,
+                        isInstalled: isInstalled
+                    ))
+                } catch {
+                    log.error("Failed to parse preset \(fileURL.lastPathComponent)", error: error)
+                }
+            }
+        } catch {
+            log.error("Failed to list presets", error: error)
+        }
+
+        return presets.sorted { $0.name < $1.name }
+    }
+
+    /// Install a preset dictionary
+    func installPreset(id: String) async throws -> TalkieDictionary {
+        guard let presetsDir = presetsDirectory else {
+            throw DictionaryFileError.presetNotFound(id)
+        }
+
+        let fileURL = presetsDir.appendingPathComponent("\(id).dict.json")
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            throw DictionaryFileError.presetNotFound(id)
+        }
+
+        let data = try Data(contentsOf: fileURL)
+        let preset = try JSONDecoder().decode(PresetDictionary.self, from: data)
+
+        // Check if already installed
+        if let existingEntry = manifest.dictionaries.first(where: { $0.source == .preset && $0.name == preset.name }) {
+            // Already installed - return existing
+            log.info("Preset already installed", detail: preset.name)
+            return try await loadDictionary(id: existingEntry.id)
+        }
+
+        // Convert and save
+        let dictionary = preset.toTalkieDictionary()
+        try await saveDictionary(dictionary)
+
+        log.info("Preset installed", detail: "\(preset.name) (\(preset.entries.count) entries)")
+        return dictionary
+    }
+
+    /// Uninstall a preset dictionary
+    func uninstallPreset(name: String) async throws {
+        guard let entry = manifest.dictionaries.first(where: { $0.source == .preset && $0.name == name }) else {
+            throw DictionaryFileError.notFound(UUID())
+        }
+
+        try await deleteDictionary(id: entry.id)
+        log.info("Preset uninstalled", detail: name)
+    }
+
+    /// Check if a preset is installed
+    func isPresetInstalled(name: String) -> Bool {
+        manifest.dictionaries.contains { $0.source == .preset && $0.name == name }
+    }
 }
 
 // MARK: - Errors
@@ -394,6 +490,7 @@ enum DictionaryFileError: LocalizedError {
     case notFound(UUID)
     case invalidFormat
     case migrationFailed(String)
+    case presetNotFound(String)
 
     var errorDescription: String? {
         switch self {
@@ -403,6 +500,73 @@ enum DictionaryFileError: LocalizedError {
             return "Invalid dictionary file format"
         case .migrationFailed(let reason):
             return "Migration failed: \(reason)"
+        case .presetNotFound(let name):
+            return "Preset not found: \(name)"
         }
     }
+}
+
+// MARK: - Preset Dictionary Format
+
+/// JSON format for bundled preset dictionaries
+struct PresetDictionary: Codable {
+    let name: String
+    let description: String?
+    let version: String?
+    let entries: [PresetEntry]
+
+    struct PresetEntry: Codable {
+        let trigger: String
+        let replacement: String
+        let matchType: String
+        let category: String?
+    }
+
+    /// Convert to TalkieDictionary
+    func toTalkieDictionary() -> TalkieDictionary {
+        let dictionaryEntries = entries.compactMap { entry -> DictionaryEntry? in
+            // Parse matchType string to enum
+            let matchType: DictionaryMatchType
+            switch entry.matchType.lowercased() {
+            case "word", "exact":
+                matchType = .word
+            case "phrase", "caseinsensitive":
+                matchType = .phrase
+            case "regex":
+                matchType = .regex
+            case "fuzzy":
+                matchType = .fuzzy
+            default:
+                matchType = .word
+            }
+
+            return DictionaryEntry(
+                trigger: entry.trigger,
+                replacement: entry.replacement,
+                matchType: matchType,
+                isEnabled: true,
+                category: entry.category
+            )
+        }
+
+        return TalkieDictionary(
+            name: name,
+            description: description,
+            isEnabled: true,
+            entries: dictionaryEntries,
+            source: .preset
+        )
+    }
+}
+
+// MARK: - Preset Info
+
+/// Metadata about an available preset (without loading all entries)
+struct PresetInfo: Identifiable {
+    let id: String  // filename without extension
+    let name: String
+    let description: String?
+    let version: String?
+    let entryCount: Int
+    let isInstalled: Bool
 }
