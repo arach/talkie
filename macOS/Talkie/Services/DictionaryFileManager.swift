@@ -5,7 +5,7 @@
 //  Manages multiple dictionary files on disk
 //  Storage: ~/Library/Application Support/Talkie/Dictionaries/
 //
-//  Each dictionary is stored as: {uuid}.dict.json
+//  Each dictionary is stored as: {name}.dict.json (e.g., personal.dict.json)
 //  Manifest file tracks all dictionaries: manifest.json
 //
 
@@ -87,6 +87,30 @@ actor DictionaryFileManager {
         log.debug("Manifest saved")
     }
 
+    // MARK: - Filename Helpers
+
+    /// Generate a clean filename from dictionary name
+    private func generateFileName(for name: String, excludingId: UUID? = nil) -> String {
+        // Create slug: lowercase, replace spaces with dashes, remove special chars
+        let slug = name
+            .lowercased()
+            .replacingOccurrences(of: " ", with: "-")
+            .components(separatedBy: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-")).inverted)
+            .joined()
+
+        let baseSlug = slug.isEmpty ? "dictionary" : slug
+        var fileName = "\(baseSlug).dict.json"
+
+        // Check for conflicts with other dictionaries
+        var counter = 2
+        while manifest.dictionaries.contains(where: { $0.fileName == fileName && $0.id != excludingId }) {
+            fileName = "\(baseSlug)-\(counter).dict.json"
+            counter += 1
+        }
+
+        return fileName
+    }
+
     // MARK: - Dictionary Operations
 
     /// Get all dictionary metadata (without loading entries)
@@ -141,8 +165,22 @@ actor DictionaryFileManager {
 
     /// Save a dictionary to disk
     func saveDictionary(_ dictionary: TalkieDictionary) async throws {
-        let fileName = "\(dictionary.id.uuidString).dict.json"
+        // Check if this dictionary already exists with a different filename
+        let existingEntry = manifest.dictionaries.first(where: { $0.id == dictionary.id })
+        let oldFileName = existingEntry?.fileName
+
+        // Generate filename from name (handles conflicts)
+        let fileName = generateFileName(for: dictionary.name, excludingId: dictionary.id)
         let fileURL = dictionariesDirectory.appendingPathComponent(fileName)
+
+        // If name changed and old file exists, delete it
+        if let oldFileName = oldFileName, oldFileName != fileName {
+            let oldFileURL = dictionariesDirectory.appendingPathComponent(oldFileName)
+            if FileManager.default.fileExists(atPath: oldFileURL.path) {
+                try? FileManager.default.removeItem(at: oldFileURL)
+                log.debug("Renamed dictionary file", detail: "\(oldFileName) → \(fileName)")
+            }
+        }
 
         // Save dictionary file
         let encoder = JSONEncoder()
@@ -171,7 +209,7 @@ actor DictionaryFileManager {
         }
 
         try saveManifest()
-        log.info("Dictionary saved", detail: "'\(dictionary.name)' with \(dictionary.entries.count) entries")
+        log.info("Dictionary saved", detail: "'\(dictionary.name)' → \(fileName)")
     }
 
     /// Create a new dictionary
@@ -268,6 +306,32 @@ actor DictionaryFileManager {
     }
 
     // MARK: - Migration
+
+    /// Migrate UUID-based filenames to name-based filenames
+    func migrateToNameBasedFilenames() async throws {
+        var needsSave = false
+
+        for (index, entry) in manifest.dictionaries.enumerated() {
+            // Check if filename is UUID-based (contains UUID pattern)
+            if entry.fileName.contains("-") && entry.fileName.count > 40 {
+                let newFileName = generateFileName(for: entry.name, excludingId: entry.id)
+                let oldFileURL = dictionariesDirectory.appendingPathComponent(entry.fileName)
+                let newFileURL = dictionariesDirectory.appendingPathComponent(newFileName)
+
+                // Rename the file
+                if FileManager.default.fileExists(atPath: oldFileURL.path) {
+                    try FileManager.default.moveItem(at: oldFileURL, to: newFileURL)
+                    manifest.dictionaries[index].fileName = newFileName
+                    needsSave = true
+                    log.info("Migrated dictionary filename", detail: "\(entry.fileName) → \(newFileName)")
+                }
+            }
+        }
+
+        if needsSave {
+            try saveManifest()
+        }
+    }
 
     /// Migrate from old single-dictionary format
     func migrateFromLegacyFormat() async throws {

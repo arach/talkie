@@ -29,7 +29,5 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
-	<key>ATSApplicationFontsPath</key>
-	<string>Resources/Fonts</string>
 </dict>
 </plist>
