@@ -426,7 +426,10 @@ class SettingsManager {
             } else {
                 UserDefaults.standard.removeObject(forKey: currentThemeKey)
             }
-            if !isBatchingUpdates { Theme.invalidate() }
+            if !isBatchingUpdates {
+                Theme.invalidate()
+                applyThemeConfig()
+            }
         }
     }
 
@@ -1077,6 +1080,25 @@ class SettingsManager {
         contentFontStyle = theme.contentFontStyle
         accentColor = theme.accentColor
         fontSize = theme.fontSize
+
+        // Configure TalkieKit's ThemeConfig for design system tokens
+        applyThemeConfig(theme)
+    }
+
+    /// Apply theme configuration to TalkieKit's global ThemeConfig
+    /// This updates corner radii, fonts, and other design tokens
+    func applyThemeConfig(_ theme: ThemePreset? = nil) {
+        let activeTheme = theme ?? currentTheme
+        if let activeTheme = activeTheme {
+            ThemeConfig.configure(
+                cornerRadiusMultiplier: activeTheme.cornerRadiusMultiplier,
+                useLightFonts: activeTheme.usesLightFonts,
+                borderWidth: activeTheme.borderWidth,
+                customFontName: activeTheme.uiFontStyle == .jetbrainsMono ? "JetBrainsMono" : nil
+            )
+        } else {
+            ThemeConfig.reset()
+        }
     }
 
     func applyAppearanceMode() {
@@ -1488,6 +1510,9 @@ class SettingsManager {
 
         // Apply appearance mode on launch
         applyAppearanceMode()
+
+        // Apply theme config to TalkieKit design tokens
+        applyThemeConfig()
 
         // Defer Core Data access until first use
         StartupProfiler.shared.mark("singleton.SettingsManager.done")
