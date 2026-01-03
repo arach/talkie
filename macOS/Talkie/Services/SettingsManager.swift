@@ -1235,6 +1235,7 @@ class SettingsManager {
     // MARK: - Audio Playback
 
     private let playbackVolumeKey = "playbackVolume"
+    private let keepTTSEngineWarmKey = "keepTTSEngineWarm"
 
     /// Audio playback volume (0.0 to 1.0, default 1.0)
     var playbackVolume: Float = 1.0 {
@@ -1244,6 +1245,18 @@ class SettingsManager {
                 UserDefaults.standard.set(volume, forKey: self.playbackVolumeKey)
             }
             NotificationCenter.default.post(name: .playbackVolumeDidChange, object: nil)
+        }
+    }
+
+    /// Keep TTS engine loaded after synthesis (default: false)
+    /// - ON: Keep TalkieEnginePod running after TTS (fast subsequent calls, ~800MB memory)
+    /// - OFF: Kill pod after TTS completes (reclaim memory)
+    var keepTTSEngineWarm: Bool = false {
+        didSet {
+            let value = keepTTSEngineWarm
+            DispatchQueue.main.async {
+                UserDefaults.standard.set(value, forKey: self.keepTTSEngineWarmKey)
+            }
         }
     }
 
@@ -1492,6 +1505,10 @@ class SettingsManager {
         } else {
             self.playbackVolume = 1.0
         }
+
+        // Initialize TTS engine warm setting
+        // Default: false (release ~800MB after TTS completes)
+        self.keepTTSEngineWarm = UserDefaults.standard.object(forKey: keepTTSEngineWarmKey) as? Bool ?? false
 
         // Initialize TTS voice
         // Default: kokoro:default (local Kokoro voice)

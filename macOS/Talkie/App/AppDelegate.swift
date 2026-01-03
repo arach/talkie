@@ -592,6 +592,33 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             print("✅ Cleared all pending and recent actions")
             exit(0)
         }
+
+        cliHandler.register(
+            "environment-crash",
+            description: "Trigger a crash by rendering a view without required @Environment value (reproduces crash report)"
+        ) { _ in
+            print("""
+            🔴 Environment Crash Test
+            =========================
+
+            This reproduces the crash from the crash report where:
+            - A view uses @Environment(LiveSettings.self)
+            - But LiveSettings is NOT provided via .environment()
+            - SwiftUI crashes with: "No Observable object of type X found"
+
+            Triggering crash in 2 seconds...
+            """)
+
+            try? await Task.sleep(for: .seconds(2))
+
+            await MainActor.run {
+                EnvironmentCrashTestView.triggerImmediateCrash()
+            }
+
+            // Keep running long enough for the crash to occur
+            try? await Task.sleep(for: .seconds(10))
+            exit(0)
+        }
     }
 
     // MARK: - URL Handling

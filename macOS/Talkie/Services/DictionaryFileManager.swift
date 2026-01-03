@@ -1,0 +1,344 @@
+//
+//  DictionaryFileManager.swift
+//  Talkie
+//
+//  Manages multiple dictionary files on disk
+//  Storage: ~/Library/Application Support/Talkie/Dictionaries/
+//
+//  Each dictionary is stored as: {uuid}.dict.json
+//  Manifest file tracks all dictionaries: manifest.json
+//
+
+import Foundation
+import TalkieKit
+
+private let log = Log(.system)
+
+// MARK: - Dictionary File Manager
+
+actor DictionaryFileManager {
+    static let shared = DictionaryFileManager()
+
+    // MARK: - Storage Paths
+
+    private let dictionariesDirectory: URL = {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let talkieDir = appSupport.appendingPathComponent("Talkie", isDirectory: true)
+        let dictDir = talkieDir.appendingPathComponent("Dictionaries", isDirectory: true)
+
+        // Ensure directory exists
+        try? FileManager.default.createDirectory(at: dictDir, withIntermediateDirectories: true)
+
+        return dictDir
+    }()
+
+    private var manifestURL: URL {
+        dictionariesDirectory.appendingPathComponent("manifest.json")
+    }
+
+    // MARK: - Manifest
+
+    /// Manifest tracks dictionary metadata without loading all entries
+    struct Manifest: Codable {
+        var dictionaries: [DictionaryManifestEntry]
+        var version: Int = 1
+
+        struct DictionaryManifestEntry: Codable, Identifiable {
+            let id: UUID
+            var name: String
+            var description: String?
+            var isEnabled: Bool
+            var entryCount: Int
+            var source: DictionarySource
+            var fileName: String
+            var createdAt: Date
+            var modifiedAt: Date
+        }
+    }
+
+    private var manifest: Manifest = Manifest(dictionaries: [])
+
+    // MARK: - Init
+
+    private init() {}
+
+    // MARK: - Load/Save Manifest
+
+    func loadManifest() async throws {
+        guard FileManager.default.fileExists(atPath: manifestURL.path) else {
+            log.info("No manifest found, starting fresh")
+            manifest = Manifest(dictionaries: [])
+            return
+        }
+
+        let data = try Data(contentsOf: manifestURL)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        manifest = try decoder.decode(Manifest.self, from: data)
+        log.info("Manifest loaded", detail: "\(manifest.dictionaries.count) dictionaries")
+    }
+
+    private func saveManifest() throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(manifest)
+        try data.write(to: manifestURL, options: .atomic)
+        log.debug("Manifest saved")
+    }
+
+    // MARK: - Dictionary Operations
+
+    /// Get all dictionary metadata (without loading entries)
+    func getAllDictionaryMetadata() -> [Manifest.DictionaryManifestEntry] {
+        manifest.dictionaries
+    }
+
+    /// Load a specific dictionary with all its entries
+    func loadDictionary(id: UUID) async throws -> TalkieDictionary {
+        guard let entry = manifest.dictionaries.first(where: { $0.id == id }) else {
+            throw DictionaryFileError.notFound(id)
+        }
+
+        let fileURL = dictionariesDirectory.appendingPathComponent(entry.fileName)
+        let data = try Data(contentsOf: fileURL)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(TalkieDictionary.self, from: data)
+    }
+
+    /// Load all enabled dictionaries
+    func loadAllEnabledDictionaries() async throws -> [TalkieDictionary] {
+        var dictionaries: [TalkieDictionary] = []
+
+        for entry in manifest.dictionaries where entry.isEnabled {
+            do {
+                let dict = try await loadDictionary(id: entry.id)
+                dictionaries.append(dict)
+            } catch {
+                log.error("Failed to load dictionary '\(entry.name)'", error: error)
+            }
+        }
+
+        return dictionaries
+    }
+
+    /// Load all dictionaries (enabled and disabled)
+    func loadAllDictionaries() async throws -> [TalkieDictionary] {
+        var dictionaries: [TalkieDictionary] = []
+
+        for entry in manifest.dictionaries {
+            do {
+                let dict = try await loadDictionary(id: entry.id)
+                dictionaries.append(dict)
+            } catch {
+                log.error("Failed to load dictionary '\(entry.name)'", error: error)
+            }
+        }
+
+        return dictionaries
+    }
+
+    /// Save a dictionary to disk
+    func saveDictionary(_ dictionary: TalkieDictionary) async throws {
+        let fileName = "\(dictionary.id.uuidString).dict.json"
+        let fileURL = dictionariesDirectory.appendingPathComponent(fileName)
+
+        // Save dictionary file
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(dictionary)
+        try data.write(to: fileURL, options: .atomic)
+
+        // Update manifest
+        let manifestEntry = Manifest.DictionaryManifestEntry(
+            id: dictionary.id,
+            name: dictionary.name,
+            description: dictionary.description,
+            isEnabled: dictionary.isEnabled,
+            entryCount: dictionary.entries.count,
+            source: dictionary.source,
+            fileName: fileName,
+            createdAt: dictionary.createdAt,
+            modifiedAt: dictionary.modifiedAt
+        )
+
+        if let index = manifest.dictionaries.firstIndex(where: { $0.id == dictionary.id }) {
+            manifest.dictionaries[index] = manifestEntry
+        } else {
+            manifest.dictionaries.append(manifestEntry)
+        }
+
+        try saveManifest()
+        log.info("Dictionary saved", detail: "'\(dictionary.name)' with \(dictionary.entries.count) entries")
+    }
+
+    /// Create a new dictionary
+    func createDictionary(name: String, description: String? = nil, source: DictionarySource = .manual) async throws -> TalkieDictionary {
+        let dictionary = TalkieDictionary(
+            name: name,
+            description: description,
+            source: source
+        )
+        try await saveDictionary(dictionary)
+        return dictionary
+    }
+
+    /// Delete a dictionary
+    func deleteDictionary(id: UUID) async throws {
+        guard let index = manifest.dictionaries.firstIndex(where: { $0.id == id }) else {
+            throw DictionaryFileError.notFound(id)
+        }
+
+        let entry = manifest.dictionaries[index]
+        let fileURL = dictionariesDirectory.appendingPathComponent(entry.fileName)
+
+        // Delete file
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+            try FileManager.default.removeItem(at: fileURL)
+        }
+
+        // Remove from manifest
+        manifest.dictionaries.remove(at: index)
+        try saveManifest()
+
+        log.info("Dictionary deleted", detail: entry.name)
+    }
+
+    /// Toggle dictionary enabled state
+    func toggleDictionary(id: UUID) async throws {
+        guard let index = manifest.dictionaries.firstIndex(where: { $0.id == id }) else {
+            throw DictionaryFileError.notFound(id)
+        }
+
+        manifest.dictionaries[index].isEnabled.toggle()
+        try saveManifest()
+
+        // Also update the dictionary file
+        var dict = try await loadDictionary(id: id)
+        dict.isEnabled = manifest.dictionaries[index].isEnabled
+        try await saveDictionary(dict)
+    }
+
+    // MARK: - Import
+
+    /// Import a dictionary from JSON data
+    func importDictionary(from data: Data, name: String? = nil) async throws -> TalkieDictionary {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        // Try to decode as TalkieDictionary first
+        if var dictionary = try? decoder.decode(TalkieDictionary.self, from: data) {
+            // Generate new ID for imported dictionary
+            dictionary = TalkieDictionary(
+                id: UUID(),
+                name: name ?? dictionary.name,
+                description: dictionary.description,
+                isEnabled: true,
+                entries: dictionary.entries,
+                createdAt: Date(),
+                modifiedAt: Date(),
+                source: .imported
+            )
+            try await saveDictionary(dictionary)
+            return dictionary
+        }
+
+        // Try to decode as array of DictionaryEntry (legacy format)
+        if let entries = try? decoder.decode([DictionaryEntry].self, from: data) {
+            let dictionary = TalkieDictionary(
+                name: name ?? "Imported Dictionary",
+                description: "Imported from JSON file",
+                entries: entries,
+                source: .imported
+            )
+            try await saveDictionary(dictionary)
+            return dictionary
+        }
+
+        throw DictionaryFileError.invalidFormat
+    }
+
+    /// Import from a file URL
+    func importDictionary(from url: URL) async throws -> TalkieDictionary {
+        let data = try Data(contentsOf: url)
+        let fileName = url.deletingPathExtension().lastPathComponent
+        return try await importDictionary(from: data, name: fileName)
+    }
+
+    // MARK: - Migration
+
+    /// Migrate from old single-dictionary format
+    func migrateFromLegacyFormat() async throws {
+        let legacyURL: URL = {
+            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            return appSupport
+                .appendingPathComponent("Talkie", isDirectory: true)
+                .appendingPathComponent("dictionary.json")
+        }()
+
+        guard FileManager.default.fileExists(atPath: legacyURL.path) else {
+            log.debug("No legacy dictionary to migrate")
+            return
+        }
+
+        // Check if we've already migrated
+        guard manifest.dictionaries.isEmpty else {
+            log.debug("Manifest already has dictionaries, skipping migration")
+            return
+        }
+
+        let data = try Data(contentsOf: legacyURL)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let entries = try decoder.decode([DictionaryEntry].self, from: data)
+
+        guard !entries.isEmpty else {
+            log.debug("Legacy dictionary is empty, skipping migration")
+            return
+        }
+
+        // Create new dictionary from legacy entries
+        let dictionary = TalkieDictionary(
+            name: "Personal",
+            description: "Migrated from legacy dictionary",
+            entries: entries,
+            source: .manual
+        )
+
+        try await saveDictionary(dictionary)
+        log.info("Migrated legacy dictionary", detail: "\(entries.count) entries")
+
+        // Optionally rename the old file
+        let backupURL = legacyURL.deletingPathExtension().appendingPathExtension("json.migrated")
+        try? FileManager.default.moveItem(at: legacyURL, to: backupURL)
+    }
+
+    // MARK: - Get all entries flattened
+
+    /// Get all enabled entries from all enabled dictionaries (for Engine sync)
+    func getAllEnabledEntries() async throws -> [DictionaryEntry] {
+        let dictionaries = try await loadAllEnabledDictionaries()
+        return dictionaries.flatMap { $0.enabledEntries }
+    }
+}
+
+// MARK: - Errors
+
+enum DictionaryFileError: LocalizedError {
+    case notFound(UUID)
+    case invalidFormat
+    case migrationFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .notFound(let id):
+            return "Dictionary not found: \(id)"
+        case .invalidFormat:
+            return "Invalid dictionary file format"
+        case .migrationFailed(let reason):
+            return "Migration failed: \(reason)"
+        }
+    }
+}

@@ -9,6 +9,67 @@
 
 import Foundation
 
+// MARK: - Dictionary (Collection of Entries)
+
+public struct TalkieDictionary: Codable, Identifiable, Equatable, Sendable {
+    public let id: UUID
+    public var name: String
+    public var description: String?
+    public var isEnabled: Bool
+    public var entries: [DictionaryEntry]
+    public var createdAt: Date
+    public var modifiedAt: Date
+
+    /// Source of this dictionary
+    public var source: DictionarySource
+
+    public init(
+        id: UUID = UUID(),
+        name: String,
+        description: String? = nil,
+        isEnabled: Bool = true,
+        entries: [DictionaryEntry] = [],
+        createdAt: Date = Date(),
+        modifiedAt: Date = Date(),
+        source: DictionarySource = .manual
+    ) {
+        self.id = id
+        self.name = name
+        self.description = description
+        self.isEnabled = isEnabled
+        self.entries = entries
+        self.createdAt = createdAt
+        self.modifiedAt = modifiedAt
+        self.source = source
+    }
+
+    /// Count of enabled entries
+    public var enabledEntryCount: Int {
+        entries.filter { $0.isEnabled }.count
+    }
+
+    /// All enabled entries
+    public var enabledEntries: [DictionaryEntry] {
+        entries.filter { $0.isEnabled }
+    }
+}
+
+// MARK: - Dictionary Source
+
+public enum DictionarySource: Codable, Equatable, Sendable {
+    case manual           // Created by user in UI
+    case imported         // Imported from file
+    case preset           // Built-in preset
+
+    public var displayName: String {
+        switch self {
+        case .manual: return "Personal"
+        case .imported: return "Imported"
+        case .preset: return "Preset"
+        }
+    }
+}
+
 // MARK: - Match Type
 
 public enum DictionaryMatchType: String, Codable, CaseIterable, Sendable {

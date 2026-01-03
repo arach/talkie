@@ -1151,28 +1151,27 @@ struct WorkflowInlineEditor: View {
     let onDuplicate: () -> Void
     let onRun: () -> Void
 
-    private let workflowManager = WorkflowManager.shared
+    private let workflowService = WorkflowService.shared
     private let settings = SettingsManager.shared
     @State private var showingStepTypePicker = false
     @State private var isEditing = false
     @State private var showingVisualizer = false
 
-    // Get the current workflow from manager (source of truth)
+    // Get the current workflow from service (source of truth for saved workflows)
     private var currentWorkflow: WorkflowDefinition? {
         guard let id = workflow?.id else { return nil }
-        return workflowManager.workflows.first { $0.id == id }
+        return workflowService.workflow(byID: id)?.definition
     }
 
     private var editedWorkflow: Binding<WorkflowDefinition> {
         Binding(
             get: {
-                // Use manager as source of truth
-                currentWorkflow ?? workflow ?? WorkflowDefinition(name: "", description: "")
+                // Use binding as source of truth for edits (saved via onSave)
+                workflow ?? WorkflowDefinition(name: "", description: "")
             },
             set: { newValue in
-                // Update both manager and binding
-                workflowManager.updateWorkflow(newValue)
-                workflow = workflowManager.workflows.first { $0.id == newValue.id }
+                // Update binding only - save happens via onSave callback
+                workflow = newValue
             }
         )
     }
@@ -1484,23 +1483,22 @@ struct WorkflowInlineEditor: View {
     private func stepBinding(at index: Int) -> Binding<WorkflowStep> {
         Binding(
             get: {
-                guard let wf = currentWorkflow, index < wf.steps.count else {
+                guard let wf = workflow, index < wf.steps.count else {
                     return WorkflowStep(type: .llm, config: .llm(LLMStepConfig(provider: .gemini, prompt: "")), outputKey: "")
                 }
                 return wf.steps[index]
             },
             set: { newValue in
-                guard var wf = currentWorkflow, index < wf.steps.count else { return }
+                guard var wf = workflow, index < wf.steps.count else { return }
                 wf.steps[index] = newValue
                 wf.modifiedAt = Date()
-                workflowManager.updateWorkflow(wf)
+                workflow = wf
             }
         )
     }
 
     private func addStep(of type: WorkflowStep.StepType) {
-        // Use currentWorkflow from manager as source of truth
-        guard var wf = currentWorkflow else { return }
+        guard var wf = workflow else { return }
         let newStep = WorkflowStep(
             type: type,
             config: StepConfig.defaultConfig(for: type),
@@ -1508,29 +1506,24 @@ struct WorkflowInlineEditor: View {
         )
         wf.steps.append(newStep)
         wf.modifiedAt = Date()
-        workflowManager.updateWorkflow(wf)
-        workflow = workflowManager.workflows.first { $0.id == wf.id }
+        workflow = wf
     }
 
     private func deleteStep(at index: Int) {
-        // Use currentWorkflow from manager as source of truth
-        guard var wf = currentWorkflow else { return }
+        guard var wf = workflow else { return }
         guard index < wf.steps.count else { return }
         wf.steps.remove(at: index)
         wf.modifiedAt = Date()
-        workflowManager.updateWorkflow(wf)
-        workflow = workflowManager.workflows.first { $0.id == wf.id }
+        workflow = wf
     }
 
     private func moveStep(from source: Int, to destination: Int) {
-        // Use currentWorkflow from manager as source of truth
-        guard var wf = currentWorkflow else { return }
+        guard var wf = workflow else { return }
         guard source < wf.steps.count else { return }
         let step = wf.steps.remove(at: source)
         wf.steps.insert(step, at: destination)
         wf.modifiedAt = Date()
-        workflowManager.updateWorkflow(wf)
-        workflow = workflowManager.workflows.first { $0.id == wf.id }
+        workflow = wf
     }
 }
 
@@ -2533,11 +2526,11 @@ struct iOSPushStepReadView: View {
 
 struct IntentExtractStepReadView: View {
     let config: IntentExtractStepConfig
-    private let workflowManager = WorkflowManager.shared
+    private let workflowService = WorkflowService.shared
 
     private func workflowName(for id: UUID?) -> String? {
         guard let id = id else { return nil }
-        return workflowManager.workflows.first { $0.id == id }?.name
+        return workflowService.workflow(byID: id)?.name
     }
 
     var body: some View {
@@ -5348,11 +5341,11 @@ struct IntentDefinitionRow: View {
     let onDelete: () -> Void
 
     @State private var newSynonym = ""
-    private let workflowManager = WorkflowManager.shared
+    private let workflowService = WorkflowService.shared
 
     /// Available workflows for mapping (excludes Hey Talkie to prevent recursion)
-    private var availableWorkflows: [WorkflowDefinition] {
-        workflowManager.workflows.filter { $0.id != WorkflowDefinition.heyTalkieWorkflowId }
+    private var availableWorkflows: [Workflow] {
+        workflowService.workflows.filter { $0.id != WorkflowDefinition.heyTalkieWorkflowId }
     }
 
     /// Get workflow name for display

@@ -20,9 +20,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "539C69422ED39ADF00BC034F"
-               BuildableName = "Talkie OSTests.xctest"
-               BlueprintName = "Talkie OSTests"
-               ReferencedContainer = "container:Talkie OS.xcodeproj">
+               BuildableName = "TalkieTests.xctest"
+               BlueprintName = "TalkieTests"
+               ReferencedContainer = "container:Talkie-iOS.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>

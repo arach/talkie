@@ -15,7 +15,7 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 struct WorkflowListColumn: View {
     @Binding var selectedWorkflowID: UUID?
     @Binding var editingWorkflow: WorkflowDefinition?
-    private let workflowManager = WorkflowManager.shared
+    private let workflowService = WorkflowService.shared
     private let settings = SettingsManager.shared
 
     var body: some View {
@@ -25,7 +25,7 @@ struct WorkflowListColumn: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("WORKFLOWS")
                         .font(Theme.current.fontSMBold)
-                    Text("\(workflowManager.workflows.count) total")
+                    Text("\(workflowService.workflows.count) total")
                         .font(Theme.current.fontXS)
                         .foregroundColor(Theme.current.foregroundSecondary)
                 }
@@ -48,11 +48,11 @@ struct WorkflowListColumn: View {
             // Workflow List
             ScrollView {
                 VStack(spacing: Spacing.xs) {
-                    ForEach(workflowManager.workflows) { workflow in
+                    ForEach(workflowService.workflows) { workflow in
                         WorkflowListItem(
-                            workflow: workflow,
+                            workflow: workflow.definition,
                             isSelected: selectedWorkflowID == workflow.id,
-                            isSystem: false,
+                            isSystem: workflow.isSystem,
                             onSelect: { selectWorkflow(workflow) },
                             onEdit: { selectWorkflow(workflow) }
                         )
@@ -72,12 +72,12 @@ struct WorkflowListColumn: View {
         selectedWorkflowID = newWorkflow.id
     }
 
-    private func selectWorkflow(_ workflow: WorkflowDefinition) {
+    private func selectWorkflow(_ workflow: Workflow) {
         // Only update editingWorkflow if selecting a different workflow
         // This prevents overwriting unsaved edits when clicking the same item
         if selectedWorkflowID != workflow.id {
             selectedWorkflowID = workflow.id
-            editingWorkflow = workflow
+            editingWorkflow = workflow.definition
         }
     }
 }
@@ -85,15 +85,15 @@ struct WorkflowListColumn: View {
 struct WorkflowDetailColumn: View {
     @Binding var editingWorkflow: WorkflowDefinition?
     @Binding var selectedWorkflowID: UUID?
-    private let workflowManager = WorkflowManager.shared
+    private let workflowService = WorkflowService.shared
     private let settings = SettingsManager.shared
     private var memosVM: MemosViewModel { MemosViewModel.shared }
     @State private var showingMemoSelector = false
 
-    // Get fresh workflow from manager (source of truth)
-    private var currentWorkflow: WorkflowDefinition? {
+    // Get fresh workflow from service (source of truth)
+    private var currentWorkflow: Workflow? {
         guard let id = editingWorkflow?.id else { return nil }
-        return workflowManager.workflows.first { $0.id == id }
+        return workflowService.workflow(byID: id)
     }
 
     var body: some View {
@@ -139,12 +139,12 @@ struct WorkflowDetailColumn: View {
             await memosVM.loadWorkflowMemos()
         }
         .sheet(isPresented: $showingMemoSelector) {
-            // Use currentWorkflow from manager for fresh data
-            if let workflow = currentWorkflow ?? editingWorkflow {
+            // Use currentWorkflow from service for fresh data (must be saved to run)
+            if let workflow = currentWorkflow {
                 // Use untranscribed memos for TRANSCRIBE workflows, transcribed for others
-                let memosToShow = workflow.startsWithTranscribe ? memosVM.untranscribedMemos : memosVM.transcribedMemos
+                let memosToShow = workflow.definition.startsWithTranscribe ? memosVM.untranscribedMemos : memosVM.transcribedMemos
                 WorkflowMemoSelectorSheet(
-                    workflow: workflow,
+                    workflow: workflow.definition,
                     memos: memosToShow,
                     onSelect: { memo in
                         runWorkflow(workflow, on: memo)
@@ -168,37 +168,59 @@ struct WorkflowDetailColumn: View {
     }
 
     private func saveWorkflow() {
-        // Use currentWorkflow from manager if available, otherwise fall back to binding
-        guard var workflow = currentWorkflow ?? editingWorkflow else { return }
-        workflow.modifiedAt = Date()
+        // Use editingWorkflow binding (contains user's edits)
+        guard var definition = editingWorkflow else { return }
+        definition.modifiedAt = Date()
 
-        if workflowManager.workflows.contains(where: { $0.id == workflow.id }) {
-            workflowManager.updateWorkflow(workflow)
-        } else {
-            workflowManager.addWorkflow(workflow)
+        Task {
+            do {
+                try await workflowService.save(definition)
+                // Sync binding from service
+                await MainActor.run {
+                    editingWorkflow = workflowService.workflow(byID: definition.id)?.definition
+                }
+            } catch {
+                logger.error("Failed to save workflow: \(error)")
+            }
         }
-        // Sync binding from manager
-        editingWorkflow = workflowManager.workflows.first { $0.id == workflow.id }
     }
 
     private func deleteCurrentWorkflow() {
-        guard let workflow = currentWorkflow ?? editingWorkflow else { return }
-        workflowManager.deleteWorkflow(workflow)
-        editingWorkflow = nil
-        selectedWorkflowID = nil
+        guard let workflow = currentWorkflow else { return }
+
+        Task {
+            do {
+                try await workflowService.delete(workflow)
+                await MainActor.run {
+                    editingWorkflow = nil
+                    selectedWorkflowID = nil
+                }
+            } catch {
+                logger.error("Failed to delete workflow: \(error)")
+            }
+        }
     }
 
     private func duplicateCurrentWorkflow() {
-        guard let workflow = currentWorkflow ?? editingWorkflow else { return }
-        let duplicate = workflowManager.duplicateWorkflow(workflow)
-        editingWorkflow = duplicate
-        selectedWorkflowID = duplicate.id
-    }
+        guard let workflow = currentWorkflow else { return }
 
-    private func runWorkflow(_ workflow: WorkflowDefinition, on memo: MemoModel) {
         Task {
             do {
-                let _ = try await WorkflowExecutor.shared.executeWorkflow(workflow, for: memo)
+                let duplicate = try await workflowService.duplicate(workflow)
+                await MainActor.run {
+                    editingWorkflow = duplicate.definition
+                    selectedWorkflowID = duplicate.id
+                }
+            } catch {
+                logger.error("Failed to duplicate workflow: \(error)")
+            }
+        }
+    }
+
+    private func runWorkflow(_ workflow: Workflow, on memo: MemoModel) {
+        Task {
+            do {
+                let _ = try await WorkflowExecutor.shared.executeWorkflow(workflow.definition, for: memo)
             } catch {
                 await SystemEventManager.shared.log(.error, "Workflow failed: \(workflow.name)", detail: error.localizedDescription)
             }
