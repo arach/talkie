@@ -136,7 +136,7 @@ struct DictationOnboardingView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, Spacing.sm)
                         .background(Color.accentColor)
-                        .cornerRadius(8)
+                        .cornerRadius(CornerRadius.sm)
                 }
                 .buttonStyle(.plain)
 
@@ -208,7 +208,7 @@ struct DictationOnboardingView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, Spacing.sm)
                     .background(allPermissionsGranted ? Color.accentColor : TalkieTheme.textMuted)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
                 }
                 .buttonStyle(.plain)
 
@@ -267,7 +267,7 @@ struct DictationOnboardingView: View {
             }
             .padding(Spacing.xl)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: CornerRadius.md)
                     .fill(TalkieTheme.surfaceCard)
             )
             .padding(.horizontal, Spacing.lg)
@@ -291,7 +291,7 @@ struct DictationOnboardingView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, Spacing.sm)
                         .background(Color.accentColor)
-                        .cornerRadius(8)
+                        .cornerRadius(CornerRadius.sm)
                 }
                 .buttonStyle(.plain)
 
@@ -352,7 +352,7 @@ struct DictationOnboardingView: View {
             }
             .padding(Spacing.lg)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: CornerRadius.md)
                     .fill(TalkieTheme.surfaceCard)
             )
 
@@ -370,7 +370,7 @@ struct DictationOnboardingView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, Spacing.sm)
                     .background(Color.accentColor)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
                 }
                 .buttonStyle(.plain)
 
@@ -466,7 +466,7 @@ private struct FeatureRow: View {
                 .foregroundColor(.accentColor)
                 .frame(width: 32, height: 32)
                 .background(Color.accentColor.opacity(0.1))
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -501,7 +501,7 @@ private struct PermissionRow: View {
                 .background(
                     (isGranted ? Color.green : Color.accentColor).opacity(0.1)
                 )
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
 
             // Text
             VStack(alignment: .leading, spacing: 2) {
@@ -541,7 +541,7 @@ private struct PermissionRow: View {
                         .padding(.horizontal, Spacing.sm)
                         .padding(.vertical, Spacing.xs)
                         .background(Color.accentColor)
-                        .cornerRadius(6)
+                        .cornerRadius(CornerRadius.xs)
                 }
                 .buttonStyle(.plain)
             }
@@ -567,12 +567,12 @@ private struct KeyCapLarge: View {
             .foregroundColor(TalkieTheme.textPrimary)
             .frame(width: 32, height: 32)
             .background(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
                     .fill(TalkieTheme.surfaceElevated)
                     .shadow(color: .black.opacity(0.2), radius: 1, y: 1)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
                     .stroke(TalkieTheme.border, lineWidth: 1)
             )
     }
@@ -612,7 +612,7 @@ private struct HotkeyRecorderInline: View {
             .padding(.horizontal, Spacing.sm)
             .padding(.vertical, Spacing.xs)
             .background(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
                     .fill(isRecording ? Color.orange.opacity(0.1) : Color.clear)
             )
         }

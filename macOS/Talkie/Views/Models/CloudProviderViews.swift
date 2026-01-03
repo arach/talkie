@@ -45,7 +45,7 @@ struct ExpandableCloudProviderCard: View {
             Button(action: onToggle) {
                 HStack(spacing: 12) {
                     // Provider icon
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
                         .fill(providerColor.opacity(0.2))
                         .frame(width: 32, height: 32)
                         .overlay(
@@ -162,7 +162,7 @@ struct ExpandableCloudProviderCard: View {
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
                                 .background(settings.midnightButtonPrimary)
-                                .cornerRadius(4)
+                                .cornerRadius(CornerRadius.xs)
                             }
                             .buttonStyle(.plain)
                         }
@@ -173,11 +173,11 @@ struct ExpandableCloudProviderCard: View {
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
                 .fill(isHovered ? settings.midnightSurfaceHover : settings.midnightSurface)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
                 .stroke(
                     isExpanded ? settings.midnightBorderActive : (isHovered ? settings.midnightBorderActive : settings.midnightBorder),
                     lineWidth: 1

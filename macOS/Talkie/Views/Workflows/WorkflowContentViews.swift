@@ -40,7 +40,7 @@ struct WorkflowsContentView: View {
                             .foregroundColor(Theme.current.foreground)
                             .frame(width: 24, height: 24)
                             .background(Theme.current.surfaceSelected)
-                            .cornerRadius(4)
+                            .cornerRadius(CornerRadius.xs)
                     }
                     .buttonStyle(.plain)
                 }
@@ -103,7 +103,7 @@ struct WorkflowsContentView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(Theme.current.surfaceSelected)
-                        .cornerRadius(4)
+                        .cornerRadius(CornerRadius.xs)
                     }
                     .buttonStyle(.plain)
                 }
@@ -258,7 +258,7 @@ struct WorkflowMemoSelectorSheet: View {
             }
             .padding(Spacing.sm)
             .background(Theme.current.surface1)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
             .padding(.horizontal, 16)
             .padding(.bottom, 12)
 
@@ -418,7 +418,7 @@ struct WorkflowCard: View {
                     .foregroundColor(.primary.opacity(0.7))
                     .frame(width: 32, height: 32)
                     .background(Theme.current.surfaceHover)
-                    .cornerRadius(4)
+                    .cornerRadius(CornerRadius.xs)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title.uppercased())
@@ -447,9 +447,9 @@ struct WorkflowCard: View {
             }
             .padding(Spacing.md)
             .background(Theme.current.surface1)
-            .cornerRadius(4)
+            .cornerRadius(CornerRadius.xs)
             .overlay(
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
                     .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
             )
         }
@@ -571,7 +571,7 @@ struct MemoSelectorSheet: View {
                             }
                             .padding(Spacing.md)
                             .background(Theme.current.surface1)
-                            .cornerRadius(6)
+                            .cornerRadius(CornerRadius.xs)
                         }
                         .buttonStyle(.plain)
                     }

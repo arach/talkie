@@ -36,7 +36,7 @@ struct WorkflowListColumn: View {
                         .foregroundColor(Theme.current.foreground)
                         .frame(width: 24, height: 24)
                         .background(Theme.current.surfaceSelected)
-                        .cornerRadius(4)
+                        .cornerRadius(CornerRadius.xs)
                 }
                 .buttonStyle(.plain)
             }
@@ -127,7 +127,7 @@ struct WorkflowDetailColumn: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(Theme.current.surfaceSelected)
-                        .cornerRadius(4)
+                        .cornerRadius(CornerRadius.xs)
                     }
                     .buttonStyle(.plain)
                 }

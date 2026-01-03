@@ -1367,11 +1367,11 @@ private struct RecentRunRow: View {
             HStack(spacing: Spacing.sm) {
                 // Workflow icon with glass background
                 ZStack {
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
                         .fill(.ultraThinMaterial)
                         .frame(width: 28, height: 28)
 
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
                         .fill(Color.accentColor.opacity(0.15))
                         .frame(width: 28, height: 28)
 

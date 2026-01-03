@@ -103,7 +103,7 @@ struct AuditResultsView: View {
                 }
                 .padding()
                 .background(Color.green.opacity(0.1))
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
             } else if let error = deleteError {
                 // Show error message
                 HStack(spacing: 8) {
@@ -114,7 +114,7 @@ struct AuditResultsView: View {
                 }
                 .padding()
                 .background(Color.red.opacity(0.1))
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
             } else {
                 // Show action buttons
                 VStack(alignment: .leading, spacing: 12) {
@@ -151,7 +151,7 @@ struct AuditResultsView: View {
         }
         .padding()
         .background(Color.secondary.opacity(0.05))
-        .cornerRadius(8)
+        .cornerRadius(CornerRadius.sm)
     }
 
     private func actionCard(
@@ -195,7 +195,7 @@ struct AuditResultsView: View {
         }
         .padding()
         .background(iconColor.opacity(0.05))
-        .cornerRadius(8)
+        .cornerRadius(CornerRadius.sm)
     }
 
     private func infoCard(
@@ -222,7 +222,7 @@ struct AuditResultsView: View {
         }
         .padding()
         .background(iconColor.opacity(0.05))
-        .cornerRadius(8)
+        .cornerRadius(CornerRadius.sm)
     }
 
     private func deleteOrphanedFiles() {
@@ -290,7 +290,7 @@ struct AuditResultsView: View {
         }
         .padding()
         .background(Color.secondary.opacity(0.05))
-        .cornerRadius(8)
+        .cornerRadius(CornerRadius.sm)
     }
 
     private func statBox(title: String, value: String, color: Color) -> some View {
@@ -307,7 +307,7 @@ struct AuditResultsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
         .background(color.opacity(0.1))
-        .cornerRadius(6)
+        .cornerRadius(CornerRadius.xs)
     }
 
     private func storageSection(
@@ -352,7 +352,7 @@ struct AuditResultsView: View {
             }
             .padding()
             .background(Color.secondary.opacity(0.05))
-            .cornerRadius(6)
+            .cornerRadius(CornerRadius.xs)
 
             // Show orphaned files
             if !orphanedFiles.isEmpty {
@@ -396,7 +396,7 @@ struct AuditResultsView: View {
             .frame(maxHeight: 150)
             .padding(8)
             .background(color.opacity(0.05))
-            .cornerRadius(4)
+            .cornerRadius(CornerRadius.xs)
         }
     }
 }

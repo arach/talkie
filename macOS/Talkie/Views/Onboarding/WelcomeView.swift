@@ -226,10 +226,10 @@ private struct TalkieLogo: View {
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.xs)
         .background(
-            RoundedRectangle(cornerRadius: 4)
+            RoundedRectangle(cornerRadius: CornerRadius.xs)
                 .strokeBorder(colors.accent, lineWidth: 2)
                 .background(
-                    RoundedRectangle(cornerRadius: 4)
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
                         .fill(colors.background)
                 )
         )
