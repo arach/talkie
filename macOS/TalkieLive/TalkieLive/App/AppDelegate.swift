@@ -107,7 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         setupHotkeys()
         setupFloatingPill()
 
-        // Bridge inject commands now routed through Talkie (BridgeInjectServer → XPC)
+        // Bridge messages now routed through Talkie (TalkieServer → XPC)
 
         // Show floating pill on launch
         floatingPill.show()

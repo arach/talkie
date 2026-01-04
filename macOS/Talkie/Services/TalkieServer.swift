@@ -1,8 +1,8 @@
 //
-//  BridgeInjectServer.swift
+//  TalkieServer.swift
 //  Talkie
 //
-//  HTTP server for receiving inject requests from TalkieBridge.
+//  HTTP server for receiving message requests from Bridge.
 //  Listens on port 8766 and forwards to TalkieLive via XPC.
 //
 
@@ -12,23 +12,23 @@ import TalkieKit
 
 private let log = Log(.system)
 
-/// Request body for /inject endpoint
-private struct InjectRequest: Codable {
+/// Request body for /message endpoint
+private struct MessageRequest: Codable {
     let sessionId: String
     let text: String
 }
 
-/// Response for /inject endpoint
-private struct InjectResponse: Codable {
+/// Response for /message endpoint
+private struct MessageResponse: Codable {
     let success: Bool
     let error: String?
 }
 
-/// Local HTTP server for bridge communication
-/// Receives inject requests and forwards to TalkieLive via XPC
+/// Local HTTP server for Bridge communication
+/// Receives message requests and forwards to TalkieLive via XPC
 @MainActor
-final class BridgeInjectServer {
-    static let shared = BridgeInjectServer()
+final class TalkieServer {
+    static let shared = TalkieServer()
 
     private var listener: NWListener?
     private let port: UInt16 = 8766
@@ -48,7 +48,7 @@ final class BridgeInjectServer {
         self.xpcManager = xpcManager
 
         guard listener == nil else {
-            log.debug("BridgeInjectServer already running")
+            log.debug("TalkieServer already running")
             return
         }
 
@@ -71,16 +71,16 @@ final class BridgeInjectServer {
             }
 
             listener?.start(queue: .main)
-            log.info("BridgeInjectServer starting on port \(port)")
+            log.info("TalkieServer starting on port \(port)")
         } catch {
-            log.error("Failed to start BridgeInjectServer: \(error)")
+            log.error("Failed to start TalkieServer: \(error)")
         }
     }
 
     func stop() {
         listener?.cancel()
         listener = nil
-        log.info("BridgeInjectServer stopped")
+        log.info("TalkieServer stopped")
     }
 
     // MARK: - Private
@@ -88,12 +88,12 @@ final class BridgeInjectServer {
     private func handleStateUpdate(_ state: NWListener.State) {
         switch state {
         case .ready:
-            log.info("BridgeInjectServer ready on port \(port)")
+            log.info("TalkieServer ready on port \(port)")
         case .failed(let error):
-            log.error("BridgeInjectServer failed: \(error)")
+            log.error("TalkieServer failed: \(error)")
             listener = nil
         case .cancelled:
-            log.info("BridgeInjectServer cancelled")
+            log.info("TalkieServer cancelled")
         default:
             break
         }
@@ -161,7 +161,7 @@ final class BridgeInjectServer {
         let method = parts[0]
         let path = parts[1]
 
-        log.debug("BridgeInjectServer: \(method) \(path)")
+        log.debug("TalkieServer: \(method) \(path)")
 
         // Find body (after empty line)
         var body: Data?
@@ -175,35 +175,36 @@ final class BridgeInjectServer {
         if path == "/health" && method == "GET" {
             let response = ["status": "ok", "service": "Talkie"]
             sendJSONResponse(connection, statusCode: 200, body: response)
-        } else if path == "/inject" && method == "POST" {
-            await handleInject(connection, body: body)
+        } else if (path == "/message" || path == "/inject") && method == "POST" {
+            // /message is preferred, /inject for backwards compat
+            await handleMessage(connection, body: body)
         } else {
             sendResponse(connection, statusCode: 404, body: "Not found")
         }
     }
 
-    private func handleInject(_ connection: NWConnection, body: Data?) async {
+    private func handleMessage(_ connection: NWConnection, body: Data?) async {
         guard let body else {
-            sendJSONResponse(connection, statusCode: 400, body: InjectResponse(success: false, error: "No body"))
+            sendJSONResponse(connection, statusCode: 400, body: MessageResponse(success: false, error: "No body"))
             return
         }
 
-        let request: InjectRequest
+        let request: MessageRequest
         do {
-            request = try JSONDecoder().decode(InjectRequest.self, from: body)
+            request = try JSONDecoder().decode(MessageRequest.self, from: body)
         } catch {
-            sendJSONResponse(connection, statusCode: 400, body: InjectResponse(success: false, error: "Invalid JSON: \(error)"))
+            sendJSONResponse(connection, statusCode: 400, body: MessageResponse(success: false, error: "Invalid JSON: \(error)"))
             return
         }
 
-        log.info("Inject request for session: \(request.sessionId), text: \(request.text.prefix(50))...")
+        log.info("Message for session: \(request.sessionId), text: \(request.text.prefix(50))...")
 
         // Forward to TalkieLive via XPC
         guard let proxy = xpcManager?.remoteObjectProxy(errorHandler: { error in
             log.error("XPC error: \(error)")
         }) else {
             log.error("TalkieLive not connected")
-            sendJSONResponse(connection, statusCode: 503, body: InjectResponse(
+            sendJSONResponse(connection, statusCode: 503, body: MessageResponse(
                 success: false,
                 error: "TalkieLive not connected"
             ))
@@ -211,16 +212,16 @@ final class BridgeInjectServer {
         }
 
         // Call the XPC method
-        proxy.injectForSession(request.text, sessionId: request.sessionId) { [weak self] success, error in
+        proxy.appendMessage(request.text, sessionId: request.sessionId) { [weak self] success, error in
             Task { @MainActor in
                 guard let self else { return }
 
                 if success {
-                    log.info("Inject succeeded via XPC")
-                    self.sendJSONResponse(connection, statusCode: 200, body: InjectResponse(success: true, error: nil))
+                    log.info("Message sent via XPC")
+                    self.sendJSONResponse(connection, statusCode: 200, body: MessageResponse(success: true, error: nil))
                 } else {
-                    log.error("Inject failed: \(error ?? "unknown error")")
-                    self.sendJSONResponse(connection, statusCode: 500, body: InjectResponse(success: false, error: error))
+                    log.error("Message failed: \(error ?? "unknown error")")
+                    self.sendJSONResponse(connection, statusCode: 500, body: MessageResponse(success: false, error: error))
                 }
             }
         }

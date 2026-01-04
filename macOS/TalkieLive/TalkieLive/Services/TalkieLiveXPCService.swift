@@ -207,9 +207,9 @@ final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol, Observ
         }
     }
 
-    nonisolated func injectForSession(_ text: String, sessionId: String, reply: @escaping (Bool, String?) -> Void) {
+    nonisolated func appendMessage(_ text: String, sessionId: String, reply: @escaping (Bool, String?) -> Void) {
         Task { @MainActor in
-            NSLog("[TalkieLiveXPC] Inject for session: \(sessionId), text: \(text.prefix(50))...")
+            NSLog("[TalkieLiveXPC] appendMessage for session: \(sessionId), text: \(text.prefix(50))...")
 
             // Look up the terminal context for this session
             var context = BridgeContextMapper.shared.getContext(for: sessionId)
@@ -227,9 +227,9 @@ final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol, Observ
                 return
             }
 
-            NSLog("[TalkieLiveXPC] Injecting into \(ctx.app) (\(ctx.bundleId))")
+            NSLog("[TalkieLiveXPC] Appending to \(ctx.app) (\(ctx.bundleId))")
 
-            // Use TextInserter to inject the text
+            // Use TextInserter to append the text
             let success = await TextInserter.shared.insert(
                 text,
                 intoAppWithBundleID: ctx.bundleId,
@@ -237,11 +237,11 @@ final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol, Observ
             )
 
             if success {
-                NSLog("[TalkieLiveXPC] Text injected successfully into \(ctx.app)")
+                NSLog("[TalkieLiveXPC] Message appended successfully to \(ctx.app)")
                 reply(true, nil)
             } else {
-                NSLog("[TalkieLiveXPC] Text injection failed for \(ctx.app)")
-                reply(false, "Injection failed")
+                NSLog("[TalkieLiveXPC] Message append failed for \(ctx.app)")
+                reply(false, "Message append failed")
             }
         }
     }

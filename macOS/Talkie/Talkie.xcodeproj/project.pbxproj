@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		7A2D93597AC44FEB88B34C47 /* BridgeInjectServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 088F3AE6BE3A4237A5188C43 /* BridgeInjectServer.swift */; };
+		7A2D93597AC44FEB88B34C47 /* TalkieServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 088F3AE6BE3A4237A5188C43 /* TalkieServer.swift */; };
 		808536C18ADD48A0BFDB371C /* BridgeSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 805F1333DAE245AEBFE04E6A /* BridgeSettingsView.swift */; };
 		41998ACBBF7B48BBB3490535 /* BridgeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 018F97247E794D7EBEC94E30 /* BridgeManager.swift */; };
 		19854BACDC1E4E8F864DF3D0 /* APIKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56A632BC7AAB4BE4A5DCAC28 /* APIKeyStore.swift */; };
@@ -259,7 +259,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		088F3AE6BE3A4237A5188C43 /* BridgeInjectServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeInjectServer.swift; sourceTree = "<group>"; };
+		088F3AE6BE3A4237A5188C43 /* TalkieServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieServer.swift; sourceTree = "<group>"; };
 		805F1333DAE245AEBFE04E6A /* BridgeSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeSettingsView.swift; sourceTree = "<group>"; };
 		018F97247E794D7EBEC94E30 /* BridgeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeManager.swift; sourceTree = "<group>"; };
 		56A632BC7AAB4BE4A5DCAC28 /* APIKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeyStore.swift; sourceTree = "<group>"; };
@@ -1053,7 +1053,7 @@
 		FDD3B1848425C2C039CA5F59 /* Services */ = {
 			isa = PBXGroup;
 			children = (
-				088F3AE6BE3A4237A5188C43 /* BridgeInjectServer.swift */,
+				088F3AE6BE3A4237A5188C43 /* TalkieServer.swift */,
 				7DD42E5F214F4DCB917FFA3E /* Bridge */,
 				56A632BC7AAB4BE4A5DCAC28 /* APIKeyStore.swift */,
 				33DC872F33B04F1C87FD2D74 /* DictionaryManager.swift */,
@@ -1212,7 +1212,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				7A2D93597AC44FEB88B34C47 /* BridgeInjectServer.swift in Sources */,
+				7A2D93597AC44FEB88B34C47 /* TalkieServer.swift in Sources */,
 				808536C18ADD48A0BFDB371C /* BridgeSettingsView.swift in Sources */,
 				41998ACBBF7B48BBB3490535 /* BridgeManager.swift in Sources */,
 				19854BACDC1E4E8F864DF3D0 /* APIKeyStore.swift in Sources */,

@@ -246,19 +246,19 @@ final class BridgeManager {
         }
 
         if let xpcManager = liveState.xpcManager {
-            BridgeInjectServer.shared.start(xpcManager: xpcManager)
-            log.info("BridgeInjectServer started (port 8766)")
+            TalkieServer.shared.start(xpcManager: xpcManager)
+            log.info("TalkieServer started (port 8766)")
         } else {
-            log.warning("Could not start BridgeInjectServer - XPC not available")
+            log.warning("Could not start TalkieServer - XPC not available")
         }
     }
 
     func stopBridge() async {
         stopRefreshTimer()
 
-        // Stop the inject server
+        // Stop TalkieServer
         await MainActor.run {
-            BridgeInjectServer.shared.stop()
+            TalkieServer.shared.stop()
         }
 
         // Kill via PID file
