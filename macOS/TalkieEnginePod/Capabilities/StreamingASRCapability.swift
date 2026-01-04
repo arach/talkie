@@ -69,19 +69,15 @@ final class StreamingASRCapability: PodCapability {
 
         // Pre-load ASR models ONCE during capability load
         // This takes ~40s but only happens once per pod spawn, not per session
-        print(#"{"type":"log","message":"Loading Parakeet TDT models (one-time ~40s)..."}"#)
-        fflush(stdout)
+        logMessage("[Model] Downloading Parakeet TDT models...")
 
-        let loadStart = Date()
+        let loadStart = CFAbsoluteTimeGetCurrent()
         cachedModels = try await AsrModels.downloadAndLoad()
-        let loadTime = Date().timeIntervalSince(loadStart)
-        let loadTimeStr = String(format: "%.1f", loadTime)
+        let loadTimeMs = (CFAbsoluteTimeGetCurrent() - loadStart) * 1000
 
-        print(#"{"type":"log","message":"Models loaded in \#(loadTimeStr)s"}"#)
-        fflush(stdout)
+        logMessage("[Model] ✅ Models loaded", durationMs: loadTimeMs)
 
         // Create streaming ASR manager with low-latency config
-        // Using the streaming preset optimized for quick hypothesis updates
         let streamConfig = StreamingAsrConfig(
             chunkSeconds: 3.0,            // Process every 3s for lower latency
             hypothesisChunkSeconds: 0.5,  // Quick hypothesis updates every 500ms
@@ -92,6 +88,26 @@ final class StreamingASRCapability: PodCapability {
         )
 
         asrManager = StreamingAsrManager(config: streamConfig)
+        logMessage("[Init] StreamingAsrManager ready")
+    }
+
+    /// Helper to emit structured log message with duration if provided
+    private func logMessage(_ message: String, durationMs: Double? = nil) {
+        var fullMessage = message
+        if let duration = durationMs {
+            fullMessage += String(format: " (%.1fms)", duration)
+        }
+        print("{\"type\":\"log\",\"message\":\"\(fullMessage)\"}")
+        fflush(stdout)
+    }
+
+    /// Helper to time an operation
+    private func timed<T>(_ operation: String, _ block: () async throws -> T) async rethrows -> T {
+        let start = CFAbsoluteTimeGetCurrent()
+        let result = try await block()
+        let duration = (CFAbsoluteTimeGetCurrent() - start) * 1000
+        logMessage(operation, durationMs: duration)
+        return result
     }
 
     func handle(_ request: PodRequest) async throws -> PodResponse {
@@ -144,19 +160,20 @@ final class StreamingASRCapability: PodCapability {
 
         // End any existing stream
         if isStreaming {
+            logMessage("[Stream] Stopping previous session...")
             _ = try? await manager.finish()
             updateListenerTask?.cancel()
         }
 
         // Start new stream
         let streamId = UUID().uuidString
+        logMessage("[Stream] Starting new session: \(streamId.prefix(8))...")
 
         do {
             // Start the ASR engine with PRE-LOADED models (instant, not 40s)
-            // Even though we also feed audio via streamAudio(), the engine needs a source to initialize
-            // Our fed audio goes into the inputBuilder alongside any mic input
             try await manager.start(models: models, source: .microphone)
         } catch {
+            logMessage("[Stream] ❌ Failed to start: \(error.localizedDescription)")
             return PodResponse.failure(id: request.id, error: "Failed to start ASR: \(error.localizedDescription)")
         }
 
@@ -165,12 +182,14 @@ final class StreamingASRCapability: PodCapability {
         accumulatedTranscript = ""
         isSpeaking = false
         lastSpeechTime = nil
+        audioChunkCount = 0
 
         // Start listening for transcript updates in background
         updateListenerTask = Task {
             await listenForUpdates(streamId: streamId, manager: manager)
         }
 
+        logMessage("[Stream] ✅ Session started")
         return PodResponse.success(id: request.id, result: [
             "streamId": streamId,
             "status": "started"
@@ -224,11 +243,10 @@ final class StreamingASRCapability: PodCapability {
             return PodResponse.failure(id: request.id, error: "Failed to create audio buffer")
         }
 
-        // Increment and log buffer details every 50 chunks
+        // Increment and log buffer details every 100 chunks (reduce log spam)
         audioChunkCount += 1
-        if audioChunkCount % 50 == 0 {
-            print("{\"type\":\"log\",\"message\":\"Audio chunk #\(audioChunkCount): \(samples.count) samples, buffer frames=\(pcmBuffer.frameLength), format=\(pcmBuffer.format.sampleRate)Hz\"}")
-            fflush(stdout)
+        if audioChunkCount % 100 == 0 {
+            logMessage("[Audio] Processed \(audioChunkCount) chunks (\(samples.count) samples/chunk)")
         }
 
         // Feed to ASR
@@ -281,6 +299,8 @@ final class StreamingASRCapability: PodCapability {
             ])
         }
 
+        logMessage("[Stream] Stopping session (processed \(audioChunkCount) audio chunks)...")
+
         // Cancel update listener
         updateListenerTask?.cancel()
         updateListenerTask = nil
@@ -298,8 +318,10 @@ final class StreamingASRCapability: PodCapability {
         isSpeaking = false
 
         let result = finalTranscript.isEmpty ? accumulatedTranscript : finalTranscript
+        let wordCount = result.split(separator: " ").count
         accumulatedTranscript = ""
 
+        logMessage("[Stream] ✅ Session stopped (\(wordCount) words)")
         return PodResponse.success(id: request.id, result: [
             "status": "stopped",
             "transcript": result
@@ -361,14 +383,11 @@ final class StreamingASRCapability: PodCapability {
 
     /// Listen for streaming transcript updates and queue them as events
     private func listenForUpdates(streamId: String, manager: StreamingAsrManager) async {
-        print("{\"type\":\"log\",\"message\":\"listenForUpdates started for stream \(streamId.prefix(8))\"}")
-        fflush(stdout)
+        logMessage("[Stream] Started listening (session: \(streamId.prefix(8)))")
 
         var updateCount = 0
         for await update in await manager.transcriptionUpdates {
             updateCount += 1
-            print("{\"type\":\"log\",\"message\":\"Got transcript update #\(updateCount): '\(update.text.prefix(30))'\"}")
-            fflush(stdout)
 
             // Only process if still the active stream
             guard activeStreamId == streamId, isStreaming else { break }

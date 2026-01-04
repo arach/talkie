@@ -83,6 +83,13 @@ final class AmbientSettings: ObservableObject {
         didSet { save() }
     }
 
+    /// Whether to enable batch channel (context buffer, 10s chunks)
+    /// DEV-ONLY: Toggle for testing - disable to isolate streaming channel
+    /// `defaults write com.arach.talkie.shared ambientUseBatchASR -bool false`
+    @Published var useBatchASR: Bool {
+        didSet { save() }
+    }
+
     // MARK: - Fuzzy Matching
 
     /// Common phonetic substitutions for transcription errors
@@ -284,6 +291,13 @@ final class AmbientSettings: ObservableObject {
         } else {
             self.useStreamingASR = true  // Default to streaming for fast wake detection
         }
+
+        // Load batch ASR enabled (default: true - context buffer always on)
+        if store.object(forKey: LiveSettingsKey.ambientUseBatchASR) != nil {
+            self.useBatchASR = store.bool(forKey: LiveSettingsKey.ambientUseBatchASR)
+        } else {
+            self.useBatchASR = true  // Default to batch for context buffer
+        }
     }
 
     // MARK: - Persistence
@@ -298,6 +312,7 @@ final class AmbientSettings: ObservableObject {
         store.set(bufferDuration, forKey: LiveSettingsKey.ambientBufferDuration)
         store.set(enableChimes, forKey: LiveSettingsKey.ambientEnableChimes)
         store.set(useStreamingASR, forKey: LiveSettingsKey.ambientUseStreamingASR)
+        store.set(useBatchASR, forKey: LiveSettingsKey.ambientUseBatchASR)
     }
 
     // MARK: - Phrase Matching

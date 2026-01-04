@@ -64,11 +64,11 @@ final class BatchTranscriptionProvider: AmbientTranscriptionProvider {
 
     func start(config: AmbientTranscriptionConfig) async throws {
         guard state == .idle else {
-            log.warning("BatchTranscriptionProvider already started")
+            log.warning("[BatchASR] ⚠️ Already started")
             return
         }
 
-        log.info("Starting BatchTranscriptionProvider")
+        log.info("[BatchASR] 🚀 Starting batch provider (context buffer)...")
 
         self.config = config
         self.phraseDetector = PhraseDetector(config: config)
@@ -77,26 +77,28 @@ final class BatchTranscriptionProvider: AmbientTranscriptionProvider {
         self.wakeTimestamp = nil
 
         // Ensure engine is connected
+        log.info("[BatchASR] Connecting to TalkieEngine...")
         let connected = await engine.ensureConnected()
         if !connected {
             let error = "Failed to connect to TalkieEngine"
-            log.error(error)
+            log.error("[BatchASR] ❌ \(error)")
             emit(.error(message: error, isFatal: true))
             state = .error(error)
             return
         }
+        log.info("[BatchASR] ✓ Engine connected")
 
         // Get memory usage from status if available
         let memoryMB = engine.status?.memoryUsageMB
 
         emit(.ready(memoryMB: memoryMB))
-        log.info("BatchTranscriptionProvider ready", detail: "model=\(settings.selectedModelId)")
+        log.info("[BatchASR] ✅ Ready!", detail: "model=\(settings.selectedModelId)")
     }
 
     func stop() async {
         guard state != .idle else { return }
 
-        log.info("Stopping BatchTranscriptionProvider")
+        log.info("[BatchASR] Stopping batch provider")
 
         state = .stopping
         commandText = ""
@@ -110,7 +112,7 @@ final class BatchTranscriptionProvider: AmbientTranscriptionProvider {
 
     func ingest(_ input: AmbientAudioInput) async {
         guard state == .listening || state.isCommandMode else {
-            log.debug("Ignoring audio input in state: \(state)")
+            log.debug("[BatchASR] Ignoring audio in state: \(state)")
             return
         }
 
@@ -120,7 +122,7 @@ final class BatchTranscriptionProvider: AmbientTranscriptionProvider {
 
         case .pcm16kFloat:
             // Batch provider doesn't support streaming PCM
-            log.warning("BatchTranscriptionProvider does not support streaming PCM input")
+            log.warning("[BatchASR] Chunk input expected - pcm16kFloat not supported")
         }
     }
 
@@ -129,7 +131,7 @@ final class BatchTranscriptionProvider: AmbientTranscriptionProvider {
     /// Transcribe an audio chunk using the engine
     private func transcribeChunk(_ chunk: AudioChunk) async {
         let fileName = chunk.fileURL.lastPathComponent
-        log.debug("Transcribing ambient chunk", detail: fileName)
+        log.debug("[BatchASR] 📤 Transcribing chunk", detail: fileName)
 
         do {
             let transcript = try await engine.transcribe(
@@ -141,11 +143,11 @@ final class BatchTranscriptionProvider: AmbientTranscriptionProvider {
 
             let cleanedText = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !cleanedText.isEmpty else {
-                log.debug("Empty transcript for chunk", detail: fileName)
+                log.debug("[BatchASR] (empty transcript)", detail: fileName)
                 return
             }
 
-            log.debug("Ambient transcript", detail: "[\(formatDuration(chunk.duration))] \(cleanedText)")
+            log.info("[BatchASR] 📝 Transcript", detail: "[\(formatDuration(chunk.duration))] \"\(cleanedText)\"")
 
             // Emit transcript event
             emit(.transcript(text: cleanedText, confidence: nil, isFinal: true))
@@ -154,7 +156,7 @@ final class BatchTranscriptionProvider: AmbientTranscriptionProvider {
             processTranscript(cleanedText)
 
         } catch {
-            log.warning("Ambient transcription failed", error: error)
+            log.warning("[BatchASR] ❌ Transcription failed", error: error)
             emit(.error(message: error.localizedDescription, isFatal: false))
         }
     }
@@ -180,9 +182,10 @@ final class BatchTranscriptionProvider: AmbientTranscriptionProvider {
 
     /// Check if text contains the wake phrase
     private func checkForWakePhrase(_ text: String, detector: PhraseDetector) {
+        log.debug("[BatchASR] Checking for wake phrase in: \"\(text)\"")
         guard let match = detector.containsWakePhrase(in: text) else { return }
 
-        log.info("Wake phrase detected!", detail: "'\(config?.wakePhrase ?? "")'")
+        log.info("[BatchASR] 🎯 Wake phrase detected!", detail: "'\(config?.wakePhrase ?? "")'")
 
         // Transition to command mode
         wakeTimestamp = Date()
@@ -210,14 +213,14 @@ final class BatchTranscriptionProvider: AmbientTranscriptionProvider {
     private func checkForEndOrCancel(detector: PhraseDetector) {
         // Check for cancel first (in the full accumulated command)
         if detector.containsCancelPhrase(in: commandText) != nil {
-            log.info("Cancel phrase detected", detail: "'\(config?.cancelPhrase ?? "")'")
+            log.info("[BatchASR] Cancel phrase detected", detail: "'\(config?.cancelPhrase ?? "")'")
             handleCancel()
             return
         }
 
         // Check for end phrase
         if let endMatch = detector.containsEndPhrase(in: commandText) {
-            log.info("End phrase detected", detail: "'\(config?.endPhrase ?? "")'")
+            log.info("[BatchASR] End phrase detected", detail: "'\(config?.endPhrase ?? "")'")
 
             // Extract command (text before end phrase)
             let finalCommand = endMatch.textBefore.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -229,7 +232,7 @@ final class BatchTranscriptionProvider: AmbientTranscriptionProvider {
 
     /// Handle cancel phrase detection
     private func handleCancel() {
-        log.info("Command cancelled")
+        log.info("[BatchASR] Command cancelled")
 
         commandText = ""
         wakeTimestamp = nil
@@ -241,7 +244,7 @@ final class BatchTranscriptionProvider: AmbientTranscriptionProvider {
     /// Handle end phrase detection
     private func handleEnd(command: String) {
         guard !command.isEmpty else {
-            log.warning("Empty command captured, returning to listening")
+            log.warning("[BatchASR] Empty command captured, returning to listening")
             commandText = ""
             wakeTimestamp = nil
             state = .listening
@@ -249,7 +252,7 @@ final class BatchTranscriptionProvider: AmbientTranscriptionProvider {
         }
 
         let duration = wakeTimestamp.map { Date().timeIntervalSince($0) } ?? 0
-        log.info("Command captured", detail: "'\(command)' (\(String(format: "%.1f", duration))s)")
+        log.info("[BatchASR] ✅ Command captured", detail: "'\(command)' (\(String(format: "%.1f", duration))s)")
 
         emit(.endDetected(command: command))
 

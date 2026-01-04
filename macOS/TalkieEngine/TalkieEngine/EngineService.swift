@@ -154,8 +154,6 @@ final class EngineService: NSObject, TalkieEngineProtocol {
     override init() {
         super.init()
         refreshDownloadedModels()
-        AppLogger.shared.info(.transcription, "EngineService initialized (PID: \(ProcessInfo.processInfo.processIdentifier))")
-        EngineStatusManager.shared.log(.info, "Engine", "EngineService initialized (PID: \(ProcessInfo.processInfo.processIdentifier))")
     }
 
     // MARK: - Model Directories
@@ -208,8 +206,8 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             return FileManager.default.fileExists(atPath: markerPath.path)
         })
 
-        AppLogger.shared.info(.transcription, "Downloaded Whisper models: \(self.downloadedWhisperModels)")
-        AppLogger.shared.info(.transcription, "Downloaded Parakeet models: \(self.downloadedParakeetModels)")
+        // Log cached models (debug only - don't spam startup logs)
+        AppLogger.shared.debug(.model, "Cached models", detail: "whisper=\(downloadedWhisperModels.count), parakeet=\(downloadedParakeetModels.count)")
     }
 
     // MARK: - Model ID Parsing

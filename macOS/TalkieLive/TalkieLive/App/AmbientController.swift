@@ -146,8 +146,8 @@ final class AmbientController: ObservableObject {
     func enable() async {
         guard state == .disabled else { return }
 
-        log.info("🎙️ Enabling ambient mode (dual-channel)")
-        log.info("Settings: streaming=\(settings.useStreamingASR), wake='\(settings.wakePhrase)'")
+        log.info("🎙️ Enabling ambient mode")
+        log.info("Settings: streaming=\(settings.useStreamingASR), batch=\(settings.useBatchASR), wake='\(settings.wakePhrase)'")
 
         // Create config
         let config = AmbientTranscriptionConfig(
@@ -156,17 +156,21 @@ final class AmbientController: ObservableObject {
             cancelPhrase: settings.cancelPhrase
         )
 
-        // Always start batch provider (context buffer)
-        log.info("Starting batch provider (context buffer)...")
-        let batch = BatchTranscriptionProvider()
-        batchProvider = batch
+        // Start batch provider if enabled (context buffer)
+        if settings.useBatchASR {
+            log.info("Starting batch provider (context buffer)...")
+            let batch = BatchTranscriptionProvider()
+            batchProvider = batch
 
-        do {
-            try await batch.start(config: config)
-            log.info("✓ Batch provider ready")
-        } catch {
-            log.error("✗ Batch provider failed", error: error)
-            batchProvider = nil
+            do {
+                try await batch.start(config: config)
+                log.info("✓ Batch provider ready")
+            } catch {
+                log.error("✗ Batch provider failed", error: error)
+                batchProvider = nil
+            }
+        } else {
+            log.info("⚠️ Batch channel DISABLED (useBatchASR=false)")
         }
 
         // Start streaming provider if enabled (fast wake detection)
@@ -182,8 +186,10 @@ final class AmbientController: ObservableObject {
         // Wire up audio callbacks (both channels from same mic tap)
         audioCapture.onChunkReady = { [weak self] chunk in
             Task { @MainActor in
-                // Batch channel: context buffer (always active)
-                await self?.batchProvider?.ingest(.chunk(chunk))
+                // Batch channel: context buffer (when enabled)
+                if self?.settings.useBatchASR == true {
+                    await self?.batchProvider?.ingest(.chunk(chunk))
+                }
             }
         }
 

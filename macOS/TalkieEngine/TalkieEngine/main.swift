@@ -16,6 +16,16 @@ func setprogname(_ name: UnsafePointer<CChar>)
 
 private let log = Log(.system)
 
+// MARK: - Startup Profiler
+
+/// Precise timing for startup performance analysis
+private let _processStartTime = CFAbsoluteTimeGetCurrent()
+
+private func markStartup(_ milestone: String) {
+    let elapsed = (CFAbsoluteTimeGetCurrent() - _processStartTime) * 1000
+    log.info(String(format: "⏱️ [%6.1fms] %@", elapsed, milestone), critical: true)
+}
+
 
 // MARK: - Signal Handling
 
@@ -200,13 +210,23 @@ var listenerDelegate: EngineListenerDelegate!
 
 // Wrap the entire startup in autoreleasepool since NSApplicationMain isn't active yet
 autoreleasepool {
+    markStartup("Process start")
+
     // Configure unified logger first
     TalkieLogger.configure(source: .talkieEngine)
+    markStartup("Logger configured")
 
     // Set up signal handling first so SIGTERM doesn't crash the debugger
     setupSignalHandling()
+    markStartup("Signal handlers installed")
 
-    log.info("TalkieEngine starting (PID: \(ProcessInfo.processInfo.processIdentifier), mode: \(isDaemonMode ? "daemon" : "debug"))...", critical: true)
+    // ════════════════════════════════════════════════════════════════════
+    // STARTUP SEQUENCE
+    // ════════════════════════════════════════════════════════════════════
+    log.info("════════════════════════════════════════════════════════════", critical: true)
+    log.info("TalkieEngine Starting", critical: true)
+    log.info("  PID: \(ProcessInfo.processInfo.processIdentifier)", critical: true)
+    log.info("  Mode: \(isDaemonMode ? "daemon" : "debug")", critical: true)
 
     // Determine XPC service name based on bundle ID and launch mode
     // Multiple environments can run side-by-side on different XPC services
@@ -218,25 +238,19 @@ autoreleasepool {
     let isStaging = bundleId.contains(".staging")
     let isDev = bundleId.contains(".dev")
 
-    // Use same mode detection as TalkieEnvironment for consistency
-    log.info("Bundle ID: \(bundleId), isDev: \(isDev), isStaging: \(isStaging)", critical: true)
-
     if isDev {
-        // Dev build (Debug configuration with .dev bundle suffix)
         activeServiceName = EngineServiceMode.dev.rawValue
         activeMode = .dev
-        log.info("Running as DEV", detail: "XPC: \(activeServiceName)", critical: true)
     } else if isStaging {
-        // Staging build
         activeServiceName = EngineServiceMode.staging.rawValue
         activeMode = .staging
-        log.info("Running as STAGING", detail: "XPC: \(activeServiceName)", critical: true)
     } else {
-        // Production build
         activeServiceName = EngineServiceMode.production.rawValue
         activeMode = .production
-        log.info("Running as PRODUCTION", detail: "XPC: \(activeServiceName)", critical: true)
     }
+
+    log.info("  Environment: \(activeMode)", critical: true)
+    log.info("  XPC Service: \(activeServiceName)", critical: true)
 
     // Set friendly process name for Activity Monitor
     let processName: String
@@ -251,35 +265,34 @@ autoreleasepool {
     processName.withCString { setprogname($0) }
 
     // No ensureSingleInstance() - debug and dev can coexist!
+    log.info("════════════════════════════════════════════════════════════", critical: true)
+    markStartup("Config parsed")
 
-    // We're on the main thread here, so @MainActor types can be created
-    // Using MainActor.assumeIsolated since we're at global scope but on main thread
-    log.info("Initializing on main thread...", critical: true)
-
+    // Initialize engine service
     MainActor.assumeIsolated {
-        // Create the engine service on the main actor
         engineService = EngineService()
-        log.info("EngineService created", critical: true)
     }
+    markStartup("EngineService created")
 
-    // Create wrapper with the engine service
+    // Setup XPC listener
     serviceWrapper = XPCServiceWrapper(engine: engineService)
     listenerDelegate = EngineListenerDelegate(wrapper: serviceWrapper)
-
-    // Create listener for the Mach service
-    log.info("Setting up XPC listener", detail: activeServiceName, critical: true)
     xpcListener = NSXPCListener(machServiceName: activeServiceName)
     xpcListener.delegate = listenerDelegate
     xpcListener.resume()
-
-    log.info("XPC listener resumed, starting app...", critical: true)
+    markStartup("XPC listener active")
 
     // Configure status manager with launch mode info
     MainActor.assumeIsolated {
         EngineStatusManager.shared.configure(mode: activeMode, serviceName: activeServiceName, isDaemon: isDaemonMode)
     }
+    markStartup("Status manager configured")
 
-    // Now start the app
+    log.info("[Init] ✅ TalkieEngine ready for connections", critical: true)
+    log.info("════════════════════════════════════════════════════════════", critical: true)
+    markStartup("✅ READY")
+
+    // Start the app run loop
     MainActor.assumeIsolated {
         let delegate = AppDelegate()
         NSApplication.shared.delegate = delegate

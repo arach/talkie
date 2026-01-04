@@ -81,6 +81,7 @@ public enum LiveSettingsKey {
     public static let ambientBufferDuration = "ambientBufferDuration"
     public static let ambientEnableChimes = "ambientEnableChimes"
     public static let ambientUseStreamingASR = "ambientUseStreamingASR"
+    public static let ambientUseBatchASR = "ambientUseBatchASR"
 
     // MARK: Legacy
     public static let legacyTheme = "theme"

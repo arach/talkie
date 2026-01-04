@@ -45,15 +45,17 @@ final class PhraseDetector: Sendable {
 
     /// Common phonetic substitutions for transcription errors
     private static let phoneticSubstitutions: [String: [String]] = [
-        // Wake word variations
-        "hey": ["hay", "a", "eh", "ey", "hey,", "hey."],
-        "talkie": ["talky", "taki", "talki", "talkey", "talk he", "talkie,", "talkie.", "tacky", "talkee"],
+        // Wake word variations - expanded for more tolerance
+        "hey": ["hay", "a", "eh", "ey", "hey,", "hey.", "hi", "hate", "heh", "he", "pay", "say", "way", "they"],
+        "talkie": ["talky", "taki", "talki", "talkey", "talk he", "talkie,", "talkie.", "tacky", "talkee",
+                   "talky,", "talking", "talkin", "talkin'", "taco", "talky.", "talcky", "tocky", "talka",
+                   "turkey", "taffy", "tauky"],
         // End phrase variations
-        "that's": ["thats", "that is", "that's,", "that's.", "dats", "that"],
-        "it": ["it.", "it,", "eat"],
+        "that's": ["thats", "that is", "that's,", "that's.", "dats", "that", "that", "this is", "this"],
+        "it": ["it.", "it,", "eat", "at", "in", "is"],
         // Cancel variations
-        "never": ["neva", "never,", "never.", "neber"],
-        "mind": ["mind.", "mind,", "mine", "mined"]
+        "never": ["neva", "never,", "never.", "neber", "ever"],
+        "mind": ["mind.", "mind,", "mine", "mined", "my"]
     ]
 
     // MARK: - Cached Variations
@@ -68,7 +70,7 @@ final class PhraseDetector: Sendable {
         wakePhrase: String = "hey talkie",
         endPhrase: String = "that's it",
         cancelPhrase: String = "never mind",
-        maxDistance: Int = 2
+        maxDistance: Int = 3  // Increased from 2 for more permissive matching
     ) {
         self.wakePhrase = wakePhrase.lowercased()
         self.endPhrase = endPhrase.lowercased()
@@ -79,6 +81,10 @@ final class PhraseDetector: Sendable {
         self.wakePhraseVariations = Self.generateVariations(for: wakePhrase)
         self.endPhraseVariations = Self.generateVariations(for: endPhrase)
         self.cancelPhraseVariations = Self.generateVariations(for: cancelPhrase)
+
+        // Log generated variations for debugging
+        log.info("[PhraseDetector] Init with maxDistance=\(maxDistance)")
+        log.debug("[PhraseDetector] Wake variations (\(wakePhraseVariations.count))", detail: wakePhraseVariations.prefix(10).joined(separator: ", "))
     }
 
     /// Create from AmbientTranscriptionConfig
@@ -95,11 +101,15 @@ final class PhraseDetector: Sendable {
     /// Check if text contains the wake phrase
     /// - Returns: Match result with range and surrounding text, or nil if not found
     func containsWakePhrase(in text: String) -> PhraseMatchResult? {
-        return findPhrase(
+        let result = findPhrase(
             in: text,
             phrase: wakePhrase,
             variations: wakePhraseVariations
         )
+        if result != nil {
+            log.info("[PhraseDetector] ✅ Wake phrase MATCHED", detail: "via '\(result!.matchedVariation)'")
+        }
+        return result
     }
 
     /// Check if text contains the end phrase
