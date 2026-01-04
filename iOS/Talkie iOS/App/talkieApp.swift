@@ -23,6 +23,10 @@ struct talkieApp: App {
     // Splash screen - shown until main view is ready
     @State private var isLoading = true
 
+    // MARK: - Boot Metrics
+    private static let bootStart = Date()
+    @State private var bootLogged = false
+
     // MARK: - Background Task Identifiers
     static let refreshTaskIdentifier = "jdi.talkie-os.refresh"
     static let syncTaskIdentifier = "jdi.talkie-os.sync"
@@ -31,7 +35,10 @@ struct talkieApp: App {
     static let showOnboardingNotification = Notification.Name("showOnboarding")
 
     init() {
+        let initStart = Date()
         registerBackgroundTasks()
+        let initDuration = Date().timeIntervalSince(initStart)
+        AppLogger.app.info("📱 App.init: \(String(format: "%.0f", initDuration * 1000))ms")
     }
 
     var body: some Scene {
@@ -83,6 +90,13 @@ struct talkieApp: App {
             }
             .animation(.easeInOut(duration: 0.3), value: isLoading)
             .onAppear {
+                // Log boot time once
+                if !bootLogged {
+                    bootLogged = true
+                    let bootDuration = Date().timeIntervalSince(Self.bootStart)
+                    AppLogger.app.info("📱 BOOT COMPLETE in \(String(format: "%.2f", bootDuration))s")
+                }
+
                 // Transition immediately - no artificial delay
                 withAnimation {
                     isLoading = false
