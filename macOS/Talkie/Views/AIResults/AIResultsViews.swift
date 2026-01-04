@@ -212,7 +212,7 @@ struct AIMemoHeaderView: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(Theme.current.surfaceAlternate)
-                .cornerRadius(4)
+                .cornerRadius(CornerRadius.xs)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -243,7 +243,7 @@ struct AIRunRowView: View {
                     .foregroundColor(isSelected ? .white : .secondary)
                     .frame(width: 22, height: 22)
                     .background(isSelected ? settings.resolvedAccentColor : Color.primary.opacity(0.05))
-                    .cornerRadius(4)
+                    .cornerRadius(CornerRadius.xs)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(workflowName)
@@ -274,7 +274,7 @@ struct AIRunRowView: View {
             .padding(.vertical, 6)
             .frame(height: 44)
             .background(isSelected ? settings.resolvedAccentColor : (isHovering ? Theme.current.surfaceHover : Color.clear))
-            .cornerRadius(6)
+            .cornerRadius(CornerRadius.xs)
         }
         .buttonStyle(.plain)
         .onHover { hovering in isHovering = hovering }
@@ -326,7 +326,7 @@ struct AIRunDetailView: View {
                         .foregroundColor(.blue)
                         .frame(width: 32, height: 32)
                         .background(Theme.current.surfaceInfo)
-                        .cornerRadius(6)
+                        .cornerRadius(CornerRadius.xs)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(workflowName)
@@ -396,7 +396,7 @@ struct AIRunDetailView: View {
                                     .padding(12)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .background(Theme.current.surface1)
-                                    .cornerRadius(6)
+                                    .cornerRadius(CornerRadius.xs)
                             }
                         }
                     } else {
@@ -449,7 +449,7 @@ struct AIStepCard: View {
                     .foregroundColor(.white)
                     .frame(width: 20, height: 20)
                     .background(settings.resolvedAccentColor)
-                    .cornerRadius(4)
+                    .cornerRadius(CornerRadius.xs)
 
                 Image(systemName: step.stepIcon)
                     .font(Theme.current.fontBody)
@@ -487,7 +487,7 @@ struct AIStepCard: View {
                         .padding(10)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Theme.current.surfaceAlternate)
-                        .cornerRadius(4)
+                        .cornerRadius(CornerRadius.xs)
                 }
             }
 
@@ -510,18 +510,18 @@ struct AIStepCard: View {
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Theme.current.surface1)
-                    .cornerRadius(4)
+                    .cornerRadius(CornerRadius.xs)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 4)
+                        RoundedRectangle(cornerRadius: CornerRadius.xs)
                             .strokeBorder(isLast ? Color.green.opacity(0.3) : Color.clear, lineWidth: 1)
                     )
             }
         }
         .padding(12)
         .background(Theme.current.surface2)
-        .cornerRadius(8)
+        .cornerRadius(CornerRadius.sm)
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
                 .strokeBorder(Color.secondary.opacity(0.1), lineWidth: 0.5)
         )
     }

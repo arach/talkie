@@ -26,7 +26,7 @@ struct OnAirIndicator: View {
         .background(
             ZStack {
                 // Outer glow
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
                     .fill(
                         LinearGradient(
                             colors: [
@@ -41,7 +41,7 @@ struct OnAirIndicator: View {
                     .opacity(0.6 + glowPhase * 0.4)
 
                 // Inner background
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
                     .fill(
                         LinearGradient(
                             colors: [
@@ -54,7 +54,7 @@ struct OnAirIndicator: View {
                     )
 
                 // Border glow
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
                     .strokeBorder(
                         LinearGradient(
                             colors: [

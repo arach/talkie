@@ -7,6 +7,47 @@
 
 import SwiftUI
 
+// MARK: - Theme Configuration
+
+/// Global theme configuration - set by the app based on current theme
+/// Values are calculated once when configure() is called, not on every access
+public enum ThemeConfig {
+    /// Corner radius multiplier (stored for reference)
+    public private(set) static var cornerRadiusMultiplier: CGFloat = 1.0
+
+    /// Whether to use light/thin font weights
+    public private(set) static var useLightFonts: Bool = false
+
+    /// Border width (calculated once)
+    public private(set) static var borderWidth: CGFloat = 1.0
+
+    /// Custom font name override (e.g., "JetBrainsMono" for Terminal theme)
+    public private(set) static var customFontName: String? = nil
+
+    /// Configure theme settings (call when theme changes)
+    /// This recalculates all derived values once
+    public static func configure(
+        cornerRadiusMultiplier: CGFloat = 1.0,
+        useLightFonts: Bool = false,
+        borderWidth: CGFloat = 1.0,
+        customFontName: String? = nil
+    ) {
+        self.cornerRadiusMultiplier = cornerRadiusMultiplier
+        self.useLightFonts = useLightFonts
+        self.borderWidth = borderWidth
+        self.customFontName = customFontName
+
+        // Recalculate all cached design token values
+        CornerRadius.recalculate(multiplier: cornerRadiusMultiplier)
+        BorderWidth.recalculate(multiplier: borderWidth)
+    }
+
+    /// Reset to defaults
+    public static func reset() {
+        configure(cornerRadiusMultiplier: 1.0, useLightFonts: false, borderWidth: 1.0, customFontName: nil)
+    }
+}
+
 // MARK: - Spacing
 
 public enum Spacing {
@@ -22,12 +63,70 @@ public enum Spacing {
 
 // MARK: - Corner Radius
 
+/// Theme-aware corner radius values (cached, calculated once per theme change)
+/// Use these instead of hardcoded values to respect theme settings
 public enum CornerRadius {
-    public static let xs: CGFloat = 4
-    public static let sm: CGFloat = 8
-    public static let md: CGFloat = 12
-    public static let lg: CGFloat = 16
-    public static let xl: CGFloat = 24
+    // Base values (before multiplier)
+    private static let baseXS: CGFloat = 4
+    private static let baseSM: CGFloat = 8
+    private static let baseMD: CGFloat = 12
+    private static let baseLG: CGFloat = 16
+    private static let baseXL: CGFloat = 24
+
+    // Cached values (calculated once when theme changes)
+    /// Extra small (4pt base, theme-adjusted)
+    public private(set) static var xs: CGFloat = 4
+    /// Small (8pt base, theme-adjusted)
+    public private(set) static var sm: CGFloat = 8
+    /// Medium (12pt base, theme-adjusted)
+    public private(set) static var md: CGFloat = 12
+    /// Large (16pt base, theme-adjusted)
+    public private(set) static var lg: CGFloat = 16
+    /// Extra large (24pt base, theme-adjusted)
+    public private(set) static var xl: CGFloat = 24
+
+    /// Recalculate all cached values (called by ThemeConfig.configure)
+    internal static func recalculate(multiplier: CGFloat) {
+        xs = baseXS * multiplier
+        sm = baseSM * multiplier
+        md = baseMD * multiplier
+        lg = baseLG * multiplier
+        xl = baseXL * multiplier
+    }
+
+    /// Raw values without theme adjustment (for rare cases where you need fixed radius)
+    public enum Raw {
+        public static let xs: CGFloat = 4
+        public static let sm: CGFloat = 8
+        public static let md: CGFloat = 12
+        public static let lg: CGFloat = 16
+        public static let xl: CGFloat = 24
+    }
+}
+
+// MARK: - Border Width
+
+/// Theme-aware border width values (cached, calculated once per theme change)
+public enum BorderWidth {
+    // Base values (before multiplier)
+    private static let baseThin: CGFloat = 0.5
+    private static let baseNormal: CGFloat = 1.0
+    private static let baseThick: CGFloat = 2.0
+
+    // Cached values
+    /// Thin border (0.5pt base)
+    public private(set) static var thin: CGFloat = 0.5
+    /// Normal border (1pt base)
+    public private(set) static var normal: CGFloat = 1.0
+    /// Thick border (2pt base)
+    public private(set) static var thick: CGFloat = 2.0
+
+    /// Recalculate cached values (called by ThemeConfig.configure)
+    internal static func recalculate(multiplier: CGFloat) {
+        thin = baseThin * multiplier
+        normal = baseNormal * multiplier
+        thick = baseThick * multiplier
+    }
 }
 
 // MARK: - Tracking

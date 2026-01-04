@@ -263,7 +263,7 @@ private struct HUDStylePreview: View {
                 EmptyView()
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .clipShape(RoundedRectangle(cornerRadius: CornerRadius.xs))
     }
 }
 

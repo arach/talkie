@@ -63,7 +63,7 @@ struct MemosSettingsView: View {
                     }
                     .padding(12)
                     .background(Theme.current.surface1)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
 
                     // Show timestamps
                     HStack(spacing: 12) {
@@ -88,7 +88,7 @@ struct MemosSettingsView: View {
                     }
                     .padding(12)
                     .background(Theme.current.surface1)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
                 }
             }
             .settingsSectionCard(padding: 16, cornerRadius: 8)
@@ -131,7 +131,7 @@ struct MemosSettingsView: View {
                     }
                     .padding(12)
                     .background(Theme.current.surface1)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
 
                     // Word-level timestamps
                     HStack(spacing: 12) {
@@ -156,7 +156,7 @@ struct MemosSettingsView: View {
                     }
                     .padding(12)
                     .background(Theme.current.surface1)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
                 }
             }
             .settingsSectionCard(padding: 16, cornerRadius: 8)
@@ -199,7 +199,7 @@ struct MemosSettingsView: View {
                     }
                     .padding(12)
                     .background(Theme.current.surface1)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
 
                     // Auto-select newest
                     HStack(spacing: 12) {
@@ -224,7 +224,7 @@ struct MemosSettingsView: View {
                     }
                     .padding(12)
                     .background(Theme.current.surface1)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
                 }
             }
             .settingsSectionCard(padding: 16, cornerRadius: 8)

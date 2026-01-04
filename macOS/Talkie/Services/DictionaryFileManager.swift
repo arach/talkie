@@ -5,7 +5,7 @@
 //  Manages multiple dictionary files on disk
 //  Storage: ~/Library/Application Support/Talkie/Dictionaries/
 //
-//  Each dictionary is stored as: {uuid}.dict.json
+//  Each dictionary is stored as: {name}.dict.json (e.g., personal.dict.json)
 //  Manifest file tracks all dictionaries: manifest.json
 //
 
@@ -87,6 +87,30 @@ actor DictionaryFileManager {
         log.debug("Manifest saved")
     }
 
+    // MARK: - Filename Helpers
+
+    /// Generate a clean filename from dictionary name
+    private func generateFileName(for name: String, excludingId: UUID? = nil) -> String {
+        // Create slug: lowercase, replace spaces with dashes, remove special chars
+        let slug = name
+            .lowercased()
+            .replacingOccurrences(of: " ", with: "-")
+            .components(separatedBy: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-")).inverted)
+            .joined()
+
+        let baseSlug = slug.isEmpty ? "dictionary" : slug
+        var fileName = "\(baseSlug).dict.json"
+
+        // Check for conflicts with other dictionaries
+        var counter = 2
+        while manifest.dictionaries.contains(where: { $0.fileName == fileName && $0.id != excludingId }) {
+            fileName = "\(baseSlug)-\(counter).dict.json"
+            counter += 1
+        }
+
+        return fileName
+    }
+
     // MARK: - Dictionary Operations
 
     /// Get all dictionary metadata (without loading entries)
@@ -141,8 +165,22 @@ actor DictionaryFileManager {
 
     /// Save a dictionary to disk
     func saveDictionary(_ dictionary: TalkieDictionary) async throws {
-        let fileName = "\(dictionary.id.uuidString).dict.json"
+        // Check if this dictionary already exists with a different filename
+        let existingEntry = manifest.dictionaries.first(where: { $0.id == dictionary.id })
+        let oldFileName = existingEntry?.fileName
+
+        // Generate filename from name (handles conflicts)
+        let fileName = generateFileName(for: dictionary.name, excludingId: dictionary.id)
         let fileURL = dictionariesDirectory.appendingPathComponent(fileName)
+
+        // If name changed and old file exists, delete it
+        if let oldFileName = oldFileName, oldFileName != fileName {
+            let oldFileURL = dictionariesDirectory.appendingPathComponent(oldFileName)
+            if FileManager.default.fileExists(atPath: oldFileURL.path) {
+                try? FileManager.default.removeItem(at: oldFileURL)
+                log.debug("Renamed dictionary file", detail: "\(oldFileName) → \(fileName)")
+            }
+        }
 
         // Save dictionary file
         let encoder = JSONEncoder()
@@ -171,7 +209,7 @@ actor DictionaryFileManager {
         }
 
         try saveManifest()
-        log.info("Dictionary saved", detail: "'\(dictionary.name)' with \(dictionary.entries.count) entries")
+        log.info("Dictionary saved", detail: "'\(dictionary.name)' → \(fileName)")
     }
 
     /// Create a new dictionary
@@ -269,6 +307,32 @@ actor DictionaryFileManager {
 
     // MARK: - Migration
 
+    /// Migrate UUID-based filenames to name-based filenames
+    func migrateToNameBasedFilenames() async throws {
+        var needsSave = false
+
+        for (index, entry) in manifest.dictionaries.enumerated() {
+            // Check if filename is UUID-based (contains UUID pattern)
+            if entry.fileName.contains("-") && entry.fileName.count > 40 {
+                let newFileName = generateFileName(for: entry.name, excludingId: entry.id)
+                let oldFileURL = dictionariesDirectory.appendingPathComponent(entry.fileName)
+                let newFileURL = dictionariesDirectory.appendingPathComponent(newFileName)
+
+                // Rename the file
+                if FileManager.default.fileExists(atPath: oldFileURL.path) {
+                    try FileManager.default.moveItem(at: oldFileURL, to: newFileURL)
+                    manifest.dictionaries[index].fileName = newFileName
+                    needsSave = true
+                    log.info("Migrated dictionary filename", detail: "\(entry.fileName) → \(newFileName)")
+                }
+            }
+        }
+
+        if needsSave {
+            try saveManifest()
+        }
+    }
+
     /// Migrate from old single-dictionary format
     func migrateFromLegacyFormat() async throws {
         let legacyURL: URL = {
@@ -322,6 +386,102 @@ actor DictionaryFileManager {
         let dictionaries = try await loadAllEnabledDictionaries()
         return dictionaries.flatMap { $0.enabledEntries }
     }
+
+    // MARK: - Presets
+
+    /// Directory containing bundled preset dictionaries
+    private var presetsDirectory: URL? {
+        Bundle.main.url(forResource: "Presets", withExtension: nil)
+    }
+
+    /// List all available presets from the app bundle
+    func listAvailablePresets() async -> [PresetInfo] {
+        guard let presetsDir = presetsDirectory else {
+            log.warning("Presets directory not found in bundle")
+            return []
+        }
+
+        var presets: [PresetInfo] = []
+
+        do {
+            let contents = try FileManager.default.contentsOfDirectory(
+                at: presetsDir,
+                includingPropertiesForKeys: nil
+            )
+
+            for fileURL in contents where fileURL.pathExtension == "json" && fileURL.lastPathComponent.contains(".dict.") {
+                do {
+                    let data = try Data(contentsOf: fileURL)
+                    let preset = try JSONDecoder().decode(PresetDictionary.self, from: data)
+
+                    // Check if already installed by matching name
+                    let isInstalled = manifest.dictionaries.contains { entry in
+                        entry.source == .preset && entry.name == preset.name
+                    }
+
+                    let presetId = fileURL.deletingPathExtension().deletingPathExtension().lastPathComponent
+                    presets.append(PresetInfo(
+                        id: presetId,
+                        name: preset.name,
+                        description: preset.description,
+                        version: preset.version,
+                        entryCount: preset.entries.count,
+                        isInstalled: isInstalled
+                    ))
+                } catch {
+                    log.error("Failed to parse preset \(fileURL.lastPathComponent)", error: error)
+                }
+            }
+        } catch {
+            log.error("Failed to list presets", error: error)
+        }
+
+        return presets.sorted { $0.name < $1.name }
+    }
+
+    /// Install a preset dictionary
+    func installPreset(id: String) async throws -> TalkieDictionary {
+        guard let presetsDir = presetsDirectory else {
+            throw DictionaryFileError.presetNotFound(id)
+        }
+
+        let fileURL = presetsDir.appendingPathComponent("\(id).dict.json")
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            throw DictionaryFileError.presetNotFound(id)
+        }
+
+        let data = try Data(contentsOf: fileURL)
+        let preset = try JSONDecoder().decode(PresetDictionary.self, from: data)
+
+        // Check if already installed
+        if let existingEntry = manifest.dictionaries.first(where: { $0.source == .preset && $0.name == preset.name }) {
+            // Already installed - return existing
+            log.info("Preset already installed", detail: preset.name)
+            return try await loadDictionary(id: existingEntry.id)
+        }
+
+        // Convert and save
+        let dictionary = preset.toTalkieDictionary()
+        try await saveDictionary(dictionary)
+
+        log.info("Preset installed", detail: "\(preset.name) (\(preset.entries.count) entries)")
+        return dictionary
+    }
+
+    /// Uninstall a preset dictionary
+    func uninstallPreset(name: String) async throws {
+        guard let entry = manifest.dictionaries.first(where: { $0.source == .preset && $0.name == name }) else {
+            throw DictionaryFileError.notFound(UUID())
+        }
+
+        try await deleteDictionary(id: entry.id)
+        log.info("Preset uninstalled", detail: name)
+    }
+
+    /// Check if a preset is installed
+    func isPresetInstalled(name: String) -> Bool {
+        manifest.dictionaries.contains { $0.source == .preset && $0.name == name }
+    }
 }
 
 // MARK: - Errors
@@ -330,6 +490,7 @@ enum DictionaryFileError: LocalizedError {
     case notFound(UUID)
     case invalidFormat
     case migrationFailed(String)
+    case presetNotFound(String)
 
     var errorDescription: String? {
         switch self {
@@ -339,6 +500,73 @@ enum DictionaryFileError: LocalizedError {
             return "Invalid dictionary file format"
         case .migrationFailed(let reason):
             return "Migration failed: \(reason)"
+        case .presetNotFound(let name):
+            return "Preset not found: \(name)"
         }
     }
+}
+
+// MARK: - Preset Dictionary Format
+
+/// JSON format for bundled preset dictionaries
+struct PresetDictionary: Codable {
+    let name: String
+    let description: String?
+    let version: String?
+    let entries: [PresetEntry]
+
+    struct PresetEntry: Codable {
+        let trigger: String
+        let replacement: String
+        let matchType: String
+        let category: String?
+    }
+
+    /// Convert to TalkieDictionary
+    func toTalkieDictionary() -> TalkieDictionary {
+        let dictionaryEntries = entries.compactMap { entry -> DictionaryEntry? in
+            // Parse matchType string to enum
+            let matchType: DictionaryMatchType
+            switch entry.matchType.lowercased() {
+            case "word", "exact":
+                matchType = .word
+            case "phrase", "caseinsensitive":
+                matchType = .phrase
+            case "regex":
+                matchType = .regex
+            case "fuzzy":
+                matchType = .fuzzy
+            default:
+                matchType = .word
+            }
+
+            return DictionaryEntry(
+                trigger: entry.trigger,
+                replacement: entry.replacement,
+                matchType: matchType,
+                isEnabled: true,
+                category: entry.category
+            )
+        }
+
+        return TalkieDictionary(
+            name: name,
+            description: description,
+            isEnabled: true,
+            entries: dictionaryEntries,
+            source: .preset
+        )
+    }
+}
+
+// MARK: - Preset Info
+
+/// Metadata about an available preset (without loading all entries)
+struct PresetInfo: Identifiable {
+    let id: String  // filename without extension
+    let name: String
+    let description: String?
+    let version: String?
+    let entryCount: Int
+    let isInstalled: Bool
 }

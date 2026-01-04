@@ -388,11 +388,11 @@ struct WaveformCard: View {
         }
         .padding(Spacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
                 .fill(TalkieTheme.divider)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
                 .stroke(TalkieTheme.surface, lineWidth: 1)
         )
     }

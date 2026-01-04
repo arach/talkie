@@ -40,7 +40,7 @@ struct HelperAppsSettingsView: View {
                     .foregroundColor(Theme.current.foregroundSecondary)
                     .frame(width: 24, height: 24)
                     .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(6)
+                    .cornerRadius(CornerRadius.xs)
                 }
                 .buttonStyle(.plain)
                 .padding(.trailing, 8)
@@ -216,7 +216,7 @@ private struct HelperAppRow: View {
                 .foregroundColor(statusColor)
                 .frame(width: 40, height: 40)
                 .background(statusColor.opacity(0.15))
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
 
             // Name and description
             VStack(alignment: .leading, spacing: 4) {
@@ -265,7 +265,7 @@ private struct HelperAppRow: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(statusColor.opacity(0.1))
-            .cornerRadius(4)
+            .cornerRadius(CornerRadius.xs)
 
             // Actions menu
             Menu {
@@ -296,13 +296,13 @@ private struct HelperAppRow: View {
                     .foregroundColor(Theme.current.foregroundSecondary)
                     .frame(width: 28, height: 28)
                     .background(isHovered ? Color.secondary.opacity(0.1) : Color.clear)
-                    .cornerRadius(6)
+                    .cornerRadius(CornerRadius.xs)
             }
             .buttonStyle(.plain)
         }
         .padding(12)
         .background(isHovered ? Theme.current.surfaceHover : Theme.current.surface1)
-        .cornerRadius(8)
+        .cornerRadius(CornerRadius.sm)
         .onHover { isHovered = $0 }
     }
 }

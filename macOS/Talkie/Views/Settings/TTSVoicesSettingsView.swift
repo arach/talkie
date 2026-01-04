@@ -374,9 +374,9 @@ struct TTSVoiceCard: View {
         }
         .frame(height: 150)
         .background(cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: CornerRadius.sm))
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
                 .stroke(borderColor, lineWidth: 1)
         )
         .onHover { hovering in

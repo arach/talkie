@@ -91,6 +91,196 @@ private final class PatternMatcher {
     }
 }
 
+// MARK: - Fuzzy Matching (SymSpell-style)
+
+/// Configuration for fuzzy matching
+private enum FuzzyConfig {
+    static let minWordLength = 4          // Skip words with 3 or fewer chars
+    static let maxDeleteDistance = 2      // SymSpell delete depth (1-2 edits)
+    static let scoreThreshold = 0.7       // Min similarity for replacement (0.0-1.0)
+    static let marginDelta = 0.1          // Min margin over second-best candidate
+}
+
+/// Token representing a word in the transcript
+private struct WordToken {
+    let text: String
+    let startOffset: Int
+    let endOffset: Int
+    var range: Range<Int> { startOffset..<endOffset }
+}
+
+/// SymSpell-style delete index for O(1) fuzzy candidate lookup
+private final class FuzzyDeleteIndex {
+    /// Maps delete variants -> source entries that could match
+    private var deleteMap: [String: [DictionaryEntry]] = [:]
+
+    /// Set of normalized triggers for "known word" detection
+    private var knownTriggers: Set<String> = []
+
+    /// Maximum edit distance for delete generation
+    let maxDeleteDistance: Int
+
+    init(entries: [DictionaryEntry], maxDeleteDistance: Int = FuzzyConfig.maxDeleteDistance) {
+        self.maxDeleteDistance = maxDeleteDistance
+        buildIndex(from: entries)
+    }
+
+    /// Build the delete index from dictionary entries
+    private func buildIndex(from entries: [DictionaryEntry]) {
+        for entry in entries {
+            let normalized = entry.trigger.lowercased()
+            knownTriggers.insert(normalized)
+
+            // Generate all delete variants and map them to this entry
+            let deletes = generateDeletes(word: normalized, maxDistance: maxDeleteDistance)
+            for variant in deletes {
+                deleteMap[variant, default: []].append(entry)
+            }
+        }
+    }
+
+    /// Generate all delete variants within maxDistance edits
+    /// Uses index-based queue processing for O(1) dequeue operations
+    private func generateDeletes(word: String, maxDistance: Int) -> Set<String> {
+        var results = Set<String>([word])
+        var queue = [(word, 0)] // (variant, currentDepth)
+        var queueIndex = 0
+
+        while queueIndex < queue.count {
+            let (current, depth) = queue[queueIndex]
+            queueIndex += 1
+
+            guard depth < maxDistance else { continue }
+
+            // Generate all single-character deletions
+            let chars = Array(current)
+            for i in 0..<chars.count {
+                var variant = chars
+                variant.remove(at: i)
+                let variantStr = String(variant)
+
+                if !variantStr.isEmpty && !results.contains(variantStr) {
+                    results.insert(variantStr)
+                    queue.append((variantStr, depth + 1))
+                }
+            }
+        }
+
+        return results
+    }
+
+    /// Find candidate entries for a word
+    func findCandidates(for word: String) -> [DictionaryEntry] {
+        let normalized = word.lowercased()
+        var candidates: [DictionaryEntry] = []
+        var seen = Set<UUID>()
+
+        // Generate deletes of the input word and look up each
+        let wordDeletes = generateDeletes(word: normalized, maxDistance: maxDeleteDistance)
+        for variant in wordDeletes {
+            if let entries = deleteMap[variant] {
+                for entry in entries {
+                    if !seen.contains(entry.id) {
+                        seen.insert(entry.id)
+                        candidates.append(entry)
+                    }
+                }
+            }
+        }
+
+        return candidates
+    }
+
+    /// Check if a word is a known trigger (exact match)
+    func isKnownTrigger(_ word: String) -> Bool {
+        knownTriggers.contains(word.lowercased())
+    }
+}
+
+// MARK: - String Distance Algorithms
+
+/// Compute Damerau-Levenshtein distance between two strings
+/// Handles insertions, deletions, substitutions, and transpositions
+private func damerauLevenshtein(_ s1: String, _ s2: String) -> Int {
+    let a = Array(s1.lowercased())
+    let b = Array(s2.lowercased())
+    let m = a.count
+    let n = b.count
+
+    // Handle empty string cases
+    if m == 0 { return n }
+    if n == 0 { return m }
+
+    // DP matrix
+    var d = Array(repeating: Array(repeating: 0, count: n + 1), count: m + 1)
+
+    for i in 0...m { d[i][0] = i }
+    for j in 0...n { d[0][j] = j }
+
+    for i in 1...m {
+        for j in 1...n {
+            let cost = a[i-1] == b[j-1] ? 0 : 1
+
+            d[i][j] = min(
+                d[i-1][j] + 1,      // deletion
+                d[i][j-1] + 1,      // insertion
+                d[i-1][j-1] + cost  // substitution
+            )
+
+            // Transposition (adjacent character swap) - always costs 1
+            if i > 1 && j > 1 && a[i-1] == b[j-2] && a[i-2] == b[j-1] {
+                d[i][j] = min(d[i][j], d[i-2][j-2] + 1)
+            }
+        }
+    }
+
+    return d[m][n]
+}
+
+/// Convert edit distance to similarity score (0.0-1.0)
+private func similarityScore(_ s1: String, _ s2: String) -> Double {
+    let distance = damerauLevenshtein(s1, s2)
+    let maxLen = max(s1.count, s2.count)
+    guard maxLen > 0 else { return 1.0 }
+    return 1.0 - (Double(distance) / Double(maxLen))
+}
+
+/// Simple word tokenizer - splits on non-alphanumeric characters
+private func tokenize(_ text: String) -> [WordToken] {
+    var tokens: [WordToken] = []
+    var currentWord = ""
+    var wordStart = 0
+
+    for (offset, char) in text.enumerated() {
+        if char.isLetter || char.isNumber {
+            if currentWord.isEmpty {
+                wordStart = offset
+            }
+            currentWord.append(char)
+        } else {
+            if !currentWord.isEmpty {
+                tokens.append(WordToken(
+                    text: currentWord,
+                    startOffset: wordStart,
+                    endOffset: offset
+                ))
+                currentWord = ""
+            }
+        }
+    }
+
+    // Handle trailing word
+    if !currentWord.isEmpty {
+        tokens.append(WordToken(
+            text: currentWord,
+            startOffset: wordStart,
+            endOffset: text.count
+        ))
+    }
+
+    return tokens
+}
+
 // MARK: - Text Post Processor
 
 /// Singleton that manages dictionary and applies text replacements.
@@ -123,8 +313,14 @@ final class TextPostProcessor {
     /// In-memory dictionary entries (loaded from Engine's file)
     private(set) var entries: [DictionaryEntry] = []
 
-    /// Pattern matcher for efficient multi-pattern matching
+    /// Pattern matcher for efficient multi-pattern matching (word/phrase types)
     private var patternMatcher: PatternMatcher?
+
+    /// Cached compiled regex patterns (regex type entries)
+    private var regexCache: [(entry: DictionaryEntry, regex: NSRegularExpression)] = []
+
+    /// Fuzzy delete index for approximate matching (fuzzy type entries)
+    private var fuzzyIndex: FuzzyDeleteIndex?
 
     /// Whether dictionary processing is enabled (persisted)
     var isEnabled: Bool {
@@ -140,6 +336,8 @@ final class TextPostProcessor {
                 // Disabling - keep file but clear memory
                 entries.removeAll()
                 patternMatcher = nil
+                regexCache.removeAll()
+                fuzzyIndex = nil
             }
         }
     }
@@ -166,16 +364,46 @@ final class TextPostProcessor {
 
     // MARK: - Pattern Matcher Building
 
-    /// Rebuild the pattern matcher from current entries
+    /// Rebuild the pattern matcher, regex cache, and fuzzy index from current entries
     private func rebuildPatternMatcher() {
         let enabledEntries = entries.filter { $0.isEnabled }
-        guard !enabledEntries.isEmpty else {
+
+        // Separate entries by match type
+        let trieEntries = enabledEntries.filter { $0.matchType == .word || $0.matchType == .phrase }
+        let regexEntries = enabledEntries.filter { $0.matchType == .regex }
+        let fuzzyEntries = enabledEntries.filter { $0.matchType == .fuzzy }
+
+        // Build trie for word/phrase entries
+        if trieEntries.isEmpty {
             patternMatcher = nil
-            return
+        } else {
+            patternMatcher = PatternMatcher(entries: trieEntries)
         }
 
-        patternMatcher = PatternMatcher(entries: enabledEntries)
-        AppLogger.shared.debug(.system, "Pattern matcher rebuilt", detail: "\(enabledEntries.count) patterns")
+        // Compile regex entries
+        regexCache = regexEntries.compactMap { entry in
+            do {
+                // No lookahead/lookbehind for performance
+                let regex = try NSRegularExpression(pattern: entry.trigger, options: [.caseInsensitive])
+                return (entry, regex)
+            } catch {
+                AppLogger.shared.warning(.system, "Invalid regex pattern", detail: "'\(entry.trigger)': \(error.localizedDescription)")
+                return nil
+            }
+        }
+
+        // Build fuzzy delete index
+        if fuzzyEntries.isEmpty {
+            fuzzyIndex = nil
+        } else {
+            fuzzyIndex = FuzzyDeleteIndex(entries: fuzzyEntries)
+        }
+
+        let total = trieEntries.count + regexCache.count + fuzzyEntries.count
+        if total > 0 {
+            AppLogger.shared.debug(.system, "Pattern matcher rebuilt",
+                                  detail: "\(trieEntries.count) trie + \(regexCache.count) regex + \(fuzzyEntries.count) fuzzy patterns")
+        }
     }
 
     // MARK: - File Operations
@@ -201,6 +429,8 @@ final class TextPostProcessor {
             AppLogger.shared.debug(.system, "No dictionary file found")
             entries = []
             patternMatcher = nil
+            regexCache.removeAll()
+            fuzzyIndex = nil
             return
         }
 
@@ -214,6 +444,8 @@ final class TextPostProcessor {
             AppLogger.shared.error(.system, "Failed to load dictionary", detail: error.localizedDescription)
             entries = []
             patternMatcher = nil
+            regexCache.removeAll()
+            fuzzyIndex = nil
         }
     }
 
@@ -254,6 +486,8 @@ final class TextPostProcessor {
     func clearDictionary() {
         entries.removeAll()
         patternMatcher = nil
+        regexCache.removeAll()
+        fuzzyIndex = nil
         lastUpdated = nil
 
         // Remove file
@@ -270,7 +504,7 @@ final class TextPostProcessor {
     /// - Returns: Processed text with replacements applied
     func process(_ text: String) -> DictionaryProcessingResult {
         // Only process if enabled and has entries
-        guard isEnabled, !entries.isEmpty, let matcher = patternMatcher else {
+        guard isEnabled, !entries.isEmpty else {
             return DictionaryProcessingResult(
                 original: text,
                 processed: text,
@@ -278,41 +512,193 @@ final class TextPostProcessor {
             )
         }
 
-        // Find all matches using trie
-        let allMatches = matcher.findMatches(in: text)
+        var result = text
+        var allReplacementInfos: [DictionaryProcessingResult.ReplacementInfo] = []
 
-        guard !allMatches.isEmpty else {
-            return DictionaryProcessingResult(
-                original: text,
-                processed: text,
-                replacements: []
-            )
+        // Step 1: Apply trie matches (word/phrase types)
+        if let matcher = patternMatcher {
+            let allMatches = matcher.findMatches(in: result)
+            if !allMatches.isEmpty {
+                let validMatches = filterAndResolveMatches(allMatches, in: result)
+                if !validMatches.isEmpty {
+                    let (newResult, infos) = applyReplacements(validMatches, to: result)
+                    result = newResult
+                    allReplacementInfos.append(contentsOf: infos)
+                }
+            }
         }
 
-        // Filter matches based on match type and resolve overlaps
-        let validMatches = filterAndResolveMatches(allMatches, in: text)
-
-        guard !validMatches.isEmpty else {
-            return DictionaryProcessingResult(
-                original: text,
-                processed: text,
-                replacements: []
-            )
+        // Step 2: Apply regex patterns with capture group substitution
+        if !regexCache.isEmpty {
+            let (newResult, infos) = applyRegexReplacements(to: result)
+            result = newResult
+            allReplacementInfos.append(contentsOf: infos)
         }
 
-        // Apply replacements (from end to start to preserve indices)
-        let (result, replacementInfos) = applyReplacements(validMatches, to: text)
+        // Step 3: Apply fuzzy matching to remaining unmatched words
+        // Note: isKnownTrigger check prevents double-processing of exact matches
+        if let index = fuzzyIndex {
+            let (newResult, infos) = applyFuzzyMatching(to: result, index: index)
+            result = newResult
+            allReplacementInfos.append(contentsOf: infos)
+        }
 
-        if !replacementInfos.isEmpty {
+        if !allReplacementInfos.isEmpty {
             AppLogger.shared.debug(.transcription, "Applied replacements",
-                                  detail: replacementInfos.map { "\($0.trigger) -> \($0.replacement)" }.joined(separator: ", "))
+                                  detail: allReplacementInfos.map { "\($0.trigger) -> \($0.replacement)" }.joined(separator: ", "))
         }
 
         return DictionaryProcessingResult(
             original: text,
             processed: result,
-            replacements: replacementInfos
+            replacements: allReplacementInfos
         )
+    }
+
+    /// Apply regex patterns with capture group substitution
+    private func applyRegexReplacements(to text: String) -> (String, [DictionaryProcessingResult.ReplacementInfo]) {
+        var result = text
+        var replacementInfos: [DictionaryProcessingResult.ReplacementInfo] = []
+
+        for (entry, regex) in regexCache {
+            let nsRange = NSRange(result.startIndex..., in: result)
+            var matches: [(NSTextCheckingResult, Range<String.Index>)] = []
+
+            // Collect all matches first
+            regex.enumerateMatches(in: result, options: [], range: nsRange) { match, _, _ in
+                guard let match = match, let range = Range(match.range, in: result) else { return }
+                matches.append((match, range))
+            }
+
+            guard !matches.isEmpty else { continue }
+
+            // Apply from end to start to preserve indices
+            var count = 0
+            for (match, range) in matches.reversed() {
+                let replacement = buildRegexReplacement(
+                    template: entry.replacement,
+                    match: match,
+                    in: result
+                )
+                result.replaceSubrange(range, with: replacement)
+                count += 1
+            }
+
+            if count > 0 {
+                replacementInfos.append(DictionaryProcessingResult.ReplacementInfo(
+                    trigger: entry.trigger,
+                    replacement: entry.replacement,
+                    count: count
+                ))
+            }
+        }
+
+        return (result, replacementInfos)
+    }
+
+    /// Build replacement string by substituting capture groups ($1, $2, $3)
+    private func buildRegexReplacement(
+        template: String,
+        match: NSTextCheckingResult,
+        in text: String
+    ) -> String {
+        var result = template
+
+        // Replace $1, $2, $3 with captured groups (up to 9)
+        for i in 1...min(9, match.numberOfRanges - 1) {
+            let groupRange = match.range(at: i)
+            guard groupRange.location != NSNotFound,
+                  let range = Range(groupRange, in: text) else { continue }
+
+            let captured = String(text[range])
+            result = result.replacingOccurrences(of: "$\(i)", with: captured)
+        }
+
+        return result
+    }
+
+    // MARK: - Fuzzy Matching
+
+    /// Apply fuzzy matching to words not matched by exact methods
+    /// - Parameters:
+    ///   - text: Current text after exact replacements
+    ///   - index: The fuzzy delete index
+    /// - Returns: Processed text and replacement info
+    private func applyFuzzyMatching(
+        to text: String,
+        index: FuzzyDeleteIndex
+    ) -> (String, [DictionaryProcessingResult.ReplacementInfo]) {
+        let tokens = tokenize(text)
+        guard !tokens.isEmpty else { return (text, []) }
+
+        var replacements: [(token: WordToken, entry: DictionaryEntry, score: Double)] = []
+
+        for token in tokens {
+            // Skip short words
+            guard token.text.count >= FuzzyConfig.minWordLength else { continue }
+
+            // Skip if word is a known trigger (exact match - already handled by trie)
+            if index.isKnownTrigger(token.text) { continue }
+
+            // Find fuzzy candidates
+            let candidates = index.findCandidates(for: token.text)
+            guard !candidates.isEmpty else { continue }
+
+            // Score candidates
+            var scored: [(entry: DictionaryEntry, score: Double)] = []
+            for entry in candidates {
+                let score = similarityScore(token.text, entry.trigger)
+                if score >= FuzzyConfig.scoreThreshold {
+                    scored.append((entry, score))
+                }
+            }
+
+            guard !scored.isEmpty else { continue }
+
+            // Sort by score descending
+            scored.sort { $0.score > $1.score }
+
+            // Check margin - best must be clearly better than second-best
+            let best = scored[0]
+            if scored.count > 1 {
+                let second = scored[1]
+                if best.score - second.score < FuzzyConfig.marginDelta {
+                    continue // Ambiguous match - skip
+                }
+            }
+
+            replacements.append((token, best.entry, best.score))
+        }
+
+        guard !replacements.isEmpty else { return (text, []) }
+
+        // Apply replacements from end to start to preserve indices
+        var result = text
+        var replacementCounts: [UUID: (entry: DictionaryEntry, count: Int)] = [:]
+
+        for (token, entry, _) in replacements.reversed() {
+            let startIdx = result.index(result.startIndex, offsetBy: token.startOffset)
+            let endIdx = result.index(result.startIndex, offsetBy: token.endOffset)
+            result.replaceSubrange(startIdx..<endIdx, with: entry.replacement)
+
+            // Track counts
+            if let existing = replacementCounts[entry.id] {
+                replacementCounts[entry.id] = (existing.entry, existing.count + 1)
+            } else {
+                replacementCounts[entry.id] = (entry, 1)
+            }
+        }
+
+        // Build replacement info
+        let infos = replacementCounts.values.map { entry, count in
+            DictionaryProcessingResult.ReplacementInfo(
+                trigger: entry.trigger,
+                replacement: entry.replacement,
+                count: count
+            )
+        }
+
+        return (result, infos)
     }
 
     // MARK: - Match Processing
@@ -329,15 +715,19 @@ final class TextPostProcessor {
 
             // Validate based on match type
             switch entry.matchType {
-            case .exact:
+            case .word:
                 // Check word boundaries
                 if isWordBoundary(at: match.startOffset, isStart: true, in: text) &&
                    isWordBoundary(at: match.endOffset, isStart: false, in: text) {
                     validMatches.append(match)
                 }
-            case .caseInsensitive:
-                // Case-insensitive matches anywhere
+            case .phrase:
+                // Case-insensitive phrase matches anywhere
                 validMatches.append(match)
+            case .regex, .fuzzy:
+                // Regex and fuzzy entries are processed separately (not via trie)
+                // These cases shouldn't be reached as they skip the trie
+                break
             }
         }
 

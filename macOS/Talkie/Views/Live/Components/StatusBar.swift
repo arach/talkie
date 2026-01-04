@@ -170,7 +170,7 @@ struct StatusBar: View {
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 3)
                                     .background(
-                                        RoundedRectangle(cornerRadius: 4)
+                                        RoundedRectangle(cornerRadius: CornerRadius.xs)
                                             .fill(TalkieTheme.hover)
                                     )
                             }
@@ -215,7 +215,7 @@ struct StatusBar: View {
                             .padding(.horizontal, 6)
                             .padding(.vertical, 4)
                             .background((serviceMonitor.state == .stopped ? SemanticColor.warning : Color.gray).opacity(0.1))
-                            .cornerRadius(4)
+                            .cornerRadius(CornerRadius.xs)
                             .help("TalkieEngine: \(serviceMonitor.state.rawValue). Click to launch.")
                             .onTapGesture {
                                 Task {

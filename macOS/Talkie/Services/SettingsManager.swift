@@ -16,6 +16,52 @@ import TalkieKit
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "Settings")
 
+// MARK: - Cached Theme Tokens
+
+/// All theme-derived values calculated once per theme change
+/// Eliminates per-access computation for fonts, colors, etc.
+struct CachedThemeTokens {
+    // MARK: - Font Tokens (UI Chrome)
+    var fontXS: Font
+    var fontXSMedium: Font
+    var fontXSBold: Font
+    var fontSM: Font
+    var fontSMMedium: Font
+    var fontSMBold: Font
+    var fontBody: Font
+    var fontBodyMedium: Font
+    var fontBodyBold: Font
+    var fontTitle: Font
+    var fontTitleMedium: Font
+    var fontTitleBold: Font
+    var fontHeadline: Font
+    var fontHeadlineMedium: Font
+    var fontHeadlineBold: Font
+    var fontDisplay: Font
+    var fontDisplayMedium: Font
+
+    // MARK: - Defaults
+    static let `default` = CachedThemeTokens(
+        fontXS: .system(size: 10),
+        fontXSMedium: .system(size: 10, weight: .medium),
+        fontXSBold: .system(size: 10, weight: .semibold),
+        fontSM: .system(size: 11),
+        fontSMMedium: .system(size: 11, weight: .medium),
+        fontSMBold: .system(size: 11, weight: .semibold),
+        fontBody: .system(size: 13),
+        fontBodyMedium: .system(size: 13, weight: .medium),
+        fontBodyBold: .system(size: 13, weight: .semibold),
+        fontTitle: .system(size: 15),
+        fontTitleMedium: .system(size: 15, weight: .medium),
+        fontTitleBold: .system(size: 15, weight: .bold),
+        fontHeadline: .system(size: 18),
+        fontHeadlineMedium: .system(size: 18, weight: .medium),
+        fontHeadlineBold: .system(size: 18, weight: .bold),
+        fontDisplay: .system(size: 32, weight: .light),
+        fontDisplayMedium: .system(size: 32)
+    )
+}
+
 // MARK: - Appearance Mode
 enum AppearanceMode: String, CaseIterable, CustomStringConvertible {
     case system = "system"
@@ -101,6 +147,7 @@ enum FontStyleOption: String, CaseIterable {
     case monospace = "monospace"
     case rounded = "rounded"
     case serif = "serif"
+    case jetbrainsMono = "jetbrainsMono"
 
     var displayName: String {
         switch self {
@@ -108,6 +155,7 @@ enum FontStyleOption: String, CaseIterable {
         case .monospace: return "Monospace"
         case .rounded: return "Rounded"
         case .serif: return "Serif"
+        case .jetbrainsMono: return "JetBrains Mono"
         }
     }
 
@@ -117,6 +165,7 @@ enum FontStyleOption: String, CaseIterable {
         case .monospace: return "chevron.left.forwardslash.chevron.right"
         case .rounded: return "a.circle"
         case .serif: return "text.book.closed"
+        case .jetbrainsMono: return "terminal"
         }
     }
 
@@ -130,6 +179,28 @@ enum FontStyleOption: String, CaseIterable {
             return .system(size: size, weight: weight, design: .rounded)
         case .serif:
             return .system(size: size, weight: weight, design: .serif)
+        case .jetbrainsMono:
+            // JetBrains Mono - falls back to system monospace if not installed
+            let fontName: String
+            switch weight {
+            case .ultraLight, .thin, .light:
+                fontName = "JetBrainsMono-Light"
+            case .regular:
+                fontName = "JetBrainsMono-Regular"
+            case .medium:
+                fontName = "JetBrainsMono-Medium"
+            case .semibold:
+                fontName = "JetBrainsMono-SemiBold"
+            case .bold, .heavy, .black:
+                fontName = "JetBrainsMono-Bold"
+            default:
+                fontName = "JetBrainsMono-Regular"
+            }
+            if let _ = NSFont(name: fontName, size: size) {
+                return .custom(fontName, size: size)
+            }
+            // Fallback to system monospace
+            return .system(size: size, weight: weight, design: .monospaced)
         }
     }
 }
@@ -217,17 +288,17 @@ enum FontSizeOption: String, CaseIterable {
 
 // MARK: - Curated Theme Presets
 enum ThemePreset: String, CaseIterable {
-    case talkiePro = "talkiePro"
-    case linear = "linear"
-    case terminal = "terminal"
-    case minimal = "minimal"
-    case classic = "classic"
-    case warm = "warm"
-    case liquidGlass = "liquidGlass"
+    case talkiePro = "talkiePro"    // Professional dark theme (default)
+    case linear = "linear"          // True black, Vercel-inspired
+    case terminal = "terminal"      // Ghostty-style: clean, monospace, sharp
+    case minimal = "minimal"        // Light mode, system-adaptive
+    case classic = "classic"        // Comfortable defaults with blue accents
+    case warm = "warm"              // Cozy dark mode with orange tones
+    case liquidGlass = "liquidGlass" // Experimental glass effects
 
     var displayName: String {
         switch self {
-        case .talkiePro: return "Talkie Pro"
+        case .talkiePro: return "Pro"
         case .linear: return "Linear"
         case .terminal: return "Terminal"
         case .minimal: return "Minimal"
@@ -239,13 +310,13 @@ enum ThemePreset: String, CaseIterable {
 
     var description: String {
         switch self {
-        case .talkiePro: return "Sharp, professional, high contrast"
+        case .talkiePro: return "Professional dark theme with balanced contrast"
         case .linear: return "True black, minimal, Vercel-inspired"
-        case .terminal: return "Terminal vibes with green accents"
-        case .minimal: return "Clean and subtle, adapts to system"
+        case .terminal: return "Clean monospace, sharp corners, no frills"
+        case .minimal: return "Light and subtle, adapts to system"
         case .classic: return "Comfortable defaults with blue accents"
         case .warm: return "Cozy dark mode with orange tones"
-        case .liquidGlass: return "EXPERIMENTAL: Maximum glass effects"
+        case .liquidGlass: return "Experimental: maximum glass effects"
         }
     }
 
@@ -264,25 +335,20 @@ enum ThemePreset: String, CaseIterable {
     var previewColors: (bg: Color, fg: Color, accent: Color) {
         switch self {
         case .talkiePro:
-            // fg: white*0.85 = 0.85
             return (Color(white: 0.08), Color(white: 0.85), Color(red: 0.4, green: 0.7, blue: 1.0))
         case .linear:
             // True black with pure white text, cyan accent (Vercel/Linear style)
             return (Color.black, Color.white, Color(red: 0.0, green: 0.83, blue: 1.0))
         case .terminal:
-            // fg: green*0.9 ≈ (0, 0.9*0.85, 0) = (0, 0.765, 0)
-            return (Color.black, Color(red: 0, green: 0.765, blue: 0), Color.green)
+            // Ghostty-style: black bg, light gray text, subtle gray accent
+            return (Color.black, Color(white: 0.85), Color(white: 0.5))
         case .minimal:
-            // fg: black*0.8 = 0.2
             return (Color(white: 0.96), Color(white: 0.2), Color.gray)
         case .classic:
-            // fg: white*0.9 = 0.9
             return (Color(white: 0.15), Color(white: 0.9), Color.blue)
         case .warm:
-            // fg: white*0.9 = 0.9
             return (Color(red: 0.1, green: 0.08, blue: 0.06), Color(white: 0.9), Color.orange)
         case .liquidGlass:
-            // Deep dark with cyan/blue glow
             return (Color(white: 0.05), Color.white, Color.cyan)
         }
     }
@@ -293,48 +359,48 @@ enum ThemePreset: String, CaseIterable {
         case .talkiePro: return .dark
         case .linear: return .dark
         case .terminal: return .dark
-        case .minimal: return .system  // Respects system light/dark
+        case .minimal: return .system
         case .classic: return .dark
         case .warm: return .dark
-        case .liquidGlass: return .dark  // Glass looks best on dark
+        case .liquidGlass: return .dark
         }
     }
 
     /// UI chrome font style (labels, headers, buttons, badges)
     var uiFontStyle: FontStyleOption {
         switch self {
-        case .talkiePro: return .system     // SF Pro - clean, professional
-        case .linear: return .system        // Clean geometric sans-serif
-        case .terminal: return .monospace
-        case .minimal: return .system       // Clean system font
+        case .talkiePro: return .system
+        case .linear: return .system
+        case .terminal: return .jetbrainsMono   // JetBrains Mono throughout
+        case .minimal: return .system
         case .classic: return .system
         case .warm: return .system
-        case .liquidGlass: return .system   // Clean for glass
+        case .liquidGlass: return .system
         }
     }
 
     /// Content font style (transcripts, notes, markdown)
     var contentFontStyle: FontStyleOption {
         switch self {
-        case .talkiePro: return .system     // SF Pro - readable, luxurious
-        case .linear: return .system        // Clean, readable content
-        case .terminal: return .monospace   // Full terminal experience
-        case .minimal: return .system       // Clean system font for content
-        case .classic: return .system       // Standard system font
-        case .warm: return .monospace       // Monospace content for warm theme
-        case .liquidGlass: return .system   // Clean for glass
+        case .talkiePro: return .system
+        case .linear: return .system
+        case .terminal: return .jetbrainsMono   // JetBrains Mono throughout
+        case .minimal: return .system
+        case .classic: return .system
+        case .warm: return .monospace           // Monospace content for warm theme
+        case .liquidGlass: return .system
         }
     }
 
     var accentColor: AccentColorOption {
         switch self {
         case .talkiePro: return .blue
-        case .linear: return .blue          // Cyan-ish blue like Linear
-        case .terminal: return .green
+        case .linear: return .blue
+        case .terminal: return .gray        // No gimmicks, just gray
         case .minimal: return .gray
         case .classic: return .blue
         case .warm: return .orange
-        case .liquidGlass: return .blue     // Cyan/blue for glass glow
+        case .liquidGlass: return .blue
         }
     }
 
@@ -343,7 +409,7 @@ enum ThemePreset: String, CaseIterable {
         switch self {
         case .talkiePro: return .medium
         case .linear: return .medium
-        case .terminal: return .medium
+        case .terminal: return .small       // Condensed, information-dense
         case .minimal: return .medium
         case .classic: return .medium
         case .warm: return .medium
@@ -351,11 +417,10 @@ enum ThemePreset: String, CaseIterable {
         }
     }
 
-    /// Whether this theme uses true black backgrounds (for OLED optimization)
+    /// Whether this theme uses true black backgrounds
     var usesTrueBlack: Bool {
         switch self {
-        case .linear, .terminal: return true
-        case .liquidGlass: return true      // True black makes glass pop
+        case .linear, .terminal, .liquidGlass: return true
         default: return false
         }
     }
@@ -364,7 +429,39 @@ enum ThemePreset: String, CaseIterable {
     var glassDepth: GlassDepth {
         switch self {
         case .liquidGlass: return .extreme
-        default: return .standard
+        case .linear: return .prominent     // Floating cards
+        case .talkiePro: return .standard
+        case .classic: return .standard
+        case .warm: return .standard
+        case .minimal: return .subtle
+        case .terminal: return .subtle      // Flat, minimal glass
+        }
+    }
+
+    /// Corner radius style for this theme
+    var cornerRadiusMultiplier: CGFloat {
+        switch self {
+        case .terminal: return 0            // Sharp corners - no rounding
+        case .minimal: return 0.75          // Slightly reduced
+        default: return 1.0                 // Standard
+        }
+    }
+
+    /// Whether to use light font weights
+    var usesLightFonts: Bool {
+        switch self {
+        case .terminal: return true         // Thin, clean lines
+        case .linear: return true           // Vercel uses light fonts
+        default: return false
+        }
+    }
+
+    /// Border width for this theme
+    var borderWidth: CGFloat {
+        switch self {
+        case .terminal: return 0.5          // Thin 1px borders
+        case .linear: return 0.5
+        default: return 1.0
         }
     }
 }
@@ -377,6 +474,11 @@ class SettingsManager {
 
     /// When true, skip Theme.invalidate() in property didSets (call once at end of batch)
     @ObservationIgnored private var isBatchingUpdates = false
+
+    // MARK: - Cached Theme Tokens (calculated once per theme change)
+
+    /// All computed font/color values - recalculated only when theme changes
+    @ObservationIgnored private(set) var cachedTokens: CachedThemeTokens = .default
 
     // MARK: - Appearance Settings (UserDefaults - device-specific)
 
@@ -399,13 +501,16 @@ class SettingsManager {
             } else {
                 UserDefaults.standard.removeObject(forKey: currentThemeKey)
             }
-            if !isBatchingUpdates { Theme.invalidate() }
+            if !isBatchingUpdates {
+                Theme.invalidate()
+                applyThemeConfig()
+            }
         }
     }
 
     /// Whether to use light/thin font weights (for sharp aesthetics)
     var useLightFonts: Bool {
-        currentTheme == .talkiePro
+        currentTheme?.usesLightFonts ?? false
     }
 
     /// Whether current theme uses high-contrast colors
@@ -428,24 +533,34 @@ class SettingsManager {
         currentTheme == .terminal
     }
 
-    /// Check if warm theme is active
-    var isWarmTheme: Bool {
-        currentTheme == .warm
-    }
-
     /// Check if liquid glass theme is active
     var isLiquidGlassTheme: Bool {
         currentTheme == .liquidGlass
     }
 
-    /// Current glass depth based on theme (extreme for Liquid Glass, standard otherwise)
+    /// Check if classic theme is active
+    var isClassicTheme: Bool {
+        currentTheme == .classic
+    }
+
+    /// Check if warm theme is active
+    var isWarmTheme: Bool {
+        currentTheme == .warm
+    }
+
+    /// Current glass depth based on theme
     var currentGlassDepth: GlassDepth {
         currentTheme?.glassDepth ?? .standard
     }
 
-    /// Check if classic theme is active
-    var isClassicTheme: Bool {
-        currentTheme == .classic
+    /// Current corner radius multiplier based on theme
+    var currentCornerRadiusMultiplier: CGFloat {
+        currentTheme?.cornerRadiusMultiplier ?? 1.0
+    }
+
+    /// Current border width based on theme
+    var currentBorderWidth: CGFloat {
+        currentTheme?.borderWidth ?? 1.0
     }
 
     /// Whether currently in dark mode (respects manual override)
@@ -561,38 +676,38 @@ class SettingsManager {
         return contentFontStyle.font(size: scaledSize, weight: weight)
     }
 
-    // MARK: - UI Font Tokens
+    // MARK: - UI Font Tokens (Cached - calculated once per theme change)
     // For UI chrome: labels, headers, buttons, badges, navigation
     // Uses uiFontStyle (themed/branded)
 
     /// Extra small UI text - labels, badges (10pt base)
-    var fontXS: Font { themedFont(baseSize: 10, weight: useLightFonts ? .regular : .regular) }
-    var fontXSMedium: Font { themedFont(baseSize: 10, weight: useLightFonts ? .medium : .medium) }
-    var fontXSBold: Font { themedFont(baseSize: 10, weight: useLightFonts ? .semibold : .semibold) }
+    var fontXS: Font { cachedTokens.fontXS }
+    var fontXSMedium: Font { cachedTokens.fontXSMedium }
+    var fontXSBold: Font { cachedTokens.fontXSBold }
 
     /// Small UI text - secondary info, metadata (11pt base)
-    var fontSM: Font { themedFont(baseSize: 11, weight: useLightFonts ? .regular : .regular) }
-    var fontSMMedium: Font { themedFont(baseSize: 11, weight: useLightFonts ? .medium : .medium) }
-    var fontSMBold: Font { themedFont(baseSize: 11, weight: useLightFonts ? .semibold : .semibold) }
+    var fontSM: Font { cachedTokens.fontSM }
+    var fontSMMedium: Font { cachedTokens.fontSMMedium }
+    var fontSMBold: Font { cachedTokens.fontSMBold }
 
     /// Body UI text - primary UI elements (13pt base)
-    var fontBody: Font { themedFont(baseSize: 13, weight: useLightFonts ? .regular : .regular) }
-    var fontBodyMedium: Font { themedFont(baseSize: 13, weight: useLightFonts ? .medium : .medium) }
-    var fontBodyBold: Font { themedFont(baseSize: 13, weight: useLightFonts ? .semibold : .semibold) }
+    var fontBody: Font { cachedTokens.fontBody }
+    var fontBodyMedium: Font { cachedTokens.fontBodyMedium }
+    var fontBodyBold: Font { cachedTokens.fontBodyBold }
 
     /// Title UI text - section headers (15pt base)
-    var fontTitle: Font { themedFont(baseSize: 15, weight: useLightFonts ? .regular : .regular) }
-    var fontTitleMedium: Font { themedFont(baseSize: 15, weight: useLightFonts ? .medium : .medium) }
-    var fontTitleBold: Font { themedFont(baseSize: 15, weight: useLightFonts ? .semibold : .bold) }
+    var fontTitle: Font { cachedTokens.fontTitle }
+    var fontTitleMedium: Font { cachedTokens.fontTitleMedium }
+    var fontTitleBold: Font { cachedTokens.fontTitleBold }
 
     /// Headline UI text - large headers (18pt base)
-    var fontHeadline: Font { themedFont(baseSize: 18, weight: useLightFonts ? .regular : .regular) }
-    var fontHeadlineMedium: Font { themedFont(baseSize: 18, weight: useLightFonts ? .medium : .medium) }
-    var fontHeadlineBold: Font { themedFont(baseSize: 18, weight: useLightFonts ? .semibold : .bold) }
+    var fontHeadline: Font { cachedTokens.fontHeadline }
+    var fontHeadlineMedium: Font { cachedTokens.fontHeadlineMedium }
+    var fontHeadlineBold: Font { cachedTokens.fontHeadlineBold }
 
     /// Display UI text - hero elements (32pt base)
-    var fontDisplay: Font { themedFont(baseSize: 32, weight: .light) }
-    var fontDisplayMedium: Font { themedFont(baseSize: 32, weight: useLightFonts ? .regular : .regular) }
+    var fontDisplay: Font { cachedTokens.fontDisplay }
+    var fontDisplayMedium: Font { cachedTokens.fontDisplayMedium }
 
     // MARK: - Theme Color Tokens
     // Returns themed colors based on active theme, falls back to system colors
@@ -610,16 +725,8 @@ class SettingsManager {
             return isDarkMode ? Color(white: 0.11) : Color(white: 0.97)
         }
         if isTerminalTheme {
-            // Terminal: Black in dark, paper-white in light
-            return isDarkMode ? Color.black : Color(white: 0.97)
-        }
-        if isWarmTheme {
-            // Warm: Rich brown-black in dark, warm cream in light
-            return isDarkMode ? Color(red: 0.08, green: 0.06, blue: 0.04) : Color(red: 0.99, green: 0.97, blue: 0.94)
-        }
-        if isClassicTheme {
-            // Classic: Dark gray in dark, clean white in light
-            return isDarkMode ? Color(white: 0.12) : Color(white: 0.98)
+            // Terminal: True black - Ghostty style
+            return Color.black
         }
         return Color(NSColor.windowBackgroundColor)
     }
@@ -637,13 +744,8 @@ class SettingsManager {
             return isDarkMode ? Color(white: 0.14) : Color(white: 0.94)
         }
         if isTerminalTheme {
-            return isDarkMode ? Color(white: 0.06) : Color(white: 0.94)
-        }
-        if isWarmTheme {
-            return isDarkMode ? Color(red: 0.12, green: 0.09, blue: 0.06) : Color(red: 0.96, green: 0.94, blue: 0.90)
-        }
-        if isClassicTheme {
-            return isDarkMode ? Color(white: 0.15) : Color(white: 0.95)
+            // Terminal: Very subtle elevation
+            return Color(white: 0.04)
         }
         return Color(NSColor.controlBackgroundColor)
     }
@@ -661,13 +763,8 @@ class SettingsManager {
             return isDarkMode ? Color(white: 0.18) : Color(white: 0.91)
         }
         if isTerminalTheme {
-            return isDarkMode ? Color(white: 0.10) : Color(white: 0.91)
-        }
-        if isWarmTheme {
-            return isDarkMode ? Color(red: 0.16, green: 0.12, blue: 0.08) : Color(red: 0.93, green: 0.90, blue: 0.86)
-        }
-        if isClassicTheme {
-            return isDarkMode ? Color(white: 0.18) : Color(white: 0.92)
+            // Terminal: Subtle card surface
+            return Color(white: 0.08)
         }
         return isDarkMode ? Color(white: 0.13) : Color(white: 0.94)
     }
@@ -685,15 +782,8 @@ class SettingsManager {
             return isDarkMode ? Color(white: 0.92) : Color(white: 0.12)
         }
         if isTerminalTheme {
-            // Terminal: Green in dark, dark green in light
-            return isDarkMode ? Color(red: 0.0, green: 0.85, blue: 0.0) : Color(red: 0.0, green: 0.35, blue: 0.0)
-        }
-        if isWarmTheme {
-            // Warm: Warm white in dark, rich brown in light
-            return isDarkMode ? Color(red: 1.0, green: 0.95, blue: 0.88) : Color(red: 0.25, green: 0.18, blue: 0.12)
-        }
-        if isClassicTheme {
-            return isDarkMode ? Color(white: 0.95) : Color(white: 0.10)
+            // Terminal: Light gray - clean, no gimmicks (Ghostty style)
+            return Color(white: 0.85)
         }
         return Color.primary
     }
@@ -711,13 +801,8 @@ class SettingsManager {
             return isDarkMode ? Color(white: 0.65) : Color(white: 0.38)
         }
         if isTerminalTheme {
-            return isDarkMode ? Color(red: 0.0, green: 0.65, blue: 0.0) : Color(red: 0.0, green: 0.45, blue: 0.0)
-        }
-        if isWarmTheme {
-            return isDarkMode ? Color(red: 0.85, green: 0.78, blue: 0.68) : Color(red: 0.45, green: 0.38, blue: 0.30)
-        }
-        if isClassicTheme {
-            return isDarkMode ? Color(white: 0.70) : Color(white: 0.35)
+            // Terminal: Dim gray - clean, no gimmicks
+            return Color(white: 0.55)
         }
         return Color.secondary
     }
@@ -735,13 +820,8 @@ class SettingsManager {
             return isDarkMode ? Color(white: 0.48) : Color(white: 0.50)
         }
         if isTerminalTheme {
-            return isDarkMode ? Color(red: 0.0, green: 0.45, blue: 0.0) : Color(red: 0.0, green: 0.55, blue: 0.0)
-        }
-        if isWarmTheme {
-            return isDarkMode ? Color(red: 0.65, green: 0.58, blue: 0.48) : Color(red: 0.55, green: 0.48, blue: 0.40)
-        }
-        if isClassicTheme {
-            return isDarkMode ? Color(white: 0.50) : Color(white: 0.50)
+            // Terminal: Subtle gray
+            return Color(white: 0.40)
         }
         return isDarkMode ? Color(white: 0.42) : Color(white: 0.58)
     }
@@ -759,13 +839,8 @@ class SettingsManager {
             return isDarkMode ? Color(white: 0.22) : Color(white: 0.88)
         }
         if isTerminalTheme {
-            return isDarkMode ? Color(red: 0.0, green: 0.3, blue: 0.0) : Color(red: 0.0, green: 0.6, blue: 0.0).opacity(0.3)
-        }
-        if isWarmTheme {
-            return isDarkMode ? Color(red: 0.3, green: 0.22, blue: 0.15) : Color(red: 0.85, green: 0.80, blue: 0.72)
-        }
-        if isClassicTheme {
-            return isDarkMode ? Color(white: 0.25) : Color(white: 0.85)
+            // Terminal: Thin gray border - minimal separation
+            return Color.white.opacity(0.12)
         }
         return Color(NSColor.separatorColor)
     }
@@ -1090,6 +1165,60 @@ class SettingsManager {
         contentFontStyle = theme.contentFontStyle
         accentColor = theme.accentColor
         fontSize = theme.fontSize
+
+        // Configure TalkieKit's ThemeConfig for design system tokens
+        applyThemeConfig(theme)
+    }
+
+    /// Apply theme configuration to TalkieKit's global ThemeConfig
+    /// This updates corner radii, fonts, and other design tokens
+    func applyThemeConfig(_ theme: ThemePreset? = nil) {
+        let activeTheme = theme ?? currentTheme
+        if let activeTheme = activeTheme {
+            ThemeConfig.configure(
+                cornerRadiusMultiplier: activeTheme.cornerRadiusMultiplier,
+                useLightFonts: activeTheme.usesLightFonts,
+                borderWidth: activeTheme.borderWidth,
+                customFontName: activeTheme.uiFontStyle == .jetbrainsMono ? "JetBrainsMono" : nil
+            )
+        } else {
+            ThemeConfig.reset()
+        }
+
+        // Recalculate all cached font tokens
+        recalculateCachedTokens()
+    }
+
+    /// Recalculate all cached theme tokens (called once per theme change)
+    private func recalculateCachedTokens() {
+        let lightFonts = useLightFonts
+        let scale = uiFontSize.scale
+        let style = uiFontStyle
+
+        // Helper to create themed font
+        func font(_ baseSize: CGFloat, _ weight: Font.Weight) -> Font {
+            style.font(size: baseSize * scale, weight: weight)
+        }
+
+        cachedTokens = CachedThemeTokens(
+            fontXS: font(10, lightFonts ? .regular : .regular),
+            fontXSMedium: font(10, lightFonts ? .medium : .medium),
+            fontXSBold: font(10, lightFonts ? .semibold : .semibold),
+            fontSM: font(11, lightFonts ? .regular : .regular),
+            fontSMMedium: font(11, lightFonts ? .medium : .medium),
+            fontSMBold: font(11, lightFonts ? .semibold : .semibold),
+            fontBody: font(13, lightFonts ? .regular : .regular),
+            fontBodyMedium: font(13, lightFonts ? .medium : .medium),
+            fontBodyBold: font(13, lightFonts ? .semibold : .semibold),
+            fontTitle: font(15, lightFonts ? .regular : .regular),
+            fontTitleMedium: font(15, lightFonts ? .medium : .medium),
+            fontTitleBold: font(15, lightFonts ? .semibold : .bold),
+            fontHeadline: font(18, lightFonts ? .regular : .regular),
+            fontHeadlineMedium: font(18, lightFonts ? .medium : .medium),
+            fontHeadlineBold: font(18, lightFonts ? .semibold : .bold),
+            fontDisplay: font(32, .light),
+            fontDisplayMedium: font(32, lightFonts ? .regular : .regular)
+        )
     }
 
     func applyAppearanceMode() {
@@ -1518,6 +1647,9 @@ class SettingsManager {
 
         // Apply appearance mode on launch
         applyAppearanceMode()
+
+        // Apply theme config to TalkieKit design tokens
+        applyThemeConfig()
 
         // Defer Core Data access until first use
         StartupProfiler.shared.mark("singleton.SettingsManager.done")

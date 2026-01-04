@@ -76,7 +76,7 @@ struct PermissionsSetupView: View {
                     }
                     .padding(Spacing.sm)
                     .background(colors.surfaceCard)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
 
                     // Microphone permission row (always shown)
                     PermissionRow(
@@ -232,11 +232,11 @@ private struct PermissionRow: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(
-                            RoundedRectangle(cornerRadius: 6)
+                            RoundedRectangle(cornerRadius: CornerRadius.xs)
                                 .fill(isHovered ? colors.accent : Color.clear)
                         )
                         .overlay(
-                            RoundedRectangle(cornerRadius: 6)
+                            RoundedRectangle(cornerRadius: CornerRadius.xs)
                                 .strokeBorder(colors.accent, lineWidth: 1.5)
                         )
                 }
@@ -246,7 +246,7 @@ private struct PermissionRow: View {
         }
         .padding(Spacing.sm)
         .background(colors.surfaceCard)
-        .cornerRadius(8)
+        .cornerRadius(CornerRadius.sm)
     }
 }
 
