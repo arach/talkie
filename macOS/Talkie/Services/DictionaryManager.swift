@@ -69,7 +69,10 @@ final class DictionaryManager: ObservableObject {
             // Migrate legacy format if needed
             try await DictionaryFileManager.shared.migrateFromLegacyFormat()
 
-            // Reload manifest after migration
+            // Migrate UUID filenames to name-based filenames
+            try await DictionaryFileManager.shared.migrateToNameBasedFilenames()
+
+            // Reload manifest after migrations
             try await DictionaryFileManager.shared.loadManifest()
 
             // Load all dictionaries

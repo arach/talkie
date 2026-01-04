@@ -67,7 +67,7 @@ struct ProviderCard<Content: View>: View {
         }
         .padding(16)
         .background(Theme.current.surface1)
-        .cornerRadius(8)
+        .cornerRadius(CornerRadius.sm)
     }
 }
 
@@ -130,7 +130,7 @@ struct ModelRow: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(Color.red.opacity(0.1))
-                        .cornerRadius(4)
+                        .cornerRadius(CornerRadius.xs)
                 }
                 .buttonStyle(.plain)
             } else {
@@ -145,14 +145,14 @@ struct ModelRow: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(settings.resolvedAccentColor.opacity(0.1))
-                    .cornerRadius(4)
+                    .cornerRadius(CornerRadius.xs)
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(12)
         .background(SettingsManager.shared.surfaceInput)
-        .cornerRadius(6)
+        .cornerRadius(CornerRadius.xs)
     }
 }
 
@@ -166,7 +166,7 @@ struct ActionButtonStyle: ButtonStyle {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(SettingsManager.shared.resolvedAccentColor)
-            .cornerRadius(4)
+            .cornerRadius(CornerRadius.xs)
             .opacity(configuration.isPressed ? 0.7 : 1.0)
     }
 }
@@ -382,7 +382,7 @@ struct CompactModelCard: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 7)
                     .background(Color.primary.opacity(isHovered ? 0.06 : 0.03))
-                    .cornerRadius(4)
+                    .cornerRadius(CornerRadius.xs)
                 }
                 .buttonStyle(.plain)
             } else {
@@ -404,9 +404,9 @@ struct CompactModelCard: View {
                             endPoint: .bottom
                         ))
                     )
-                    .cornerRadius(4)
+                    .cornerRadius(CornerRadius.xs)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 4)
+                        RoundedRectangle(cornerRadius: CornerRadius.xs)
                             .stroke(isHovered ? Color.accentColor.opacity(0.3) : settings.cardBorderDefault, lineWidth: 1)
                     )
                 }
@@ -427,9 +427,9 @@ struct CompactModelCard: View {
                 )
             }
         )
-        .cornerRadius(8)
+        .cornerRadius(CornerRadius.sm)
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
                 .stroke(
                     isHovered ? Theme.current.foreground.opacity(0.2) :
                     model.isInstalled ? settings.cardBorderActive : settings.cardBorderDefault,
@@ -574,7 +574,7 @@ struct CompactProviderCard: View {
                     .font(.system(size: 10, design: .monospaced))
                     .padding(6)
                     .background(Color.primary.opacity(0.05))
-                    .cornerRadius(4)
+                    .cornerRadius(CornerRadius.xs)
 
                 Spacer()
 
@@ -585,7 +585,7 @@ struct CompactProviderCard: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
                         .background(Color.primary.opacity(settings.specDividerOpacity))
-                        .cornerRadius(4)
+                        .cornerRadius(CornerRadius.xs)
                 }
                 .buttonStyle(.plain)
             }
@@ -593,9 +593,9 @@ struct CompactProviderCard: View {
             .frame(height: 140)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(settings.cardBackgroundHover)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
                     .stroke(settings.resolvedAccentColor.opacity(0.4), lineWidth: 1)
             )
             .opacity(isConfiguring ? 1 : 0)
@@ -720,9 +720,9 @@ struct CompactProviderCard: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 7)
                     .background(buttonBackground)
-                    .cornerRadius(4)
+                    .cornerRadius(CornerRadius.xs)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 4)
+                        RoundedRectangle(cornerRadius: CornerRadius.xs)
                             .stroke(isConfigured ? settings.cardBorderReady : settings.cardBorderDefault, lineWidth: 1)
                     )
                 }
@@ -742,9 +742,9 @@ struct CompactProviderCard: View {
                     )
                 }
             )
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
                     .stroke(
                         isHovered ? Theme.current.foreground.opacity(0.2) :
                         isConfigured ? settings.cardBorderActive : settings.cardBorderDefault,

@@ -29,7 +29,7 @@ struct ModelInstallView: View {
                     .foregroundColor(colors.accent)
                     .frame(width: 72, height: 72)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: CornerRadius.md)
                             .fill(colors.accent.opacity(0.15))
                     )
             },

@@ -187,7 +187,7 @@ struct DebugActionButton: View {
             .padding(.vertical, 4)
             .padding(.horizontal, 6)
             .background(Theme.current.surface2)
-            .cornerRadius(4)
+            .cornerRadius(CornerRadius.xs)
         }
         .buttonStyle(.plain)
     }
@@ -218,9 +218,9 @@ struct DebugStateTable: View {
             }
         }
         .background(Theme.current.surface1)
-        .cornerRadius(4)
+        .cornerRadius(CornerRadius.xs)
         .overlay(
-            RoundedRectangle(cornerRadius: 4)
+            RoundedRectangle(cornerRadius: CornerRadius.xs)
                 .strokeBorder(Color.gray.opacity(0.2), lineWidth: 0.5)
         )
     }
@@ -784,7 +784,7 @@ struct EngineProcessesDebugContent: View {
                     .padding(.vertical, 6)
                     .frame(maxWidth: .infinity)
                     .background(envColor)
-                    .cornerRadius(6)
+                    .cornerRadius(CornerRadius.xs)
                 }
                 .buttonStyle(.plain)
                 .disabled(isRestarting)
@@ -836,7 +836,7 @@ struct EngineProcessesDebugContent: View {
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
         .background(Theme.current.surface2)
-        .cornerRadius(4)
+        .cornerRadius(CornerRadius.xs)
     }
 
     private func refreshProcesses() {
@@ -1104,7 +1104,7 @@ struct MemoModelInspector: View {
                 content()
             }
             .background(Theme.current.surface2)
-            .cornerRadius(6)
+            .cornerRadius(CornerRadius.xs)
         }
     }
 
@@ -1324,7 +1324,7 @@ struct AudioPaddingTestView: View {
                     }
                     .padding()
                     .background(Theme.current.surface2)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
 
                     // Test controls
                     HStack(spacing: 8) {
@@ -1386,7 +1386,7 @@ struct AudioPaddingTestView: View {
                     }
                     .padding()
                     .background(Theme.current.surface2)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
                 }
                 .padding()
             }
@@ -1431,14 +1431,14 @@ struct AudioPaddingTestView: View {
                     .textSelection(.enabled)
                     .padding(8)
                     .background(Theme.current.surface1)
-                    .cornerRadius(4)
+                    .cornerRadius(CornerRadius.xs)
             }
         }
         .padding()
         .background(Theme.current.surface2)
-        .cornerRadius(8)
+        .cornerRadius(CornerRadius.sm)
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
                 .strokeBorder(result.isRunning ? Color.accentColor : Color.clear, lineWidth: 2)
         )
     }

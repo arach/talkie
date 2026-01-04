@@ -88,10 +88,10 @@ struct StatusCheckView: View {
                 }
                 .frame(width: 72, height: 72)
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
                         .fill(colors.accent.opacity(0.08))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 8)
+                            RoundedRectangle(cornerRadius: CornerRadius.sm)
                                 .strokeBorder(colors.accent.opacity(0.3), lineWidth: 1)
                         )
                 )

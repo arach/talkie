@@ -48,7 +48,7 @@ struct ExpandableModelFamilyCard: View {
             Button(action: onToggle) {
                 HStack(spacing: 12) {
                     // Family icon placeholder
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
                         .fill(settings.midnightSurfaceElevated)
                         .frame(width: 32, height: 32)
                         .overlay(
@@ -171,11 +171,11 @@ struct ExpandableModelFamilyCard: View {
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
                 .fill(isHovered ? settings.midnightSurfaceHover : settings.midnightSurface)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
                 .stroke(
                     isExpanded ? settings.midnightBorderActive : (isHovered ? settings.midnightBorderActive : settings.midnightBorder),
                     lineWidth: 1
@@ -299,7 +299,7 @@ struct ModelVariantRow: View {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background(settings.midnightButtonPrimary)
-                        .cornerRadius(4)
+                        .cornerRadius(CornerRadius.xs)
                     }
                     .buttonStyle(.plain)
                 }
@@ -347,7 +347,7 @@ struct ExpandableSTTCard<Content: View>: View {
             Button(action: onToggle) {
                 HStack(spacing: 12) {
                     // Icon placeholder
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
                         .fill(settings.midnightSurfaceElevated)
                         .frame(width: 32, height: 32)
                         .overlay(
@@ -449,11 +449,11 @@ struct ExpandableSTTCard<Content: View>: View {
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
                 .fill(isHovered ? settings.midnightSurfaceHover : settings.midnightSurface)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
                 .stroke(
                     isExpanded ? settings.midnightBorderActive : (isHovered ? settings.midnightBorderActive : settings.midnightBorder),
                     lineWidth: 1
@@ -602,7 +602,7 @@ struct STTVariantRow: View {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
                         .background(settings.midnightButtonPrimary)
-                        .cornerRadius(4)
+                        .cornerRadius(CornerRadius.xs)
                     }
                     .buttonStyle(.plain)
                 }

@@ -236,7 +236,7 @@ struct ParakeetModelCard: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 7)
                     .background(Color.primary.opacity(isHovered ? 0.06 : 0.03))
-                    .cornerRadius(4)
+                    .cornerRadius(CornerRadius.xs)
                 }
                 .buttonStyle(.plain)
             } else {
@@ -258,9 +258,9 @@ struct ParakeetModelCard: View {
                             endPoint: .bottom
                         ))
                     )
-                    .cornerRadius(4)
+                    .cornerRadius(CornerRadius.xs)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 4)
+                        RoundedRectangle(cornerRadius: CornerRadius.xs)
                             .stroke(isHovered ? Color.accentColor.opacity(0.3) : settings.cardBorderDefault, lineWidth: 1)
                     )
                 }
@@ -283,9 +283,9 @@ struct ParakeetModelCard: View {
                 )
             }
         )
-        .cornerRadius(8)
+        .cornerRadius(CornerRadius.sm)
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
                 .stroke(
                     isHovered ? Theme.current.foreground.opacity(0.2) :
                     isLoaded ? settings.cardBorderActive :

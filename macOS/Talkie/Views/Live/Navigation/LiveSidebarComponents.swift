@@ -68,7 +68,7 @@ struct SidebarNavItem: View {
                         .foregroundColor(foregroundColor)
                         .frame(width: 32, height: 28)
                         .background(
-                            RoundedRectangle(cornerRadius: 6)
+                            RoundedRectangle(cornerRadius: CornerRadius.xs)
                                 .fill(backgroundColor)
                         )
 
@@ -104,7 +104,7 @@ struct SidebarNavItem: View {
                 .padding(.horizontal, 10)
                 .frame(height: 28)
                 .background(
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
                         .fill(backgroundColor)
                 )
                 .padding(.horizontal, 6)
@@ -134,7 +134,7 @@ struct CollapsedNavButton: View {
                     .foregroundColor(isSelected ? .white : (isHovered ? TalkieTheme.textSecondary : TalkieTheme.textTertiary))
                     .frame(width: 36, height: 32)
                     .background(
-                        RoundedRectangle(cornerRadius: 6)
+                        RoundedRectangle(cornerRadius: CornerRadius.xs)
                             .fill(isSelected ? Color.accentColor.opacity(0.3) : (isHovered ? TalkieTheme.border : Color.clear))
                     )
 
@@ -145,7 +145,7 @@ struct CollapsedNavButton: View {
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)
                         .background(Color.accentColor)
-                        .cornerRadius(6)
+                        .cornerRadius(CornerRadius.xs)
                         .offset(x: 4, y: -4)
                 }
             }

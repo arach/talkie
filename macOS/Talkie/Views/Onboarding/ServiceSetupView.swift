@@ -148,7 +148,7 @@ private struct ServiceStatusRow: View {
         }
         .padding(Spacing.sm)
         .background(colors.surfaceCard)
-        .cornerRadius(8)
+        .cornerRadius(CornerRadius.sm)
     }
 }
 

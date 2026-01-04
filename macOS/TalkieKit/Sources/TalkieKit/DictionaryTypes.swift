@@ -73,20 +73,50 @@ public enum DictionarySource: Codable, Equatable, Sendable {
 // MARK: - Match Type
 
 public enum DictionaryMatchType: String, Codable, CaseIterable, Sendable {
-    case exact           // Word boundary match (e.g., "react" matches "react" but not "reaction")
-    case caseInsensitive // Case-insensitive anywhere (e.g., "React", "REACT", "react" all match)
+    case word            // Word boundary match (e.g., "clawd" matches "clawd" but not "clawding")
+    case phrase          // Case-insensitive multi-word match (e.g., "open ai" → "OpenAI")
+    case regex           // Regex with capture groups (e.g., "v(\d+)" → "version $1")
+    case fuzzy           // Fuzzy match for technical terms (e.g., "Claude" catches "clawd", "claud")
 
     public var displayName: String {
         switch self {
-        case .exact: return "Exact Word"
-        case .caseInsensitive: return "Case Insensitive"
+        case .word: return "Word"
+        case .phrase: return "Phrase"
+        case .regex: return "Regex"
+        case .fuzzy: return "Fuzzy"
         }
     }
 
     public var description: String {
         switch self {
-        case .exact: return "Match whole words only"
-        case .caseInsensitive: return "Match anywhere, ignore case"
+        case .word: return "Match whole words only"
+        case .phrase: return "Match phrase, ignore case"
+        case .regex: return "Regular expression with $1, $2 capture groups"
+        case .fuzzy: return "Approximate match for misspellings/mishearings"
+        }
+    }
+
+    // MARK: - Legacy Decoding Support
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+
+        // Map legacy values to new ones
+        switch rawValue {
+        case "exact":
+            self = .word
+        case "caseInsensitive":
+            self = .phrase
+        default:
+            if let value = DictionaryMatchType(rawValue: rawValue) {
+                self = value
+            } else {
+                throw DecodingError.dataCorruptedError(
+                    in: container,
+                    debugDescription: "Unknown matchType: \(rawValue)"
+                )
+            }
         }
     }
 }
@@ -107,7 +137,7 @@ public struct DictionaryEntry: Codable, Identifiable, Equatable, Sendable {
         id: UUID = UUID(),
         trigger: String,
         replacement: String,
-        matchType: DictionaryMatchType = .exact,
+        matchType: DictionaryMatchType = .word,
         isEnabled: Bool = true,
         category: String? = nil,
         createdAt: Date = Date(),
