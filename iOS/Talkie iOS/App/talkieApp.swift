@@ -20,6 +20,9 @@ struct talkieApp: App {
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @State private var showOnboarding = false
 
+    // Splash screen - shown until main view is ready
+    @State private var isLoading = true
+
     // MARK: - Background Task Identifiers
     static let refreshTaskIdentifier = "jdi.talkie-os.refresh"
     static let syncTaskIdentifier = "jdi.talkie-os.sync"
@@ -34,43 +37,56 @@ struct talkieApp: App {
     var body: some Scene {
         WindowGroup {
             ZStack {
-                VoiceMemoListView()
-                    .environment(\.managedObjectContext, persistenceController.container.viewContext)
-                    .environmentObject(deepLinkManager)
-                    .onOpenURL { url in
-                        deepLinkManager.handle(url: url)
-                    }
-                    .onAppear {
-                        // Show onboarding on first launch
-                        if !hasSeenOnboarding {
+                if isLoading {
+                    SplashView()
+                        .transition(.opacity)
+                } else {
+                    VoiceMemoListView()
+                        .environment(\.managedObjectContext, persistenceController.container.viewContext)
+                        .environmentObject(deepLinkManager)
+                        .onOpenURL { url in
+                            deepLinkManager.handle(url: url)
+                        }
+                        .onAppear {
+                            // Show onboarding on first launch
+                            if !hasSeenOnboarding {
+                                showOnboarding = true
+                            }
+                        }
+                        .onReceive(NotificationCenter.default.publisher(for: Self.showOnboardingNotification)) { _ in
                             showOnboarding = true
                         }
-                    }
-                    .onReceive(NotificationCenter.default.publisher(for: Self.showOnboardingNotification)) { _ in
-                        showOnboarding = true
-                    }
-                    .fullScreenCover(isPresented: $showOnboarding) {
-                        OnboardingView(
-                            hasSeenOnboarding: $hasSeenOnboarding,
-                            onStartRecording: {
-                                // Trigger recording via deep link manager
-                                deepLinkManager.pendingAction = .record
-                            }
-                        )
-                    }
+                        .fullScreenCover(isPresented: $showOnboarding) {
+                            OnboardingView(
+                                hasSeenOnboarding: $hasSeenOnboarding,
+                                onStartRecording: {
+                                    // Trigger recording via deep link manager
+                                    deepLinkManager.pendingAction = .record
+                                }
+                            )
+                        }
+                        .transition(.opacity)
 
-                #if DEBUG
-                DebugToolbarOverlay(
-                    content: {
-                        ListViewDebugContent()
-                    },
-                    debugInfo: {
-                        [
-                            "View": "MemoList"
-                        ]
-                    }
-                )
-                #endif
+                    #if DEBUG
+                    DebugToolbarOverlay(
+                        content: {
+                            ListViewDebugContent()
+                        },
+                        debugInfo: {
+                            [
+                                "View": "MemoList"
+                            ]
+                        }
+                    )
+                    #endif
+                }
+            }
+            .animation(.easeInOut(duration: 0.3), value: isLoading)
+            .onAppear {
+                // Transition immediately - no artificial delay
+                withAnimation {
+                    isLoading = false
+                }
             }
         }
     }

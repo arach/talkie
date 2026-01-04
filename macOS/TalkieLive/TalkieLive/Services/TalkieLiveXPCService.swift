@@ -207,6 +207,45 @@ final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol, Observ
         }
     }
 
+    nonisolated func injectForSession(_ text: String, sessionId: String, reply: @escaping (Bool, String?) -> Void) {
+        Task { @MainActor in
+            NSLog("[TalkieLiveXPC] Inject for session: \(sessionId), text: \(text.prefix(50))...")
+
+            // Look up the terminal context for this session
+            var context = BridgeContextMapper.shared.getContext(for: sessionId)
+
+            if context == nil {
+                // Context not found - try a terminal scan first
+                NSLog("[TalkieLiveXPC] No cached context for session, attempting terminal scan...")
+                BridgeContextMapper.shared.refreshFromScan()
+                context = BridgeContextMapper.shared.getContext(for: sessionId)
+            }
+
+            guard let ctx = context else {
+                NSLog("[TalkieLiveXPC] Could not find terminal for session: \(sessionId)")
+                reply(false, "No terminal found for session '\(sessionId)'. Try dictating in that session first.")
+                return
+            }
+
+            NSLog("[TalkieLiveXPC] Injecting into \(ctx.app) (\(ctx.bundleId))")
+
+            // Use TextInserter to inject the text
+            let success = await TextInserter.shared.insert(
+                text,
+                intoAppWithBundleID: ctx.bundleId,
+                replaceSelection: false
+            )
+
+            if success {
+                NSLog("[TalkieLiveXPC] Text injected successfully into \(ctx.app)")
+                reply(true, nil)
+            } else {
+                NSLog("[TalkieLiveXPC] Text injection failed for \(ctx.app)")
+                reply(false, "Injection failed")
+            }
+        }
+    }
+
     private func checkScreenRecordingPermission() -> Bool {
         // Screen recording permission check - try to get window info
         guard let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else {

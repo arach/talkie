@@ -32,9 +32,14 @@ class OnDeviceAIService: ObservableObject {
     /// Check if on-device AI is available
     func checkAvailability() async {
         #if canImport(FoundationModels)
-        let availability = LanguageModelSession.Availability.current
-        isAvailable = availability == .available
-        AppLogger.ai.info("On-device AI availability: \(String(describing: availability))")
+        if #available(iOS 26.0, *) {
+            // FoundationModels available on iOS 26+
+            isAvailable = true
+            AppLogger.ai.info("On-device AI: Available (iOS 26+)")
+        } else {
+            isAvailable = false
+            AppLogger.ai.info("On-device AI: Requires iOS 26.0+")
+        }
         #else
         isAvailable = false
         AppLogger.ai.info("On-device AI: FoundationModels not available on this platform")
@@ -45,6 +50,10 @@ class OnDeviceAIService: ObservableObject {
     func generateSmartTitle(for transcript: String) async throws -> String {
         #if canImport(FoundationModels)
         guard isAvailable else {
+            throw OnDeviceAIError.notAvailable
+        }
+
+        guard #available(iOS 26.0, *) else {
             throw OnDeviceAIError.notAvailable
         }
 
@@ -79,6 +88,10 @@ class OnDeviceAIService: ObservableObject {
             throw OnDeviceAIError.notAvailable
         }
 
+        guard #available(iOS 26.0, *) else {
+            throw OnDeviceAIError.notAvailable
+        }
+
         isProcessing = true
         defer { isProcessing = false }
 
@@ -102,6 +115,10 @@ class OnDeviceAIService: ObservableObject {
     func extractTasks(from transcript: String) async throws -> String {
         #if canImport(FoundationModels)
         guard isAvailable else {
+            throw OnDeviceAIError.notAvailable
+        }
+
+        guard #available(iOS 26.0, *) else {
             throw OnDeviceAIError.notAvailable
         }
 

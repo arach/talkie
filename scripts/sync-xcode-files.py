@@ -6,10 +6,24 @@ Scans for .swift files not in project.pbxproj and adds them to the correct
 PBXGroup, preserving folder structure. Creates backup before any changes.
 
 Usage:
-    ./sync-xcode-files.py              # Add missing files to project
-    ./sync-xcode-files.py --check      # List missing files (no changes)
-    ./sync-xcode-files.py --dry-run    # Simulate add (no changes)
-    ./sync-xcode-files.py --diff       # Show unified diff (no changes)
+    ./sync-xcode-files.py [project] [options] [--only PATTERN]
+
+Projects:
+    macos       Talkie macOS app (default)
+    ios         Talkie iOS app
+
+Options:
+    --check       List missing files (no changes)
+    --dry-run     Simulate add (no changes)
+    --diff        Show unified diff (no changes)
+    --only PAT    Only sync files matching pattern (e.g., "Bridge/*")
+
+Examples:
+    ./sync-xcode-files.py                         # Sync macOS (default)
+    ./sync-xcode-files.py macos --check           # Check macOS project
+    ./sync-xcode-files.py ios                     # Sync iOS project
+    ./sync-xcode-files.py ios --check             # Check iOS project
+    ./sync-xcode-files.py ios --only "Bridge/*"   # Only sync Bridge files
 
 What it does:
     1. Finds .swift files on disk not in project.pbxproj
@@ -28,8 +42,24 @@ import shutil
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-PROJECT_DIR = Path("/Users/arach/dev/talkie/macOS/Talkie")
-PBXPROJ = PROJECT_DIR / "Talkie.xcodeproj" / "project.pbxproj"
+# Get the repo root (parent of scripts/)
+REPO_ROOT = Path(__file__).parent.parent.resolve()
+
+# Project configurations
+PROJECTS = {
+    'macos': {
+        'source_dir': REPO_ROOT / 'macOS' / 'Talkie',
+        'pbxproj': REPO_ROOT / 'macOS' / 'Talkie' / 'Talkie.xcodeproj' / 'project.pbxproj',
+    },
+    'ios': {
+        'source_dir': REPO_ROOT / 'iOS' / 'Talkie iOS',
+        'pbxproj': REPO_ROOT / 'iOS' / 'Talkie OS.xcodeproj' / 'project.pbxproj',
+    },
+    'live': {
+        'source_dir': REPO_ROOT / 'macOS' / 'TalkieLive' / 'TalkieLive',
+        'pbxproj': REPO_ROOT / 'macOS' / 'TalkieLive' / 'TalkieLive.xcodeproj' / 'project.pbxproj',
+    },
+}
 
 # Directories to skip
 SKIP_DIRS = {'build', '.build', 'DerivedData', 'Packages', '.swiftpm', 'xcshareddata'}
@@ -40,10 +70,10 @@ def generate_uuid():
     return uuid.uuid4().hex[:24].upper()
 
 
-def find_swift_files():
+def find_swift_files(source_dir: Path):
     """Find all .swift files in project, excluding build dirs."""
     swift_files = []
-    for root, dirs, files in os.walk(PROJECT_DIR):
+    for root, dirs, files in os.walk(source_dir):
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.endswith('.xcodeproj')]
         for f in files:
             if f.endswith('.swift'):
@@ -206,10 +236,10 @@ def ensure_group_path(content: str, path_parts: List[str]) -> Tuple[str, str]:
     return content, current_group_id
 
 
-def add_file_to_project(content: str, filepath: Path) -> str:
+def add_file_to_project(content: str, filepath: Path, source_dir: Path) -> str:
     """Add a Swift file to the project.pbxproj with proper group handling."""
     filename = filepath.name
-    rel_path = filepath.relative_to(PROJECT_DIR)
+    rel_path = filepath.relative_to(source_dir)
     path_parts = list(rel_path.parts[:-1])  # Directory parts without filename
 
     file_ref_id = generate_uuid()
@@ -261,28 +291,68 @@ def add_file_to_project(content: str, filepath: Path) -> str:
 
 def main():
     import difflib
+    import fnmatch
 
-    check_only = '--check' in sys.argv
-    dry_run = '--dry-run' in sys.argv
-    show_diff = '--diff' in sys.argv
+    # Parse arguments
+    argv = sys.argv[1:]
 
-    if not PBXPROJ.exists():
-        print(f"Error: {PBXPROJ} not found")
+    check_only = '--check' in argv
+    dry_run = '--dry-run' in argv
+    show_diff = '--diff' in argv
+
+    # Parse --only pattern
+    only_pattern = None
+    if '--only' in argv:
+        idx = argv.index('--only')
+        if idx + 1 < len(argv):
+            only_pattern = argv[idx + 1]
+            argv = argv[:idx] + argv[idx+2:]  # Remove --only and its value
+
+    # Get positional args (project name)
+    args = [a for a in argv if not a.startswith('-')]
+
+    # Determine project (default to macos)
+    project_name = args[0] if args else 'macos'
+
+    if project_name not in PROJECTS:
+        print(f"Error: Unknown project '{project_name}'")
+        print(f"Available: {', '.join(PROJECTS.keys())}")
         sys.exit(1)
 
-    print(f"Scanning {PROJECT_DIR}...")
-    print()
+    project = PROJECTS[project_name]
+    source_dir = project['source_dir']
+    pbxproj = project['pbxproj']
 
-    with open(PBXPROJ, 'r', encoding='utf-8') as f:
+    if not pbxproj.exists():
+        print(f"Error: {pbxproj} not found")
+        sys.exit(1)
+
+    with open(pbxproj, 'r', encoding='utf-8') as f:
         original_content = f.read()
+
+    # Check if project uses PBXFileSystemSynchronizedRootGroup (Xcode auto-sync)
+    if 'PBXFileSystemSynchronizedRootGroup' in original_content:
+        print(f"Project uses Xcode file system synchronization.")
+        print(f"Files in {source_dir.name} are automatically synced by Xcode.")
+        print()
+        print("✓ No manual sync needed - just add files to the folder!")
+        return
+
+    print(f"Scanning {source_dir}...")
+    print()
 
     content = original_content
     existing_files = get_files_in_project(content)
-    all_swift_files = find_swift_files()
+    all_swift_files = find_swift_files(source_dir)
 
     missing = []
     for filepath in all_swift_files:
         if filepath.name not in existing_files:
+            rel_path = str(filepath.relative_to(source_dir))
+            # Apply --only filter if specified
+            if only_pattern:
+                if not fnmatch.fnmatch(rel_path, only_pattern):
+                    continue
             missing.append(filepath)
 
     if not missing:
@@ -293,7 +363,7 @@ def main():
     print()
 
     for f in missing:
-        rel = f.relative_to(PROJECT_DIR)
+        rel = f.relative_to(source_dir)
         print(f"  {rel}")
     print()
 
@@ -303,7 +373,7 @@ def main():
 
     # Process all files
     for filepath in missing:
-        content = add_file_to_project(content, filepath)
+        content = add_file_to_project(content, filepath, source_dir)
 
     if show_diff:
         # Show unified diff
@@ -326,10 +396,10 @@ def main():
         return
 
     # Actually write changes
-    backup_path = str(PBXPROJ) + '.backup'
-    shutil.copy(PBXPROJ, backup_path)
+    backup_path = str(pbxproj) + '.backup'
+    shutil.copy(pbxproj, backup_path)
 
-    with open(PBXPROJ, 'w', encoding='utf-8') as f:
+    with open(pbxproj, 'w', encoding='utf-8') as f:
         f.write(content)
 
     print(f"✓ Added {len(missing)} file(s)")

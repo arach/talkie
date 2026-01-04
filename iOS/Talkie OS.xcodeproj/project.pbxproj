@@ -753,8 +753,12 @@
 				INFOPLIST_FILE = "Talkie iOS/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Talkie AI OS";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_LSRequiresIPhoneOS = YES;
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = NO;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talkie AI OS needs access to your microphone to record voice memos.";
+				INFOPLIST_KEY_NSRemindersUsageDescription = "Talkie can create reminders from your voice memos so you don't forget important tasks.";
+				INFOPLIST_KEY_NSSiriUsageDescription = "Talkie uses Siri to let you record voice memos, play recordings, and search your memos hands-free.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Talkie AI OS uses speech recognition to transcribe your voice memos.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -793,8 +797,12 @@
 				INFOPLIST_FILE = "Talkie iOS/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Talkie AI OS";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_LSRequiresIPhoneOS = YES;
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = NO;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talkie AI OS needs access to your microphone to record voice memos.";
+				INFOPLIST_KEY_NSRemindersUsageDescription = "Talkie can create reminders from your voice memos so you don't forget important tasks.";
+				INFOPLIST_KEY_NSSiriUsageDescription = "Talkie uses Siri to let you record voice memos, play recordings, and search your memos hands-free.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Talkie AI OS uses speech recognition to transcribe your voice memos.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

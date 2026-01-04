@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7A2D93597AC44FEB88B34C47 /* BridgeInjectServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 088F3AE6BE3A4237A5188C43 /* BridgeInjectServer.swift */; };
+		808536C18ADD48A0BFDB371C /* BridgeSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 805F1333DAE245AEBFE04E6A /* BridgeSettingsView.swift */; };
+		41998ACBBF7B48BBB3490535 /* BridgeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 018F97247E794D7EBEC94E30 /* BridgeManager.swift */; };
 		19854BACDC1E4E8F864DF3D0 /* APIKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56A632BC7AAB4BE4A5DCAC28 /* APIKeyStore.swift */; };
 		E70B85D4A1BE44518892942C /* RadioButtonRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = C14D7861F4B14F6CB942F04F /* RadioButtonRow.swift */; };
 		0E5DFF0FB4C0437BACAEF540 /* TTSVoicesSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 728B25DE3B5B4697947A1CB0 /* TTSVoicesSettingsView.swift */; };
@@ -128,7 +131,6 @@
 		642DEC0586D865075007587F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6BEF4F1CF83704DC4DED4C4 /* AppDelegate.swift */; };
 		C6BD795A767D422EB2F5E9D1 /* StartupProfiler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56B45E22F4CA4E19AAE930E7 /* StartupProfiler.swift */; };
 		65203124384564E9FF2BE845 /* DesignAuditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E75FED0DCD51602D30AD94C8 /* DesignAuditor.swift */; };
-		6562B1C0819BB0A465A98458 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F32E922E7292E91230F71AD6 /* SettingsView.swift */; };
 		673E5DD45505795431156EAB /* TranscriptFileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5699D36DE5FDBFFC9D5DB2AC /* TranscriptFileManager.swift */; };
 		67A5249D6D764042BF21594F /* TalkieKit in Frameworks */ = {isa = PBXBuildFile; productRef = 46A4FF7ED5361369A679A309 /* TalkieKit */; };
 		67CD427670A2C17B12FACBDE /* WhisperModelViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BF85D803DB667E4820E2185 /* WhisperModelViews.swift */; };
@@ -257,6 +259,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		088F3AE6BE3A4237A5188C43 /* BridgeInjectServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeInjectServer.swift; sourceTree = "<group>"; };
+		805F1333DAE245AEBFE04E6A /* BridgeSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeSettingsView.swift; sourceTree = "<group>"; };
+		018F97247E794D7EBEC94E30 /* BridgeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeManager.swift; sourceTree = "<group>"; };
 		56A632BC7AAB4BE4A5DCAC28 /* APIKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeyStore.swift; sourceTree = "<group>"; };
 		C14D7861F4B14F6CB942F04F /* RadioButtonRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioButtonRow.swift; sourceTree = "<group>"; };
 		728B25DE3B5B4697947A1CB0 /* TTSVoicesSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSVoicesSettingsView.swift; sourceTree = "<group>"; };
@@ -488,7 +493,6 @@
 		ED8D0AE79E98863550265B7E /* CompleteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompleteView.swift; sourceTree = "<group>"; };
 		EDF6CBE76775757D53F5AF8E /* WFKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = WFKit; path = ../../Packages/WFKit; sourceTree = SOURCE_ROOT; };
 		F07283F6C46D066449E6FB15 /* NavigationViewNative.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationViewNative.swift; sourceTree = "<group>"; };
-		F32E922E7292E91230F71AD6 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		F426003DF3F7E075603239CB /* InterstitialEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterstitialEditorView.swift; sourceTree = "<group>"; };
 		F4D4E2DB27710F96580E45D2 /* settings-02-dictation-output.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "settings-02-dictation-output.png"; sourceTree = "<group>"; };
 		F59DE59E8322331AC2B7ABB2 /* LiveDictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveDictation.swift; sourceTree = "<group>"; };
@@ -521,6 +525,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		7DD42E5F214F4DCB917FFA3E /* Bridge */ = {
+			isa = PBXGroup;
+			children = (
+				018F97247E794D7EBEC94E30 /* BridgeManager.swift */,
+			);
+			path = Bridge;
+			sourceTree = "<group>";
+		};
 		9A88BE828DAF4F20853DEEA5 /* DurableQueue */ = {
 			isa = PBXGroup;
 			children = (
@@ -814,6 +826,7 @@
 		9A4651765758DD61801D03CA /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				805F1333DAE245AEBFE04E6A /* BridgeSettingsView.swift */,
 				728B25DE3B5B4697947A1CB0 /* TTSVoicesSettingsView.swift */,
 				5A2D3F324B964FFBAE1A4AE0 /* DictionarySettings.swift */,
 				C17881FF95CCD644641D298E /* APISettings.swift */,
@@ -834,7 +847,6 @@
 				FDDE4E10FB667DA80E5BD1E5 /* QuickActionsSettings.swift */,
 				B6A2AA3D0376EDA1A44A3C31 /* QuickOpenSettings.swift */,
 				4AACC22A4D152DCBFB30FE56 /* SettingsColumns.swift */,
-				F32E922E7292E91230F71AD6 /* SettingsView.swift */,
 				E4EB7B1A21E7830A24BDD98E /* StorageSettings.swift */,
 				888ED1B8358260357AC807D8 /* TranscriptionModelsSettingsView.swift */,
 				0AE0F9BE138BF58E1192F3E9 /* WorkflowSettings.swift */,
@@ -1041,6 +1053,8 @@
 		FDD3B1848425C2C039CA5F59 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				088F3AE6BE3A4237A5188C43 /* BridgeInjectServer.swift */,
+				7DD42E5F214F4DCB917FFA3E /* Bridge */,
 				56A632BC7AAB4BE4A5DCAC28 /* APIKeyStore.swift */,
 				33DC872F33B04F1C87FD2D74 /* DictionaryManager.swift */,
 				9A88BE828DAF4F20853DEEA5 /* DurableQueue */,
@@ -1198,6 +1212,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7A2D93597AC44FEB88B34C47 /* BridgeInjectServer.swift in Sources */,
+				808536C18ADD48A0BFDB371C /* BridgeSettingsView.swift in Sources */,
+				41998ACBBF7B48BBB3490535 /* BridgeManager.swift in Sources */,
 				19854BACDC1E4E8F864DF3D0 /* APIKeyStore.swift in Sources */,
 				E70B85D4A1BE44518892942C /* RadioButtonRow.swift in Sources */,
 				0E5DFF0FB4C0437BACAEF540 /* TTSVoicesSettingsView.swift in Sources */,
@@ -1352,7 +1369,6 @@
 				1EC0957F58331301CC08CCD6 /* SettingsColumns.swift in Sources */,
 				CA38C7C6CFE0057E73773A3B /* SettingsManager.swift in Sources */,
 				5CBBC212A591778A4B9E9EF4 /* SettingsStoryboardGenerator.swift in Sources */,
-				6562B1C0819BB0A465A98458 /* SettingsView.swift in Sources */,
 				0F7AC4BF4EB64F0D041321EF /* SmartAction.swift in Sources */,
 				48030E4892BF38C862F53F32 /* SoundManager.swift in Sources */,
 				FC33C6A3FA04C2738A9B4D66 /* SoundPicker.swift in Sources */,

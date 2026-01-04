@@ -51,6 +51,17 @@ public var kTalkieEngineXPCServiceName: String {
     ///   - bundleID: Bundle identifier of the target app (nil = frontmost app)
     ///   - reply: Callback with success status
     func pasteText(_ text: String, toAppWithBundleID bundleID: String?, reply: @escaping (_ success: Bool) -> Void)
+
+    /// Inject text into a Claude session's terminal (for iOS Bridge)
+    ///
+    /// Looks up the terminal context for the given session ID from BridgeContextMapper,
+    /// then injects the text using TextInserter.
+    ///
+    /// - Parameters:
+    ///   - text: The text to inject
+    ///   - sessionId: Claude session ID (e.g., "-Users-arach-dev-talkie")
+    ///   - reply: Callback with success status and optional error message
+    func injectForSession(_ text: String, sessionId: String, reply: @escaping (_ success: Bool, _ error: String?) -> Void)
 }
 
 /// Protocol for Talkie to receive callbacks from TalkieLive (Live → Talkie events)

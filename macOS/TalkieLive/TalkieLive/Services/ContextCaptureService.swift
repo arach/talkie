@@ -235,6 +235,9 @@ final class ContextCaptureService {
             await MainActor.run {
                 LiveDatabase.updateMetadata(id: utteranceId, metadata: merged)
                 log.debug("Enriched context for utterance \(utteranceId)")
+
+                // Update bridge session-context mapping
+                BridgeContextMapper.shared.updateAfterDictation(metadata: merged)
             }
         }
     }
