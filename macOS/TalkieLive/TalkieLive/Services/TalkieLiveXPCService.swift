@@ -145,6 +145,30 @@ final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol, Observ
         }
     }
 
+    // MARK: - Ambient Mode
+
+    /// Notify observers about an ambient voice command
+    /// Called by AmbientController when a command is captured
+    func notifyAmbientCommand(_ command: String, duration: TimeInterval, bufferContext: String?) {
+        broadcastAmbientCommand(command: command, duration: duration, bufferContext: bufferContext)
+    }
+
+    private func broadcastAmbientCommand(command: String, duration: TimeInterval, bufferContext: String?) {
+        // Notify all connected observers (XPC)
+        for connection in observers {
+            guard let observer = connection.remoteObjectProxyWithErrorHandler({ error in
+                NSLog("[TalkieLiveXPC] ⚠️ Error sending ambient command to observer: \(error)")
+            }) as? TalkieLiveStateObserverProtocol else { continue }
+
+            observer.ambientCommandReceived(command: command, duration: duration, bufferContext: bufferContext)
+        }
+
+        // Also send URL notification for decoupled handling
+        TalkieNotifier.shared.ambientCommand(command)
+
+        NSLog("[TalkieLiveXPC] ✓ Ambient command broadcasted to \(observers.count) observers: '\(command.prefix(50))...'")
+    }
+
     // MARK: - TalkieLiveXPCServiceProtocol
 
     nonisolated func getCurrentState(reply: @escaping (String, TimeInterval, Int32) -> Void) {

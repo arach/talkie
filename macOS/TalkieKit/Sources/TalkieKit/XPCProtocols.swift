@@ -63,6 +63,14 @@ public var kTalkieEngineXPCServiceName: String {
 
     /// Called when audio level changes (throttled to ~2Hz)
     func audioLevelDidChange(level: Float)
+
+    /// Called when ambient mode captures a voice command
+    /// TalkieLive handles wake phrase detection; this delivers the command text
+    /// - Parameters:
+    ///   - command: The voice command text (between wake and end phrases)
+    ///   - duration: How long the command took to speak
+    ///   - bufferContext: Optional recent transcript for context retrieval
+    func ambientCommandReceived(command: String, duration: TimeInterval, bufferContext: String?)
 }
 
 // MARK: - TalkieEngine XPC Protocol
@@ -226,6 +234,40 @@ public var kTalkieEngineXPCServiceName: String {
 
     /// Get TTS status (loaded, idle time since last use)
     func getTTSStatus(reply: @escaping (_ isLoaded: Bool, _ idleSeconds: Double) -> Void)
+
+    // MARK: - Streaming ASR
+
+    /// Start a streaming ASR session for real-time transcription
+    ///
+    /// Spawns the streaming-asr pod if not already running and begins a new session.
+    /// Audio chunks can then be fed via `feedStreamingASR`.
+    ///
+    /// - Parameters:
+    ///   - reply: Callback with session ID (UUID string) or error message
+    func startStreamingASR(_ reply: @escaping (_ sessionId: String?, _ error: String?) -> Void)
+
+    /// Feed audio data to an active streaming ASR session
+    ///
+    /// Sends a chunk of audio to the ASR engine for processing.
+    /// The callback receives JSON-encoded transcript events that have occurred.
+    ///
+    /// Audio format: base64-encoded Float32 samples at 16kHz mono
+    ///
+    /// - Parameters:
+    ///   - sessionId: The session ID from startStreamingASR
+    ///   - audio: Base64-encoded Float32 16kHz mono audio samples
+    ///   - reply: Callback with JSON-encoded events array (or nil if none) and error
+    func feedStreamingASR(sessionId: String, audio: Data, _ reply: @escaping (_ eventsJSON: Data?, _ error: String?) -> Void)
+
+    /// Stop a streaming ASR session and get the final transcript
+    ///
+    /// Ends the streaming session and returns the complete transcript.
+    /// The pod remains running for future sessions.
+    ///
+    /// - Parameters:
+    ///   - sessionId: The session ID from startStreamingASR
+    ///   - reply: Callback with final transcript or error
+    func stopStreamingASR(sessionId: String, _ reply: @escaping (_ transcript: String?, _ error: String?) -> Void)
 }
 
 // MARK: - TTS Types

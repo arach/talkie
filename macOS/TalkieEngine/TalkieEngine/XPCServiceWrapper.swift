@@ -114,4 +114,20 @@ final class XPCServiceWrapper: NSObject, TalkieEngineProtocol {
     func getTTSStatus(reply: @escaping (Bool, Double) -> Void) {
         engine.getTTSStatus(reply: reply)
     }
+
+    // MARK: - Streaming ASR
+
+    func startStreamingASR(_ reply: @escaping (String?, String?) -> Void) {
+        AppLogger.shared.info(.xpc, "startStreamingASR called")
+        engine.startStreamingASR(reply)
+    }
+
+    func feedStreamingASR(sessionId: String, audio: Data, _ reply: @escaping (Data?, String?) -> Void) {
+        engine.feedStreamingASR(sessionId: sessionId, audio: audio, reply)
+    }
+
+    func stopStreamingASR(sessionId: String, _ reply: @escaping (String?, String?) -> Void) {
+        AppLogger.shared.info(.xpc, "stopStreamingASR called", detail: sessionId.prefix(8).description)
+        engine.stopStreamingASR(sessionId: sessionId, reply)
+    }
 }

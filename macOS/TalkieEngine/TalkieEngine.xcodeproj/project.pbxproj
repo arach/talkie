@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		6C13F95E28FE47A3AF85B645 /* StreamingASRService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6662660AC36484E97F551B6 /* StreamingASRService.swift */; };
 		01306C6A37A0B4610F2D3B64 /* TalkieKit in Frameworks */ = {isa = PBXBuildFile; productRef = 47A405AC76859296760FD6A8 /* TalkieKit */; };
 		04FA816DA64246EDAD5A6356 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 930497E959A78E2E572D7F9B /* WhisperKit */; };
 		12DD200A43D294C5523EE021 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB26F22F9D507243DB479766 /* AppDelegate.swift */; };
@@ -25,6 +26,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		C6662660AC36484E97F551B6 /* StreamingASRService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingASRService.swift; sourceTree = "<group>"; };
 		071A5BB5F9E02D438B1F4900 /* TalkieEngine.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TalkieEngine.entitlements; sourceTree = "<group>"; };
 		2A4E812D358408E68A034368 /* TalkieEngine.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TalkieEngine.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2F4E3464C72C240A7FFD4A74 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
@@ -93,6 +95,7 @@
 		D9C01A083B04BE1B82451546 /* TalkieEngine */ = {
 			isa = PBXGroup;
 			children = (
+				C6662660AC36484E97F551B6 /* StreamingASRService.swift */,
 				BB26F22F9D507243DB479766 /* AppDelegate.swift */,
 				8D631E6E8C0DDACCE13712FC /* EngineListenerDelegate.swift */,
 				4838D192BBA458EC7CA4EFA8 /* EngineProtocol.swift */,
@@ -179,6 +182,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6C13F95E28FE47A3AF85B645 /* StreamingASRService.swift in Sources */,
 				12DD200A43D294C5523EE021 /* AppDelegate.swift in Sources */,
 				1E8ACC6E34F3FE16FF2D9F95 /* EngineListenerDelegate.swift in Sources */,
 				D92C5024D36DB3573FEDADC7 /* EngineProtocol.swift in Sources */,

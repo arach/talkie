@@ -27,7 +27,8 @@ enum CapabilityRegistry {
         switch name.lowercased() {
         case "tts":
             return TTSCapability()
-        // Future: case "asr": return ASRCapability()
+        case "streaming-asr":
+            return StreamingASRCapability()
         // Future: case "llm": return LLMCapability()
         default:
             return nil
@@ -35,7 +36,7 @@ enum CapabilityRegistry {
     }
 
     static var available: [String] {
-        ["tts"]  // Add more as implemented
+        ["tts", "streaming-asr"]
     }
 }
 
@@ -60,6 +61,8 @@ struct PodShell {
         switch capabilityName.lowercased() {
         case "tts":
             friendlyName = "Talkie Speech Engine"
+        case "streaming-asr":
+            friendlyName = "Talkie Streaming Engine"
         default:
             friendlyName = "Talkie \(capabilityName.capitalized) Engine"
         }
