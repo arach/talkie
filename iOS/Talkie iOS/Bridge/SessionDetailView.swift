@@ -142,7 +142,7 @@ struct SessionDetailView: View {
 
         Task {
             do {
-                try await bridgeManager.injectText(sessionId: session.id, text: text)
+                try await bridgeManager.sendMessage(sessionId: session.id, text: text)
                 // Clear input on success
                 inputText = ""
                 sendError = nil

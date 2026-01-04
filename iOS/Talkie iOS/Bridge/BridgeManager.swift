@@ -194,11 +194,11 @@ final class BridgeManager {
         return response.messages
     }
 
-    /// Inject text into a Claude session's terminal
-    func injectText(sessionId: String, text: String) async throws {
-        let response = try await client.inject(sessionId: sessionId, text: text)
+    /// Send a message to a Claude session's terminal
+    func sendMessage(sessionId: String, text: String) async throws {
+        let response = try await client.sendMessage(sessionId: sessionId, text: text)
         if !response.success {
-            throw BridgeError.injectFailed(response.error ?? "Unknown error")
+            throw BridgeError.messageFailed(response.error ?? "Unknown error")
         }
     }
 

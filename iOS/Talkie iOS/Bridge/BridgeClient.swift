@@ -50,10 +50,10 @@ actor BridgeClient {
         return try JSONDecoder().decode(PairResponse.self, from: data)
     }
 
-    func inject(sessionId: String, text: String) async throws -> InjectResponse {
-        let body = InjectRequest(sessionId: sessionId, text: text)
-        let data = try await post("/inject", body: body)
-        return try JSONDecoder().decode(InjectResponse.self, from: data)
+    func sendMessage(sessionId: String, text: String) async throws -> MessageResponse {
+        let body = MessageRequest(text: text)
+        let data = try await post("/sessions/\(sessionId)/message", body: body)
+        return try JSONDecoder().decode(MessageResponse.self, from: data)
     }
 
     // MARK: - HTTP Methods
@@ -171,12 +171,11 @@ struct PairResponse: Codable {
     let message: String?
 }
 
-struct InjectRequest: Codable {
-    let sessionId: String
+struct MessageRequest: Codable {
     let text: String
 }
 
-struct InjectResponse: Codable {
+struct MessageResponse: Codable {
     let success: Bool
     let error: String?
 }
@@ -196,7 +195,7 @@ enum BridgeError: LocalizedError {
     case httpError(Int)
     case connectionFailed
     case pairingRejected
-    case injectFailed(String)
+    case messageFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -210,8 +209,8 @@ enum BridgeError: LocalizedError {
             return "Could not connect to Mac"
         case .pairingRejected:
             return "Pairing was rejected"
-        case .injectFailed(let reason):
-            return "Could not send text: \(reason)"
+        case .messageFailed(let reason):
+            return "Could not send message: \(reason)"
         }
     }
 }
