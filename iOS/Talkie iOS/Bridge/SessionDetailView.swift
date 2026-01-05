@@ -30,9 +30,6 @@ struct SessionDetailView: View {
     // Delivery confirmation state
     @State private var lastDelivery: DeliveryConfirmation?
 
-    // Force Enter state
-    @State private var isForcingEnter = false
-
     // Quick reply options parsed from last assistant message
     private var quickReplyOptions: [QuickReplyOption] {
         parseQuickReplyOptions(from: messages.last(where: { $0.role == "assistant" }))
@@ -119,36 +116,26 @@ struct SessionDetailView: View {
                 )
             }
         }
-        .navigationTitle(session.project)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                HStack(spacing: 8) {
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: Spacing.xs) {
                     if session.isLive {
-                        Text("LIVE")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.green)
-                            .cornerRadius(4)
-
-                        // Force Enter button
-                        Button(action: forceEnter) {
-                            if isForcingEnter {
-                                ProgressView()
-                                    .progressViewStyle(.circular)
-                                    .scaleEffect(0.7)
-                            } else {
-                                Image(systemName: "return")
-                            }
-                        }
-                        .disabled(isForcingEnter)
+                        Circle()
+                            .fill(Color.success)
+                            .frame(width: 6, height: 6)
                     }
+                    Text(session.project)
+                        .font(.headlineMedium)
+                        .foregroundColor(.textPrimary)
+                }
+            }
 
-                    Button(action: loadMessages) {
-                        Image(systemName: "arrow.clockwise")
-                    }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: loadMessages) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.textSecondary)
                 }
             }
         }
@@ -262,23 +249,6 @@ struct SessionDetailView: View {
     private func retryAudio() {
         guard let url = lastFailedAudioURL else { return }
         sendAudio(url: url)
-    }
-
-    private func forceEnter() {
-        isForcingEnter = true
-        sendError = nil
-
-        Task {
-            do {
-                try await bridgeManager.forceEnter(sessionId: session.id)
-                // Refresh messages after a brief delay
-                try? await Task.sleep(nanoseconds: 500_000_000)
-                await fetchMessages()
-            } catch {
-                sendError = "Enter failed: \(error.localizedDescription)"
-            }
-            isForcingEnter = false
-        }
     }
 
     private func sendQuickReply(_ number: String) {
@@ -455,25 +425,25 @@ struct InputBar: View {
                 DeliveredOverlay(delivery: delivery)
             } else {
                 // Normal input bar
-                HStack(spacing: 8) {
+                HStack(spacing: Spacing.xs) {
                     // Mic button
                     Button(action: onMicTap) {
                         Image(systemName: "mic.fill")
-                            .font(.system(size: 16))
-                            .frame(width: 36, height: 36)
-                            .background(Color(.systemGray5))
-                            .foregroundColor(.primary)
+                            .font(.system(size: 14))
+                            .frame(width: 32, height: 32)
+                            .background(Color.surfaceSecondary)
+                            .foregroundColor(.textSecondary)
                             .clipShape(Circle())
                     }
 
                     // Text field
                     TextField("Send to Claude...", text: $text, axis: .vertical)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 15))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(20)
+                        .font(.bodySmall)
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, Spacing.xs)
+                        .background(Color.surfaceSecondary)
+                        .cornerRadius(CornerRadius.lg)
                         .lineLimit(1...5)
                         .focused(isFocused)
                         .submitLabel(.send)
@@ -481,22 +451,22 @@ struct InputBar: View {
                             onSend()
                         }
 
-                    // Send button
+                    // Send button (enter/return)
                     Button(action: onSend) {
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: 16, weight: .semibold))
-                            .frame(width: 36, height: 36)
-                            .background(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.gray : Color.blue)
-                            .foregroundColor(.white)
+                        Image(systemName: "return")
+                            .font(.system(size: 14, weight: .semibold))
+                            .frame(width: 32, height: 32)
+                            .background(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.surfaceTertiary : Color.active)
+                            .foregroundColor(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .textTertiary : .white)
                             .clipShape(Circle())
                     }
                     .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, Spacing.sm)
+                .padding(.vertical, Spacing.xs)
             }
         }
-        .background(Color(.systemBackground))
+        .background(Color.surfacePrimary)
     }
 }
 
@@ -515,64 +485,82 @@ struct RecordingOverlay: View {
     }
 
     var body: some View {
-        VStack(spacing: 12) {
-            // Waveform visualization
-            HStack(spacing: 12) {
-                // Recording indicator
-                RecordingPulse(color: .red)
-
-                // Waveform
-                WaveformView(
+        VStack(spacing: Spacing.md) {
+            // Particles + Timer
+            HStack(spacing: Spacing.md) {
+                // Compact particles visualization
+                ParticlesWaveformView(
                     levels: audioLevels,
-                    height: 32,
-                    color: .red
+                    height: 28,
+                    color: .recording
                 )
+                .frame(maxWidth: .infinity)
 
-                // Duration
-                Text(durationText)
-                    .font(.system(size: 14, weight: .medium, design: .monospaced))
-                    .foregroundColor(.red)
+                // Duration with recording dot
+                HStack(spacing: Spacing.xs) {
+                    RecordingPulse(color: .recording, size: 8)
+                    Text(durationText)
+                        .font(.monoMedium)
+                        .foregroundColor(.recording)
+                }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, Spacing.md)
 
             // Transcription preview
             if !transcriptionPreview.isEmpty {
                 Text(transcriptionPreview)
-                    .font(.system(size: 14))
-                    .foregroundColor(.primary)
-                    .lineLimit(3)
+                    .font(.bodySmall)
+                    .foregroundColor(.textPrimary)
+                    .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(12)
-                    .padding(.horizontal, 12)
-            } else {
-                Text("Listening...")
-                    .font(.system(size: 14))
-                    .foregroundColor(.secondary)
-                    .italic()
+                    .padding(Spacing.sm)
+                    .background(Color.surfaceSecondary)
+                    .cornerRadius(CornerRadius.sm)
+                    .padding(.horizontal, Spacing.sm)
             }
 
             // Stop button
             Button(action: onStop) {
-                HStack(spacing: 8) {
+                HStack(spacing: Spacing.xs) {
                     Image(systemName: "stop.fill")
-                        .font(.system(size: 14))
-                    Text("Tap to Send")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 12))
+                    Text("SEND")
+                        .font(.techLabel)
+                        .tracking(2)
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Color.red)
-                .cornerRadius(24)
+                .padding(.vertical, Spacing.sm)
+                .background(Color.recording)
+                .cornerRadius(CornerRadius.sm)
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 8)
+            .padding(.horizontal, Spacing.sm)
         }
-        .padding(.top, 12)
-        .background(Color(.systemBackground))
+        .padding(.vertical, Spacing.sm)
+        .background(Color.surfacePrimary)
+    }
+}
+
+// MARK: - Braille Spinner
+
+struct BrailleSpinner: View {
+    var speed: Double = 0.08
+    var color: Color = .textSecondary
+
+    @State private var frame = 0
+    private let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+    var body: some View {
+        Text(frames[frame])
+            .font(.monoMedium)
+            .foregroundColor(color)
+            .onAppear { startAnimation() }
+    }
+
+    private func startAnimation() {
+        Timer.scheduledTimer(withTimeInterval: speed, repeats: true) { _ in
+            frame = (frame + 1) % frames.count
+        }
     }
 }
 
@@ -582,40 +570,32 @@ struct SendingOverlay: View {
     let transcriptionPreview: String
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: Spacing.sm) {
+            // Sending indicator with braille spinner
+            HStack(spacing: Spacing.xs) {
+                BrailleSpinner(color: .active)
+                Text("SENDING")
+                    .font(.techLabel)
+                    .tracking(2)
+                    .foregroundColor(.textSecondary)
+            }
+            .padding(.vertical, Spacing.sm)
+
             // Show what's being sent
             if !transcriptionPreview.isEmpty {
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "text.quote")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-
-                    Text(transcriptionPreview)
-                        .font(.system(size: 14))
-                        .foregroundColor(.primary)
-                        .lineLimit(3)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .padding(12)
-                .background(Color(.systemGray6))
-                .cornerRadius(12)
-                .padding(.horizontal, 12)
+                Text(transcriptionPreview)
+                    .font(.bodySmall)
+                    .foregroundColor(.textSecondary)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(Spacing.sm)
+                    .background(Color.surfaceSecondary)
+                    .cornerRadius(CornerRadius.sm)
+                    .padding(.horizontal, Spacing.sm)
             }
-
-            // Sending indicator
-            HStack(spacing: 12) {
-                ProgressView()
-                    .progressViewStyle(.circular)
-                    .scaleEffect(0.9)
-
-                Text("Sending to Mac...")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.secondary)
-            }
-            .padding(.vertical, 12)
         }
-        .padding(.top, 8)
-        .background(Color(.systemBackground))
+        .padding(.vertical, Spacing.sm)
+        .background(Color.surfacePrimary)
     }
 }
 
@@ -630,40 +610,39 @@ struct DeliveredOverlay: View {
     let delivery: DeliveryConfirmation
 
     var body: some View {
-        VStack(spacing: 12) {
-            // Success icon with animation
-            HStack(spacing: 10) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 24))
-                    .foregroundColor(.green)
-
-                Text("Delivered to Claude")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.green)
+        VStack(spacing: Spacing.sm) {
+            // Success indicator
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.success)
+                Text("DELIVERED")
+                    .font(.techLabel)
+                    .tracking(2)
+                    .foregroundColor(.success)
             }
+            .padding(.vertical, Spacing.sm)
 
             // Show what was sent
             if !delivery.text.isEmpty {
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "text.quote")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-
-                    Text(delivery.text)
-                        .font(.system(size: 14))
-                        .foregroundColor(.primary)
-                        .lineLimit(2)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .padding(12)
-                .background(Color.green.opacity(0.1))
-                .cornerRadius(12)
-                .padding(.horizontal, 12)
+                Text(delivery.text)
+                    .font(.bodySmall)
+                    .foregroundColor(.textPrimary)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(Spacing.sm)
+                    .background(Color.success.opacity(0.1))
+                    .cornerRadius(CornerRadius.sm)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .strokeBorder(Color.success.opacity(0.2), lineWidth: 1)
+                    )
+                    .padding(.horizontal, Spacing.sm)
             }
         }
-        .padding(.vertical, 16)
-        .background(Color(.systemBackground))
-        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+        .padding(.vertical, Spacing.sm)
+        .background(Color.surfacePrimary)
+        .transition(.opacity.combined(with: .scale(scale: 0.98)))
     }
 }
 
