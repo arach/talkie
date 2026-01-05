@@ -416,7 +416,7 @@ struct TalkieServiceStatusBadge: View {
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
         .background(statusColor.opacity(0.1))
-        .cornerRadius(4)
+        .cornerRadius(CornerRadius.xs)
         .onAppear {
             // One-time check without starting full monitoring
             monitor.refreshState()

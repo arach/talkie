@@ -329,7 +329,7 @@ struct ActivityInspectorPanel: View {
                     .foregroundColor(TalkieTheme.accent)
                     .frame(width: 24, height: 24)
                     .background(Theme.current.surfaceInfo)
-                    .cornerRadius(4)
+                    .cornerRadius(CornerRadius.xs)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(workflowName)
@@ -407,7 +407,7 @@ struct ActivityInspectorPanel: View {
                                     .padding(Spacing.sm)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .background(Theme.current.surface1)
-                                    .cornerRadius(6)
+                                    .cornerRadius(CornerRadius.xs)
                             }
                         }
                     } else {
@@ -503,7 +503,7 @@ struct InspectorStepCard: View {
                         .padding(Spacing.sm)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Theme.current.surfaceAlternate)
-                        .cornerRadius(4)
+                        .cornerRadius(CornerRadius.xs)
                 }
             }
 
@@ -526,16 +526,16 @@ struct InspectorStepCard: View {
                     .padding(Spacing.sm)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Theme.current.surface1)
-                    .cornerRadius(4)
+                    .cornerRadius(CornerRadius.xs)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 4)
+                        RoundedRectangle(cornerRadius: CornerRadius.xs)
                             .strokeBorder(isLast ? SemanticColor.success.opacity(0.3) : Color.clear, lineWidth: 1)
                     )
             }
         }
         .padding(Spacing.sm)
         .background(Theme.current.surface2)
-        .cornerRadius(6)
+        .cornerRadius(CornerRadius.xs)
     }
 }
 

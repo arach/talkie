@@ -39,7 +39,7 @@ struct PendingActionsView: View {
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(Color.accentColor)
-                        .cornerRadius(8)
+                        .cornerRadius(CornerRadius.sm)
                 }
 
                 if pendingManager.failedCount > 0 {
@@ -49,7 +49,7 @@ struct PendingActionsView: View {
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(Color.red)
-                        .cornerRadius(8)
+                        .cornerRadius(CornerRadius.sm)
                 }
             }
             .padding(.horizontal, Spacing.lg)
@@ -194,7 +194,7 @@ struct PendingActionsView: View {
         // Find the workflow and memo
         Task {
             // Load workflow
-            guard let workflow = WorkflowManager.shared.workflows.first(where: { $0.id == workflowId }) else {
+            guard let workflow = WorkflowService.shared.workflow(byID: workflowId) else {
                 await SystemEventManager.shared.log(.error, "Retry failed", detail: "Workflow not found")
                 return
             }
@@ -213,7 +213,7 @@ struct PendingActionsView: View {
 
                 // Re-run the workflow
                 await SystemEventManager.shared.log(.workflow, "Retrying: \(workflow.name)", detail: "Memo: \(memoModel.title ?? "Untitled")")
-                _ = try await WorkflowExecutor.shared.executeWorkflow(workflow, for: memoModel)
+                _ = try await WorkflowExecutor.shared.executeWorkflow(workflow.definition, for: memoModel)
 
             } catch {
                 await SystemEventManager.shared.log(.error, "Retry failed", detail: error.localizedDescription)
@@ -263,7 +263,7 @@ struct PendingActionRow: View {
         HStack(spacing: Spacing.sm) {
             // Workflow icon with spinner overlay
             ZStack {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
                     .fill(Theme.current.surfaceAlternate)
                     .frame(width: 36, height: 36)
 
@@ -373,7 +373,7 @@ struct RecentActionRow: View {
             HStack(spacing: Spacing.sm) {
                 // Workflow icon with status indicator
                 ZStack {
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
                         .fill(isFailed ? Color.red.opacity(0.15) : Theme.current.surfaceAlternate)
                         .frame(width: 36, height: 36)
 
@@ -424,7 +424,7 @@ struct RecentActionRow: View {
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(Color.accentColor)
-                            .cornerRadius(4)
+                            .cornerRadius(CornerRadius.xs)
                         }
                         .buttonStyle(.plain)
                     }
@@ -514,7 +514,7 @@ struct PendingActionsBadge: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
             .background(Color.accentColor.opacity(0.1))
-            .cornerRadius(4)
+            .cornerRadius(CornerRadius.xs)
         }
     }
 }

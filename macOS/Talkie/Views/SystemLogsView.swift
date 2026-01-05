@@ -634,7 +634,7 @@ struct SystemLogsView: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(Theme.current.surface1)
-                .cornerRadius(4)
+                .cornerRadius(CornerRadius.xs)
             }
         }
         .padding(.horizontal, 12)
@@ -660,10 +660,10 @@ struct SystemLogsView: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
             .background(
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
                     .fill(isSelected ? chipColor.opacity(0.85) : chipColor.opacity(0.12))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 4)
+                        RoundedRectangle(cornerRadius: CornerRadius.xs)
                             .stroke(isSelected ? chipColor.opacity(0.3) : Color.clear, lineWidth: 1)
                     )
             )

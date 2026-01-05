@@ -1,11 +1,11 @@
 #!/bin/bash
 # Build, install, and launch Talkie in iOS Simulator
 
-SCHEME="Talkie OS"
+SCHEME="Talkie"
 DEVICE="iPhone 16 Pro"
 BUNDLE_ID="jdi.talkie-os"
 DERIVED_DATA="/Users/arach/Library/Developer/Xcode/DerivedData/Talkie_OS-allortoczsqmvcchyrfuwhzihcos"
-APP_PATH="$DERIVED_DATA/Build/Products/Debug-iphonesimulator/Talkie OS.app"
+APP_PATH="$DERIVED_DATA/Build/Products/Debug-iphonesimulator/Talkie.app"
 
 echo "🔨 Building..."
 xcodebuild -scheme "$SCHEME" -destination "platform=iOS Simulator,name=$DEVICE" build 2>&1 | tail -3

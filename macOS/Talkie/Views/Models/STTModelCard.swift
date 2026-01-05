@@ -244,9 +244,9 @@ struct STTModelCard: View {
         }
         .frame(height: 130)
         .background(cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: CornerRadius.sm))
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
                 .stroke(borderColor, lineWidth: 1)
         )
         .onHover { hovering in
@@ -344,9 +344,9 @@ struct STTModelCard: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
                 .background(settings.midnightSurfaceElevated)
-                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .clipShape(RoundedRectangle(cornerRadius: CornerRadius.xs))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 4)
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
                         .stroke(settings.midnightBorder, lineWidth: 1)
                 )
             }

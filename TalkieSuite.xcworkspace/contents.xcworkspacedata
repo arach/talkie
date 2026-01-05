@@ -25,7 +25,7 @@
       location = "group:iOS"
       name = "iOS">
       <FileRef
-         location = "group:Talkie OS.xcodeproj">
+         location = "group:Talkie-iOS.xcodeproj">
       </FileRef>
    </Group>
 </Workspace>

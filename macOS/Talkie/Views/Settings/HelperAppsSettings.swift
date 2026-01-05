@@ -40,86 +40,138 @@ struct HelperAppsSettingsView: View {
                     .foregroundColor(Theme.current.foregroundSecondary)
                     .frame(width: 24, height: 24)
                     .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(6)
+                    .cornerRadius(CornerRadius.xs)
                 }
                 .buttonStyle(.plain)
                 .padding(.trailing, 8)
             }
         } content: {
-            VStack(alignment: .leading, spacing: 16) {
-                // TalkieEngine
-                HelperAppRow(
-                    name: "Transcription Engine",
-                    description: "Transcription and AI processing service",
-                    bundleId: ServiceManager.engineBundleId,
-                    status: serviceManager.engineStatus,
-                    processId: serviceManager.engine.processId,
-                    environment: EngineClient.shared.connectedMode,
-                    onLaunch: { serviceManager.launchEngine() },
-                    onTerminate: { serviceManager.terminateEngine() },
-                    onRegister: { serviceManager.registerEngine() },
-                    onUnregister: { serviceManager.unregisterEngine() }
-                )
+            // Helper Apps Section
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                HStack(spacing: Spacing.sm) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.green)
+                        .frame(width: 3, height: 14)
 
-                Divider()
+                    Text("BACKGROUND SERVICES")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(Theme.current.foregroundSecondary)
 
-                // TalkieLive
-                HelperAppRow(
-                    name: "Live",
-                    description: "Voice capture and quick paste feature",
-                    bundleId: ServiceManager.liveBundleId,
-                    status: serviceManager.liveStatus,
-                    processId: serviceManager.live.processId,
-                    environment: serviceManager.live.connectedMode,
-                    onLaunch: { serviceManager.launchLive() },
-                    onTerminate: { serviceManager.terminateLive() },
-                    onRegister: { serviceManager.registerLive() },
-                    onUnregister: { serviceManager.unregisterLive() }
-                )
-            }
+                    Spacer()
 
-            Divider()
-                .padding(.vertical, 8)
-
-            // Actions
-            Button(action: {
-                serviceManager.openLoginItemsSettings()
-            }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "gear")
-                        .font(Theme.current.fontXS)
-                    Text("OPEN LOGIN ITEMS")
-                        .font(Theme.current.fontXSMedium)
+                    let runningCount = [serviceManager.engineStatus, serviceManager.liveStatus].filter { $0 == .running }.count
+                    Text("\(runningCount)/2 RUNNING")
+                        .font(.techLabelSmall)
+                        .foregroundColor(runningCount == 2 ? .green : .orange)
                 }
-                .foregroundColor(Theme.current.foregroundSecondary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color.secondary.opacity(0.1))
-                .cornerRadius(6)
-            }
-            .buttonStyle(.plain)
 
-            // Info
-            HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "info.circle")
-                    .font(Theme.current.fontXS)
-                    .foregroundColor(Theme.current.foregroundSecondary)
+                VStack(spacing: Spacing.sm) {
+                    // TalkieEngine
+                    HelperAppRow(
+                        name: "Transcription Engine",
+                        description: "Transcription and AI processing service",
+                        bundleId: ServiceManager.engineBundleId,
+                        status: serviceManager.engineStatus,
+                        processId: serviceManager.engine.processId,
+                        environment: EngineClient.shared.connectedMode,
+                        onLaunch: { serviceManager.launchEngine() },
+                        onTerminate: { serviceManager.terminateEngine() },
+                        onRegister: { serviceManager.registerEngine() },
+                        onUnregister: { serviceManager.unregisterEngine() }
+                    )
 
-                Text("Helper apps run in the background to provide voice capture and AI processing. They automatically start when you log in.")
-                    .font(Theme.current.fontXS)
-                    .foregroundColor(Theme.current.foregroundSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    // TalkieLive
+                    HelperAppRow(
+                        name: "Live",
+                        description: "Voice capture and quick paste feature",
+                        bundleId: ServiceManager.liveBundleId,
+                        status: serviceManager.liveStatus,
+                        processId: serviceManager.live.processId,
+                        environment: serviceManager.live.connectedMode,
+                        onLaunch: { serviceManager.launchLive() },
+                        onTerminate: { serviceManager.terminateLive() },
+                        onRegister: { serviceManager.registerLive() },
+                        onUnregister: { serviceManager.unregisterLive() }
+                    )
+                }
             }
-            .padding(10)
-            .background(Color.secondary.opacity(0.05))
-            .cornerRadius(8)
+            .settingsSectionCard(padding: Spacing.md)
+
+            // Actions Section
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.blue)
+                        .frame(width: 3, height: 14)
+
+                    Text("SYSTEM SETTINGS")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                }
+
+                Button(action: {
+                    serviceManager.openLoginItemsSettings()
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "gear")
+                            .font(Theme.current.fontXS)
+                        Text("OPEN LOGIN ITEMS")
+                            .font(Theme.current.fontXSMedium)
+                    }
+                    .foregroundColor(Theme.current.foregroundSecondary)
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.vertical, Spacing.xs)
+                    .background(Theme.current.surface1)
+                    .cornerRadius(CornerRadius.xs)
+                }
+                .buttonStyle(.plain)
+            }
+            .settingsSectionCard(padding: Spacing.md)
+
+            // Info Section
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.cyan)
+                        .frame(width: 3, height: 14)
+
+                    Text("ABOUT HELPERS")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                }
+
+                HStack(alignment: .top, spacing: Spacing.sm) {
+                    Image(systemName: "info.circle")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+
+                    Text("Helper apps run in the background to provide voice capture and AI processing. They automatically start when you log in.")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(Spacing.sm)
+                .background(Theme.current.surface1)
+                .cornerRadius(CornerRadius.sm)
+            }
+            .settingsSectionCard(padding: Spacing.md)
 
             // Developer options (only show if running dev build)
             #if DEBUG
-            Divider()
-                .padding(.vertical, 8)
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack(spacing: Spacing.sm) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.purple)
+                        .frame(width: 3, height: 14)
 
-            HelperEnvironmentPicker(serviceManager: serviceManager)
+                    Text("DEVELOPER OPTIONS")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(.purple)
+                }
+
+                HelperEnvironmentPicker(serviceManager: serviceManager)
+            }
+            .settingsSectionCard(padding: Spacing.md)
             #endif
         }
         .onAppear {
@@ -164,7 +216,7 @@ private struct HelperAppRow: View {
                 .foregroundColor(statusColor)
                 .frame(width: 40, height: 40)
                 .background(statusColor.opacity(0.15))
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
 
             // Name and description
             VStack(alignment: .leading, spacing: 4) {
@@ -213,7 +265,7 @@ private struct HelperAppRow: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(statusColor.opacity(0.1))
-            .cornerRadius(4)
+            .cornerRadius(CornerRadius.xs)
 
             // Actions menu
             Menu {
@@ -244,13 +296,13 @@ private struct HelperAppRow: View {
                     .foregroundColor(Theme.current.foregroundSecondary)
                     .frame(width: 28, height: 28)
                     .background(isHovered ? Color.secondary.opacity(0.1) : Color.clear)
-                    .cornerRadius(6)
+                    .cornerRadius(CornerRadius.xs)
             }
             .buttonStyle(.plain)
         }
         .padding(12)
         .background(isHovered ? Theme.current.surfaceHover : Theme.current.surface1)
-        .cornerRadius(8)
+        .cornerRadius(CornerRadius.sm)
         .onHover { isHovered = $0 }
     }
 }
@@ -269,17 +321,8 @@ private struct HelperEnvironmentPicker: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "hammer.fill")
-                    .font(Theme.current.fontXS)
-                    .foregroundColor(.purple)
-                Text("DEV OPTIONS")
-                    .font(Theme.current.fontXSMedium)
-                    .foregroundColor(.purple)
-            }
-
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(spacing: Spacing.md) {
                 Text("Launch helpers from:")
                     .font(Theme.current.fontXS)
                     .foregroundColor(Theme.current.foregroundSecondary)
@@ -303,9 +346,9 @@ private struct HelperEnvironmentPicker: View {
                     .foregroundColor(.orange.opacity(0.8))
             }
         }
-        .padding(10)
-        .background(Color.purple.opacity(0.05))
-        .cornerRadius(8)
+        .padding(Spacing.sm)
+        .background(Theme.current.surface1)
+        .cornerRadius(CornerRadius.sm)
     }
 }
 #endif

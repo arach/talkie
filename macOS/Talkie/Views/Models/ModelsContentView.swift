@@ -428,7 +428,7 @@ struct ModelsContentView: View {
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.orange.opacity(0.1))
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
             #endif
         }
     }
@@ -512,7 +512,7 @@ struct ModelsContentView: View {
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.orange.opacity(0.1))
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
             #endif
         }
     }
@@ -559,7 +559,7 @@ struct ModelsContentView: View {
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.orange.opacity(0.1))
-                .cornerRadius(6)
+                .cornerRadius(CornerRadius.xs)
             }
             #endif
         }

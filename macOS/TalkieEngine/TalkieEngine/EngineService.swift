@@ -154,8 +154,6 @@ final class EngineService: NSObject, TalkieEngineProtocol {
     override init() {
         super.init()
         refreshDownloadedModels()
-        AppLogger.shared.info(.transcription, "EngineService initialized (PID: \(ProcessInfo.processInfo.processIdentifier))")
-        EngineStatusManager.shared.log(.info, "Engine", "EngineService initialized (PID: \(ProcessInfo.processInfo.processIdentifier))")
     }
 
     // MARK: - Model Directories
@@ -208,8 +206,8 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             return FileManager.default.fileExists(atPath: markerPath.path)
         })
 
-        AppLogger.shared.info(.transcription, "Downloaded Whisper models: \(self.downloadedWhisperModels)")
-        AppLogger.shared.info(.transcription, "Downloaded Parakeet models: \(self.downloadedParakeetModels)")
+        // Log cached models (debug only - don't spam startup logs)
+        AppLogger.shared.debug(.model, "Cached models", detail: "whisper=\(downloadedWhisperModels.count), parakeet=\(downloadedParakeetModels.count)")
     }
 
     // MARK: - Model ID Parsing
@@ -1099,6 +1097,69 @@ final class EngineService: NSObject, TalkieEngineProtocol {
             // TTSService tracks lastUsedTime internally, we expose isLoaded status
             // Idle time could be computed but we just return 0 if loaded, -1 if not
             reply(isLoaded, isLoaded ? 0 : -1)
+        }
+    }
+
+    // MARK: - Streaming ASR
+
+    nonisolated func startStreamingASR(_ reply: @escaping (String?, String?) -> Void) {
+        AppLogger.shared.info(.system, "[XPC] startStreamingASR called")
+        Task { @MainActor in
+            await self.doStartStreamingASR(reply: reply)
+        }
+    }
+
+    private func doStartStreamingASR(reply: @escaping (String?, String?) -> Void) async {
+        guard !isShuttingDown else {
+            EngineStatusManager.shared.log(.warning, "StreamASR", "Rejected - engine is shutting down")
+            reply(nil, "Engine is shutting down")
+            return
+        }
+
+        do {
+            let sessionId = try await StreamingASRService.shared.startSession()
+            reply(sessionId, nil)
+        } catch {
+            AppLogger.shared.error(.system, "Streaming ASR start failed", detail: error.localizedDescription)
+            reply(nil, error.localizedDescription)
+        }
+    }
+
+    nonisolated func feedStreamingASR(sessionId: String, audio: Data, _ reply: @escaping (Data?, String?) -> Void) {
+        Task { @MainActor in
+            await self.doFeedStreamingASR(sessionId: sessionId, audio: audio, reply: reply)
+        }
+    }
+
+    private func doFeedStreamingASR(sessionId: String, audio: Data, reply: @escaping (Data?, String?) -> Void) async {
+        guard !isShuttingDown else {
+            reply(nil, "Engine is shutting down")
+            return
+        }
+
+        do {
+            let eventsData = try await StreamingASRService.shared.feedAudio(sessionId: sessionId, audioData: audio)
+            reply(eventsData, nil)
+        } catch {
+            AppLogger.shared.warning(.system, "Streaming ASR feed failed", detail: error.localizedDescription)
+            reply(nil, error.localizedDescription)
+        }
+    }
+
+    nonisolated func stopStreamingASR(sessionId: String, _ reply: @escaping (String?, String?) -> Void) {
+        AppLogger.shared.info(.system, "[XPC] stopStreamingASR called", detail: sessionId.prefix(8).description)
+        Task { @MainActor in
+            await self.doStopStreamingASR(sessionId: sessionId, reply: reply)
+        }
+    }
+
+    private func doStopStreamingASR(sessionId: String, reply: @escaping (String?, String?) -> Void) async {
+        do {
+            let transcript = try await StreamingASRService.shared.stopSession(sessionId: sessionId)
+            reply(transcript, nil)
+        } catch {
+            AppLogger.shared.error(.system, "Streaming ASR stop failed", detail: error.localizedDescription)
+            reply(nil, error.localizedDescription)
         }
     }
 }

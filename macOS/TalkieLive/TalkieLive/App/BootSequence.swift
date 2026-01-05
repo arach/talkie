@@ -11,6 +11,17 @@ import TalkieKit
 
 private let log = Log(.system)
 
+// MARK: - Startup Profiler
+
+/// Precise process start time (set at file load)
+private let _processStartTime = CFAbsoluteTimeGetCurrent()
+
+/// Mark a startup milestone with precise timing
+private func markStartup(_ milestone: String) {
+    let elapsed = (CFAbsoluteTimeGetCurrent() - _processStartTime) * 1000
+    log.info(String(format: "⏱️ [%6.1fms] %@", elapsed, milestone), critical: true)
+}
+
 /// Boot phases for service initialization
 enum BootPhase: String, CaseIterable {
     case config = "Config"      // Settings, logging infrastructure
@@ -57,39 +68,51 @@ final class BootSequence {
     /// Called from AppDelegate.applicationDidFinishLaunching
     func execute() async {
         bootStartTime = Date()
-        log.info("TALKIE LIVE BOOT SEQUENCE starting...", critical: true)
+        log.info("════════════════════════════════════════════════════════════", critical: true)
+        log.info("TalkieLive Boot Sequence", critical: true)
+        log.info("  PID: \(ProcessInfo.processInfo.processIdentifier)", critical: true)
+        log.info("════════════════════════════════════════════════════════════", critical: true)
+        markStartup("Boot started")
 
         // Phase 1: Config
         await executePhase(.config) {
             self.initConfig()
         }
+        markStartup("Config phase complete")
 
         // Phase 2: Data
         await executePhase(.data) {
             self.initData()
         }
+        markStartup("Data phase complete")
 
         // Phase 3: Engine (async - connection may take time)
         await executePhase(.engine) {
             await self.initEngine()
         }
+        markStartup("Engine phase complete")
 
         // Phase 4: Services (depends on engine being ready)
         await executePhase(.services) {
             self.initServices()
         }
+        markStartup("Services phase complete")
 
         // Phase 5: UI
         await executePhase(.ui) {
             self.initUI()
         }
+        markStartup("UI phase complete")
 
         // Boot complete
         currentPhase = .complete
         isComplete = true
 
         let duration = bootStartTime.map { Date().timeIntervalSince($0) } ?? 0
-        log.info("BOOT COMPLETE in \(String(format: "%.2f", duration))s (\(self.initializedServices.count) services)", critical: true)
+        log.info("════════════════════════════════════════════════════════════", critical: true)
+        markStartup("✅ BOOT COMPLETE (\(initializedServices.count) services)")
+        log.info("  Total time: \(String(format: "%.2f", duration))s", critical: true)
+        log.info("════════════════════════════════════════════════════════════", critical: true)
     }
 
     private func executePhase(_ phase: BootPhase, action: () async -> Void) async {

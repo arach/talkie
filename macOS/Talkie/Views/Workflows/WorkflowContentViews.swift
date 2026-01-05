@@ -13,12 +13,18 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 // MARK: - Legacy Tool Content Views (keeping for reference)
 
 struct WorkflowsContentView: View {
-    private let workflowManager = WorkflowManager.shared
+    private let workflowService = WorkflowService.shared
     private let settings = SettingsManager.shared
     private var memosVM: MemosViewModel { MemosViewModel.shared }
     @State private var selectedWorkflowID: UUID?
     @State private var editingWorkflow: WorkflowDefinition?
     @State private var showingMemoSelector = false
+
+    // Get current workflow from service
+    private var currentWorkflow: Workflow? {
+        guard let id = selectedWorkflowID else { return nil }
+        return workflowService.workflow(byID: id)
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -29,7 +35,7 @@ struct WorkflowsContentView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("WORKFLOWS")
                             .font(Theme.current.fontSMBold)
-                        Text("\(workflowManager.workflows.count) total")
+                        Text("\(workflowService.workflows.count) total")
                             .font(Theme.current.fontXS)
                             .foregroundColor(Theme.current.foregroundSecondary)
                     }
@@ -40,7 +46,7 @@ struct WorkflowsContentView: View {
                             .foregroundColor(Theme.current.foreground)
                             .frame(width: 24, height: 24)
                             .background(Theme.current.surfaceSelected)
-                            .cornerRadius(4)
+                            .cornerRadius(CornerRadius.xs)
                     }
                     .buttonStyle(.plain)
                 }
@@ -52,11 +58,11 @@ struct WorkflowsContentView: View {
                 // Workflow List - unified, no sections
                 ScrollView {
                     VStack(spacing: 4) {
-                        ForEach(workflowManager.workflows) { workflow in
+                        ForEach(workflowService.workflows) { workflow in
                             WorkflowListItem(
-                                workflow: workflow,
+                                workflow: workflow.definition,
                                 isSelected: selectedWorkflowID == workflow.id,
-                                isSystem: false,
+                                isSystem: workflow.isSystem,
                                 onSelect: { selectWorkflow(workflow) },
                                 onEdit: { selectWorkflow(workflow) }
                             )
@@ -103,7 +109,7 @@ struct WorkflowsContentView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(Theme.current.surfaceSelected)
-                        .cornerRadius(4)
+                        .cornerRadius(CornerRadius.xs)
                     }
                     .buttonStyle(.plain)
                 }
@@ -143,39 +149,61 @@ struct WorkflowsContentView: View {
         selectedWorkflowID = newWorkflow.id
     }
 
-    private func selectWorkflow(_ workflow: WorkflowDefinition) {
+    private func selectWorkflow(_ workflow: Workflow) {
         // Only update editingWorkflow if selecting a different workflow
         // This prevents overwriting unsaved edits when clicking the same item
         if selectedWorkflowID != workflow.id {
             selectedWorkflowID = workflow.id
-            editingWorkflow = workflow
+            editingWorkflow = workflow.definition
         }
     }
 
     private func saveWorkflow() {
-        guard var workflow = editingWorkflow else { return }
-        workflow.modifiedAt = Date()
+        guard var definition = editingWorkflow else { return }
+        definition.modifiedAt = Date()
 
-        if workflowManager.workflows.contains(where: { $0.id == workflow.id }) {
-            workflowManager.updateWorkflow(workflow)
-        } else {
-            workflowManager.addWorkflow(workflow)
+        Task {
+            do {
+                try await workflowService.save(definition)
+                await MainActor.run {
+                    editingWorkflow = workflowService.workflow(byID: definition.id)?.definition
+                }
+            } catch {
+                logger.error("Failed to save workflow: \(error)")
+            }
         }
-        editingWorkflow = workflow
     }
 
     private func deleteCurrentWorkflow() {
-        guard let workflow = editingWorkflow else { return }
-        workflowManager.deleteWorkflow(workflow)
-        editingWorkflow = nil
-        selectedWorkflowID = nil
+        guard let workflow = currentWorkflow else { return }
+
+        Task {
+            do {
+                try await workflowService.delete(workflow)
+                await MainActor.run {
+                    editingWorkflow = nil
+                    selectedWorkflowID = nil
+                }
+            } catch {
+                logger.error("Failed to delete workflow: \(error)")
+            }
+        }
     }
 
     private func duplicateCurrentWorkflow() {
-        guard let workflow = editingWorkflow else { return }
-        let duplicate = workflowManager.duplicateWorkflow(workflow)
-        editingWorkflow = duplicate
-        selectedWorkflowID = duplicate.id
+        guard let workflow = currentWorkflow else { return }
+
+        Task {
+            do {
+                let duplicate = try await workflowService.duplicate(workflow)
+                await MainActor.run {
+                    editingWorkflow = duplicate.definition
+                    selectedWorkflowID = duplicate.id
+                }
+            } catch {
+                logger.error("Failed to duplicate workflow: \(error)")
+            }
+        }
     }
 
     private func runWorkflow(_ workflow: WorkflowDefinition, on memo: MemoModel) {
@@ -258,7 +286,7 @@ struct WorkflowMemoSelectorSheet: View {
             }
             .padding(Spacing.sm)
             .background(Theme.current.surface1)
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
             .padding(.horizontal, 16)
             .padding(.bottom, 12)
 
@@ -418,7 +446,7 @@ struct WorkflowCard: View {
                     .foregroundColor(.primary.opacity(0.7))
                     .frame(width: 32, height: 32)
                     .background(Theme.current.surfaceHover)
-                    .cornerRadius(4)
+                    .cornerRadius(CornerRadius.xs)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title.uppercased())
@@ -447,9 +475,9 @@ struct WorkflowCard: View {
             }
             .padding(Spacing.md)
             .background(Theme.current.surface1)
-            .cornerRadius(4)
+            .cornerRadius(CornerRadius.xs)
             .overlay(
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
                     .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
             )
         }
@@ -571,7 +599,7 @@ struct MemoSelectorSheet: View {
                             }
                             .padding(Spacing.md)
                             .background(Theme.current.surface1)
-                            .cornerRadius(6)
+                            .cornerRadius(CornerRadius.xs)
                         }
                         .buttonStyle(.plain)
                     }

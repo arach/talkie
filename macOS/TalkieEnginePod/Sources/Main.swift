@@ -15,6 +15,16 @@
 
 import Foundation
 
+// MARK: - Startup Timing
+
+/// Precise process start time (set at file load)
+private let _processStartTime = CFAbsoluteTimeGetCurrent()
+
+/// Get elapsed time in ms since process start
+private func elapsedMs() -> Double {
+    return (CFAbsoluteTimeGetCurrent() - _processStartTime) * 1000
+}
+
 // Set process name visible in Activity Monitor
 @_silgen_name("setprogname")
 func setprogname(_ name: UnsafePointer<CChar>)
@@ -27,7 +37,8 @@ enum CapabilityRegistry {
         switch name.lowercased() {
         case "tts":
             return TTSCapability()
-        // Future: case "asr": return ASRCapability()
+        case "streaming-asr":
+            return StreamingASRCapability()
         // Future: case "llm": return LLMCapability()
         default:
             return nil
@@ -35,7 +46,7 @@ enum CapabilityRegistry {
     }
 
     static var available: [String] {
-        ["tts"]  // Add more as implemented
+        ["tts", "streaming-asr"]
     }
 }
 
@@ -56,7 +67,15 @@ struct PodShell {
         let configJson = args.count >= 3 ? args[2] : "{}"
 
         // Set friendly process name for Activity Monitor
-        let friendlyName = "Talkie \(capabilityName.uppercased()) Pod"
+        let friendlyName: String
+        switch capabilityName.lowercased() {
+        case "tts":
+            friendlyName = "Talkie Speech Engine"
+        case "streaming-asr":
+            friendlyName = "Talkie Streaming Engine"
+        default:
+            friendlyName = "Talkie \(capabilityName.capitalized) Engine"
+        }
         friendlyName.withCString { setprogname($0) }
 
         // Create capability
@@ -76,18 +95,26 @@ struct PodShell {
             exit(1)
         }
 
+        // Startup banner
+        log("════════════════════════════════════════════════════════════")
+        log("\(friendlyName) Starting")
+        log("  PID: \(ProcessInfo.processInfo.processIdentifier)")
+        log("  Capability: \(capabilityName)")
+        log("════════════════════════════════════════════════════════════")
+
         // Load capability
-        log("Loading capability: \(capabilityName)")
+        log("[Load] Initializing \(capabilityName)...")
         do {
             try await capability.load(config: config)
-            log("Capability loaded. Memory: \(capability.memoryUsageMB)MB")
+            log("[Load] ✅ Ready (memory: \(capability.memoryUsageMB)MB)")
         } catch {
-            printError("Failed to load capability: \(error.localizedDescription)")
+            printError("[Load] ❌ Failed: \(error.localizedDescription)")
             exit(1)
         }
 
-        // Signal ready
+        // Signal ready to parent
         sendReady(capability: capabilityName, memoryMB: capability.memoryUsageMB)
+        log("════════════════════════════════════════════════════════════")
 
         // Setup signal handlers for graceful shutdown
         setupSignalHandlers(capability: capability)
@@ -211,10 +238,11 @@ struct PodShell {
         sendResponse(response)
     }
 
-    static func log(_ message: String) {
+    static func log(_ message: String, includeTime: Bool = true) {
+        let timePrefix = includeTime ? String(format: "[%6.1fms] ", elapsedMs()) : ""
         let logEntry: [String: Any] = [
             "type": "log",
-            "message": message,
+            "message": "\(timePrefix)\(message)",
             "timestamp": ISO8601DateFormatter().string(from: Date())
         ]
         if let data = try? JSONSerialization.data(withJSONObject: logEntry),

@@ -11,6 +11,8 @@ Usage:
 Projects:
     macos       Talkie macOS app (default)
     ios         Talkie iOS app
+    live        TalkieLive helper app
+    engine      TalkieEngine service
 
 Options:
     --check       List missing files (no changes)
@@ -24,6 +26,7 @@ Examples:
     ./sync-xcode-files.py ios                     # Sync iOS project
     ./sync-xcode-files.py ios --check             # Check iOS project
     ./sync-xcode-files.py ios --only "Bridge/*"   # Only sync Bridge files
+    ./sync-xcode-files.py engine                  # Sync TalkieEngine project
 
 What it does:
     1. Finds .swift files on disk not in project.pbxproj
@@ -50,18 +53,30 @@ PROJECTS = {
     'macos': {
         'source_dir': REPO_ROOT / 'macOS' / 'Talkie',
         'pbxproj': REPO_ROOT / 'macOS' / 'Talkie' / 'Talkie.xcodeproj' / 'project.pbxproj',
+        'skip_dirs': {'build', '.build', 'DerivedData', 'Packages', '.swiftpm', 'xcshareddata'},
+        'source_group': None,  # Use mainGroup
     },
     'ios': {
         'source_dir': REPO_ROOT / 'iOS' / 'Talkie iOS',
-        'pbxproj': REPO_ROOT / 'iOS' / 'Talkie OS.xcodeproj' / 'project.pbxproj',
+        'pbxproj': REPO_ROOT / 'iOS' / 'Talkie-iOS.xcodeproj' / 'project.pbxproj',
+        'skip_dirs': {'build', '.build', 'DerivedData', 'Packages', '.swiftpm', 'xcshareddata'},
+        'source_group': None,  # Use mainGroup
     },
     'live': {
         'source_dir': REPO_ROOT / 'macOS' / 'TalkieLive' / 'TalkieLive',
         'pbxproj': REPO_ROOT / 'macOS' / 'TalkieLive' / 'TalkieLive.xcodeproj' / 'project.pbxproj',
+        'skip_dirs': {'build', '.build', 'DerivedData', 'Packages', '.swiftpm', 'xcshareddata'},
+        'source_group': None,
+    },
+    'engine': {
+        'source_dir': REPO_ROOT / 'macOS' / 'TalkieEngine' / 'TalkieEngine',
+        'pbxproj': REPO_ROOT / 'macOS' / 'TalkieEngine' / 'TalkieEngine.xcodeproj' / 'project.pbxproj',
+        'skip_dirs': {'build', '.build', 'DerivedData', 'Packages', '.swiftpm', 'xcshareddata', 'Views'},
+        'source_group': 'TalkieEngine',  # Name of the source group
     },
 }
 
-# Directories to skip
+# Directories to skip (default, overridden by project config)
 SKIP_DIRS = {'build', '.build', 'DerivedData', 'Packages', '.swiftpm', 'xcshareddata'}
 
 
@@ -70,11 +85,11 @@ def generate_uuid():
     return uuid.uuid4().hex[:24].upper()
 
 
-def find_swift_files(source_dir: Path):
+def find_swift_files(source_dir: Path, skip_dirs: set):
     """Find all .swift files in project, excluding build dirs."""
     swift_files = []
     for root, dirs, files in os.walk(source_dir):
-        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.endswith('.xcodeproj')]
+        dirs[:] = [d for d in dirs if d not in skip_dirs and not d.endswith('.xcodeproj')]
         for f in files:
             if f.endswith('.swift'):
                 swift_files.append(Path(root) / f)
@@ -236,7 +251,24 @@ def ensure_group_path(content: str, path_parts: List[str]) -> Tuple[str, str]:
     return content, current_group_id
 
 
-def add_file_to_project(content: str, filepath: Path, source_dir: Path) -> str:
+def find_source_group(content: str, groups: Dict, group_name: str) -> Optional[str]:
+    """Find a group by name (direct child of main group)."""
+    main_match = re.search(r'mainGroup = (\w{24})', content)
+    if not main_match:
+        return None
+
+    main_group_id = main_match.group(1)
+    if main_group_id not in groups:
+        return None
+
+    for child_id in groups[main_group_id]['children']:
+        if child_id in groups and groups[child_id]['name'] == group_name:
+            return child_id
+
+    return None
+
+
+def add_file_to_project(content: str, filepath: Path, source_dir: Path, project_config: dict) -> str:
     """Add a Swift file to the project.pbxproj with proper group handling."""
     filename = filepath.name
     rel_path = filepath.relative_to(source_dir)
@@ -246,8 +278,13 @@ def add_file_to_project(content: str, filepath: Path, source_dir: Path) -> str:
     build_file_id = generate_uuid()
 
     # 1. Ensure parent group exists and get its ID
+    source_group_name = project_config.get('source_group')
     if path_parts:
         content, parent_group_id = ensure_group_path(content, path_parts)
+    elif source_group_name:
+        # Use configured source group for root-level files
+        groups = parse_groups(content)
+        parent_group_id = find_source_group(content, groups, source_group_name)
     else:
         # File at root - find main group
         main_match = re.search(r'mainGroup = (\w{24})', content)
@@ -319,9 +356,10 @@ def main():
         print(f"Available: {', '.join(PROJECTS.keys())}")
         sys.exit(1)
 
-    project = PROJECTS[project_name]
-    source_dir = project['source_dir']
-    pbxproj = project['pbxproj']
+    project_config = PROJECTS[project_name]
+    source_dir = project_config['source_dir']
+    pbxproj = project_config['pbxproj']
+    skip_dirs = project_config.get('skip_dirs', SKIP_DIRS)
 
     if not pbxproj.exists():
         print(f"Error: {pbxproj} not found")
@@ -338,12 +376,12 @@ def main():
         print("✓ No manual sync needed - just add files to the folder!")
         return
 
-    print(f"Scanning {source_dir}...")
+    print(f"Scanning {project_name.upper()} project: {source_dir}...")
     print()
 
     content = original_content
     existing_files = get_files_in_project(content)
-    all_swift_files = find_swift_files(source_dir)
+    all_swift_files = find_swift_files(source_dir, skip_dirs)
 
     missing = []
     for filepath in all_swift_files:
@@ -373,7 +411,7 @@ def main():
 
     # Process all files
     for filepath in missing:
-        content = add_file_to_project(content, filepath, source_dir)
+        content = add_file_to_project(content, filepath, source_dir, project_config)
 
     if show_diff:
         # Show unified diff

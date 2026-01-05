@@ -817,6 +817,95 @@ public final class EngineClient: ObservableObject {
         downloadProgress = nil
     }
 
+    // MARK: - Streaming ASR
+
+    /// Start a streaming ASR session for real-time transcription
+    /// - Returns: Session ID (UUID string) for use with feedStreamingASR and stopStreamingASR
+    public func startStreamingASR() async throws -> String {
+        log.info("Starting streaming ASR session...")
+
+        guard let proxy = engineProxy else {
+            let connected = await ensureConnected()
+            guard connected, let proxy = engineProxy else {
+                throw EngineClientError.notConnected
+            }
+            return try await doStartStreamingASR(proxy: proxy)
+        }
+
+        return try await doStartStreamingASR(proxy: proxy)
+    }
+
+    private func doStartStreamingASR(proxy: TalkieEngineProtocol) async throws -> String {
+        return try await withCheckedThrowingContinuation { continuation in
+            proxy.startStreamingASR { sessionId, error in
+                if let error = error {
+                    log.error("Streaming ASR start failed", detail: error)
+                    continuation.resume(throwing: EngineClientError.streamingASRFailed(error))
+                } else if let sessionId = sessionId {
+                    log.info("Streaming ASR session started", detail: sessionId.prefix(8).description)
+                    continuation.resume(returning: sessionId)
+                } else {
+                    continuation.resume(throwing: EngineClientError.emptyResponse)
+                }
+            }
+        }
+    }
+
+    /// Feed audio data to an active streaming ASR session
+    /// - Parameters:
+    ///   - sessionId: Session ID from startStreamingASR
+    ///   - audio: Float32 16kHz mono audio samples as Data
+    /// - Returns: JSON-encoded transcript events (or nil if none)
+    public func feedStreamingASR(sessionId: String, audio: Data) async throws -> [StreamingASREvent]? {
+        guard let proxy = engineProxy else {
+            throw EngineClientError.notConnected
+        }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            proxy.feedStreamingASR(sessionId: sessionId, audio: audio) { eventsJSON, error in
+                if let error = error {
+                    log.warning("Streaming ASR feed error", detail: error)
+                    continuation.resume(throwing: EngineClientError.streamingASRFailed(error))
+                } else if let data = eventsJSON {
+                    // Decode events
+                    if let events = try? JSONDecoder().decode([StreamingASREvent].self, from: data) {
+                        continuation.resume(returning: events)
+                    } else {
+                        continuation.resume(returning: nil)
+                    }
+                } else {
+                    continuation.resume(returning: nil)
+                }
+            }
+        }
+    }
+
+    /// Stop a streaming ASR session and get the final transcript
+    /// - Parameter sessionId: Session ID from startStreamingASR
+    /// - Returns: Final transcript
+    public func stopStreamingASR(sessionId: String) async throws -> String {
+        guard let proxy = engineProxy else {
+            throw EngineClientError.notConnected
+        }
+
+        log.info("Stopping streaming ASR session...", detail: sessionId.prefix(8).description)
+
+        return try await withCheckedThrowingContinuation { continuation in
+            proxy.stopStreamingASR(sessionId: sessionId) { transcript, error in
+                if let error = error {
+                    log.error("Streaming ASR stop failed", detail: error)
+                    continuation.resume(throwing: EngineClientError.streamingASRFailed(error))
+                } else if let transcript = transcript {
+                    let wordCount = transcript.split(separator: " ").count
+                    log.info("Streaming ASR session stopped", detail: "\(wordCount) words")
+                    continuation.resume(returning: transcript)
+                } else {
+                    continuation.resume(returning: "")
+                }
+            }
+        }
+    }
+
     /// Refresh available models list
     public func refreshAvailableModels() async {
         log.info("[Models] refreshAvailableModels called, connectionState=\(self.connectionState.rawValue)")
@@ -861,6 +950,7 @@ public enum EngineClientError: LocalizedError {
     case transcriptionFailed(String)
     case preloadFailed(String)
     case downloadFailed(String)
+    case streamingASRFailed(String)
     case emptyResponse
 
     public var errorDescription: String? {
@@ -873,8 +963,43 @@ public enum EngineClientError: LocalizedError {
             return "Failed to preload model: \(message)"
         case .downloadFailed(let message):
             return "Failed to download model: \(message)"
+        case .streamingASRFailed(let message):
+            return "Streaming ASR failed: \(message)"
         case .emptyResponse:
             return "Empty response from engine"
         }
+    }
+}
+
+// MARK: - Streaming ASR Types
+
+/// Event emitted by streaming ASR (matches pod output format)
+public struct StreamingASREvent: Codable, Sendable {
+    public let type: String
+    public let text: String?
+    public let confidence: Double?
+    public let isFinal: Bool?
+    public let silenceDuration: Double?
+    public let message: String?
+    public let isFatal: Bool?
+
+    /// Whether this is a transcript event
+    public var isTranscript: Bool {
+        type == "transcript"
+    }
+
+    /// Whether this is a speech start event
+    public var isSpeechStart: Bool {
+        type == "speechStart"
+    }
+
+    /// Whether this is a speech end event
+    public var isSpeechEnd: Bool {
+        type == "speechEnd"
+    }
+
+    /// Whether this is an error event
+    public var isError: Bool {
+        type == "error"
     }
 }

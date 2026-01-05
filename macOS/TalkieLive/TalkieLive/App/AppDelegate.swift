@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let pttHotKeyManager = HotKeyManager(signature: "\(sig)PT", hotkeyID: 3)  // Push-to-talk
     private let queuePickerHotKeyManager = HotKeyManager(signature: "\(sig)QP", hotkeyID: 2)  // Queue picker
     private let pasteLastHotKeyManager = HotKeyManager(signature: "\(sig)PL", hotkeyID: 4)  // Paste last
+    private let ambientHotKeyManager = HotKeyManager(signature: "\(sig)AB", hotkeyID: 6)  // Ambient mode toggle
     #if DEBUG
     private let debugPasteHotKeyManager = HotKeyManager(signature: "\(sig)DP", hotkeyID: 5)  // Debug paste test
     #endif
@@ -187,6 +188,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         recentItem.submenu = recentSubmenu
         menu.addItem(recentItem)
 
+        // Clear failed queue (only shown if there are items)
+        let clearQueueItem = NSMenuItem(title: "Clear Failed Queue", action: #selector(clearFailedQueue), keyEquivalent: "")
+        clearQueueItem.target = self
+        menu.addItem(clearQueueItem)
+
         // Paste last with global hotkey
         let pasteLastItem = NSMenuItem(title: "Paste Last", action: #selector(pasteLastDictation), keyEquivalent: "v")
         pasteLastItem.keyEquivalentModifierMask = [.control, .command]
@@ -199,6 +205,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         pillItem.target = self
         pillItem.state = .on
         menu.addItem(pillItem)
+
+        // Ambient mode toggle
+        let ambientItem = NSMenuItem(title: "Ambient Mode", action: #selector(toggleAmbientModeFromMenu), keyEquivalent: "a")
+        ambientItem.keyEquivalentModifierMask = [.option, .command]
+        ambientItem.target = self
+        ambientItem.state = AmbientSettings.shared.isEnabled ? .on : .off
+        menu.addItem(ambientItem)
+
+        // Streaming wake detection toggle (sub-option for ambient)
+        let streamingItem = NSMenuItem(title: "  ↳ Fast Wake Detection", action: #selector(toggleStreamingWakeFromMenu), keyEquivalent: "")
+        streamingItem.target = self
+        streamingItem.state = AmbientSettings.shared.useStreamingASR ? .on : .off
+        streamingItem.toolTip = "Use streaming ASR for faster wake word detection (~500ms vs ~10s)"
+        menu.addItem(streamingItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -332,6 +352,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ) { [weak self] in
             self?.showQueuePicker()
         }
+
+        // Register ambient mode toggle hotkey: ⌥⌘A (Option + Command + A)
+        // keyCode 0 = A key
+        ambientHotKeyManager.registerHotKey(
+            modifiers: UInt32(cmdKey | optionKey),
+            keyCode: 0
+        ) { [weak self] in
+            self?.toggleAmbientMode()
+        }
+        log.info("Ambient mode hotkey registered: ⌥⌘A")
 
         #if DEBUG
         // Register debug paste test hotkey: ⌃⌘T (Control + Command + T)
@@ -478,6 +508,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    private func toggleAmbientMode() {
+        let wasEnabled = AmbientController.shared.state != .disabled
+        log.info("Toggling ambient mode (currently \(wasEnabled ? "enabled" : "disabled"))")
+        AmbientController.shared.toggle()
+    }
+
+    @objc private func toggleAmbientModeFromMenu(_ sender: NSMenuItem) {
+        toggleAmbientMode()
+        sender.state = AmbientSettings.shared.isEnabled ? .on : .off
+    }
+
+    @objc private func clearFailedQueue() {
+        let count = LiveDatabase.countQueued()
+        guard count > 0 else {
+            log.info("No failed items to clear")
+            return
+        }
+
+        TranscriptionRetryManager.shared.clearPending()
+        log.info("Cleared \(count) failed transcriptions from queue")
+    }
+
+    @objc private func toggleStreamingWakeFromMenu(_ sender: NSMenuItem) {
+        let newValue = !AmbientSettings.shared.useStreamingASR
+        AmbientSettings.shared.useStreamingASR = newValue
+        sender.state = newValue ? .on : .off
+        log.info("Streaming wake detection: \(newValue ? "enabled" : "disabled")")
+
+        // If ambient is currently running, it will pick up the change via the settings binding
+    }
+
     @objc private func showHistory() {
         // Open Talkie app via URL scheme - environment-aware
         let scheme = TalkieEnvironment.current.talkieURLScheme
@@ -540,6 +601,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Task { @MainActor in
             self.updateRecentMenu()
             self.updatePermissionsMenuItem()
+            self.updateAmbientMenuItem()
+            self.updateStreamingMenuItem()
+            self.updateClearQueueMenuItem()
+        }
+    }
+
+    private func updateAmbientMenuItem() {
+        guard let menu = statusItem.menu,
+              let ambientItem = menu.items.first(where: { $0.action == #selector(toggleAmbientModeFromMenu) }) else {
+            return
+        }
+        ambientItem.state = AmbientSettings.shared.isEnabled ? .on : .off
+    }
+
+    private func updateStreamingMenuItem() {
+        guard let menu = statusItem.menu,
+              let streamingItem = menu.items.first(where: { $0.action == #selector(toggleStreamingWakeFromMenu) }) else {
+            return
+        }
+        streamingItem.state = AmbientSettings.shared.useStreamingASR ? .on : .off
+    }
+
+    private func updateClearQueueMenuItem() {
+        guard let menu = statusItem.menu,
+              let clearItem = menu.items.first(where: { $0.action == #selector(clearFailedQueue) }) else {
+            return
+        }
+        let count = LiveDatabase.countQueued()
+        if count > 0 {
+            clearItem.title = "Clear Failed Queue (\(count))"
+            clearItem.isHidden = false
+        } else {
+            clearItem.isHidden = true
         }
     }
 

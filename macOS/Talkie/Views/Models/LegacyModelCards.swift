@@ -226,7 +226,7 @@ struct FamilyModelCard: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                         .background(Color.primary.opacity(isHovered ? 0.06 : 0.03))
-                        .cornerRadius(6)
+                        .cornerRadius(CornerRadius.xs)
                     }
                     .buttonStyle(.plain)
                 } else {
@@ -244,9 +244,9 @@ struct FamilyModelCard: View {
                             isHovered ? AnyView(Color.accentColor.opacity(0.1)) :
                             AnyView(LinearGradient(colors: [Color.primary.opacity(0.06), Color.primary.opacity(0.08)], startPoint: .top, endPoint: .bottom))
                         )
-                        .cornerRadius(6)
+                        .cornerRadius(CornerRadius.xs)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 6)
+                            RoundedRectangle(cornerRadius: CornerRadius.xs)
                                 .stroke(isHovered ? Color.accentColor.opacity(0.3) : settings.cardBorderDefault, lineWidth: 1)
                         )
                     }
@@ -538,7 +538,7 @@ struct WhisperFamilyCard: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
                     .background(Color.primary.opacity(isHovered ? 0.06 : 0.03))
-                    .cornerRadius(6)
+                    .cornerRadius(CornerRadius.xs)
                 }
                 .buttonStyle(.plain)
             } else {
@@ -556,9 +556,9 @@ struct WhisperFamilyCard: View {
                         isHovered ? AnyView(Color.accentColor.opacity(0.1)) :
                         AnyView(LinearGradient(colors: [Color.primary.opacity(0.06), Color.primary.opacity(0.08)], startPoint: .top, endPoint: .bottom))
                     )
-                    .cornerRadius(6)
+                    .cornerRadius(CornerRadius.xs)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 6)
+                        RoundedRectangle(cornerRadius: CornerRadius.xs)
                             .stroke(isHovered ? Color.accentColor.opacity(0.3) : settings.cardBorderDefault, lineWidth: 1)
                     )
                 }
@@ -804,7 +804,7 @@ struct ParakeetFamilyCard: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
                     .background(Color.primary.opacity(isHovered ? 0.06 : 0.03))
-                    .cornerRadius(6)
+                    .cornerRadius(CornerRadius.xs)
                 }
                 .buttonStyle(.plain)
             } else {
@@ -822,9 +822,9 @@ struct ParakeetFamilyCard: View {
                         isHovered ? AnyView(Color.accentColor.opacity(0.1)) :
                         AnyView(LinearGradient(colors: [Color.primary.opacity(0.06), Color.primary.opacity(0.08)], startPoint: .top, endPoint: .bottom))
                     )
-                    .cornerRadius(6)
+                    .cornerRadius(CornerRadius.xs)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 6)
+                        RoundedRectangle(cornerRadius: CornerRadius.xs)
                             .stroke(isHovered ? Color.accentColor.opacity(0.3) : settings.cardBorderDefault, lineWidth: 1)
                     )
                 }

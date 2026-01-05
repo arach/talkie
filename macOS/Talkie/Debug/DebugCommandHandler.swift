@@ -56,6 +56,12 @@ class DebugCommandHandler {
         case "design-audit":
             await runDesignAudit()
 
+        case "environment-crash":
+            await triggerEnvironmentCrash()
+
+        case "pull-memo":
+            await pullMemo(args: args)
+
         case "help":
             printHelp()
             exit(0)
@@ -139,6 +145,78 @@ class DebugCommandHandler {
         exit(0)
     }
 
+    private func pullMemo(args: [String]) async {
+        guard let uuidString = args.first else {
+            print("❌ Usage: --debug=pull-memo <uuid>")
+            print("   Example: --debug=pull-memo 25E8709E-CAF7-4612-92F5-730B419A5902")
+            exit(1)
+        }
+
+        // Parse UUID (handle both hyphenated and compact formats)
+        let normalizedUUID: String
+        if uuidString.contains("-") {
+            normalizedUUID = uuidString.uppercased()
+        } else {
+            // Convert compact to hyphenated: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -> XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+            let s = uuidString.uppercased()
+            guard s.count == 32 else {
+                print("❌ Invalid UUID format: \(uuidString)")
+                exit(1)
+            }
+            let idx = s.startIndex
+            normalizedUUID = "\(s[idx..<s.index(idx, offsetBy: 8)])-\(s[s.index(idx, offsetBy: 8)..<s.index(idx, offsetBy: 12)])-\(s[s.index(idx, offsetBy: 12)..<s.index(idx, offsetBy: 16)])-\(s[s.index(idx, offsetBy: 16)..<s.index(idx, offsetBy: 20)])-\(s[s.index(idx, offsetBy: 20)..<s.index(idx, offsetBy: 32)])"
+        }
+
+        guard let uuid = UUID(uuidString: normalizedUUID) else {
+            print("❌ Invalid UUID: \(uuidString)")
+            exit(1)
+        }
+
+        print("📥 Pulling memo: \(uuid)")
+
+        // Initialize Core Data
+        let context = PersistenceController.shared.container.viewContext
+
+        // Configure TalkieData with context
+        TalkieData.shared.configure(with: context)
+
+        // Wait for TalkieData to be ready
+        try? await Task.sleep(for: .seconds(1))
+
+        // Sync the specific memo
+        await TalkieData.shared.syncMissingMemos(ids: [uuid])
+
+        print("✅ Done")
+        exit(0)
+    }
+
+    private func triggerEnvironmentCrash() async {
+        print("""
+        🔴 Environment Crash Test
+        =========================
+
+        This reproduces the crash from the crash report where:
+        - A view uses @Environment(LiveSettings.self)
+        - But LiveSettings is NOT provided via .environment()
+        - SwiftUI crashes with: "No Observable object of type X found"
+
+        The crash happens because @Environment(Type.self) for @Observable
+        objects has NO default value - it MUST be provided.
+
+        Triggering crash in 2 seconds...
+        """)
+
+        // Give time to read the message
+        try? await Task.sleep(for: .seconds(2))
+
+        // Trigger the crash
+        EnvironmentCrashTestView.triggerImmediateCrash()
+
+        // Keep app running long enough for window to render and crash
+        try? await Task.sleep(for: .seconds(5))
+        exit(0)
+    }
+
     // MARK: - Help
 
     private func printHelp() {
@@ -168,6 +246,16 @@ class DebugCommandHandler {
                 - report.html (interactive report)
                 - report.md (markdown report)
                 - screenshots/ (all settings pages)
+
+          environment-crash
+              Trigger a crash by rendering a view that uses
+              @Environment(LiveSettings.self) without providing it.
+              This reproduces the crash from the crash report.
+
+          pull-memo <uuid>
+              Pull a specific memo from Core Data to GRDB by UUID.
+              Useful for testing the intake pipeline.
+              Example: --debug=pull-memo 25E8709E-CAF7-4612-92F5-730B419A5902
 
           help
               Show this help message

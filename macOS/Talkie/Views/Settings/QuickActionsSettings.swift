@@ -13,8 +13,8 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 // MARK: - Quick Actions Settings View
 
 struct QuickActionsSettingsView: View {
-    private let workflowManager = WorkflowManager.shared
-    @State private var selectedWorkflow: WorkflowDefinition?
+    private let workflowService = WorkflowService.shared
+    @State private var selectedWorkflow: Workflow?
     @State private var showingWorkflowEditor = false
 
     var body: some View {
@@ -140,10 +140,12 @@ struct QuickActionsSettingsView: View {
         .sheet(isPresented: $showingWorkflowEditor) {
             if let workflow = selectedWorkflow {
                 WorkflowEditorSheet(
-                    workflow: workflow,
+                    workflow: workflow.definition,
                     isNew: false,
                     onSave: { updatedWorkflow in
-                        workflowManager.updateWorkflow(updatedWorkflow)
+                        Task {
+                            try? await workflowService.save(updatedWorkflow)
+                        }
                         showingWorkflowEditor = false
                     },
                     onCancel: {
@@ -155,16 +157,16 @@ struct QuickActionsSettingsView: View {
         }
     }
 
-    private var pinnedWorkflows: [WorkflowDefinition] {
-        workflowManager.workflows.filter { $0.isPinned }
+    private var pinnedWorkflows: [Workflow] {
+        workflowService.pinnedWorkflows
     }
 
-    private var unpinnedWorkflows: [WorkflowDefinition] {
-        workflowManager.workflows.filter { !$0.isPinned }
+    private var unpinnedWorkflows: [Workflow] {
+        workflowService.workflows.filter { !$0.isPinned }
     }
 
     @ViewBuilder
-    private func workflowRow(_ workflow: WorkflowDefinition, isPinned: Bool) -> some View {
+    private func workflowRow(_ workflow: Workflow, isPinned: Bool) -> some View {
         HStack(spacing: Spacing.sm) {
             // Icon
             Image(systemName: workflow.icon)
@@ -229,15 +231,14 @@ struct QuickActionsSettingsView: View {
         .cornerRadius(CornerRadius.sm)
     }
 
-    private func editWorkflow(_ workflow: WorkflowDefinition) {
+    private func editWorkflow(_ workflow: Workflow) {
         selectedWorkflow = workflow
         showingWorkflowEditor = true
     }
 
-    private func togglePin(_ workflow: WorkflowDefinition) {
-        var updated = workflow
-        updated.isPinned.toggle()
-        updated.modifiedAt = Date()
-        workflowManager.updateWorkflow(updated)
+    private func togglePin(_ workflow: Workflow) {
+        Task {
+            try? await workflowService.setPinned(!workflow.isPinned, for: workflow.id)
+        }
     }
 }

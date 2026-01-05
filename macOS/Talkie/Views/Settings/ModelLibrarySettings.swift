@@ -38,119 +38,153 @@ struct ModelLibraryView: View {
                         .lineLimit(2)
                 }
 
-                // Cloud Providers Grid
-                LazyVGrid(columns: [
-                    GridItem(.flexible(), spacing: Spacing.sm),
-                    GridItem(.flexible(), spacing: Spacing.sm)
-                ], spacing: Spacing.sm) {
-                    ExpandableCloudProviderCard(
-                        providerId: "openai",
-                        name: "OpenAI",
-                        tagline: "Industry standard for reasoning and vision",
-                        isConfigured: settingsManager.openaiApiKey != nil,
-                        isExpanded: expandedProvider == "openai",
-                        onToggle: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                expandedProvider = expandedProvider == "openai" ? nil : "openai"
-                            }
-                        },
-                        onConfigure: {
-                            // Navigate to API Keys section in this same settings view
-                            NotificationCenter.default.post(name: .navigateToSettings, object: "apiKeys")
-                        }
-                    )
-
-                    ExpandableCloudProviderCard(
-                        providerId: "anthropic",
-                        name: "Anthropic",
-                        tagline: "Extended thinking and nuanced understanding",
-                        isConfigured: settingsManager.anthropicApiKey != nil,
-                        isExpanded: expandedProvider == "anthropic",
-                        onToggle: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                expandedProvider = expandedProvider == "anthropic" ? nil : "anthropic"
-                            }
-                        },
-                        onConfigure: {
-                            NotificationCenter.default.post(name: .navigateToSettings, object: "apiKeys")
-                        }
-                    )
-
-                    ExpandableCloudProviderCard(
-                        providerId: "gemini",
-                        name: "Gemini",
-                        tagline: "Multimodal powerhouse with massive context",
-                        isConfigured: settingsManager.hasValidApiKey,
-                        isExpanded: expandedProvider == "gemini",
-                        onToggle: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                expandedProvider = expandedProvider == "gemini" ? nil : "gemini"
-                            }
-                        },
-                        onConfigure: {
-                            NotificationCenter.default.post(name: .navigateToSettings, object: "apiKeys")
-                        }
-                    )
-
-                    ExpandableCloudProviderCard(
-                        providerId: "groq",
-                        name: "Groq",
-                        tagline: "Ultra-fast inference at scale",
-                        isConfigured: settingsManager.groqApiKey != nil,
-                        isExpanded: expandedProvider == "groq",
-                        onToggle: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                expandedProvider = expandedProvider == "groq" ? nil : "groq"
-                            }
-                        },
-                        onConfigure: {
-                            NotificationCenter.default.post(name: .navigateToSettings, object: "apiKeys")
-                        }
-                    )
-                }
-
-                // Quick configure hint
-                if !hasAnyProviderConfigured {
+                // Cloud Providers Grid Section
+                VStack(alignment: .leading, spacing: Spacing.md) {
                     HStack(spacing: Spacing.sm) {
-                        Image(systemName: "key.fill")
-                            .font(Theme.current.fontBody)
-                            .foregroundColor(Theme.current.foregroundMuted)
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.blue)
+                            .frame(width: 3, height: 14)
 
-                        VStack(alignment: .leading, spacing: Spacing.xxs) {
-                            Text("No API keys configured")
-                                .font(Theme.current.fontSMMedium)
-                                .foregroundColor(Theme.current.foregroundSecondary)
-                            Text("Click 'Configure' on any provider to add your API key")
-                                .font(Theme.current.fontSM)
-                                .foregroundColor(Theme.current.foregroundMuted)
-                        }
+                        Text("CLOUD PROVIDERS")
+                            .font(Theme.current.fontXSBold)
+                            .foregroundColor(Theme.current.foregroundSecondary)
 
                         Spacer()
 
-                        Button(action: {
-                            NotificationCenter.default.post(name: .navigateToSettings, object: "apiKeys")
-                        }) {
-                            Text("Go to API Keys")
-                                .font(Theme.current.fontSMMedium)
-                                .foregroundColor(Theme.current.foregroundSecondary)
-                                .padding(.horizontal, Spacing.sm)
-                                .padding(.vertical, Spacing.xs)
-                                .background(Theme.current.surface2)
-                                .cornerRadius(CornerRadius.xs)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: CornerRadius.xs)
-                                        .stroke(Theme.current.divider, lineWidth: 1)
-                                )
-                        }
-                        .buttonStyle(.plain)
+                        let configuredCount = [
+                            settingsManager.openaiApiKey != nil,
+                            settingsManager.anthropicApiKey != nil,
+                            settingsManager.hasValidApiKey,
+                            settingsManager.groqApiKey != nil
+                        ].filter { $0 }.count
+                        Text("\(configuredCount)/4 CONFIGURED")
+                            .font(.techLabelSmall)
+                            .foregroundColor(configuredCount > 0 ? .green : .orange)
                     }
-                    .padding(Spacing.md)
-                    .background(Theme.current.surface1)
-                    .cornerRadius(CornerRadius.sm)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CornerRadius.sm)
-                            .stroke(Theme.current.divider, lineWidth: 1)
-                    )
+
+                    LazyVGrid(columns: [
+                        GridItem(.flexible(), spacing: Spacing.sm),
+                        GridItem(.flexible(), spacing: Spacing.sm)
+                    ], spacing: Spacing.sm) {
+                        ExpandableCloudProviderCard(
+                            providerId: "openai",
+                            name: "OpenAI",
+                            tagline: "Industry standard for reasoning and vision",
+                            isConfigured: settingsManager.openaiApiKey != nil,
+                            isExpanded: expandedProvider == "openai",
+                            onToggle: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    expandedProvider = expandedProvider == "openai" ? nil : "openai"
+                                }
+                            },
+                            onConfigure: {
+                                // Navigate to API Keys section in this same settings view
+                                NotificationCenter.default.post(name: .navigateToSettings, object: "apiKeys")
+                            }
+                        )
+
+                        ExpandableCloudProviderCard(
+                            providerId: "anthropic",
+                            name: "Anthropic",
+                            tagline: "Extended thinking and nuanced understanding",
+                            isConfigured: settingsManager.anthropicApiKey != nil,
+                            isExpanded: expandedProvider == "anthropic",
+                            onToggle: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    expandedProvider = expandedProvider == "anthropic" ? nil : "anthropic"
+                                }
+                            },
+                            onConfigure: {
+                                NotificationCenter.default.post(name: .navigateToSettings, object: "apiKeys")
+                            }
+                        )
+
+                        ExpandableCloudProviderCard(
+                            providerId: "gemini",
+                            name: "Gemini",
+                            tagline: "Multimodal powerhouse with massive context",
+                            isConfigured: settingsManager.hasValidApiKey,
+                            isExpanded: expandedProvider == "gemini",
+                            onToggle: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    expandedProvider = expandedProvider == "gemini" ? nil : "gemini"
+                                }
+                            },
+                            onConfigure: {
+                                NotificationCenter.default.post(name: .navigateToSettings, object: "apiKeys")
+                            }
+                        )
+
+                        ExpandableCloudProviderCard(
+                            providerId: "groq",
+                            name: "Groq",
+                            tagline: "Ultra-fast inference at scale",
+                            isConfigured: settingsManager.groqApiKey != nil,
+                            isExpanded: expandedProvider == "groq",
+                            onToggle: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    expandedProvider = expandedProvider == "groq" ? nil : "groq"
+                                }
+                            },
+                            onConfigure: {
+                                NotificationCenter.default.post(name: .navigateToSettings, object: "apiKeys")
+                            }
+                        )
+                    }
+                }
+                .settingsSectionCard(padding: Spacing.md)
+
+                // Quick configure hint
+                if !hasAnyProviderConfigured {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        HStack(spacing: Spacing.sm) {
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(Color.orange)
+                                .frame(width: 3, height: 14)
+
+                            Text("GET STARTED")
+                                .font(Theme.current.fontXSBold)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                        }
+
+                        HStack(spacing: Spacing.sm) {
+                            Image(systemName: "key.fill")
+                                .font(Theme.current.fontBody)
+                                .foregroundColor(Theme.current.foregroundMuted)
+
+                            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                                Text("No API keys configured")
+                                    .font(Theme.current.fontSMMedium)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
+                                Text("Click 'Configure' on any provider to add your API key")
+                                    .font(Theme.current.fontSM)
+                                    .foregroundColor(Theme.current.foregroundMuted)
+                            }
+
+                            Spacer()
+
+                            Button(action: {
+                                NotificationCenter.default.post(name: .navigateToSettings, object: "apiKeys")
+                            }) {
+                                Text("Go to API Keys")
+                                    .font(Theme.current.fontSMMedium)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
+                                    .padding(.horizontal, Spacing.sm)
+                                    .padding(.vertical, Spacing.xs)
+                                    .background(Theme.current.surface2)
+                                    .cornerRadius(CornerRadius.xs)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: CornerRadius.xs)
+                                            .stroke(Theme.current.divider, lineWidth: 1)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(Spacing.sm)
+                        .background(Theme.current.surface1)
+                        .cornerRadius(CornerRadius.sm)
+                    }
+                    .settingsSectionCard(padding: Spacing.md)
                 }
 
                 Spacer(minLength: Spacing.xxl)

@@ -12,7 +12,7 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 
 // MARK: - Workflows View
 struct WorkflowsView: View {
-    private let workflowManager = WorkflowManager.shared
+    private let workflowService = WorkflowService.shared
 
     var body: some View {
         SettingsPageContainer {
@@ -35,19 +35,19 @@ struct WorkflowsView: View {
 
                     Spacer()
 
-                    Text("\(workflowManager.workflows.count) WORKFLOWS")
+                    Text("\(workflowService.workflows.count) WORKFLOWS")
                         .font(.system(size: 9, weight: .medium, design: .monospaced))
                         .foregroundColor(.purple.opacity(0.8))
                 }
 
                 VStack(spacing: 8) {
-                    ForEach(workflowManager.workflows.prefix(5)) { workflow in
+                    ForEach(workflowService.workflows.prefix(5)) { workflow in
                         WorkflowPreviewRow(workflow: workflow)
                     }
 
-                    if workflowManager.workflows.count > 5 {
+                    if workflowService.workflows.count > 5 {
                         HStack {
-                            Text("+ \(workflowManager.workflows.count - 5) more workflows")
+                            Text("+ \(workflowService.workflows.count - 5) more workflows")
                                 .font(Theme.current.fontXS)
                                 .foregroundColor(Theme.current.foregroundSecondary)
                             Spacer()
@@ -98,7 +98,7 @@ struct WorkflowsView: View {
                 }
                 .padding(16)
                 .background(Theme.current.surface1)
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
 
                 // Feature list
                 VStack(alignment: .leading, spacing: 8) {
@@ -109,7 +109,7 @@ struct WorkflowsView: View {
                 }
                 .padding(12)
                 .background(Theme.current.surface1)
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
             }
             .settingsSectionCard(padding: 16, cornerRadius: 8)
 
@@ -125,14 +125,14 @@ struct WorkflowsView: View {
             }
             .padding(12)
             .background(Color.orange.opacity(0.1))
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
         }
     }
 }
 
 // MARK: - Workflow Preview Row
 private struct WorkflowPreviewRow: View {
-    let workflow: WorkflowDefinition
+    let workflow: Workflow
 
     var body: some View {
         HStack(spacing: 12) {
@@ -141,7 +141,7 @@ private struct WorkflowPreviewRow: View {
                 .foregroundColor(workflow.color.color)
                 .frame(width: 28, height: 28)
                 .background(workflow.color.color.opacity(0.15))
-                .cornerRadius(6)
+                .cornerRadius(CornerRadius.xs)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(workflow.name)
@@ -177,7 +177,7 @@ private struct WorkflowPreviewRow: View {
         }
         .padding(10)
         .background(Theme.current.surface1)
-        .cornerRadius(6)
+        .cornerRadius(CornerRadius.xs)
     }
 }
 
@@ -250,7 +250,7 @@ struct ActivityLogView: View {
                 }
                 .padding(16)
                 .background(Theme.current.surface1)
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
 
                 // Planned features
                 VStack(alignment: .leading, spacing: 8) {
@@ -261,7 +261,7 @@ struct ActivityLogView: View {
                 }
                 .padding(12)
                 .background(Theme.current.surface1)
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
             }
             .settingsSectionCard(padding: 16, cornerRadius: 8)
         }
@@ -348,7 +348,7 @@ struct AllowedCommandsView: View {
                         }
                         .padding(8)
                         .background(result.contains("Found") ? Color.green.opacity(0.1) : Theme.current.surface1)
-                        .cornerRadius(6)
+                        .cornerRadius(CornerRadius.xs)
                     }
 
                     Text("Enter the full path to the executable (e.g., /Users/you/.bun/bin/claude)")
@@ -357,7 +357,7 @@ struct AllowedCommandsView: View {
                 }
                 .padding(12)
                 .background(Theme.current.surface1)
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
             }
             .settingsSectionCard(padding: 16, cornerRadius: 8)
 
@@ -399,7 +399,7 @@ struct AllowedCommandsView: View {
                     .padding(12)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Theme.current.surface1)
-                    .cornerRadius(8)
+                    .cornerRadius(CornerRadius.sm)
                 } else {
                     VStack(spacing: 6) {
                         ForEach(customCommands, id: \.self) { path in
@@ -425,7 +425,7 @@ struct AllowedCommandsView: View {
                             }
                             .padding(10)
                             .background(Theme.current.surface1)
-                            .cornerRadius(6)
+                            .cornerRadius(CornerRadius.xs)
                         }
                     }
                 }
@@ -471,7 +471,7 @@ struct AllowedCommandsView: View {
                 }
                 .padding(12)
                 .background(Theme.current.surface1)
-                .cornerRadius(8)
+                .cornerRadius(CornerRadius.sm)
             }
             .settingsSectionCard(padding: 16, cornerRadius: 8)
 
@@ -487,7 +487,7 @@ struct AllowedCommandsView: View {
             }
             .padding(12)
             .background(Color.orange.opacity(0.1))
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
         }
         .onAppear {
             loadCustomCommands()

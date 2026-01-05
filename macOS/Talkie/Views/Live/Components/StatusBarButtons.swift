@@ -27,7 +27,7 @@ struct ConsoleButton: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 4)
                 .background(
-                    RoundedRectangle(cornerRadius: 4)
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
                         .fill(isHovered ? TalkieTheme.hover : Color.clear)
                 )
         }

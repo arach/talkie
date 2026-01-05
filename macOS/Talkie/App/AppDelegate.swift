@@ -592,6 +592,90 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             print("✅ Cleared all pending and recent actions")
             exit(0)
         }
+
+        cliHandler.register(
+            "environment-crash",
+            description: "Trigger a crash by rendering a view without required @Environment value (reproduces crash report)"
+        ) { _ in
+            print("""
+            🔴 Environment Crash Test
+            =========================
+
+            This reproduces the crash from the crash report where:
+            - A view uses @Environment(LiveSettings.self)
+            - But LiveSettings is NOT provided via .environment()
+            - SwiftUI crashes with: "No Observable object of type X found"
+
+            Triggering crash in 2 seconds...
+            """)
+
+            try? await Task.sleep(for: .seconds(2))
+
+            await MainActor.run {
+                EnvironmentCrashTestView.triggerImmediateCrash()
+            }
+
+            // Keep running long enough for the crash to occur
+            try? await Task.sleep(for: .seconds(10))
+            exit(0)
+        }
+
+        cliHandler.register(
+            "pull-memo",
+            description: "Pull a specific memo from Core Data to GRDB by UUID. Usage: --debug=pull-memo <uuid>"
+        ) { args in
+            guard let uuidString = args.first else {
+                print("❌ Usage: --debug=pull-memo <uuid>")
+                print("   Example: --debug=pull-memo 25E8709E-CAF7-4612-92F5-730B419A5902")
+                exit(1)
+                return
+            }
+
+            // Parse UUID (handle both hyphenated and compact formats)
+            let normalizedUUID: String
+            if uuidString.contains("-") {
+                normalizedUUID = uuidString.uppercased()
+            } else {
+                // Convert compact to hyphenated
+                let s = uuidString.uppercased()
+                guard s.count == 32 else {
+                    print("❌ Invalid UUID format: \(uuidString)")
+                    exit(1)
+                    return
+                }
+                let idx = s.startIndex
+                normalizedUUID = "\(s[idx..<s.index(idx, offsetBy: 8)])-\(s[s.index(idx, offsetBy: 8)..<s.index(idx, offsetBy: 12)])-\(s[s.index(idx, offsetBy: 12)..<s.index(idx, offsetBy: 16)])-\(s[s.index(idx, offsetBy: 16)..<s.index(idx, offsetBy: 20)])-\(s[s.index(idx, offsetBy: 20)..<s.index(idx, offsetBy: 32)])"
+            }
+
+            guard let uuid = UUID(uuidString: normalizedUUID) else {
+                print("❌ Invalid UUID: \(uuidString)")
+                exit(1)
+                return
+            }
+
+            print("📥 Pulling memo: \(uuid)")
+
+            // Ensure TalkieData has CoreData context
+            await MainActor.run {
+                let context = PersistenceController.shared.container.viewContext
+                TalkieData.shared.configure(with: context)
+            }
+
+            // Wait for initialization
+            try? await Task.sleep(for: .seconds(1))
+
+            // Sync the specific memo
+            await TalkieData.shared.syncMissingMemos(ids: [uuid])
+
+            // Verify it was synced
+            let repo = LocalRepository()
+            if let memo = try? await repo.fetchMemo(id: uuid) {
+                print("✅ Synced: '\(memo.memo.title ?? "Untitled")' (\(Int(memo.memo.duration))s)")
+            } else {
+                print("⚠️ Memo not found in Core Data or sync failed")
+            }
+            exit(0)
+        }
     }
 
     // MARK: - URL Handling

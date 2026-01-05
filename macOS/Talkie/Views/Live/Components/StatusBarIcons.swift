@@ -48,7 +48,7 @@ struct StatusIcon: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 4)
             .background(
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
                     .fill(isHovered ? TalkieTheme.hover : Color.clear)
             )
         }
@@ -131,7 +131,7 @@ struct SimpleEngineIcon: View {
                 .padding(.horizontal, 4)
                 .padding(.vertical, 4)
                 .background(
-                    RoundedRectangle(cornerRadius: 4)
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
                         .fill(isHovered ? TalkieTheme.hover : Color.clear)
                 )
         }
@@ -259,7 +259,7 @@ struct EngineStatusIcon: View {
                 .padding(.horizontal, showLabels ? 6 : 4)
                 .padding(.vertical, 4)
                 .background(
-                    RoundedRectangle(cornerRadius: 4)
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
                         .fill(isHovered ? TalkieTheme.hover : Color.clear)
                 )
             }
@@ -276,7 +276,7 @@ struct EngineStatusIcon: View {
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
                         .background(
-                            RoundedRectangle(cornerRadius: 4)
+                            RoundedRectangle(cornerRadius: CornerRadius.xs)
                                 .fill(TalkieTheme.hover)
                         )
                 }
@@ -420,7 +420,7 @@ struct ModelStatusIcon: View {
             .padding(.horizontal, showLabels ? 6 : 4)
             .padding(.vertical, 4)
             .background(
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
                     .fill(isHovered ? TalkieTheme.hover : Color.clear)
             )
         }

@@ -401,7 +401,7 @@ struct PendingDeletionsSection: View {
                 }
             }
             .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
-            .cornerRadius(8)
+            .cornerRadius(CornerRadius.sm)
             .padding(.horizontal, 16)
         }
         .padding(.bottom, 8)
@@ -590,7 +590,7 @@ struct SyncRecordDetailRow: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(recordTypeColor(detail.recordType))
-                .cornerRadius(4)
+                .cornerRadius(CornerRadius.xs)
 
             // Title
             Text(detail.title)
@@ -850,7 +850,7 @@ struct DevModeSyncSection: View {
         }
         .padding(.vertical, 12)
         .background(Color.orange.opacity(0.05))
-        .cornerRadius(8)
+        .cornerRadius(CornerRadius.sm)
         .padding(.horizontal, 16)
         .task {
             stats = await DevSyncStats.gather()

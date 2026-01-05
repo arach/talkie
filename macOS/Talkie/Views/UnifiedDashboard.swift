@@ -8,12 +8,13 @@
 import SwiftUI
 import Combine
 import AppKit
+import TalkieKit
 
 // MARK: - Card Style Modifier
 
 /// Unified card styling - uses Liquid Glass on macOS 26+, falls back to shadow-based on older
 struct CardStyle: ViewModifier {
-    var cornerRadius: CGFloat = 12
+    var cornerRadius: CGFloat = CornerRadius.md
     var padding: CGFloat = Spacing.md
 
     func body(content: Content) -> some View {
@@ -24,7 +25,7 @@ struct CardStyle: ViewModifier {
 }
 
 extension View {
-    func cardStyle(cornerRadius: CGFloat = 12, padding: CGFloat = Spacing.md) -> some View {
+    func cardStyle(cornerRadius: CGFloat = CornerRadius.md, padding: CGFloat = Spacing.md) -> some View {
         modifier(CardStyle(cornerRadius: cornerRadius, padding: padding))
     }
 }
@@ -309,7 +310,7 @@ struct UnifiedDashboard: View {
                     }
                 }
             }
-            .liquidGlassCard(cornerRadius: 10)
+            .liquidGlassCard(cornerRadius: CornerRadius.sm)
         }
         .frame(maxWidth: .infinity)
     }
@@ -348,7 +349,7 @@ struct UnifiedDashboard: View {
                     }
                 }
             }
-            .liquidGlassCard(cornerRadius: 10)
+            .liquidGlassCard(cornerRadius: CornerRadius.sm)
         }
         .frame(maxWidth: .infinity)
     }
@@ -566,7 +567,7 @@ struct UnifiedDashboard: View {
         }
         .frame(maxWidth: .infinity)
         .padding(48)
-        .liquidGlassCard(cornerRadius: 16)
+        .liquidGlassCard(cornerRadius: CornerRadius.lg)
     }
 
     // MARK: - Data Loading
@@ -770,7 +771,7 @@ struct MemoActivityRow: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: CornerRadius.xs)
                 .fill(isHovered ? Theme.current.surfaceHover : Color.clear)
         )
         }
@@ -862,7 +863,7 @@ struct DictationActivityRow: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: CornerRadius.xs)
                 .fill(isHovered ? Theme.current.surfaceHover : Color.clear)
         )
         }
@@ -922,7 +923,7 @@ struct CompactStatCard: View {
         }
         .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlassCard(cornerRadius: 12, tint: color.opacity(0.2), isInteractive: true, depth: .prominent)
+        .liquidGlassCard(cornerRadius: CornerRadius.md, tint: color.opacity(0.2), isInteractive: true, depth: .prominent)
         .scaleEffect(isHovered ? 1.02 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovered)
         .onHover { hovering in
@@ -997,7 +998,7 @@ struct UnifiedActivityRow: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: CornerRadius.xs)
                 .fill(isHovered ? Theme.current.surfaceHover : Color.clear)
         )
         .onHover { hovering in
@@ -1044,7 +1045,7 @@ struct DashboardActionCard: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .liquidGlassCard(cornerRadius: 10, tint: isHovered ? color.opacity(0.25) : color.opacity(0.08), isInteractive: true, depth: .standard)
+            .liquidGlassCard(cornerRadius: CornerRadius.sm, tint: isHovered ? color.opacity(0.25) : color.opacity(0.08), isInteractive: true, depth: .standard)
         }
         .buttonStyle(.plain)
         .onHover { hovering in
@@ -1306,7 +1307,7 @@ private struct CompactActionButton: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
                     .fill(isHovered ? Theme.current.surfaceHover : Color.clear)
             )
         }

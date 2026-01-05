@@ -608,7 +608,7 @@ public final class ServiceManager {
 
         if path.contains(".dev.app") || path.contains("/Debug/") || path.contains("DerivedData") {
             return .dev
-        } else if path.contains(".staging.app") {
+        } else if path.contains(".staging.app") || path.contains("/Staging/") {
             return .staging
         }
         return .production
@@ -823,6 +823,28 @@ public final class LiveServiceState: NSObject, TalkieLiveStateObserverProtocol {
             self?.audioLevel = level
         }
     }
+
+    nonisolated public func ambientCommandReceived(command: String, duration: TimeInterval, bufferContext: String?) {
+        DispatchQueue.main.async { [weak self] in
+            self?.handleAmbientCommand(command, duration: duration, bufferContext: bufferContext)
+        }
+    }
+
+    private func handleAmbientCommand(_ command: String, duration: TimeInterval, bufferContext: String?) {
+        logger.info("[Live] Ambient command received: '\(command.prefix(50))...' (\(String(format: "%.1f", duration))s)")
+
+        // Store for UI (optional)
+        lastAmbientCommand = command
+        lastAmbientCommandTime = Date()
+
+        // TODO: Route to workflow system
+        // For now, just log the command
+        // Future: Create synthetic memo or trigger workflow directly
+    }
+
+    // Track last ambient command for UI display
+    public private(set) var lastAmbientCommand: String?
+    public private(set) var lastAmbientCommandTime: Date?
 
     private func updateState(_ stateString: String, _ elapsed: TimeInterval) {
         let newState = LiveState(rawValue: stateString) ?? .idle

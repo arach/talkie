@@ -13,7 +13,7 @@ struct CompleteView: View {
     let onComplete: () -> Void
     @Bindable private var manager = OnboardingManager.shared
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(LiveSettings.self) private var liveSettings
+    private var liveSettings: LiveSettings { LiveSettings.shared }
     @State private var scale: CGFloat = 0.5
     @State private var rotation: Double = 0
     @State private var showCelebration = false
@@ -150,12 +150,12 @@ struct CompleteView: View {
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
                                 .background(
-                                    RoundedRectangle(cornerRadius: 6)
+                                    RoundedRectangle(cornerRadius: CornerRadius.xs)
                                         .fill(colors.surfaceCard)
                                         .shadow(color: .black.opacity(0.2), radius: 1, y: 1)
                                 )
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 6)
+                                    RoundedRectangle(cornerRadius: CornerRadius.xs)
                                         .strokeBorder(colors.border, lineWidth: 1)
                                 )
                         }
@@ -208,10 +208,10 @@ struct CompleteView: View {
                             .padding(.horizontal, 8)
                             .padding(.vertical, 5)
                             .background(
-                                RoundedRectangle(cornerRadius: 6)
+                                RoundedRectangle(cornerRadius: CornerRadius.xs)
                                     .fill(colors.border.opacity(0.3))
                                     .overlay(
-                                        RoundedRectangle(cornerRadius: 6)
+                                        RoundedRectangle(cornerRadius: CornerRadius.xs)
                                             .stroke(colors.border, lineWidth: 0.5)
                                     )
                             )
@@ -377,7 +377,7 @@ private struct LiveModePromoCard: View {
                         .padding(.vertical, 2)
                         .background(Color.purple.opacity(0.2))
                         .foregroundColor(.purple)
-                        .cornerRadius(4)
+                        .cornerRadius(CornerRadius.xs)
                 }
 
                 Button(action: {
@@ -439,7 +439,7 @@ private struct SimplePillDemo: View {
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(
-                        RoundedRectangle(cornerRadius: 4)
+                        RoundedRectangle(cornerRadius: CornerRadius.xs)
                             .fill(colors.border.opacity(0.5))
                     )
                 } else {

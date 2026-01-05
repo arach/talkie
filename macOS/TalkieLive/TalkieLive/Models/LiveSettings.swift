@@ -51,29 +51,26 @@ enum AppearanceMode: String, CaseIterable, Codable {
 // MARK: - Visual Theme (Color Schemes)
 
 enum VisualTheme: String, CaseIterable, Codable {
-    case live = "live"
-    case midnight = "midnight"
+    case live = "live"          // Maps to talkiePro
+    case midnight = "midnight"  // Maps to talkiePro (legacy)
     case terminal = "terminal"
-    case warm = "warm"
     case minimal = "minimal"
 
     var displayName: String {
         switch self {
-        case .live: return "Live"
-        case .midnight: return "Midnight"
+        case .live: return "Pro"
+        case .midnight: return "Pro"
         case .terminal: return "Terminal"
-        case .warm: return "Warm"
         case .minimal: return "Minimal"
         }
     }
 
     var description: String {
         switch self {
-        case .live: return "Default blue accent"
-        case .midnight: return "Deep black, high contrast"
-        case .terminal: return "Green on black"
-        case .warm: return "Cozy orange tones"
-        case .minimal: return "Clean and subtle"
+        case .live: return "Professional dark theme"
+        case .midnight: return "Professional dark theme"
+        case .terminal: return "Clean monospace, sharp corners"
+        case .minimal: return "Light and subtle"
         }
     }
 
@@ -82,8 +79,7 @@ enum VisualTheme: String, CaseIterable, Codable {
         switch self {
         case .live: return .blue
         case .midnight: return .blue
-        case .terminal: return .green
-        case .warm: return .orange
+        case .terminal: return .gray    // No gimmicks
         case .minimal: return .gray
         }
     }
@@ -94,7 +90,6 @@ enum VisualTheme: String, CaseIterable, Codable {
         case .live: return .dark
         case .midnight: return .dark
         case .terminal: return .dark
-        case .warm: return .dark
         case .minimal: return .system
         }
     }
@@ -103,15 +98,14 @@ enum VisualTheme: String, CaseIterable, Codable {
     var previewColors: (bg: Color, fg: Color, accent: Color) {
         switch self {
         case .live:
-            return (Color(white: 0.1), Color.white.opacity(0.9), Color.blue)
+            return (Color(white: 0.08), Color.white.opacity(0.85), Color.blue)
         case .midnight:
-            return (Color.black, Color.white.opacity(0.85), Color(red: 0.4, green: 0.7, blue: 1.0))
+            return (Color(white: 0.08), Color.white.opacity(0.85), Color(red: 0.4, green: 0.7, blue: 1.0))
         case .terminal:
-            return (Color.black, Color.green.opacity(0.9), Color.green)
-        case .warm:
-            return (Color(red: 0.1, green: 0.08, blue: 0.06), Color.white.opacity(0.9), Color.orange)
+            // Ghostty-style: black bg, light gray text, subtle gray accent
+            return (Color.black, Color(white: 0.85), Color(white: 0.5))
         case .minimal:
-            return (Color(white: 0.95), Color.black.opacity(0.8), Color.gray)
+            return (Color(white: 0.96), Color(white: 0.2), Color.gray)
         }
     }
 }

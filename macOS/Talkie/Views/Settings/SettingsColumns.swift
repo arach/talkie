@@ -230,7 +230,7 @@ struct SettingsSidebarColumn: View {
                     }
 
                     // DICTATION
-                    SettingsSidebarSection(title: "DICTATION", isActive: selectedSection == .dictationCapture || selectedSection == .dictationOutput) {
+                    SettingsSidebarSection(title: "DICTATION", isActive: selectedSection == .dictationCapture || selectedSection == .dictationOutput || selectedSection == .dictionary) {
                         SettingsSidebarItem(
                             icon: "mic.fill",
                             title: "CAPTURE",
@@ -244,6 +244,13 @@ struct SettingsSidebarColumn: View {
                             isSelected: selectedSection == .dictationOutput
                         ) {
                             selectedSection = .dictationOutput
+                        }
+                        SettingsSidebarItem(
+                            icon: "text.book.closed",
+                            title: "DICTIONARY",
+                            isSelected: selectedSection == .dictionary
+                        ) {
+                            selectedSection = .dictionary
                         }
                     }
 

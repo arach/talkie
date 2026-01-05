@@ -150,10 +150,10 @@ struct PillDemoAnimation: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
                         .background(
-                            RoundedRectangle(cornerRadius: 4)
+                            RoundedRectangle(cornerRadius: CornerRadius.xs)
                                 .fill(isRecordingExpanded ? Color.red.opacity(0.2) : colors.border.opacity(0.5))
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 4)
+                                    RoundedRectangle(cornerRadius: CornerRadius.xs)
                                         .stroke(isRecordingExpanded ? Color.red.opacity(0.3) : colors.border, lineWidth: 0.5)
                                 )
                         )

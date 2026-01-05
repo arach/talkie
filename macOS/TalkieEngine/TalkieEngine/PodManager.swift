@@ -73,9 +73,20 @@ final class PodManager {
         if let builtProductsDir = ProcessInfo.processInfo.environment["__XCODE_BUILT_PRODUCTS_DIR_PATHS"]?.split(separator: ":").first {
             // Running from Xcode - use same build directory
             self.podExecutablePath = "\(builtProductsDir)/TalkieEnginePod"
+            AppLogger.shared.info(.system, "Pod path (Xcode): \(self.podExecutablePath)")
         } else {
-            // Fallback: look in TalkieSuite DerivedData
-            self.podExecutablePath = "/Users/arach/Library/Developer/Xcode/DerivedData/TalkieSuite-guavpoyqmfbntrgcygyesivttxyh/Build/Products/Debug/TalkieEnginePod"
+            // Fallback: Check standalone build first (has streaming-asr), then TalkieSuite
+            let standalonePath = "/Users/arach/Library/Developer/Xcode/DerivedData/TalkieEnginePod-cxskgjvfilrsfqdtktvylicabxbs/Build/Products/Debug/TalkieEnginePod"
+            let suitePath = "/Users/arach/Library/Developer/Xcode/DerivedData/TalkieSuite-guavpoyqmfbntrgcygyesivttxyh/Build/Products/Debug/TalkieEnginePod"
+
+            // Prefer standalone build (more up-to-date with streaming-asr)
+            if FileManager.default.fileExists(atPath: standalonePath) {
+                self.podExecutablePath = standalonePath
+                AppLogger.shared.info(.system, "Pod path (standalone): \(self.podExecutablePath)")
+            } else {
+                self.podExecutablePath = suitePath
+                AppLogger.shared.info(.system, "Pod path (suite): \(self.podExecutablePath)")
+            }
         }
     }
 

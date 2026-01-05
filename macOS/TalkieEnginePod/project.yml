@@ -45,7 +45,7 @@ targets:
         SWIFT_VERSION: "5.9"
         PRODUCT_NAME: TalkieEnginePod
         ENABLE_HARDENED_RUNTIME: YES
-        CODE_SIGN_ENTITLEMENTS: ""
+        CODE_SIGN_ENTITLEMENTS: TalkieEnginePod.entitlements
         # Find frameworks next to executable and in TalkieEngine.app
         LD_RUNPATH_SEARCH_PATHS:
           - "@executable_path"
@@ -54,3 +54,5 @@ targets:
     dependencies:
       - package: FluidAudio
         product: FluidAudioTTS
+      - package: FluidAudio
+        product: FluidAudio  # For streaming ASR

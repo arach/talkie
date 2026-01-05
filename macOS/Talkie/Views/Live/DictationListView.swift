@@ -237,7 +237,7 @@ struct DictationListView: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
                 .background(TalkieTheme.surfaceCard)
-                .cornerRadius(6)
+                .cornerRadius(CornerRadius.xs)
 
                 Spacer()
 
@@ -606,7 +606,7 @@ struct DictationRowEnhanced: View {
 
     private var leadingIcon: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
                 .fill(iconColor.opacity(Opacity.medium))
                 .frame(width: 36, height: 36)
 
@@ -636,7 +636,7 @@ struct DictationRowEnhanced: View {
         .padding(.horizontal, Spacing.xs)
         .padding(.vertical, Spacing.xxs)
         .background(TalkieTheme.surfaceCard)
-        .cornerRadius(4)
+        .cornerRadius(CornerRadius.xs)
     }
 
     private var rowBackground: some View {
