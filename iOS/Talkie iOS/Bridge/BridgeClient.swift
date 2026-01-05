@@ -56,6 +56,49 @@ actor BridgeClient {
         return try JSONDecoder().decode(MessageResponse.self, from: data)
     }
 
+    /// Send audio to be transcribed and submitted to Claude
+    /// - Parameters:
+    ///   - sessionId: Claude session ID
+    ///   - audioData: Raw audio data (m4a format)
+    /// - Returns: Response including the transcript
+    func sendAudio(sessionId: String, audioData: Data) async throws -> MessageResponse {
+        let body = AudioMessageRequest(
+            audio: audioData.base64EncodedString(),
+            format: "m4a"
+        )
+        let data = try await post("/sessions/\(sessionId)/message", body: body, timeout: 30)
+        return try JSONDecoder().decode(MessageResponse.self, from: data)
+    }
+
+    /// Force press Enter key in a session's terminal
+    /// Useful when auto-submit doesn't work
+    /// Sends empty message which triggers just pressing Enter
+    func forceEnter(sessionId: String) async throws -> MessageResponse {
+        // Send empty text - server will just press Enter without inserting anything
+        let body = MessageRequest(text: "")
+        let data = try await post("/sessions/\(sessionId)/message", body: body)
+        return try JSONDecoder().decode(MessageResponse.self, from: data)
+    }
+
+    // MARK: - Window & Screenshot API
+
+    /// List all terminal windows with metadata
+    func windows() async throws -> WindowsResponse {
+        let data = try await get("/windows")
+        return try JSONDecoder().decode(WindowsResponse.self, from: data)
+    }
+
+    /// Get screenshot of a specific window (returns JPEG Data)
+    func windowScreenshot(windowId: UInt32) async throws -> Data {
+        return try await get("/windows/\(windowId)/screenshot")
+    }
+
+    /// Get all terminal window screenshots with metadata
+    func windowCaptures() async throws -> WindowCapturesResponse {
+        let data = try await get("/windows/captures")
+        return try JSONDecoder().decode(WindowCapturesResponse.self, from: data)
+    }
+
     // MARK: - HTTP Methods
 
     private func get(_ path: String) async throws -> Data {
@@ -83,7 +126,7 @@ actor BridgeClient {
         return data
     }
 
-    private func post<T: Encodable>(_ path: String, body: T) async throws -> Data {
+    private func post<T: Encodable>(_ path: String, body: T, timeout: TimeInterval = 10) async throws -> Data {
         guard let baseURL = baseURL else {
             throw BridgeError.notConfigured
         }
@@ -94,7 +137,7 @@ actor BridgeClient {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 10
+        request.timeoutInterval = timeout
         request.httpBody = try JSONEncoder().encode(body)
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -125,9 +168,10 @@ struct SessionsResponse: Codable {
 }
 
 struct ClaudeSession: Codable, Identifiable {
-    let id: String
-    let project: String
-    let projectPath: String
+    let id: String              // Claude session UUID
+    let folderName: String?     // Encoded path (e.g., "-Users-arach-dev-talkie")
+    let project: String         // Display name (e.g., "talkie")
+    let projectPath: String     // Full path (e.g., "/Users/arach/dev/talkie")
     let isLive: Bool
     let lastSeen: String
     let messageCount: Int
@@ -175,9 +219,16 @@ struct MessageRequest: Codable {
     let text: String
 }
 
+
+struct AudioMessageRequest: Codable {
+    let audio: String  // Base64 encoded audio
+    let format: String  // "m4a", "wav", etc.
+}
+
 struct MessageResponse: Codable {
     let success: Bool
     let error: String?
+    let transcript: String?  // Included when sending audio
 }
 
 struct QRCodeData: Codable {
@@ -185,6 +236,54 @@ struct QRCodeData: Codable {
     let hostname: String
     let port: Int
     let `protocol`: String
+}
+
+// MARK: - Window Types
+
+struct WindowsResponse: Codable {
+    let windows: [TerminalWindow]
+}
+
+struct TerminalWindow: Codable, Identifiable {
+    let windowID: UInt32
+    let pid: Int32
+    let bundleId: String?
+    let appName: String
+    let title: String?
+    let isOnScreen: Bool
+    let bounds: WindowBounds?
+
+    var id: UInt32 { windowID }
+
+    var displayTitle: String {
+        title ?? appName
+    }
+}
+
+struct WindowBounds: Codable {
+    let x: Double
+    let y: Double
+    let width: Double
+    let height: Double
+}
+
+struct WindowCapturesResponse: Codable {
+    let screenshots: [WindowCapture]
+    let count: Int
+}
+
+struct WindowCapture: Codable, Identifiable {
+    let windowID: UInt32
+    let bundleId: String
+    let title: String
+    let imageBase64: String
+
+    var id: UInt32 { windowID }
+
+    /// Decode the base64 image data
+    var imageData: Data? {
+        Data(base64Encoded: imageBase64)
+    }
 }
 
 // MARK: - Errors

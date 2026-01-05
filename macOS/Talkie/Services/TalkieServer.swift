@@ -13,15 +13,26 @@ import TalkieKit
 private let log = Log(.system)
 
 /// Request body for /message endpoint
+/// Accepts either text OR audio (base64) - audio gets transcribed first
 private struct MessageRequest: Codable {
     let sessionId: String
-    let text: String
+    let projectPath: String?  // Full path for terminal matching
+    let text: String?  // Direct text to send
+    let audio: String?  // Base64 encoded audio (alternative to text)
+    let format: String?  // Audio format: "wav", "m4a", etc.
 }
 
 /// Response for /message endpoint
 private struct MessageResponse: Codable {
     let success: Bool
     let error: String?
+    let transcript: String?  // For audio endpoint
+
+    init(success: Bool, error: String? = nil, transcript: String? = nil) {
+        self.success = success
+        self.error = error
+        self.transcript = transcript
+    }
 }
 
 /// Local HTTP server for Bridge communication
@@ -33,8 +44,10 @@ final class TalkieServer {
     private var listener: NWListener?
     private let port: UInt16 = 8766
 
-    // XPC manager for TalkieLive
-    private var xpcManager: XPCServiceManager<TalkieLiveXPCServiceProtocol>?
+    // Get XPC manager dynamically from ServiceManager (handles reconnection)
+    private var xpcManager: XPCServiceManager<TalkieLiveXPCServiceProtocol>? {
+        ServiceManager.shared.live.xpcManager
+    }
 
     var isRunning: Bool {
         listener?.state == .ready
@@ -44,8 +57,9 @@ final class TalkieServer {
 
     // MARK: - Public API
 
-    func start(xpcManager: XPCServiceManager<TalkieLiveXPCServiceProtocol>) {
-        self.xpcManager = xpcManager
+    func start(xpcManager: XPCServiceManager<TalkieLiveXPCServiceProtocol>? = nil) {
+        // xpcManager parameter kept for API compatibility but not used
+        // We now get it dynamically from ServiceManager
 
         guard listener == nil else {
             log.debug("TalkieServer already running")
@@ -118,7 +132,8 @@ final class TalkieServer {
     }
 
     private func receiveRequest(_ connection: NWConnection) {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
+        // 10MB buffer to handle base64 audio data
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 10_485_760) { [weak self] data, _, isComplete, error in
             guard let self else { return }
 
             if let error {
@@ -161,7 +176,7 @@ final class TalkieServer {
         let method = parts[0]
         let path = parts[1]
 
-        log.debug("TalkieServer: \(method) \(path)")
+        log.info("TalkieServer received: \(method) '\(path)'")
 
         // Find body (after empty line)
         var body: Data?
@@ -177,8 +192,21 @@ final class TalkieServer {
             sendJSONResponse(connection, statusCode: 200, body: response)
         } else if (path == "/message" || path == "/inject") && method == "POST" {
             // /message is preferred, /inject for backwards compat
+            // Empty text = force enter (just press Enter without inserting)
             await handleMessage(connection, body: body)
+        } else if path == "/windows/claude" && method == "GET" {
+            await handleListClaudeWindows(connection)
+        } else if path == "/screenshot/terminals" && method == "GET" {
+            await handleCaptureTerminals(connection)
+        } else if path.hasPrefix("/screenshot/window/") && method == "GET" {
+            let windowIdStr = String(path.dropFirst("/screenshot/window/".count))
+            if let windowId = UInt32(windowIdStr) {
+                await handleCaptureWindow(connection, windowID: windowId)
+            } else {
+                sendResponse(connection, statusCode: 400, body: "Invalid window ID")
+            }
         } else {
+            log.warning("TalkieServer 404: method='\(method)' path='\(path)'")
             sendResponse(connection, statusCode: 404, body: "Not found")
         }
     }
@@ -197,34 +225,247 @@ final class TalkieServer {
             return
         }
 
-        log.info("Message for session: \(request.sessionId), text: \(request.text.prefix(50))...")
+        // Determine the text to send - either direct text or transcribed audio
+        let textToSend: String
+        var transcript: String? = nil
+
+        if let audio = request.audio, !audio.isEmpty {
+            // Audio mode: transcribe first
+            let format = request.format ?? "m4a"
+            log.info("Audio message for session: \(request.sessionId), format: \(format), \(audio.count) chars base64")
+
+            // Decode base64 audio
+            guard let audioData = Data(base64Encoded: audio) else {
+                sendJSONResponse(connection, statusCode: 400, body: MessageResponse(success: false, error: "Invalid base64 audio"))
+                return
+            }
+
+            log.info("Decoded audio: \(audioData.count) bytes")
+
+            // Save to temp file
+            let tempDir = FileManager.default.temporaryDirectory
+            let audioPath = tempDir.appendingPathComponent("\(UUID().uuidString).\(format)")
+
+            do {
+                try audioData.write(to: audioPath)
+            } catch {
+                sendJSONResponse(connection, statusCode: 500, body: MessageResponse(success: false, error: "Failed to save audio: \(error)"))
+                return
+            }
+
+            defer {
+                try? FileManager.default.removeItem(at: audioPath)
+            }
+
+            // Transcribe via TalkieEngine
+            do {
+                // Use default model
+                let modelId = "whisper:openai_whisper-small"
+                log.info("Transcribing with model: \(modelId)")
+
+                transcript = try await EngineClient.shared.transcribe(
+                    audioPath: audioPath.path,
+                    modelId: modelId,
+                    priority: .high,  // Real-time request from iOS
+                    postProcess: .dictionary  // Apply dictionary replacements
+                )
+                log.info("Transcribed: \(transcript?.prefix(50) ?? "")...")
+            } catch {
+                log.error("Transcription failed: \(error)")
+                sendJSONResponse(connection, statusCode: 500, body: MessageResponse(success: false, error: "Transcription failed: \(error.localizedDescription)"))
+                return
+            }
+
+            // Skip empty transcriptions
+            guard let t = transcript, !t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                log.warning("Empty transcription, skipping send")
+                sendJSONResponse(connection, statusCode: 200, body: MessageResponse(success: true, error: nil, transcript: ""))
+                return
+            }
+
+            textToSend = t
+        } else if let text = request.text, !text.isEmpty {
+            // Text mode: use directly
+            log.info("Message for session: \(request.sessionId), text: \(text.prefix(50))...")
+            textToSend = text
+        } else {
+            sendJSONResponse(connection, statusCode: 400, body: MessageResponse(success: false, error: "Either 'text' or 'audio' is required"))
+            return
+        }
+
+        // Record in message queue for visibility
+        let messageId = MessageQueue.shared.recordIncoming(
+            sessionId: request.sessionId,
+            projectPath: request.projectPath,
+            text: textToSend,
+            source: .bridge,
+            metadata: ["endpoint": "/message", "isAudio": request.audio != nil ? "true" : "false"]
+        )
+        MessageQueue.shared.updateStatus(messageId, status: .sending)
+        let xpcStartTime = Date()
 
         // Forward to TalkieLive via XPC
+        // Use a flag to track if we've already responded (XPC error vs reply callback)
+        var hasResponded = false
+        let respondOnce: (Int, MessageResponse, Bool) -> Void = { [weak self] statusCode, response, success in
+            guard let self, !hasResponded else { return }
+            hasResponded = true
+            let durationMs = Int(Date().timeIntervalSince(xpcStartTime) * 1000)
+            if success {
+                MessageQueue.shared.updateStatus(messageId, status: .sent, xpcDurationMs: durationMs)
+            }
+            self.sendJSONResponse(connection, statusCode: statusCode, body: response)
+        }
+
         guard let proxy = xpcManager?.remoteObjectProxy(errorHandler: { error in
             log.error("XPC error: \(error)")
+            Task { @MainActor in
+                let durationMs = Int(Date().timeIntervalSince(xpcStartTime) * 1000)
+                MessageQueue.shared.updateStatus(messageId, status: .failed, error: "TalkieLive not available: \(error.localizedDescription)", xpcDurationMs: durationMs)
+                respondOnce(503, MessageResponse(success: false, error: "TalkieLive not available: \(error.localizedDescription)", transcript: transcript), false)
+            }
         }) else {
             log.error("TalkieLive not connected")
+            MessageQueue.shared.updateStatus(messageId, status: .failed, error: "TalkieLive not connected")
             sendJSONResponse(connection, statusCode: 503, body: MessageResponse(
                 success: false,
-                error: "TalkieLive not connected"
+                error: "TalkieLive not connected",
+                transcript: transcript
             ))
             return
         }
 
-        // Call the XPC method
-        proxy.appendMessage(request.text, sessionId: request.sessionId) { [weak self] success, error in
+        // Call the XPC method (submit: true to press Enter and send to Claude)
+        proxy.appendMessage(textToSend, sessionId: request.sessionId, projectPath: request.projectPath, submit: true) { success, error in
             Task { @MainActor in
-                guard let self else { return }
-
+                let durationMs = Int(Date().timeIntervalSince(xpcStartTime) * 1000)
                 if success {
-                    log.info("Message sent via XPC")
-                    self.sendJSONResponse(connection, statusCode: 200, body: MessageResponse(success: true, error: nil))
+                    log.info("Message sent via XPC in \(durationMs)ms")
+                    respondOnce(200, MessageResponse(success: true, error: nil, transcript: transcript), true)
                 } else {
                     log.error("Message failed: \(error ?? "unknown error")")
-                    self.sendJSONResponse(connection, statusCode: 500, body: MessageResponse(success: false, error: error))
+                    MessageQueue.shared.updateStatus(messageId, status: .failed, error: error, xpcDurationMs: durationMs)
+                    respondOnce(500, MessageResponse(success: false, error: error, transcript: transcript), false)
                 }
             }
         }
+    }
+
+    // MARK: - Screenshot Handlers
+
+    private func handleListClaudeWindows(_ connection: NWConnection) async {
+        guard let proxy = xpcManager?.remoteObjectProxy(errorHandler: { error in
+            log.error("XPC error: \(error)")
+        }) else {
+            sendErrorResponse(connection, statusCode: 503, error: "TalkieLive not connected")
+            return
+        }
+
+        proxy.listClaudeWindows { windowsJSON in
+            Task { @MainActor in
+                if let data = windowsJSON,
+                   let windows = try? JSONSerialization.jsonObject(with: data),
+                   let wrapped = try? JSONSerialization.data(withJSONObject: ["windows": windows]) {
+                    self.sendRawJSONResponse(connection, statusCode: 200, jsonData: wrapped)
+                } else {
+                    self.sendErrorResponse(connection, statusCode: 500, error: "Failed to list windows")
+                }
+            }
+        }
+    }
+
+    private func handleCaptureWindow(_ connection: NWConnection, windowID: UInt32) async {
+        guard let proxy = xpcManager?.remoteObjectProxy(errorHandler: { error in
+            log.error("XPC error: \(error)")
+        }) else {
+            sendErrorResponse(connection, statusCode: 503, error: "TalkieLive not connected")
+            return
+        }
+
+        proxy.captureWindow(windowID: windowID) { imageData, error in
+            Task { @MainActor in
+                if let data = imageData {
+                    self.sendImageResponse(connection, data: data, contentType: "image/jpeg")
+                } else {
+                    self.sendErrorResponse(connection, statusCode: 500, error: error ?? "Failed to capture window")
+                }
+            }
+        }
+    }
+
+    private func handleCaptureTerminals(_ connection: NWConnection) async {
+        guard let proxy = xpcManager?.remoteObjectProxy(errorHandler: { error in
+            log.error("XPC error: \(error)")
+        }) else {
+            sendErrorResponse(connection, statusCode: 503, error: "TalkieLive not connected")
+            return
+        }
+
+        proxy.captureTerminalWindows { screenshotsJSON, error in
+            Task { @MainActor in
+                if let data = screenshotsJSON {
+                    // Forward the raw JSON directly
+                    self.sendRawJSONResponse(connection, statusCode: 200, jsonData: data)
+                } else {
+                    self.sendErrorResponse(connection, statusCode: 500, error: error ?? "Failed to capture terminals")
+                }
+            }
+        }
+    }
+
+    // MARK: - Response Helpers
+
+    private func sendRawJSONResponse(_ connection: NWConnection, statusCode: Int, jsonData: Data) {
+        let statusText = statusCode == 200 ? "OK" : "Error"
+        let headers = """
+        HTTP/1.1 \(statusCode) \(statusText)\r
+        Content-Type: application/json\r
+        Content-Length: \(jsonData.count)\r
+        Connection: close\r
+        \r
+
+        """
+
+        var responseData = Data(headers.utf8)
+        responseData.append(jsonData)
+
+        connection.send(content: responseData, completion: .contentProcessed { _ in
+            connection.cancel()
+        })
+    }
+
+    private func sendErrorResponse(_ connection: NWConnection, statusCode: Int, error: String) {
+        let json = "{\"error\":\"\(error)\"}"
+        let headers = """
+        HTTP/1.1 \(statusCode) Error\r
+        Content-Type: application/json\r
+        Content-Length: \(json.utf8.count)\r
+        Connection: close\r
+        \r
+        \(json)
+        """
+
+        connection.send(content: headers.data(using: .utf8), completion: .contentProcessed { _ in
+            connection.cancel()
+        })
+    }
+
+    private func sendImageResponse(_ connection: NWConnection, data: Data, contentType: String) {
+        let response = """
+        HTTP/1.1 200 OK\r
+        Content-Type: \(contentType)\r
+        Content-Length: \(data.count)\r
+        Connection: close\r
+        \r
+
+        """
+
+        var responseData = Data(response.utf8)
+        responseData.append(data)
+
+        connection.send(content: responseData, completion: .contentProcessed { _ in
+            connection.cancel()
+        })
     }
 
     private func sendResponse(_ connection: NWConnection, statusCode: Int, body: String) {

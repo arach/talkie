@@ -222,7 +222,7 @@ final class ContextCaptureService {
 
     /// Schedule background enrichment that updates the DB record after paste
     /// Fire-and-forget: runs in background and updates the record when complete
-    func scheduleEnrichment(utteranceId: Int64, baseline: DictationMetadata) {
+    func scheduleEnrichment(utteranceId: Int64, baseline: DictationMetadata, dictationText: String? = nil) {
         let options = ContextCaptureOptions(enabled: true, detail: .rich)
         guard options.detail == .rich else { return }
 
@@ -236,8 +236,19 @@ final class ContextCaptureService {
                 LiveDatabase.updateMetadata(id: utteranceId, metadata: merged)
                 log.debug("Enriched context for utterance \(utteranceId)")
 
-                // Update bridge session-context mapping
-                BridgeContextMapper.shared.updateAfterDictation(metadata: merged)
+                // Update bridge session-context mapping (with dictation text for history)
+                BridgeContextMapper.shared.updateAfterDictation(metadata: merged, dictationText: dictationText)
+
+                // Record to fingerprint file for batch session matching
+                if let text = dictationText,
+                   let bundleId = merged.activeAppBundleID,
+                   let windowTitle = merged.activeWindowTitle {
+                    FingerprintStore.shared.recordDictation(
+                        bundleId: bundleId,
+                        windowTitle: windowTitle,
+                        text: text
+                    )
+                }
             }
         }
     }
@@ -254,6 +265,7 @@ final class ContextCaptureService {
 
         metadata.activeAppBundleID = frontApp.bundleIdentifier
         metadata.activeAppName = frontApp.localizedName
+        metadata.activeAppPID = frontApp.processIdentifier
 
         let appElement = AXUIElementCreateApplication(frontApp.processIdentifier)
 
@@ -282,6 +294,7 @@ final class ContextCaptureService {
 
         metadata.activeAppBundleID = frontApp.bundleIdentifier
         metadata.activeAppName = frontApp.localizedName
+        metadata.activeAppPID = frontApp.processIdentifier
 
         let appElement = AXUIElementCreateApplication(frontApp.processIdentifier)
 

@@ -54,6 +54,7 @@ struct BridgeSettingsView: View {
                     tailscaleReady: bridgeManager.tailscaleStatus.isReady,
                     onStart: { Task { await bridgeManager.startBridge() } },
                     onStop: { Task { await bridgeManager.stopBridge() } },
+                    onRestart: { Task { await bridgeManager.restartBridge() } },
                     onShowQR: { showingQRSheet = true }
                 )
 
@@ -77,6 +78,9 @@ struct BridgeSettingsView: View {
                 if bridgeManager.bridgeStatus == .running {
                     Divider()
                     BridgeLogsSection()
+
+                    Divider()
+                    BridgeMessageQueueSection()
                 }
 
                 Divider()
@@ -282,6 +286,7 @@ private struct BridgeServerSection: View {
     let tailscaleReady: Bool
     let onStart: () -> Void
     let onStop: () -> Void
+    let onRestart: () -> Void
     let onShowQR: () -> Void
 
     var body: some View {
@@ -334,6 +339,21 @@ private struct BridgeServerSection: View {
                         }
                         .buttonStyle(.plain)
 
+                        Button(action: onRestart) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(Theme.current.fontXS)
+                                Text("RESTART")
+                                    .font(Theme.current.fontXSMedium)
+                            }
+                            .foregroundColor(.orange)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.orange.opacity(0.1))
+                            .cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
+
                         Button(action: onStop) {
                             HStack(spacing: 4) {
                                 Image(systemName: "stop.fill")
@@ -364,6 +384,22 @@ private struct BridgeServerSection: View {
                         }
                         .buttonStyle(.plain)
                         .disabled(!tailscaleReady)
+                    } else if status == .error {
+                        // Force restart when in error state (kills stray processes)
+                        Button(action: onRestart) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(Theme.current.fontXS)
+                                Text("FORCE RESTART")
+                                    .font(Theme.current.fontXSMedium)
+                            }
+                            .foregroundColor(.orange)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.orange.opacity(0.1))
+                            .cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
                     } else if status == .starting {
                         BrailleSpinner(speed: 0.08)
                             .font(.system(size: 12))
@@ -685,6 +721,142 @@ private struct QRCodeSheet: View {
         }
 
         return NSImage(cgImage: cgImage, size: NSSize(width: 200, height: 200))
+    }
+}
+
+// MARK: - Bridge Message Queue Section (Troubleshooting)
+
+private struct BridgeMessageQueueSection: View {
+    @State private var queue = MessageQueue.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.right.arrow.left")
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(Theme.current.foregroundSecondary)
+                Text("MESSAGE QUEUE")
+                    .font(Theme.current.fontXSMedium)
+                    .foregroundColor(Theme.current.foregroundSecondary)
+
+                if !queue.messages.isEmpty {
+                    Text("(\(queue.messages.count))")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                }
+
+                Spacer()
+
+                if !queue.messages.isEmpty {
+                    Button("Clear") {
+                        queue.clearAll()
+                    }
+                    .font(Theme.current.fontXS)
+                    .buttonStyle(.plain)
+                    .foregroundColor(.red)
+                }
+            }
+
+            // Status summary
+            HStack(spacing: 16) {
+                let failed = queue.messages.filter { $0.status == .failed }.count
+                let pending = queue.messages.filter { $0.status == .pending || $0.status == .sending }.count
+                let sent = queue.messages.filter { $0.status == .sent }.count
+
+                if queue.messages.isEmpty {
+                    Text("No messages received from iOS")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                } else {
+                    if failed > 0 {
+                        HStack(spacing: 4) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.red)
+                            Text("\(failed) failed")
+                        }
+                        .font(Theme.current.fontXS)
+                    }
+
+                    if pending > 0 {
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock")
+                                .foregroundColor(.orange)
+                            Text("\(pending) pending")
+                        }
+                        .font(Theme.current.fontXS)
+                    }
+
+                    if sent > 0 {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                            Text("\(sent) sent")
+                        }
+                        .font(Theme.current.fontXS)
+                    }
+                }
+
+                Spacer()
+            }
+            .padding(10)
+            .background(Theme.current.surface1)
+            .cornerRadius(8)
+
+            // Recent messages (last 5)
+            if !queue.messages.isEmpty {
+                VStack(spacing: 4) {
+                    ForEach(queue.messages.prefix(5)) { message in
+                        HStack(spacing: 8) {
+                            // Status icon
+                            Group {
+                                switch message.status {
+                                case .pending:
+                                    Image(systemName: "clock")
+                                        .foregroundColor(.orange)
+                                case .sending:
+                                    ProgressView()
+                                        .controlSize(.mini)
+                                case .sent:
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.green)
+                                case .failed:
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(.red)
+                                }
+                            }
+                            .frame(width: 14)
+
+                            // Session + text preview
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(message.sessionId.prefix(8) + "...")
+                                    .font(.system(size: 9, design: .monospaced))
+                                    .foregroundColor(Theme.current.foregroundSecondary)
+                                Text(message.text.prefix(50) + (message.text.count > 50 ? "..." : ""))
+                                    .font(Theme.current.fontXS)
+                                    .lineLimit(1)
+                            }
+
+                            Spacer()
+
+                            // Error or time
+                            if let error = message.lastError {
+                                Text(error.prefix(20))
+                                    .font(.system(size: 9))
+                                    .foregroundColor(.red)
+                                    .lineLimit(1)
+                            } else {
+                                Text(message.createdAt, style: .time)
+                                    .font(.system(size: 9))
+                                    .foregroundColor(Theme.current.foregroundSecondary)
+                            }
+                        }
+                        .padding(6)
+                        .background(Theme.current.surface1.opacity(0.5))
+                        .cornerRadius(4)
+                    }
+                }
+            }
+        }
     }
 }
 

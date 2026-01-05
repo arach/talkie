@@ -207,37 +207,72 @@ final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol, Observ
         }
     }
 
-    nonisolated func appendMessage(_ text: String, sessionId: String, reply: @escaping (Bool, String?) -> Void) {
+    nonisolated func appendMessage(_ text: String, sessionId: String, projectPath: String?, submit: Bool, reply: @escaping (Bool, String?) -> Void) {
         Task { @MainActor in
-            NSLog("[TalkieLiveXPC] appendMessage for session: \(sessionId), text: \(text.prefix(50))...")
+            NSLog("[TalkieLiveXPC] appendMessage for session: \(sessionId), projectPath: \(projectPath ?? "nil"), submit: \(submit), text: \(text.prefix(50))...")
 
-            // Look up the terminal context for this session
-            var context = BridgeContextMapper.shared.getContext(for: sessionId)
+            // Try to find terminal context
+            var context: SessionContext? = nil
 
+            // 1. Try to find by sessionId first
+            context = BridgeContextMapper.shared.getContext(for: sessionId)
+
+            // 2. If not found and we have projectPath, try matching by path
+            if context == nil, let projectPath = projectPath {
+                context = BridgeContextMapper.shared.getContextByProjectPath(projectPath)
+            }
+
+            // 3. If still not found, do a terminal scan and try again
             if context == nil {
-                // Context not found - try a terminal scan first
-                NSLog("[TalkieLiveXPC] No cached context for session, attempting terminal scan...")
+                NSLog("[TalkieLiveXPC] No cached context, attempting terminal scan...")
                 BridgeContextMapper.shared.refreshFromScan()
+
+                // Try sessionId first
                 context = BridgeContextMapper.shared.getContext(for: sessionId)
+
+                // Then try projectPath
+                if context == nil, let projectPath = projectPath {
+                    context = BridgeContextMapper.shared.getContextByProjectPath(projectPath)
+                }
             }
 
             guard let ctx = context else {
-                NSLog("[TalkieLiveXPC] Could not find terminal for session: \(sessionId)")
-                reply(false, "No terminal found for session '\(sessionId)'. Try dictating in that session first.")
+                NSLog("[TalkieLiveXPC] Could not find terminal for session: \(sessionId), project: \(projectPath ?? "nil")")
+                reply(false, "No terminal found for project. Try dictating in that session first.")
                 return
             }
 
-            NSLog("[TalkieLiveXPC] Appending to \(ctx.app) (\(ctx.bundleId))")
+            NSLog("[TalkieLiveXPC] Appending to \(ctx.app) (\(ctx.bundleId)), submit=\(submit), textLen=\(text.count)")
 
-            // Use TextInserter to append the text
-            let success = await TextInserter.shared.insert(
-                text,
-                intoAppWithBundleID: ctx.bundleId,
-                replaceSelection: false
-            )
+            // Use TextInserter to append the text (and optionally press Enter)
+            let success: Bool
+
+            // Handle empty text + submit as "just press Enter" (for force submit from iOS)
+            if text.isEmpty && submit {
+                NSLog("[TalkieLiveXPC] Empty text with submit - pressing Enter only")
+                success = await TextInserter.shared.simulateEnterInApp(bundleId: ctx.bundleId)
+            } else if text.isEmpty {
+                // Empty text without submit - nothing to do
+                NSLog("[TalkieLiveXPC] Empty text without submit - no action")
+                reply(true, nil)
+                return
+            } else if submit {
+                // Insert text and press Enter to submit
+                success = await TextInserter.shared.insertAndSubmit(
+                    text,
+                    intoAppWithBundleID: ctx.bundleId
+                )
+            } else {
+                // Just insert text, no Enter
+                success = await TextInserter.shared.insert(
+                    text,
+                    intoAppWithBundleID: ctx.bundleId,
+                    replaceSelection: false
+                )
+            }
 
             if success {
-                NSLog("[TalkieLiveXPC] Message appended successfully to \(ctx.app)")
+                NSLog("[TalkieLiveXPC] Message appended\(submit ? " + submitted" : "") to \(ctx.app)")
                 reply(true, nil)
             } else {
                 NSLog("[TalkieLiveXPC] Message append failed for \(ctx.app)")
@@ -253,6 +288,118 @@ final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol, Observ
         }
         // If we can see window owner names, we have permission
         return windowList.contains { $0[kCGWindowOwnerName as String] != nil }
+    }
+
+    // MARK: - Screenshot Methods
+
+    nonisolated func listClaudeWindows(reply: @escaping (Data?) -> Void) {
+        Task { @MainActor in
+            NSLog("[TalkieLiveXPC] listClaudeWindows requested")
+
+            if #available(macOS 14.0, *) {
+                let windows = await ScreenshotService.shared.findClaudeWindows()
+
+                let windowDicts: [[String: Any]] = windows.map { window in
+                    var dict: [String: Any] = [
+                        "windowID": window.windowID,
+                        "pid": window.pid,
+                        "appName": window.appName,
+                        "isOnScreen": window.isOnScreen
+                    ]
+                    if let bundleId = window.bundleId { dict["bundleId"] = bundleId }
+                    if let title = window.title { dict["title"] = title }
+                    if let bounds = window.bounds {
+                        dict["bounds"] = [
+                            "x": bounds.origin.x,
+                            "y": bounds.origin.y,
+                            "width": bounds.width,
+                            "height": bounds.height
+                        ]
+                    }
+                    return dict
+                }
+
+                if let jsonData = try? JSONSerialization.data(withJSONObject: windowDicts) {
+                    NSLog("[TalkieLiveXPC] Found \(windows.count) Claude windows")
+                    reply(jsonData)
+                } else {
+                    reply(nil)
+                }
+            } else {
+                NSLog("[TalkieLiveXPC] ScreenshotService requires macOS 14+")
+                reply(nil)
+            }
+        }
+    }
+
+    nonisolated func captureWindow(windowID: UInt32, reply: @escaping (Data?, String?) -> Void) {
+        Task { @MainActor in
+            NSLog("[TalkieLiveXPC] captureWindow requested: \(windowID)")
+
+            if #available(macOS 14.0, *) {
+                guard let image = await ScreenshotService.shared.captureWindow(windowID: CGWindowID(windowID)) else {
+                    reply(nil, "Failed to capture window - check Screen Recording permission")
+                    return
+                }
+
+                guard let jpegData = await ScreenshotService.shared.encodeAsJPEG(image, quality: 0.85) else {
+                    reply(nil, "Failed to encode image")
+                    return
+                }
+
+                NSLog("[TalkieLiveXPC] Captured window \(windowID): \(jpegData.count) bytes")
+                reply(jpegData, nil)
+            } else {
+                reply(nil, "Requires macOS 14+")
+            }
+        }
+    }
+
+    nonisolated func captureTerminalWindows(reply: @escaping (Data?, String?) -> Void) {
+        Task { @MainActor in
+            NSLog("[TalkieLiveXPC] captureTerminalWindows requested")
+
+            if #available(macOS 14.0, *) {
+                let terminals = await ScreenshotService.shared.captureTerminalWindows()
+
+                var screenshots: [[String: Any]] = []
+                for terminal in terminals {
+                    if let jpegData = await ScreenshotService.shared.encodeAsJPEG(terminal.image, quality: 0.75) {
+                        screenshots.append([
+                            "windowID": terminal.windowID,
+                            "bundleId": terminal.bundleId,
+                            "title": terminal.title,
+                            "imageBase64": jpegData.base64EncodedString()
+                        ])
+                    }
+                }
+
+                let result: [String: Any] = [
+                    "screenshots": screenshots,
+                    "count": screenshots.count
+                ]
+
+                if let jsonData = try? JSONSerialization.data(withJSONObject: result) {
+                    NSLog("[TalkieLiveXPC] Captured \(screenshots.count) terminal windows")
+                    reply(jsonData, nil)
+                } else {
+                    reply(nil, "Failed to encode response")
+                }
+            } else {
+                reply(nil, "Requires macOS 14+")
+            }
+        }
+    }
+
+    nonisolated func hasScreenRecordingPermission(reply: @escaping (Bool) -> Void) {
+        Task { @MainActor in
+            if #available(macOS 14.0, *) {
+                let hasPermission = await ScreenshotService.shared.hasScreenRecordingPermission()
+                reply(hasPermission)
+            } else {
+                reply(checkScreenRecordingPermission())
+            }
+        }
     }
 
     func addObserverConnection(_ connection: NSXPCConnection) {

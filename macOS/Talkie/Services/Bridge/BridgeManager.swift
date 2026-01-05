@@ -202,6 +202,9 @@ final class BridgeManager {
         bridgeStatus = .starting
         errorMessage = nil
 
+        // Kill any stray processes before starting
+        await killStrayBridgeProcesses()
+
         do {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: bunPath)
@@ -222,8 +225,8 @@ final class BridgeManager {
             try await Task.sleep(nanoseconds: 2_000_000_000)
             await checkBridgeStatus()
 
-            // Start the inject server (receives commands from Bridge, forwards to TalkieLive via XPC)
-            await startInjectServer()
+            // Start the message relay server (receives commands from Bridge, forwards to TalkieLive via XPC)
+            await startMessageRelay()
 
             // Start refresh timer
             startRefreshTimer()
@@ -234,23 +237,18 @@ final class BridgeManager {
         }
     }
 
-    /// Start the local HTTP server that receives inject commands from Bridge
+    /// Start the local HTTP server that receives message commands from Bridge
     @MainActor
-    private func startInjectServer() async {
-        // Ensure XPC is connected
+    private func startMessageRelay() async {
+        // Start XPC monitoring (TalkieServer gets XPC dynamically, doesn't need it at start)
         let liveState = ServiceManager.shared.live
         if !liveState.isXPCConnected {
             liveState.startXPCMonitoring()
-            // Wait a bit for XPC to connect
-            try? await Task.sleep(nanoseconds: 500_000_000)
         }
 
-        if let xpcManager = liveState.xpcManager {
-            TalkieServer.shared.start(xpcManager: xpcManager)
-            log.info("TalkieServer started (port 8766)")
-        } else {
-            log.warning("Could not start TalkieServer - XPC not available")
-        }
+        // Always start TalkieServer - it gets XPC dynamically when handling requests
+        TalkieServer.shared.start()
+        log.info("TalkieServer started (port 8766)")
     }
 
     func stopBridge() async {
@@ -272,7 +270,86 @@ final class BridgeManager {
         bridgeProcess?.terminate()
         bridgeProcess = nil
 
+        // Clean up any stray processes that might be holding the port
+        await killStrayBridgeProcesses()
+
         bridgeStatus = .stopped
+    }
+
+    /// Kill any processes holding port 8765 or running the bridge server
+    /// This handles orphaned bun processes that weren't properly cleaned up
+    private func killStrayBridgeProcesses() async {
+        // Find PIDs using port 8765 via lsof
+        let lsofProcess = Process()
+        lsofProcess.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+        lsofProcess.arguments = ["-ti", ":\(port)"]
+
+        let lsofPipe = Pipe()
+        lsofProcess.standardOutput = lsofPipe
+        lsofProcess.standardError = Pipe()
+
+        do {
+            try lsofProcess.run()
+            lsofProcess.waitUntilExit()
+
+            let data = lsofPipe.fileHandleForReading.readDataToEndOfFile()
+            if let output = String(data: data, encoding: .utf8) {
+                let pids = output.components(separatedBy: .newlines)
+                    .compactMap { Int32($0.trimmingCharacters(in: .whitespaces)) }
+
+                for pid in pids {
+                    // Don't kill ourselves
+                    if pid != ProcessInfo.processInfo.processIdentifier {
+                        log.info("Killing stray process on port \(port): PID \(pid)")
+                        kill(pid, SIGKILL)  // SIGKILL to force terminate stuck processes
+                    }
+                }
+
+                // If we killed anything, wait a moment for port to be released
+                if !pids.isEmpty {
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                }
+            }
+        } catch {
+            log.debug("lsof check failed (probably no process on port): \(error)")
+        }
+
+        // Also kill any bun processes running our server script
+        let pgrepProcess = Process()
+        pgrepProcess.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+        pgrepProcess.arguments = ["-f", "bun.*talkie-bridge.*server"]
+
+        let pgrepPipe = Pipe()
+        pgrepProcess.standardOutput = pgrepPipe
+        pgrepProcess.standardError = Pipe()
+
+        do {
+            try pgrepProcess.run()
+            pgrepProcess.waitUntilExit()
+
+            let data = pgrepPipe.fileHandleForReading.readDataToEndOfFile()
+            if let output = String(data: data, encoding: .utf8) {
+                let pids = output.components(separatedBy: .newlines)
+                    .compactMap { Int32($0.trimmingCharacters(in: .whitespaces)) }
+
+                for pid in pids {
+                    if pid != ProcessInfo.processInfo.processIdentifier {
+                        log.info("Killing stray bun process: PID \(pid)")
+                        kill(pid, SIGKILL)
+                    }
+                }
+            }
+        } catch {
+            log.debug("pgrep check failed: \(error)")
+        }
+    }
+
+    /// Force restart the bridge, killing any stray processes first
+    func restartBridge() async {
+        await stopBridge()
+        // Extra wait to ensure port is fully released
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        await startBridge()
     }
 
     func approvePairing(_ deviceId: String) async {
@@ -400,9 +477,29 @@ final class BridgeManager {
                 return
             }
             bridgeStatus = .running
+
+            // Ensure TalkieServer is running when Bridge is running
+            await ensureTalkieServerRunning()
         } catch {
             bridgeStatus = .stopped
         }
+    }
+
+    /// Ensure TalkieServer is running (auto-start if Bridge is up but TalkieServer is not)
+    @MainActor
+    private func ensureTalkieServerRunning() async {
+        guard !TalkieServer.shared.isRunning else { return }
+
+        log.info("Bridge is running but TalkieServer is not - starting TalkieServer")
+
+        // Ensure XPC is connected
+        let liveState = ServiceManager.shared.live
+        if !liveState.isXPCConnected {
+            liveState.startXPCMonitoring()
+            try? await Task.sleep(nanoseconds: 500_000_000)
+        }
+
+        TalkieServer.shared.start()
     }
 
     private func refreshDevices() async {

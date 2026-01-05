@@ -220,6 +220,21 @@ final class TerminalScanner {
         // (some terminals show the current command in title)
         if lowerTitle.hasPrefix("claude ") { return true }
 
+        // Check if the working directory has a Claude project
+        // (matches a folder in ~/.claude/projects/)
+        if let workingDir = workingDir {
+            let sessionId = extractClaudeSessionId(workingDir: workingDir)
+            if let sessionId = sessionId {
+                let projectsDir = FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent(".claude/projects")
+                    .appendingPathComponent(sessionId)
+                if FileManager.default.fileExists(atPath: projectsDir.path) {
+                    log.debug("Detected Claude session via project folder: \(sessionId)")
+                    return true
+                }
+            }
+        }
+
         return false
     }
 

@@ -21,6 +21,19 @@ struct SessionDetailView: View {
     @State private var sendError: String?
     @FocusState private var isInputFocused: Bool
 
+    // Audio recording state
+    @StateObject private var recorder = AudioRecorderManager()
+    @State private var isTranscribing = false
+    @State private var lastFailedAudioURL: URL?  // For retry capability
+
+    // Force Enter state
+    @State private var isForcingEnter = false
+
+    // Quick reply options parsed from last assistant message
+    private var quickReplyOptions: [QuickReplyOption] {
+        parseQuickReplyOptions(from: messages.last(where: { $0.role == "assistant" }))
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Messages area
@@ -77,12 +90,25 @@ struct SessionDetailView: View {
             // Input bar
             if session.isLive {
                 Divider()
+
+                // Quick reply buttons (when numbered options detected)
+                if !quickReplyOptions.isEmpty {
+                    QuickReplyBar(options: quickReplyOptions) { number in
+                        sendQuickReply(number)
+                    }
+                }
+
                 InputBar(
                     text: $inputText,
-                    isSending: isSending,
+                    isSending: isSending || isTranscribing,
+                    isRecording: recorder.isRecording,
+                    recordingDuration: recorder.recordingDuration,
                     error: sendError,
+                    canRetryAudio: lastFailedAudioURL != nil,
                     isFocused: $isInputFocused,
-                    onSend: sendMessage
+                    onSend: sendMessage,
+                    onMicTap: toggleRecording,
+                    onRetry: retryAudio
                 )
             }
         }
@@ -99,6 +125,18 @@ struct SessionDetailView: View {
                             .padding(.vertical, 2)
                             .background(Color.green)
                             .cornerRadius(4)
+
+                        // Force Enter button
+                        Button(action: forceEnter) {
+                            if isForcingEnter {
+                                ProgressView()
+                                    .progressViewStyle(.circular)
+                                    .scaleEffect(0.7)
+                            } else {
+                                Image(systemName: "return")
+                            }
+                        }
+                        .disabled(isForcingEnter)
                     }
 
                     Button(action: loadMessages) {
@@ -155,6 +193,179 @@ struct SessionDetailView: View {
             isSending = false
         }
     }
+
+    private func toggleRecording() {
+        if recorder.isRecording {
+            // Stop recording and send
+            recorder.stopRecording()
+            recorder.finalizeRecording()
+
+            guard let audioURL = recorder.currentRecordingURL else {
+                sendError = "No recording available"
+                return
+            }
+
+            sendAudio(url: audioURL)
+        } else {
+            // Start recording - clear any previous failed audio
+            sendError = nil
+            lastFailedAudioURL = nil
+            recorder.startRecording()
+        }
+    }
+
+    private func sendAudio(url: URL) {
+        isTranscribing = true
+        sendError = nil
+
+        Task {
+            do {
+                let transcript = try await bridgeManager.sendAudio(
+                    sessionId: session.id,
+                    audioURL: url
+                )
+                sendError = nil
+                lastFailedAudioURL = nil  // Clear on success
+                // Refresh to see result
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                await fetchMessages()
+            } catch {
+                sendError = error.localizedDescription
+                lastFailedAudioURL = url  // Store for retry
+            }
+            isTranscribing = false
+        }
+    }
+
+    private func retryAudio() {
+        guard let url = lastFailedAudioURL else { return }
+        sendAudio(url: url)
+    }
+
+    private func forceEnter() {
+        isForcingEnter = true
+        sendError = nil
+
+        Task {
+            do {
+                try await bridgeManager.forceEnter(sessionId: session.id)
+                // Refresh messages after a brief delay
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                await fetchMessages()
+            } catch {
+                sendError = "Enter failed: \(error.localizedDescription)"
+            }
+            isForcingEnter = false
+        }
+    }
+
+    private func sendQuickReply(_ number: String) {
+        isSending = true
+        sendError = nil
+
+        Task {
+            do {
+                try await bridgeManager.sendMessage(sessionId: session.id, text: number)
+                // Refresh messages after a brief delay
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                await fetchMessages()
+            } catch {
+                sendError = error.localizedDescription
+            }
+            isSending = false
+        }
+    }
+}
+
+// MARK: - Quick Reply Option
+
+struct QuickReplyOption: Identifiable {
+    let id: String
+    let number: String
+    let label: String
+}
+
+/// Parse numbered options from the last assistant message
+/// Looks for patterns like "1. Allow", "[1] Proceed", "1) Skip"
+func parseQuickReplyOptions(from message: SessionMessage?) -> [QuickReplyOption] {
+    guard let message = message, message.role == "assistant" else { return [] }
+
+    var options: [QuickReplyOption] = []
+    let content = message.content
+
+    // Pattern: "1. Label", "2. Label", etc.
+    let dotPattern = /(\d)\.\s+([^\n\d][^\n]{0,30})/
+    for match in content.matches(of: dotPattern) {
+        let number = String(match.1)
+        let label = String(match.2).trimmingCharacters(in: .whitespaces)
+        if !label.isEmpty && options.count < 5 {
+            options.append(QuickReplyOption(id: "\(number)-\(label)", number: number, label: label))
+        }
+    }
+
+    // Pattern: "[1] Label", "[2] Label", etc.
+    let bracketPattern = /\[(\d)\]\s+([^\n\[]{1,30})/
+    if options.isEmpty {
+        for match in content.matches(of: bracketPattern) {
+            let number = String(match.1)
+            let label = String(match.2).trimmingCharacters(in: .whitespaces)
+            if !label.isEmpty && options.count < 5 {
+                options.append(QuickReplyOption(id: "\(number)-\(label)", number: number, label: label))
+            }
+        }
+    }
+
+    // Pattern: "1) Label", "2) Label", etc.
+    let parenPattern = /(\d)\)\s+([^\n\d][^\n]{0,30})/
+    if options.isEmpty {
+        for match in content.matches(of: parenPattern) {
+            let number = String(match.1)
+            let label = String(match.2).trimmingCharacters(in: .whitespaces)
+            if !label.isEmpty && options.count < 5 {
+                options.append(QuickReplyOption(id: "\(number)-\(label)", number: number, label: label))
+            }
+        }
+    }
+
+    return options
+}
+
+// MARK: - Quick Reply Bar
+
+struct QuickReplyBar: View {
+    let options: [QuickReplyOption]
+    let onSelect: (String) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(options) { option in
+                    Button(action: { onSelect(option.number) }) {
+                        HStack(spacing: 4) {
+                            Text(option.number)
+                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                .foregroundColor(.white)
+                                .frame(width: 18, height: 18)
+                                .background(Color.blue)
+                                .clipShape(Circle())
+                            Text(option.label)
+                                .font(.system(size: 13, weight: .medium))
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.blue.opacity(0.1))
+                        .foregroundColor(.blue)
+                        .cornerRadius(16)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+        }
+        .background(Color(.systemGray6))
+    }
 }
 
 // MARK: - Input Bar
@@ -162,56 +373,118 @@ struct SessionDetailView: View {
 struct InputBar: View {
     @Binding var text: String
     let isSending: Bool
+    let isRecording: Bool
+    let recordingDuration: TimeInterval
     let error: String?
+    let canRetryAudio: Bool
     var isFocused: FocusState<Bool>.Binding
     let onSend: () -> Void
+    let onMicTap: () -> Void
+    let onRetry: () -> Void
+
+    private var durationText: String {
+        let minutes = Int(recordingDuration) / 60
+        let seconds = Int(recordingDuration) % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
 
     var body: some View {
         VStack(spacing: 4) {
-            // Error message
+            // Error message with optional retry
             if let error {
-                Text(error)
-                    .font(.system(size: 11))
-                    .foregroundColor(.red)
-                    .padding(.horizontal, 12)
-                    .padding(.top, 4)
+                HStack(spacing: 8) {
+                    Text(error)
+                        .font(.system(size: 11))
+                        .foregroundColor(.red)
+
+                    if canRetryAudio {
+                        Button(action: onRetry) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 10))
+                                Text("Retry")
+                                    .font(.system(size: 11, weight: .medium))
+                            }
+                            .foregroundColor(.blue)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 4)
             }
 
             HStack(spacing: 8) {
-                // Text field
-                TextField("Send to Claude...", text: $text, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 15))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(20)
-                    .lineLimit(1...5)
-                    .focused(isFocused)
-                    .disabled(isSending)
-                    .submitLabel(.send)
-                    .onSubmit {
-                        onSend()
-                    }
-
-                // Send button
-                Button(action: onSend) {
+                // Mic button
+                Button(action: onMicTap) {
                     Group {
-                        if isSending {
-                            ProgressView()
-                                .progressViewStyle(.circular)
-                                .tint(.white)
+                        if isRecording {
+                            // Recording state - show stop and duration
+                            HStack(spacing: 6) {
+                                Image(systemName: "stop.fill")
+                                    .font(.system(size: 12))
+                                Text(durationText)
+                                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.red)
+                            .foregroundColor(.white)
+                            .cornerRadius(16)
                         } else {
-                            Image(systemName: "arrow.up")
-                                .font(.system(size: 16, weight: .semibold))
+                            Image(systemName: "mic.fill")
+                                .font(.system(size: 16))
+                                .frame(width: 32, height: 32)
+                                .background(Color(.systemGray5))
+                                .foregroundColor(.primary)
+                                .clipShape(Circle())
                         }
                     }
-                    .frame(width: 32, height: 32)
-                    .background(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending ? Color.gray : Color.blue)
-                    .foregroundColor(.white)
-                    .clipShape(Circle())
                 }
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
+                .disabled(isSending)
+
+                if isRecording {
+                    // Recording - show "Tap to send" hint
+                    Text("Tap to send")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                } else {
+                    // Text field
+                    TextField("Send to Claude...", text: $text, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 15))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(20)
+                        .lineLimit(1...5)
+                        .focused(isFocused)
+                        .disabled(isSending)
+                        .submitLabel(.send)
+                        .onSubmit {
+                            onSend()
+                        }
+
+                    // Send button
+                    Button(action: onSend) {
+                        Group {
+                            if isSending {
+                                ProgressView()
+                                    .progressViewStyle(.circular)
+                                    .tint(.white)
+                            } else {
+                                Image(systemName: "arrow.up")
+                                    .font(.system(size: 16, weight: .semibold))
+                            }
+                        }
+                        .frame(width: 32, height: 32)
+                        .background(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending ? Color.gray : Color.blue)
+                        .foregroundColor(.white)
+                        .clipShape(Circle())
+                    }
+                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -363,7 +636,8 @@ struct ToolCallView: View {
 #Preview {
     NavigationView {
         SessionDetailView(session: ClaudeSession(
-            id: "test",
+            id: "fcf1ca5a-b801-4aa6-9329-d0b8fe7691a4",
+            folderName: "-Users-arach-dev-talkie",
             project: "talkie",
             projectPath: "/Users/arach/dev/talkie",
             isLive: true,

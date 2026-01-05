@@ -44,6 +44,8 @@ final class BridgeManager {
 
     private(set) var status: ConnectionStatus = .disconnected
     private(set) var sessions: [ClaudeSession] = []
+    private(set) var windows: [TerminalWindow] = []
+    private(set) var windowCaptures: [WindowCapture] = []
     private(set) var errorMessage: String?
     private(set) var pairedMacName: String?
 
@@ -158,6 +160,8 @@ final class BridgeManager {
         stopAutoRefresh()
         status = .disconnected
         sessions = []
+        windows = []
+        windowCaptures = []
     }
 
     /// Remove pairing
@@ -200,6 +204,73 @@ final class BridgeManager {
         if !response.success {
             throw BridgeError.messageFailed(response.error ?? "Unknown error")
         }
+    }
+
+    /// Send audio to be transcribed and submitted to Claude
+    /// - Returns: The transcript that was sent
+    func sendAudio(sessionId: String, audioURL: URL) async throws -> String {
+        let audioData = try Data(contentsOf: audioURL)
+        let response = try await client.sendAudio(sessionId: sessionId, audioData: audioData)
+        if !response.success {
+            throw BridgeError.messageFailed(response.error ?? "Unknown error")
+        }
+        return response.transcript ?? ""
+    }
+
+    /// Force press Enter key in a session's terminal
+    /// Useful when auto-submit doesn't work
+    func forceEnter(sessionId: String) async throws {
+        let response = try await client.forceEnter(sessionId: sessionId)
+        if !response.success {
+            throw BridgeError.messageFailed(response.error ?? "Unknown error")
+        }
+    }
+
+    // MARK: - Window & Screenshot Methods
+
+    /// Refresh the list of terminal windows
+    func refreshWindows() async {
+        guard status == .connected else { return }
+
+        do {
+            let response = try await client.windows()
+            windows = response.windows
+        } catch {
+            print("Failed to refresh windows: \(error)")
+        }
+    }
+
+    /// Fetch all window captures (screenshots + metadata)
+    func refreshWindowCaptures() async {
+        guard status == .connected else { return }
+
+        do {
+            let response = try await client.windowCaptures()
+            windowCaptures = response.screenshots
+        } catch {
+            print("Failed to capture windows: \(error)")
+        }
+    }
+
+    /// Fetch all window captures (throwing version for UI feedback)
+    func refreshWindowCapturesWithError() async throws {
+        guard status == .connected else {
+            throw BridgeError.notConfigured
+        }
+
+        let response = try await client.windowCaptures()
+        windowCaptures = response.screenshots
+    }
+
+    /// Get screenshot data for a specific window
+    func getWindowScreenshot(windowId: UInt32) async throws -> Data {
+        try await client.windowScreenshot(windowId: windowId)
+    }
+
+    /// Refresh both sessions and windows
+    func refreshAll() async {
+        await refreshSessions()
+        await refreshWindows()
     }
 
     // MARK: - Private

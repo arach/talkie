@@ -10,6 +10,9 @@ import SwiftUI
 struct SessionListView: View {
     @State private var bridgeManager = BridgeManager.shared
     @State private var isRefreshing = false
+    @State private var isCapturing = false
+    @State private var captureError: String?
+    @State private var selectedWindow: WindowCapture?
 
     var body: some View {
         Group {
@@ -83,6 +86,67 @@ struct SessionListView: View {
                 }
             }
 
+            // Terminal Windows (Screenshots)
+            Section("Terminal Windows") {
+                if let error = captureError {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle")
+                            .foregroundColor(.orange)
+                        Text(error)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                if bridgeManager.windowCaptures.isEmpty {
+                    HStack {
+                        Image(systemName: "macwindow")
+                            .foregroundColor(.secondary)
+                        Text("No windows captured")
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 8)
+
+                    Button(action: captureWindows) {
+                        if isCapturing {
+                            HStack {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text("Capturing...")
+                            }
+                        } else {
+                            Label("Capture Windows", systemImage: "camera")
+                        }
+                    }
+                    .disabled(isCapturing)
+                } else {
+                    // Grid of window thumbnails
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                        ForEach(bridgeManager.windowCaptures) { capture in
+                            WindowThumbnailCell(capture: capture)
+                                .onTapGesture {
+                                    selectedWindow = capture
+                                }
+                        }
+                    }
+                    .padding(.vertical, 8)
+
+                    Button(action: captureWindows) {
+                        if isCapturing {
+                            HStack {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text("Refreshing...")
+                            }
+                        } else {
+                            Label("Refresh Screenshots", systemImage: "arrow.clockwise")
+                        }
+                    }
+                    .disabled(isCapturing)
+                }
+            }
+
             // Disconnect
             Section {
                 Button(action: {
@@ -98,7 +162,26 @@ struct SessionListView: View {
             }
         }
         .refreshable {
-            await bridgeManager.refreshSessions()
+            await bridgeManager.refreshAll()
+            await bridgeManager.refreshWindowCaptures()
+        }
+        .sheet(item: $selectedWindow) { window in
+            WindowDetailSheet(capture: window)
+        }
+    }
+
+    // MARK: - Actions
+
+    private func captureWindows() {
+        isCapturing = true
+        captureError = nil
+        Task {
+            do {
+                try await bridgeManager.refreshWindowCapturesWithError()
+            } catch {
+                captureError = error.localizedDescription
+            }
+            isCapturing = false
         }
     }
 
@@ -211,6 +294,113 @@ struct SessionRow: View {
         let relativeFormatter = RelativeDateTimeFormatter()
         relativeFormatter.unitsStyle = .abbreviated
         return relativeFormatter.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+// MARK: - Window Thumbnail Cell
+
+struct WindowThumbnailCell: View {
+    let capture: WindowCapture
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Screenshot
+            Group {
+                if let imageData = capture.imageData,
+                   let uiImage = UIImage(data: imageData) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(height: 90)
+                        .clipped()
+                } else {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.2))
+                        .frame(height: 90)
+                        .overlay {
+                            Image(systemName: "photo")
+                                .foregroundColor(.secondary)
+                        }
+                }
+            }
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+            )
+
+            // Window title
+            Text(capture.title)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+        }
+    }
+}
+
+// MARK: - Window Detail Sheet
+
+struct WindowDetailSheet: View {
+    let capture: WindowCapture
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 16) {
+                    // Full-size screenshot
+                    if let imageData = capture.imageData,
+                       let uiImage = UIImage(data: imageData) {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .cornerRadius(12)
+                            .shadow(radius: 4)
+                    }
+
+                    // Metadata
+                    VStack(alignment: .leading, spacing: 12) {
+                        MetadataRow(label: "Window ID", value: "\(capture.windowID)")
+                        MetadataRow(label: "Bundle ID", value: capture.bundleId)
+                        MetadataRow(label: "Title", value: capture.title)
+                        if let imageData = capture.imageData {
+                            MetadataRow(label: "Image Size", value: "\(imageData.count / 1024) KB")
+                        }
+                    }
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                }
+                .padding()
+            }
+            .navigationTitle(capture.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct MetadataRow: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text(value)
+                .font(.caption)
+                .foregroundColor(.primary)
+                .lineLimit(1)
+        }
     }
 }
 

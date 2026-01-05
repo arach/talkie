@@ -57,11 +57,32 @@ public var kTalkieEngineXPCServiceName: String {
     /// Looks up the terminal context for the given session ID from BridgeContextMapper,
     /// then inserts the text using TextInserter.
     ///
+    /// If text is empty and submit is true, just presses Enter without inserting anything.
+    ///
     /// - Parameters:
-    ///   - text: The text to append
-    ///   - sessionId: Claude session ID (e.g., "-Users-arach-dev-talkie")
+    ///   - text: The text to append (empty = no text insertion)
+    ///   - sessionId: Claude session UUID
+    ///   - projectPath: Full project path (e.g., "/Users/arach/dev/talkie") for terminal matching
+    ///   - submit: Whether to press Enter after inserting text (submits to Claude)
     ///   - reply: Callback with success status and optional error message
-    func appendMessage(_ text: String, sessionId: String, reply: @escaping (_ success: Bool, _ error: String?) -> Void)
+    func appendMessage(_ text: String, sessionId: String, projectPath: String?, submit: Bool, reply: @escaping (_ success: Bool, _ error: String?) -> Void)
+
+    // MARK: - Screenshot Methods (for iOS Bridge)
+
+    /// List terminal windows that might contain Claude sessions
+    /// Returns JSON-encoded array of window info
+    func listClaudeWindows(reply: @escaping (_ windowsJSON: Data?) -> Void)
+
+    /// Capture a screenshot of a specific window
+    /// Returns JPEG image data
+    func captureWindow(windowID: UInt32, reply: @escaping (_ imageData: Data?, _ error: String?) -> Void)
+
+    /// Capture screenshots of all terminal windows
+    /// Returns JSON-encoded array with window info and base64 image data
+    func captureTerminalWindows(reply: @escaping (_ screenshotsJSON: Data?, _ error: String?) -> Void)
+
+    /// Check if screen recording permission is granted
+    func hasScreenRecordingPermission(reply: @escaping (_ granted: Bool) -> Void)
 }
 
 /// Protocol for Talkie to receive callbacks from TalkieLive (Live → Talkie events)

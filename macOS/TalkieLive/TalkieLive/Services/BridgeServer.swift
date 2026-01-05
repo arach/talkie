@@ -1,279 +1,292 @@
-//
-//  BridgeServer.swift
-//  TalkieLive
-//
-//  Local HTTP server for receiving commands from TalkieBridge.
-//  Listens on port 8766 for inject requests.
-//
-
 import Foundation
 import Network
 import TalkieKit
 
-private let log = Log(.system)
-
-/// Request body for /inject endpoint
-/// Bridge sends sessionId + text; TalkieLive looks up the terminal context
-struct InjectRequest: Codable {
-    let sessionId: String
-    let text: String
-}
-
-/// Response for /inject endpoint
-struct InjectResponse: Codable {
-    let success: Bool
-    let error: String?
-}
-
-/// Local HTTP server for bridge communication
-@MainActor
-final class BridgeServer {
+/// Lightweight HTTP server for Bridge communication
+/// Runs on localhost:8766, only accepts local connections
+@available(macOS 14.0, *)
+actor BridgeServer {
     static let shared = BridgeServer()
 
+    private let log = Log(.system)
+    private let port: UInt16 = 8767
     private var listener: NWListener?
-    private let port: UInt16 = 8766
+    private var isRunning = false
 
-    var isRunning: Bool {
-        listener?.state == .ready
-    }
+    // MARK: - Server Lifecycle
 
-    private init() {}
-
-    // MARK: - Public API
-
-    func start() {
-        guard listener == nil else {
-            log.debug("BridgeServer already running")
+    func start() async throws {
+        guard !isRunning else {
+            log.info("BridgeServer already running")
             return
         }
 
-        do {
-            let params = NWParameters.tcp
-            params.allowLocalEndpointReuse = true
+        let parameters = NWParameters.tcp
+        parameters.allowLocalEndpointReuse = true
 
-            listener = try NWListener(using: params, on: NWEndpoint.Port(rawValue: port)!)
+        // Only accept local connections
+        parameters.requiredLocalEndpoint = NWEndpoint.hostPort(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: port)!)
 
-            listener?.stateUpdateHandler = { [weak self] state in
-                Task { @MainActor in
-                    self?.handleStateUpdate(state)
-                }
-            }
+        let listener = try NWListener(using: parameters, on: NWEndpoint.Port(rawValue: port)!)
 
-            listener?.newConnectionHandler = { [weak self] connection in
-                Task { @MainActor in
-                    self?.handleConnection(connection)
-                }
-            }
-
-            listener?.start(queue: .main)
-            log.info("BridgeServer starting on port \(port)")
-        } catch {
-            log.error("Failed to start BridgeServer: \(error)")
-        }
-    }
-
-    func stop() {
-        listener?.cancel()
-        listener = nil
-        log.info("BridgeServer stopped")
-    }
-
-    // MARK: - Private
-
-    private func handleStateUpdate(_ state: NWListener.State) {
-        switch state {
-        case .ready:
-            log.info("BridgeServer ready on port \(port)")
-        case .failed(let error):
-            log.error("BridgeServer failed: \(error)")
-            listener = nil
-        case .cancelled:
-            log.info("BridgeServer cancelled")
-        default:
-            break
-        }
-    }
-
-    private func handleConnection(_ connection: NWConnection) {
-        connection.stateUpdateHandler = { [weak self] state in
+        listener.stateUpdateHandler = { [weak self] state in
             Task { @MainActor in
-                guard let self else { return }
                 switch state {
                 case .ready:
-                    self.receiveRequest(connection)
+                    self?.log.info("BridgeServer listening on port \(self?.port ?? 0)")
                 case .failed(let error):
-                    log.error("Connection failed: \(error)")
-                    connection.cancel()
+                    self?.log.error("BridgeServer failed: \(error)")
+                case .cancelled:
+                    self?.log.info("BridgeServer cancelled")
                 default:
                     break
                 }
             }
         }
-        connection.start(queue: .main)
+
+        listener.newConnectionHandler = { [weak self] connection in
+            Task {
+                await self?.handleConnection(connection)
+            }
+        }
+
+        listener.start(queue: .global(qos: .userInitiated))
+        self.listener = listener
+        self.isRunning = true
+        log.info("BridgeServer started on port \(port)")
     }
 
-    private func receiveRequest(_ connection: NWConnection) {
+    func stop() {
+        listener?.cancel()
+        listener = nil
+        isRunning = false
+        log.info("BridgeServer stopped")
+    }
+
+    // MARK: - Connection Handling
+
+    private func handleConnection(_ connection: NWConnection) async {
+        connection.stateUpdateHandler = { state in
+            switch state {
+            case .ready:
+                break
+            case .failed(let error):
+                self.log.error("Connection failed: \(error)")
+            default:
+                break
+            }
+        }
+
+        connection.start(queue: .global(qos: .userInitiated))
+
+        // Read the HTTP request
         connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
-            guard let self else { return }
+            guard let self = self else { return }
 
-            if let error {
-                log.error("Receive error: \(error)")
+            if let error = error {
+                self.log.error("Receive error: \(error)")
                 connection.cancel()
                 return
             }
 
-            if let data {
-                Task { @MainActor in
-                    await self.processRequest(data, connection: connection)
-                }
+            guard let data = data, !data.isEmpty else {
+                connection.cancel()
+                return
             }
 
-            if isComplete {
-                connection.cancel()
+            Task {
+                await self.handleRequest(data, connection: connection)
             }
         }
     }
 
-    private func processRequest(_ data: Data, connection: NWConnection) async {
+    private func handleRequest(_ data: Data, connection: NWConnection) async {
         guard let requestString = String(data: data, encoding: .utf8) else {
-            sendResponse(connection, statusCode: 400, body: "Invalid request")
+            await sendError(connection, status: 400, message: "Invalid request")
             return
         }
 
-        // Parse HTTP request
-        let lines = requestString.components(separatedBy: "\r\n")
-        guard let requestLine = lines.first else {
-            sendResponse(connection, statusCode: 400, body: "No request line")
+        // Parse HTTP request line
+        let lines = requestString.split(separator: "\r\n", omittingEmptySubsequences: false)
+        guard let firstLine = lines.first else {
+            await sendError(connection, status: 400, message: "Empty request")
             return
         }
 
-        let parts = requestLine.components(separatedBy: " ")
+        let parts = firstLine.split(separator: " ")
         guard parts.count >= 2 else {
-            sendResponse(connection, statusCode: 400, body: "Invalid request line")
+            await sendError(connection, status: 400, message: "Invalid request line")
             return
         }
 
-        let method = parts[0]
-        let path = parts[1]
+        let method = String(parts[0])
+        let path = String(parts[1])
 
-        log.debug("BridgeServer: \(method) \(path)")
+        log.info("BridgeServer: \(method) \(path)")
 
-        // Find body (after empty line)
-        var body: Data?
-        if let emptyLineIndex = lines.firstIndex(of: "") {
-            let bodyLines = lines[(emptyLineIndex + 1)...]
-            let bodyString = bodyLines.joined(separator: "\r\n")
-            body = bodyString.data(using: .utf8)
-        }
+        // Route the request
+        switch (method, path) {
+        case ("GET", "/health"):
+            await handleHealth(connection)
 
-        // Route request
-        if path == "/health" && method == "GET" {
-            let response = ["status": "ok", "service": "TalkieLive"]
-            sendJSONResponse(connection, statusCode: 200, body: response)
-        } else if path == "/inject" && method == "POST" {
-            await handleInject(connection, body: body)
-        } else {
-            sendResponse(connection, statusCode: 404, body: "Not found")
-        }
-    }
+        case ("GET", "/screenshot/terminals"):
+            await handleTerminalScreenshots(connection)
 
-    private func handleInject(_ connection: NWConnection, body: Data?) async {
-        guard let body else {
-            sendJSONResponse(connection, statusCode: 400, body: InjectResponse(success: false, error: "No body"))
-            return
-        }
-
-        let request: InjectRequest
-        do {
-            request = try JSONDecoder().decode(InjectRequest.self, from: body)
-        } catch {
-            sendJSONResponse(connection, statusCode: 400, body: InjectResponse(success: false, error: "Invalid JSON: \(error)"))
-            return
-        }
-
-        log.info("Inject request for session: \(request.sessionId), text: \(request.text.prefix(50))...")
-
-        // Look up the terminal context for this session
-        guard let context = BridgeContextMapper.shared.getContext(for: request.sessionId) else {
-            // Context not found - try a terminal scan first
-            log.info("No cached context for session, attempting terminal scan...")
-            await MainActor.run {
-                BridgeContextMapper.shared.refreshFromScan()
+        case ("GET", let p) where p.hasPrefix("/screenshot/window/"):
+            let windowIdStr = String(p.dropFirst("/screenshot/window/".count))
+            if let windowId = UInt32(windowIdStr) {
+                await handleWindowScreenshot(connection, windowID: windowId)
+            } else {
+                await sendError(connection, status: 400, message: "Invalid window ID")
             }
 
-            // Try again after scan
-            guard let context = BridgeContextMapper.shared.getContext(for: request.sessionId) else {
-                log.error("Could not find terminal for session: \(request.sessionId)")
-                sendJSONResponse(connection, statusCode: 404, body: InjectResponse(
-                    success: false,
-                    error: "No terminal found for session '\(request.sessionId)'. Try dictating in that session first."
-                ))
-                return
-            }
+        case ("GET", "/windows"):
+            await handleListWindows(connection)
 
-            await doInject(request.text, context: context, connection: connection)
+        case ("GET", "/windows/claude"):
+            await handleClaudeWindows(connection)
+
+        default:
+            await sendError(connection, status: 404, message: "Not found")
+        }
+    }
+
+    // MARK: - Route Handlers
+
+    private func handleHealth(_ connection: NWConnection) async {
+        let response: [String: Any] = [
+            "status": "ok",
+            "service": "TalkieLive",
+            "port": port,
+            "timestamp": ISO8601DateFormatter().string(from: Date())
+        ]
+        await sendJSON(connection, data: response)
+    }
+
+    private func handleListWindows(_ connection: NWConnection) async {
+        let windows = await ScreenshotService.shared.listWindows()
+        let response: [String: Any] = [
+            "windows": windows.map { windowToDict($0) }
+        ]
+        await sendJSON(connection, data: response)
+    }
+
+    private func handleClaudeWindows(_ connection: NWConnection) async {
+        let windows = await ScreenshotService.shared.findClaudeWindows()
+        let response: [String: Any] = [
+            "windows": windows.map { windowToDict($0) }
+        ]
+        await sendJSON(connection, data: response)
+    }
+
+    private func handleWindowScreenshot(_ connection: NWConnection, windowID: CGWindowID) async {
+        guard let image = await ScreenshotService.shared.captureWindow(windowID: windowID),
+              let jpegData = await ScreenshotService.shared.encodeAsJPEG(image, quality: 0.85) else {
+            await sendError(connection, status: 500, message: "Failed to capture window")
             return
         }
 
-        await doInject(request.text, context: context, connection: connection)
+        await sendImage(connection, data: jpegData, contentType: "image/jpeg")
     }
 
-    private func doInject(_ text: String, context: SessionContext, connection: NWConnection) async {
-        log.info("Injecting into \(context.app) (\(context.bundleId))")
+    private func handleTerminalScreenshots(_ connection: NWConnection) async {
+        let terminals = await ScreenshotService.shared.captureTerminalWindows()
 
-        // Use TextInserter to inject the text
-        let success = await TextInserter.shared.insert(
-            text,
-            intoAppWithBundleID: context.bundleId,
-            replaceSelection: false
-        )
-
-        if success {
-            log.info("Text injected successfully into \(context.app)")
-            sendJSONResponse(connection, statusCode: 200, body: InjectResponse(success: true, error: nil))
-        } else {
-            log.error("Text injection failed for \(context.app)")
-            sendJSONResponse(connection, statusCode: 500, body: InjectResponse(success: false, error: "Injection failed"))
+        if terminals.isEmpty {
+            await sendJSON(connection, data: ["screenshots": [], "count": 0])
+            return
         }
+
+        // Return metadata with base64-encoded images
+        var screenshots: [[String: Any]] = []
+        for terminal in terminals {
+            if let jpegData = await ScreenshotService.shared.encodeAsJPEG(terminal.image, quality: 0.75) {
+                screenshots.append([
+                    "windowID": terminal.windowID,
+                    "bundleId": terminal.bundleId,
+                    "title": terminal.title,
+                    "imageBase64": jpegData.base64EncodedString()
+                ])
+            }
+        }
+
+        let response: [String: Any] = [
+            "screenshots": screenshots,
+            "count": screenshots.count
+        ]
+        await sendJSON(connection, data: response)
     }
 
-    private func sendResponse(_ connection: NWConnection, statusCode: Int, body: String) {
-        let statusText = statusCode == 200 ? "OK" : "Error"
-        let response = """
-        HTTP/1.1 \(statusCode) \(statusText)\r
-        Content-Type: text/plain\r
-        Content-Length: \(body.utf8.count)\r
+    // MARK: - Response Helpers
+
+    private func windowToDict(_ window: WindowInfo) -> [String: Any] {
+        var dict: [String: Any] = [
+            "windowID": window.windowID,
+            "pid": window.pid,
+            "appName": window.appName,
+            "layer": window.layer,
+            "isOnScreen": window.isOnScreen
+        ]
+        if let bundleId = window.bundleId {
+            dict["bundleId"] = bundleId
+        }
+        if let title = window.title {
+            dict["title"] = title
+        }
+        if let bounds = window.bounds {
+            dict["bounds"] = [
+                "x": bounds.origin.x,
+                "y": bounds.origin.y,
+                "width": bounds.width,
+                "height": bounds.height
+            ]
+        }
+        return dict
+    }
+
+    private func sendJSON(_ connection: NWConnection, data: [String: Any], status: Int = 200) async {
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: data, options: [.sortedKeys]) else {
+            await sendError(connection, status: 500, message: "JSON encoding error")
+            return
+        }
+
+        let statusText = status == 200 ? "OK" : "Error"
+        let headers = """
+        HTTP/1.1 \(status) \(statusText)\r
+        Content-Type: application/json\r
+        Content-Length: \(jsonData.count)\r
         Connection: close\r
         \r
-        \(body)
+
         """
 
-        connection.send(content: response.data(using: .utf8), completion: .contentProcessed { _ in
+        var response = Data(headers.utf8)
+        response.append(jsonData)
+
+        connection.send(content: response, completion: .contentProcessed { _ in
             connection.cancel()
         })
     }
 
-    private func sendJSONResponse<T: Encodable>(_ connection: NWConnection, statusCode: Int, body: T) {
-        let statusText = statusCode == 200 ? "OK" : "Error"
+    private func sendImage(_ connection: NWConnection, data: Data, contentType: String) async {
+        let headers = """
+        HTTP/1.1 200 OK\r
+        Content-Type: \(contentType)\r
+        Content-Length: \(data.count)\r
+        Connection: close\r
+        \r
 
-        do {
-            let jsonData = try JSONEncoder().encode(body)
-            let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
+        """
 
-            let response = """
-            HTTP/1.1 \(statusCode) \(statusText)\r
-            Content-Type: application/json\r
-            Content-Length: \(jsonData.count)\r
-            Connection: close\r
-            \r
-            \(jsonString)
-            """
+        var response = Data(headers.utf8)
+        response.append(data)
 
-            connection.send(content: response.data(using: .utf8), completion: .contentProcessed { _ in
-                connection.cancel()
-            })
-        } catch {
-            sendResponse(connection, statusCode: 500, body: "JSON encoding error")
-        }
+        connection.send(content: response, completion: .contentProcessed { _ in
+            connection.cancel()
+        })
+    }
+
+    private func sendError(_ connection: NWConnection, status: Int, message: String) async {
+        await sendJSON(connection, data: ["error": message], status: status)
     }
 }

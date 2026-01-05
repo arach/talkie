@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DBA7F747214140C8B7C8D547 /* ClaudeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E05552534D9043BBBC0FC5BD /* ClaudeView.swift */; };
+		9BE44F3D5EC840D3A86085C8 /* MessageQueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136D3D28ABD745EF8BAED870 /* MessageQueueView.swift */; };
+		E886ED0600114C08AFF931AE /* MessageQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA7941AFFEF34D589C5ABB53 /* MessageQueue.swift */; };
 		7A2D93597AC44FEB88B34C47 /* TalkieServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 088F3AE6BE3A4237A5188C43 /* TalkieServer.swift */; };
 		808536C18ADD48A0BFDB371C /* BridgeSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 805F1333DAE245AEBFE04E6A /* BridgeSettingsView.swift */; };
 		41998ACBBF7B48BBB3490535 /* BridgeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 018F97247E794D7EBEC94E30 /* BridgeManager.swift */; };
@@ -259,6 +262,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		E05552534D9043BBBC0FC5BD /* ClaudeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeView.swift; sourceTree = "<group>"; };
+		136D3D28ABD745EF8BAED870 /* MessageQueueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageQueueView.swift; sourceTree = "<group>"; };
+		FA7941AFFEF34D589C5ABB53 /* MessageQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageQueue.swift; sourceTree = "<group>"; };
 		088F3AE6BE3A4237A5188C43 /* TalkieServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieServer.swift; sourceTree = "<group>"; };
 		805F1333DAE245AEBFE04E6A /* BridgeSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeSettingsView.swift; sourceTree = "<group>"; };
 		018F97247E794D7EBEC94E30 /* BridgeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeManager.swift; sourceTree = "<group>"; };
@@ -525,9 +531,33 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		4360EFD78DF7470B8AD37BFE /* Claude */ = {
+			isa = PBXGroup;
+			children = (
+				E05552534D9043BBBC0FC5BD /* ClaudeView.swift */,
+			);
+			path = Claude;
+			sourceTree = "<group>";
+		};
+		120CBA93146544B081847A2E /* Claude */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Claude;
+			sourceTree = "<group>";
+		};
+		018F6768B5C04B99AD26AEF0 /* Bridge */ = {
+			isa = PBXGroup;
+			children = (
+				136D3D28ABD745EF8BAED870 /* MessageQueueView.swift */,
+			);
+			path = Bridge;
+			sourceTree = "<group>";
+		};
 		7DD42E5F214F4DCB917FFA3E /* Bridge */ = {
 			isa = PBXGroup;
 			children = (
+				FA7941AFFEF34D589C5ABB53 /* MessageQueue.swift */,
 				018F97247E794D7EBEC94E30 /* BridgeManager.swift */,
 			);
 			path = Bridge;
@@ -657,6 +687,7 @@
 		5CC7B1BEDA8719A80E0BFD4C /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				4360EFD78DF7470B8AD37BFE /* Claude */,
 				BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */,
 				25DB7E4762BA599C3AAC78DC /* DictationStatsView.swift */,
 				37B249E75E681770AEA53425 /* MemoRowView.swift */,
@@ -826,6 +857,8 @@
 		9A4651765758DD61801D03CA /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				120CBA93146544B081847A2E /* Claude */,
+				018F6768B5C04B99AD26AEF0 /* Bridge */,
 				805F1333DAE245AEBFE04E6A /* BridgeSettingsView.swift */,
 				728B25DE3B5B4697947A1CB0 /* TTSVoicesSettingsView.swift */,
 				5A2D3F324B964FFBAE1A4AE0 /* DictionarySettings.swift */,
@@ -1212,6 +1245,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DBA7F747214140C8B7C8D547 /* ClaudeView.swift in Sources */,
+				9BE44F3D5EC840D3A86085C8 /* MessageQueueView.swift in Sources */,
+				E886ED0600114C08AFF931AE /* MessageQueue.swift in Sources */,
 				7A2D93597AC44FEB88B34C47 /* TalkieServer.swift in Sources */,
 				808536C18ADD48A0BFDB371C /* BridgeSettingsView.swift in Sources */,
 				41998ACBBF7B48BBB3490535 /* BridgeManager.swift in Sources */,
