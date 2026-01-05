@@ -2,7 +2,7 @@
  * Device Registry
  *
  * Stores paired iOS devices and their public keys.
- * Devices are stored in ~/.talkie-bridge/devices.json
+ * Devices are stored in ~/Library/Application Support/TalkieBridge/devices.json
  *
  * Features:
  * - Manual revocation via removeDevice()
@@ -13,8 +13,7 @@
 import { deriveSharedKeyFromBase64, deriveAuthKeyFromBase64 } from "../crypto/keypair";
 import { getOrCreateKeyPair } from "../crypto/store";
 import { log } from "../log";
-
-const DEVICES_FILE = `${process.env.HOME}/.talkie-bridge/devices.json`;
+import { DEVICES_FILE } from "../paths";
 
 /** Devices not seen in this many days are considered expired */
 const DEVICE_EXPIRY_DAYS = 30;

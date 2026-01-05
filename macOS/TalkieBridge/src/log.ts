@@ -1,12 +1,13 @@
 /**
  * log.ts - Simple file logger for TalkieBridge
  *
- * Writes timestamped logs to ~/Library/Application Support/TalkieBridge/bridge.log
- * Also outputs to console for debugging
+ * Two log files:
+ * - bridge.log: User-facing logs (info, warn, error, requests)
+ * - bridge.dev.log: Developer logs (auth, debug, verbose troubleshooting)
  */
 
 import { appendFile } from "fs/promises";
-import { LOG_FILE } from "./paths";
+import { LOG_FILE, DEV_LOG_FILE } from "./paths";
 
 function formatTimestamp(): string {
   return new Date().toISOString();
@@ -30,9 +31,23 @@ async function writeLog(level: string, message: string) {
   }
 }
 
+async function writeDevLog(level: string, message: string) {
+  const line = `[${formatTimestamp()}] [${level}] ${message}\n`;
+
+  // Console output (dev logs always to console for debugging)
+  console.log(`[DEV] ${message}`);
+
+  // Dev log file only
+  try {
+    await appendFile(DEV_LOG_FILE, line);
+  } catch (err) {
+    console.error("Failed to write dev log:", err);
+  }
+}
+
 export const log = {
+  // User-facing logs (bridge.log)
   info: (message: string) => writeLog("INFO", message),
-  debug: (message: string) => writeLog("DEBUG", message),
   warn: (message: string) => writeLog("WARN", message),
   error: (message: string) => writeLog("ERROR", message),
   request: (method: string, path: string, status?: number) => {
@@ -41,13 +56,26 @@ export const log = {
       : `${method} ${path}`;
     writeLog("REQ", msg);
   },
+
+  // Dev-only logs (bridge.dev.log)
+  debug: (message: string) => writeDevLog("DEBUG", message),
+  auth: (message: string, context?: Record<string, unknown>) => {
+    const ctx = context ? ` ${JSON.stringify(context)}` : "";
+    writeDevLog("AUTH", `${message}${ctx}`);
+  },
+  crypto: (message: string, context?: Record<string, unknown>) => {
+    const ctx = context ? ` ${JSON.stringify(context)}` : "";
+    writeDevLog("CRYPTO", `${message}${ctx}`);
+  },
 };
 
-// Clear log on startup (keep it fresh)
+// Clear logs on startup (keep them fresh)
 export async function clearLog() {
+  const ts = formatTimestamp();
   try {
-    await Bun.write(LOG_FILE, `[${formatTimestamp()}] [INFO] === Bridge started ===\n`);
+    await Bun.write(LOG_FILE, `[${ts}] [INFO] === Bridge started ===\n`);
+    await Bun.write(DEV_LOG_FILE, `[${ts}] [INFO] === Dev log started ===\n`);
   } catch (err) {
-    console.error("Failed to clear log:", err);
+    console.error("Failed to clear logs:", err);
   }
 }

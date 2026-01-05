@@ -244,29 +244,33 @@ export async function parseTranscript(
       try {
         const entry = JSON.parse(line);
 
-        // Claude transcript format varies, handle common cases
-        if (entry.type === "human" || entry.role === "user") {
+        // Claude Code JSONL format: { type: "user"|"assistant", message: { role, content }, timestamp }
+        // Also handle legacy formats with type: "human" or direct role/content
+
+        const entryType = entry.type;
+        const messageRole = entry.message?.role;
+
+        if (entryType === "user" || entryType === "human" || messageRole === "user") {
           messages.push({
             role: "user",
             content: extractContent(entry),
             timestamp: entry.timestamp || new Date().toISOString(),
           });
-        } else if (entry.type === "assistant" || entry.role === "assistant") {
+        } else if (entryType === "assistant" || messageRole === "assistant") {
           const msg: Message = {
             role: "assistant",
             content: extractContent(entry),
             timestamp: entry.timestamp || new Date().toISOString(),
           };
 
-          // Extract tool calls if present
-          if (entry.tool_calls || entry.toolCalls) {
-            msg.toolCalls = (entry.tool_calls || entry.toolCalls).map(
-              (tc: any) => ({
-                name: tc.name || tc.function?.name,
-                input: tc.input || tc.function?.arguments,
-                output: tc.output,
-              })
-            );
+          // Extract tool calls if present (from message object or entry directly)
+          const toolCalls = entry.message?.tool_calls || entry.tool_calls || entry.toolCalls;
+          if (toolCalls) {
+            msg.toolCalls = toolCalls.map((tc: any) => ({
+              name: tc.name || tc.function?.name,
+              input: tc.input || tc.function?.arguments,
+              output: tc.output,
+            }));
           }
 
           messages.push(msg);

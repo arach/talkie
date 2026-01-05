@@ -15,13 +15,23 @@ struct SessionListView: View {
     @State private var captureError: String?
     @State private var selectedWindow: WindowCapture?
     @State private var sessionsMeta: SessionsMeta?
+    @State private var showUnpairConfirmation = false
+    @State private var showMacDetails = false
 
     var body: some View {
         Group {
-            if bridgeManager.status == .connected {
+            switch bridgeManager.status {
+            case .connected:
                 connectedView
-            } else {
-                disconnectedView
+            case .connecting:
+                connectingView
+            case .disconnected, .error:
+                // If paired but disconnected, show connecting (we're about to auto-connect)
+                if bridgeManager.isPaired {
+                    connectingView
+                } else {
+                    disconnectedView
+                }
             }
         }
         .onAppear {
@@ -31,73 +41,174 @@ struct SessionListView: View {
                 }
             }
         }
+        .alert("Unpair from Mac?", isPresented: $showUnpairConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Unpair", role: .destructive) {
+                bridgeManager.unpair()
+            }
+        } message: {
+            Text("This will remove all pairing data. You'll need to scan the QR code again to reconnect.")
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("TALKIE")
+                        .font(.system(size: 15, weight: .medium, design: .monospaced))
+                        .foregroundColor(.primary)
+                    Text("with Claude")
+                        .font(.system(size: 13, weight: .regular, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
     }
 
     private var connectedView: some View {
-        List {
-            // Connection status
-            Section {
-                HStack {
-                    Image(systemName: "desktopcomputer")
-                        .font(.title2)
-                        .foregroundColor(.green)
+        VStack(spacing: 0) {
+            // Sessions list (scrollable)
+            sessionsList
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(bridgeManager.pairedMacName ?? "Mac")
-                            .font(.headline)
-                        HStack(spacing: 4) {
-                            Text("Connected")
-                                .foregroundColor(.green)
-                            if let meta = sessionsMeta, let syncedAt = meta.syncedAt {
-                                Text("•")
-                                    .foregroundColor(.secondary)
-                                Text(formatRelativeTime(syncedAt))
-                                    .foregroundColor(.secondary)
+            // Mac status bar - sticky footer
+            macStatusFooter
+        }
+    }
+
+    private var macStatusFooter: some View {
+        VStack(spacing: 0) {
+            // Expanded panel (slides up from footer)
+            if showMacDetails {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    // Full hostname with refresh
+                    HStack {
+                        Text("HOST")
+                            .font(.techLabelSmall)
+                            .foregroundColor(.textTertiary)
+                        Spacer()
+                        Text(bridgeManager.pairedMacName ?? "Unknown")
+                            .font(.monoSmall)
+                            .foregroundColor(.textSecondary)
+
+                        // Quick refresh button
+                        Button(action: {
+                            Task {
+                                isRefreshing = true
+                                await refreshSessions(deepSync: false)
+                                isRefreshing = false
+                            }
+                        }) {
+                            if isRefreshing {
+                                BrailleSpinner(speed: 0.06, color: .brandAccent)
+                                    .frame(width: 14, height: 14)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.textSecondary)
                             }
                         }
-                        .font(.caption)
+                        .buttonStyle(.plain)
+                        .disabled(isRefreshing || isDeepSyncing)
+                    }
+
+                    // Last sync
+                    if let meta = sessionsMeta, let syncedAt = meta.syncedAt {
+                        HStack {
+                            Text("SYNCED")
+                                .font(.techLabelSmall)
+                                .foregroundColor(.textTertiary)
+                            Spacer()
+                            Text(formatRelativeTime(syncedAt))
+                                .font(.monoSmall)
+                                .foregroundColor(.textSecondary)
+                        }
+                    }
+
+                    Divider()
+                        .padding(.vertical, Spacing.xxs)
+
+                    // Action buttons
+                    HStack(spacing: Spacing.xs) {
+                        BridgeActionButton(
+                            icon: "arrow.trianglehead.2.clockwise",
+                            label: "Deep Sync",
+                            color: .brandAccent,
+                            isLoading: isDeepSyncing
+                        ) {
+                            Task {
+                                isDeepSyncing = true
+                                await refreshSessions(deepSync: true)
+                                isDeepSyncing = false
+                            }
+                        }
+                        .disabled(isDeepSyncing || isRefreshing)
+
+                        BridgeActionButton(
+                            icon: "wifi.slash",
+                            label: "Disconnect",
+                            color: .textSecondary
+                        ) {
+                            bridgeManager.disconnect()
+                        }
+
+                        BridgeActionButton(
+                            icon: "xmark.circle",
+                            label: "Unpair",
+                            color: .recording
+                        ) {
+                            showUnpairConfirmation = true
+                        }
+                    }
+                }
+                .padding(.horizontal, Spacing.md)
+                .padding(.vertical, Spacing.sm)
+                .background(Color.surfaceSecondary)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
+            // Main footer bar (collapsed)
+            Button(action: { withAnimation(.easeInOut(duration: 0.25)) { showMacDetails.toggle() } }) {
+                HStack(spacing: Spacing.sm) {
+                    // Connection status
+                    HStack(spacing: Spacing.xs) {
+                        Circle()
+                            .fill(Color.success)
+                            .frame(width: 8, height: 8)
+
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("Connected")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.textPrimary)
+                            Text(truncatedMacName)
+                                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                                .foregroundColor(.textSecondary)
+                        }
                     }
 
                     Spacer()
 
-                    // Normal refresh
-                    Button(action: {
-                        Task {
-                            isRefreshing = true
-                            await refreshSessions(deepSync: false)
-                            isRefreshing = false
-                        }
-                    }) {
-                        if isRefreshing {
-                            ProgressView()
-                        } else {
-                            Image(systemName: "arrow.clockwise")
-                        }
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(isRefreshing || isDeepSyncing)
-
-                    // Deep sync
-                    Button(action: {
-                        Task {
-                            isDeepSyncing = true
-                            await refreshSessions(deepSync: true)
-                            isDeepSyncing = false
-                        }
-                    }) {
-                        if isDeepSyncing {
-                            ProgressView()
-                        } else {
-                            Image(systemName: "arrow.trianglehead.2.clockwise")
-                        }
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(isRefreshing || isDeepSyncing)
+                    // Expand indicator (refresh only in expanded view)
+                    Image(systemName: showMacDetails ? "chevron.down" : "chevron.up")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.textTertiary)
                 }
+                .padding(.horizontal, Spacing.md)
+                .padding(.vertical, Spacing.sm)
             }
+            .buttonStyle(.plain)
+            .background(Color.surfacePrimary)
+            .overlay(
+                Rectangle()
+                    .fill(Color.textTertiary.opacity(0.3))
+                    .frame(height: 0.5),
+                alignment: .top
+            )
+        }
+    }
 
+    private var sessionsList: some View {
+        List {
             // Sessions
-            Section("Claude Sessions") {
+            Section {
                 if bridgeManager.sessions.isEmpty {
                     HStack {
                         Image(systemName: "tray")
@@ -176,19 +287,6 @@ struct SessionListView: View {
                 }
             }
 
-            // Disconnect
-            Section {
-                Button(action: {
-                    bridgeManager.disconnect()
-                }) {
-                    HStack {
-                        Spacer()
-                        Text("Disconnect")
-                            .foregroundColor(.red)
-                        Spacer()
-                    }
-                }
-            }
         }
         .refreshable {
             await refreshSessions(deepSync: false)
@@ -197,6 +295,20 @@ struct SessionListView: View {
         .sheet(item: $selectedWindow) { window in
             WindowDetailSheet(capture: window)
         }
+    }
+
+    // MARK: - Computed
+
+    private var truncatedMacName: String {
+        guard let fullName = bridgeManager.pairedMacName else { return "Mac" }
+        // Show first part before .tail or first 20 chars
+        if let tailRange = fullName.range(of: ".tail") {
+            return String(fullName[..<tailRange.lowerBound])
+        }
+        if fullName.count > 20 {
+            return String(fullName.prefix(20)) + "…"
+        }
+        return fullName
     }
 
     // MARK: - Actions
@@ -236,6 +348,31 @@ struct SessionListView: View {
         }
     }
 
+    private var connectingView: some View {
+        VStack(spacing: Spacing.lg) {
+            Spacer()
+
+            // Animated connection indicator
+            ConnectingAnimation()
+
+            VStack(spacing: Spacing.xs) {
+                Text("Connecting to Mac")
+                    .font(.headlineMedium)
+                    .foregroundColor(.textPrimary)
+
+                if let macName = bridgeManager.pairedMacName {
+                    Text(macName)
+                        .font(.monoSmall)
+                        .foregroundColor(.textSecondary)
+                }
+            }
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .background(Color.surfacePrimary)
+    }
+
     private var disconnectedView: some View {
         VStack(spacing: 24) {
             Spacer()
@@ -265,11 +402,17 @@ struct SessionListView: View {
                 }
                 .buttonStyle(.borderedProminent)
 
-                Button("Unpair Mac") {
-                    bridgeManager.unpair()
+                Button(action: {
+                    showUnpairConfirmation = true
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "trash")
+                        Text("Unpair Mac")
+                    }
+                    .font(.caption)
+                    .foregroundColor(.red)
                 }
-                .font(.caption)
-                .foregroundColor(.red)
+                .padding(.top, 8)
             } else {
                 // No pairing
                 VStack(spacing: 8) {
@@ -295,56 +438,272 @@ struct SessionListView: View {
     }
 }
 
+// MARK: - Connecting Animation
+
+struct ConnectingAnimation: View {
+    @State private var pulse = false
+    @State private var wave1 = false
+    @State private var wave2 = false
+    @State private var wave3 = false
+
+    var body: some View {
+        ZStack {
+            // Outer waves
+            Circle()
+                .stroke(Color.brandAccent.opacity(0.15), lineWidth: 2)
+                .frame(width: 120, height: 120)
+                .scaleEffect(wave3 ? 1.0 : 0.5)
+                .opacity(wave3 ? 0 : 0.8)
+
+            Circle()
+                .stroke(Color.brandAccent.opacity(0.25), lineWidth: 2)
+                .frame(width: 90, height: 90)
+                .scaleEffect(wave2 ? 1.0 : 0.5)
+                .opacity(wave2 ? 0 : 0.8)
+
+            Circle()
+                .stroke(Color.brandAccent.opacity(0.4), lineWidth: 2)
+                .frame(width: 60, height: 60)
+                .scaleEffect(wave1 ? 1.0 : 0.5)
+                .opacity(wave1 ? 0 : 0.8)
+
+            // Center icon
+            ZStack {
+                Circle()
+                    .fill(Color.brandAccent.opacity(0.1))
+                    .frame(width: 56, height: 56)
+                    .scaleEffect(pulse ? 1.05 : 0.95)
+
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundColor(.brandAccent)
+            }
+        }
+        .onAppear {
+            // Staggered wave animations
+            withAnimation(.easeOut(duration: 1.5).repeatForever(autoreverses: false)) {
+                wave1 = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                withAnimation(.easeOut(duration: 1.5).repeatForever(autoreverses: false)) {
+                    wave2 = true
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                withAnimation(.easeOut(duration: 1.5).repeatForever(autoreverses: false)) {
+                    wave3 = true
+                }
+            }
+            // Center pulse
+            withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                pulse = true
+            }
+        }
+    }
+}
+
+// MARK: - Session Summary Cache (Background AI)
+
+/// Manages background AI summary generation with low priority
+@MainActor
+class SessionSummaryCache: ObservableObject {
+    static let shared = SessionSummaryCache()
+
+    @Published private(set) var summaries: [String: String] = [:]
+    private var pendingSessionIds: Set<String> = []
+
+    private init() {}
+
+    func getSummary(for sessionId: String) -> String? {
+        return summaries[sessionId]
+    }
+
+    /// Queue a session for background summary generation
+    func queueSummary(for session: ClaudeSession) {
+        let sessionId = session.id
+
+        // Skip if already cached or pending
+        guard summaries[sessionId] == nil, !pendingSessionIds.contains(sessionId) else {
+            return
+        }
+
+        pendingSessionIds.insert(sessionId)
+
+        // Fire and forget - truly background, low priority
+        Task.detached(priority: .background) { [sessionId] in
+            await Self.generateSummaryInBackground(sessionId: sessionId)
+        }
+    }
+
+    private static func generateSummaryInBackground(sessionId: String) async {
+        // Check AI availability
+        let aiService = await OnDeviceAIService.shared
+        let isAvailable = await aiService.isAvailable
+
+        print("[SessionSummary] Attempting summary for \(sessionId), AI available: \(isAvailable)")
+
+        guard isAvailable else {
+            print("[SessionSummary] AI not available, skipping")
+            await MainActor.run {
+                shared.pendingSessionIds.remove(sessionId)
+            }
+            return
+        }
+
+        do {
+            // Small delay to not compete with UI
+            try await Task.sleep(nanoseconds: 500_000_000)
+
+            // Fetch messages
+            print("[SessionSummary] Fetching messages...")
+            let messages = try await BridgeManager.shared.getMessages(sessionId: sessionId)
+            print("[SessionSummary] Got \(messages.count) messages")
+
+            guard !messages.isEmpty else {
+                print("[SessionSummary] No messages, skipping")
+                await MainActor.run {
+                    shared.pendingSessionIds.remove(sessionId)
+                }
+                return
+            }
+
+            // Generate summary (this is the slow part)
+            print("[SessionSummary] Generating AI summary...")
+            let summary = try await aiService.summarizeSession(messages: messages)
+            print("[SessionSummary] Generated: \(summary)")
+
+            // Update cache on main thread
+            await MainActor.run {
+                shared.summaries[sessionId] = summary
+                shared.pendingSessionIds.remove(sessionId)
+                print("[SessionSummary] Cached summary for \(sessionId)")
+            }
+        } catch {
+            print("[SessionSummary] Error: \(error)")
+            await MainActor.run {
+                shared.pendingSessionIds.remove(sessionId)
+            }
+        }
+    }
+}
+
 // MARK: - Session Row
 
 struct SessionRow: View {
     let session: ClaudeSession
+    @ObservedObject private var summaryCache = SessionSummaryCache.shared
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Live indicator
+        HStack(spacing: Spacing.xs) {
+            // Live indicator dot
             Circle()
-                .fill(session.isLive ? Color.green : Color.gray.opacity(0.3))
-                .frame(width: 8, height: 8)
+                .fill(session.isLive ? Color.success : Color.tactical500.opacity(0.3))
+                .frame(width: 6, height: 6)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(session.project)
-                    .font(.headline)
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                // Project name + message count
+                HStack(spacing: Spacing.xs) {
+                    Text(session.project)
+                        .font(.monoMedium)
+                        .foregroundColor(.textPrimary)
+                        .lineLimit(1)
 
-                HStack(spacing: 8) {
-                    Label("\(session.messageCount)", systemImage: "bubble.left.and.bubble.right")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    Text("·")
+                        .foregroundColor(.textTertiary)
 
-                    Text(formatRelativeTime(session.lastSeen))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    Text("\(session.messageCount)")
+                        .font(.monoSmall)
+                        .foregroundColor(.textTertiary)
                 }
+
+                // AI Summary (appears when ready) or fallback
+                Text(summaryCache.getSummary(for: session.id) ?? generateQuickSummary())
+                    .font(.labelSmall)
+                    .foregroundColor(.textSecondary)
+                    .lineLimit(1)
             }
 
             Spacer()
 
-            if session.isLive {
-                Text("LIVE")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.green)
-                    .cornerRadius(4)
-            }
+            // Compact time
+            Text(compactTime)
+                .font(.techLabelSmall)
+                .foregroundColor(.textTertiary)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, Spacing.xxs)
+        .onAppear {
+            // Queue for background processing - doesn't block anything
+            summaryCache.queueSummary(for: session)
+        }
     }
 
-    private func formatRelativeTime(_ isoString: String) -> String {
+    private var compactTime: String {
         let formatter = ISO8601DateFormatter()
-        guard let date = formatter.date(from: isoString) else {
-            return isoString
+        guard let date = formatter.date(from: session.lastSeen) else { return "" }
+        let interval = Date().timeIntervalSince(date)
+
+        if interval < 60 { return "now" }
+        if interval < 3600 { return "\(Int(interval / 60))m" }
+        if interval < 86400 { return "\(Int(interval / 3600))h" }
+        return "\(Int(interval / 86400))d"
+    }
+
+    private func generateQuickSummary() -> String {
+        if session.isLive {
+            return "Active session"
+        } else if session.messageCount > 50 {
+            return "Long conversation"
+        } else if session.messageCount > 10 {
+            return "Ongoing work"
+        } else {
+            return "Quick task"
         }
-        let relativeFormatter = RelativeDateTimeFormatter()
-        relativeFormatter.unitsStyle = .abbreviated
-        return relativeFormatter.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+// MARK: - Bridge Action Button
+
+struct BridgeActionButton: View {
+    let icon: String
+    let label: String
+    let color: Color
+    var isLoading: Bool = false
+    let action: () -> Void
+
+    @State private var isPressed = false
+
+    var body: some View {
+        Button(action: {
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isPressed = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isPressed = false
+                }
+                action()
+            }
+        }) {
+            VStack(spacing: Spacing.xxs) {
+                if isLoading {
+                    ProgressView()
+                        .scaleEffect(0.6)
+                        .frame(width: 16, height: 16)
+                } else {
+                    Image(systemName: icon)
+                        .font(.system(size: 12, weight: .medium))
+                }
+                Text(label)
+                    .font(.techLabelSmall)
+            }
+            .foregroundColor(color)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, Spacing.xs)
+            .background(color.opacity(isPressed ? 0.15 : 0.08))
+            .cornerRadius(CornerRadius.sm)
+            .scaleEffect(isPressed ? 0.95 : 1.0)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -458,6 +817,5 @@ struct MetadataRow: View {
 #Preview {
     NavigationView {
         SessionListView()
-            .navigationTitle("Mac Bridge")
     }
 }

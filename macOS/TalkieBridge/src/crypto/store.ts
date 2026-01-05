@@ -2,12 +2,12 @@
  * Key Storage
  *
  * Persists the server's key pair to disk.
- * Keys are stored in ~/.talkie-bridge/keys/
+ * Keys are stored in ~/Library/Application Support/TalkieBridge/keys/
  */
 
 import { generateKeyPair, type KeyPair } from "./keypair";
+import { KEYS_DIR } from "../paths";
 
-const KEYS_DIR = `${process.env.HOME}/.talkie-bridge/keys`;
 const KEYPAIR_FILE = `${KEYS_DIR}/server.json`;
 
 /**

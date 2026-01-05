@@ -34,6 +34,15 @@ actor BridgeClient {
         self.authKey = sharedSecret.deriveAuthKey()
     }
 
+    /// Clear all authentication state (for unpair)
+    func clearAuth() {
+        self.deviceId = nil
+        self.authKey = nil
+        self.sharedKey = nil
+        self.baseURL = nil
+        self.clockOffset = 0
+    }
+
     var isConfigured: Bool {
         baseURL != nil
     }

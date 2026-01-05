@@ -4,7 +4,7 @@
 //
 //  Manages fingerprint → UUID mapping and dictation logging.
 //  Each terminal context (bundleId + windowTitle) gets a UUID.
-//  Dictations are appended to ~/.talkie-bridge/fingerprints/{uuid}.jsonl
+//  Dictations are appended to ~/Library/Application Support/Talkie/Bridge/fingerprints/{uuid}.jsonl
 //
 //  A separate batch script (session-matcher) reads these files and
 //  correlates with Claude's session files to establish mappings.
@@ -57,11 +57,8 @@ final class FingerprintStore {
     private var keyToUUID: [String: String] = [:]  // stableKey → UUID cache
 
     private init() {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        self.baseDir = home
-            .appendingPathComponent(".talkie-bridge", isDirectory: true)
-            .appendingPathComponent("fingerprints", isDirectory: true)
-        self.indexFile = baseDir.appendingPathComponent("index.json")
+        self.baseDir = BridgePaths.fingerprintsDir
+        self.indexFile = BridgePaths.fingerprintIndex
         self.index = FingerprintIndex()
 
         ensureDirectoryExists()

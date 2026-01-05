@@ -12,11 +12,12 @@ import { log } from "../log";
 import { getSession } from "../discovery/sessions";
 
 const TALKIE_SERVER_PORT = 8766;
-const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 1000;
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 500;
+const FETCH_TIMEOUT_MS = 30000;  // 30 second timeout for each attempt
 
 /**
- * Fetch with retry - retries on connection errors with exponential backoff
+ * Fetch with retry and timeout - retries on connection errors with backoff
  */
 async function fetchWithRetry(
   url: string,
@@ -26,11 +27,25 @@ async function fetchWithRetry(
   let lastError: Error | undefined;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
     try {
-      const response = await fetch(url, options);
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
       return response;
     } catch (error) {
+      clearTimeout(timeoutId);
       lastError = error as Error;
+
+      // Don't retry on abort (timeout)
+      if (controller.signal.aborted) {
+        log.error(`TalkieServer request timed out after ${FETCH_TIMEOUT_MS}ms`);
+        throw new Error(`Request timed out after ${FETCH_TIMEOUT_MS}ms`);
+      }
 
       if (attempt < retries) {
         const delay = RETRY_DELAY_MS * Math.pow(2, attempt);

@@ -564,7 +564,7 @@ private struct BridgeLogsSection: View {
     @State private var logContent: String = ""
     @State private var isAutoRefresh = true
     private let logFile = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".talkie-bridge/bridge.log")
+        .appendingPathComponent("Library/Application Support/Talkie/Bridge/bridge.log")
     private let timer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     var body: some View {

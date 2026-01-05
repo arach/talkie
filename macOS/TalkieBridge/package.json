@@ -6,8 +6,8 @@
   "scripts": {
     "start": "bun run src/server.ts",
     "dev": "bun --watch run src/server.ts",
-    "stop": "kill $(cat ~/.talkie-bridge/bridge.pid) 2>/dev/null || echo 'Not running'",
-    "status": "cat ~/.talkie-bridge/bridge.pid 2>/dev/null && echo 'Running' || echo 'Stopped'"
+    "stop": "kill $(cat ~/Library/Application\\ Support/Talkie/Bridge/bridge.pid) 2>/dev/null || echo 'Not running'",
+    "status": "cat ~/Library/Application\\ Support/Talkie/Bridge/bridge.pid 2>/dev/null && echo 'Running' || echo 'Stopped'"
   },
   "dependencies": {},
   "devDependencies": {

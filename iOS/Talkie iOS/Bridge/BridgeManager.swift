@@ -57,6 +57,8 @@ final class BridgeManager {
     private let portKey = "bridge.port"
     private let deviceIdKey = "bridge.deviceId"
     private let pairedMacKey = "bridge.pairedMacName"
+    private let privateKeyKey = "bridge.privateKey"
+    private let serverPublicKeyKey = "bridge.serverPublicKey"
 
     // MARK: - Computed
 
@@ -94,10 +96,26 @@ final class BridgeManager {
         await client.configure(hostname: qrData.hostname, port: qrData.port)
 
         do {
+            // Decode server's public key from QR (X9.63 format: 04 || x || y)
+            guard let serverPublicKeyData = Data(base64Encoded: qrData.publicKey) else {
+                throw BridgeError.invalidResponse
+            }
+            let serverPublicKey = try P256.KeyAgreement.PublicKey(x963Representation: serverPublicKeyData)
+
             // Generate our key pair
             let privateKey = P256.KeyAgreement.PrivateKey()
-            let publicKeyData = privateKey.publicKey.rawRepresentation
+            // Use X9.63 format to match Web Crypto's "raw" export (04 || x || y)
+            let publicKeyData = privateKey.publicKey.x963Representation
             let publicKeyBase64 = publicKeyData.base64EncodedString()
+
+            // Derive shared secret via ECDH
+            let sharedSecret = try privateKey.sharedSecretFromKeyAgreement(with: serverPublicKey)
+
+            // Configure auth BEFORE making authenticated requests
+            await client.configureAuth(deviceId: deviceId, sharedSecret: sharedSecret)
+
+            // Sync clocks
+            try await client.connect()
 
             // Send pairing request
             let response = try await client.pair(
@@ -110,6 +128,11 @@ final class BridgeManager {
                 // Save pairing info
                 UserDefaults.standard.set(qrData.hostname, forKey: hostnameKey)
                 UserDefaults.standard.set(qrData.port, forKey: portKey)
+                UserDefaults.standard.set(qrData.publicKey, forKey: serverPublicKeyKey)
+
+                // Save our private key for reconnection
+                let privateKeyBase64 = privateKey.rawRepresentation.base64EncodedString()
+                UserDefaults.standard.set(privateKeyBase64, forKey: privateKeyKey)
 
                 // Test connection
                 let health = try await client.health()
@@ -143,7 +166,19 @@ final class BridgeManager {
 
         await client.configure(hostname: hostname, port: port)
 
+        // Restore auth credentials from saved keys
         do {
+            try await restoreAuth()
+        } catch {
+            status = .error
+            errorMessage = "Auth keys missing - please re-pair"
+            return
+        }
+
+        do {
+            // Sync clocks before making requests
+            try await client.connect()
+
             let health = try await client.health()
             pairedMacName = health.hostname
             status = .connected
@@ -155,6 +190,26 @@ final class BridgeManager {
         }
     }
 
+    /// Restore auth credentials from saved keys
+    private func restoreAuth() async throws {
+        guard let privateKeyBase64 = UserDefaults.standard.string(forKey: privateKeyKey),
+              let serverPublicKeyBase64 = UserDefaults.standard.string(forKey: serverPublicKeyKey),
+              let privateKeyData = Data(base64Encoded: privateKeyBase64),
+              let serverPublicKeyData = Data(base64Encoded: serverPublicKeyBase64) else {
+            throw BridgeError.notConfigured
+        }
+
+        let privateKey = try P256.KeyAgreement.PrivateKey(rawRepresentation: privateKeyData)
+        // Server public key is in X9.63 format (04 || x || y)
+        let serverPublicKey = try P256.KeyAgreement.PublicKey(x963Representation: serverPublicKeyData)
+
+        // Re-derive shared secret
+        let sharedSecret = try privateKey.sharedSecretFromKeyAgreement(with: serverPublicKey)
+
+        // Configure auth
+        await client.configureAuth(deviceId: deviceId, sharedSecret: sharedSecret)
+    }
+
     /// Disconnect and stop auto-refresh
     func disconnect() {
         stopAutoRefresh()
@@ -164,13 +219,26 @@ final class BridgeManager {
         windowCaptures = []
     }
 
-    /// Remove pairing
+    /// Remove pairing completely (clears all credentials)
     func unpair() {
         disconnect()
+
+        // Clear all pairing data
         UserDefaults.standard.removeObject(forKey: hostnameKey)
         UserDefaults.standard.removeObject(forKey: portKey)
         UserDefaults.standard.removeObject(forKey: pairedMacKey)
+        UserDefaults.standard.removeObject(forKey: privateKeyKey)
+        UserDefaults.standard.removeObject(forKey: serverPublicKeyKey)
+        // Also clear device ID to force fresh identity on re-pair
+        UserDefaults.standard.removeObject(forKey: deviceIdKey)
+
         pairedMacName = nil
+        errorMessage = nil
+
+        // Clear client auth state
+        Task {
+            await client.clearAuth()
+        }
     }
 
     /// Set error state (for validation failures before pairing)

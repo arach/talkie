@@ -136,26 +136,112 @@ final class TalkieServer {
     }
 
     private func receiveRequest(_ connection: NWConnection) {
-        // 10MB buffer to handle base64 audio data
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 10_485_760) { [weak self] data, _, isComplete, error in
+        // First, receive headers to get Content-Length
+        receiveHTTPRequest(connection: connection, accumulated: Data()) { [weak self] result in
             guard let self else { return }
 
-            if let error {
-                log.error("Receive error: \(error)")
-                connection.cancel()
-                return
-            }
-
-            if let data {
+            switch result {
+            case .success(let data):
                 Task { @MainActor in
                     await self.processRequest(data, connection: connection)
                 }
-            }
-
-            if isComplete {
+            case .failure(let error):
+                log.error("Receive error: \(error)")
                 connection.cancel()
             }
         }
+    }
+
+    /// Receive HTTP request: parse headers for Content-Length, then read exact body size
+    private func receiveHTTPRequest(connection: NWConnection, accumulated: Data, completion: @escaping (Result<Data, Error>) -> Void) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
+            guard let self else { return }
+
+            if let error {
+                completion(.failure(error))
+                return
+            }
+
+            var totalData = accumulated
+            if let data {
+                totalData.append(data)
+            }
+
+            // Check if we have complete headers (ends with \r\n\r\n)
+            if let headerEndRange = totalData.range(of: Data("\r\n\r\n".utf8)) {
+                let headerData = totalData[..<headerEndRange.lowerBound]
+                let bodyStartIndex = headerEndRange.upperBound
+
+                // Parse Content-Length from headers
+                if let headerString = String(data: headerData, encoding: .utf8) {
+                    let contentLength = self.parseContentLength(from: headerString)
+                    let currentBodyLength = totalData.count - bodyStartIndex
+
+                    if currentBodyLength >= contentLength {
+                        // We have all the data
+                        log.debug("Received complete HTTP request: \(totalData.count) bytes (body: \(contentLength))")
+                        completion(.success(totalData))
+                    } else {
+                        // Need more body data
+                        let remaining = contentLength - currentBodyLength
+                        log.debug("Need \(remaining) more bytes (have \(currentBodyLength)/\(contentLength))")
+                        self.receiveRemainingBody(connection: connection, accumulated: totalData, targetSize: totalData.count + remaining, completion: completion)
+                    }
+                } else {
+                    completion(.failure(NSError(domain: "TalkieServer", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid header encoding"])))
+                }
+            } else if isComplete {
+                // Connection closed before headers complete - process what we have
+                log.debug("Connection closed with \(totalData.count) bytes")
+                completion(.success(totalData))
+            } else {
+                // Headers not complete yet, keep receiving
+                self.receiveHTTPRequest(connection: connection, accumulated: totalData, completion: completion)
+            }
+        }
+    }
+
+    /// Continue receiving until we have targetSize bytes
+    private func receiveRemainingBody(connection: NWConnection, accumulated: Data, targetSize: Int, completion: @escaping (Result<Data, Error>) -> Void) {
+        let remaining = targetSize - accumulated.count
+        connection.receive(minimumIncompleteLength: 1, maximumLength: min(remaining, 10_485_760)) { [weak self] data, _, isComplete, error in
+            guard let self else { return }
+
+            if let error {
+                completion(.failure(error))
+                return
+            }
+
+            var totalData = accumulated
+            if let data {
+                totalData.append(data)
+            }
+
+            if totalData.count >= targetSize {
+                log.debug("Received complete body: \(totalData.count) bytes")
+                completion(.success(totalData))
+            } else if isComplete {
+                // Connection closed early - process what we have
+                log.warning("Connection closed early: got \(totalData.count)/\(targetSize) bytes")
+                completion(.success(totalData))
+            } else {
+                // Keep receiving
+                self.receiveRemainingBody(connection: connection, accumulated: totalData, targetSize: targetSize, completion: completion)
+            }
+        }
+    }
+
+    /// Parse Content-Length header value
+    private func parseContentLength(from headers: String) -> Int {
+        let lines = headers.components(separatedBy: "\r\n")
+        for line in lines {
+            let lower = line.lowercased()
+            if lower.hasPrefix("content-length:") {
+                let value = line.dropFirst("content-length:".count).trimmingCharacters(in: .whitespaces)
+                return Int(value) ?? 0
+            }
+        }
+        return 0
     }
 
     private func processRequest(_ data: Data, connection: NWConnection) async {

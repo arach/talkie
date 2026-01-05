@@ -107,8 +107,11 @@ final class BridgeManager {
     private var bridgeProcess: Process?
     private var refreshTimer: Timer?
 
-    private let bridgePath = "\(FileManager.default.homeDirectoryForCurrentUser.path)/.talkie-bridge"
-    private let pidFile = "\(FileManager.default.homeDirectoryForCurrentUser.path)/.talkie-bridge/bridge.pid"
+    // Source code location (repo)
+    private let bridgeSourcePath = "\(FileManager.default.homeDirectoryForCurrentUser.path)/dev/talkie-tailscale/macOS/TalkieBridge"
+    // Runtime data location (App Support)
+    private let bridgeDataPath = "\(FileManager.default.homeDirectoryForCurrentUser.path)/Library/Application Support/Talkie/Bridge"
+    private var pidFile: String { "\(bridgeDataPath)/bridge.pid" }
     private let port = 8765
 
     // Known Tailscale CLI locations (in priority order)
@@ -189,7 +192,7 @@ final class BridgeManager {
     }
 
     func startBridge() async {
-        guard bridgeStatus != .running else { return }
+        guard bridgeStatus != .running && bridgeStatus != .starting else { return }
 
         // Find bun runtime
         guard let bunPath = findBunPath() else {
@@ -209,7 +212,7 @@ final class BridgeManager {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: bunPath)
             process.arguments = ["run", "src/server.ts"]
-            process.currentDirectoryURL = URL(fileURLWithPath: bridgePath)
+            process.currentDirectoryURL = URL(fileURLWithPath: bridgeSourcePath)
 
             // Capture output for debugging
             let pipe = Pipe()
@@ -221,9 +224,17 @@ final class BridgeManager {
 
             log.info("TalkieBridge started with PID \(process.processIdentifier)")
 
-            // Wait for server to be ready
-            try await Task.sleep(nanoseconds: 2_000_000_000)
-            await checkBridgeStatus()
+            // Poll until server is ready (max 5 seconds)
+            let ready = await waitForBridgeReady(maxAttempts: 10, delayMs: 500)
+            if ready {
+                bridgeStatus = .running
+                await fetchQRData()
+            } else {
+                log.error("Bridge started but not responding")
+                bridgeStatus = .error
+                errorMessage = "Bridge started but not responding"
+                return
+            }
 
             // Start the message relay server (receives commands from Bridge, forwards to TalkieLive via XPC)
             await startMessageRelay()
@@ -317,7 +328,7 @@ final class BridgeManager {
         // Also kill any bun processes running our server script
         let pgrepProcess = Process()
         pgrepProcess.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
-        pgrepProcess.arguments = ["-f", "bun.*talkie-bridge.*server"]
+        pgrepProcess.arguments = ["-f", "bun.*TalkieBridge.*server"]
 
         let pgrepPipe = Pipe()
         pgrepProcess.standardOutput = pgrepPipe
@@ -483,6 +494,27 @@ final class BridgeManager {
         } catch {
             bridgeStatus = .stopped
         }
+    }
+
+    /// Poll until bridge health endpoint responds (or max attempts reached)
+    private func waitForBridgeReady(maxAttempts: Int, delayMs: UInt64) async -> Bool {
+        let url = URL(string: "http://localhost:\(port)/health")!
+
+        for attempt in 1...maxAttempts {
+            do {
+                let (_, response) = try await URLSession.shared.data(from: url)
+                if let httpResponse = response as? HTTPURLResponse,
+                   httpResponse.statusCode == 200 {
+                    log.info("Bridge ready after \(attempt) attempt(s)")
+                    return true
+                }
+            } catch {
+                // Not ready yet, wait and retry
+            }
+            try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
+        }
+
+        return false
     }
 
     /// Ensure TalkieServer is running (auto-start if Bridge is up but TalkieServer is not)

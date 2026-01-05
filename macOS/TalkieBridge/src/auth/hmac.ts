@@ -31,6 +31,7 @@ export async function verifyRequest(req: Request): Promise<AuthResult> {
 
   // 1. Check headers present
   if (!deviceId || !timestamp || !nonce || !signature) {
+    log.auth("REJECT: Missing headers", { deviceId, hasTimestamp: !!timestamp, hasNonce: !!nonce, hasSig: !!signature });
     return { authenticated: false, error: "Missing auth headers" };
   }
 
@@ -38,18 +39,27 @@ export async function verifyRequest(req: Request): Promise<AuthResult> {
   const now = Math.floor(Date.now() / 1000);
   const reqTime = parseInt(timestamp, 10);
   if (isNaN(reqTime) || Math.abs(now - reqTime) > TIMESTAMP_TOLERANCE_SECONDS) {
+    log.auth("REJECT: Expired", { deviceId, reqTime, now, drift: now - reqTime });
     return { authenticated: false, error: "Request expired", serverTime: now };
   }
 
   // 3. Check nonce uniqueness (replay protection layer 2)
   if (!nonceStore.check(nonce)) {
-    log.warn(`Replay detected: nonce ${nonce.slice(0, 8)}... for device ${deviceId}`);
+    log.auth("REJECT: Replay", { deviceId, nonce: nonce.slice(0, 16) });
     return { authenticated: false, error: "Replay detected" };
   }
 
   // 4. Look up device and get auth key
-  const authKey = await getDeviceAuthKey(deviceId);
+  let authKey: CryptoKey | null;
+  try {
+    authKey = await getDeviceAuthKey(deviceId);
+  } catch (err) {
+    log.auth("REJECT: Key derivation failed", { deviceId, error: String(err) });
+    return { authenticated: false, error: "Key derivation failed - please re-pair device" };
+  }
+
   if (!authKey) {
+    log.auth("REJECT: Unknown device", { deviceId });
     return { authenticated: false, error: "Unknown device" };
   }
 
@@ -64,9 +74,11 @@ export async function verifyRequest(req: Request): Promise<AuthResult> {
 
   // 6. Compare (timing-safe)
   if (!timingSafeEqual(signature, expectedSig)) {
-    log.warn(`HMAC mismatch for device ${deviceId}`);
+    log.auth("REJECT: Signature mismatch", { deviceId, path: pathWithQuery });
     return { authenticated: false, error: "Invalid signature" };
   }
+
+  log.auth("OK", { deviceId, path: pathWithQuery });
 
   // Update last seen (fire and forget)
   updateLastSeen(deviceId).catch(() => {});

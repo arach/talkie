@@ -120,6 +120,57 @@ class OnDeviceAIService: ObservableObject {
         #endif
     }
 
+    /// Summarize Claude Code session messages into a brief description
+    func summarizeSession(messages: [SessionMessage]) async throws -> String {
+        #if canImport(FoundationModels)
+        guard isAvailable else {
+            throw OnDeviceAIError.notAvailable
+        }
+
+        guard #available(iOS 26.0, *) else {
+            throw OnDeviceAIError.notAvailable
+        }
+
+        // Take last few messages for context
+        let recentMessages = messages.suffix(6)
+        let conversationText = recentMessages.map { msg in
+            let role = msg.role == "user" ? "User" : "Claude"
+            return "\(role): \(msg.content.prefix(200))"
+        }.joined(separator: "\n")
+
+        guard !conversationText.isEmpty else {
+            throw OnDeviceAIError.noTranscript
+        }
+
+        isProcessing = true
+        defer { isProcessing = false }
+
+        let session = LanguageModelSession()
+
+        let prompt = """
+        Summarize this Claude Code conversation in 4-8 words. Focus on the main task or topic. \
+        Be specific and technical. Return ONLY the summary, no quotes.
+
+        Examples of good summaries:
+        - "Fixing auth token refresh bug"
+        - "Adding dark mode toggle"
+        - "Refactoring database queries"
+        - "Debugging API timeout issue"
+
+        Conversation:
+        \(conversationText)
+        """
+
+        let response = try await session.respond(to: prompt)
+        let summary = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        AppLogger.ai.info("Generated session summary: \(summary)")
+        return summary
+        #else
+        throw OnDeviceAIError.notAvailable
+        #endif
+    }
+
     /// Extract action items/tasks from a voice memo
     func extractTasks(from transcript: String) async throws -> String {
         #if canImport(FoundationModels)
