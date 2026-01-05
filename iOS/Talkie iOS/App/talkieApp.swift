@@ -20,6 +20,13 @@ struct talkieApp: App {
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @State private var showOnboarding = false
 
+    // Splash screen - shown until main view is ready
+    @State private var isLoading = true
+
+    // MARK: - Boot Metrics
+    private static let bootStart = Date()
+    @State private var bootLogged = false
+
     // MARK: - Background Task Identifiers
     static let refreshTaskIdentifier = "jdi.talkie-os.refresh"
     static let syncTaskIdentifier = "jdi.talkie-os.sync"
@@ -28,49 +35,72 @@ struct talkieApp: App {
     static let showOnboardingNotification = Notification.Name("showOnboarding")
 
     init() {
+        let initStart = Date()
         registerBackgroundTasks()
+        let initDuration = Date().timeIntervalSince(initStart)
+        AppLogger.app.info("📱 App.init: \(String(format: "%.0f", initDuration * 1000))ms")
     }
 
     var body: some Scene {
         WindowGroup {
             ZStack {
-                VoiceMemoListView()
-                    .environment(\.managedObjectContext, persistenceController.container.viewContext)
-                    .environmentObject(deepLinkManager)
-                    .onOpenURL { url in
-                        deepLinkManager.handle(url: url)
-                    }
-                    .onAppear {
-                        // Show onboarding on first launch
-                        if !hasSeenOnboarding {
+                if isLoading {
+                    SplashView()
+                        .transition(.opacity)
+                } else {
+                    VoiceMemoListView()
+                        .environment(\.managedObjectContext, persistenceController.container.viewContext)
+                        .environmentObject(deepLinkManager)
+                        .onOpenURL { url in
+                            deepLinkManager.handle(url: url)
+                        }
+                        .onAppear {
+                            // Show onboarding on first launch
+                            if !hasSeenOnboarding {
+                                showOnboarding = true
+                            }
+                        }
+                        .onReceive(NotificationCenter.default.publisher(for: Self.showOnboardingNotification)) { _ in
                             showOnboarding = true
                         }
-                    }
-                    .onReceive(NotificationCenter.default.publisher(for: Self.showOnboardingNotification)) { _ in
-                        showOnboarding = true
-                    }
-                    .fullScreenCover(isPresented: $showOnboarding) {
-                        OnboardingView(
-                            hasSeenOnboarding: $hasSeenOnboarding,
-                            onStartRecording: {
-                                // Trigger recording via deep link manager
-                                deepLinkManager.pendingAction = .record
-                            }
-                        )
-                    }
+                        .fullScreenCover(isPresented: $showOnboarding) {
+                            OnboardingView(
+                                hasSeenOnboarding: $hasSeenOnboarding,
+                                onStartRecording: {
+                                    // Trigger recording via deep link manager
+                                    deepLinkManager.pendingAction = .record
+                                }
+                            )
+                        }
+                        .transition(.opacity)
 
-                #if DEBUG
-                DebugToolbarOverlay(
-                    content: {
-                        ListViewDebugContent()
-                    },
-                    debugInfo: {
-                        [
-                            "View": "MemoList"
-                        ]
-                    }
-                )
-                #endif
+                    #if DEBUG
+                    DebugToolbarOverlay(
+                        content: {
+                            ListViewDebugContent()
+                        },
+                        debugInfo: {
+                            [
+                                "View": "MemoList"
+                            ]
+                        }
+                    )
+                    #endif
+                }
+            }
+            .animation(.easeInOut(duration: 0.3), value: isLoading)
+            .onAppear {
+                // Log boot time once
+                if !bootLogged {
+                    bootLogged = true
+                    let bootDuration = Date().timeIntervalSince(Self.bootStart)
+                    AppLogger.app.info("📱 BOOT COMPLETE in \(String(format: "%.2f", bootDuration))s")
+                }
+
+                // Transition immediately - no artificial delay
+                withAnimation {
+                    isLoading = false
+                }
             }
         }
     }

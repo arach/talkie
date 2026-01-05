@@ -821,9 +821,9 @@ final class LiveController: ObservableObject {
                     // Refresh pending count to clear queue indicator on successful recording
                     TranscriptionRetryManager.shared.refreshPendingCount()
 
-                    // Schedule enrichment
+                    // Schedule enrichment (includes bridge context mapping)
                     if let baseline = capturedContext {
-                        ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline)
+                        ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline, dictationText: result.text)
                     }
 
                     // Auto-promote to memo (uses existing QuickActionRunner)
@@ -917,9 +917,9 @@ final class LiveController: ObservableObject {
                     // Refresh pending count to clear queue indicator on successful recording
                     TranscriptionRetryManager.shared.refreshPendingCount()
 
-                    // Schedule enrichment
+                    // Schedule enrichment (includes bridge context mapping)
                     if let baseline = capturedContext {
-                        ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline)
+                        ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline, dictationText: result.text)
                     }
 
                     // Launch Talkie Core with interstitial URL
@@ -1000,7 +1000,7 @@ final class LiveController: ObservableObject {
                 if let id = LiveDatabase.store(utterance), let baseline = capturedContext {
                     TalkieLiveXPCService.shared.notifyDictationAdded()
                     TranscriptionRetryManager.shared.refreshPendingCount()
-                    ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline)
+                    ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline, dictationText: result.text)
                 }
                 logTiming("Database stored")
 
@@ -1071,7 +1071,7 @@ final class LiveController: ObservableObject {
                 if let id = LiveDatabase.store(utterance), let baseline = capturedContext {
                     TalkieLiveXPCService.shared.notifyDictationAdded()
                     TranscriptionRetryManager.shared.refreshPendingCount()
-                    ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline)
+                    ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline, dictationText: result.text)
                 }
                 logTiming("Database stored")
             }

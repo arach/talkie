@@ -75,6 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let settings = LiveSettings.shared
 
         // Start XPC service for inter-app communication with Talkie
+        // Screenshots handled via XPC: Bridge → TalkieServer (8766) → XPC → TalkieLive
         TalkieLiveXPCService.shared.startService()
 
         // Listen for permissions window notification from FloatingPill
@@ -107,6 +108,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         setupStateObservation()
         setupHotkeys()
         setupFloatingPill()
+
+        // Bridge messages now routed through Talkie (TalkieServer → XPC)
 
         // Show floating pill on launch
         floatingPill.show()

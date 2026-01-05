@@ -753,11 +753,10 @@ class SettingsStoryboardGenerator {
     }
 
     private func createView(for page: SettingsPage) -> AnyView {
-        // Use SettingsView for now - shows 2-column settings layout
-        // TODO: Add 3-column capture with full navigation
+        // Use SettingsColumns - the actual settings UI used in the app
         let section = page.settingsSection
 
-        let view = SettingsView(initialSection: section)
+        let view = SettingsScreenshotView(initialSection: section)
             .frame(width: 900, height: 700)
             .environment(SettingsManager.shared)
             .environment(LiveSettings.shared)
@@ -812,5 +811,29 @@ class SettingsStoryboardGenerator {
         }
 
         return AnyView(view)
+    }
+}
+
+// MARK: - Settings Screenshot View
+
+/// Wrapper view for screenshots that combines SettingsSidebarColumn and SettingsContentColumn
+/// This uses the same components as the actual app navigation
+private struct SettingsScreenshotView: View {
+    @State private var selectedSection: SettingsSection
+
+    init(initialSection: SettingsSection) {
+        _selectedSection = State(initialValue: initialSection)
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            SettingsSidebarColumn(selectedSection: $selectedSection)
+                .frame(width: 220)
+
+            Divider()
+
+            SettingsContentColumn(selectedSection: $selectedSection)
+        }
+        .background(Theme.current.background)
     }
 }

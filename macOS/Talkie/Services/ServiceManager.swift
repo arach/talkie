@@ -649,7 +649,7 @@ public final class LiveServiceState: NSObject, TalkieLiveStateObserverProtocol {
     public private(set) var audioLevel: Float = 0
 
     // ─── Private ───
-    private var xpcManager: XPCServiceManager<TalkieLiveXPCServiceProtocol>?
+    private(set) var xpcManager: XPCServiceManager<TalkieLiveXPCServiceProtocol>?
     private var cancellables = Set<AnyCancellable>()
 
     public override init() {

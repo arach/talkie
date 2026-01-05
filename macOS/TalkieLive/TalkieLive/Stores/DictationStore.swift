@@ -18,6 +18,7 @@ struct DictationMetadata: Codable, Hashable {
     var activeAppBundleID: String?
     var activeAppName: String?
     var activeWindowTitle: String?
+    var activeAppPID: pid_t?  // Process ID for fingerprinting
 
     // End context: where was the user when recording STOPPED?
     var endAppBundleID: String?
