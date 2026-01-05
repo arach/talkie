@@ -3,12 +3,14 @@
 //  TalkieLive
 //
 //  Robust text insertion service.
-//  Primary: Direct Accessibility API insertion (no clipboard pollution)
-//  Fallback: Clipboard + simulated Cmd+V paste
+//  Primary: Terminal-specific strategies (AppleScript for iTerm2/Terminal.app)
+//  Secondary: Direct Accessibility API insertion (no clipboard pollution)
+//  Fallback: Clipboard + simulated Cmd+V paste with click-to-focus
 //
 //  History:
 //  - Pre-2025: Used simulatePaste() with fixed timing delays (see legacySimulatePaste below)
 //  - 2025-12: Added direct AX insertion with notification-based timing fallback
+//  - 2026-01: Added click-to-focus and terminal-specific AppleScript strategies
 //
 
 import AppKit
@@ -16,6 +18,13 @@ import ApplicationServices
 import TalkieKit
 
 private let log = Log(.system)
+
+/// Terminal insertion strategy
+private enum TerminalStrategy {
+    case iTerm2Script       // Use AppleScript `write text`
+    case terminalAppScript  // Use AppleScript `do script`
+    case clipboardPaste     // Universal fallback with click-to-focus
+}
 
 /// Result of attempting AX insertion
 private enum AXInsertionResult {
@@ -42,6 +51,16 @@ final class TextInserter {
 
     /// Failure counts for apps (not persisted - resets on restart)
     private var axFailureCounts: [String: Int] = [:]
+
+    /// Known terminal bundle IDs for strategy selection
+    private static let terminalBundleIDs: Set<String> = [
+        "com.googlecode.iterm2",
+        "com.apple.Terminal",
+        "com.mitchellh.ghostty",
+        "dev.warp.Warp-Stable",
+        "co.zeit.hyper",
+        "com.github.wez.wezterm"
+    ]
 
     private init() {
         // Load persisted lists from UserDefaults
@@ -78,6 +97,25 @@ final class TextInserter {
         }
     }
 
+    // MARK: - Terminal Strategy Selection
+
+    /// Determine the best insertion strategy for a given app
+    private func terminalStrategy(for bundleID: String) -> TerminalStrategy {
+        switch bundleID {
+        case "com.googlecode.iterm2":
+            return .iTerm2Script
+        case "com.apple.Terminal":
+            return .terminalAppScript
+        default:
+            return .clipboardPaste
+        }
+    }
+
+    /// Check if bundle ID is a known terminal
+    private func isTerminal(_ bundleID: String) -> Bool {
+        Self.terminalBundleIDs.contains(bundleID)
+    }
+
     // MARK: - Public API
 
     /// Insert text into the target application
@@ -107,6 +145,38 @@ final class TextInserter {
 
         log.info("🎯 Target app: \(app.localizedName ?? "?") (\(app.bundleIdentifier ?? "?"))")
 
+        let bundleID = app.bundleIdentifier ?? ""
+
+        // For known terminals, use terminal-specific strategies first
+        if isTerminal(bundleID) {
+            let strategy = terminalStrategy(for: bundleID)
+            log.info("📺 Terminal detected, strategy: \(strategy)")
+
+            switch strategy {
+            case .iTerm2Script:
+                if let result = await insertViaiTerm2(text) {
+                    log.info("✅ iTerm2 AppleScript insertion succeeded")
+                    return result
+                }
+                log.warning("⚠️ iTerm2 AppleScript failed, falling back to clipboard")
+                return await clipboardPasteWithFocus(text, app: app)
+
+            case .terminalAppScript:
+                if let result = await insertViaTerminalApp(text) {
+                    log.info("✅ Terminal.app AppleScript insertion succeeded")
+                    return result
+                }
+                log.warning("⚠️ Terminal.app AppleScript failed, falling back to clipboard")
+                return await clipboardPasteWithFocus(text, app: app)
+
+            case .clipboardPaste:
+                // For Ghostty, Warp, etc. - clipboard paste with click-to-focus
+                return await clipboardPasteWithFocus(text, app: app)
+            }
+        }
+
+        // Non-terminal apps: use existing AX + clipboard logic
+
         // Activate the app first if it's not frontmost
         if app != NSWorkspace.shared.frontmostApplication {
             app.activate(options: [.activateIgnoringOtherApps])
@@ -116,8 +186,6 @@ final class TextInserter {
             }
         }
 
-        let bundleID = app.bundleIdentifier ?? ""
-
         // Skip AX for apps we've learned don't support it
         if axDisabledApps.contains(bundleID) {
             log.debug("📋 Using clipboard paste for \(app.localizedName ?? bundleID) (AX disabled)")
@@ -126,12 +194,14 @@ final class TextInserter {
 
         // Use AX without verification for apps we've verified
         if axEnabledApps.contains(bundleID) {
+            log.info("🎯 AX insert (verified app): \(app.localizedName ?? bundleID), text: \(text.prefix(30))...")
             let axResult = tryDirectAXInsertion(text, app: app, replaceSelection: replaceSelection, verify: false)
             if axResult == .success {
-                log.debug("✅ AX insertion (\(text.count) chars)")
+                log.info("✅ AX insertion succeeded (\(text.count) chars)")
                 return true
             }
             // Shouldn't happen for verified apps, but fall back just in case
+            log.warning("⚠️ AX failed for verified app, falling back to clipboard")
             return await clipboardPaste(text)
         }
 
@@ -172,6 +242,7 @@ final class TextInserter {
 
         // Some apps need us to look at the focused window first
         if result != .success {
+            log.debug("Direct focused element failed (\(result.rawValue)), trying via focused window...")
             var windowRef: CFTypeRef?
             if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef) == .success,
                let window = windowRef {
@@ -180,7 +251,7 @@ final class TextInserter {
         }
 
         guard result == .success, let focusedElement = focusedRef else {
-            log.debug("Could not get focused element for AX insertion")
+            log.warning("❌ Could not get focused element for AX insertion (result: \(result.rawValue))")
             return .notSupported
         }
 
@@ -190,7 +261,7 @@ final class TextInserter {
         var roleRef: CFTypeRef?
         AXUIElementCopyAttributeValue(focused, kAXRoleAttribute as CFString, &roleRef)
         let role = (roleRef as? String) ?? "unknown"
-        log.info("📍 Focused element role: \(role)")
+        log.info("📍 Focused element: role=\(role), app=\(app.localizedName ?? "?"), pid=\(app.processIdentifier)")
 
         // Check if element is editable (has kAXValueAttribute and is writable)
         var settableRef: DarwinBoolean = false
@@ -303,6 +374,166 @@ final class TextInserter {
 
         log.info("Clipboard paste: \(eventsPosted)/4 events posted")
         return eventsPosted == 4
+    }
+
+    // MARK: - Terminal-Specific Insertion
+
+    /// Insert text using iTerm2 AppleScript
+    /// Returns nil if AppleScript fails, true/false based on success
+    private func insertViaiTerm2(_ text: String) async -> Bool? {
+        let escaped = text.replacingOccurrences(of: "\\", with: "\\\\")
+                         .replacingOccurrences(of: "\"", with: "\\\"")
+
+        let script = """
+        tell application "iTerm2"
+            tell current session of current window
+                write text "\(escaped)" newline NO
+            end tell
+        end tell
+        """
+
+        return executeAppleScript(script)
+    }
+
+    /// Insert text using Terminal.app AppleScript
+    /// Returns nil if AppleScript fails, true/false based on success
+    private func insertViaTerminalApp(_ text: String) async -> Bool? {
+        let escaped = text.replacingOccurrences(of: "\\", with: "\\\\")
+                         .replacingOccurrences(of: "\"", with: "\\\"")
+
+        // Note: Terminal.app's "do script" executes the text, we need a different approach
+        // Use keystroke instead for just inserting text
+        let script = """
+        tell application "Terminal"
+            activate
+        end tell
+        tell application "System Events"
+            tell process "Terminal"
+                set frontmost to true
+                keystroke "\(escaped)"
+            end tell
+        end tell
+        """
+
+        return executeAppleScript(script)
+    }
+
+    /// Execute AppleScript and return result
+    private func executeAppleScript(_ source: String) -> Bool? {
+        var error: NSDictionary?
+        guard let script = NSAppleScript(source: source) else {
+            log.error("Failed to create AppleScript")
+            return nil
+        }
+
+        script.executeAndReturnError(&error)
+
+        if let error = error {
+            log.error("AppleScript error: \(error)")
+            return nil
+        }
+
+        return true
+    }
+
+    // MARK: - Enhanced Clipboard Paste with Click-to-Focus
+
+    /// Clipboard paste with click-to-focus for terminals like Ghostty
+    /// This ensures the input cursor is active before pasting
+    private func clipboardPasteWithFocus(_ text: String, app: NSRunningApplication) async -> Bool {
+        let bundleID = app.bundleIdentifier ?? ""
+        log.info("📋 Clipboard paste with focus: \(app.localizedName ?? bundleID)")
+
+        // 1. Activate the app
+        app.activate(options: [.activateIgnoringOtherApps])
+
+        // 2. Wait for activation with verification
+        var activated = false
+        for _ in 0..<20 {  // 1 second total
+            try? await Task.sleep(nanoseconds: 50_000_000)  // 50ms
+            if NSWorkspace.shared.frontmostApplication?.bundleIdentifier == bundleID {
+                activated = true
+                break
+            }
+        }
+
+        if !activated {
+            log.warning("App activation timeout, proceeding anyway")
+        }
+
+        // 3. Click to ensure input focus (key improvement for terminals!)
+        await clickTerminalInputArea(app)
+
+        // 4. Set clipboard
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        guard pb.setString(text, forType: .string) else {
+            log.error("Failed to copy text to clipboard")
+            return false
+        }
+
+        // 5. Wait for clipboard to be ready
+        try? await Task.sleep(nanoseconds: 50_000_000)  // 50ms
+
+        // 6. Paste
+        let pasteResult = simulatePaste()
+
+        log.info("📋 Clipboard paste with focus completed: \(pasteResult)")
+        return pasteResult
+    }
+
+    /// Click in the terminal's input area to ensure keyboard focus
+    /// This is crucial for terminals like Ghostty that don't respond well to AX focus
+    private func clickTerminalInputArea(_ app: NSRunningApplication) async {
+        let appElement = AXUIElementCreateApplication(app.processIdentifier)
+
+        // Get windows
+        var windowsRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windowsRef) == .success,
+              let windows = windowsRef as? [AXUIElement],
+              let mainWindow = windows.first else {
+            log.debug("Could not get windows for click-to-focus")
+            return
+        }
+
+        // Get window position and size
+        var positionRef: CFTypeRef?
+        var sizeRef: CFTypeRef?
+        AXUIElementCopyAttributeValue(mainWindow, kAXPositionAttribute as CFString, &positionRef)
+        AXUIElementCopyAttributeValue(mainWindow, kAXSizeAttribute as CFString, &sizeRef)
+
+        guard let positionValue = positionRef, let sizeValue = sizeRef else {
+            log.debug("Could not get window bounds for click-to-focus")
+            return
+        }
+
+        var position = CGPoint.zero
+        var size = CGSize.zero
+        AXValueGetValue(positionValue as! AXValue, .cgPoint, &position)
+        AXValueGetValue(sizeValue as! AXValue, .cgSize, &size)
+
+        // Click near bottom-center where terminal input typically is
+        // Claude Code's input is at the very bottom of the terminal
+        let clickPoint = CGPoint(
+            x: position.x + size.width / 2,
+            y: position.y + size.height - 40  // 40px from bottom
+        )
+
+        log.info("🖱️ Click-to-focus at (\(Int(clickPoint.x)), \(Int(clickPoint.y)))")
+
+        // Simulate click
+        guard let clickDown = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: clickPoint, mouseButton: .left),
+              let clickUp = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: clickPoint, mouseButton: .left) else {
+            log.error("Failed to create click events")
+            return
+        }
+
+        clickDown.post(tap: .cghidEventTap)
+        try? await Task.sleep(nanoseconds: 10_000_000)  // 10ms between down/up
+        clickUp.post(tap: .cghidEventTap)
+
+        // Wait for click to register
+        try? await Task.sleep(nanoseconds: 50_000_000)  // 50ms
     }
 
     // MARK: - Key Press Simulation

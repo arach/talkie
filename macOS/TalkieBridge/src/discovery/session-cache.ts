@@ -8,8 +8,10 @@
 
 import {
   discoverSessions,
+  discoverPaths,
   getSession as getSessionDirect,
   type ClaudeSession,
+  type PathEntry,
 } from "./sessions";
 import { log } from "../log";
 
@@ -21,6 +23,7 @@ type CacheState = "idle" | "polling";
 class EngagementAwareCache {
   private state: CacheState = "idle";
   private cache: ClaudeSession[] = [];
+  private pathsCache: PathEntry[] = [];
   private lastRefresh = 0;
   private lastRequest = 0;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -44,6 +47,27 @@ class EngagementAwareCache {
     }
 
     return this.cache;
+  }
+
+  /**
+   * Get all paths with their sessions (path-centric view)
+   * @param forceRefresh - If true, bypasses cache entirely (deep sync)
+   */
+  async getPaths(forceRefresh = false): Promise<PathEntry[]> {
+    this.touch();
+
+    if (forceRefresh) {
+      log.info("Deep sync: forcing full rescan (paths)");
+      await this.refresh();
+      return this.pathsCache;
+    }
+
+    // If cache is empty (cold start), do initial scan
+    if (this.pathsCache.length === 0) {
+      await this.refresh();
+    }
+
+    return this.pathsCache;
   }
 
   /**
@@ -94,15 +118,22 @@ class EngagementAwareCache {
   }
 
   /**
-   * Force a cache refresh
+   * Force a cache refresh (refreshes both sessions and paths caches)
    */
   private async refresh(): Promise<void> {
     try {
       const start = Date.now();
-      this.cache = await discoverSessions();
+      // Refresh both caches in parallel
+      const [sessions, paths] = await Promise.all([
+        discoverSessions(),
+        discoverPaths(),
+      ]);
+      this.cache = sessions;
+      this.pathsCache = paths;
       this.lastRefresh = Date.now();
+      const totalSessions = paths.reduce((sum, p) => sum + p.sessions.length, 0);
       log.debug(
-        `Session cache refreshed: ${this.cache.length} sessions in ${Date.now() - start}ms`
+        `Cache refreshed: ${paths.length} paths, ${totalSessions} sessions in ${Date.now() - start}ms`
       );
     } catch (err) {
       log.error(`Session refresh failed: ${err}`);
@@ -148,8 +179,9 @@ class EngagementAwareCache {
       this.pollTimer = null;
     }
 
-    // Clear cache to free memory
+    // Clear caches to free memory
     this.cache = [];
+    this.pathsCache = [];
     this.lastRefresh = 0;
   }
 
@@ -159,12 +191,15 @@ class EngagementAwareCache {
   getStatus(): {
     state: CacheState;
     sessionCount: number;
+    pathCount: number;
     lastRefresh: number;
     cacheAgeMs: number;
   } {
+    const totalSessions = this.pathsCache.reduce((sum, p) => sum + p.sessions.length, 0);
     return {
       state: this.state,
       sessionCount: this.cache.length,
+      pathCount: this.pathsCache.length,
       lastRefresh: this.lastRefresh,
       cacheAgeMs: this.lastRefresh ? Date.now() - this.lastRefresh : -1,
     };

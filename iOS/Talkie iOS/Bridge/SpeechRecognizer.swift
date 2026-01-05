@@ -5,6 +5,10 @@
 //  On-device speech recognition for live transcription preview
 //  Uses Apple's Speech framework for instant feedback while recording
 //
+//  NOTE: This recognizer can work in two modes:
+//  1. Standalone mode (startListening) - uses its own audio engine
+//  2. External buffer mode (startListeningWithExternalAudio) - receives buffers from another source
+//
 
 import Foundation
 import Speech
@@ -21,6 +25,8 @@ class SpeechRecognizer: ObservableObject {
     private var recognitionTask: SFSpeechRecognitionTask?
     private let speechRecognizer: SFSpeechRecognizer?
     private let audioEngine = AVAudioEngine()
+    private var useExternalAudio = false
+    private var recognitionStartTime: Date?
 
     init() {
         // Use on-device recognition if available (iOS 13+)
@@ -148,5 +154,74 @@ class SpeechRecognizer: ObservableObject {
     func clear() {
         transcript = ""
         error = nil
+    }
+
+    /// Transcribe an audio file (post-recording)
+    /// This runs Apple Speech on the captured audio file for preview
+    func transcribeFile(_ url: URL) {
+        transcript = ""
+        error = nil
+
+        guard SFSpeechRecognizer.authorizationStatus() == .authorized else {
+            error = "Speech recognition not authorized"
+            return
+        }
+
+        guard let speechRecognizer = speechRecognizer, speechRecognizer.isAvailable else {
+            error = "Speech recognition not available"
+            return
+        }
+
+        // Cancel any existing task
+        recognitionTask?.cancel()
+        recognitionTask = nil
+
+        // Create URL-based recognition request
+        let request = SFSpeechURLRecognitionRequest(url: url)
+
+        // Configure for partial results (progressive transcription)
+        request.shouldReportPartialResults = true
+
+        // Prefer on-device for speed
+        if #available(iOS 13, *) {
+            request.requiresOnDeviceRecognition = speechRecognizer.supportsOnDeviceRecognition
+        }
+
+        isListening = true
+
+        // Start recognition
+        recognitionTask = speechRecognizer.recognitionTask(with: request) { [weak self] result, error in
+            Task { @MainActor in
+                guard let self = self else { return }
+
+                if let result = result {
+                    let newText = result.bestTranscription.formattedString
+
+                    if newText != self.transcript {
+                        self.transcript = newText
+                    }
+
+                    if result.isFinal {
+                        self.isListening = false
+                    }
+                }
+
+                if let error = error {
+                    let nsError = error as NSError
+                    // Ignore cancellation errors
+                    if nsError.domain != "kAFAssistantErrorDomain" || nsError.code != 216 {
+                        self.error = error.localizedDescription
+                    }
+                    self.isListening = false
+                }
+            }
+        }
+    }
+
+    /// Stop file transcription
+    func stopFileTranscription() {
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        isListening = false
     }
 }

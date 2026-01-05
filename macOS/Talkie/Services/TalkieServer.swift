@@ -349,8 +349,8 @@ final class TalkieServer {
 
             // Transcribe via TalkieEngine
             do {
-                // Use default model
-                let modelId = "whisper:openai_whisper-small"
+                // Use Parakeet - already warm/loaded from local dictation
+                let modelId = "parakeet:v3"
                 log.info("Transcribing with model: \(modelId)")
 
                 transcript = try await EngineClient.shared.transcribe(

@@ -3,7 +3,54 @@ import { sessionCache } from "../discovery/session-cache";
 import { log } from "../log";
 
 /**
- * List all sessions
+ * List all paths with their sessions (path-centric view)
+ * GET /paths
+ * Query params:
+ *   - refresh=deep  Force full rescan (bypass cache)
+ */
+export async function pathsRoute(req: Request): Promise<Response> {
+  const url = new URL(req.url);
+  const forceRefresh = url.searchParams.get("refresh") === "deep";
+
+  const paths = await sessionCache.getPaths(forceRefresh);
+  const status = sessionCache.getStatus();
+
+  const totalSessions = paths.reduce((sum, p) => sum + p.sessions.length, 0);
+
+  const response = {
+    paths: paths.map((p) => ({
+      path: p.path,
+      name: p.name,
+      folderName: p.folderName,
+      sessions: p.sessions.map((s) => ({
+        id: s.id,
+        lastSeen: s.lastSeen,
+        messageCount: s.messageCount,
+        isLive: s.isLive,
+      })),
+      lastSeen: p.lastSeen,
+      isLive: p.isLive,
+    })),
+    meta: {
+      pathCount: paths.length,
+      sessionCount: totalSessions,
+      fromCache: !forceRefresh && status.state === "polling",
+      cacheAgeMs: status.cacheAgeMs,
+      syncedAt: status.lastRefresh
+        ? new Date(status.lastRefresh).toISOString()
+        : null,
+    },
+  };
+
+  log.info(
+    `Paths: ${paths.length} paths, ${totalSessions} sessions (cache: ${status.state}, age: ${status.cacheAgeMs}ms)`
+  );
+
+  return Response.json(response);
+}
+
+/**
+ * List all sessions (flat view - legacy)
  * GET /sessions
  * Query params:
  *   - refresh=deep  Force full rescan (bypass cache)

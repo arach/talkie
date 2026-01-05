@@ -1,6 +1,6 @@
 import { getTailscaleState, getStateMessage } from "./tailscale/status";
 import { healthRoute } from "./routes/health";
-import { sessionsRoute, sessionMessagesRoute } from "./routes/sessions";
+import { pathsRoute, sessionsRoute, sessionMessagesRoute } from "./routes/sessions";
 import { sessionMetadataRoute, sessionEntryRoute } from "./routes/metadata";
 import {
   pairRoute,
@@ -95,7 +95,7 @@ async function main() {
   // Start HTTP server
   const server = Bun.serve({
     port: PORT,
-    async fetch(req) {
+    async fetch(req, server) {
       const url = new URL(req.url);
       const path = url.pathname;
       const method = req.method;
@@ -109,9 +109,13 @@ async function main() {
         return response;
       };
 
+      // Check if request is from localhost (bypass auth for local requests)
+      const clientIP = server.requestIP(req);
+      const isLocalhost = clientIP?.address === "127.0.0.1" || clientIP?.address === "::1";
+
       try {
-        // HMAC Authentication (unless exempt endpoint)
-        if (!isExemptPath(path, method)) {
+        // HMAC Authentication (unless exempt endpoint or localhost)
+        if (!isLocalhost && !isExemptPath(path, method)) {
           const authResult = await verifyRequest(req);
           if (!authResult.authenticated) {
             log.warn(`Auth failed: ${authResult.error} for ${path}`);
@@ -129,7 +133,12 @@ async function main() {
           return logResponse(Response.json(sessionCache.getStatus()));
         }
 
-        // Sessions
+        // Paths (path-centric view with all sessions per path)
+        if (path === "/paths" && method === "GET") {
+          return logResponse(await pathsRoute(req));
+        }
+
+        // Sessions (flat view - legacy)
         if (path === "/sessions" && method === "GET") {
           return logResponse(await sessionsRoute(req));
         }

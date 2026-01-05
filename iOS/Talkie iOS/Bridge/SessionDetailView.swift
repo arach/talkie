@@ -89,34 +89,46 @@ struct SessionDetailView: View {
                 }
             }
 
-            // Input bar
-            if session.isLive {
-                Divider()
+            // Input bar - always show, even for non-live sessions
+            Divider()
 
-                // Quick reply buttons (when numbered options detected)
-                if !quickReplyOptions.isEmpty {
-                    QuickReplyBar(options: quickReplyOptions) { number in
-                        sendQuickReply(number)
-                    }
+            // Warning for non-live sessions
+            if !session.isLive {
+                HStack(spacing: Spacing.xs) {
+                    Image(systemName: "moon.zzz")
+                        .font(.system(size: 10))
+                        .foregroundColor(.warning)
+                    Text("Session inactive — message will be queued")
+                        .font(.techLabelSmall)
+                        .foregroundColor(.textTertiary)
                 }
-
-                InputBar(
-                    text: $inputText,
-                    isSending: isSending || isTranscribing,
-                    isRecording: recorder.isRecording,
-                    recordingDuration: recorder.recordingDuration,
-                    audioLevels: recorder.audioLevels,
-                    liveTranscription: speechRecognizer.transcript,
-                    capturedTranscription: capturedTranscription,
-                    delivery: lastDelivery,
-                    error: sendError,
-                    canRetryAudio: lastFailedAudioURL != nil,
-                    isFocused: $isInputFocused,
-                    onSend: sendMessage,
-                    onMicTap: toggleRecording,
-                    onRetry: retryAudio
-                )
+                .padding(.horizontal, Spacing.sm)
+                .padding(.vertical, Spacing.xxs)
             }
+
+            // Quick reply buttons (when numbered options detected)
+            if !quickReplyOptions.isEmpty {
+                QuickReplyBar(options: quickReplyOptions) { number in
+                    sendQuickReply(number)
+                }
+            }
+
+            InputBar(
+                text: $inputText,
+                isSending: isSending || isTranscribing,
+                isRecording: recorder.isRecording,
+                recordingDuration: recorder.recordingDuration,
+                audioLevels: recorder.audioLevels,
+                liveTranscription: speechRecognizer.transcript,
+                capturedTranscription: capturedTranscription,
+                delivery: lastDelivery,
+                error: sendError,
+                canRetryAudio: lastFailedAudioURL != nil,
+                isFocused: $isInputFocused,
+                onSend: sendMessage,
+                onMicTap: toggleRecording,
+                onRetry: retryAudio
+            )
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -192,22 +204,24 @@ struct SessionDetailView: View {
 
     private func toggleRecording() {
         if recorder.isRecording {
-            // Capture transcription BEFORE stopping (it gets cleared on stop)
-            capturedTranscription = speechRecognizer.transcript
-            print("[Recording] Captured transcription: '\(capturedTranscription)'")
+            let stopTime = Date()
 
-            // Stop recording and send
+            // Stop audio recording immediately (so we can send the file)
             recorder.stopRecording()
             recorder.finalizeRecording()
-            speechRecognizer.stopListening()
 
             guard let audioURL = recorder.currentRecordingURL else {
                 sendError = "No recording available"
                 return
             }
 
-            print("[Recording] Starting send with captured: '\(capturedTranscription)'")
-            sendAudio(url: audioURL)
+            // Clear any previous transcription
+            capturedTranscription = ""
+
+            // Start BOTH in parallel:
+            // 1. Send audio to server (for Whisper transcription + Claude)
+            // 2. Transcribe audio file locally (for UI preview)
+            sendAudioWithFileTranscription(url: audioURL, stopTime: stopTime)
         } else {
             // Start recording - clear any previous state
             sendError = nil
@@ -215,42 +229,78 @@ struct SessionDetailView: View {
             capturedTranscription = ""
             speechRecognizer.clear()
             recorder.startRecording()
-            speechRecognizer.startListening()
-            print("[Recording] Started recording, speech recognition active")
+            // NOTE: We don't start speech recognition here anymore
+            // Instead, we transcribe the file AFTER recording stops
         }
     }
 
-    private func sendAudio(url: URL) {
+    /// Send audio while transcribing the file locally in parallel
+    /// This shows progressive transcription during the send phase
+    private func sendAudioWithFileTranscription(url: URL, stopTime: Date) {
         isTranscribing = true
         sendError = nil
         lastDelivery = nil
 
+        // Start local file transcription (runs in background, updates speechRecognizer.transcript)
+        speechRecognizer.transcribeFile(url)
+
+        // Poll for transcription updates and update UI
+        let transcriptionTask = Task { @MainActor in
+            var lastUpdate = ""
+
+            // Poll for updates while sending (max 5 seconds)
+            for i in 0..<50 {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+
+                if Task.isCancelled { break }
+
+                let current = speechRecognizer.transcript
+                if current != lastUpdate && !current.isEmpty {
+                    capturedTranscription = current
+                    lastUpdate = current
+                }
+            }
+        }
+
+        // Send audio to server in parallel
         Task {
             do {
                 let response = try await bridgeManager.sendAudioWithResponse(
                     sessionId: session.id,
                     audioURL: url
                 )
-                isTranscribing = false  // Clear immediately so delivery overlay shows
-                sendError = nil
-                lastFailedAudioURL = nil  // Clear on success
 
-                // Show delivery confirmation
+                // Cancel local transcription - we have server's result now
+                transcriptionTask.cancel()
+                speechRecognizer.stopFileTranscription()
+
+                isTranscribing = false
+                sendError = nil
+                lastFailedAudioURL = nil
+
+                // Show delivery confirmation with server's transcript
                 if response.success, let deliveredAt = response.deliveredAt {
+                    let serverText = response.insertedText ?? response.transcript ?? ""
+
+                    // Update with server's version (Whisper is more accurate)
+                    if !serverText.isEmpty {
+                        capturedTranscription = serverText
+                    }
+
                     lastDelivery = DeliveryConfirmation(
-                        text: response.insertedText ?? response.transcript ?? "",
+                        text: serverText,
                         deliveredAt: deliveredAt
                     )
-                    // Auto-hide after 1.5 seconds (quick confirmation)
                     try? await Task.sleep(nanoseconds: 1_500_000_000)
                     lastDelivery = nil
                 }
 
-                // Refresh to see result
                 await fetchMessages()
             } catch {
+                transcriptionTask.cancel()
+                speechRecognizer.stopFileTranscription()
                 sendError = error.localizedDescription
-                lastFailedAudioURL = url  // Store for retry
+                lastFailedAudioURL = url
                 isTranscribing = false
             }
         }
@@ -258,7 +308,8 @@ struct SessionDetailView: View {
 
     private func retryAudio() {
         guard let url = lastFailedAudioURL else { return }
-        sendAudio(url: url)
+        // Retry uses file transcription for consistent UX
+        sendAudioWithFileTranscription(url: url, stopTime: Date())
     }
 
     private func sendQuickReply(_ number: String) {
@@ -618,9 +669,6 @@ struct SendingOverlay: View {
         .padding(.vertical, Spacing.sm)
         .frame(maxWidth: .infinity)
         .background(Color.surfacePrimary)
-        .onAppear {
-            print("[SendingOverlay] Showing with transcription: '\(transcriptionPreview)'")
-        }
     }
 }
 
