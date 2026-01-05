@@ -59,9 +59,17 @@ export async function sessionMessagesRoute(
   const before = url.searchParams.get("before") || undefined;
   const forceRefresh = url.searchParams.get("refresh") === "deep";
 
-  const session = await sessionCache.getSession(sessionId, forceRefresh);
+  // Try to get session, with multiple fallback attempts
+  let session = await sessionCache.getSession(sessionId, forceRefresh);
+
+  // If still not found, try one more time with force refresh
+  if (!session && !forceRefresh) {
+    log.info(`Session ${sessionId} not in cache, trying force refresh`);
+    session = await sessionCache.getSession(sessionId, true);
+  }
 
   if (!session) {
+    log.warn(`Session not found after all attempts: ${sessionId}`);
     return Response.json({ error: "Session not found" }, { status: 404 });
   }
 
