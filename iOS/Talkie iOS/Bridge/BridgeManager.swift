@@ -43,13 +43,13 @@ final class BridgeManager {
     // MARK: - Properties
 
     private(set) var status: ConnectionStatus = .disconnected
-    private(set) var sessions: [ClaudeSession] = []
+    var sessions: [ClaudeSession] = []
     private(set) var windows: [TerminalWindow] = []
     private(set) var windowCaptures: [WindowCapture] = []
     private(set) var errorMessage: String?
     private(set) var pairedMacName: String?
 
-    private let client = BridgeClient()
+    let client = BridgeClient()
     private var refreshTask: Task<Void, Never>?
 
     // UserDefaults keys
@@ -209,12 +209,18 @@ final class BridgeManager {
     /// Send audio to be transcribed and submitted to Claude
     /// - Returns: The transcript that was sent
     func sendAudio(sessionId: String, audioURL: URL) async throws -> String {
+        let response = try await sendAudioWithResponse(sessionId: sessionId, audioURL: audioURL)
+        return response.transcript ?? ""
+    }
+
+    /// Send audio and return full response with delivery confirmation
+    func sendAudioWithResponse(sessionId: String, audioURL: URL) async throws -> MessageResponse {
         let audioData = try Data(contentsOf: audioURL)
         let response = try await client.sendAudio(sessionId: sessionId, audioData: audioData)
         if !response.success {
             throw BridgeError.messageFailed(response.error ?? "Unknown error")
         }
-        return response.transcript ?? ""
+        return response
     }
 
     /// Force press Enter key in a session's terminal

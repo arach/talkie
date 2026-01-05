@@ -38,7 +38,11 @@ struct LiveTraceStep: Identifiable {
 /// Uses mach_absolute_time for minimal overhead
 final class LiveTranscriptionTrace {
     let traceId: String
-    private let startTicks: UInt64 = mach_absolute_time()
+
+    /// The mach_absolute_time when the trace started
+    /// Can be initialized from a HotKeyTimestamp for accurate hotkey → recording measurement
+    private let startTicks: UInt64
+
     private static let timebaseInfo: mach_timebase_info_data_t = {
         var info = mach_timebase_info_data_t()
         mach_timebase_info(&info)
@@ -56,8 +60,13 @@ final class LiveTranscriptionTrace {
     // External reference ID for correlation with Engine
     var externalRefId: String?
 
-    init(traceId: String? = nil) {
+    /// Initialize a trace, optionally with a precise hotkey timestamp
+    /// - Parameters:
+    ///   - traceId: Optional trace ID (auto-generated if nil)
+    ///   - hotkeyTimestamp: If provided, uses the precise mach_absolute_time from the Carbon callback
+    init(traceId: String? = nil, hotkeyTimestamp: HotKeyTimestamp? = nil) {
         self.traceId = traceId ?? Self.generateTraceId()
+        self.startTicks = hotkeyTimestamp?.machTicks ?? mach_absolute_time()
     }
 
     deinit {
@@ -208,11 +217,15 @@ final class LiveTranscriptionTrace {
 // MARK: - Trace Metric (for storage/display)
 
 /// A completed trace with all metrics
+/// Recording duration is tracked separately since it's user-controlled, not a performance metric
 struct LiveTraceMetric: Identifiable {
     let id = UUID()
     let traceId: String
     let timestamp: Date
+
+    /// Total time INCLUDING recording (for reference only)
     let totalMs: Int
+
     let steps: [LiveTraceStep]
 
     // Context
@@ -225,9 +238,50 @@ struct LiveTraceMetric: Identifiable {
     /// Has step breakdown
     var hasSteps: Bool { !steps.isEmpty }
 
-    /// Bottleneck step
+    // MARK: - Actionable Performance Metrics
+
+    /// Actionable time EXCLUDING recording - this is what we can optimize
+    /// Pre-recording (hotkey → record start) + Post-recording (record stop → paste)
+    var actionableMs: Int {
+        steps.filter { $0.name != "recording" }.reduce(0) { $0 + $1.durationMs }
+    }
+
+    /// Pre-recording latency: hotkey → recording starts
+    /// This measures how quickly we respond to the hotkey
+    var preRecordingMs: Int {
+        var sum = 0
+        for step in steps {
+            if step.name == "recording" { break }
+            sum += step.durationMs
+        }
+        return sum
+    }
+
+    /// Post-recording latency: recording stops → complete
+    /// This measures transcription + routing + paste time
+    var postRecordingMs: Int {
+        var foundRecording = false
+        var sum = 0
+        for step in steps {
+            if step.name == "recording" {
+                foundRecording = true
+                continue
+            }
+            if foundRecording {
+                sum += step.durationMs
+            }
+        }
+        return sum
+    }
+
+    /// Recording duration (user-controlled, not a performance metric)
+    var recordingMs: Int {
+        steps.first(where: { $0.name == "recording" })?.durationMs ?? 0
+    }
+
+    /// Bottleneck step (slowest, excluding recording since that's user-controlled)
     var bottleneck: LiveTraceStep? {
-        steps.max { $0.durationMs < $1.durationMs }
+        steps.filter { $0.name != "recording" }.max { $0.durationMs < $1.durationMs }
     }
 
     /// Create from active trace

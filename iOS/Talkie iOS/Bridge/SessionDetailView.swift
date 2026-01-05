@@ -23,8 +23,12 @@ struct SessionDetailView: View {
 
     // Audio recording state
     @StateObject private var recorder = AudioRecorderManager()
+    @StateObject private var speechRecognizer = SpeechRecognizer()
     @State private var isTranscribing = false
     @State private var lastFailedAudioURL: URL?  // For retry capability
+
+    // Delivery confirmation state
+    @State private var lastDelivery: DeliveryConfirmation?
 
     // Force Enter state
     @State private var isForcingEnter = false
@@ -103,6 +107,9 @@ struct SessionDetailView: View {
                     isSending: isSending || isTranscribing,
                     isRecording: recorder.isRecording,
                     recordingDuration: recorder.recordingDuration,
+                    audioLevels: recorder.audioLevels,
+                    transcriptionPreview: speechRecognizer.transcript,
+                    delivery: lastDelivery,
                     error: sendError,
                     canRetryAudio: lastFailedAudioURL != nil,
                     isFocused: $isInputFocused,
@@ -199,6 +206,7 @@ struct SessionDetailView: View {
             // Stop recording and send
             recorder.stopRecording()
             recorder.finalizeRecording()
+            speechRecognizer.stopListening()
 
             guard let audioURL = recorder.currentRecordingURL else {
                 sendError = "No recording available"
@@ -210,24 +218,38 @@ struct SessionDetailView: View {
             // Start recording - clear any previous failed audio
             sendError = nil
             lastFailedAudioURL = nil
+            speechRecognizer.clear()
             recorder.startRecording()
+            speechRecognizer.startListening()
         }
     }
 
     private func sendAudio(url: URL) {
         isTranscribing = true
         sendError = nil
+        lastDelivery = nil
 
         Task {
             do {
-                let transcript = try await bridgeManager.sendAudio(
+                let response = try await bridgeManager.sendAudioWithResponse(
                     sessionId: session.id,
                     audioURL: url
                 )
                 sendError = nil
                 lastFailedAudioURL = nil  // Clear on success
+
+                // Show delivery confirmation
+                if response.success, let deliveredAt = response.deliveredAt {
+                    lastDelivery = DeliveryConfirmation(
+                        text: response.insertedText ?? response.transcript ?? "",
+                        deliveredAt: deliveredAt
+                    )
+                    // Auto-hide after 3 seconds
+                    try? await Task.sleep(nanoseconds: 3_000_000_000)
+                    lastDelivery = nil
+                }
+
                 // Refresh to see result
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
                 await fetchMessages()
             } catch {
                 sendError = error.localizedDescription
@@ -375,6 +397,9 @@ struct InputBar: View {
     let isSending: Bool
     let isRecording: Bool
     let recordingDuration: TimeInterval
+    let audioLevels: [Float]
+    let transcriptionPreview: String
+    let delivery: DeliveryConfirmation?
     let error: String?
     let canRetryAudio: Bool
     var isFocused: FocusState<Bool>.Binding
@@ -389,7 +414,7 @@ struct InputBar: View {
     }
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 0) {
             // Error message with optional retry
             if let error {
                 HStack(spacing: 8) {
@@ -411,45 +436,36 @@ struct InputBar: View {
                     }
                 }
                 .padding(.horizontal, 12)
-                .padding(.top, 4)
+                .padding(.vertical, 6)
             }
 
-            HStack(spacing: 8) {
-                // Mic button
-                Button(action: onMicTap) {
-                    Group {
-                        if isRecording {
-                            // Recording state - show stop and duration
-                            HStack(spacing: 6) {
-                                Image(systemName: "stop.fill")
-                                    .font(.system(size: 12))
-                                Text(durationText)
-                                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Color.red)
-                            .foregroundColor(.white)
-                            .cornerRadius(16)
-                        } else {
-                            Image(systemName: "mic.fill")
-                                .font(.system(size: 16))
-                                .frame(width: 32, height: 32)
-                                .background(Color(.systemGray5))
-                                .foregroundColor(.primary)
-                                .clipShape(Circle())
-                        }
+            // Recording UI with waveform and transcription preview
+            if isRecording {
+                RecordingOverlay(
+                    duration: recordingDuration,
+                    audioLevels: audioLevels,
+                    transcriptionPreview: transcriptionPreview,
+                    onStop: onMicTap
+                )
+            } else if isSending {
+                // Sending state - show transcription being sent
+                SendingOverlay(transcriptionPreview: transcriptionPreview)
+            } else if let delivery = delivery {
+                // Delivery confirmation
+                DeliveredOverlay(delivery: delivery)
+            } else {
+                // Normal input bar
+                HStack(spacing: 8) {
+                    // Mic button
+                    Button(action: onMicTap) {
+                        Image(systemName: "mic.fill")
+                            .font(.system(size: 16))
+                            .frame(width: 36, height: 36)
+                            .background(Color(.systemGray5))
+                            .foregroundColor(.primary)
+                            .clipShape(Circle())
                     }
-                }
-                .disabled(isSending)
 
-                if isRecording {
-                    // Recording - show "Tap to send" hint
-                    Text("Tap to send")
-                        .font(.system(size: 13))
-                        .foregroundColor(.secondary)
-                    Spacer()
-                } else {
                     // Text field
                     TextField("Send to Claude...", text: $text, axis: .vertical)
                         .textFieldStyle(.plain)
@@ -460,7 +476,6 @@ struct InputBar: View {
                         .cornerRadius(20)
                         .lineLimit(1...5)
                         .focused(isFocused)
-                        .disabled(isSending)
                         .submitLabel(.send)
                         .onSubmit {
                             onSend()
@@ -468,28 +483,187 @@ struct InputBar: View {
 
                     // Send button
                     Button(action: onSend) {
-                        Group {
-                            if isSending {
-                                ProgressView()
-                                    .progressViewStyle(.circular)
-                                    .tint(.white)
-                            } else {
-                                Image(systemName: "arrow.up")
-                                    .font(.system(size: 16, weight: .semibold))
-                            }
-                        }
-                        .frame(width: 32, height: 32)
-                        .background(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending ? Color.gray : Color.blue)
-                        .foregroundColor(.white)
-                        .clipShape(Circle())
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(width: 36, height: 36)
+                            .background(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.gray : Color.blue)
+                            .foregroundColor(.white)
+                            .clipShape(Circle())
                     }
-                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
+                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
         }
         .background(Color(.systemBackground))
+    }
+}
+
+// MARK: - Recording Overlay
+
+struct RecordingOverlay: View {
+    let duration: TimeInterval
+    let audioLevels: [Float]
+    let transcriptionPreview: String
+    let onStop: () -> Void
+
+    private var durationText: String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            // Waveform visualization
+            HStack(spacing: 12) {
+                // Recording indicator
+                RecordingPulse(color: .red)
+
+                // Waveform
+                WaveformView(
+                    levels: audioLevels,
+                    height: 32,
+                    color: .red
+                )
+
+                // Duration
+                Text(durationText)
+                    .font(.system(size: 14, weight: .medium, design: .monospaced))
+                    .foregroundColor(.red)
+            }
+            .padding(.horizontal, 16)
+
+            // Transcription preview
+            if !transcriptionPreview.isEmpty {
+                Text(transcriptionPreview)
+                    .font(.system(size: 14))
+                    .foregroundColor(.primary)
+                    .lineLimit(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                    .padding(.horizontal, 12)
+            } else {
+                Text("Listening...")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+                    .italic()
+            }
+
+            // Stop button
+            Button(action: onStop) {
+                HStack(spacing: 8) {
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 14))
+                    Text("Tap to Send")
+                        .font(.system(size: 15, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color.red)
+                .cornerRadius(24)
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 8)
+        }
+        .padding(.top, 12)
+        .background(Color(.systemBackground))
+    }
+}
+
+// MARK: - Sending Overlay
+
+struct SendingOverlay: View {
+    let transcriptionPreview: String
+
+    var body: some View {
+        VStack(spacing: 12) {
+            // Show what's being sent
+            if !transcriptionPreview.isEmpty {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "text.quote")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+
+                    Text(transcriptionPreview)
+                        .font(.system(size: 14))
+                        .foregroundColor(.primary)
+                        .lineLimit(3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(12)
+                .background(Color(.systemGray6))
+                .cornerRadius(12)
+                .padding(.horizontal, 12)
+            }
+
+            // Sending indicator
+            HStack(spacing: 12) {
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .scaleEffect(0.9)
+
+                Text("Sending to Mac...")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.vertical, 12)
+        }
+        .padding(.top, 8)
+        .background(Color(.systemBackground))
+    }
+}
+
+// MARK: - Delivery Confirmation
+
+struct DeliveryConfirmation {
+    let text: String
+    let deliveredAt: String
+}
+
+struct DeliveredOverlay: View {
+    let delivery: DeliveryConfirmation
+
+    var body: some View {
+        VStack(spacing: 12) {
+            // Success icon with animation
+            HStack(spacing: 10) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(.green)
+
+                Text("Delivered to Claude")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.green)
+            }
+
+            // Show what was sent
+            if !delivery.text.isEmpty {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "text.quote")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+
+                    Text(delivery.text)
+                        .font(.system(size: 14))
+                        .foregroundColor(.primary)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(12)
+                .background(Color.green.opacity(0.1))
+                .cornerRadius(12)
+                .padding(.horizontal, 12)
+            }
+        }
+        .padding(.vertical, 16)
+        .background(Color(.systemBackground))
+        .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
 }
 

@@ -10,9 +10,11 @@ import SwiftUI
 struct SessionListView: View {
     @State private var bridgeManager = BridgeManager.shared
     @State private var isRefreshing = false
+    @State private var isDeepSyncing = false
     @State private var isCapturing = false
     @State private var captureError: String?
     @State private var selectedWindow: WindowCapture?
+    @State private var sessionsMeta: SessionsMeta?
 
     var body: some View {
         Group {
@@ -43,17 +45,26 @@ struct SessionListView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(bridgeManager.pairedMacName ?? "Mac")
                             .font(.headline)
-                        Text("Connected")
-                            .font(.caption)
-                            .foregroundColor(.green)
+                        HStack(spacing: 4) {
+                            Text("Connected")
+                                .foregroundColor(.green)
+                            if let meta = sessionsMeta, let syncedAt = meta.syncedAt {
+                                Text("•")
+                                    .foregroundColor(.secondary)
+                                Text(formatRelativeTime(syncedAt))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .font(.caption)
                     }
 
                     Spacer()
 
+                    // Normal refresh
                     Button(action: {
                         Task {
                             isRefreshing = true
-                            await bridgeManager.refreshSessions()
+                            await refreshSessions(deepSync: false)
                             isRefreshing = false
                         }
                     }) {
@@ -64,6 +75,24 @@ struct SessionListView: View {
                         }
                     }
                     .buttonStyle(.borderless)
+                    .disabled(isRefreshing || isDeepSyncing)
+
+                    // Deep sync
+                    Button(action: {
+                        Task {
+                            isDeepSyncing = true
+                            await refreshSessions(deepSync: true)
+                            isDeepSyncing = false
+                        }
+                    }) {
+                        if isDeepSyncing {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "arrow.trianglehead.2.clockwise")
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(isRefreshing || isDeepSyncing)
                 }
             }
 
@@ -162,7 +191,7 @@ struct SessionListView: View {
             }
         }
         .refreshable {
-            await bridgeManager.refreshAll()
+            await refreshSessions(deepSync: false)
             await bridgeManager.refreshWindowCaptures()
         }
         .sheet(item: $selectedWindow) { window in
@@ -171,6 +200,28 @@ struct SessionListView: View {
     }
 
     // MARK: - Actions
+
+    private func refreshSessions(deepSync: Bool) async {
+        do {
+            let response = try await bridgeManager.client.sessions(deepSync: deepSync)
+            await MainActor.run {
+                bridgeManager.sessions = response.sessions
+                sessionsMeta = response.meta
+            }
+        } catch {
+            // Handle error silently for now, bridgeManager handles connection state
+        }
+    }
+
+    private func formatRelativeTime(_ isoString: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        guard let date = formatter.date(from: isoString) else {
+            return isoString
+        }
+        let relativeFormatter = RelativeDateTimeFormatter()
+        relativeFormatter.unitsStyle = .abbreviated
+        return relativeFormatter.localizedString(for: date, relativeTo: Date())
+    }
 
     private func captureWindows() {
         isCapturing = true

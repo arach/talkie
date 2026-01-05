@@ -27,11 +27,15 @@ private struct MessageResponse: Codable {
     let success: Bool
     let error: String?
     let transcript: String?  // For audio endpoint
+    let deliveredAt: String?  // ISO timestamp when delivered
+    let insertedText: String?  // The actual text that was inserted
 
-    init(success: Bool, error: String? = nil, transcript: String? = nil) {
+    init(success: Bool, error: String? = nil, transcript: String? = nil, deliveredAt: String? = nil, insertedText: String? = nil) {
         self.success = success
         self.error = error
         self.transcript = transcript
+        self.deliveredAt = deliveredAt
+        self.insertedText = insertedText
     }
 }
 
@@ -341,7 +345,14 @@ final class TalkieServer {
                 let durationMs = Int(Date().timeIntervalSince(xpcStartTime) * 1000)
                 if success {
                     log.info("Message sent via XPC in \(durationMs)ms")
-                    respondOnce(200, MessageResponse(success: true, error: nil, transcript: transcript), true)
+                    let deliveredAt = ISO8601DateFormatter().string(from: Date())
+                    respondOnce(200, MessageResponse(
+                        success: true,
+                        error: nil,
+                        transcript: transcript,
+                        deliveredAt: deliveredAt,
+                        insertedText: textToSend
+                    ), true)
                 } else {
                     log.error("Message failed: \(error ?? "unknown error")")
                     MessageQueue.shared.updateStatus(messageId, status: .failed, error: error, xpcDurationMs: durationMs)
@@ -435,14 +446,22 @@ final class TalkieServer {
     }
 
     private func sendErrorResponse(_ connection: NWConnection, statusCode: Int, error: String) {
-        let json = "{\"error\":\"\(error)\"}"
+        // Use proper JSON encoding to escape special characters
+        let errorDict = ["error": error]
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: errorDict),
+              let jsonString = String(data: jsonData, encoding: .utf8) else {
+            // Fallback to plain text if JSON encoding fails
+            sendResponse(connection, statusCode: statusCode, body: error)
+            return
+        }
+
         let headers = """
         HTTP/1.1 \(statusCode) Error\r
         Content-Type: application/json\r
-        Content-Length: \(json.utf8.count)\r
+        Content-Length: \(jsonData.count)\r
         Connection: close\r
         \r
-        \(json)
+        \(jsonString)
         """
 
         connection.send(content: headers.data(using: .utf8), completion: .contentProcessed { _ in

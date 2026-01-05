@@ -24,10 +24,12 @@ import {
   getWindowContent,
   captureAllWindows,
 } from "./routes/windows";
-import { getDevices } from "./devices/registry";
+import { getDevices, pruneExpiredDevices } from "./devices/registry";
 import { getOrCreateKeyPair } from "./crypto/store";
+import { verifyRequest, authErrorResponse, isExemptPath } from "./auth/hmac";
 import { log, clearLog } from "./log";
 import { PID_FILE, ensureDirectories } from "./paths";
+import { sessionCache } from "./discovery/session-cache";
 
 const PORT = 8765;
 
@@ -64,6 +66,9 @@ async function main() {
   const keyPair = await getOrCreateKeyPair();
   log.info(`Server public key: ${keyPair.publicKey.slice(0, 20)}...`);
 
+  // Prune expired devices on startup
+  await pruneExpiredDevices();
+
   // Load paired devices
   const devices = await getDevices();
   log.info(`Paired devices: ${devices.length}`);
@@ -72,15 +77,17 @@ async function main() {
   await Bun.write(PID_FILE, process.pid.toString());
   log.info(`PID ${process.pid} written to ${PID_FILE}`);
 
-  // Clean up PID file on exit
+  // Clean up on exit
   process.on("SIGINT", async () => {
     log.info("Shutting down...");
+    sessionCache.shutdown();
     await Bun.write(PID_FILE, "").catch(() => {});
     process.exit(0);
   });
 
   process.on("SIGTERM", async () => {
     log.info("Shutting down...");
+    sessionCache.shutdown();
     await Bun.write(PID_FILE, "").catch(() => {});
     process.exit(0);
   });
@@ -96,9 +103,23 @@ async function main() {
       log.request(method, path);
 
       try {
+        // HMAC Authentication (unless exempt endpoint)
+        if (!isExemptPath(path, method)) {
+          const authResult = await verifyRequest(req);
+          if (!authResult.authenticated) {
+            log.warn(`Auth failed: ${authResult.error} for ${path}`);
+            return authErrorResponse(authResult);
+          }
+        }
+
         // Health check
         if (path === "/health" && method === "GET") {
           return healthRoute(req, hostname);
+        }
+
+        // Debug: cache status
+        if (path === "/debug/cache" && method === "GET") {
+          return Response.json(sessionCache.getStatus());
         }
 
         // Sessions
@@ -240,6 +261,7 @@ async function main() {
 
   log.info(`TalkieBridge running at http://${hostname}:${PORT}`);
   log.info(`Local: http://localhost:${PORT}`);
+  log.info("HMAC authentication enabled");
 }
 
 main().catch((err) => {

@@ -11,7 +11,12 @@ import CryptoKit
 /// Client for communicating with TalkieBridge server
 actor BridgeClient {
     private var baseURL: URL?
-    private var sharedKey: SymmetricKey?
+    private var sharedKey: SymmetricKey?  // Legacy - kept for backwards compat
+
+    // HMAC Authentication
+    private var deviceId: String?
+    private var authKey: SymmetricKey?
+    private var clockOffset: TimeInterval = 0
 
     // MARK: - Configuration
 
@@ -23,19 +28,64 @@ actor BridgeClient {
         self.sharedKey = key
     }
 
+    /// Configure authentication credentials from pairing
+    func configureAuth(deviceId: String, sharedSecret: SharedSecret) {
+        self.deviceId = deviceId
+        self.authKey = sharedSecret.deriveAuthKey()
+    }
+
     var isConfigured: Bool {
         baseURL != nil
     }
 
+    var isAuthenticated: Bool {
+        deviceId != nil && authKey != nil
+    }
+
+    /// Current server time accounting for clock offset
+    private var serverTime: Int {
+        Int(Date().timeIntervalSince1970 + clockOffset)
+    }
+
+    /// Connect to the bridge and sync clocks
+    /// Call this after configureAuth() before making authenticated requests
+    func connect() async throws {
+        let health = try await healthUnauthenticated()
+        if let serverTimeValue = health.time {
+            let localTime = Date().timeIntervalSince1970
+            clockOffset = Double(serverTimeValue) - localTime
+
+            // Log significant clock drift for debugging
+            if abs(clockOffset) > 5 {
+                print("[BridgeClient] Clock offset with Mac: \(String(format: "%.1f", clockOffset))s")
+            }
+        }
+    }
+
+    /// Recalibrate clock from a server timestamp (e.g., from 401 response)
+    private func recalibrateClockFrom(serverTime: Int) {
+        let localTime = Date().timeIntervalSince1970
+        clockOffset = Double(serverTime) - localTime
+        print("[BridgeClient] Clock recalibrated, new offset: \(String(format: "%.1f", clockOffset))s")
+    }
+
     // MARK: - API Calls
 
-    func health() async throws -> HealthResponse {
-        let data = try await get("/health")
+    /// Health check (unauthenticated - for clock sync)
+    private func healthUnauthenticated() async throws -> HealthResponse {
+        let data = try await getUnauthenticated("/health")
         return try JSONDecoder().decode(HealthResponse.self, from: data)
     }
 
-    func sessions() async throws -> SessionsResponse {
-        let data = try await get("/sessions")
+    func health() async throws -> HealthResponse {
+        // Health is exempt from auth, but we can still use the standard method
+        let data = try await getUnauthenticated("/health")
+        return try JSONDecoder().decode(HealthResponse.self, from: data)
+    }
+
+    func sessions(deepSync: Bool = false) async throws -> SessionsResponse {
+        let path = deepSync ? "/sessions?refresh=deep" : "/sessions"
+        let data = try await get(path)
         return try JSONDecoder().decode(SessionsResponse.self, from: data)
     }
 
@@ -101,7 +151,8 @@ actor BridgeClient {
 
     // MARK: - HTTP Methods
 
-    private func get(_ path: String) async throws -> Data {
+    /// Unauthenticated GET (for exempt endpoints like /health)
+    private func getUnauthenticated(_ path: String) async throws -> Data {
         guard let baseURL = baseURL else {
             throw BridgeError.notConfigured
         }
@@ -126,7 +177,45 @@ actor BridgeClient {
         return data
     }
 
-    private func post<T: Encodable>(_ path: String, body: T, timeout: TimeInterval = 10) async throws -> Data {
+    /// Authenticated GET with HMAC signing
+    private func get(_ path: String, allowRetry: Bool = true) async throws -> Data {
+        guard let baseURL = baseURL else {
+            throw BridgeError.notConfigured
+        }
+
+        guard let url = URL(string: path, relativeTo: baseURL) else {
+            throw BridgeError.invalidResponse
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 10
+
+        // Sign request if authenticated
+        signRequest(&request)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw BridgeError.invalidResponse
+        }
+
+        // Handle 401 with clock recalibration
+        if httpResponse.statusCode == 401 && allowRetry {
+            if let serverTime = try? extractServerTime(from: data) {
+                recalibrateClockFrom(serverTime: serverTime)
+                return try await get(path, allowRetry: false)  // Retry once
+            }
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            throw BridgeError.httpError(httpResponse.statusCode)
+        }
+
+        return data
+    }
+
+    /// Authenticated POST with HMAC signing
+    private func post<T: Encodable>(_ path: String, body: T, timeout: TimeInterval = 10, allowRetry: Bool = true) async throws -> Data {
         guard let baseURL = baseURL else {
             throw BridgeError.notConfigured
         }
@@ -140,10 +229,21 @@ actor BridgeClient {
         request.timeoutInterval = timeout
         request.httpBody = try JSONEncoder().encode(body)
 
+        // Sign request if authenticated
+        signRequest(&request)
+
         let (data, response) = try await URLSession.shared.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw BridgeError.invalidResponse
+        }
+
+        // Handle 401 with clock recalibration
+        if httpResponse.statusCode == 401 && allowRetry {
+            if let serverTime = try? extractServerTime(from: data) {
+                recalibrateClockFrom(serverTime: serverTime)
+                return try await post(path, body: body, timeout: timeout, allowRetry: false)
+            }
         }
 
         guard httpResponse.statusCode == 200 else {
@@ -151,6 +251,29 @@ actor BridgeClient {
         }
 
         return data
+    }
+
+    // MARK: - Signing Helpers
+
+    /// Sign a request with HMAC if credentials are available
+    private func signRequest(_ request: inout URLRequest) {
+        guard let deviceId = deviceId, let authKey = authKey else {
+            // Not authenticated - request will go unsigned
+            return
+        }
+
+        let signer = RequestSigner(deviceId: deviceId, authKey: authKey)
+        signer.sign(&request, serverTime: serverTime)
+    }
+
+    /// Extract serverTime from a 401 error response for clock recalibration
+    private func extractServerTime(from data: Data) throws -> Int? {
+        struct ErrorResponse: Codable {
+            let error: String?
+            let serverTime: Int?
+        }
+        let response = try JSONDecoder().decode(ErrorResponse.self, from: data)
+        return response.serverTime
     }
 }
 
@@ -161,10 +284,19 @@ struct HealthResponse: Codable {
     let version: String
     let hostname: String
     let port: Int
+    let time: Int?  // Unix epoch seconds for clock sync
 }
 
 struct SessionsResponse: Codable {
     let sessions: [ClaudeSession]
+    let meta: SessionsMeta?
+}
+
+struct SessionsMeta: Codable {
+    let count: Int
+    let fromCache: Bool
+    let cacheAgeMs: Int
+    let syncedAt: String?
 }
 
 struct ClaudeSession: Codable, Identifiable {
@@ -229,6 +361,8 @@ struct MessageResponse: Codable {
     let success: Bool
     let error: String?
     let transcript: String?  // Included when sending audio
+    let deliveredAt: String?  // ISO timestamp when delivered to Claude
+    let insertedText: String?  // The actual text that was inserted
 }
 
 struct QRCodeData: Codable {

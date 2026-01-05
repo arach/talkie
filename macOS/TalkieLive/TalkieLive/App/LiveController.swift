@@ -136,14 +136,16 @@ final class LiveController: ObservableObject {
     }
 
     /// Toggle mode: press to start, press to stop
-    /// - Parameter interstitial: If true (Shift-click), route to Talkie Core interstitial instead of paste
-    func toggleListening(interstitial: Bool = false) async {
+    /// - Parameters:
+    ///   - interstitial: If true (Shift-click), route to Talkie Core interstitial instead of paste
+    ///   - hotkeyTimestamp: Precise timestamp from Carbon callback for performance measurement
+    func toggleListening(interstitial: Bool = false, hotkeyTimestamp: HotKeyTimestamp? = nil) async {
         log.info("[LiveController] toggleListening: state=\(self.state.rawValue), interstitial=\(interstitial)")
 
         switch state {
         case .idle:
             log.info("[LiveController] Calling start()...")
-            await start()
+            await start(hotkeyTimestamp: hotkeyTimestamp)
             log.info("[LiveController] start() completed")
         case .listening:
             log.info("[LiveController] Calling stop()...")
@@ -159,13 +161,14 @@ final class LiveController: ObservableObject {
     // MARK: - Push-to-Talk Mode
 
     /// PTT start: called when PTT hotkey is pressed down
-    func pttStart() async {
+    /// - Parameter hotkeyTimestamp: Precise timestamp from Carbon callback for performance measurement
+    func pttStart(hotkeyTimestamp: HotKeyTimestamp? = nil) async {
         guard state == .idle else {
             log.info("PTT start ignored - not idle (state=\(self.state.rawValue))")
             return
         }
         log.info("PTT recording started (key down)")
-        await start()
+        await start(hotkeyTimestamp: hotkeyTimestamp)
     }
 
     /// PTT stop: called when PTT hotkey is released
@@ -361,7 +364,7 @@ final class LiveController: ObservableObject {
     /// Whether scratchpad was auto-triggered by text selection
     var isAutoScratchpad: Bool { autoTriggeredScratchpad }
 
-    private func start() async {
+    private func start(hotkeyTimestamp: HotKeyTimestamp? = nil) async {
         // Reset cancelled flag for new recording
         resetCancelled()
         traceID = nil
@@ -371,8 +374,17 @@ final class LiveController: ObservableObject {
         saveAsMemo = false
 
         // Start performance trace for this dictation flow
-        trace = LiveTranscriptionTrace()
-        trace?.mark("hotkey_pressed")
+        // If we have a precise hotkey timestamp, use it as the trace start time
+        // This gives us accurate measurement from the actual Carbon callback
+        trace = LiveTranscriptionTrace(hotkeyTimestamp: hotkeyTimestamp)
+
+        // Mark how long it took from hotkey to reach this point
+        if let ts = hotkeyTimestamp {
+            let dispatchMs = ts.elapsedMs()
+            trace?.mark("hotkey_received", metadata: "dispatch: \(dispatchMs)ms")
+        } else {
+            trace?.mark("hotkey_pressed")
+        }
         trace?.begin("context_capture")
 
         // Capture frontmost app IMMEDIATELY before any focus changes
@@ -1096,6 +1108,16 @@ final class LiveController: ObservableObject {
             trace?.end()
             if let trace = trace {
                 AppLogger.shared.log(.performance, "Trace complete", detail: trace.summary)
+
+                // Save completed trace to performance store for UI viewing
+                let metric = LiveTraceMetric(
+                    from: trace,
+                    wordCount: wordCount,
+                    audioFilename: audioFilename,
+                    audioDurationSeconds: durationSeconds,
+                    transcriptPreview: String(result.text.prefix(50))
+                )
+                LivePerformanceStore.shared.add(metric)
             }
 
             // Track final milestone

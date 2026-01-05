@@ -34,7 +34,7 @@ struct DebugToolbarOverlay<Content: View>: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
+        ZStack(alignment: .topTrailing) {
             // Expanded panel
             if showToolbar {
                 VStack(alignment: .leading, spacing: 0) {
@@ -109,7 +109,7 @@ struct DebugToolbarOverlay<Content: View>: View {
                     RoundedRectangle(cornerRadius: 10)
                         .strokeBorder(Color.borderPrimary.opacity(0.5), lineWidth: 0.5)
                 )
-                .transition(.scale(scale: 0.9, anchor: .bottomTrailing).combined(with: .opacity))
+                .transition(.scale(scale: 0.9, anchor: .topTrailing).combined(with: .opacity))
             }
 
             // Toggle button (always visible - shared chrome)
@@ -136,8 +136,8 @@ struct DebugToolbarOverlay<Content: View>: View {
             }
         }
         .padding(.trailing, 16)
-        .padding(.bottom, 16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        .padding(.top, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
         .sheet(isPresented: $showingLogs) {
             DebugLogsView()
         }

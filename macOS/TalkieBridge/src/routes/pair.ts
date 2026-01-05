@@ -49,13 +49,14 @@ export async function pairRoute(req: Request): Promise<Response> {
     // Add to pending pairings
     addPendingPairing(body.deviceId, body.name, body.publicKey);
 
-    // For v1 testing: auto-approve if AUTO_APPROVE env var is set
-    if (process.env.AUTO_APPROVE === "1") {
+    // Development only: auto-approve if AUTO_APPROVE env var is set
+    // This is disabled in production for security
+    if (process.env.NODE_ENV !== "production" && process.env.AUTO_APPROVE === "1") {
       const device = await approvePairing(body.deviceId);
-      console.log(`Auto-approved device: ${device?.name}`);
+      console.log(`⚠️  Auto-approved device (dev mode): ${device?.name}`);
       return Response.json({
         status: "approved",
-        message: "Device paired successfully (auto-approved)",
+        message: "Device paired successfully (auto-approved in dev mode)",
       });
     }
 
