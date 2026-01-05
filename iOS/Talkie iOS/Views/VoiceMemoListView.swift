@@ -45,6 +45,8 @@ struct VoiceMemoListView: View {
     @EnvironmentObject var deepLinkManager: DeepLinkManager
     @ObservedObject var themeManager = ThemeManager.shared
     @ObservedObject var iCloudStatus = iCloudStatusManager.shared
+    @State private var bridgeManager = BridgeManager.shared
+    @State private var showingMacView = false
 
     @FetchRequest(
         sortDescriptors: [
@@ -321,61 +323,91 @@ struct VoiceMemoListView: View {
                                 .transition(.opacity.combined(with: .move(edge: .bottom)))
                             }
 
-                            // Centered record button
-                            ZStack {
-                                // Subtle glow - only when recording
-                                if isPushToTalkActive {
-                                    Circle()
-                                        .fill(Color.recording)
-                                        .frame(width: 68, height: 68)
-                                        .blur(radius: 20)
-                                        .opacity(0.6)
+                            // Button row: Settings (left) - Record (center) - Mac (right)
+                            HStack {
+                                // Settings button (left)
+                                BottomCircleButton(
+                                    icon: "gearshape.fill",
+                                    isActive: false
+                                ) {
+                                    showingSettings = true
                                 }
 
-                                // Main button with subtle border
-                                Circle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [Color.recording, Color.recordingGlow],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .frame(width: 58, height: 58)
-                                    .overlay(
+                                Spacer()
+
+                                // Centered record button
+                                ZStack {
+                                    // Subtle glow - only when recording
+                                    if isPushToTalkActive {
                                         Circle()
-                                            .strokeBorder(Color.recordingGlow.opacity(0.5), lineWidth: 1.5)
-                                    )
-                                    .scaleEffect(pushToTalkScale)
+                                            .fill(Color.recording)
+                                            .frame(width: 68, height: 68)
+                                            .blur(radius: 20)
+                                            .opacity(0.6)
+                                    }
 
-                                // Icon changes based on state
-                                if isPushToTalkActive {
-                                    RoundedRectangle(cornerRadius: 3)
-                                        .fill(Color.white)
-                                        .frame(width: 18, height: 18)
+                                    // Main button with subtle border
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [Color.recording, Color.recordingGlow],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .frame(width: 58, height: 58)
+                                        .overlay(
+                                            Circle()
+                                                .strokeBorder(Color.recordingGlow.opacity(0.5), lineWidth: 1.5)
+                                        )
+                                        .scaleEffect(pushToTalkScale)
+
+                                    // Icon changes based on state
+                                    if isPushToTalkActive {
+                                        RoundedRectangle(cornerRadius: 3)
+                                            .fill(Color.white)
+                                            .frame(width: 18, height: 18)
+                                    } else {
+                                        Image(systemName: "mic.fill")
+                                            .font(.system(size: 22, weight: .medium))
+                                            .foregroundColor(.white)
+                                    }
+                                }
+                                .scaleEffect(isPushToTalkActive ? 1.15 : 1.0)
+                                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPushToTalkActive)
+                                .onTapGesture {
+                                    // Short tap opens the sheet
+                                    showingRecordingView = true
+                                }
+                                .onLongPressGesture(minimumDuration: 0.2, pressing: { pressing in
+                                    if pressing {
+                                        // Started long press - begin push-to-talk
+                                        startPushToTalk()
+                                    } else if isPushToTalkActive {
+                                        // Released - stop and save
+                                        stopPushToTalk()
+                                    }
+                                }, perform: {
+                                    // Long press completed (finger still down) - do nothing, handled in pressing
+                                })
+
+                                Spacer()
+
+                                // Mac button (right) - only show when paired
+                                if bridgeManager.isPaired {
+                                    BottomCircleButton(
+                                        icon: "desktopcomputer",
+                                        isActive: bridgeManager.status == .connected
+                                    ) {
+                                        showingMacView = true
+                                    }
                                 } else {
-                                    Image(systemName: "mic.fill")
-                                        .font(.system(size: 22, weight: .medium))
-                                        .foregroundColor(.white)
+                                    // Invisible placeholder to keep record button centered
+                                    Color.clear
+                                        .frame(width: 44, height: 44)
                                 }
                             }
-                            .scaleEffect(isPushToTalkActive ? 1.15 : 1.0)
-                            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPushToTalkActive)
-                            .onTapGesture {
-                                // Short tap opens the sheet
-                                showingRecordingView = true
-                            }
-                            .onLongPressGesture(minimumDuration: 0.2, pressing: { pressing in
-                                if pressing {
-                                    // Started long press - begin push-to-talk
-                                    startPushToTalk()
-                                } else if isPushToTalkActive {
-                                    // Released - stop and save
-                                    stopPushToTalk()
-                                }
-                            }, perform: {
-                                // Long press completed (finger still down) - do nothing, handled in pressing
-                            })
+                            .padding(.horizontal, Spacing.md)
                             .padding(.top, Spacing.xs)
                             .padding(.bottom, 10)
                         }
@@ -412,25 +444,24 @@ struct VoiceMemoListView: View {
             .toolbarBackground(Color.surfacePrimary, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    VStack(spacing: 0) {
-                        Text("TALKIE")
-                            .font(.system(size: 12, weight: .bold, design: .monospaced))
-                            .tracking(2)
-                            .foregroundColor(.textPrimary)
-                        Text("\(allVoiceMemos.count) MEMOS")
-                            .font(.techLabelSmall)
-                            .tracking(1)
-                            .foregroundColor(.textTertiary)
-                    }
-                }
+                    HStack(spacing: Spacing.xs) {
+                        VStack(spacing: 0) {
+                            Text("TALKIE")
+                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                .tracking(2)
+                                .foregroundColor(.textPrimary)
+                            Text("\(allVoiceMemos.count) MEMOS")
+                                .font(.techLabelSmall)
+                                .tracking(1)
+                                .foregroundColor(.textTertiary)
+                        }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        showingSettings = true
-                    }) {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.textSecondary)
+                        // Connection indicator (green dot when Mac connected)
+                        if bridgeManager.status == .connected {
+                            Circle()
+                                .fill(Color.success)
+                                .frame(width: 6, height: 6)
+                        }
                     }
                 }
             }
@@ -450,11 +481,18 @@ struct VoiceMemoListView: View {
         }
         .navigationViewStyle(.stack)
         .preferredColorScheme(themeManager.appearanceMode.colorScheme)
+        .sheet(isPresented: $showingMacView) {
+            NavigationView {
+                SessionListView()
+                    .navigationTitle("Mac Bridge")
+            }
+        }
         #if DEBUG
-        .overlay(alignment: .bottomTrailing) {
+        .overlay(alignment: .topTrailing) {
             DebugToolbarOverlay {
                 ListViewDebugContent()
             }
+            .padding(.top, 60) // Below nav bar
         }
         #endif
         .onChange(of: deepLinkManager.pendingAction) { _, action in
@@ -1110,6 +1148,45 @@ struct VoiceMemoListView: View {
             // Fallback to app settings if iCloud URL doesn't work
             UIApplication.shared.open(url)
         }
+    }
+}
+
+// MARK: - Bottom Circle Button
+
+struct BottomCircleButton: View {
+    let icon: String
+    let isActive: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            // Circle background with icon
+            Circle()
+                .fill(Color.surfaceSecondary)
+                .frame(width: 44, height: 44)
+                .overlay(
+                    Circle()
+                        .strokeBorder(isActive ? Color.success.opacity(0.4) : Color.borderPrimary, lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                .overlay {
+                    ZStack {
+                        // Icon
+                        Image(systemName: icon)
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(.textPrimary)
+
+                        // Active indicator (small green dot on the icon)
+                        if isActive {
+                            Circle()
+                                .fill(Color.success)
+                                .frame(width: 8, height: 8)
+                                .offset(x: 8, y: 6) // Bottom-right of icon
+                        }
+                    }
+                }
+        }
+        .buttonStyle(.plain)
     }
 }
 

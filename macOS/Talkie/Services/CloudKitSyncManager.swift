@@ -830,13 +830,9 @@ class CloudKitSyncManager {
         let syncStart = Date()
         let lastSync = fullSync ? Date.distantPast : lastBridge1Sync
 
-        let repository = LocalRepository()
-        var createdCount = 0
-        var updatedCount = 0
-        var errorCount = 0
-
-        await context.perform {
-            // Fetch memos - either all (fullSync) or only modified since last sync
+        // Step 1: Extract memo data from Core Data synchronously
+        // We must read Core Data objects on the context's queue
+        let memoModels: [MemoModel] = await context.perform {
             let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
             if !fullSync {
                 fetchRequest.predicate = NSPredicate(format: "lastModified > %@", lastSync as NSDate)
@@ -846,65 +842,84 @@ class CloudKitSyncManager {
             do {
                 let cdMemos = try context.fetch(fetchRequest)
                 if cdMemos.isEmpty {
-                    // Nothing new since last sync - skip silently
                     if fullSync {
                         log.info("🌉 [Bridge 1] Full sync: no memos in CoreData")
                     }
-                    return
+                    return []
                 }
                 let syncType = fullSync ? "FULL sync" : "incremental sync"
                 log.info("🌉 [Bridge 1] \(syncType): \(cdMemos.count) memo(s)")
 
+                // Convert all memos to MemoModel while still on context queue
+                var models: [MemoModel] = []
                 for cdMemo in cdMemos {
-                    guard let memoId = cdMemo.id else {
+                    guard cdMemo.id != nil else {
                         log.warning("🌉 [Bridge 1] Skipping memo with nil ID")
                         continue
                     }
-
-                    Task {
-                        do {
-                            // Check if exists in GRDB
-                            let existingMemo = try await repository.fetchMemo(id: memoId)
-
-                            if let existing = existingMemo {
-                                // Skip soft-deleted memos - respect local deletion
-                                if existing.memo.deletedAt != nil {
-                                    log.info("⏭️ [Bridge 1] Skipping soft-deleted memo: '\(cdMemo.title ?? "Untitled")'")
-                                    return
-                                }
-
-                                // Compare timestamps - Core Data wins (source of truth from phone)
-                                let cdModified = cdMemo.lastModified ?? Date.distantPast
-                                let grdbModified = existing.memo.lastModified
-
-                                if cdModified > grdbModified {
-                                    log.info("🌉 [Bridge 1] Updating memo: '\(cdMemo.title ?? "Untitled")'")
-                                    let memoModel = self.convertToMemoModel(cdMemo)
-                                    try await repository.saveMemo(memoModel)
-                                    updatedCount += 1
-                                } else {
-                                    log.info("⏭️ [Bridge 1] Skipping memo (GRDB is newer): '\(cdMemo.title ?? "Untitled")'")
-                                }
-                            } else {
-                                // New memo - create in GRDB
-                                log.info("🌉 [Bridge 1] Creating new memo in GRDB: '\(cdMemo.title ?? "Untitled")'")
-                                let memoModel = self.convertToMemoModel(cdMemo)
-                                try await repository.saveMemo(memoModel)
-                                createdCount += 1
-                            }
-                        } catch {
-                            log.error("❌ [Bridge 1] Failed to sync memo \(memoId): \(error.localizedDescription)")
-                            errorCount += 1
-                        }
-                    }
+                    models.append(self.convertToMemoModel(cdMemo))
                 }
+                return models
             } catch {
                 log.error("❌ [Bridge 1] Failed to fetch Core Data memos: \(error.localizedDescription)")
+                return []
             }
         }
 
-        // Wait a moment for all async tasks to complete
-        try? await Task.sleep(for: .seconds(1)) // 1 second
+        guard !memoModels.isEmpty else {
+            return
+        }
+
+        // Step 2: Process memos asynchronously with proper awaiting using TaskGroup
+        let repository = LocalRepository()
+        var createdCount = 0
+        var updatedCount = 0
+        var errorCount = 0
+
+        // Process in parallel and collect results
+        await withTaskGroup(of: (created: Int, updated: Int, error: Int).self) { group in
+            for memoModel in memoModels {
+                group.addTask {
+                    do {
+                        // Check if exists in GRDB
+                        let existingMemo = try await repository.fetchMemo(id: memoModel.id)
+
+                        if let existing = existingMemo {
+                            // Skip soft-deleted memos - respect local deletion
+                            if existing.memo.deletedAt != nil {
+                                log.info("⏭️ [Bridge 1] Skipping soft-deleted memo: '\(memoModel.title ?? "Untitled")'")
+                                return (0, 0, 0)
+                            }
+
+                            // Compare timestamps - Core Data wins (source of truth from phone)
+                            if memoModel.lastModified > existing.memo.lastModified {
+                                log.info("🌉 [Bridge 1] Updating memo: '\(memoModel.title ?? "Untitled")'")
+                                try await repository.saveMemo(memoModel)
+                                return (0, 1, 0)
+                            } else {
+                                log.info("⏭️ [Bridge 1] Skipping memo (GRDB is newer): '\(memoModel.title ?? "Untitled")'")
+                                return (0, 0, 0)
+                            }
+                        } else {
+                            // New memo - create in GRDB
+                            log.info("🌉 [Bridge 1] Creating new memo in GRDB: '\(memoModel.title ?? "Untitled")'")
+                            try await repository.saveMemo(memoModel)
+                            return (1, 0, 0)
+                        }
+                    } catch {
+                        log.error("❌ [Bridge 1] Failed to sync memo \(memoModel.id): \(error.localizedDescription)")
+                        return (0, 0, 1)
+                    }
+                }
+            }
+
+            // Collect all results
+            for await result in group {
+                createdCount += result.created
+                updatedCount += result.updated
+                errorCount += result.error
+            }
+        }
 
         // Update sync timestamp for next run
         lastBridge1Sync = syncStart
@@ -913,7 +928,6 @@ class CloudKitSyncManager {
         if createdCount > 0 || updatedCount > 0 || errorCount > 0 {
             log.info("🌉 [Bridge 1] Complete: \(createdCount) created, \(updatedCount) updated, \(errorCount) errors (\(String(format: "%.1fs", duration)))")
         }
-        // Skip logging if nothing happened - reduces noise
     }
 
     /// Convert CoreData VoiceMemo to GRDB MemoModel

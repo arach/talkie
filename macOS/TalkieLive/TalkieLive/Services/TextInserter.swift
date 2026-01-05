@@ -305,6 +305,69 @@ final class TextInserter {
         return eventsPosted == 4
     }
 
+    // MARK: - Key Press Simulation
+
+    /// Simulate pressing the Enter/Return key
+    func simulateEnter() -> Bool {
+        guard let src = CGEventSource(stateID: .combinedSessionState) else {
+            log.error("Failed to create CGEventSource for Enter")
+            return false
+        }
+
+        // Return key is keycode 0x24 (36)
+        let returnKey: UInt16 = 0x24
+
+        guard let keyDown = CGEvent(keyboardEventSource: src, virtualKey: returnKey, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: src, virtualKey: returnKey, keyDown: false) else {
+            log.error("Failed to create Enter key events")
+            return false
+        }
+
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
+
+        log.info("⏎ Enter key simulated")
+        return true
+    }
+
+    /// Insert text and then press Enter to submit
+    func insertAndSubmit(_ text: String, intoAppWithBundleID bundleID: String?) async -> Bool {
+        // First insert the text
+        let inserted = await insert(text, intoAppWithBundleID: bundleID)
+        guard inserted else {
+            log.error("Failed to insert text, skipping Enter")
+            return false
+        }
+
+        // Small delay to ensure text is fully inserted
+        try? await Task.sleep(nanoseconds: 150_000_000)  // 150ms
+
+        // Then press Enter to submit
+        return simulateEnter()
+    }
+
+    /// Activate an app and press Enter key
+    /// Used for "force Enter" when the auto-submit didn't work
+    func simulateEnterInApp(bundleId: String) async -> Bool {
+        // Find and activate the app
+        guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId).first else {
+            log.error("App not running: \(bundleId)")
+            return false
+        }
+
+        // Activate the app
+        let activated = app.activate(options: [.activateIgnoringOtherApps])
+        if !activated {
+            log.warning("Could not activate \(bundleId), proceeding anyway")
+        }
+
+        // Wait for app to be frontmost
+        try? await Task.sleep(nanoseconds: 200_000_000)  // 200ms
+
+        // Press Enter
+        return simulateEnter()
+    }
+
     // MARK: - App Activation
 
     private func waitForAppActivation(bundleID: String?, timeout: TimeInterval = 1.0) async -> Bool {

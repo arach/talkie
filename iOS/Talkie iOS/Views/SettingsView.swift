@@ -113,6 +113,38 @@ struct SettingsView: View {
                                 .padding(.horizontal, Spacing.md)
                         }
 
+                        // Mac Bridge
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            Text("MAC BRIDGE")
+                                .font(.techLabel)
+                                .tracking(2)
+                                .foregroundColor(.textTertiary)
+                                .padding(.horizontal, Spacing.md)
+
+                            NavigationLink(destination: SessionListView()) {
+                                HStack {
+                                    Image(systemName: "desktopcomputer")
+                                        .foregroundColor(.active)
+                                    Text("Claude Sessions")
+                                    Spacer()
+                                    BridgeStatusBadge()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.textTertiary)
+                                }
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.textPrimary)
+                                .padding(Spacing.sm)
+                                .background(Color.surfaceSecondary)
+                                .cornerRadius(CornerRadius.sm)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                                        .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
+                                )
+                            }
+                            .padding(.horizontal, Spacing.md)
+                        }
+
                         // Debug Info
                         VStack(alignment: .leading, spacing: Spacing.sm) {
                             Text("DEBUG INFO")
@@ -586,6 +618,23 @@ struct ThemePreview: View {
             RoundedRectangle(cornerRadius: CornerRadius.sm)
                 .strokeBorder(theme.colors.tableBorder, lineWidth: 0.5)
         )
+    }
+}
+
+// MARK: - Bridge Status Badge
+
+struct BridgeStatusBadge: View {
+    @State private var bridgeManager = BridgeManager.shared
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(bridgeManager.status.color)
+                .frame(width: 6, height: 6)
+            Text(bridgeManager.status.rawValue)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.textSecondary)
+        }
     }
 }
 

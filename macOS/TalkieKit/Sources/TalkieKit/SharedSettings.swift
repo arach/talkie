@@ -73,6 +73,16 @@ public enum LiveSettingsKey {
     public static let dictionaryEnabled = "dictionaryEnabled"
     public static let fillerRemovalEnabled = "fillerRemovalEnabled"
 
+    // MARK: Ambient Mode
+    public static let ambientEnabled = "ambientEnabled"
+    public static let ambientWakePhrase = "ambientWakePhrase"
+    public static let ambientEndPhrase = "ambientEndPhrase"
+    public static let ambientCancelPhrase = "ambientCancelPhrase"
+    public static let ambientBufferDuration = "ambientBufferDuration"
+    public static let ambientEnableChimes = "ambientEnableChimes"
+    public static let ambientUseStreamingASR = "ambientUseStreamingASR"
+    public static let ambientUseBatchASR = "ambientUseBatchASR"
+
     // MARK: Legacy
     public static let legacyTheme = "theme"
 }

@@ -3122,6 +3122,44 @@ struct DebugToolbarOverlay<Content: View>: View {
                 .sheet(isPresented: $showObjectInspector) {
                     ObjectInspectorView()
                 }
+
+                // Bridge section
+                DebugSection(title: "BRIDGE") {
+                    VStack(spacing: 4) {
+                        let contexts = BridgeContextMapper.shared.getAllMappedSessions()
+                        HStack {
+                            Text("\(contexts.count) session(s) mapped")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.7))
+                            Spacer()
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+
+                        DebugActionButton(icon: "terminal", label: "Scan Terminals") {
+                            Task { @MainActor in
+                                let result = TerminalScanner.shared.scanAllTerminals()
+                                let json = TerminalScanner.shared.dumpAsJSON()
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(json, forType: .string)
+                                print("Terminal scan (\(result.terminals.count) windows) copied to clipboard")
+                            }
+                        }
+
+                        DebugActionButton(icon: "doc.text", label: "Dump Context Map") {
+                            let json = BridgeContextMapper.shared.dumpAsJSON()
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(json, forType: .string)
+                            print("Session context map copied to clipboard")
+                        }
+
+                        DebugActionButton(icon: "arrow.clockwise", label: "Refresh from Scan") {
+                            Task { @MainActor in
+                                BridgeContextMapper.shared.refreshFromScan()
+                            }
+                        }
+                    }
+                }
             }
             .padding(10)
             .padding(.bottom, 6)

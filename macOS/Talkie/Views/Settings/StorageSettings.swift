@@ -380,7 +380,7 @@ struct CloudSettingsView: View {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
                         featureRow(icon: "arrow.triangle.2.circlepath", text: "Automatic background sync")
                         featureRow(icon: "lock.shield", text: "End-to-end encryption")
-                        featureRow(icon: "iphone.and.arrow.forward", text: "Seamless iPhone integration")
+                        featureRow(icon: "iphone.gen3.radiowaves.left.and.right", text: "Seamless iPhone integration")
                     }
                 }
                 .settingsSectionCard(padding: Spacing.md)

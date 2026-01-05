@@ -786,8 +786,10 @@ enum QuickSettingsTab: String, CaseIterable {
     case audio
     case feedback
     case output
+    case ambient
     case permissions
     case connections
+    case accessibility
 
     var title: String {
         switch self {
@@ -796,8 +798,10 @@ enum QuickSettingsTab: String, CaseIterable {
         case .audio: return "Audio"
         case .feedback: return "Feedback"
         case .output: return "Output"
+        case .ambient: return "Ambient"
         case .permissions: return "Permissions"
         case .connections: return "Connections"
+        case .accessibility: return "AX Scan"
         }
     }
 
@@ -808,8 +812,10 @@ enum QuickSettingsTab: String, CaseIterable {
         case .audio: return "mic.fill"
         case .feedback: return "rectangle.inset.topright.filled"
         case .output: return "arrow.right.doc.on.clipboard"
+        case .ambient: return "waveform.circle"
         case .permissions: return "lock.shield.fill"
         case .connections: return "network"
+        case .accessibility: return "accessibility"
         }
     }
 }
@@ -893,10 +899,14 @@ struct QuickSettingsView: View {
                     OverlaySettingsSection()
                 case .output:
                     OutputSettingsSection()
+                case .ambient:
+                    AmbientSettingsSection()
                 case .permissions:
                     PermissionsSettingsSection()
                 case .connections:
                     ConnectionsSettingsSection()
+                case .accessibility:
+                    AccessibilityInventorySection()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

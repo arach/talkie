@@ -51,6 +51,38 @@ public var kTalkieEngineXPCServiceName: String {
     ///   - bundleID: Bundle identifier of the target app (nil = frontmost app)
     ///   - reply: Callback with success status
     func pasteText(_ text: String, toAppWithBundleID bundleID: String?, reply: @escaping (_ success: Bool) -> Void)
+
+    /// Append a message to a Claude session's terminal (for iOS Bridge)
+    ///
+    /// Looks up the terminal context for the given session ID from BridgeContextMapper,
+    /// then inserts the text using TextInserter.
+    ///
+    /// If text is empty and submit is true, just presses Enter without inserting anything.
+    ///
+    /// - Parameters:
+    ///   - text: The text to append (empty = no text insertion)
+    ///   - sessionId: Claude session UUID
+    ///   - projectPath: Full project path (e.g., "/Users/arach/dev/talkie") for terminal matching
+    ///   - submit: Whether to press Enter after inserting text (submits to Claude)
+    ///   - reply: Callback with success status and optional error message
+    func appendMessage(_ text: String, sessionId: String, projectPath: String?, submit: Bool, reply: @escaping (_ success: Bool, _ error: String?) -> Void)
+
+    // MARK: - Screenshot Methods (for iOS Bridge)
+
+    /// List terminal windows that might contain Claude sessions
+    /// Returns JSON-encoded array of window info
+    func listClaudeWindows(reply: @escaping (_ windowsJSON: Data?) -> Void)
+
+    /// Capture a screenshot of a specific window
+    /// Returns JPEG image data
+    func captureWindow(windowID: UInt32, reply: @escaping (_ imageData: Data?, _ error: String?) -> Void)
+
+    /// Capture screenshots of all terminal windows
+    /// Returns JSON-encoded array with window info and base64 image data
+    func captureTerminalWindows(reply: @escaping (_ screenshotsJSON: Data?, _ error: String?) -> Void)
+
+    /// Check if screen recording permission is granted
+    func hasScreenRecordingPermission(reply: @escaping (_ granted: Bool) -> Void)
 }
 
 /// Protocol for Talkie to receive callbacks from TalkieLive (Live → Talkie events)
@@ -63,6 +95,14 @@ public var kTalkieEngineXPCServiceName: String {
 
     /// Called when audio level changes (throttled to ~2Hz)
     func audioLevelDidChange(level: Float)
+
+    /// Called when ambient mode captures a voice command
+    /// TalkieLive handles wake phrase detection; this delivers the command text
+    /// - Parameters:
+    ///   - command: The voice command text (between wake and end phrases)
+    ///   - duration: How long the command took to speak
+    ///   - bufferContext: Optional recent transcript for context retrieval
+    func ambientCommandReceived(command: String, duration: TimeInterval, bufferContext: String?)
 }
 
 // MARK: - TalkieEngine XPC Protocol
@@ -226,6 +266,40 @@ public var kTalkieEngineXPCServiceName: String {
 
     /// Get TTS status (loaded, idle time since last use)
     func getTTSStatus(reply: @escaping (_ isLoaded: Bool, _ idleSeconds: Double) -> Void)
+
+    // MARK: - Streaming ASR
+
+    /// Start a streaming ASR session for real-time transcription
+    ///
+    /// Spawns the streaming-asr pod if not already running and begins a new session.
+    /// Audio chunks can then be fed via `feedStreamingASR`.
+    ///
+    /// - Parameters:
+    ///   - reply: Callback with session ID (UUID string) or error message
+    func startStreamingASR(_ reply: @escaping (_ sessionId: String?, _ error: String?) -> Void)
+
+    /// Feed audio data to an active streaming ASR session
+    ///
+    /// Sends a chunk of audio to the ASR engine for processing.
+    /// The callback receives JSON-encoded transcript events that have occurred.
+    ///
+    /// Audio format: base64-encoded Float32 samples at 16kHz mono
+    ///
+    /// - Parameters:
+    ///   - sessionId: The session ID from startStreamingASR
+    ///   - audio: Base64-encoded Float32 16kHz mono audio samples
+    ///   - reply: Callback with JSON-encoded events array (or nil if none) and error
+    func feedStreamingASR(sessionId: String, audio: Data, _ reply: @escaping (_ eventsJSON: Data?, _ error: String?) -> Void)
+
+    /// Stop a streaming ASR session and get the final transcript
+    ///
+    /// Ends the streaming session and returns the complete transcript.
+    /// The pod remains running for future sessions.
+    ///
+    /// - Parameters:
+    ///   - sessionId: The session ID from startStreamingASR
+    ///   - reply: Callback with final transcript or error
+    func stopStreamingASR(sessionId: String, _ reply: @escaping (_ transcript: String?, _ error: String?) -> Void)
 }
 
 // MARK: - TTS Types

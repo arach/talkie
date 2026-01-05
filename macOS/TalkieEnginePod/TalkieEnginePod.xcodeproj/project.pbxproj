@@ -7,10 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		2CFED2C327C6D6A12EFF6234 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = 88C225F30DC04092B4467D77 /* FluidAudio */; };
 		3E65A2AF5167432CB74932A4 /* FluidAudioTTS in Frameworks */ = {isa = PBXBuildFile; productRef = E290D1E92B1353EF1A971F36 /* FluidAudioTTS */; };
 		5D1D0178E24061697B24AD8A /* PodCapability.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5053F85BB2868A0361A8D72B /* PodCapability.swift */; };
 		6525285FB381E9164DD57897 /* Main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21CA52125F0BE7B2B89F922D /* Main.swift */; };
 		C4A6C4AAD0BE34E96ED2EE9D /* TTSCapability.swift in Sources */ = {isa = PBXBuildFile; fileRef = D01331EFCBD65B27A6A65716 /* TTSCapability.swift */; };
+		C6455928899BA5A9545EB6E7 /* StreamingASRCapability.swift in Sources */ = {isa = PBXBuildFile; fileRef = D604254D1AF131EC622EFBB1 /* StreamingASRCapability.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -18,6 +20,7 @@
 		254374E31EF5D28DBBA3AD06 /* TalkieEnginePod */ = {isa = PBXFileReference; includeInIndex = 0; path = TalkieEnginePod; sourceTree = BUILT_PRODUCTS_DIR; };
 		5053F85BB2868A0361A8D72B /* PodCapability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PodCapability.swift; sourceTree = "<group>"; };
 		D01331EFCBD65B27A6A65716 /* TTSCapability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSCapability.swift; sourceTree = "<group>"; };
+		D604254D1AF131EC622EFBB1 /* StreamingASRCapability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingASRCapability.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -26,6 +29,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				3E65A2AF5167432CB74932A4 /* FluidAudioTTS in Frameworks */,
+				2CFED2C327C6D6A12EFF6234 /* FluidAudio in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -35,6 +39,7 @@
 		3CC46F276AFBDD604D7A2DFC /* Capabilities */ = {
 			isa = PBXGroup;
 			children = (
+				D604254D1AF131EC622EFBB1 /* StreamingASRCapability.swift */,
 				D01331EFCBD65B27A6A65716 /* TTSCapability.swift */,
 			);
 			path = Capabilities;
@@ -83,6 +88,7 @@
 			name = TalkieEnginePod;
 			packageProductDependencies = (
 				E290D1E92B1353EF1A971F36 /* FluidAudioTTS */,
+				88C225F30DC04092B4467D77 /* FluidAudio */,
 			);
 			productName = TalkieEnginePod;
 			productReference = 254374E31EF5D28DBBA3AD06 /* TalkieEnginePod */;
@@ -132,6 +138,7 @@
 			files = (
 				6525285FB381E9164DD57897 /* Main.swift in Sources */,
 				5D1D0178E24061697B24AD8A /* PodCapability.swift in Sources */,
+				C6455928899BA5A9545EB6E7 /* StreamingASRCapability.swift in Sources */,
 				C4A6C4AAD0BE34E96ED2EE9D /* TTSCapability.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -208,7 +215,7 @@
 		2C7235689E9F195E5119625A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = "";
+				CODE_SIGN_ENTITLEMENTS = TalkieEnginePod.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -227,7 +234,7 @@
 		C96C0809E90AC71085EB65DC /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = "";
+				CODE_SIGN_ENTITLEMENTS = TalkieEnginePod.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -337,6 +344,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		88C225F30DC04092B4467D77 /* FluidAudio */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A8D13B9C8D67F2D8B5A633D4 /* XCRemoteSwiftPackageReference "FluidAudio" */;
+			productName = FluidAudio;
+		};
 		E290D1E92B1353EF1A971F36 /* FluidAudioTTS */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = A8D13B9C8D67F2D8B5A633D4 /* XCRemoteSwiftPackageReference "FluidAudio" */;

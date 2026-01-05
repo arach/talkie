@@ -56,6 +56,14 @@ final class TalkieNotifier {
         send("routing")
     }
 
+    // MARK: - Ambient Mode
+
+    /// Notify Talkie of an ambient voice command
+    func ambientCommand(_ command: String) {
+        // URL-encode the command for safe transmission
+        send("ambient/command", params: ["cmd": command])
+    }
+
     // MARK: - Data Notifications
 
     /// Notify Talkie that a new dictation was saved
