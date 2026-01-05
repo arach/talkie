@@ -7,6 +7,7 @@
 
 import { fuzzyMatchTerminals, type TerminalInfo, type MatchResult, type MatchSummary } from "../matching/fuzzy-matcher";
 import { log } from "../log";
+import { MAPPINGS_FILE } from "../paths";
 import { $ } from "bun";
 
 // Cached results
@@ -189,13 +190,13 @@ async function saveConfirmedMappings(): Promise<void> {
     mappings[fingerprint] = sessionId;
   });
 
-  const file = Bun.file(`${process.env.HOME}/.talkie-bridge/confirmed-mappings.json`);
+  const file = Bun.file(MAPPINGS_FILE);
   await Bun.write(file, JSON.stringify(mappings, null, 2));
 }
 
 async function loadConfirmedMappings(): Promise<void> {
   try {
-    const file = Bun.file(`${process.env.HOME}/.talkie-bridge/confirmed-mappings.json`);
+    const file = Bun.file(MAPPINGS_FILE);
     if (await file.exists()) {
       const data = await file.json() as Record<string, string>;
       confirmedMappings = new Map(Object.entries(data));

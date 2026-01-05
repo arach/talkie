@@ -3,7 +3,7 @@
 //  TalkieLive
 //
 //  Maintains a mapping of Claude session IDs to terminal app contexts.
-//  Written to ~/.talkie-bridge/session-contexts.json after each dictation.
+//  Written to ~/Library/Application Support/Talkie/.context/session-contexts.json after each dictation.
 //
 
 import Foundation
@@ -90,24 +90,14 @@ struct SessionContextMap: Codable {
 final class BridgeContextMapper {
     static let shared = BridgeContextMapper()
 
-    /// Context storage in TalkieLive's Application Support folder
-    /// ~/Library/Application Support/Talkie/.context/session-contexts.json
-    private let contextDir: URL = {
-        let fm = FileManager.default
-        if let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-            return appSupport
-                .appendingPathComponent("Talkie", isDirectory: true)
-                .appendingPathComponent(".context", isDirectory: true)
-        }
-        // Fallback (should never happen)
-        return fm.homeDirectoryForCurrentUser.appendingPathComponent(".talkie-context")
-    }()
+    private let contextDir: URL
     private let contextFile: URL
 
     private var contextMap: SessionContextMap
 
     private init() {
-        self.contextFile = contextDir.appendingPathComponent("session-contexts.json")
+        self.contextDir = BridgePaths.contextDir
+        self.contextFile = BridgePaths.sessionContexts
         self.contextMap = SessionContextMap()
         loadFromDisk()
     }

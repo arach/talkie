@@ -1,6 +1,6 @@
 import { getTailscaleState, getStateMessage } from "./tailscale/status";
 import { healthRoute } from "./routes/health";
-import { sessionsRoute, sessionMessagesRoute } from "./routes/sessions";
+import { pathsRoute, sessionsRoute, sessionMessagesRoute } from "./routes/sessions";
 import { sessionMetadataRoute, sessionEntryRoute } from "./routes/metadata";
 import {
   pairRoute,
@@ -24,10 +24,12 @@ import {
   getWindowContent,
   captureAllWindows,
 } from "./routes/windows";
-import { getDevices } from "./devices/registry";
+import { getDevices, pruneExpiredDevices } from "./devices/registry";
 import { getOrCreateKeyPair } from "./crypto/store";
+import { verifyRequest, authErrorResponse, isExemptPath } from "./auth/hmac";
 import { log, clearLog } from "./log";
 import { PID_FILE, ensureDirectories } from "./paths";
+import { sessionCache } from "./discovery/session-cache";
 
 const PORT = 8765;
 
@@ -64,6 +66,9 @@ async function main() {
   const keyPair = await getOrCreateKeyPair();
   log.info(`Server public key: ${keyPair.publicKey.slice(0, 20)}...`);
 
+  // Prune expired devices on startup
+  await pruneExpiredDevices();
+
   // Load paired devices
   const devices = await getDevices();
   log.info(`Paired devices: ${devices.length}`);
@@ -72,15 +77,17 @@ async function main() {
   await Bun.write(PID_FILE, process.pid.toString());
   log.info(`PID ${process.pid} written to ${PID_FILE}`);
 
-  // Clean up PID file on exit
+  // Clean up on exit
   process.on("SIGINT", async () => {
     log.info("Shutting down...");
+    sessionCache.shutdown();
     await Bun.write(PID_FILE, "").catch(() => {});
     process.exit(0);
   });
 
   process.on("SIGTERM", async () => {
     log.info("Shutting down...");
+    sessionCache.shutdown();
     await Bun.write(PID_FILE, "").catch(() => {});
     process.exit(0);
   });
@@ -88,148 +95,179 @@ async function main() {
   // Start HTTP server
   const server = Bun.serve({
     port: PORT,
-    async fetch(req) {
+    async fetch(req, server) {
       const url = new URL(req.url);
       const path = url.pathname;
       const method = req.method;
+      const startTime = performance.now();
 
       log.request(method, path);
 
+      const logResponse = (response: Response) => {
+        const duration = Math.round(performance.now() - startTime);
+        log.info(`${method} ${path} → ${response.status} (${duration}ms)`);
+        return response;
+      };
+
+      // Check if request is from localhost (bypass auth for local requests)
+      const clientIP = server.requestIP(req);
+      const isLocalhost = clientIP?.address === "127.0.0.1" || clientIP?.address === "::1";
+
       try {
-        // Health check
-        if (path === "/health" && method === "GET") {
-          return healthRoute(req, hostname);
+        // HMAC Authentication (unless exempt endpoint or localhost)
+        if (!isLocalhost && !isExemptPath(path, method)) {
+          const authResult = await verifyRequest(req);
+          if (!authResult.authenticated) {
+            log.warn(`Auth failed: ${authResult.error} for ${path}`);
+            return logResponse(authErrorResponse(authResult));
+          }
         }
 
-        // Sessions
+        // Health check
+        if (path === "/health" && method === "GET") {
+          return logResponse(healthRoute(req, hostname));
+        }
+
+        // Debug: cache status
+        if (path === "/debug/cache" && method === "GET") {
+          return logResponse(Response.json(sessionCache.getStatus()));
+        }
+
+        // Paths (path-centric view with all sessions per path)
+        if (path === "/paths" && method === "GET") {
+          return logResponse(await pathsRoute(req));
+        }
+
+        // Sessions (flat view - legacy)
         if (path === "/sessions" && method === "GET") {
-          return sessionsRoute(req);
+          return logResponse(await sessionsRoute(req));
         }
 
         // Match /sessions/:id/messages
         const messagesMatch = path.match(/^\/sessions\/([^/]+)\/messages$/);
         if (messagesMatch && method === "GET") {
-          return sessionMessagesRoute(req, messagesMatch[1]);
+          return logResponse(await sessionMessagesRoute(req, messagesMatch[1]));
         }
 
         // Match /sessions/:id/metadata
         const metadataMatch = path.match(/^\/sessions\/([^/]+)\/metadata$/);
         if (metadataMatch && method === "GET") {
-          return sessionMetadataRoute(req, metadataMatch[1]);
+          return logResponse(await sessionMetadataRoute(req, metadataMatch[1]));
         }
 
         // Match /sessions/:id/entry/:index
         const entryMatch = path.match(/^\/sessions\/([^/]+)\/entry\/(\d+)$/);
         if (entryMatch && method === "GET") {
-          return sessionEntryRoute(req, entryMatch[1], parseInt(entryMatch[2], 10));
+          return logResponse(await sessionEntryRoute(req, entryMatch[1], parseInt(entryMatch[2], 10)));
         }
 
         // Match /sessions/:id
         const sessionMatch = path.match(/^\/sessions\/([^/]+)$/);
         if (sessionMatch && method === "GET") {
-          return sessionMessagesRoute(req, sessionMatch[1]);
+          return logResponse(await sessionMessagesRoute(req, sessionMatch[1]));
         }
 
         // POST /sessions/:id/message - Send text to a Claude session
         // Empty text with submit triggers Enter key only (for submit without new text)
         const sendMessageMatch = path.match(/^\/sessions\/([^/]+)\/message$/);
         if (sendMessageMatch && method === "POST") {
-          return sendMessageRoute(req, sendMessageMatch[1]);
+          return logResponse(await sendMessageRoute(req, sendMessageMatch[1]));
         }
 
         // Pairing endpoints
         if (path === "/pair" && method === "POST") {
-          return pairRoute(req);
+          return logResponse(await pairRoute(req));
         }
 
         if (path === "/pair/info" && method === "GET") {
-          return pairInfoRoute(req, hostname);
+          return logResponse(await pairInfoRoute(req, hostname));
         }
 
         if (path === "/pair/pending" && method === "GET") {
-          return pairPendingRoute(req);
+          return logResponse(await pairPendingRoute(req));
         }
 
         // Match /pair/:deviceId/approve
         const approveMatch = path.match(/^\/pair\/([^/]+)\/approve$/);
         if (approveMatch && method === "POST") {
-          return pairApproveRoute(req, approveMatch[1]);
+          return logResponse(await pairApproveRoute(req, approveMatch[1]));
         }
 
         // Match /pair/:deviceId/reject
         const rejectMatch = path.match(/^\/pair\/([^/]+)\/reject$/);
         if (rejectMatch && method === "POST") {
-          return pairRejectRoute(req, rejectMatch[1]);
+          return logResponse(await pairRejectRoute(req, rejectMatch[1]));
         }
 
         // Devices endpoint
         if (path === "/devices" && method === "GET") {
           const devices = await getDevices();
-          return Response.json({ devices });
+          return logResponse(Response.json({ devices }));
         }
 
         // Legacy /inject endpoint (use /sessions/:id/message instead)
         if (path === "/inject" && method === "POST") {
-          return sendMessageRoute(req);
+          return logResponse(await sendMessageRoute(req));
         }
 
         // Match endpoints - fuzzy terminal-to-session matching
         if (path === "/match" && method === "GET") {
-          return matchRoute(req);
+          return logResponse(await matchRoute(req));
         }
 
         if (path === "/match/scan" && method === "POST") {
-          return matchScanRoute(req);
+          return logResponse(await matchScanRoute(req));
         }
 
         if (path === "/match/confirm" && method === "POST") {
-          return matchConfirmRoute(req);
+          return logResponse(await matchConfirmRoute(req));
         }
 
         if (path === "/match/confirmed" && method === "GET") {
-          return matchConfirmedRoute(req);
+          return logResponse(await matchConfirmedRoute(req));
         }
 
         // Match /match/confirmed/:fingerprint for DELETE
         const deleteMatch = path.match(/^\/match\/confirmed\/(.+)$/);
         if (deleteMatch && method === "DELETE") {
-          return matchDeleteRoute(req, decodeURIComponent(deleteMatch[1]));
+          return logResponse(await matchDeleteRoute(req, decodeURIComponent(deleteMatch[1])));
         }
 
         // Windows Resource (RESTful)
         // GET /windows - List all terminal windows
         if (path === "/windows" && method === "GET") {
-          return listWindows(req);
+          return logResponse(await listWindows(req));
         }
 
         // GET /windows/captures - Batch: all screenshots + AX
         if (path === "/windows/captures" && method === "GET") {
-          return captureAllWindows(req);
+          return logResponse(await captureAllWindows(req));
         }
 
         // GET /windows/:id/screenshot - Window screenshot (JPEG)
         const windowScreenshotMatch = path.match(/^\/windows\/(\d+)\/screenshot$/);
         if (windowScreenshotMatch && method === "GET") {
-          return getWindowScreenshot(req, windowScreenshotMatch[1]);
+          return logResponse(await getWindowScreenshot(req, windowScreenshotMatch[1]));
         }
 
         // GET /windows/:id/content - Window AX content
         const windowContentMatch = path.match(/^\/windows\/(\d+)\/content$/);
         if (windowContentMatch && method === "GET") {
-          return getWindowContent(req, windowContentMatch[1]);
+          return logResponse(await getWindowContent(req, windowContentMatch[1]));
         }
 
         // GET /windows/:id - Single window details
         const windowMatch = path.match(/^\/windows\/(\d+)$/);
         if (windowMatch && method === "GET") {
-          return getWindow(req, windowMatch[1]);
+          return logResponse(await getWindow(req, windowMatch[1]));
         }
 
         // 404 for unknown routes
         log.warn(`404: ${path}`);
-        return Response.json({ error: "Not found" }, { status: 404 });
+        return logResponse(Response.json({ error: "Not found" }, { status: 404 }));
       } catch (error) {
-        log.error(`Request error: ${error}`);
+        const duration = Math.round(performance.now() - startTime);
+        log.error(`${method} ${path} → ERROR (${duration}ms): ${error}`);
         return Response.json(
           { error: "Internal server error" },
           { status: 500 }
@@ -240,6 +278,7 @@ async function main() {
 
   log.info(`TalkieBridge running at http://${hostname}:${PORT}`);
   log.info(`Local: http://localhost:${PORT}`);
+  log.info("HMAC authentication enabled");
 }
 
 main().catch((err) => {

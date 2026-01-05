@@ -15,6 +15,20 @@ struct QRScannerView: View {
     @State private var isScanning = true
     @State private var scannedCode: String?
     @State private var errorMessage: String?
+    @State private var pairingStatus: String = ""
+    @State private var statusIndex = 0
+
+    // Techy status messages during pairing
+    private let pairingStatuses = [
+        "Decoding QR payload...",
+        "Extracting public key...",
+        "Generating keypair...",
+        "Deriving shared secret...",
+        "Establishing secure channel...",
+        "Authenticating device...",
+        "Syncing clocks...",
+        "Verifying connection..."
+    ]
 
     var body: some View {
         NavigationView {
@@ -55,57 +69,92 @@ struct QRScannerView: View {
                     }
                 } else {
                     // Pairing in progress
-                    VStack(spacing: 20) {
+                    VStack(spacing: 24) {
                         if bridgeManager.status == .connecting {
-                            ProgressView()
-                                .scaleEffect(1.5)
-                                .tint(.white)
+                            // Techy pairing animation
+                            VStack(spacing: 16) {
+                                BrailleSpinner(speed: 0.06, color: .green)
 
-                            Text("Connecting to Mac...")
-                                .font(.headline)
-                                .foregroundColor(.white)
+                                Text("PAIRING")
+                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                    .tracking(4)
+                                    .foregroundColor(.green)
+
+                                Text(pairingStatus)
+                                    .font(.system(size: 14, weight: .medium, design: .monospaced))
+                                    .foregroundColor(.white.opacity(0.8))
+                                    .animation(.easeInOut(duration: 0.2), value: pairingStatus)
+                            }
+                            .onAppear {
+                                startStatusAnimation()
+                            }
+
                         } else if bridgeManager.status == .connected {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 60))
-                                .foregroundColor(.green)
+                            // Success state
+                            VStack(spacing: 16) {
+                                Text("✓")
+                                    .font(.system(size: 48, weight: .light, design: .monospaced))
+                                    .foregroundColor(.green)
 
-                            Text("Connected!")
-                                .font(.headline)
-                                .foregroundColor(.white)
+                                Text("PAIRED")
+                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                    .tracking(4)
+                                    .foregroundColor(.green)
 
-                            if let macName = bridgeManager.pairedMacName {
-                                Text(macName)
-                                    .font(.subheadline)
-                                    .foregroundColor(.white.opacity(0.7))
+                                if let macName = bridgeManager.pairedMacName {
+                                    Text(macName)
+                                        .font(.system(size: 14, weight: .medium, design: .monospaced))
+                                        .foregroundColor(.white.opacity(0.7))
+                                }
+
+                                Text("Secure connection established")
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundColor(.white.opacity(0.5))
                             }
 
                             Button("Done") {
                                 dismiss()
                             }
-                            .buttonStyle(.borderedProminent)
+                            .font(.system(size: 14, weight: .medium, design: .monospaced))
+                            .foregroundColor(.black)
+                            .padding(.horizontal, 32)
+                            .padding(.vertical, 12)
+                            .background(Color.green)
+                            .cornerRadius(8)
                             .padding(.top, 20)
+
                         } else if bridgeManager.status == .error {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.system(size: 60))
-                                .foregroundColor(.red)
+                            // Error state
+                            VStack(spacing: 16) {
+                                Text("✗")
+                                    .font(.system(size: 48, weight: .light, design: .monospaced))
+                                    .foregroundColor(.red)
 
-                            Text("Connection Failed")
-                                .font(.headline)
-                                .foregroundColor(.white)
+                                Text("FAILED")
+                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                    .tracking(4)
+                                    .foregroundColor(.red)
 
-                            if let error = bridgeManager.errorMessage ?? errorMessage {
-                                Text(error)
-                                    .font(.caption)
-                                    .foregroundColor(.white.opacity(0.7))
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal)
+                                if let error = bridgeManager.errorMessage ?? errorMessage {
+                                    Text(error)
+                                        .font(.system(size: 12, design: .monospaced))
+                                        .foregroundColor(.white.opacity(0.7))
+                                        .multilineTextAlignment(.center)
+                                        .padding(.horizontal)
+                                }
                             }
 
-                            Button("Try Again") {
+                            Button("Retry") {
                                 isScanning = true
                                 errorMessage = nil
+                                statusIndex = 0
                             }
-                            .buttonStyle(.borderedProminent)
+                            .font(.system(size: 14, weight: .medium, design: .monospaced))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 32)
+                            .padding(.vertical, 12)
+                            .background(Color.white.opacity(0.2))
+                            .cornerRadius(8)
                             .padding(.top, 20)
                         }
                     }
@@ -120,6 +169,18 @@ struct QRScannerView: View {
                     .foregroundColor(.white)
                 }
             }
+        }
+    }
+
+    private func startStatusAnimation() {
+        pairingStatus = pairingStatuses[0]
+        Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { timer in
+            if bridgeManager.status != .connecting {
+                timer.invalidate()
+                return
+            }
+            statusIndex = (statusIndex + 1) % pairingStatuses.count
+            pairingStatus = pairingStatuses[statusIndex]
         }
     }
 

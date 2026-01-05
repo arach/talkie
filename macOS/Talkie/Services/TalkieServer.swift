@@ -27,11 +27,15 @@ private struct MessageResponse: Codable {
     let success: Bool
     let error: String?
     let transcript: String?  // For audio endpoint
+    let deliveredAt: String?  // ISO timestamp when delivered
+    let insertedText: String?  // The actual text that was inserted
 
-    init(success: Bool, error: String? = nil, transcript: String? = nil) {
+    init(success: Bool, error: String? = nil, transcript: String? = nil, deliveredAt: String? = nil, insertedText: String? = nil) {
         self.success = success
         self.error = error
         self.transcript = transcript
+        self.deliveredAt = deliveredAt
+        self.insertedText = insertedText
     }
 }
 
@@ -132,26 +136,112 @@ final class TalkieServer {
     }
 
     private func receiveRequest(_ connection: NWConnection) {
-        // 10MB buffer to handle base64 audio data
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 10_485_760) { [weak self] data, _, isComplete, error in
+        // First, receive headers to get Content-Length
+        receiveHTTPRequest(connection: connection, accumulated: Data()) { [weak self] result in
             guard let self else { return }
 
-            if let error {
-                log.error("Receive error: \(error)")
-                connection.cancel()
-                return
-            }
-
-            if let data {
+            switch result {
+            case .success(let data):
                 Task { @MainActor in
                     await self.processRequest(data, connection: connection)
                 }
-            }
-
-            if isComplete {
+            case .failure(let error):
+                log.error("Receive error: \(error)")
                 connection.cancel()
             }
         }
+    }
+
+    /// Receive HTTP request: parse headers for Content-Length, then read exact body size
+    private func receiveHTTPRequest(connection: NWConnection, accumulated: Data, completion: @escaping (Result<Data, Error>) -> Void) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
+            guard let self else { return }
+
+            if let error {
+                completion(.failure(error))
+                return
+            }
+
+            var totalData = accumulated
+            if let data {
+                totalData.append(data)
+            }
+
+            // Check if we have complete headers (ends with \r\n\r\n)
+            if let headerEndRange = totalData.range(of: Data("\r\n\r\n".utf8)) {
+                let headerData = totalData[..<headerEndRange.lowerBound]
+                let bodyStartIndex = headerEndRange.upperBound
+
+                // Parse Content-Length from headers
+                if let headerString = String(data: headerData, encoding: .utf8) {
+                    let contentLength = self.parseContentLength(from: headerString)
+                    let currentBodyLength = totalData.count - bodyStartIndex
+
+                    if currentBodyLength >= contentLength {
+                        // We have all the data
+                        log.debug("Received complete HTTP request: \(totalData.count) bytes (body: \(contentLength))")
+                        completion(.success(totalData))
+                    } else {
+                        // Need more body data
+                        let remaining = contentLength - currentBodyLength
+                        log.debug("Need \(remaining) more bytes (have \(currentBodyLength)/\(contentLength))")
+                        self.receiveRemainingBody(connection: connection, accumulated: totalData, targetSize: totalData.count + remaining, completion: completion)
+                    }
+                } else {
+                    completion(.failure(NSError(domain: "TalkieServer", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid header encoding"])))
+                }
+            } else if isComplete {
+                // Connection closed before headers complete - process what we have
+                log.debug("Connection closed with \(totalData.count) bytes")
+                completion(.success(totalData))
+            } else {
+                // Headers not complete yet, keep receiving
+                self.receiveHTTPRequest(connection: connection, accumulated: totalData, completion: completion)
+            }
+        }
+    }
+
+    /// Continue receiving until we have targetSize bytes
+    private func receiveRemainingBody(connection: NWConnection, accumulated: Data, targetSize: Int, completion: @escaping (Result<Data, Error>) -> Void) {
+        let remaining = targetSize - accumulated.count
+        connection.receive(minimumIncompleteLength: 1, maximumLength: min(remaining, 10_485_760)) { [weak self] data, _, isComplete, error in
+            guard let self else { return }
+
+            if let error {
+                completion(.failure(error))
+                return
+            }
+
+            var totalData = accumulated
+            if let data {
+                totalData.append(data)
+            }
+
+            if totalData.count >= targetSize {
+                log.debug("Received complete body: \(totalData.count) bytes")
+                completion(.success(totalData))
+            } else if isComplete {
+                // Connection closed early - process what we have
+                log.warning("Connection closed early: got \(totalData.count)/\(targetSize) bytes")
+                completion(.success(totalData))
+            } else {
+                // Keep receiving
+                self.receiveRemainingBody(connection: connection, accumulated: totalData, targetSize: targetSize, completion: completion)
+            }
+        }
+    }
+
+    /// Parse Content-Length header value
+    private func parseContentLength(from headers: String) -> Int {
+        let lines = headers.components(separatedBy: "\r\n")
+        for line in lines {
+            let lower = line.lowercased()
+            if lower.hasPrefix("content-length:") {
+                let value = line.dropFirst("content-length:".count).trimmingCharacters(in: .whitespaces)
+                return Int(value) ?? 0
+            }
+        }
+        return 0
     }
 
     private func processRequest(_ data: Data, connection: NWConnection) async {
@@ -259,8 +349,8 @@ final class TalkieServer {
 
             // Transcribe via TalkieEngine
             do {
-                // Use default model
-                let modelId = "whisper:openai_whisper-small"
+                // Use Parakeet - already warm/loaded from local dictation
+                let modelId = "parakeet:v3"
                 log.info("Transcribing with model: \(modelId)")
 
                 transcript = try await EngineClient.shared.transcribe(
@@ -341,7 +431,14 @@ final class TalkieServer {
                 let durationMs = Int(Date().timeIntervalSince(xpcStartTime) * 1000)
                 if success {
                     log.info("Message sent via XPC in \(durationMs)ms")
-                    respondOnce(200, MessageResponse(success: true, error: nil, transcript: transcript), true)
+                    let deliveredAt = ISO8601DateFormatter().string(from: Date())
+                    respondOnce(200, MessageResponse(
+                        success: true,
+                        error: nil,
+                        transcript: transcript,
+                        deliveredAt: deliveredAt,
+                        insertedText: textToSend
+                    ), true)
                 } else {
                     log.error("Message failed: \(error ?? "unknown error")")
                     MessageQueue.shared.updateStatus(messageId, status: .failed, error: error, xpcDurationMs: durationMs)
@@ -435,14 +532,22 @@ final class TalkieServer {
     }
 
     private func sendErrorResponse(_ connection: NWConnection, statusCode: Int, error: String) {
-        let json = "{\"error\":\"\(error)\"}"
+        // Use proper JSON encoding to escape special characters
+        let errorDict = ["error": error]
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: errorDict),
+              let jsonString = String(data: jsonData, encoding: .utf8) else {
+            // Fallback to plain text if JSON encoding fails
+            sendResponse(connection, statusCode: statusCode, body: error)
+            return
+        }
+
         let headers = """
         HTTP/1.1 \(statusCode) Error\r
         Content-Type: application/json\r
-        Content-Length: \(json.utf8.count)\r
+        Content-Length: \(jsonData.count)\r
         Connection: close\r
         \r
-        \(json)
+        \(jsonString)
         """
 
         connection.send(content: headers.data(using: .utf8), completion: .contentProcessed { _ in

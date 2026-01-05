@@ -291,6 +291,31 @@ struct ParticlesWaveformView: View {
     }
 }
 
+// MARK: - Recording Pulse Indicator
+
+struct RecordingPulse: View {
+    var color: Color = .red
+    var size: CGFloat = 12
+
+    @State private var isPulsing = false
+
+    var body: some View {
+        Circle()
+            .fill(color)
+            .frame(width: size, height: size)
+            .scaleEffect(isPulsing ? 1.2 : 1.0)
+            .opacity(isPulsing ? 0.7 : 1.0)
+            .animation(
+                .easeInOut(duration: 0.8)
+                .repeatForever(autoreverses: true),
+                value: isPulsing
+            )
+            .onAppear {
+                isPulsing = true
+            }
+    }
+}
+
 // MARK: - Unified LiveWaveformView
 
 struct LiveWaveformView: View {

@@ -23,11 +23,13 @@ struct SessionDetailView: View {
 
     // Audio recording state
     @StateObject private var recorder = AudioRecorderManager()
+    @StateObject private var speechRecognizer = SpeechRecognizer()
     @State private var isTranscribing = false
     @State private var lastFailedAudioURL: URL?  // For retry capability
+    @State private var capturedTranscription: String = ""  // Captured when recording stops
 
-    // Force Enter state
-    @State private var isForcingEnter = false
+    // Delivery confirmation state
+    @State private var lastDelivery: DeliveryConfirmation?
 
     // Quick reply options parsed from last assistant message
     private var quickReplyOptions: [QuickReplyOption] {
@@ -87,61 +89,67 @@ struct SessionDetailView: View {
                 }
             }
 
-            // Input bar
-            if session.isLive {
-                Divider()
+            // Input bar - always show, even for non-live sessions
+            Divider()
 
-                // Quick reply buttons (when numbered options detected)
-                if !quickReplyOptions.isEmpty {
-                    QuickReplyBar(options: quickReplyOptions) { number in
-                        sendQuickReply(number)
-                    }
+            // Warning for non-live sessions
+            if !session.isLive {
+                HStack(spacing: Spacing.xs) {
+                    Image(systemName: "moon.zzz")
+                        .font(.system(size: 10))
+                        .foregroundColor(.warning)
+                    Text("Session inactive — message will be queued")
+                        .font(.techLabelSmall)
+                        .foregroundColor(.textTertiary)
                 }
-
-                InputBar(
-                    text: $inputText,
-                    isSending: isSending || isTranscribing,
-                    isRecording: recorder.isRecording,
-                    recordingDuration: recorder.recordingDuration,
-                    error: sendError,
-                    canRetryAudio: lastFailedAudioURL != nil,
-                    isFocused: $isInputFocused,
-                    onSend: sendMessage,
-                    onMicTap: toggleRecording,
-                    onRetry: retryAudio
-                )
+                .padding(.horizontal, Spacing.sm)
+                .padding(.vertical, Spacing.xxs)
             }
+
+            // Quick reply buttons (when numbered options detected)
+            if !quickReplyOptions.isEmpty {
+                QuickReplyBar(options: quickReplyOptions) { number in
+                    sendQuickReply(number)
+                }
+            }
+
+            InputBar(
+                text: $inputText,
+                isSending: isSending || isTranscribing,
+                isRecording: recorder.isRecording,
+                recordingDuration: recorder.recordingDuration,
+                audioLevels: recorder.audioLevels,
+                liveTranscription: speechRecognizer.transcript,
+                capturedTranscription: capturedTranscription,
+                delivery: lastDelivery,
+                error: sendError,
+                canRetryAudio: lastFailedAudioURL != nil,
+                isFocused: $isInputFocused,
+                onSend: sendMessage,
+                onMicTap: toggleRecording,
+                onRetry: retryAudio
+            )
         }
-        .navigationTitle(session.project)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                HStack(spacing: 8) {
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: Spacing.xs) {
                     if session.isLive {
-                        Text("LIVE")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.green)
-                            .cornerRadius(4)
-
-                        // Force Enter button
-                        Button(action: forceEnter) {
-                            if isForcingEnter {
-                                ProgressView()
-                                    .progressViewStyle(.circular)
-                                    .scaleEffect(0.7)
-                            } else {
-                                Image(systemName: "return")
-                            }
-                        }
-                        .disabled(isForcingEnter)
+                        Circle()
+                            .fill(Color.success)
+                            .frame(width: 6, height: 6)
                     }
+                    Text(session.project)
+                        .font(.headlineMedium)
+                        .foregroundColor(.textPrimary)
+                }
+            }
 
-                    Button(action: loadMessages) {
-                        Image(systemName: "arrow.clockwise")
-                    }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: loadMessages) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.textSecondary)
                 }
             }
         }
@@ -173,7 +181,7 @@ struct SessionDetailView: View {
 
     private func sendMessage() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+        // Allow empty text - sends Enter key only (submits last message)
 
         isSending = true
         sendError = nil
@@ -196,7 +204,9 @@ struct SessionDetailView: View {
 
     private func toggleRecording() {
         if recorder.isRecording {
-            // Stop recording and send
+            let stopTime = Date()
+
+            // Stop audio recording immediately (so we can send the file)
             recorder.stopRecording()
             recorder.finalizeRecording()
 
@@ -205,58 +215,101 @@ struct SessionDetailView: View {
                 return
             }
 
-            sendAudio(url: audioURL)
+            // Clear any previous transcription
+            capturedTranscription = ""
+
+            // Start BOTH in parallel:
+            // 1. Send audio to server (for Whisper transcription + Claude)
+            // 2. Transcribe audio file locally (for UI preview)
+            sendAudioWithFileTranscription(url: audioURL, stopTime: stopTime)
         } else {
-            // Start recording - clear any previous failed audio
+            // Start recording - clear any previous state
             sendError = nil
             lastFailedAudioURL = nil
+            capturedTranscription = ""
+            speechRecognizer.clear()
             recorder.startRecording()
+            // NOTE: We don't start speech recognition here anymore
+            // Instead, we transcribe the file AFTER recording stops
         }
     }
 
-    private func sendAudio(url: URL) {
+    /// Send audio while transcribing the file locally in parallel
+    /// This shows progressive transcription during the send phase
+    private func sendAudioWithFileTranscription(url: URL, stopTime: Date) {
         isTranscribing = true
         sendError = nil
+        lastDelivery = nil
 
+        // Start local file transcription (runs in background, updates speechRecognizer.transcript)
+        speechRecognizer.transcribeFile(url)
+
+        // Poll for transcription updates and update UI
+        let transcriptionTask = Task { @MainActor in
+            var lastUpdate = ""
+
+            // Poll for updates while sending (max 5 seconds)
+            for i in 0..<50 {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+
+                if Task.isCancelled { break }
+
+                let current = speechRecognizer.transcript
+                if current != lastUpdate && !current.isEmpty {
+                    capturedTranscription = current
+                    lastUpdate = current
+                }
+            }
+        }
+
+        // Send audio to server in parallel
         Task {
             do {
-                let transcript = try await bridgeManager.sendAudio(
+                let response = try await bridgeManager.sendAudioWithResponse(
                     sessionId: session.id,
                     audioURL: url
                 )
+
+                // Cancel local transcription - we have server's result now
+                transcriptionTask.cancel()
+                speechRecognizer.stopFileTranscription()
+
+                isTranscribing = false
                 sendError = nil
-                lastFailedAudioURL = nil  // Clear on success
-                // Refresh to see result
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                lastFailedAudioURL = nil
+
+                // Show delivery confirmation with server's transcript
+                if response.success, let deliveredAt = response.deliveredAt {
+                    let serverText = response.insertedText ?? response.transcript ?? ""
+
+                    // Update with server's version (Whisper is more accurate)
+                    if !serverText.isEmpty {
+                        capturedTranscription = serverText
+                    }
+
+                    lastDelivery = DeliveryConfirmation(
+                        text: serverText,
+                        deliveredAt: deliveredAt
+                    )
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)
+                    lastDelivery = nil
+                }
+
                 await fetchMessages()
             } catch {
+                transcriptionTask.cancel()
+                speechRecognizer.stopFileTranscription()
                 sendError = error.localizedDescription
-                lastFailedAudioURL = url  // Store for retry
+                lastFailedAudioURL = url
+                isTranscribing = false
             }
-            isTranscribing = false
         }
     }
 
     private func retryAudio() {
         guard let url = lastFailedAudioURL else { return }
-        sendAudio(url: url)
-    }
-
-    private func forceEnter() {
-        isForcingEnter = true
-        sendError = nil
-
-        Task {
-            do {
-                try await bridgeManager.forceEnter(sessionId: session.id)
-                // Refresh messages after a brief delay
-                try? await Task.sleep(nanoseconds: 500_000_000)
-                await fetchMessages()
-            } catch {
-                sendError = "Enter failed: \(error.localizedDescription)"
-            }
-            isForcingEnter = false
-        }
+        // Retry uses file transcription for consistent UX
+        sendAudioWithFileTranscription(url: url, stopTime: Date())
     }
 
     private func sendQuickReply(_ number: String) {
@@ -375,6 +428,10 @@ struct InputBar: View {
     let isSending: Bool
     let isRecording: Bool
     let recordingDuration: TimeInterval
+    let audioLevels: [Float]
+    let liveTranscription: String      // Real-time during recording
+    let capturedTranscription: String  // Captured when recording stopped
+    let delivery: DeliveryConfirmation?
     let error: String?
     let canRetryAudio: Bool
     var isFocused: FocusState<Bool>.Binding
@@ -389,7 +446,7 @@ struct InputBar: View {
     }
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 0) {
             // Error message with optional retry
             if let error {
                 HStack(spacing: 8) {
@@ -411,85 +468,241 @@ struct InputBar: View {
                     }
                 }
                 .padding(.horizontal, 12)
-                .padding(.top, 4)
+                .padding(.vertical, 6)
             }
 
-            HStack(spacing: 8) {
-                // Mic button
-                Button(action: onMicTap) {
-                    Group {
-                        if isRecording {
-                            // Recording state - show stop and duration
-                            HStack(spacing: 6) {
-                                Image(systemName: "stop.fill")
-                                    .font(.system(size: 12))
-                                Text(durationText)
-                                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Color.red)
-                            .foregroundColor(.white)
-                            .cornerRadius(16)
-                        } else {
-                            Image(systemName: "mic.fill")
-                                .font(.system(size: 16))
-                                .frame(width: 32, height: 32)
-                                .background(Color(.systemGray5))
-                                .foregroundColor(.primary)
-                                .clipShape(Circle())
-                        }
+            // Recording UI with waveform and transcription preview
+            if isRecording {
+                RecordingOverlay(
+                    duration: recordingDuration,
+                    audioLevels: audioLevels,
+                    transcriptionPreview: liveTranscription,
+                    onStop: onMicTap
+                )
+            } else if isSending {
+                // Sending state - show captured transcription (what user said)
+                SendingOverlay(transcriptionPreview: capturedTranscription)
+            } else if let delivery = delivery {
+                // Delivery confirmation
+                DeliveredOverlay(delivery: delivery)
+            } else {
+                // Normal input bar
+                HStack(spacing: Spacing.xs) {
+                    // Mic button
+                    Button(action: onMicTap) {
+                        Image(systemName: "mic.fill")
+                            .font(.system(size: 14))
+                            .frame(width: 32, height: 32)
+                            .background(Color.surfaceSecondary)
+                            .foregroundColor(.textSecondary)
+                            .clipShape(Circle())
                     }
-                }
-                .disabled(isSending)
 
-                if isRecording {
-                    // Recording - show "Tap to send" hint
-                    Text("Tap to send")
-                        .font(.system(size: 13))
-                        .foregroundColor(.secondary)
-                    Spacer()
-                } else {
                     // Text field
                     TextField("Send to Claude...", text: $text, axis: .vertical)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 15))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(20)
+                        .font(.bodySmall)
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, Spacing.xs)
+                        .background(Color.surfaceSecondary)
+                        .cornerRadius(CornerRadius.lg)
                         .lineLimit(1...5)
                         .focused(isFocused)
-                        .disabled(isSending)
                         .submitLabel(.send)
                         .onSubmit {
                             onSend()
                         }
 
-                    // Send button
+                    // Send button (enter/return) - always enabled, empty sends Enter only
                     Button(action: onSend) {
-                        Group {
-                            if isSending {
-                                ProgressView()
-                                    .progressViewStyle(.circular)
-                                    .tint(.white)
-                            } else {
-                                Image(systemName: "arrow.up")
-                                    .font(.system(size: 16, weight: .semibold))
-                            }
-                        }
-                        .frame(width: 32, height: 32)
-                        .background(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending ? Color.gray : Color.blue)
-                        .foregroundColor(.white)
-                        .clipShape(Circle())
+                        Image(systemName: "return")
+                            .font(.system(size: 14, weight: .semibold))
+                            .frame(width: 32, height: 32)
+                            .background(Color.brandAccent)
+                            .foregroundColor(.white)
+                            .clipShape(Circle())
                     }
-                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
                 }
+                .padding(.horizontal, Spacing.sm)
+                .padding(.vertical, Spacing.xs)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
         }
-        .background(Color(.systemBackground))
+        .frame(maxWidth: .infinity)
+        .background(Color.surfacePrimary)
+    }
+}
+
+// MARK: - Recording Overlay
+
+struct RecordingOverlay: View {
+    let duration: TimeInterval
+    let audioLevels: [Float]
+    let transcriptionPreview: String
+    let onStop: () -> Void
+
+    @State private var recPulse = false
+
+    var body: some View {
+        VStack(spacing: Spacing.xs) {
+            // REC indicator - like main recording view
+            HStack(spacing: Spacing.xs) {
+                Circle()
+                    .fill(Color.recording)
+                    .frame(width: 6, height: 6)
+                    .scaleEffect(recPulse ? 1.2 : 0.8)
+                    .animation(
+                        .easeInOut(duration: 0.6)
+                            .repeatForever(autoreverses: true),
+                        value: recPulse
+                    )
+
+                Text("REC")
+                    .font(.techLabelSmall)
+                    .fontWeight(.bold)
+                    .foregroundColor(.recording)
+                    .tracking(1)
+            }
+            .onAppear { recPulse = true }
+
+            // Particles waveform
+            ParticlesWaveformView(
+                levels: audioLevels,
+                height: 32,
+                color: .recording
+            )
+            .padding(.horizontal, Spacing.sm)
+
+            // Transcription preview - compact
+            if !transcriptionPreview.isEmpty {
+                Text(transcriptionPreview)
+                    .font(.caption)
+                    .foregroundColor(.textSecondary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, Spacing.sm)
+            }
+
+            // Send button - pill with return icon
+            Button(action: onStop) {
+                HStack(spacing: Spacing.xs) {
+                    Image(systemName: "return")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("SEND")
+                        .font(.techLabelSmall)
+                        .tracking(1.5)
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, Spacing.md)
+                .padding(.vertical, Spacing.xs)
+                .background(Color.recording)
+                .cornerRadius(CornerRadius.full)
+            }
+            .padding(.top, Spacing.xs)
+        }
+        .padding(.vertical, Spacing.xs)
+        .padding(.bottom, 2)
+        .background(Color.surfacePrimary)
+    }
+}
+
+// MARK: - Braille Spinner
+
+struct BrailleSpinner: View {
+    var speed: Double = 0.08
+    var color: Color = .textSecondary
+
+    @State private var frame = 0
+    private let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+    var body: some View {
+        Text(frames[frame])
+            .font(.monoMedium)
+            .foregroundColor(color)
+            .onAppear { startAnimation() }
+    }
+
+    private func startAnimation() {
+        Timer.scheduledTimer(withTimeInterval: speed, repeats: true) { _ in
+            frame = (frame + 1) % frames.count
+        }
+    }
+}
+
+// MARK: - Sending Overlay
+
+struct SendingOverlay: View {
+    let transcriptionPreview: String
+
+    var body: some View {
+        VStack(spacing: Spacing.xs) {
+            // Show transcription first (what user said) - primary content
+            if !transcriptionPreview.isEmpty {
+                Text(transcriptionPreview)
+                    .font(.monoSmall)
+                    .foregroundColor(.textPrimary)
+                    .lineLimit(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(Spacing.sm)
+                    .background(Color.brandAccent.opacity(0.08))
+                    .cornerRadius(CornerRadius.sm)
+            } else {
+                // Show placeholder when no transcription captured
+                Text("Processing audio...")
+                    .font(.monoSmall)
+                    .foregroundColor(.textSecondary)
+                    .italic()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(Spacing.sm)
+                    .background(Color.surfaceSecondary)
+                    .cornerRadius(CornerRadius.sm)
+            }
+
+            // Sending indicator - subtle, secondary
+            HStack(spacing: Spacing.xs) {
+                BrailleSpinner(color: .brandAccent)
+                Text("sending")
+                    .font(.techLabelSmall)
+                    .foregroundColor(.textTertiary)
+            }
+        }
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.sm)
+        .frame(maxWidth: .infinity)
+        .background(Color.surfacePrimary)
+    }
+}
+
+// MARK: - Delivery Confirmation
+
+struct DeliveryConfirmation {
+    let text: String
+    let deliveredAt: String
+}
+
+struct DeliveredOverlay: View {
+    let delivery: DeliveryConfirmation
+
+    var body: some View {
+        HStack(spacing: Spacing.xs) {
+            Image(systemName: "checkmark")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(.success)
+            Text("Sent")
+                .font(.bodySmall)
+                .foregroundColor(.textSecondary)
+            if !delivery.text.isEmpty {
+                Text("·")
+                    .foregroundColor(.textTertiary)
+                Text(delivery.text)
+                    .font(.bodySmall)
+                    .foregroundColor(.textSecondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.sm)
+        .background(Color.surfacePrimary)
     }
 }
 
@@ -503,55 +716,53 @@ struct MessageBubble: View {
     }
 
     var body: some View {
-        HStack {
-            if isUser { Spacer(minLength: 60) }
+        VStack(alignment: .leading, spacing: Spacing.xxs) {
+            // Header: role + timestamp
+            HStack(spacing: Spacing.xs) {
+                Text(isUser ? ">" : "◆")
+                    .font(.monoSmall)
+                    .foregroundColor(isUser ? .active : .transcribing)
 
-            VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
-                // Role label
-                HStack(spacing: 4) {
-                    if !isUser {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 10))
-                    }
-                    Text(isUser ? "You" : "Claude")
-                        .font(.system(size: 11, weight: .medium))
-                    Text(formatTime(message.timestamp))
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                }
-                .foregroundColor(isUser ? .blue : .purple)
+                Text(isUser ? "you" : "claude")
+                    .font(.techLabel)
+                    .foregroundColor(isUser ? .active : .transcribing)
 
-                // Content
-                if !message.content.isEmpty {
-                    Text(message.content)
-                        .font(.system(size: 14))
-                        .padding(12)
-                        .background(isUser ? Color.blue.opacity(0.1) : Color.purple.opacity(0.1))
-                        .cornerRadius(16)
-                        .textSelection(.enabled)
-                }
+                Spacer()
 
-                // Tool calls
-                if let toolCalls = message.toolCalls, !toolCalls.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(toolCalls, id: \.name) { tool in
-                            ToolCallView(tool: tool)
-                        }
+                Text(compactTime)
+                    .font(.techLabelSmall)
+                    .foregroundColor(.textTertiary)
+            }
+
+            // Content
+            if !message.content.isEmpty {
+                Text(message.content)
+                    .font(.monoSmall)
+                    .foregroundColor(.textPrimary)
+                    .padding(Spacing.sm)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(isUser ? Color.active.opacity(0.05) : Color.surfaceSecondary)
+                    .cornerRadius(CornerRadius.sm)
+                    .textSelection(.enabled)
+            }
+
+            // Tool calls
+            if let toolCalls = message.toolCalls, !toolCalls.isEmpty {
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    ForEach(toolCalls, id: \.name) { tool in
+                        ToolCallView(tool: tool)
                     }
                 }
             }
-
-            if !isUser { Spacer(minLength: 60) }
         }
+        .padding(.vertical, Spacing.xs)
     }
 
-    private func formatTime(_ isoString: String) -> String {
+    private var compactTime: String {
         let formatter = ISO8601DateFormatter()
-        guard let date = formatter.date(from: isoString) else {
-            return ""
-        }
+        guard let date = formatter.date(from: message.timestamp) else { return "" }
         let timeFormatter = DateFormatter()
-        timeFormatter.dateFormat = "h:mm a"
+        timeFormatter.dateFormat = "HH:mm"
         return timeFormatter.string(from: date)
     }
 }
@@ -564,71 +775,61 @@ struct ToolCallView: View {
     @State private var isExpanded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Spacing.xxs) {
             Button(action: { isExpanded.toggle() }) {
-                HStack(spacing: 6) {
-                    Image(systemName: toolIcon)
-                        .font(.system(size: 10))
+                HStack(spacing: Spacing.xs) {
+                    Text("⚡")
+                        .font(.system(size: 8))
                     Text(tool.name)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(.techLabel)
                     Spacer()
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 10))
+                        .font(.system(size: 8, weight: .medium))
                 }
-                .foregroundColor(.orange)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color.orange.opacity(0.1))
-                .cornerRadius(8)
+                .foregroundColor(.warning)
+                .padding(.horizontal, Spacing.xs)
+                .padding(.vertical, Spacing.xxs)
+                .background(Color.warning.opacity(0.08))
+                .cornerRadius(CornerRadius.sm)
             }
             .buttonStyle(.plain)
 
             if isExpanded {
-                if let input = tool.input, !input.isEmpty {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Input:")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(.secondary)
-                        Text(input)
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(.primary)
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    if let input = tool.input, !input.isEmpty {
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
+                            Text("IN")
+                                .font(.techLabelSmall)
+                                .foregroundColor(.textTertiary)
+                            Text(input)
+                                .font(.monoSmall)
+                                .foregroundColor(.textSecondary)
+                                .lineLimit(5)
+                        }
+                        .padding(Spacing.xs)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.surfaceTertiary)
+                        .cornerRadius(CornerRadius.sm)
                     }
-                    .padding(8)
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(6)
-                }
 
-                if let output = tool.output, !output.isEmpty {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Output:")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(.secondary)
-                        Text(output.prefix(500) + (output.count > 500 ? "..." : ""))
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(.primary)
+                    if let output = tool.output, !output.isEmpty {
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
+                            Text("OUT")
+                                .font(.techLabelSmall)
+                                .foregroundColor(.textTertiary)
+                            Text(output.prefix(300) + (output.count > 300 ? "…" : ""))
+                                .font(.monoSmall)
+                                .foregroundColor(.textSecondary)
+                                .lineLimit(8)
+                        }
+                        .padding(Spacing.xs)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.surfaceTertiary)
+                        .cornerRadius(CornerRadius.sm)
                     }
-                    .padding(8)
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(6)
                 }
+                .padding(.leading, Spacing.sm)
             }
-        }
-    }
-
-    private var toolIcon: String {
-        switch tool.name.lowercased() {
-        case let name where name.contains("read"):
-            return "doc.text"
-        case let name where name.contains("write"), let name where name.contains("edit"):
-            return "pencil"
-        case let name where name.contains("bash"):
-            return "terminal"
-        case let name where name.contains("glob"), let name where name.contains("grep"):
-            return "magnifyingglass"
-        case let name where name.contains("web"):
-            return "globe"
-        default:
-            return "wrench"
         }
     }
 }

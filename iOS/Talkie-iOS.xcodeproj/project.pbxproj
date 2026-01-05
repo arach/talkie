@@ -92,9 +92,9 @@
 
 /* Begin PBXFileReference section */
 		531A90C22EEE73370084EC25 /* TalkieWatchWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TalkieWatchWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		539C69312ED39ADE00BC034F /* Talkie.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Talkie.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		539C69432ED39ADF00BC034F /* TalkieTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "TalkieTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		539C694D2ED39ADF00BC034F /* TalkieUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "TalkieUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		539C69312ED39ADE00BC034F /* Talkie.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Talkie.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		539C69432ED39ADF00BC034F /* TalkieTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TalkieTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		539C694D2ED39ADF00BC034F /* TalkieUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TalkieUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		53B43EC02EDB539100C09544 /* TalkieWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TalkieWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		53B43EC22EDB539100C09544 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		53B43EC42EDB539200C09544 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
@@ -287,7 +287,7 @@
 			fileSystemSynchronizedGroups = (
 				539C69332ED39ADE00BC034F /* Talkie iOS */,
 			);
-			name = "Talkie";
+			name = Talkie;
 			packageProductDependencies = (
 			);
 			productName = talkie;
@@ -307,7 +307,7 @@
 			dependencies = (
 				539C69452ED39ADF00BC034F /* PBXTargetDependency */,
 			);
-			name = "TalkieTests";
+			name = TalkieTests;
 			packageProductDependencies = (
 			);
 			productName = talkieTests;
@@ -327,7 +327,7 @@
 			dependencies = (
 				539C694F2ED39ADF00BC034F /* PBXTargetDependency */,
 			);
-			name = "TalkieUITests";
+			name = TalkieUITests;
 			packageProductDependencies = (
 			);
 			productName = talkieUITests;
@@ -412,7 +412,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 539C692C2ED39ADE00BC034F /* Build configuration list for PBXProject "Talkie" */;
+			buildConfigurationList = 539C692C2ED39ADE00BC034F /* Build configuration list for PBXProject "Talkie-iOS" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -1034,7 +1034,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		539C692C2ED39ADE00BC034F /* Build configuration list for PBXProject "Talkie" */ = {
+		539C692C2ED39ADE00BC034F /* Build configuration list for PBXProject "Talkie-iOS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				539C69552ED39ADF00BC034F /* Debug */,

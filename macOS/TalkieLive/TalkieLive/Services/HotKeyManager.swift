@@ -16,13 +16,43 @@ enum HotKeyEventType {
     case released
 }
 
+// MARK: - Hotkey Timestamp
+
+/// Captures the precise mach_absolute_time when a hotkey event is received
+/// Used for accurate performance measurement from Carbon callback → recording start
+struct HotKeyTimestamp {
+    let machTicks: UInt64
+
+    init() {
+        self.machTicks = mach_absolute_time()
+    }
+
+    /// Convert to milliseconds elapsed since this timestamp
+    func elapsedMs() -> Int {
+        let now = mach_absolute_time()
+        return Self.ticksToMs(now - machTicks)
+    }
+
+    private static let timebaseInfo: mach_timebase_info_data_t = {
+        var info = mach_timebase_info_data_t()
+        mach_timebase_info(&info)
+        return info
+    }()
+
+    static func ticksToMs(_ ticks: UInt64) -> Int {
+        let nanos = ticks * UInt64(timebaseInfo.numer) / UInt64(timebaseInfo.denom)
+        return Int(nanos / 1_000_000)
+    }
+}
+
 // MARK: - Global Registry
 
 /// Shared registry for all hotkeys - uses a single Carbon event handler
 private final class HotKeyRegistry {
     static let shared = HotKeyRegistry()
 
-    private var pressCallbacks: [HotKeyIdentifier: () -> Void] = [:]
+    /// Press callbacks now receive the precise timestamp from the Carbon callback
+    private var pressCallbacks: [HotKeyIdentifier: (HotKeyTimestamp) -> Void] = [:]
     private var releaseCallbacks: [HotKeyIdentifier: () -> Void] = [:]
     private var eventHandlerRef: EventHandlerRef?
     private var isInstalled = false
@@ -37,7 +67,7 @@ private final class HotKeyRegistry {
         let id: UInt32
     }
 
-    func register(signature: OSType, id: UInt32, onPress: @escaping () -> Void, onRelease: (() -> Void)? = nil) {
+    func register(signature: OSType, id: UInt32, onPress: @escaping (HotKeyTimestamp) -> Void, onRelease: (() -> Void)? = nil) {
         let identifier = HotKeyIdentifier(signature: signature, id: id)
         pressCallbacks[identifier] = onPress
         if let onRelease = onRelease {
@@ -54,7 +84,7 @@ private final class HotKeyRegistry {
         releaseCallbacks.removeValue(forKey: identifier)
     }
 
-    func handleEvent(signature: OSType, id: UInt32, eventType: HotKeyEventType) {
+    func handleEvent(signature: OSType, id: UInt32, eventType: HotKeyEventType, timestamp: HotKeyTimestamp) {
         let identifier = HotKeyIdentifier(signature: signature, id: id)
 
         switch eventType {
@@ -68,7 +98,7 @@ private final class HotKeyRegistry {
 
             if let callback = pressCallbacks[identifier] {
                 logger.info("Hotkey pressed: signature=\(signature) id=\(id)")
-                callback()
+                callback(timestamp)
             } else {
                 logger.warning("No press callback registered for this hotkey")
             }
@@ -118,6 +148,10 @@ private func globalHotKeyEventHandler(
     event: EventRef?,
     userData: UnsafeMutableRawPointer?
 ) -> OSStatus {
+    // CRITICAL: Capture timestamp IMMEDIATELY at Carbon callback entry
+    // This is our most accurate measurement of when the hotkey was pressed
+    let timestamp = HotKeyTimestamp()
+
     guard let event else { return noErr }
 
     // Determine event type (press or release)
@@ -137,7 +171,7 @@ private func globalHotKeyEventHandler(
 
     guard status == noErr else { return status }
 
-    HotKeyRegistry.shared.handleEvent(signature: hotKeyID.signature, id: hotKeyID.id, eventType: eventType)
+    HotKeyRegistry.shared.handleEvent(signature: hotKeyID.signature, id: hotKeyID.id, eventType: eventType, timestamp: timestamp)
 
     return noErr
 }
@@ -158,12 +192,14 @@ final class HotKeyManager {
     }
 
     /// Register a hotkey with press handler only (toggle mode)
-    func registerHotKey(modifiers: UInt32, keyCode: UInt32, handler: @escaping () -> Void) {
+    /// The handler receives a precise timestamp from the Carbon callback for performance measurement
+    func registerHotKey(modifiers: UInt32, keyCode: UInt32, handler: @escaping (HotKeyTimestamp) -> Void) {
         registerHotKey(modifiers: modifiers, keyCode: keyCode, onPress: handler, onRelease: nil)
     }
 
     /// Register a hotkey with both press and release handlers (push-to-talk mode)
-    func registerHotKey(modifiers: UInt32, keyCode: UInt32, onPress: @escaping () -> Void, onRelease: (() -> Void)?) {
+    /// The press handler receives a precise timestamp from the Carbon callback for performance measurement
+    func registerHotKey(modifiers: UInt32, keyCode: UInt32, onPress: @escaping (HotKeyTimestamp) -> Void, onRelease: (() -> Void)?) {
         let sig = signature.fourCharCode
 
         logger.info("Registering hotkey: signature=\(self.signature)(\(sig)) id=\(self.hotkeyID) keyCode=\(keyCode) modifiers=\(modifiers) hasPTT=\(onRelease != nil)")

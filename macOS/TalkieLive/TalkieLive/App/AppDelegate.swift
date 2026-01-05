@@ -314,13 +314,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     }
                 } else {
                     // Normal tap: start recording (with optional interstitial mode)
+                    // No hotkey timestamp for click-triggered recordings
                     log.debug("Starting recording (interstitial=\(shiftHeld))")
-                    self.toggleListening(interstitial: shiftHeld)
+                    self.toggleListening(interstitial: shiftHeld, hotkeyTimestamp: nil)
                 }
 
             case .listening:
                 // Listening state: stop recording (with optional interstitial mode)
-                self.toggleListening(interstitial: shiftHeld)
+                self.toggleListening(interstitial: shiftHeld, hotkeyTimestamp: nil)
 
             case .transcribing, .routing:
                 // Processing states: offer escape options
@@ -349,7 +350,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         queuePickerHotKeyManager.registerHotKey(
             modifiers: UInt32(cmdKey | optionKey),
             keyCode: 9
-        ) { [weak self] in
+        ) { [weak self] _ in  // Ignore timestamp for non-recording hotkeys
             self?.showQueuePicker()
         }
 
@@ -358,7 +359,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ambientHotKeyManager.registerHotKey(
             modifiers: UInt32(cmdKey | optionKey),
             keyCode: 0
-        ) { [weak self] in
+        ) { [weak self] _ in  // Ignore timestamp for non-recording hotkeys
             self?.toggleAmbientMode()
         }
         log.info("Ambient mode hotkey registered: ⌥⌘A")
@@ -369,7 +370,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         debugPasteHotKeyManager.registerHotKey(
             modifiers: UInt32(cmdKey | controlKey),
             keyCode: 17
-        ) { [weak self] in
+        ) { [weak self] _ in  // Ignore timestamp for non-recording hotkeys
             Task { @MainActor in
                 self?.testTextInserterPaste()
             }
@@ -407,23 +408,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         // Register toggle hotkey (press to start, press to stop)
         // Note: Hotkey-triggered stops don't check for Shift modifier (intentional)
+        // The callback receives a precise timestamp from the Carbon callback for performance measurement
         hotKeyManager.registerHotKey(
             modifiers: settings.hotkey.modifiers,
             keyCode: settings.hotkey.keyCode
-        ) { [weak self] in
+        ) { [weak self] timestamp in
             guard let self else { return }
-            self.toggleListening(interstitial: false)
+            self.toggleListening(interstitial: false, hotkeyTimestamp: timestamp)
         }
 
         // Register push-to-talk hotkey if enabled
+        // Press callback receives timestamp for accurate measurement
         if settings.pttEnabled {
             pttHotKeyManager.registerHotKey(
                 modifiers: settings.pttHotkey.modifiers,
                 keyCode: settings.pttHotkey.keyCode,
-                onPress: { [weak self] in
+                onPress: { [weak self] timestamp in
                     guard let self else { return }
                     Task { @MainActor in
-                        await self.liveController.pttStart()
+                        await self.liveController.pttStart(hotkeyTimestamp: timestamp)
                     }
                 },
                 onRelease: { [weak self] in
@@ -496,14 +499,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func toggleListeningFromMenu() {
-        toggleListening(interstitial: false)
+        toggleListening(interstitial: false, hotkeyTimestamp: nil)
     }
 
-    private func toggleListening(interstitial: Bool) {
+    private func toggleListening(interstitial: Bool, hotkeyTimestamp: HotKeyTimestamp? = nil) {
         log.debug("toggleListening called: interstitial=\(interstitial)")
         Task {
             log.debug("Calling liveController.toggleListening...")
-            await liveController.toggleListening(interstitial: interstitial)
+            await liveController.toggleListening(interstitial: interstitial, hotkeyTimestamp: hotkeyTimestamp)
             log.debug("liveController.toggleListening completed")
         }
     }

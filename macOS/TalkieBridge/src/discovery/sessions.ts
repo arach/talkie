@@ -15,6 +15,25 @@ export interface ClaudeSession {
   transcriptPath: string;
 }
 
+/** A single session (conversation) within a path */
+export interface Session {
+  id: string;              // Session UUID
+  lastSeen: string;        // ISO timestamp
+  messageCount: number;
+  isLive: boolean;
+  transcriptPath: string;
+}
+
+/** A path (working directory) with all its sessions */
+export interface PathEntry {
+  path: string;            // Full path (e.g., "/Users/arach/dev/talkie")
+  name: string;            // Display name (e.g., "talkie")
+  folderName: string;      // Encoded folder name for lookups
+  sessions: Session[];     // All sessions in this path, sorted by lastSeen
+  lastSeen: string;        // Most recent session's lastSeen
+  isLive: boolean;         // True if any session is live
+}
+
 export interface Message {
   role: "user" | "assistant";
   content: string;
@@ -80,6 +99,40 @@ async function findLatestTranscript(
     return latest;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Find ALL .jsonl transcript files in a project directory
+ * Returns them sorted by mtime (most recent first)
+ */
+async function findAllTranscripts(
+  projectDir: string
+): Promise<{ path: string; mtime: Date; filename: string }[]> {
+  try {
+    const files = await readdir(projectDir);
+    const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"));
+
+    if (jsonlFiles.length === 0) return [];
+
+    const transcripts: { path: string; mtime: Date; filename: string }[] = [];
+
+    for (const file of jsonlFiles) {
+      const filePath = join(projectDir, file);
+      const stats = await stat(filePath);
+      transcripts.push({
+        path: filePath,
+        mtime: stats.mtime,
+        filename: file.replace(".jsonl", ""),
+      });
+    }
+
+    // Sort by mtime descending (most recent first)
+    transcripts.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+
+    return transcripts;
+  } catch {
+    return [];
   }
 }
 
@@ -226,6 +279,84 @@ export async function discoverSessions(): Promise<ClaudeSession[]> {
 }
 
 /**
+ * Discover all paths and their sessions from ~/.claude/projects/
+ * Returns path-centric data with all sessions per path
+ */
+export async function discoverPaths(): Promise<PathEntry[]> {
+  const paths: PathEntry[] = [];
+  const claudeRunning = await isClaudeRunning();
+  const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+
+  try {
+    const projectFolders = await readdir(CLAUDE_PROJECTS_DIR);
+
+    for (const folder of projectFolders) {
+      const projectDir = join(CLAUDE_PROJECTS_DIR, folder);
+
+      try {
+        const stats = await stat(projectDir);
+        if (!stats.isDirectory()) continue;
+
+        const transcripts = await findAllTranscripts(projectDir);
+        if (transcripts.length === 0) continue;
+
+        // Get path from first transcript's metadata (most recent)
+        const firstMetadata = await extractSessionMetadata(projectDir, transcripts[0].path);
+        const pathStr = firstMetadata?.cwd || folderToPath(folder);
+
+        // Build sessions array
+        const sessions: Session[] = [];
+        for (const transcript of transcripts) {
+          // Get session ID from filename if UUID, otherwise from metadata
+          let sessionId: string;
+          if (isUUID(transcript.filename)) {
+            sessionId = transcript.filename;
+          } else {
+            const meta = await extractSessionMetadata(projectDir, transcript.path);
+            sessionId = meta?.sessionId || transcript.filename;
+          }
+
+          const messageCount = await countMessages(transcript.path);
+          const isLive = claudeRunning && transcript.mtime > thirtyMinutesAgo;
+
+          sessions.push({
+            id: sessionId,
+            lastSeen: transcript.mtime.toISOString(),
+            messageCount,
+            isLive,
+            transcriptPath: transcript.path,
+          });
+        }
+
+        // Path is live if any session is live
+        const anyLive = sessions.some((s) => s.isLive);
+
+        paths.push({
+          path: pathStr,
+          name: getDisplayName(pathStr),
+          folderName: folder,
+          sessions,
+          lastSeen: sessions[0].lastSeen, // Most recent session
+          isLive: anyLive,
+        });
+      } catch (err) {
+        // Skip inaccessible directories
+        continue;
+      }
+    }
+  } catch (err) {
+    console.error("Error reading Claude projects directory:", err);
+  }
+
+  // Sort paths by lastSeen (most recent first)
+  paths.sort(
+    (a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime()
+  );
+
+  return paths;
+}
+
+/**
  * Parse messages from a JSONL transcript file
  */
 export async function parseTranscript(
@@ -244,29 +375,33 @@ export async function parseTranscript(
       try {
         const entry = JSON.parse(line);
 
-        // Claude transcript format varies, handle common cases
-        if (entry.type === "human" || entry.role === "user") {
+        // Claude Code JSONL format: { type: "user"|"assistant", message: { role, content }, timestamp }
+        // Also handle legacy formats with type: "human" or direct role/content
+
+        const entryType = entry.type;
+        const messageRole = entry.message?.role;
+
+        if (entryType === "user" || entryType === "human" || messageRole === "user") {
           messages.push({
             role: "user",
             content: extractContent(entry),
             timestamp: entry.timestamp || new Date().toISOString(),
           });
-        } else if (entry.type === "assistant" || entry.role === "assistant") {
+        } else if (entryType === "assistant" || messageRole === "assistant") {
           const msg: Message = {
             role: "assistant",
             content: extractContent(entry),
             timestamp: entry.timestamp || new Date().toISOString(),
           };
 
-          // Extract tool calls if present
-          if (entry.tool_calls || entry.toolCalls) {
-            msg.toolCalls = (entry.tool_calls || entry.toolCalls).map(
-              (tc: any) => ({
-                name: tc.name || tc.function?.name,
-                input: tc.input || tc.function?.arguments,
-                output: tc.output,
-              })
-            );
+          // Extract tool calls if present (from message object or entry directly)
+          const toolCalls = entry.message?.tool_calls || entry.tool_calls || entry.toolCalls;
+          if (toolCalls) {
+            msg.toolCalls = toolCalls.map((tc: any) => ({
+              name: tc.name || tc.function?.name,
+              input: tc.input || tc.function?.arguments,
+              output: tc.output,
+            }));
           }
 
           messages.push(msg);
@@ -376,11 +511,19 @@ function extractToolResultText(content: any): string {
 }
 
 /**
- * Get a specific session by ID
+ * Get a specific session by ID (or folder name)
+ * Tries matching by UUID first, then falls back to folder name
  */
 export async function getSession(
   sessionId: string
 ): Promise<ClaudeSession | null> {
   const sessions = await discoverSessions();
-  return sessions.find((s) => s.id === sessionId) || null;
+
+  // Try exact ID match first
+  let session = sessions.find((s) => s.id === sessionId);
+  if (session) return session;
+
+  // Try matching by folder name
+  session = sessions.find((s) => s.folderName === sessionId);
+  return session || null;
 }

@@ -790,6 +790,7 @@ enum QuickSettingsTab: String, CaseIterable {
     case permissions
     case connections
     case accessibility
+    case performance
 
     var title: String {
         switch self {
@@ -802,6 +803,7 @@ enum QuickSettingsTab: String, CaseIterable {
         case .permissions: return "Permissions"
         case .connections: return "Connections"
         case .accessibility: return "AX Scan"
+        case .performance: return "Performance"
         }
     }
 
@@ -816,6 +818,7 @@ enum QuickSettingsTab: String, CaseIterable {
         case .permissions: return "lock.shield.fill"
         case .connections: return "network"
         case .accessibility: return "accessibility"
+        case .performance: return "gauge.with.needle"
         }
     }
 }
@@ -907,6 +910,8 @@ struct QuickSettingsView: View {
                     ConnectionsSettingsSection()
                 case .accessibility:
                     AccessibilityInventorySection()
+                case .performance:
+                    PerformanceSettingsSection()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

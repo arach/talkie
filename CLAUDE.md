@@ -17,6 +17,8 @@ Voice-first productivity suite for macOS.
 - **macOS/Talkie** - Main macOS app (SwiftUI)
 - **macOS/TalkieLive** - Background helper for live dictation
 - **macOS/TalkieEngine** - Transcription engine service
+- **macOS/TalkieBridge** - iOS-to-Mac bridge server (TypeScript/Bun)
+- **iOS/Talkie iOS** - iOS companion app (SwiftUI)
 - **Packages/** - Shared Swift packages (WFKit, TalkieKit, DebugKit)
 
 ## Build
@@ -29,6 +31,12 @@ xcodebuild -scheme Talkie -configuration Debug build
 # Build TalkieLive
 cd macOS/TalkieLive
 xcodebuild -scheme TalkieLive -configuration Debug build
+
+# Run TalkieBridge (TypeScript/Bun)
+cd macOS/TalkieBridge
+bun install
+bun run src/server.ts          # Normal mode (requires Tailscale)
+bun run src/server.ts --local  # Local mode (no Tailscale required)
 ```
 
 ## Scripts & Utilities

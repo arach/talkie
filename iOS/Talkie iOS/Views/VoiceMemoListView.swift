@@ -484,17 +484,8 @@ struct VoiceMemoListView: View {
         .sheet(isPresented: $showingMacView) {
             NavigationView {
                 SessionListView()
-                    .navigationTitle("Mac Bridge")
             }
         }
-        #if DEBUG
-        .overlay(alignment: .topTrailing) {
-            DebugToolbarOverlay {
-                ListViewDebugContent()
-            }
-            .padding(.top, 60) // Below nav bar
-        }
-        #endif
         .onChange(of: deepLinkManager.pendingAction) { _, action in
             handleDeepLinkAction(action)
         }
