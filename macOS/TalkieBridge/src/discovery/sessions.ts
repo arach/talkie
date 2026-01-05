@@ -380,11 +380,19 @@ function extractToolResultText(content: any): string {
 }
 
 /**
- * Get a specific session by ID
+ * Get a specific session by ID (or folder name)
+ * Tries matching by UUID first, then falls back to folder name
  */
 export async function getSession(
   sessionId: string
 ): Promise<ClaudeSession | null> {
   const sessions = await discoverSessions();
-  return sessions.find((s) => s.id === sessionId) || null;
+
+  // Try exact ID match first
+  let session = sessions.find((s) => s.id === sessionId);
+  if (session) return session;
+
+  // Try matching by folder name
+  session = sessions.find((s) => s.folderName === sessionId);
+  return session || null;
 }

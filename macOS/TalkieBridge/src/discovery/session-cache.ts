@@ -48,6 +48,7 @@ class EngagementAwareCache {
 
   /**
    * Get a single session by ID
+   * Tries cache first, then falls back to direct lookup
    * @param forceRefresh - If true, bypasses cache entirely
    */
   async getSession(
@@ -60,7 +61,25 @@ class EngagementAwareCache {
     }
 
     const sessions = await this.getSessions();
-    return sessions.find((s) => s.id === id) ?? null;
+
+    // Try exact match first
+    let session = sessions.find((s) => s.id === id);
+    if (session) return session;
+
+    // Try matching by folder name (in case ID format differs)
+    session = sessions.find((s) => s.folderName === id);
+    if (session) {
+      log.debug(`Session found by folderName fallback: ${id}`);
+      return session;
+    }
+
+    // Last resort: try direct lookup (bypasses cache)
+    log.debug(`Session not in cache, trying direct lookup: ${id}`);
+    const directSession = await getSessionDirect(id);
+    if (directSession) {
+      log.info(`Session found via direct lookup: ${id}`);
+    }
+    return directSession;
   }
 
   /**
