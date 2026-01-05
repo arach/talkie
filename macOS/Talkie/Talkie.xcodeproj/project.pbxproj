@@ -286,7 +286,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-<<<<<<< HEAD
 		E05552534D9043BBBC0FC5BD /* ClaudeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeView.swift; sourceTree = "<group>"; };
 		136D3D28ABD745EF8BAED870 /* MessageQueueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageQueueView.swift; sourceTree = "<group>"; };
 		FA7941AFFEF34D589C5ABB53 /* MessageQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageQueue.swift; sourceTree = "<group>"; };
@@ -306,8 +305,6 @@
 		342E065617D74B6E9BB2708A /* SyncQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncQueue.swift; sourceTree = "<group>"; };
 		E796CCF5E6CA4B0C91E0797F /* MigrationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MigrationManager.swift; sourceTree = "<group>"; };
 		5C087E70A7BB4015BA1A92C4 /* StartupLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartupLogger.swift; sourceTree = "<group>"; };
-=======
->>>>>>> origin/master
 		02A27F7032460B34EEAC0687 /* STTModelCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTModelCard.swift; sourceTree = "<group>"; };
 		03794B826EFF607A0BBB5B59 /* VoiceMemo+Transcripts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VoiceMemo+Transcripts.swift"; sourceTree = "<group>"; };
 		03E564DDD2727813BD2F80F4 /* OpenAIProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIProvider.swift; sourceTree = "<group>"; };
@@ -582,7 +579,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-<<<<<<< HEAD
 		4360EFD78DF7470B8AD37BFE /* Claude */ = {
 			isa = PBXGroup;
 			children = (
@@ -624,8 +620,6 @@
 			path = DurableQueue;
 			sourceTree = "<group>";
 		};
-=======
->>>>>>> origin/master
 		07EC6608E6DA26A94F36034F /* Models */ = {
 			isa = PBXGroup;
 			children = (
@@ -912,14 +906,11 @@
 		9A4651765758DD61801D03CA /* Settings */ = {
 			isa = PBXGroup;
 			children = (
-<<<<<<< HEAD
 				120CBA93146544B081847A2E /* Claude */,
 				018F6768B5C04B99AD26AEF0 /* Bridge */,
 				805F1333DAE245AEBFE04E6A /* BridgeSettingsView.swift */,
 				728B25DE3B5B4697947A1CB0 /* TTSVoicesSettingsView.swift */,
 				5A2D3F324B964FFBAE1A4AE0 /* DictionarySettings.swift */,
-=======
->>>>>>> origin/master
 				C17881FF95CCD644641D298E /* APISettings.swift */,
 				CB9A7709DDDFE4A1859B1326 /* AppearanceSettings.swift */,
 				90C22080263D752683F84C1A /* AuditResultsView.swift */,
@@ -1170,16 +1161,12 @@
 		FDD3B1848425C2C039CA5F59 /* Services */ = {
 			isa = PBXGroup;
 			children = (
-<<<<<<< HEAD
 				088F3AE6BE3A4237A5188C43 /* TalkieServer.swift */,
 				7DD42E5F214F4DCB917FFA3E /* Bridge */,
-				56A632BC7AAB4BE4A5DCAC28 /* APIKeyStore.swift */,
+				75BB8C84F67500324AE2084A /* APIKeyStore.swift */,
 				33DC872F33B04F1C87FD2D74 /* DictionaryManager.swift */,
 				9A88BE828DAF4F20853DEEA5 /* DurableQueue */,
 				342E065617D74B6E9BB2708A /* SyncQueue.swift */,
-=======
-				75BB8C84F67500324AE2084A /* APIKeyStore.swift */,
->>>>>>> origin/master
 				6F7C961509F087E2FA5C4C24 /* AppEnvironment.swift */,
 				96A936E8A33939EF4FEF6B47 /* AppIconProvider.swift */,
 				E30DDF9CB041E54430249019 /* AppleSpeechService.swift */,
@@ -1339,7 +1326,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-<<<<<<< HEAD
 				DBA7F747214140C8B7C8D547 /* ClaudeView.swift in Sources */,
 				9BE44F3D5EC840D3A86085C8 /* MessageQueueView.swift in Sources */,
 				E886ED0600114C08AFF931AE /* MessageQueue.swift in Sources */,
@@ -1359,8 +1345,6 @@
 				C7DC7C8B88674AA0B6422305 /* SyncQueue.swift in Sources */,
 				461BECBB584E428C90EC628C /* MigrationManager.swift in Sources */,
 				00EBB818C60D4CF7A777D71A /* StartupLogger.swift in Sources */,
-=======
->>>>>>> origin/master
 				46BCB0361A074CFCE3C32252 /* AIResultsViews.swift in Sources */,
 				FF50DD21DD6B6C2C95BE8EBD /* APIKeyStore.swift in Sources */,
 				A99F74DC6D3F9B3A38A11425 /* APISettings.swift in Sources */,
@@ -1517,13 +1501,9 @@
 				1EC0957F58331301CC08CCD6 /* SettingsColumns.swift in Sources */,
 				CA38C7C6CFE0057E73773A3B /* SettingsManager.swift in Sources */,
 				5CBBC212A591778A4B9E9EF4 /* SettingsStoryboardGenerator.swift in Sources */,
-<<<<<<< HEAD
-				0F7AC4BF4EB64F0D041321EF /* SmartAction.swift in Sources */,
-=======
 				6562B1C0819BB0A465A98458 /* SettingsView.swift in Sources */,
 				6B72928F8016CD3A48F0E39E /* SimpleWorkflowLoader.swift in Sources */,
 				5DB732D6B11894C37834F50D /* SmartAction.swift in Sources */,
->>>>>>> origin/master
 				48030E4892BF38C862F53F32 /* SoundManager.swift in Sources */,
 				FC33C6A3FA04C2738A9B4D66 /* SoundPicker.swift in Sources */,
 				6CD5D0BF3B910F4183A538C8 /* SpacingDecoratorOverlay.swift in Sources */,
