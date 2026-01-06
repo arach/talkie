@@ -10,7 +10,9 @@
     "start": "bun run src/server.ts",
     "start:local": "bun run src/server.ts --local",
     "dev": "bun --watch run src/server.ts --local",
-    "bridge": "./bin/bridge"
+    "bridge": "./bin/bridge",
+    "postinstall": "./bin/bridge install && ./bin/bridge start",
+    "setup": "./bin/bridge install && ./bin/bridge start"
   },
   "dependencies": {
     "@anthropic-ai/claude-code": "^2.0.76",
