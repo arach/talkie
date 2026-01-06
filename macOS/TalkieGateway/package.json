@@ -1,0 +1,18 @@
+{
+  "name": "talkie-gateway",
+  "version": "0.3.0",
+  "description": "Containerized LLM router for Talkie - runs in Apple container",
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/server.ts",
+    "dev": "bun --watch run src/server.ts"
+  },
+  "dependencies": {
+    "openai": "^4.77.0",
+    "@anthropic-ai/sdk": "^0.33.1",
+    "@google/generative-ai": "^0.21.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

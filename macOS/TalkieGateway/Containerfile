@@ -1,0 +1,31 @@
+# TalkieGateway Container
+# Build: cctl image build -t talkie-gateway:latest .
+# Run via GatewayContainer Swift class
+
+FROM oven/bun:1.1-alpine
+
+LABEL org.opencontainers.image.title="TalkieGateway"
+LABEL org.opencontainers.image.description="LLM inference router for Talkie"
+LABEL org.opencontainers.image.version="0.3.0"
+
+WORKDIR /app
+
+# Install dependencies first (better layer caching)
+COPY package.json bun.lock* ./
+RUN bun install --frozen-lockfile --production
+
+# Copy source
+COPY src/ ./src/
+
+# Environment defaults
+ENV PORT=8080
+ENV NODE_ENV=production
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
+    CMD curl -f http://localhost:${PORT}/health || exit 1
+
+EXPOSE 8080
+
+# Run Gateway
+CMD ["bun", "run", "src/server.ts"]
