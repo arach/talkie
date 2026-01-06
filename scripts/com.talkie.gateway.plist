@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.talkie.gateway</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/arach/dev/talkie-gateway-vision/scripts/run-gateway-service.sh</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/talkie-gateway.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/talkie-gateway.err</string>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/arach/dev/talkie-gateway-vision</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+</dict>
+</plist>
