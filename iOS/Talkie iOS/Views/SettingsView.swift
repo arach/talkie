@@ -121,11 +121,11 @@ struct SettingsView: View {
                                 .foregroundColor(.textTertiary)
                                 .padding(.horizontal, Spacing.md)
 
-                            NavigationLink(destination: SessionListView()) {
+                            NavigationLink(destination: BridgeSettingsView()) {
                                 HStack {
                                     Image(systemName: "desktopcomputer")
                                         .foregroundColor(.active)
-                                    Text("Claude Sessions")
+                                    Text("Connection Settings")
                                     Spacer()
                                     BridgeStatusBadge()
                                     Image(systemName: "chevron.right")

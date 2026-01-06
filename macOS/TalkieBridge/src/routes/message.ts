@@ -1,20 +1,197 @@
 /**
- * message.ts - Forward messages to Talkie
+ * message.ts - Smart message delivery to Claude sessions
  *
- * Bridge is a dumb pipe:
- * - Forwards { sessionId, text, projectPath } OR { sessionId, audio, format, projectPath }
- * - Talkie forwards to TalkieLive via XPC
- * - TalkieLive handles terminal lookup and text insertion
- * - If audio provided, Talkie transcribes first via TalkieEngine
+ * POST /sessions/:id/message delivers a message using the best available method:
+ * - Screen unlocked → UI mode (Talkie → TalkieLive → paste into terminal)
+ * - Screen locked → Headless mode (Claude CLI --resume --print)
+ *
+ * iOS doesn't need to know or care about modes. Just send the message.
  */
 
 import { log } from "../log";
-import { getSession } from "../discovery/sessions";
+import { getSession, type ClaudeSession } from "../discovery/sessions";
+import { spawn } from "bun";
 
 const TALKIE_SERVER_PORT = 8766;
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 500;
 const FETCH_TIMEOUT_MS = 30000;  // 30 second timeout for each attempt
+
+// Log verification settings
+const LOG_VERIFY_TIMEOUT_MS = 3000;  // How long to wait for message to appear
+const LOG_VERIFY_POLL_MS = 200;      // Poll interval
+const LOG_VERIFY_ENABLED = true;     // Can disable for debugging
+
+/**
+ * Check if the screen is locked using ioreg (more reliable than Python/Quartz)
+ */
+async function isScreenLocked(): Promise<boolean> {
+  try {
+    // Use ioreg which works without pyobjc
+    const proc = spawn({
+      cmd: ["ioreg", "-r", "-k", "CGSSessionScreenIsLocked"],
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const output = await new Response(proc.stdout).text();
+    // If CGSSessionScreenIsLocked = Yes appears, screen is locked
+    return output.includes('"CGSSessionScreenIsLocked" = Yes');
+  } catch {
+    return false;  // Assume unlocked if we can't determine
+  }
+}
+
+/**
+ * Check if Talkie app is available (responding on its port)
+ */
+async function isTalkieAvailable(): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+    const start = Date.now();
+    const response = await fetch(`http://localhost:${TALKIE_SERVER_PORT}/health`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    const elapsed = Date.now() - start;
+    if (elapsed > 500) {
+      log.warn(`Talkie health check slow: ${elapsed}ms`);
+    }
+    return response.ok;
+  } catch (err) {
+    log.warn(`Talkie health check failed: ${err}`);
+    return false;
+  }
+}
+
+/**
+ * Send message via headless mode (Claude CLI)
+ */
+async function sendHeadless(
+  sessionId: string,
+  message: string,
+  projectDir?: string
+): Promise<{ success: boolean; response?: string; error?: string }> {
+  const args = [
+    "--resume", sessionId,
+    "--print",
+    "--output-format", "stream-json",
+    "--verbose",
+    message,
+  ];
+
+  const proc = spawn({
+    cmd: ["npx", "claude", ...args],
+    cwd: projectDir || process.cwd(),
+    stdout: "pipe",
+    stderr: "pipe",
+    env: { ...process.env, TERM: "dumb", NO_COLOR: "1" },
+  });
+
+  try {
+    const stdout = await new Response(proc.stdout).text();
+    const stderr = await new Response(proc.stderr).text();
+    const exitCode = await proc.exited;
+
+    if (exitCode !== 0) {
+      log.error(`Headless CLI error (exit ${exitCode}): ${stderr}`);
+      return { success: false, error: `CLI exited with code ${exitCode}` };
+    }
+
+    // Parse streaming JSON and extract assistant response
+    let response = "";
+    for (const line of stdout.split("\n")) {
+      if (line.trim()) {
+        try {
+          const msg = JSON.parse(line);
+          if (msg.type === "assistant") {
+            const text = msg.message?.content
+              ?.filter((b: any) => b.type === "text")
+              ?.map((b: any) => b.text)
+              ?.join("") || "";
+            response += text;
+          }
+        } catch { /* skip malformed */ }
+      }
+    }
+
+    return { success: true, response };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+/**
+ * Verify a message appeared in the session's JSONL log
+ * Polls the log file looking for the message text in recent entries
+ */
+async function verifyMessageInLogs(
+  session: ClaudeSession,
+  messageText: string,
+  timeoutMs: number = LOG_VERIFY_TIMEOUT_MS
+): Promise<{ verified: boolean; attempts: number }> {
+  const startTime = Date.now();
+  let attempts = 0;
+
+  // Normalize message for comparison (trim, lowercase)
+  const normalizedMessage = messageText.trim().toLowerCase().slice(0, 100);
+
+  while (Date.now() - startTime < timeoutMs) {
+    attempts++;
+
+    try {
+      const file = Bun.file(session.transcriptPath);
+      const text = await file.text();
+      const lines = text.trim().split("\n");
+
+      // Check last 10 lines for the message
+      const recentLines = lines.slice(-10);
+
+      for (const line of recentLines) {
+        try {
+          const entry = JSON.parse(line);
+
+          // Check if it's a user message containing our text
+          if (entry.type === "user" || entry.message?.role === "user") {
+            const content = extractMessageContent(entry);
+            if (content.toLowerCase().includes(normalizedMessage)) {
+              log.info(`Log verified: message found after ${attempts} attempts`);
+              return { verified: true, attempts };
+            }
+          }
+        } catch {
+          // Skip malformed lines
+        }
+      }
+    } catch (err) {
+      log.warn(`Log verification read error: ${err}`);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, LOG_VERIFY_POLL_MS));
+  }
+
+  log.warn(`Log verification failed: message not found after ${attempts} attempts`);
+  return { verified: false, attempts };
+}
+
+/**
+ * Extract text content from a log entry
+ */
+function extractMessageContent(entry: any): string {
+  if (typeof entry.content === "string") {
+    return entry.content;
+  }
+  if (Array.isArray(entry.content)) {
+    return entry.content
+      .filter((c: any) => c.type === "text")
+      .map((c: any) => c.text)
+      .join(" ");
+  }
+  if (entry.message?.content) {
+    return extractMessageContent(entry.message);
+  }
+  return "";
+}
 
 /**
  * Fetch with retry and timeout - retries on connection errors with backoff
@@ -99,6 +276,47 @@ export async function sendMessageRoute(req: Request, sessionId?: string): Promis
   const session = await getSession(resolvedSessionId);
   const projectPath = session?.projectPath;
 
+  // Detect mode: screen locked → headless, otherwise → UI
+  const screenLocked = await isScreenLocked();
+  const talkieAvailable = screenLocked ? false : await isTalkieAvailable();
+  const useHeadless = screenLocked || !talkieAvailable;
+
+  const modeReason = screenLocked
+    ? "screen locked"
+    : !talkieAvailable
+    ? "Talkie unavailable"
+    : "screen unlocked";
+
+  log.info(`Mode: ${useHeadless ? "headless" : "ui"} (${modeReason})`);
+
+  // HEADLESS MODE: Use Claude CLI directly
+  if (useHeadless && hasText && body.text && body.text.length > 0) {
+    log.info(`Headless: session=${resolvedSessionId}, message=${body.text.slice(0, 50)}...`);
+
+    const result = await sendHeadless(resolvedSessionId, body.text, projectPath);
+
+    return Response.json({
+      success: result.success,
+      error: result.error,
+      response: result.response,
+      mode: "headless",
+      modeReason,
+      screenLocked,
+    });
+  }
+
+  // Audio in headless mode not supported yet - need Talkie for transcription
+  if (useHeadless && hasAudio) {
+    return Response.json({
+      success: false,
+      error: "Audio transcription requires Talkie app (screen must be unlocked)",
+      mode: "headless",
+      modeReason,
+      screenLocked,
+    }, { status: 503 });
+  }
+
+  // UI MODE: Forward to Talkie app
   if (hasAudio) {
     const format = body.format || "m4a";
     log.info(`Audio message: forwarding to TalkieServer (session: ${resolvedSessionId}, project: ${projectPath || "unknown"}, ${body.audio!.length} chars base64, format: ${format})`);
@@ -153,7 +371,25 @@ export async function sendMessageRoute(req: Request, sessionId?: string): Promis
 
     const result = await response.json();
     log.info(`Message sent: ${JSON.stringify(result)}`);
-    return Response.json(result);
+
+    // Verify message appeared in logs (for text messages only)
+    let verified: boolean | undefined;
+    let verifyAttempts: number | undefined;
+
+    if (LOG_VERIFY_ENABLED && hasText && body.text && body.text.length > 0 && session) {
+      const verification = await verifyMessageInLogs(session, body.text);
+      verified = verification.verified;
+      verifyAttempts = verification.attempts;
+    }
+
+    return Response.json({
+      ...result,
+      mode: "ui",
+      modeReason,
+      screenLocked,
+      verified,
+      verifyAttempts,
+    });
   } catch (error) {
     log.error(`Could not connect to TalkieServer: ${error}`);
     return Response.json(
