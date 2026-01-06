@@ -135,13 +135,33 @@ final class WorkflowFileRepository {
     private func syncBundledWorkflows() async {
         guard let resourcePath = Bundle.main.resourcePath else { return }
 
+        // Try both direct path and nested Resources/ path (Xcode folder reference creates nesting)
+        let directPath = resourcePath
+        let nestedPath = (resourcePath as NSString).appendingPathComponent("Resources")
+
         // System workflows (always overwrite)
-        let systemBundlePath = (resourcePath as NSString).appendingPathComponent("SystemWorkflows")
-        await syncBundleDirectory(from: systemBundlePath, to: .system, alwaysOverwrite: true)
+        let systemPaths = [
+            (directPath as NSString).appendingPathComponent("SystemWorkflows"),
+            (nestedPath as NSString).appendingPathComponent("SystemWorkflows")
+        ]
+        for path in systemPaths {
+            if FileManager.default.fileExists(atPath: path) {
+                await syncBundleDirectory(from: path, to: .system, alwaysOverwrite: true)
+                break
+            }
+        }
 
         // Starter workflows (overwrite only if not duplicated to user/)
-        let starterBundlePath = (resourcePath as NSString).appendingPathComponent("StarterWorkflows")
-        await syncBundleDirectory(from: starterBundlePath, to: .starter, alwaysOverwrite: false)
+        let starterPaths = [
+            (directPath as NSString).appendingPathComponent("StarterWorkflows"),
+            (nestedPath as NSString).appendingPathComponent("StarterWorkflows")
+        ]
+        for path in starterPaths {
+            if FileManager.default.fileExists(atPath: path) {
+                await syncBundleDirectory(from: path, to: .starter, alwaysOverwrite: false)
+                break
+            }
+        }
     }
 
     private func syncBundleDirectory(from bundlePath: String, to source: WorkflowSource, alwaysOverwrite: Bool) async {

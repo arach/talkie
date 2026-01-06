@@ -26,8 +26,9 @@ final class StartupCoordinator {
 
     /// Set to true to skip async startup work (phases 3 & 4) for performance testing
     /// This isolates the critical path: load app → load data → render
+    /// WARNING: Setting to true will prevent workflows from loading!
     #if DEBUG
-    var skipAsyncStartup = true  // Enable for this branch to test pure render perf
+    var skipAsyncStartup = false  // Set to true only for startup performance profiling
     #else
     let skipAsyncStartup = false
     #endif
