@@ -21,23 +21,29 @@
                                 <color key="textColor" red="0.13333333333333333" green="0.77254901960784317" blue="0.36862745098039218" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                                 <nil key="highlightedColor"/>
                             </label>
-                            <!-- "VOICE MEMOS" -->
-                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="VOICE MEMOS" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="title-voice">
-                                <rect key="frame" x="87" y="392" width="219" height="43"/>
-                                <fontDescription key="fontDescription" type="system" weight="black" pointSize="36"/>
-                                <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-                                <nil key="highlightedColor"/>
-                            </label>
-                            <!-- "+ AI." -->
-                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="+ AI." textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="title-ai">
-                                <rect key="frame" x="148" y="435" width="97" height="43"/>
-                                <fontDescription key="fontDescription" type="system" weight="black" pointSize="36"/>
-                                <color key="textColor" red="0.13333333333333333" green="0.77254901960784317" blue="0.36862745098039218" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
-                                <nil key="highlightedColor"/>
-                            </label>
+                            <!-- Horizontal stack for "VOICE + AI." inline -->
+                            <stackView opaque="NO" contentMode="scaleToFill" axis="horizontal" spacing="8" translatesAutoresizingMaskIntoConstraints="NO" id="title-stack">
+                                <rect key="frame" x="72" y="396" width="249" height="43"/>
+                                <subviews>
+                                    <!-- "VOICE" -->
+                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="VOICE" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="title-voice">
+                                        <rect key="frame" x="0" y="0" width="119" height="43"/>
+                                        <fontDescription key="fontDescription" type="system" weight="black" pointSize="36"/>
+                                        <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                        <nil key="highlightedColor"/>
+                                    </label>
+                                    <!-- "+ AI" -->
+                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="+ AI" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="title-ai">
+                                        <rect key="frame" x="127" y="0" width="122" height="43"/>
+                                        <fontDescription key="fontDescription" type="system" weight="black" pointSize="36"/>
+                                        <color key="textColor" red="0.13333333333333333" green="0.77254901960784317" blue="0.36862745098039218" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                                        <nil key="highlightedColor"/>
+                                    </label>
+                                </subviews>
+                            </stackView>
                             <!-- Tagline -->
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="CAPTURE ON iPHONE | PROCESS ON MAC" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="tagline">
-                                <rect key="frame" x="47" y="498" width="299" height="15"/>
+                                <rect key="frame" x="47" y="459" width="299" height="15"/>
                                 <fontDescription key="fontDescription" name="Menlo-Bold" family="Menlo" pointSize="11"/>
                                 <color key="textColor" red="0.60392156862745094" green="0.60392156862745094" blue="0.60392156862745094" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                                 <nil key="highlightedColor"/>
@@ -46,18 +52,15 @@
                         <viewLayoutGuide key="safeArea" id="6Tk-OE-BBY"/>
                         <color key="backgroundColor" red="0.039215686274509803" green="0.039215686274509803" blue="0.039215686274509803" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
-                            <!-- Logo centered horizontally, above title -->
+                            <!-- Logo centered horizontally, above title stack -->
                             <constraint firstItem="logo-text" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c1"/>
-                            <constraint firstItem="logo-text" firstAttribute="bottom" secondItem="title-voice" secondAttribute="top" constant="-20" id="c2"/>
-                            <!-- VOICE MEMOS centered -->
-                            <constraint firstItem="title-voice" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c3"/>
-                            <constraint firstItem="title-voice" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" constant="-30" id="c4"/>
-                            <!-- + AI. centered below VOICE MEMOS -->
-                            <constraint firstItem="title-ai" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c5"/>
-                            <constraint firstItem="title-ai" firstAttribute="top" secondItem="title-voice" secondAttribute="bottom" id="c6"/>
-                            <!-- Tagline centered below + AI. -->
+                            <constraint firstItem="logo-text" firstAttribute="bottom" secondItem="title-stack" secondAttribute="top" constant="-20" id="c2"/>
+                            <!-- Title stack centered -->
+                            <constraint firstItem="title-stack" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c3"/>
+                            <constraint firstItem="title-stack" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" constant="-10" id="c4"/>
+                            <!-- Tagline centered below title stack -->
                             <constraint firstItem="tagline" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c7"/>
-                            <constraint firstItem="tagline" firstAttribute="top" secondItem="title-ai" secondAttribute="bottom" constant="20" id="c8"/>
+                            <constraint firstItem="tagline" firstAttribute="top" secondItem="title-stack" secondAttribute="bottom" constant="20" id="c8"/>
                         </constraints>
                     </view>
                 </viewController>

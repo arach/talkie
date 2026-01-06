@@ -80,7 +80,7 @@ struct MacView: View {
             }
         }
         .onAppear {
-            if bridgeManager.isPaired && bridgeManager.status == .disconnected {
+            if bridgeManager.shouldConnect {
                 Task {
                     await bridgeManager.connect()
                 }
@@ -276,6 +276,13 @@ struct MacView: View {
                             .foregroundColor(.textTertiary)
                             .multilineTextAlignment(.center)
                     }
+
+                    // Show retry status
+                    if bridgeManager.retryCount > 0 && bridgeManager.retryCount < 3 {
+                        Text("Retrying... (\(bridgeManager.retryCount)/3)")
+                            .font(.monoSmall)
+                            .foregroundColor(.orange)
+                    }
                 } else {
                     Text("CONNECT TO MAC")
                         .font(.techLabel)
@@ -295,7 +302,7 @@ struct MacView: View {
                 if bridgeManager.isPaired {
                     Button(action: {
                         Task {
-                            await bridgeManager.connect()
+                            await bridgeManager.retry()  // Resets retry count and reconnects
                         }
                     }) {
                         HStack(spacing: Spacing.xs) {
@@ -310,6 +317,7 @@ struct MacView: View {
                         .background(Color.brandAccent)
                         .cornerRadius(CornerRadius.sm)
                     }
+                    .disabled(bridgeManager.status == .connecting)
 
                     Button(action: {
                         bridgeManager.unpair()

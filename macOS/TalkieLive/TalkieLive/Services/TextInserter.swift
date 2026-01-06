@@ -380,14 +380,16 @@ final class TextInserter {
 
     /// Insert text using iTerm2 AppleScript
     /// Returns nil if AppleScript fails, true/false based on success
-    private func insertViaiTerm2(_ text: String) async -> Bool? {
+    /// - Parameter withNewline: If true, sends Enter after text (for submit)
+    private func insertViaiTerm2(_ text: String, withNewline: Bool = false) async -> Bool? {
         let escaped = text.replacingOccurrences(of: "\\", with: "\\\\")
                          .replacingOccurrences(of: "\"", with: "\\\"")
 
+        let newlineOption = withNewline ? "YES" : "NO"
         let script = """
         tell application "iTerm2"
             tell current session of current window
-                write text "\(escaped)" newline NO
+                write text "\(escaped)" newline \(newlineOption)
             end tell
         end tell
         """
@@ -411,6 +413,24 @@ final class TextInserter {
             tell process "Terminal"
                 set frontmost to true
                 keystroke "\(escaped)"
+            end tell
+        end tell
+        """
+
+        return executeAppleScript(script)
+    }
+
+    /// Insert text AND press return using Terminal.app AppleScript (background-safe)
+    private func insertViaTerminalAppWithReturn(_ text: String) async -> Bool? {
+        let escaped = text.replacingOccurrences(of: "\\", with: "\\\\")
+                         .replacingOccurrences(of: "\"", with: "\\\"")
+
+        // Use System Events keystroke with return key - works without stealing focus
+        let script = """
+        tell application "System Events"
+            tell process "Terminal"
+                keystroke "\(escaped)"
+                key code 36
             end tell
         end tell
         """
@@ -563,7 +583,25 @@ final class TextInserter {
 
     /// Insert text and then press Enter to submit
     func insertAndSubmit(_ text: String, intoAppWithBundleID bundleID: String?) async -> Bool {
-        // First insert the text
+        // For iTerm2, use AppleScript with newline - works in background without focus
+        if bundleID == "com.googlecode.iterm2" {
+            if let result = await insertViaiTerm2(text, withNewline: true) {
+                log.info("✅ iTerm2 insert+submit via AppleScript (background-safe)")
+                return result
+            }
+            log.warning("⚠️ iTerm2 AppleScript failed, falling back to focus+Enter")
+        }
+
+        // For Terminal.app, use AppleScript with keystroke + return
+        if bundleID == "com.apple.Terminal" {
+            if let result = await insertViaTerminalAppWithReturn(text) {
+                log.info("✅ Terminal.app insert+submit via AppleScript (background-safe)")
+                return result
+            }
+            log.warning("⚠️ Terminal.app AppleScript failed, falling back to focus+Enter")
+        }
+
+        // For other apps: insert text first
         let inserted = await insert(text, intoAppWithBundleID: bundleID)
         guard inserted else {
             log.error("Failed to insert text, skipping Enter")
@@ -573,8 +611,29 @@ final class TextInserter {
         // Small delay to ensure text is fully inserted
         try? await Task.sleep(nanoseconds: 150_000_000)  // 150ms
 
-        // Then press Enter to submit
-        return simulateEnter()
+        // Remember current frontmost app to restore later
+        let previousApp = NSWorkspace.shared.frontmostApplication
+
+        // Activate the target app before pressing Enter (CGEvent requires focus)
+        if let bundleID {
+            if let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first {
+                app.activate(options: [.activateIgnoringOtherApps])
+                // Wait for activation to complete
+                try? await Task.sleep(nanoseconds: 100_000_000)  // 100ms
+            }
+        }
+
+        // Press Enter to submit
+        let result = simulateEnter()
+
+        // Restore previous app focus (minimal disruption)
+        if let previousApp, previousApp.bundleIdentifier != bundleID {
+            try? await Task.sleep(nanoseconds: 50_000_000)  // 50ms
+            previousApp.activate(options: [])
+            log.info("↩️ Restored focus to \(previousApp.localizedName ?? "previous app")")
+        }
+
+        return result
     }
 
     /// Activate an app and press Enter key
@@ -586,6 +645,9 @@ final class TextInserter {
             return false
         }
 
+        // Remember current frontmost app to restore later
+        let previousApp = NSWorkspace.shared.frontmostApplication
+
         // Activate the app
         let activated = app.activate(options: [.activateIgnoringOtherApps])
         if !activated {
@@ -596,7 +658,16 @@ final class TextInserter {
         try? await Task.sleep(nanoseconds: 200_000_000)  // 200ms
 
         // Press Enter
-        return simulateEnter()
+        let result = simulateEnter()
+
+        // Restore previous app focus (minimal disruption)
+        if let previousApp, previousApp.bundleIdentifier != bundleId {
+            try? await Task.sleep(nanoseconds: 50_000_000)  // 50ms
+            previousApp.activate(options: [])
+            log.info("↩️ Restored focus to \(previousApp.localizedName ?? "previous app")")
+        }
+
+        return result
     }
 
     // MARK: - App Activation

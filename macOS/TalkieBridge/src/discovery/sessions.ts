@@ -22,6 +22,8 @@ export interface Session {
   messageCount: number;
   isLive: boolean;
   transcriptPath: string;
+  lastMessage?: string;    // Preview of most recent message (first 100 chars)
+  title?: string;          // Session title/name if available
 }
 
 /** A path (working directory) with all its sessions */
@@ -164,7 +166,7 @@ function isUUID(str: string): boolean {
 async function extractSessionMetadata(
   projectDir: string,
   transcriptPath: string
-): Promise<{ sessionId?: string; cwd?: string } | null> {
+): Promise<{ sessionId?: string; cwd?: string; title?: string } | null> {
   try {
     // First check if the transcript filename is a UUID
     const filename = transcriptPath.split('/').pop()?.replace('.jsonl', '') || '';
@@ -204,10 +206,11 @@ async function extractSessionMetadata(
     const result = {
       sessionId: entry.sessionId,
       cwd: entry.cwd,
+      title: entry.title || entry.sessionTitle || entry.name, // Check for title fields
     };
 
     if (result.sessionId) {
-      console.log(`[metadata] ${transcriptPath.split('/').pop()}: sessionId=${result.sessionId}, cwd=${result.cwd}`);
+      console.log(`[metadata] ${transcriptPath.split('/').pop()}: sessionId=${result.sessionId}, cwd=${result.cwd}, title=${result.title || 'none'}`);
     } else {
       console.log(`[metadata] ${transcriptPath.split('/').pop()}: no sessionId found, keys: ${Object.keys(entry).join(', ')}`);
     }
@@ -216,6 +219,26 @@ async function extractSessionMetadata(
   } catch (e) {
     console.log(`[metadata] Error parsing ${transcriptPath}: ${e}`);
     return null;
+  }
+}
+
+/**
+ * Get all project directories (fast, no parsing)
+ */
+export async function getProjectDirs(): Promise<string[]> {
+  try {
+    const projectFolders = await readdir(CLAUDE_PROJECTS_DIR);
+    const dirs: string[] = [];
+    for (const folder of projectFolders) {
+      const projectDir = join(CLAUDE_PROJECTS_DIR, folder);
+      const stats = await stat(projectDir);
+      if (stats.isDirectory()) {
+        dirs.push(projectDir);
+      }
+    }
+    return dirs;
+  } catch {
+    return [];
   }
 }
 
@@ -318,6 +341,33 @@ export async function discoverPaths(): Promise<PathEntry[]> {
 
           const messageCount = await countMessages(transcript.path);
           const isLive = claudeRunning && transcript.mtime > thirtyMinutesAgo;
+          
+          // Get metadata including title if available
+          const metadata = await extractSessionMetadata(projectDir, transcript.path);
+          
+          // Get last message preview (most recent message, up to 100 chars)
+          let lastMessage: string | undefined;
+          let title: string | undefined = metadata?.title;
+          
+          try {
+            const messages = await parseTranscript(transcript.path, 1);
+            if (messages.length > 0) {
+              const content = messages[messages.length - 1].content;
+              lastMessage = content.length > 100 ? content.substring(0, 100) + "…" : content;
+              
+              // If no title from metadata, use first user message as title (up to 60 chars)
+              if (!title && messages.length > 0) {
+                const firstUserMessage = messages.find(m => m.role === "user");
+                if (firstUserMessage) {
+                  title = firstUserMessage.content.length > 60 
+                    ? firstUserMessage.content.substring(0, 60) + "…" 
+                    : firstUserMessage.content;
+                }
+              }
+            }
+          } catch {
+            // Ignore errors reading messages - it's optional
+          }
 
           sessions.push({
             id: sessionId,
@@ -325,6 +375,8 @@ export async function discoverPaths(): Promise<PathEntry[]> {
             messageCount,
             isLive,
             transcriptPath: transcript.path,
+            lastMessage,
+            title,
           });
         }
 
@@ -382,9 +434,20 @@ export async function parseTranscript(
         const messageRole = entry.message?.role;
 
         if (entryType === "user" || entryType === "human" || messageRole === "user") {
+          // Skip tool_result entries - they're system responses, not user messages
+          const content = entry.message?.content || entry.content;
+          if (Array.isArray(content)) {
+            const isToolResult = content.some((c: any) => c.type === "tool_result");
+            if (isToolResult) continue; // Skip tool results
+          }
+
+          // Extract and check if there's actual text content
+          const textContent = extractUserText(entry);
+          if (!textContent || textContent.trim() === "") continue; // Skip empty
+
           messages.push({
             role: "user",
-            content: extractContent(entry),
+            content: textContent,
             timestamp: entry.timestamp || new Date().toISOString(),
           });
         } else if (entryType === "assistant" || messageRole === "assistant") {
@@ -424,6 +487,28 @@ export async function parseTranscript(
 
   // Return most recent messages up to limit
   return filtered.slice(-limit);
+}
+
+/**
+ * Extract only user-typed text (not tool results or system content)
+ */
+function extractUserText(entry: any): string {
+  const content = entry.message?.content || entry.content;
+
+  if (typeof content === "string") {
+    return content;
+  }
+
+  if (Array.isArray(content)) {
+    // Only extract text blocks, skip tool_result, images, etc.
+    return content
+      .filter((c: any) => c.type === "text")
+      .map((c: any) => c.text || "")
+      .join(" ")
+      .trim();
+  }
+
+  return "";
 }
 
 /**
@@ -512,18 +597,87 @@ function extractToolResultText(content: any): string {
 
 /**
  * Get a specific session by ID (or folder name)
- * Tries matching by UUID first, then falls back to folder name
+ * Searches ALL transcripts across all projects, not just the latest per project
  */
 export async function getSession(
   sessionId: string
 ): Promise<ClaudeSession | null> {
-  const sessions = await discoverSessions();
+  // First try quick lookup via discoverSessions (latest sessions only)
+  const latestSessions = await discoverSessions();
 
-  // Try exact ID match first
-  let session = sessions.find((s) => s.id === sessionId);
+  let session = latestSessions.find((s) => s.id === sessionId);
   if (session) return session;
 
-  // Try matching by folder name
-  session = sessions.find((s) => s.folderName === sessionId);
-  return session || null;
+  session = latestSessions.find((s) => s.folderName === sessionId);
+  if (session) return session;
+
+  // Not found in latest sessions - search ALL transcripts
+  console.log(`[getSession] Session ${sessionId} not in latest, searching all transcripts...`);
+
+  const claudeRunning = await isClaudeRunning();
+  const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+
+  try {
+    const projectFolders = await readdir(CLAUDE_PROJECTS_DIR);
+
+    for (const folder of projectFolders) {
+      const projectDir = join(CLAUDE_PROJECTS_DIR, folder);
+
+      try {
+        const stats = await stat(projectDir);
+        if (!stats.isDirectory()) continue;
+
+        const transcripts = await findAllTranscripts(projectDir);
+
+        for (const transcript of transcripts) {
+          // Check if filename matches (for UUID-named files)
+          if (transcript.filename === sessionId) {
+            const metadata = await extractSessionMetadata(projectDir, transcript.path);
+            const projectPath = metadata?.cwd || folderToPath(folder);
+            const messageCount = await countMessages(transcript.path);
+            const isLive = claudeRunning && transcript.mtime > thirtyMinutesAgo;
+
+            console.log(`[getSession] Found session ${sessionId} via filename match in ${folder}`);
+            return {
+              id: sessionId,
+              folderName: folder,
+              project: getDisplayName(projectPath),
+              projectPath,
+              isLive,
+              lastSeen: transcript.mtime.toISOString(),
+              messageCount,
+              transcriptPath: transcript.path,
+            };
+          }
+
+          // Check if metadata sessionId matches
+          const metadata = await extractSessionMetadata(projectDir, transcript.path);
+          if (metadata?.sessionId === sessionId) {
+            const projectPath = metadata?.cwd || folderToPath(folder);
+            const messageCount = await countMessages(transcript.path);
+            const isLive = claudeRunning && transcript.mtime > thirtyMinutesAgo;
+
+            console.log(`[getSession] Found session ${sessionId} via metadata match in ${folder}`);
+            return {
+              id: sessionId,
+              folderName: folder,
+              project: getDisplayName(projectPath),
+              projectPath,
+              isLive,
+              lastSeen: transcript.mtime.toISOString(),
+              messageCount,
+              transcriptPath: transcript.path,
+            };
+          }
+        }
+      } catch {
+        continue;
+      }
+    }
+  } catch (err) {
+    console.error("[getSession] Error searching all transcripts:", err);
+  }
+
+  console.log(`[getSession] Session ${sessionId} not found anywhere`);
+  return null;
 }

@@ -44,13 +44,19 @@ final class BridgeManager {
 
     private(set) var status: ConnectionStatus = .disconnected
     var sessions: [ClaudeSession] = []
+    var projectPaths: [ProjectPath] = []  // Grouped by project
     private(set) var windows: [TerminalWindow] = []
     private(set) var windowCaptures: [WindowCapture] = []
     private(set) var errorMessage: String?
     private(set) var pairedMacName: String?
+    private(set) var retryCount = 0
 
     let client = BridgeClient()
-    private var refreshTask: Task<Void, Never>?
+    private var retryTask: Task<Void, Never>?
+
+    // Retry configuration
+    private let maxRetries = 3
+    private let baseRetryDelayNs: UInt64 = 2_000_000_000  // 2 seconds
 
     // UserDefaults keys
     private let hostnameKey = "bridge.hostname"
@@ -64,6 +70,11 @@ final class BridgeManager {
 
     var isPaired: Bool {
         UserDefaults.standard.string(forKey: hostnameKey) != nil
+    }
+
+    /// Whether the manager should attempt to connect (paired but not connected)
+    var shouldConnect: Bool {
+        isPaired && (status == .disconnected || status == .error)
     }
 
     var deviceId: String {
@@ -140,8 +151,8 @@ final class BridgeManager {
                 UserDefaults.standard.set(health.hostname, forKey: pairedMacKey)
 
                 status = .connected
+                await refreshPaths()
                 await refreshSessions()
-                startAutoRefresh()
             } else {
                 status = .error
                 errorMessage = "Pairing rejected by Mac"
@@ -152,8 +163,12 @@ final class BridgeManager {
         }
     }
 
-    /// Connect using saved pairing
+    /// Connect using saved pairing with auto-retry
     func connect() async {
+        // Cancel any pending retry
+        retryTask?.cancel()
+        retryTask = nil
+
         guard let hostname = UserDefaults.standard.string(forKey: hostnameKey) else {
             return
         }
@@ -172,6 +187,7 @@ final class BridgeManager {
         } catch {
             status = .error
             errorMessage = "Auth keys missing - please re-pair"
+            retryCount = maxRetries  // Don't retry auth failures
             return
         }
 
@@ -182,11 +198,41 @@ final class BridgeManager {
             let health = try await client.health()
             pairedMacName = health.hostname
             status = .connected
+            retryCount = 0  // Reset on success
+            await refreshPaths()
             await refreshSessions()
-            startAutoRefresh()
         } catch {
             status = .error
             errorMessage = "Could not connect to Mac"
+            scheduleRetry()
+        }
+    }
+
+    /// Manually retry connection (resets retry count)
+    func retry() async {
+        retryCount = 0
+        await connect()
+    }
+
+    /// Schedule an automatic retry with exponential backoff
+    private func scheduleRetry() {
+        guard retryCount < maxRetries else {
+            print("[BridgeManager] Max retries (\(maxRetries)) reached, giving up")
+            return
+        }
+
+        retryCount += 1
+        let delay = baseRetryDelayNs * UInt64(1 << (retryCount - 1))  // Exponential backoff
+        print("[BridgeManager] Scheduling retry \(retryCount)/\(maxRetries) in \(delay / 1_000_000_000)s")
+
+        retryTask = Task {
+            do {
+                try await Task.sleep(nanoseconds: delay)
+                guard !Task.isCancelled else { return }
+                await connect()
+            } catch {
+                // Task cancelled
+            }
         }
     }
 
@@ -210,11 +256,14 @@ final class BridgeManager {
         await client.configureAuth(deviceId: deviceId, sharedSecret: sharedSecret)
     }
 
-    /// Disconnect and stop auto-refresh
+    /// Disconnect and clear state
     func disconnect() {
-        stopAutoRefresh()
+        retryTask?.cancel()
+        retryTask = nil
+        retryCount = 0
         status = .disconnected
         sessions = []
+        projectPaths = []
         windows = []
         windowCaptures = []
     }
@@ -247,7 +296,7 @@ final class BridgeManager {
         errorMessage = message
     }
 
-    /// Manually refresh sessions
+    /// Manually refresh sessions (flat view)
     func refreshSessions() async {
         guard status == .connected else { return }
 
@@ -257,6 +306,26 @@ final class BridgeManager {
         } catch {
             // Don't change status on refresh failure
             print("Failed to refresh sessions: \(error)")
+        }
+    }
+
+    /// Refresh project paths (grouped view - preferred)
+    func refreshPaths() async {
+        guard status == .connected else {
+            print("[BridgeManager] refreshPaths: not connected, skipping")
+            return
+        }
+
+        do {
+            print("[BridgeManager] refreshPaths: fetching...")
+            let response = try await client.paths()
+            print("[BridgeManager] refreshPaths: got \(response.paths.count) paths")
+            for path in response.paths.prefix(3) {
+                print("[BridgeManager]   - \(path.name): \(path.sessions.count) sessions")
+            }
+            projectPaths = response.paths
+        } catch {
+            print("[BridgeManager] refreshPaths FAILED: \(error)")
         }
     }
 
@@ -341,8 +410,9 @@ final class BridgeManager {
         try await client.windowScreenshot(windowId: windowId)
     }
 
-    /// Refresh both sessions and windows
+    /// Refresh sessions, paths, and windows
     func refreshAll() async {
+        await refreshPaths()
         await refreshSessions()
         await refreshWindows()
     }
@@ -353,18 +423,4 @@ final class BridgeManager {
         pairedMacName = UserDefaults.standard.string(forKey: pairedMacKey)
     }
 
-    private func startAutoRefresh() {
-        stopAutoRefresh()
-        refreshTask = Task {
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 30_000_000_000) // 30 seconds
-                await refreshSessions()
-            }
-        }
-    }
-
-    private func stopAutoRefresh() {
-        refreshTask?.cancel()
-        refreshTask = nil
-    }
 }

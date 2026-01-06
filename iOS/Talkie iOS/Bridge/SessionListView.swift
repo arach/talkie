@@ -25,8 +25,11 @@ struct SessionListView: View {
                 connectedView
             case .connecting:
                 connectingView
-            case .disconnected, .error:
-                // If paired but disconnected, show connecting (we're about to auto-connect)
+            case .error:
+                // Show error state with retry option
+                disconnectedView
+            case .disconnected:
+                // If paired but disconnected, auto-connect is about to happen
                 if bridgeManager.isPaired {
                     connectingView
                 } else {
@@ -35,7 +38,7 @@ struct SessionListView: View {
             }
         }
         .onAppear {
-            if bridgeManager.isPaired && bridgeManager.status == .disconnected {
+            if bridgeManager.shouldConnect {
                 Task {
                     await bridgeManager.connect()
                 }
@@ -50,27 +53,37 @@ struct SessionListView: View {
             Text("This will remove all pairing data. You'll need to scan the QR code again to reconnect.")
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Color.surfacePrimary, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text("TALKIE")
-                        .font(.system(size: 15, weight: .medium, design: .monospaced))
+                        .font(.system(size: 14, weight: .medium, design: .monospaced))
                         .foregroundColor(.primary)
                     Text("with Claude")
-                        .font(.system(size: 13, weight: .regular, design: .monospaced))
+                        .font(.system(size: 12, weight: .regular, design: .monospaced))
                         .foregroundColor(.secondary)
                 }
+                .frame(height: 20)
+                .padding(.leading, Spacing.sm)
             }
         }
     }
 
     private var connectedView: some View {
-        VStack(spacing: 0) {
-            // Sessions list (scrollable)
-            sessionsList
+        ZStack {
+            // Background extends under nav bar
+            Color.surfacePrimary
+                .ignoresSafeArea()
 
-            // Mac status bar - sticky footer
-            macStatusFooter
+            VStack(spacing: 0) {
+                // Sessions list (scrollable)
+                sessionsList
+
+                // Mac status bar - sticky footer
+                macStatusFooter
+            }
         }
     }
 
@@ -78,7 +91,7 @@ struct SessionListView: View {
         VStack(spacing: 0) {
             // Expanded panel (slides up from footer)
             if showMacDetails {
-                VStack(alignment: .leading, spacing: Spacing.sm) {
+                VStack(alignment: .leading, spacing: Spacing.md) {
                     // Full hostname with refresh
                     HStack {
                         Text("HOST")
@@ -160,56 +173,103 @@ struct SessionListView: View {
                     }
                 }
                 .padding(.horizontal, Spacing.md)
-                .padding(.vertical, Spacing.sm)
+                .padding(.vertical, Spacing.xs)
                 .background(Color.surfaceSecondary)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
             // Main footer bar (collapsed)
-            Button(action: { withAnimation(.easeInOut(duration: 0.25)) { showMacDetails.toggle() } }) {
-                HStack(spacing: Spacing.sm) {
-                    // Connection status
-                    HStack(spacing: Spacing.xs) {
-                        Circle()
-                            .fill(Color.success)
-                            .frame(width: 8, height: 8)
-
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text("Connected")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(.textPrimary)
-                            Text(truncatedMacName)
-                                .font(.system(size: 10, weight: .regular, design: .monospaced))
-                                .foregroundColor(.textSecondary)
-                        }
-                    }
-
-                    Spacer()
-
-                    // Expand indicator (refresh only in expanded view)
-                    Image(systemName: showMacDetails ? "chevron.down" : "chevron.up")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.textTertiary)
-                }
-                .padding(.horizontal, Spacing.md)
-                .padding(.vertical, Spacing.sm)
-            }
-            .buttonStyle(.plain)
-            .background(Color.surfacePrimary)
-            .overlay(
+            VStack(spacing: 0) {
+                // Top divider with spacing
                 Rectangle()
                     .fill(Color.textTertiary.opacity(0.3))
-                    .frame(height: 0.5),
-                alignment: .top
-            )
+                    .frame(height: 1)
+                    .padding(.bottom, Spacing.xs)
+
+                Button(action: { withAnimation(.easeInOut(duration: 0.25)) { showMacDetails.toggle() } }) {
+                HStack(alignment: .center, spacing: Spacing.xs) {
+                    // Connection status - indented to avoid corner curve
+                    HStack(alignment: .center, spacing: Spacing.xs) {
+                        // Computer icon
+                        Image(systemName: "desktopcomputer")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.textSecondary)
+
+                        // Device name (Mac Mini) - primary focus
+                        Text(truncatedMacName)
+                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.textPrimary)
+
+                        // Connection status dot on the right
+                        Circle()
+                            .fill(Color.success)
+                            .frame(width: 6, height: 6)
+                    }
+                    .padding(.leading, Spacing.sm)
+
+                        Spacer()
+
+                        // Live session count
+                        if liveSessionCount > 0 {
+                 
+                            HStack(spacing: 3) {
+                                Circle()
+                                    .fill(Color.success)
+                                    .frame(width: 5, height: 5)
+                                Text("\(liveSessionCount) live")
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundColor(.success)
+                            }
+                            .padding(.trailing, Spacing.xs)
+                        } else {
+                            Text("no active")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundColor(.textTertiary)
+                                .padding(.trailing, Spacing.xs)
+                        }
+
+                        // Expand indicator - aligned with project chevrons
+                        Image(systemName: showMacDetails ? "chevron.down" : "chevron.up")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.textTertiary)
+                            .frame(width: 12)
+                            .padding(.trailing, Spacing.xs)
+                    }
+                    .padding(.horizontal, Spacing.md)
+                    .padding(.vertical, Spacing.xs)
+                }
+                .buttonStyle(.plain)
+            }
+            .background(Color.surfacePrimary)
         }
     }
 
     private var sessionsList: some View {
         List {
-            // Sessions
-            Section {
-                if bridgeManager.sessions.isEmpty {
+            // Refresh indicator (braille spinner)
+            if isRefreshing {
+                Section {
+                    HStack {
+                        Spacer()
+                        BrailleSpinner(speed: 0.06, color: .brandAccent)
+                        Text("syncing")
+                            .font(.techLabelSmall)
+                            .foregroundColor(.textTertiary)
+                        Spacer()
+                    }
+                    .listRowBackground(Color.clear)
+                }
+            }
+
+            // Projects with sessions (grouped view)
+            if !bridgeManager.projectPaths.isEmpty {
+                ForEach(Array(bridgeManager.projectPaths.enumerated()), id: \.element.id) { index, projectPath in
+                    ProjectPathSection(projectPath: projectPath, index: index)
+                        .padding(.top, index == 0 ? Spacing.md : 0)
+                }
+            } else if bridgeManager.sessions.isEmpty {
+                // Fallback: flat sessions or empty
+                Section {
                     HStack {
                         Image(systemName: "tray")
                             .foregroundColor(.secondary)
@@ -217,7 +277,10 @@ struct SessionListView: View {
                             .foregroundColor(.secondary)
                     }
                     .padding(.vertical, 8)
-                } else {
+                }
+            } else {
+                // Fallback: flat sessions list
+                Section {
                     ForEach(bridgeManager.sessions) { session in
                         NavigationLink(destination: SessionDetailView(session: session)) {
                             SessionRow(session: session)
@@ -288,9 +351,21 @@ struct SessionListView: View {
             }
 
         }
+        .scrollContentBackground(.hidden)
+        .background(Color.surfaceSecondary)
+        .background {
+            // Hide default refresh spinner - find and hide UIRefreshControl
+            RefreshControlHider()
+        }
         .refreshable {
+            isRefreshing = true
             await refreshSessions(deepSync: false)
             await bridgeManager.refreshWindowCaptures()
+            isRefreshing = false
+        }
+        .onAppear {
+            // Also use appearance proxy as fallback
+            UIRefreshControl.appearance().tintColor = .clear
         }
         .sheet(item: $selectedWindow) { window in
             WindowDetailSheet(capture: window)
@@ -298,6 +373,12 @@ struct SessionListView: View {
     }
 
     // MARK: - Computed
+
+    private var liveSessionCount: Int {
+        bridgeManager.projectPaths.reduce(0) { total, project in
+            total + project.sessions.filter { $0.isLive }.count
+        }
+    }
 
     private var truncatedMacName: String {
         guard let fullName = bridgeManager.pairedMacName else { return "Mac" }
@@ -315,10 +396,16 @@ struct SessionListView: View {
 
     private func refreshSessions(deepSync: Bool) async {
         do {
-            let response = try await bridgeManager.client.sessions(deepSync: deepSync)
+            // Fetch both paths (grouped) and sessions (flat) in parallel
+            async let pathsResponse = bridgeManager.client.paths(deepSync: deepSync)
+            async let sessionsResponse = bridgeManager.client.sessions(deepSync: deepSync)
+
+            let (paths, sessions) = try await (pathsResponse, sessionsResponse)
+
             await MainActor.run {
-                bridgeManager.sessions = response.sessions
-                sessionsMeta = response.meta
+                bridgeManager.projectPaths = paths.paths
+                bridgeManager.sessions = sessions.sessions
+                sessionsMeta = sessions.meta
             }
         } catch {
             // Handle error silently for now, bridgeManager handles connection state
@@ -393,14 +480,22 @@ struct SessionListView: View {
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
                     }
+
+                    // Show retry status
+                    if bridgeManager.retryCount > 0 && bridgeManager.retryCount < 3 {
+                        Text("Retrying... (\(bridgeManager.retryCount)/3)")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
                 }
 
                 Button("Reconnect") {
                     Task {
-                        await bridgeManager.connect()
+                        await bridgeManager.retry()  // Resets retry count
                     }
                 }
                 .buttonStyle(.borderedProminent)
+                .disabled(bridgeManager.status == .connecting)
 
                 Button(action: {
                     showUnpairConfirmation = true
@@ -592,14 +687,15 @@ class SessionSummaryCache: ObservableObject {
 struct SessionRow: View {
     let session: ClaudeSession
     @ObservedObject private var summaryCache = SessionSummaryCache.shared
+    
+    private var isRecent: Bool {
+        let formatter = ISO8601DateFormatter()
+        guard let date = formatter.date(from: session.lastSeen) else { return false }
+        return Date().timeIntervalSince(date) < 3600 // Within last hour
+    }
 
     var body: some View {
         HStack(spacing: Spacing.xs) {
-            // Live indicator dot
-            Circle()
-                .fill(session.isLive ? Color.success : Color.tactical500.opacity(0.3))
-                .frame(width: 6, height: 6)
-
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 // Project name + message count
                 HStack(spacing: Spacing.xs) {
@@ -617,10 +713,23 @@ struct SessionRow: View {
                 }
 
                 // AI Summary (appears when ready) or fallback
-                Text(summaryCache.getSummary(for: session.id) ?? generateQuickSummary())
-                    .font(.labelSmall)
-                    .foregroundColor(.textSecondary)
-                    .lineLimit(1)
+                HStack(spacing: Spacing.xxs) {
+                    Text(summaryCache.getSummary(for: session.id) ?? generateQuickSummary())
+                        .font(.labelSmall)
+                        .foregroundColor(.textSecondary)
+                        .lineLimit(1)
+                    
+                    // Recent tag for recent sessions
+                    if isRecent {
+                        Text("recent")
+                            .font(.system(size: 8, weight: .medium))
+                            .foregroundColor(.textTertiary)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color.textTertiary.opacity(0.15))
+                            .cornerRadius(4)
+                    }
+                }
             }
 
             Spacer()
@@ -658,6 +767,230 @@ struct SessionRow: View {
         } else {
             return "Quick task"
         }
+    }
+}
+
+// MARK: - Project Path Section (Grouped Sessions)
+
+struct ProjectPathSection: View {
+    let projectPath: ProjectPath
+    let index: Int  // For determining default expanded state
+    @State private var isExpanded: Bool
+    @State private var showAll = false
+
+    private let maxVisibleSessions = 3
+
+    init(projectPath: ProjectPath, index: Int) {
+        self.projectPath = projectPath
+        self.index = index
+        // Start expanded for first 2 projects only
+        self._isExpanded = State(initialValue: index < 2)
+    }
+
+    private var visibleSessions: [PathSession] {
+        // Deduplicate sessions by ID (keep first occurrence)
+        let uniqueSessions = projectPath.sessions.reduce(into: [String: PathSession]()) { dict, session in
+            if dict[session.id] == nil {
+                dict[session.id] = session
+            }
+        }.values.sorted { session1, session2 in
+            // Sort by lastSeen descending (most recent first)
+            let formatter = ISO8601DateFormatter()
+            let date1 = formatter.date(from: session1.lastSeen) ?? Date.distantPast
+            let date2 = formatter.date(from: session2.lastSeen) ?? Date.distantPast
+            return date1 > date2
+        }
+        
+        if showAll || uniqueSessions.count <= maxVisibleSessions {
+            return Array(uniqueSessions)
+        }
+        return Array(uniqueSessions.prefix(maxVisibleSessions))
+    }
+    
+    private var uniqueSessionCount: Int {
+        Set(projectPath.sessions.map { $0.id }).count
+    }
+
+    private var hasMoreSessions: Bool {
+        uniqueSessionCount > maxVisibleSessions && !showAll
+    }
+
+    var body: some View {
+        Section {
+            if isExpanded {
+                // Sessions (limited or all)
+                ForEach(visibleSessions) { session in
+                    NavigationLink(destination: SessionDetailViewByPath(sessionId: session.id, projectPath: projectPath)) {
+                        PathSessionRow(session: session)
+                    }
+                }
+
+                // "Show more" row
+                if hasMoreSessions {
+                    Button(action: { withAnimation { showAll = true } }) {
+                        HStack {
+                            Text("Show \(uniqueSessionCount - maxVisibleSessions) more...")
+                                .font(.system(size: 12))
+                                .foregroundColor(.brandAccent)
+                            Spacer()
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+        } header: {
+            Button(action: { withAnimation { isExpanded.toggle() } }) {
+                HStack(spacing: Spacing.xs) {
+                    // Expand/collapse indicator
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.textTertiary)
+                        .frame(width: 12)
+
+                    // Project name
+                    Text(projectPath.name.uppercased())
+                        .font(.techLabel)
+                        .tracking(1)
+                        .foregroundColor(.textPrimary)
+
+                    // Session count
+                    Text("(\(uniqueSessionCount))")
+                        .font(.techLabelSmall)
+                        .foregroundColor(.textTertiary)
+
+                    Spacer()
+
+                    // Last active time
+                    Text(compactTime(from: projectPath.lastSeen))
+                        .font(.techLabelSmall)
+                        .foregroundColor(.textTertiary)
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func compactTime(from isoString: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        guard let date = formatter.date(from: isoString) else { return "" }
+        let interval = Date().timeIntervalSince(date)
+
+        if interval < 60 { return "now" }
+        if interval < 3600 { return "\(Int(interval / 60))m" }
+        if interval < 86400 { return "\(Int(interval / 3600))h" }
+        return "\(Int(interval / 86400))d"
+    }
+}
+
+// MARK: - Path Session Row (Compact - Single Line)
+
+struct PathSessionRow: View {
+    let session: PathSession
+
+    private var lastSeenDate: Date? {
+        let formatter = ISO8601DateFormatter()
+        return formatter.date(from: session.lastSeen)
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: Spacing.sm) {
+            // Live/inactive indicator
+            Circle()
+                .fill(session.isLive ? Color.success : Color.textTertiary.opacity(0.3))
+                .frame(width: 6, height: 6)
+
+            // Main content - single line with preview
+            HStack(spacing: 0) {
+                // Preview text (main content)
+                Text(previewText)
+                    .font(.system(size: 13))
+                    .foregroundColor(session.isLive ? .textPrimary : .textSecondary)
+                    .lineLimit(1)
+
+                Spacer(minLength: Spacing.sm)
+
+                // Right side: message count + time
+                HStack(spacing: Spacing.xs) {
+                    Text("\(session.messageCount)")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.textTertiary)
+
+                    Text(compactTimestamp)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.textTertiary)
+                }
+            }
+        }
+        .padding(.vertical, Spacing.xs)
+    }
+
+    private var previewText: String {
+        // Priority: lastMessage > title > session ID
+        if let preview = session.lastMessage, !preview.isEmpty {
+            // Take first line only, trim whitespace
+            let firstLine = preview.components(separatedBy: .newlines).first ?? preview
+            return firstLine.trimmingCharacters(in: .whitespaces)
+        }
+        if let title = session.title, !title.isEmpty {
+            return title
+        }
+        return String(session.id.prefix(12)) + "..."
+    }
+
+    private var compactTimestamp: String {
+        guard let date = lastSeenDate else { return "" }
+        let interval = Date().timeIntervalSince(date)
+
+        // Very recent: "now"
+        if interval < 60 { return "now" }
+
+        // Within an hour: "5m"
+        if interval < 3600 { return "\(Int(interval / 60))m" }
+
+        // Today: show time "3:45 PM"
+        if Calendar.current.isDateInToday(date) {
+            let formatter = DateFormatter()
+            formatter.timeStyle = .short
+            formatter.dateStyle = .none
+            return formatter.string(from: date)
+        }
+
+        // Yesterday
+        if Calendar.current.isDateInYesterday(date) {
+            return "Yesterday"
+        }
+
+        // Within a week: "3d"
+        if interval < 604800 {
+            return "\(Int(interval / 86400))d"
+        }
+
+        // Older: short date
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - Session Detail View by Path (for grouped sessions)
+
+struct SessionDetailViewByPath: View {
+    let sessionId: String
+    let projectPath: ProjectPath
+
+    var body: some View {
+        // Create a ClaudeSession from PathSession for the existing detail view
+        let session = ClaudeSession(
+            id: sessionId,
+            folderName: projectPath.folderName,
+            project: projectPath.name,
+            projectPath: projectPath.path,
+            isLive: projectPath.sessions.first(where: { $0.id == sessionId })?.isLive ?? false,
+            lastSeen: projectPath.sessions.first(where: { $0.id == sessionId })?.lastSeen ?? "",
+            messageCount: projectPath.sessions.first(where: { $0.id == sessionId })?.messageCount ?? 0
+        )
+        SessionDetailView(session: session)
     }
 }
 
@@ -714,29 +1047,28 @@ struct WindowThumbnailCell: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            // Screenshot
+            // Screenshot - preserve natural aspect ratio
             Group {
                 if let imageData = capture.imageData,
                    let uiImage = UIImage(data: imageData) {
                     Image(uiImage: uiImage)
                         .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(height: 90)
-                        .clipped()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxHeight: 120)
                 } else {
                     Rectangle()
                         .fill(Color.gray.opacity(0.2))
-                        .frame(height: 90)
+                        .frame(height: 80)
                         .overlay {
                             Image(systemName: "photo")
                                 .foregroundColor(.secondary)
                         }
                 }
             }
-            .cornerRadius(8)
+            .cornerRadius(6)
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color.borderPrimary, lineWidth: 1)
             )
 
             // Window title
@@ -811,6 +1143,40 @@ struct MetadataRow: View {
                 .foregroundColor(.primary)
                 .lineLimit(1)
         }
+    }
+}
+
+// MARK: - Refresh Control Hider
+
+struct RefreshControlHider: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+        view.isUserInteractionEnabled = false
+        return view
+    }
+    
+    func updateUIView(_ uiView: UIView, context: Context) {
+        // Find and hide refresh control by traversing the view hierarchy
+        DispatchQueue.main.async {
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let window = windowScene.windows.first {
+                findAndHideRefreshControl(in: window)
+            }
+        }
+    }
+    
+    private func findAndHideRefreshControl(in view: UIView) {
+        // Check if this is a scroll view with a refresh control
+        if let scrollView = view as? UIScrollView {
+            if let refreshControl = scrollView.refreshControl {
+                refreshControl.tintColor = .clear
+                refreshControl.backgroundColor = .clear
+            }
+        }
+        
+        // Recursively search subviews
+        view.subviews.forEach { findAndHideRefreshControl(in: $0) }
     }
 }
 

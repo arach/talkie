@@ -1,0 +1,323 @@
+#!/bin/bash
+#
+# TalkieBridge management CLI
+#
+# Usage:
+#   bridge install     - Install launchd services and DNS entries
+#   bridge uninstall   - Remove launchd services
+#   bridge start       - Start production bridge (port 8765)
+#   bridge stop        - Stop production bridge
+#   bridge dev         - Start dev bridge (port 8766, --local mode)
+#   bridge dev:stop    - Stop dev bridge
+#   bridge status      - Show status of both services
+#   bridge logs        - Tail production logs
+#   bridge logs:dev    - Tail dev logs
+#   bridge dns         - Add /etc/hosts entries (requires sudo)
+#   bridge dns:remove  - Remove /etc/hosts entries (requires sudo)
+#
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BRIDGE_DIR="$(dirname "$SCRIPT_DIR")"
+LAUNCHD_DIR="$BRIDGE_DIR/launchd"
+LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
+LOG_DIR="$HOME/Library/Logs/TalkieBridge"
+
+PROD_PLIST="com.talkie.bridge.plist"
+DEV_PLIST="com.talkie.bridge-dev.plist"
+PROD_LABEL="com.talkie.bridge"
+DEV_LABEL="com.talkie.bridge-dev"
+
+# DNS entry - single subdomain, different ports
+HOSTS_MARKER="# TalkieBridge DNS"
+HOSTS_ENTRIES="
+127.0.0.1   dev.usetalkie.com
+"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+log_info() { echo -e "${BLUE}→${NC} $1"; }
+log_success() { echo -e "${GREEN}✓${NC} $1"; }
+log_warn() { echo -e "${YELLOW}⚠${NC} $1"; }
+log_error() { echo -e "${RED}✗${NC} $1"; }
+
+ensure_log_dir() {
+    mkdir -p "$LOG_DIR"
+}
+
+install_plists() {
+    log_info "Installing launchd plists..."
+    mkdir -p "$LAUNCH_AGENTS"
+
+    # Copy plists
+    cp "$LAUNCHD_DIR/$PROD_PLIST" "$LAUNCH_AGENTS/"
+    cp "$LAUNCHD_DIR/$DEV_PLIST" "$LAUNCH_AGENTS/"
+
+    log_success "Installed to $LAUNCH_AGENTS"
+}
+
+uninstall_plists() {
+    log_info "Uninstalling launchd plists..."
+
+    # Stop services first
+    launchctl unload "$LAUNCH_AGENTS/$PROD_PLIST" 2>/dev/null || true
+    launchctl unload "$LAUNCH_AGENTS/$DEV_PLIST" 2>/dev/null || true
+
+    # Remove plists
+    rm -f "$LAUNCH_AGENTS/$PROD_PLIST"
+    rm -f "$LAUNCH_AGENTS/$DEV_PLIST"
+
+    log_success "Uninstalled"
+}
+
+start_prod() {
+    ensure_log_dir
+    log_info "Starting production bridge (port 8765)..."
+
+    if ! [ -f "$LAUNCH_AGENTS/$PROD_PLIST" ]; then
+        log_error "Not installed. Run: bridge install"
+        exit 1
+    fi
+
+    launchctl load "$LAUNCH_AGENTS/$PROD_PLIST" 2>/dev/null || true
+    launchctl start "$PROD_LABEL" 2>/dev/null || true
+
+    sleep 1
+    if curl -s http://localhost:8765/health > /dev/null 2>&1; then
+        log_success "Production bridge running at http://dev.usetalkie.com:8765"
+    else
+        log_warn "Started but health check failed - check logs: bridge logs"
+    fi
+}
+
+stop_prod() {
+    log_info "Stopping production bridge..."
+    launchctl stop "$PROD_LABEL" 2>/dev/null || true
+    launchctl unload "$LAUNCH_AGENTS/$PROD_PLIST" 2>/dev/null || true
+    log_success "Stopped"
+}
+
+start_dev() {
+    ensure_log_dir
+    log_info "Starting dev bridge (port 8767, local mode)..."
+
+    if ! [ -f "$LAUNCH_AGENTS/$DEV_PLIST" ]; then
+        log_error "Not installed. Run: bridge install"
+        exit 1
+    fi
+
+    launchctl load "$LAUNCH_AGENTS/$DEV_PLIST" 2>/dev/null || true
+    launchctl start "$DEV_LABEL" 2>/dev/null || true
+
+    sleep 1
+    if curl -s http://localhost:8767/health > /dev/null 2>&1; then
+        log_success "Dev bridge running at http://dev.usetalkie.com:8767"
+    else
+        log_warn "Started but health check failed - check logs: bridge logs:dev"
+    fi
+}
+
+stop_dev() {
+    log_info "Stopping dev bridge..."
+    launchctl stop "$DEV_LABEL" 2>/dev/null || true
+    launchctl unload "$LAUNCH_AGENTS/$DEV_PLIST" 2>/dev/null || true
+    log_success "Stopped"
+}
+
+show_status() {
+    echo ""
+    echo "TalkieBridge Status"
+    echo "==================="
+    echo ""
+
+    # iOS/Production (8765)
+    if curl -s http://localhost:8765/health > /dev/null 2>&1; then
+        local health=$(curl -s http://localhost:8765/health 2>/dev/null)
+        echo -e "${GREEN}●${NC} :8765 iOS/Tailscale"
+        echo "$health" | jq -r '"    Version: \(.version)  Host: \(.hostname)"' 2>/dev/null || echo "    Running"
+    else
+        echo -e "${RED}○${NC} :8765 iOS/Tailscale - not running"
+    fi
+
+    echo ""
+
+    # Talkie (8766) - just check if port is in use
+    if lsof -i :8766 > /dev/null 2>&1; then
+        echo -e "${GREEN}●${NC} :8766 Talkie macOS"
+        echo "    (Managed by Talkie.app)"
+    else
+        echo -e "${YELLOW}○${NC} :8766 Talkie macOS - not running"
+        echo "    (Start Talkie.app to enable)"
+    fi
+
+    echo ""
+
+    # Dev (8767)
+    if curl -s http://localhost:8767/health > /dev/null 2>&1; then
+        local health=$(curl -s http://localhost:8767/health 2>/dev/null)
+        echo -e "${GREEN}●${NC} :8767 Dev (local mode)"
+        echo "$health" | jq -r '"    Version: \(.version)"' 2>/dev/null || echo "    Running"
+    else
+        echo -e "${RED}○${NC} :8767 Dev - not running"
+    fi
+
+    echo ""
+
+    # DNS check
+    if grep -q "usetalkie.com" /etc/hosts 2>/dev/null; then
+        echo -e "${GREEN}●${NC} DNS entries configured"
+    else
+        echo -e "${YELLOW}○${NC} DNS entries not configured - run: sudo bridge dns"
+    fi
+
+    echo ""
+}
+
+tail_logs() {
+    local log_file="$LOG_DIR/bridge.log"
+    local err_file="$LOG_DIR/bridge.error.log"
+
+    if [ ! -f "$log_file" ]; then
+        log_warn "No logs yet at $log_file"
+        return
+    fi
+
+    log_info "Tailing $log_file (Ctrl+C to stop)"
+    tail -f "$log_file" "$err_file" 2>/dev/null
+}
+
+tail_dev_logs() {
+    local log_file="$LOG_DIR/bridge-dev.log"
+    local err_file="$LOG_DIR/bridge-dev.error.log"
+
+    if [ ! -f "$log_file" ]; then
+        log_warn "No logs yet at $log_file"
+        return
+    fi
+
+    log_info "Tailing $log_file (Ctrl+C to stop)"
+    tail -f "$log_file" "$err_file" 2>/dev/null
+}
+
+add_dns() {
+    log_info "Adding DNS entries to /etc/hosts..."
+
+    if grep -q "$HOSTS_MARKER" /etc/hosts 2>/dev/null; then
+        log_warn "DNS entries already exist"
+        return
+    fi
+
+    echo "" | sudo tee -a /etc/hosts > /dev/null
+    echo "$HOSTS_MARKER" | sudo tee -a /etc/hosts > /dev/null
+    echo "$HOSTS_ENTRIES" | sudo tee -a /etc/hosts > /dev/null
+
+    # Flush DNS cache
+    sudo dscacheutil -flushcache
+    sudo killall -HUP mDNSResponder 2>/dev/null || true
+
+    log_success "DNS entry added: dev.usetalkie.com → 127.0.0.1"
+    echo ""
+    echo "  Ports:"
+    echo "    :8765 - iOS/Tailscale"
+    echo "    :8766 - Talkie macOS app"
+    echo "    :8767 - localhost dev"
+}
+
+remove_dns() {
+    log_info "Removing DNS entries from /etc/hosts..."
+
+    if ! grep -q "$HOSTS_MARKER" /etc/hosts 2>/dev/null; then
+        log_warn "No DNS entries found"
+        return
+    fi
+
+    # Remove our entries (marker + next 3 lines)
+    sudo sed -i '' "/$HOSTS_MARKER/,+3d" /etc/hosts
+
+    # Flush DNS cache
+    sudo dscacheutil -flushcache
+    sudo killall -HUP mDNSResponder 2>/dev/null || true
+
+    log_success "DNS entries removed"
+}
+
+show_help() {
+    echo "TalkieBridge CLI"
+    echo ""
+    echo "Usage: bridge <command>"
+    echo ""
+    echo "Services:                          dev.usetalkie.com"
+    echo "  start        Production bridge   :8765 (Tailscale)"
+    echo "  stop         Stop production"
+    echo "  dev          Dev bridge          :8767 (local mode)"
+    echo "  dev:stop     Stop dev"
+    echo "  restart      Restart production"
+    echo "  status       Show all services"
+    echo ""
+    echo "Logs:"
+    echo "  logs         Tail production logs"
+    echo "  logs:dev     Tail dev logs"
+    echo ""
+    echo "Setup:"
+    echo "  install      Install launchd services"
+    echo "  uninstall    Remove launchd services"
+    echo "  dns          Add dev.usetalkie.com to /etc/hosts"
+    echo ""
+}
+
+# Main
+case "${1:-}" in
+    install)
+        install_plists
+        log_info "Next: sudo bridge dns (to add DNS entries)"
+        ;;
+    uninstall)
+        uninstall_plists
+        ;;
+    start)
+        start_prod
+        ;;
+    stop)
+        stop_prod
+        ;;
+    restart)
+        stop_prod
+        sleep 1
+        start_prod
+        ;;
+    dev)
+        start_dev
+        ;;
+    dev:stop)
+        stop_dev
+        ;;
+    status)
+        show_status
+        ;;
+    logs)
+        tail_logs
+        ;;
+    logs:dev)
+        tail_dev_logs
+        ;;
+    dns)
+        add_dns
+        ;;
+    dns:remove)
+        remove_dns
+        ;;
+    help|--help|-h|"")
+        show_help
+        ;;
+    *)
+        log_error "Unknown command: $1"
+        show_help
+        exit 1
+        ;;
+esac

@@ -1,9 +1,9 @@
 /**
- * Engagement-Aware Session Cache
+ * Engagement-Aware Session Cache with Incremental Updates
  *
  * Polls for session updates while user is actively engaged.
+ * Uses `find -newer` to efficiently detect changed files.
  * Goes idle after 5 minutes of no requests to conserve resources.
- * Supports forced "deep sync" to bypass cache entirely.
  */
 
 import {
@@ -14,9 +14,14 @@ import {
   type PathEntry,
 } from "./sessions";
 import { log } from "../log";
+import { spawn } from "bun";
+import { homedir } from "os";
+import { join } from "path";
 
-const POLL_INTERVAL_MS = 3_000; // Poll every 3 seconds while engaged
+const POLL_INTERVAL_MS = 60_000; // Poll every 60 seconds while engaged
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // Go idle after 5 minutes
+const CLAUDE_PROJECTS_DIR = join(homedir(), ".claude", "projects");
+const TIMESTAMP_FILE = "/tmp/talkie-cache-check";
 
 type CacheState = "idle" | "polling";
 
@@ -37,13 +42,13 @@ class EngagementAwareCache {
 
     if (forceRefresh) {
       log.info("Deep sync: forcing full rescan");
-      await this.refresh();
+      await this.fullRefresh();
       return this.cache;
     }
 
     // If cache is empty (cold start), do initial scan
     if (this.cache.length === 0) {
-      await this.refresh();
+      await this.fullRefresh();
     }
 
     return this.cache;
@@ -58,13 +63,13 @@ class EngagementAwareCache {
 
     if (forceRefresh) {
       log.info("Deep sync: forcing full rescan (paths)");
-      await this.refresh();
+      await this.fullRefresh();
       return this.pathsCache;
     }
 
     // If cache is empty (cold start), do initial scan
     if (this.pathsCache.length === 0) {
-      await this.refresh();
+      await this.fullRefresh();
     }
 
     return this.pathsCache;
@@ -118,9 +123,9 @@ class EngagementAwareCache {
   }
 
   /**
-   * Force a cache refresh (refreshes both sessions and paths caches)
+   * Full cache refresh - walks everything
    */
-  private async refresh(): Promise<void> {
+  private async fullRefresh(): Promise<void> {
     try {
       const start = Date.now();
       // Refresh both caches in parallel
@@ -131,18 +136,82 @@ class EngagementAwareCache {
       this.cache = sessions;
       this.pathsCache = paths;
       this.lastRefresh = Date.now();
+
       const totalSessions = paths.reduce((sum, p) => sum + p.sessions.length, 0);
       log.debug(
-        `Cache refreshed: ${paths.length} paths, ${totalSessions} sessions in ${Date.now() - start}ms`
+        `Cache refresh: ${paths.length} paths, ${totalSessions} sessions in ${Date.now() - start}ms`
       );
     } catch (err) {
       log.error(`Session refresh failed: ${err}`);
-      // Keep stale cache rather than clearing on error
     }
   }
 
   /**
+   * Check for changes using `find -newer` (efficient shell command)
+   * Returns true if any .jsonl files were modified since last check
+   */
+  private async hasChanges(): Promise<boolean> {
+    try {
+      // First check - no timestamp file exists, need full refresh
+      const timestampExists = await Bun.file(TIMESTAMP_FILE).exists();
+      if (!timestampExists) {
+        return true;
+      }
+
+      // Use find -newer to check for modified files
+      const proc = spawn({
+        cmd: [
+          "find", CLAUDE_PROJECTS_DIR,
+          "-name", "*.jsonl",
+          "-newer", TIMESTAMP_FILE,
+          "-type", "f"
+        ],
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+
+      const output = await new Response(proc.stdout).text();
+      const changedFiles = output.trim().split("\n").filter(Boolean);
+
+      if (changedFiles.length > 0) {
+        log.debug(`Found ${changedFiles.length} changed files`);
+        return true;
+      }
+
+      return false;
+    } catch (err) {
+      log.warn(`Change detection failed: ${err}`);
+      return true; // Assume changes on error
+    }
+  }
+
+  /**
+   * Update timestamp file after successful refresh
+   */
+  private async touchTimestamp(): Promise<void> {
+    try {
+      await Bun.write(TIMESTAMP_FILE, Date.now().toString());
+    } catch {
+      // Ignore errors
+    }
+  }
+
+  /**
+   * Incremental refresh - only refresh if files changed
+   */
+  private async incrementalRefresh(): Promise<void> {
+    const hasChanges = await this.hasChanges();
+
+    if (hasChanges) {
+      await this.fullRefresh();
+      await this.touchTimestamp();
+    }
+    // Silent when no changes - no logging spam
+  }
+
+  /**
    * Start polling for updates
+   * Note: Does NOT do initial refresh - callers handle that with await
    */
   private startPolling(): void {
     if (this.state === "polling") return;
@@ -150,10 +219,8 @@ class EngagementAwareCache {
     this.state = "polling";
     log.info("Engagement: active, starting session polling");
 
-    // Immediate first refresh
-    this.refresh();
-
-    // Poll periodically
+    // Poll periodically (incremental) - first poll after interval
+    // Initial data load is handled by callers with proper await
     this.pollTimer = setInterval(async () => {
       // Check for idle timeout
       if (Date.now() - this.lastRequest > IDLE_TIMEOUT_MS) {
@@ -161,7 +228,7 @@ class EngagementAwareCache {
         return;
       }
 
-      await this.refresh();
+      await this.incrementalRefresh();
     }, POLL_INTERVAL_MS);
   }
 
@@ -195,7 +262,6 @@ class EngagementAwareCache {
     lastRefresh: number;
     cacheAgeMs: number;
   } {
-    const totalSessions = this.pathsCache.reduce((sum, p) => sum + p.sessions.length, 0);
     return {
       state: this.state,
       sessionCount: this.cache.length,

@@ -98,6 +98,12 @@ actor BridgeClient {
         return try JSONDecoder().decode(SessionsResponse.self, from: data)
     }
 
+    func paths(deepSync: Bool = false) async throws -> PathsResponse {
+        let path = deepSync ? "/paths?refresh=deep" : "/paths"
+        let data = try await get(path)
+        return try JSONDecoder().decode(PathsResponse.self, from: data)
+    }
+
     func sessionMessages(id: String, limit: Int = 50) async throws -> SessionMessagesResponse {
         let data = try await get("/sessions/\(id)/messages?limit=\(limit)")
         return try JSONDecoder().decode(SessionMessagesResponse.self, from: data)
@@ -308,6 +314,41 @@ struct SessionsMeta: Codable {
     let syncedAt: String?
 }
 
+// MARK: - Paths (Grouped Sessions)
+
+struct PathsResponse: Codable {
+    let paths: [ProjectPath]
+    let meta: PathsMeta
+}
+
+struct PathsMeta: Codable {
+    let pathCount: Int
+    let sessionCount: Int
+    let fromCache: Bool
+    let cacheAgeMs: Int
+    let syncedAt: String?
+}
+
+struct ProjectPath: Codable, Identifiable {
+    let path: String              // Full path (e.g., "/Users/arach/dev/talkie")
+    let name: String              // Display name (e.g., "talkie")
+    let folderName: String        // Encoded path for lookup
+    let sessions: [PathSession]   // Sessions for this project
+    let lastSeen: String
+    let isLive: Bool
+
+    var id: String { path }
+}
+
+struct PathSession: Codable, Identifiable {
+    let id: String                // Claude session UUID
+    let lastSeen: String
+    let messageCount: Int
+    let isLive: Bool
+    let lastMessage: String?      // Preview of most recent message
+    let title: String?            // Session title/name if available
+}
+
 struct ClaudeSession: Codable, Identifiable {
     let id: String              // Claude session UUID
     let folderName: String?     // Encoded path (e.g., "-Users-arach-dev-talkie")
@@ -369,9 +410,17 @@ struct AudioMessageRequest: Codable {
 struct MessageResponse: Codable {
     let success: Bool
     let error: String?
-    let transcript: String?  // Included when sending audio
-    let deliveredAt: String?  // ISO timestamp when delivered to Claude
-    let insertedText: String?  // The actual text that was inserted
+    let transcript: String?      // Included when sending audio
+    let deliveredAt: String?     // ISO timestamp when delivered to Claude
+    let insertedText: String?    // The actual text that was inserted
+
+    // Mode info (smart routing)
+    let mode: String?            // "ui" or "headless"
+    let modeReason: String?      // Why this mode was chosen
+    let screenLocked: Bool?      // Was Mac screen locked?
+    let response: String?        // Claude's response (headless mode only)
+    let verified: Bool?          // UI mode: did message appear in logs?
+    let verifyAttempts: Int?     // How many log checks were needed
 }
 
 struct QRCodeData: Codable {

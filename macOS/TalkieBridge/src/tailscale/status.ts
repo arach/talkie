@@ -1,12 +1,14 @@
 import { $ } from "bun";
 import { existsSync } from "fs";
+import { networkInterfaces } from "os";
 
 // Known Tailscale CLI locations (in priority order)
+// Prefer standalone CLI over app bundle (app bundle needs GUI session)
 const TAILSCALE_PATHS = [
-  "/Applications/Tailscale.app/Contents/MacOS/Tailscale", // macOS app bundle
-  "/usr/local/bin/tailscale", // Homebrew Intel
   "/opt/homebrew/bin/tailscale", // Homebrew Apple Silicon
+  "/usr/local/bin/tailscale", // Homebrew Intel
   "/usr/bin/tailscale", // System install
+  "/Applications/Tailscale.app/Contents/MacOS/Tailscale", // macOS app bundle (last - needs GUI)
 ];
 
 /**
@@ -19,6 +21,47 @@ function findTailscalePath(): string | null {
       return path;
     }
   }
+  return null;
+}
+
+/**
+ * Fallback: Check for Tailscale via network interfaces.
+ * Looks for 100.x.x.x IP (Tailscale CGNAT range).
+ * Returns the IP if found, null otherwise.
+ */
+function getTailscaleIPFromNetwork(): string | null {
+  const nets = networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name] || []) {
+      // Tailscale uses 100.64.0.0/10 (CGNAT range)
+      if (net.family === "IPv4" && net.address.startsWith("100.")) {
+        return net.address;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Fallback: Get hostname from scutil (works in launchd context).
+ */
+async function getHostnameFromScutil(): Promise<string | null> {
+  try {
+    // Use full path - scutil is in /usr/sbin which isn't in launchd's PATH
+    const result = await $`/usr/sbin/scutil --get LocalHostName`.quiet().nothrow();
+    if (result.exitCode === 0) {
+      const localName = result.stdout.toString().trim().toLowerCase().replace(/ /g, "-");
+      // Try to find the tailnet domain from DNS
+      const dnsResult = await $`/usr/sbin/scutil --dns`.quiet().nothrow();
+      const dnsOutput = dnsResult.stdout.toString();
+      const tailnetMatch = dnsOutput.match(/tail[a-z0-9]+\.ts\.net/);
+      if (tailnetMatch) {
+        return `${localName}.${tailnetMatch[0]}`;
+      }
+      // Fallback: just use local hostname
+      return localName;
+    }
+  } catch {}
   return null;
 }
 
@@ -57,6 +100,27 @@ export interface TailscaleStatus {
 }
 
 /**
+ * Fallback: Detect Tailscale state via network interfaces.
+ * Used when CLI is unavailable or fails (e.g., launchd context).
+ */
+async function getTailscaleStateFromNetwork(): Promise<TailscaleState> {
+  const tailscaleIP = getTailscaleIPFromNetwork();
+  if (!tailscaleIP) {
+    return { status: "not-running" };
+  }
+
+  // We have a Tailscale IP, so it's running
+  const hostname = await getHostnameFromScutil();
+  if (!hostname) {
+    // Can't determine hostname, but Tailscale is running
+    return { status: "no-peers", hostname: tailscaleIP };
+  }
+
+  // We have IP and hostname - assume ready (can't check peers without CLI)
+  return { status: "ready", hostname, peers: [] };
+}
+
+/**
  * Get the current Tailscale state with detailed information.
  * This is the primary function for checking if we can run the bridge.
  */
@@ -64,20 +128,23 @@ export async function getTailscaleState(): Promise<TailscaleState> {
   // Find tailscale CLI
   const tailscalePath = findTailscalePath();
   if (!tailscalePath) {
-    return { status: "not-installed" };
+    // No CLI found - try network fallback
+    return getTailscaleStateFromNetwork();
   }
 
   // Get tailscale status using full path
   const result = await $`${tailscalePath} status --json`.quiet().nothrow();
   if (result.exitCode !== 0) {
-    return { status: "not-running" };
+    // CLI failed (common in launchd context) - try network fallback
+    return getTailscaleStateFromNetwork();
   }
 
   let status: TailscaleStatus;
   try {
     status = JSON.parse(result.stdout.toString());
   } catch {
-    return { status: "not-running" };
+    // Parse failed - try network fallback
+    return getTailscaleStateFromNetwork();
   }
 
   // Check if we need to login

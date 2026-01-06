@@ -1152,30 +1152,19 @@ struct BottomCircleButton: View {
 
     var body: some View {
         Button(action: action) {
-            // Circle background with icon
+            // Circle background with icon - subtle green tint when active
             Circle()
-                .fill(Color.surfaceSecondary)
+                .fill(isActive ? Color.success.opacity(0.08) : Color.surfaceSecondary)
                 .frame(width: 44, height: 44)
                 .overlay(
                     Circle()
-                        .strokeBorder(isActive ? Color.success.opacity(0.4) : Color.borderPrimary, lineWidth: 1)
+                        .strokeBorder(isActive ? Color.success.opacity(0.3) : Color.borderPrimary, lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                 .overlay {
-                    ZStack {
-                        // Icon
-                        Image(systemName: icon)
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundColor(.textPrimary)
-
-                        // Active indicator (small green dot on the icon)
-                        if isActive {
-                            Circle()
-                                .fill(Color.success)
-                                .frame(width: 8, height: 8)
-                                .offset(x: 8, y: 6) // Bottom-right of icon
-                        }
-                    }
+                    Image(systemName: icon)
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(isActive ? .textPrimary : .textSecondary)
                 }
         }
         .buttonStyle(.plain)

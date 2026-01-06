@@ -1,3 +1,5 @@
+import { Elysia } from "elysia";
+
 import { getTailscaleState, getStateMessage } from "./tailscale/status";
 import { healthRoute } from "./routes/health";
 import { pathsRoute, sessionsRoute, sessionMessagesRoute } from "./routes/sessions";
@@ -10,6 +12,7 @@ import {
   pairRejectRoute,
 } from "./routes/pair";
 import { sendMessageRoute } from "./routes/message";
+import { headlessRoute, headlessStatusRoute } from "./routes/headless";
 import {
   matchRoute,
   matchScanRoute,
@@ -31,24 +34,128 @@ import { log, clearLog } from "./log";
 import { PID_FILE, ensureDirectories } from "./paths";
 import { sessionCache } from "./discovery/session-cache";
 
-const PORT = 8765;
-
 // Parse CLI args
 const args = process.argv.slice(2);
 const LOCAL_MODE = args.includes("--local") || args.includes("-l");
 
+// Port configuration
+const DEFAULT_PORT = LOCAL_MODE ? 8767 : 8765;
+const portArgIndex = args.findIndex((a) => a === "--port" || a === "-p");
+const PORT =
+  portArgIndex !== -1 && args[portArgIndex + 1]
+    ? parseInt(args[portArgIndex + 1], 10)
+    : DEFAULT_PORT;
+
+// Store hostname for routes
+let hostname = "localhost";
+
+// Create Elysia app
+const app = new Elysia()
+  // Strip trailing slashes
+  .onRequest(({ request }) => {
+    const url = new URL(request.url);
+    if (url.pathname !== "/" && url.pathname.endsWith("/")) {
+      url.pathname = url.pathname.slice(0, -1);
+      return Response.redirect(url.toString(), 301);
+    }
+  })
+  // Request logging
+  .onBeforeHandle(({ request }) => {
+    const url = new URL(request.url);
+    log.request(request.method, url.pathname);
+  })
+  .onAfterHandle(({ request, response }) => {
+    const url = new URL(request.url);
+    // @ts-ignore
+    log.info(`${request.method} ${url.pathname} → ${response?.status || 200}`);
+  })
+  // Auth middleware
+  .onBeforeHandle(async ({ request }) => {
+    const url = new URL(request.url);
+    const path = url.pathname;
+
+    if (LOCAL_MODE || isExemptPath(path, request.method)) {
+      return;
+    }
+
+    const authResult = await verifyRequest(request);
+    if (!authResult.authenticated) {
+      log.warn(`Auth failed: ${authResult.error} for ${path}`);
+      return authErrorResponse(authResult);
+    }
+  })
+  // Error handler
+  .onError(({ error, request }) => {
+    const url = new URL(request.url);
+    log.error(`${request.method} ${url.pathname} → ERROR: ${error}`);
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  })
+
+  // Health
+  .get("/health", ({ request }) => healthRoute(request, hostname))
+
+  // Debug
+  .get("/debug/cache", () => sessionCache.getStatus())
+
+  // Sessions
+  .get("/paths", ({ request }) => pathsRoute(request))
+  .get("/sessions", ({ request }) => sessionsRoute(request))
+  .get("/sessions/:id", ({ request, params }) => sessionMessagesRoute(request, params.id))
+  .get("/sessions/:id/messages", ({ request, params }) => sessionMessagesRoute(request, params.id))
+  .get("/sessions/:id/metadata", ({ request, params }) => sessionMetadataRoute(request, params.id))
+  .get("/sessions/:id/entry/:index", ({ request, params }) =>
+    sessionEntryRoute(request, params.id, parseInt(params.index, 10))
+  )
+  .post("/sessions/:id/message", ({ request, params }) => sendMessageRoute(request, params.id))
+
+  // Headless
+  .post("/headless", ({ request }) => headlessRoute(request))
+  .get("/headless/status", ({ request }) => headlessStatusRoute(request))
+
+  // Pairing
+  .post("/pair", ({ request }) => pairRoute(request))
+  .get("/pair/info", ({ request }) => pairInfoRoute(request, hostname))
+  .get("/pair/pending", ({ request }) => pairPendingRoute(request))
+  .post("/pair/:deviceId/approve", ({ request, params }) => pairApproveRoute(request, params.deviceId))
+  .post("/pair/:deviceId/reject", ({ request, params }) => pairRejectRoute(request, params.deviceId))
+
+  // Devices
+  .get("/devices", async () => {
+    const devices = await getDevices();
+    return { devices };
+  })
+
+  // Legacy inject
+  .post("/inject", ({ request }) => sendMessageRoute(request))
+
+  // Match endpoints
+  .get("/match", ({ request }) => matchRoute(request))
+  .post("/match/scan", ({ request }) => matchScanRoute(request))
+  .post("/match/confirm", ({ request }) => matchConfirmRoute(request))
+  .get("/match/confirmed", ({ request }) => matchConfirmedRoute(request))
+  .delete("/match/confirmed/:fingerprint", ({ request, params }) =>
+    matchDeleteRoute(request, decodeURIComponent(params.fingerprint))
+  )
+
+  // Windows
+  .get("/windows", ({ request }) => listWindows(request))
+  .get("/windows/captures", ({ request }) => captureAllWindows(request))
+  .get("/windows/:id", ({ request, params }) => getWindow(request, params.id))
+  .get("/windows/:id/screenshot", ({ request, params }) => getWindowScreenshot(request, params.id))
+  .get("/windows/:id/content", ({ request, params }) => getWindowContent(request, params.id));
+
+// Main
 async function main() {
-  // Ensure data directories exist
   await ensureDirectories();
   await clearLog();
   log.info("TalkieBridge starting...");
 
-  let hostname = "localhost";
-
   if (LOCAL_MODE) {
     log.info("Running in LOCAL mode (Tailscale check skipped)");
   } else {
-    // Check Tailscale state
     const tailscaleState = await getTailscaleState();
     log.info(`Tailscale: ${getStateMessage(tailscaleState)}`);
 
@@ -78,207 +185,22 @@ async function main() {
   log.info(`PID ${process.pid} written to ${PID_FILE}`);
 
   // Clean up on exit
-  process.on("SIGINT", async () => {
+  const shutdown = async () => {
     log.info("Shutting down...");
     sessionCache.shutdown();
     await Bun.write(PID_FILE, "").catch(() => {});
     process.exit(0);
-  });
+  };
 
-  process.on("SIGTERM", async () => {
-    log.info("Shutting down...");
-    sessionCache.shutdown();
-    await Bun.write(PID_FILE, "").catch(() => {});
-    process.exit(0);
-  });
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 
-  // Start HTTP server
-  const server = Bun.serve({
-    port: PORT,
-    async fetch(req, server) {
-      const url = new URL(req.url);
-      const path = url.pathname;
-      const method = req.method;
-      const startTime = performance.now();
-
-      log.request(method, path);
-
-      const logResponse = (response: Response) => {
-        const duration = Math.round(performance.now() - startTime);
-        log.info(`${method} ${path} → ${response.status} (${duration}ms)`);
-        return response;
-      };
-
-      // Check if request is from localhost (bypass auth for local requests)
-      const clientIP = server.requestIP(req);
-      const isLocalhost = clientIP?.address === "127.0.0.1" || clientIP?.address === "::1";
-
-      try {
-        // HMAC Authentication (unless exempt endpoint or localhost)
-        if (!isLocalhost && !isExemptPath(path, method)) {
-          const authResult = await verifyRequest(req);
-          if (!authResult.authenticated) {
-            log.warn(`Auth failed: ${authResult.error} for ${path}`);
-            return logResponse(authErrorResponse(authResult));
-          }
-        }
-
-        // Health check
-        if (path === "/health" && method === "GET") {
-          return logResponse(healthRoute(req, hostname));
-        }
-
-        // Debug: cache status
-        if (path === "/debug/cache" && method === "GET") {
-          return logResponse(Response.json(sessionCache.getStatus()));
-        }
-
-        // Paths (path-centric view with all sessions per path)
-        if (path === "/paths" && method === "GET") {
-          return logResponse(await pathsRoute(req));
-        }
-
-        // Sessions (flat view - legacy)
-        if (path === "/sessions" && method === "GET") {
-          return logResponse(await sessionsRoute(req));
-        }
-
-        // Match /sessions/:id/messages
-        const messagesMatch = path.match(/^\/sessions\/([^/]+)\/messages$/);
-        if (messagesMatch && method === "GET") {
-          return logResponse(await sessionMessagesRoute(req, messagesMatch[1]));
-        }
-
-        // Match /sessions/:id/metadata
-        const metadataMatch = path.match(/^\/sessions\/([^/]+)\/metadata$/);
-        if (metadataMatch && method === "GET") {
-          return logResponse(await sessionMetadataRoute(req, metadataMatch[1]));
-        }
-
-        // Match /sessions/:id/entry/:index
-        const entryMatch = path.match(/^\/sessions\/([^/]+)\/entry\/(\d+)$/);
-        if (entryMatch && method === "GET") {
-          return logResponse(await sessionEntryRoute(req, entryMatch[1], parseInt(entryMatch[2], 10)));
-        }
-
-        // Match /sessions/:id
-        const sessionMatch = path.match(/^\/sessions\/([^/]+)$/);
-        if (sessionMatch && method === "GET") {
-          return logResponse(await sessionMessagesRoute(req, sessionMatch[1]));
-        }
-
-        // POST /sessions/:id/message - Send text to a Claude session
-        // Empty text with submit triggers Enter key only (for submit without new text)
-        const sendMessageMatch = path.match(/^\/sessions\/([^/]+)\/message$/);
-        if (sendMessageMatch && method === "POST") {
-          return logResponse(await sendMessageRoute(req, sendMessageMatch[1]));
-        }
-
-        // Pairing endpoints
-        if (path === "/pair" && method === "POST") {
-          return logResponse(await pairRoute(req));
-        }
-
-        if (path === "/pair/info" && method === "GET") {
-          return logResponse(await pairInfoRoute(req, hostname));
-        }
-
-        if (path === "/pair/pending" && method === "GET") {
-          return logResponse(await pairPendingRoute(req));
-        }
-
-        // Match /pair/:deviceId/approve
-        const approveMatch = path.match(/^\/pair\/([^/]+)\/approve$/);
-        if (approveMatch && method === "POST") {
-          return logResponse(await pairApproveRoute(req, approveMatch[1]));
-        }
-
-        // Match /pair/:deviceId/reject
-        const rejectMatch = path.match(/^\/pair\/([^/]+)\/reject$/);
-        if (rejectMatch && method === "POST") {
-          return logResponse(await pairRejectRoute(req, rejectMatch[1]));
-        }
-
-        // Devices endpoint
-        if (path === "/devices" && method === "GET") {
-          const devices = await getDevices();
-          return logResponse(Response.json({ devices }));
-        }
-
-        // Legacy /inject endpoint (use /sessions/:id/message instead)
-        if (path === "/inject" && method === "POST") {
-          return logResponse(await sendMessageRoute(req));
-        }
-
-        // Match endpoints - fuzzy terminal-to-session matching
-        if (path === "/match" && method === "GET") {
-          return logResponse(await matchRoute(req));
-        }
-
-        if (path === "/match/scan" && method === "POST") {
-          return logResponse(await matchScanRoute(req));
-        }
-
-        if (path === "/match/confirm" && method === "POST") {
-          return logResponse(await matchConfirmRoute(req));
-        }
-
-        if (path === "/match/confirmed" && method === "GET") {
-          return logResponse(await matchConfirmedRoute(req));
-        }
-
-        // Match /match/confirmed/:fingerprint for DELETE
-        const deleteMatch = path.match(/^\/match\/confirmed\/(.+)$/);
-        if (deleteMatch && method === "DELETE") {
-          return logResponse(await matchDeleteRoute(req, decodeURIComponent(deleteMatch[1])));
-        }
-
-        // Windows Resource (RESTful)
-        // GET /windows - List all terminal windows
-        if (path === "/windows" && method === "GET") {
-          return logResponse(await listWindows(req));
-        }
-
-        // GET /windows/captures - Batch: all screenshots + AX
-        if (path === "/windows/captures" && method === "GET") {
-          return logResponse(await captureAllWindows(req));
-        }
-
-        // GET /windows/:id/screenshot - Window screenshot (JPEG)
-        const windowScreenshotMatch = path.match(/^\/windows\/(\d+)\/screenshot$/);
-        if (windowScreenshotMatch && method === "GET") {
-          return logResponse(await getWindowScreenshot(req, windowScreenshotMatch[1]));
-        }
-
-        // GET /windows/:id/content - Window AX content
-        const windowContentMatch = path.match(/^\/windows\/(\d+)\/content$/);
-        if (windowContentMatch && method === "GET") {
-          return logResponse(await getWindowContent(req, windowContentMatch[1]));
-        }
-
-        // GET /windows/:id - Single window details
-        const windowMatch = path.match(/^\/windows\/(\d+)$/);
-        if (windowMatch && method === "GET") {
-          return logResponse(await getWindow(req, windowMatch[1]));
-        }
-
-        // 404 for unknown routes
-        log.warn(`404: ${path}`);
-        return logResponse(Response.json({ error: "Not found" }, { status: 404 }));
-      } catch (error) {
-        const duration = Math.round(performance.now() - startTime);
-        log.error(`${method} ${path} → ERROR (${duration}ms): ${error}`);
-        return Response.json(
-          { error: "Internal server error" },
-          { status: 500 }
-        );
-      }
-    },
-  });
+  // Start server
+  app.listen(PORT);
 
   log.info(`TalkieBridge running at http://${hostname}:${PORT}`);
   log.info(`Local: http://localhost:${PORT}`);
-  log.info("HMAC authentication enabled");
+  log.info(LOCAL_MODE ? "Auth: DISABLED (local mode)" : "Auth: HMAC enabled");
 }
 
 main().catch((err) => {

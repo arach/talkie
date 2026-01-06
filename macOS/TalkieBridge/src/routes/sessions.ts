@@ -27,6 +27,8 @@ export async function pathsRoute(req: Request): Promise<Response> {
         lastSeen: s.lastSeen,
         messageCount: s.messageCount,
         isLive: s.isLive,
+        lastMessage: s.lastMessage,
+        title: s.title,
       })),
       lastSeen: p.lastSeen,
       isLive: p.isLive,
@@ -45,6 +47,11 @@ export async function pathsRoute(req: Request): Promise<Response> {
   log.info(
     `Paths: ${paths.length} paths, ${totalSessions} sessions (cache: ${status.state}, age: ${status.cacheAgeMs}ms)`
   );
+
+  // Log first few paths for debugging
+  for (const p of paths.slice(0, 3)) {
+    log.info(`  → ${p.name}: ${p.sessions.length} sessions, live=${p.isLive}`);
+  }
 
   return Response.json(response);
 }

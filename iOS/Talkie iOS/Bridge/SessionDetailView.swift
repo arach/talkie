@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import PhotosUI
 
 struct SessionDetailView: View {
     let session: ClaudeSession
@@ -27,6 +28,11 @@ struct SessionDetailView: View {
     @State private var isTranscribing = false
     @State private var lastFailedAudioURL: URL?  // For retry capability
     @State private var capturedTranscription: String = ""  // Captured when recording stops
+
+    // Image picker state
+    @State private var selectedImage: UIImage?
+    @State private var showingImagePicker = false
+    @State private var imagePickerItem: PhotosPickerItem?
 
     // Delivery confirmation state
     @State private var lastDelivery: DeliveryConfirmation?
@@ -121,14 +127,26 @@ struct SessionDetailView: View {
                 audioLevels: recorder.audioLevels,
                 liveTranscription: speechRecognizer.transcript,
                 capturedTranscription: capturedTranscription,
+                selectedImage: selectedImage,
                 delivery: lastDelivery,
                 error: sendError,
                 canRetryAudio: lastFailedAudioURL != nil,
                 isFocused: $isInputFocused,
                 onSend: sendMessage,
                 onMicTap: toggleRecording,
-                onRetry: retryAudio
+                onRetry: retryAudio,
+                onImagePick: { showingImagePicker = true },
+                onImageClear: { selectedImage = nil }
             )
+        }
+        .photosPicker(isPresented: $showingImagePicker, selection: $imagePickerItem, matching: .images)
+        .onChange(of: imagePickerItem) { _, newItem in
+            Task {
+                if let data = try? await newItem?.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    selectedImage = image
+                }
+            }
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -188,7 +206,18 @@ struct SessionDetailView: View {
 
         Task {
             do {
-                try await bridgeManager.sendMessage(sessionId: session.id, text: text)
+                // If image is attached, send with image
+                if let image = selectedImage {
+                    try await bridgeManager.sendMessageWithImage(
+                        sessionId: session.id,
+                        text: text,
+                        image: image
+                    )
+                    selectedImage = nil
+                    imagePickerItem = nil
+                } else {
+                    try await bridgeManager.sendMessage(sessionId: session.id, text: text)
+                }
                 // Clear input on success
                 inputText = ""
                 sendError = nil
@@ -431,6 +460,7 @@ struct InputBar: View {
     let audioLevels: [Float]
     let liveTranscription: String      // Real-time during recording
     let capturedTranscription: String  // Captured when recording stopped
+    let selectedImage: UIImage?        // Attached image
     let delivery: DeliveryConfirmation?
     let error: String?
     let canRetryAudio: Bool
@@ -438,6 +468,8 @@ struct InputBar: View {
     let onSend: () -> Void
     let onMicTap: () -> Void
     let onRetry: () -> Void
+    let onImagePick: () -> Void
+    let onImageClear: () -> Void
 
     private var durationText: String {
         let minutes = Int(recordingDuration) / 60
@@ -487,40 +519,73 @@ struct InputBar: View {
                 DeliveredOverlay(delivery: delivery)
             } else {
                 // Normal input bar
-                HStack(spacing: Spacing.xs) {
-                    // Mic button
-                    Button(action: onMicTap) {
-                        Image(systemName: "mic.fill")
-                            .font(.system(size: 14))
-                            .frame(width: 32, height: 32)
-                            .background(Color.surfaceSecondary)
-                            .foregroundColor(.textSecondary)
-                            .clipShape(Circle())
+                VStack(spacing: Spacing.xs) {
+                    // Image preview (if attached)
+                    if let image = selectedImage {
+                        HStack {
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(height: 60)
+                                .cornerRadius(CornerRadius.sm)
+
+                            Spacer()
+
+                            Button(action: onImageClear) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(.textTertiary)
+                            }
+                        }
+                        .padding(.horizontal, Spacing.sm)
                     }
 
-                    // Text field
-                    TextField("Send to Claude...", text: $text, axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .font(.bodySmall)
-                        .padding(.horizontal, Spacing.sm)
-                        .padding(.vertical, Spacing.xs)
-                        .background(Color.surfaceSecondary)
-                        .cornerRadius(CornerRadius.lg)
-                        .lineLimit(1...5)
-                        .focused(isFocused)
-                        .submitLabel(.send)
-                        .onSubmit {
-                            onSend()
+                    HStack(spacing: Spacing.xs) {
+                        // Image picker button
+                        Button(action: onImagePick) {
+                            Image(systemName: "photo")
+                                .font(.system(size: 16))
+                                .frame(width: 36, height: 36)
+                                .background(selectedImage != nil ? Color.brandAccent.opacity(0.15) : Color.surfaceSecondary)
+                                .foregroundColor(selectedImage != nil ? .brandAccent : .textSecondary)
+                                .clipShape(Circle())
                         }
 
-                    // Send button (enter/return) - always enabled, empty sends Enter only
-                    Button(action: onSend) {
-                        Image(systemName: "return")
-                            .font(.system(size: 14, weight: .semibold))
-                            .frame(width: 32, height: 32)
-                            .background(Color.brandAccent)
-                            .foregroundColor(.white)
-                            .clipShape(Circle())
+                        // Mic button
+                        Button(action: onMicTap) {
+                            Image(systemName: "mic.fill")
+                                .font(.system(size: 16))
+                                .frame(width: 36, height: 36)
+                                .background(Color.surfaceSecondary)
+                                .foregroundColor(.textSecondary)
+                                .clipShape(Circle())
+                        }
+
+                        // Text field
+                        TextField("Send to Claude...", text: $text, axis: .vertical)
+                            .textFieldStyle(.plain)
+                            .font(.bodySmall)
+                            .padding(.horizontal, Spacing.sm)
+                            .padding(.vertical, Spacing.sm)
+                            .frame(minHeight: 40)
+                            .background(Color.surfaceSecondary)
+                            .cornerRadius(CornerRadius.lg)
+                            .lineLimit(1...5)
+                            .focused(isFocused)
+                            .submitLabel(.send)
+                            .onSubmit {
+                                onSend()
+                            }
+
+                        // Send button - always enabled, empty sends Enter only
+                        Button(action: onSend) {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                                .frame(width: 40, height: 40)
+                                .background(Color.brandAccent)
+                                .foregroundColor(.white)
+                                .clipShape(Circle())
+                        }
                     }
                 }
                 .padding(.horizontal, Spacing.sm)
@@ -582,11 +647,11 @@ struct RecordingOverlay: View {
                     .padding(.horizontal, Spacing.sm)
             }
 
-            // Send button - pill with return icon
+            // Send button - pill with play icon
             Button(action: onStop) {
                 HStack(spacing: Spacing.xs) {
-                    Image(systemName: "return")
-                        .font(.system(size: 11, weight: .semibold))
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 10, weight: .semibold))
                     Text("SEND")
                         .font(.techLabelSmall)
                         .tracking(1.5)
@@ -711,8 +776,14 @@ struct DeliveredOverlay: View {
 struct MessageBubble: View {
     let message: SessionMessage
 
+    @State private var isExpanded = false
+
     private var isUser: Bool {
         message.role == "user"
+    }
+
+    private var isLongMessage: Bool {
+        message.content.count > 300
     }
 
     var body: some View {
@@ -734,16 +805,27 @@ struct MessageBubble: View {
                     .foregroundColor(.textTertiary)
             }
 
-            // Content
+            // Content (tap to expand long messages)
             if !message.content.isEmpty {
-                Text(message.content)
-                    .font(.monoSmall)
-                    .foregroundColor(.textPrimary)
-                    .padding(Spacing.sm)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(isUser ? Color.active.opacity(0.05) : Color.surfaceSecondary)
-                    .cornerRadius(CornerRadius.sm)
-                    .textSelection(.enabled)
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text(isExpanded || !isLongMessage ? message.content : String(message.content.prefix(300)) + "…")
+                        .font(.monoSmall)
+                        .foregroundColor(.textPrimary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+
+                    if isLongMessage {
+                        Button(action: { isExpanded.toggle() }) {
+                            Text(isExpanded ? "Show less" : "Show more…")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.brandAccent)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(Spacing.sm)
+                .background(isUser ? Color.active.opacity(0.05) : Color.surfaceSecondary)
+                .cornerRadius(CornerRadius.sm)
             }
 
             // Tool calls
