@@ -387,6 +387,7 @@ struct RecordingView: View {
         newMemo.id = UUID()
         newMemo.title = recordingTitle.isEmpty ? defaultTitle : recordingTitle
         newMemo.createdAt = Date()
+        newMemo.lastModified = Date()
         newMemo.duration = recorder.recordingDuration
         newMemo.fileURL = url.lastPathComponent
         newMemo.isTranscribing = false

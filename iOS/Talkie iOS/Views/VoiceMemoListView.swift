@@ -982,6 +982,7 @@ struct VoiceMemoListView: View {
             newMemo.id = UUID()
             newMemo.title = "Quick memo \(formatPushToTalkDate(Date()))"
             newMemo.createdAt = Date()
+            newMemo.lastModified = Date()
             newMemo.duration = pushToTalkRecorder.recordingDuration
             newMemo.fileURL = url.lastPathComponent
             newMemo.isTranscribing = false
