@@ -57,6 +57,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         newMemo.id = UUID()
         newMemo.title = "Watch Recording \(formatWatchDate(Date()))"
         newMemo.createdAt = Date()
+        newMemo.lastModified = Date()
         newMemo.duration = duration.isNaN ? 0 : duration
         newMemo.fileURL = audioURL.lastPathComponent
         newMemo.isTranscribing = false

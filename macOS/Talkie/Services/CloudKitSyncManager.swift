@@ -835,7 +835,9 @@ class CloudKitSyncManager {
         let memoModels: [MemoModel] = await context.perform {
             let fetchRequest: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
             if !fullSync {
-                fetchRequest.predicate = NSPredicate(format: "lastModified > %@", lastSync as NSDate)
+                // Include memos with NULL lastModified (iOS bug: some code paths didn't set it)
+                // These memos would otherwise be invisible to incremental sync
+                fetchRequest.predicate = NSPredicate(format: "lastModified > %@ OR lastModified == nil", lastSync as NSDate)
             }
             fetchRequest.sortDescriptors = [NSSortDescriptor(keyPath: \VoiceMemo.lastModified, ascending: false)]
 
