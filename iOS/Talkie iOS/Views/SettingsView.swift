@@ -113,6 +113,9 @@ struct SettingsView: View {
                                 .padding(.horizontal, Spacing.md)
                         }
 
+                        // Sync
+                        SyncSection()
+
                         // Mac Bridge
                         VStack(alignment: .leading, spacing: Spacing.sm) {
                             Text("MAC BRIDGE")
@@ -618,6 +621,206 @@ struct ThemePreview: View {
             RoundedRectangle(cornerRadius: CornerRadius.sm)
                 .strokeBorder(theme.colors.tableBorder, lineWidth: 0.5)
         )
+    }
+}
+
+// MARK: - Sync Section
+
+struct SyncSection: View {
+    @AppStorage("sync_icloud_enabled") private var iCloudEnabled = true
+    @State private var iCloudStatus: ConnectionStatus = .available
+    @State private var isChecking = false
+    @State private var showingEnableConfirmation = false
+    @State private var localMemoCount: Int = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text("SYNC")
+                .font(.techLabel)
+                .tracking(2)
+                .foregroundColor(.textTertiary)
+                .padding(.horizontal, Spacing.md)
+
+            VStack(spacing: 0) {
+                // iCloud Sync Row
+                HStack {
+                    Image(systemName: iCloudEnabled ? "icloud" : "icloud.slash")
+                        .foregroundColor(iCloudEnabled ? .active : .textTertiary)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("iCloud")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.textPrimary)
+
+                        Text(iCloudEnabled ? statusMessage : "Disabled")
+                            .font(.system(size: 12))
+                            .foregroundColor(.textSecondary)
+                    }
+
+                    Spacer()
+
+                    statusBadge
+
+                    Toggle("", isOn: Binding(
+                        get: { iCloudEnabled },
+                        set: { newValue in
+                            if newValue && !iCloudEnabled {
+                                // Enabling - show confirmation
+                                countLocalMemos()
+                                showingEnableConfirmation = true
+                            } else if !newValue && iCloudEnabled {
+                                // Disabling - no confirmation needed, just pause
+                                iCloudEnabled = false
+                                handleToggleChange(false)
+                            }
+                        }
+                    ))
+                    .labelsHidden()
+                }
+                .padding(Spacing.sm)
+                .alert("Enable iCloud Sync?", isPresented: $showingEnableConfirmation) {
+                    Button("Cancel", role: .cancel) {}
+                    Button("Enable") {
+                        iCloudEnabled = true
+                        handleToggleChange(true)
+                    }
+                } message: {
+                    Text(localMemoCount > 0
+                         ? "\(localMemoCount) memo\(localMemoCount == 1 ? "" : "s") will be uploaded to iCloud. This may take a few moments."
+                         : "Your memos will sync across all your Apple devices via iCloud.")
+                }
+
+                Divider().background(Color.borderPrimary)
+
+                // Bridge Sync Row (Future)
+                HStack {
+                    Image(systemName: "link")
+                        .foregroundColor(.textTertiary)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Direct Connect")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.textPrimary)
+
+                        Text("Coming soon")
+                            .font(.system(size: 12))
+                            .foregroundColor(.textSecondary)
+                    }
+
+                    Spacer()
+
+                    Text("SOON")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(.textTertiary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.surfaceTertiary)
+                        .cornerRadius(3)
+                }
+                .padding(Spacing.sm)
+                .opacity(0.5)
+            }
+            .background(Color.surfaceSecondary)
+            .cornerRadius(CornerRadius.sm)
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
+            )
+            .padding(.horizontal, Spacing.md)
+        }
+        .task {
+            await checkiCloudStatus()
+        }
+    }
+
+    private var statusBadge: some View {
+        Group {
+            if isChecking {
+                ProgressView()
+                    .controlSize(.small)
+            } else if !iCloudEnabled {
+                Circle()
+                    .fill(Color.gray)
+                    .frame(width: 6, height: 6)
+            } else {
+                Circle()
+                    .fill(iCloudStatus == .available ? Color.green : Color.orange)
+                    .frame(width: 6, height: 6)
+            }
+        }
+    }
+
+    private var statusMessage: String {
+        if isChecking {
+            return "Checking..."
+        } else if iCloudStatus == .available {
+            return "Connected"
+        } else if case .unavailable(let reason) = iCloudStatus {
+            return reason
+        } else {
+            return "Not available"
+        }
+    }
+
+    private func countLocalMemos() {
+        // Count memos in local Core Data store
+        Task {
+            let context = PersistenceController.shared.container.viewContext
+            let fetchRequest = VoiceMemo.fetchRequest()
+            fetchRequest.predicate = NSPredicate(format: "deletedAt == nil")
+
+            do {
+                let count = try await context.perform {
+                    try context.count(for: fetchRequest)
+                }
+                await MainActor.run {
+                    localMemoCount = count
+                }
+            } catch {
+                AppLogger.app.error("Failed to count local memos: \(error)")
+                await MainActor.run {
+                    localMemoCount = 0
+                }
+            }
+        }
+    }
+
+    private func handleToggleChange(_ enabled: Bool) {
+        AppLogger.app.info("iCloud sync \(enabled ? "enabled" : "disabled")")
+
+        if enabled {
+            // Resume sync - Core Data + CloudKit automatically sync
+            AppLogger.app.info("iCloud sync resumed - Core Data will push changes")
+        } else {
+            // Pause sync - preference tracked, automatic sync paused
+            AppLogger.app.info("iCloud sync paused")
+        }
+
+        Task {
+            await ConnectionManager.shared.checkAllConnections()
+        }
+    }
+
+    private func checkiCloudStatus() async {
+        guard iCloudEnabled else {
+            iCloudStatus = .unavailable(reason: "Disabled")
+            return
+        }
+
+        isChecking = true
+
+        if let provider = ConnectionManager.shared.provider(for: .iCloud) {
+            let status = await provider.checkConnection()
+            await MainActor.run {
+                iCloudStatus = status
+                isChecking = false
+            }
+        } else {
+            await MainActor.run {
+                iCloudStatus = .unavailable(reason: "Not available")
+                isChecking = false
+            }
+        }
     }
 }
 

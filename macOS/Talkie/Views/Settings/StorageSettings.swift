@@ -323,8 +323,15 @@ struct DatabaseSettingsView: View {
 
 // MARK: - Cloud Settings
 
-/// Cloud storage settings: sync configuration (future)
+/// Cloud storage settings: sync configuration
 struct CloudSettingsView: View {
+    @AppStorage("sync_icloud_enabled") private var iCloudEnabled = true
+    @State private var iCloudStatus: ConnectionStatus = .available
+    @State private var isChecking = false
+    @State private var showingEnableConfirmation = false
+    @State private var pendingEnableValue = false
+    @State private var localMemoCount: Int = 0
+
     var body: some View {
         SettingsPageContainer {
             SettingsPageHeader(
@@ -334,14 +341,109 @@ struct CloudSettingsView: View {
             )
         } content: {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                // Coming soon card
+                // iCloud Sync Settings
                 VStack(alignment: .leading, spacing: Spacing.md) {
                     HStack(spacing: Spacing.sm) {
                         RoundedRectangle(cornerRadius: 1)
-                            .fill(Color.blue)
+                            .fill(iCloudEnabled ? Color.blue : Color.gray)
                             .frame(width: 3, height: 14)
 
                         Text("ICLOUD SYNC")
+                            .font(Theme.current.fontXSBold)
+                            .foregroundColor(Theme.current.foregroundSecondary)
+
+                        Spacer()
+
+                        // Status indicator
+                        statusBadge
+                    }
+
+                    // Toggle and status
+                    VStack(spacing: Spacing.md) {
+                        HStack(spacing: Spacing.md) {
+                            Image(systemName: iCloudEnabled ? "icloud" : "icloud.slash")
+                                .font(.displayMedium)
+                                .foregroundColor(iCloudEnabled ? .blue : .gray.opacity(Opacity.half))
+
+                            VStack(alignment: .leading, spacing: Spacing.xs) {
+                                Text(iCloudEnabled ? "Sync Enabled" : "Sync Disabled")
+                                    .font(Theme.current.fontSMMedium)
+                                    .foregroundColor(Theme.current.foreground)
+
+                                Text(iCloudEnabled
+                                     ? "Memos sync across all your Apple devices via iCloud."
+                                     : "Memos are stored locally only. Enable to sync with other devices.")
+                                    .font(Theme.current.fontXS)
+                                    .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .padding(Spacing.md)
+                        .background(Theme.current.surface1)
+                        .cornerRadius(CornerRadius.sm)
+
+                        // Toggle control
+                        HStack {
+                            Text("Enable iCloud Sync")
+                                .font(Theme.current.fontSM)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+
+                            Spacer()
+
+                            Toggle("", isOn: Binding(
+                                get: { iCloudEnabled },
+                                set: { newValue in
+                                    if newValue && !iCloudEnabled {
+                                        // Enabling - show confirmation
+                                        pendingEnableValue = true
+                                        countLocalMemos()
+                                        showingEnableConfirmation = true
+                                    } else if !newValue && iCloudEnabled {
+                                        // Disabling - no confirmation needed, just pause
+                                        iCloudEnabled = false
+                                        handleToggleChange(false)
+                                    }
+                                }
+                            ))
+                            .labelsHidden()
+                        }
+                        .padding(Spacing.sm)
+                        .background(Theme.current.surface1)
+                        .cornerRadius(CornerRadius.sm)
+                        .alert("Enable iCloud Sync?", isPresented: $showingEnableConfirmation) {
+                            Button("Cancel", role: .cancel) {
+                                pendingEnableValue = false
+                            }
+                            Button("Enable") {
+                                iCloudEnabled = true
+                                handleToggleChange(true)
+                            }
+                        } message: {
+                            Text(localMemoCount > 0
+                                 ? "\(localMemoCount) memo\(localMemoCount == 1 ? "" : "s") will be uploaded to iCloud. This may take a few moments."
+                                 : "Your memos will sync across all your Apple devices via iCloud.")
+                        }
+                    }
+
+                    // Feature list
+                    if iCloudEnabled {
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            featureRow(icon: "arrow.triangle.2.circlepath", text: "Automatic background sync")
+                            featureRow(icon: "lock.shield", text: "Encrypted by Apple")
+                            featureRow(icon: "iphone.gen3.radiowaves.left.and.right", text: "iPhone and Mac sync")
+                        }
+                    }
+                }
+                .settingsSectionCard(padding: Spacing.md)
+
+                // Future providers placeholder
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    HStack(spacing: Spacing.sm) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.gray)
+                            .frame(width: 3, height: 14)
+
+                        Text("OTHER PROVIDERS")
                             .font(Theme.current.fontXSBold)
                             .foregroundColor(Theme.current.foregroundSecondary)
 
@@ -352,38 +454,124 @@ struct CloudSettingsView: View {
                             .foregroundColor(.white)
                             .padding(.horizontal, Spacing.xs)
                             .padding(.vertical, Spacing.xxs)
-                            .background(Color.accentColor)
+                            .background(Color.gray)
                             .cornerRadius(3)
                     }
 
-                    HStack(spacing: Spacing.md) {
-                        Image(systemName: "icloud")
-                            .font(.displayMedium)
-                            .foregroundColor(.blue.opacity(Opacity.half))
-
-                        VStack(alignment: .leading, spacing: Spacing.xs) {
-                            Text("Sync Across Devices")
-                                .font(Theme.current.fontSMMedium)
-                                .foregroundColor(Theme.current.foreground)
-
-                            Text("Sync your memos and dictations seamlessly across all your Apple devices using iCloud.")
-                                .font(Theme.current.fontXS)
-                                .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    .padding(Spacing.md)
-                    .background(Theme.current.surface1)
-                    .cornerRadius(CornerRadius.sm)
-
-                    // Feature list
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        featureRow(icon: "arrow.triangle.2.circlepath", text: "Automatic background sync")
-                        featureRow(icon: "lock.shield", text: "End-to-end encryption")
-                        featureRow(icon: "iphone.gen3.radiowaves.left.and.right", text: "Seamless iPhone integration")
-                    }
+                    Text("Direct Connect (Tailscale), Dropbox, Google Drive, and S3 support coming soon.")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(Opacity.prominent))
                 }
                 .settingsSectionCard(padding: Spacing.md)
+            }
+        }
+        .task {
+            await checkiCloudStatus()
+        }
+    }
+
+    private var statusBadge: some View {
+        Group {
+            if isChecking {
+                HStack(spacing: Spacing.xs) {
+                    ProgressView()
+                        .controlSize(.mini)
+                    Text("CHECKING")
+                        .font(.techLabelSmall)
+                }
+                .foregroundColor(Theme.current.foregroundSecondary)
+            } else if !iCloudEnabled {
+                Text("DISABLED")
+                    .font(.techLabelSmall)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, Spacing.xs)
+                    .padding(.vertical, Spacing.xxs)
+                    .background(Color.gray)
+                    .cornerRadius(3)
+            } else {
+                switch iCloudStatus {
+                case .available:
+                    HStack(spacing: Spacing.xxs) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(Theme.current.fontXS)
+                        Text("ACTIVE")
+                            .font(.techLabelSmall)
+                    }
+                    .foregroundColor(.green)
+
+                case .unavailable(let reason):
+                    Text(reason.uppercased())
+                        .font(.techLabelSmall)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, Spacing.xs)
+                        .padding(.vertical, Spacing.xxs)
+                        .background(Color.orange)
+                        .cornerRadius(3)
+
+                case .connecting, .syncing:
+                    HStack(spacing: Spacing.xs) {
+                        ProgressView()
+                            .controlSize(.mini)
+                        Text("SYNCING")
+                            .font(.techLabelSmall)
+                    }
+                    .foregroundColor(.blue)
+                }
+            }
+        }
+    }
+
+    private func countLocalMemos() {
+        // Count memos in local GRDB database
+        Task {
+            do {
+                let count = try await DatabaseManager.shared.countMemos()
+                await MainActor.run {
+                    localMemoCount = count
+                }
+            } catch {
+                logger.error("Failed to count local memos: \(error)")
+                await MainActor.run {
+                    localMemoCount = 0
+                }
+            }
+        }
+    }
+
+    private func handleToggleChange(_ enabled: Bool) {
+        logger.info("iCloud sync \(enabled ? "enabled" : "disabled")")
+
+        if enabled {
+            // Resume sync - trigger immediate sync
+            CloudKitSyncManager.shared.syncNow()
+        } else {
+            // Pause sync - CloudKit container keeps running but we don't trigger syncs
+            logger.info("iCloud sync paused - will not trigger automatic syncs")
+        }
+
+        Task {
+            await ConnectionManager.shared.checkAllConnections()
+        }
+    }
+
+    private func checkiCloudStatus() async {
+        guard iCloudEnabled else {
+            iCloudStatus = .unavailable(reason: "Disabled")
+            return
+        }
+
+        isChecking = true
+
+        if let provider = ConnectionManager.shared.provider(for: .iCloud) {
+            let status = await provider.checkConnection()
+            await MainActor.run {
+                iCloudStatus = status
+                isChecking = false
+            }
+        } else {
+            await MainActor.run {
+                iCloudStatus = .unavailable(reason: "Not available")
+                isChecking = false
             }
         }
     }

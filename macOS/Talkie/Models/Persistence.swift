@@ -315,6 +315,14 @@ struct PersistenceController {
             CloudKitSyncManager.shared.configure(with: viewContext)
             CloudKitSyncManager.shared.syncNow()
 
+            // Initialize ConnectionManager and register sync providers
+            Task {
+                let manager = ConnectionManager.shared
+                manager.register(LocalSyncProvider())
+                manager.register(iCloudSyncProvider())
+                await manager.checkAllConnections()
+            }
+
             // Initialize TalkieData - runs startup inventory and bridge sync if needed
             TalkieData.shared.configure(with: viewContext)
 

@@ -37,6 +37,15 @@ struct talkieApp: App {
     init() {
         let initStart = Date()
         registerBackgroundTasks()
+
+        // Initialize ConnectionManager and register sync providers
+        Task {
+            let manager = ConnectionManager.shared
+            manager.register(LocalSyncProvider())
+            manager.register(iCloudSyncProvider())
+            await manager.checkAllConnections()
+        }
+
         let initDuration = Date().timeIntervalSince(initStart)
         AppLogger.app.info("📱 App.init: \(String(format: "%.0f", initDuration * 1000))ms")
     }

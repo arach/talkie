@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		541290A2D8A34748AA4ECB7B /* ModelRegistryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C71EF7996EB344539C396977 /* ModelRegistryView.swift */; };
+		7F9BC024C8014855BD7CFDE3 /* ModelPlaygroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34DF50FEB16C4FBBB136B740 /* ModelPlaygroundView.swift */; };
+		ED5C9D66ABD648B4A9225302 /* iCloudSyncProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CDE3623769D498DB219A660 /* iCloudSyncProvider.swift */; };
+		E3CCBC9B5FBA4845B9FCA405 /* SyncProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BF3B038A8142B480F07308 /* SyncProvider.swift */; };
+		6671D8A270FE4F2AB3104C86 /* LocalSyncProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67EF9D4181744ED4AF5722A1 /* LocalSyncProvider.swift */; };
+		DDC7BAAE14D045158DDA4FF7 /* ConnectionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 660A3B21E1A248659DF2F953 /* ConnectionManager.swift */; };
 		000B06752659571E4EA8208D /* ClaudeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA2846DC98F2A0A65B237633 /* ClaudeView.swift */; };
 		0042119489E020046688F029 /* QuickOpenBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8B99BF40592ACAE5392D78 /* QuickOpenBar.swift */; };
 		007579B10DE6CF086C0E3C46 /* DebugToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */; };
@@ -275,6 +281,12 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		C71EF7996EB344539C396977 /* ModelRegistryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelRegistryView.swift; sourceTree = "<group>"; };
+		34DF50FEB16C4FBBB136B740 /* ModelPlaygroundView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelPlaygroundView.swift; sourceTree = "<group>"; };
+		9CDE3623769D498DB219A660 /* iCloudSyncProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iCloudSyncProvider.swift; sourceTree = "<group>"; };
+		E5BF3B038A8142B480F07308 /* SyncProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncProvider.swift; sourceTree = "<group>"; };
+		67EF9D4181744ED4AF5722A1 /* LocalSyncProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalSyncProvider.swift; sourceTree = "<group>"; };
+		660A3B21E1A248659DF2F953 /* ConnectionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionManager.swift; sourceTree = "<group>"; };
 		02A27F7032460B34EEAC0687 /* STTModelCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTModelCard.swift; sourceTree = "<group>"; };
 		03794B826EFF607A0BBB5B59 /* VoiceMemo+Transcripts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VoiceMemo+Transcripts.swift"; sourceTree = "<group>"; };
 		03E564DDD2727813BD2F80F4 /* OpenAIProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIProvider.swift; sourceTree = "<group>"; };
@@ -557,6 +569,17 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		B5DD782E95EC432C8A66157B /* Sync */ = {
+			isa = PBXGroup;
+			children = (
+				9CDE3623769D498DB219A660 /* iCloudSyncProvider.swift */,
+				E5BF3B038A8142B480F07308 /* SyncProvider.swift */,
+				67EF9D4181744ED4AF5722A1 /* LocalSyncProvider.swift */,
+				660A3B21E1A248659DF2F953 /* ConnectionManager.swift */,
+			);
+			path = Sync;
+			sourceTree = "<group>";
+		};
 		07EC6608E6DA26A94F36034F /* Models */ = {
 			isa = PBXGroup;
 			children = (
@@ -860,6 +883,8 @@
 		9A4651765758DD61801D03CA /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				C71EF7996EB344539C396977 /* ModelRegistryView.swift */,
+				34DF50FEB16C4FBBB136B740 /* ModelPlaygroundView.swift */,
 				C17881FF95CCD644641D298E /* APISettings.swift */,
 				CB9A7709DDDFE4A1859B1326 /* AppearanceSettings.swift */,
 				90C22080263D752683F84C1A /* AuditResultsView.swift */,
@@ -1122,6 +1147,7 @@
 		FDD3B1848425C2C039CA5F59 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				B5DD782E95EC432C8A66157B /* Sync */,
 				75BB8C84F67500324AE2084A /* APIKeyStore.swift */,
 				6F7C961509F087E2FA5C4C24 /* AppEnvironment.swift */,
 				96A936E8A33939EF4FEF6B47 /* AppIconProvider.swift */,
@@ -1286,6 +1312,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				541290A2D8A34748AA4ECB7B /* ModelRegistryView.swift in Sources */,
+				7F9BC024C8014855BD7CFDE3 /* ModelPlaygroundView.swift in Sources */,
+				ED5C9D66ABD648B4A9225302 /* iCloudSyncProvider.swift in Sources */,
+				E3CCBC9B5FBA4845B9FCA405 /* SyncProvider.swift in Sources */,
+				6671D8A270FE4F2AB3104C86 /* LocalSyncProvider.swift in Sources */,
+				DDC7BAAE14D045158DDA4FF7 /* ConnectionManager.swift in Sources */,
 				46BCB0361A074CFCE3C32252 /* AIResultsViews.swift in Sources */,
 				FF50DD21DD6B6C2C95BE8EBD /* APIKeyStore.swift in Sources */,
 				A99F74DC6D3F9B3A38A11425 /* APISettings.swift in Sources */,
