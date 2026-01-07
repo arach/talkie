@@ -1145,7 +1145,7 @@ struct DetailBadge: View {
 // MARK: - Workflow Inline Editor (Primary Edit Experience)
 
 struct WorkflowInlineEditor: View {
-    @Binding var workflow: WorkflowDefinition?
+    @Binding var workflow: WorkflowDefinition
     let onSave: () -> Void
     let onDelete: () -> Void
     let onDuplicate: () -> Void
@@ -1156,24 +1156,16 @@ struct WorkflowInlineEditor: View {
     @State private var showingStepTypePicker = false
     @State private var isEditing = false
     @State private var showingVisualizer = false
+    @State private var hasInitializedEditMode = false
+
+    // Check if this is a new unsaved workflow (not in service yet)
+    private var isNewUnsavedWorkflow: Bool {
+        return workflowService.workflow(byID: workflow.id) == nil
+    }
 
     // Get the current workflow from service (source of truth for saved workflows)
     private var currentWorkflow: WorkflowDefinition? {
-        guard let id = workflow?.id else { return nil }
-        return workflowService.workflow(byID: id)?.definition
-    }
-
-    private var editedWorkflow: Binding<WorkflowDefinition> {
-        Binding(
-            get: {
-                // Use binding as source of truth for edits (saved via onSave)
-                workflow ?? WorkflowDefinition(name: "", description: "")
-            },
-            set: { newValue in
-                // Update binding only - save happens via onSave callback
-                workflow = newValue
-            }
-        )
+        return workflowService.workflow(byID: workflow.id)?.definition
     }
 
     var body: some View {
@@ -1182,17 +1174,17 @@ struct WorkflowInlineEditor: View {
             HStack(spacing: Spacing.xs) {
                 // Inline icon/color picker - clickable in edit mode
                 WorkflowIconColorPicker(
-                    selectedIcon: editedWorkflow.icon,
-                    selectedColor: editedWorkflow.color,
+                    selectedIcon: $workflow.icon,
+                    selectedColor: $workflow.color,
                     isEditing: isEditing
                 )
 
                 if isEditing {
-                    TextField("Workflow name", text: editedWorkflow.name)
+                    TextField("Workflow name", text: $workflow.name)
                         .font(.bodySmall)
                         .textFieldStyle(.plain)
                 } else {
-                    Text(editedWorkflow.wrappedValue.name)
+                    Text(workflow.name)
                         .font(.bodySmall)
                 }
 
@@ -1277,7 +1269,7 @@ struct WorkflowInlineEditor: View {
                         .cornerRadius(CornerRadius.xs)
                     }
                     .buttonStyle(.plain)
-                    .disabled(editedWorkflow.wrappedValue.steps.isEmpty)
+                    .disabled(workflow.steps.isEmpty)
 
                     // Run button
                     Button(action: onRun) {
@@ -1294,7 +1286,7 @@ struct WorkflowInlineEditor: View {
                         .cornerRadius(CornerRadius.xs)
                     }
                     .buttonStyle(.plain)
-                    .disabled(editedWorkflow.wrappedValue.steps.isEmpty)
+                    .disabled(workflow.steps.isEmpty)
 
                     // Delete button
                     Button(action: onDelete) {
@@ -1322,7 +1314,7 @@ struct WorkflowInlineEditor: View {
                                     .font(.techLabelSmall)
                                     .foregroundColor(.secondary.opacity(0.6))
 
-                                TextField("What does this workflow do?", text: editedWorkflow.description)
+                                TextField("What does this workflow do?", text: $workflow.description)
                                     .font(.monoSmall)
                                     .textFieldStyle(.plain)
                                     .padding(Spacing.xs)
@@ -1339,7 +1331,7 @@ struct WorkflowInlineEditor: View {
                                 HStack(spacing: Spacing.sm) {
                                     // Enabled
                                     CompactToggle(
-                                        isOn: editedWorkflow.isEnabled,
+                                        isOn: $workflow.isEnabled,
                                         icon: "checkmark.circle.fill",
                                         label: "Enabled",
                                         activeColor: SemanticColor.success
@@ -1347,15 +1339,15 @@ struct WorkflowInlineEditor: View {
 
                                     // Pinned
                                     CompactToggle(
-                                        isOn: editedWorkflow.isPinned,
+                                        isOn: $workflow.isPinned,
                                         icon: "pin.fill",
                                         label: "Pinned",
-                                        activeColor: editedWorkflow.wrappedValue.color.color
+                                        activeColor: workflow.color.color
                                     )
 
                                     // Auto-run
                                     CompactToggle(
-                                        isOn: editedWorkflow.autoRun,
+                                        isOn: $workflow.autoRun,
                                         icon: "bolt.fill",
                                         label: "Auto-run",
                                         activeColor: SemanticColor.warning
@@ -1370,9 +1362,9 @@ struct WorkflowInlineEditor: View {
                                 .font(.techLabelSmall)
                                 .foregroundColor(.secondary.opacity(0.6))
 
-                            Text(editedWorkflow.wrappedValue.description.isEmpty ? "No description" : editedWorkflow.wrappedValue.description)
+                            Text(workflow.description.isEmpty ? "No description" : workflow.description)
                                 .font(.monoSmall)
-                                .foregroundColor(editedWorkflow.wrappedValue.description.isEmpty ? .secondary.opacity(Opacity.half) : .primary)
+                                .foregroundColor(workflow.description.isEmpty ? .secondary.opacity(Opacity.half) : .primary)
                                 .padding(Spacing.xs)
                         }
                     }
@@ -1407,7 +1399,9 @@ struct WorkflowInlineEditor: View {
                             }
                         }
 
-                        let displaySteps = currentWorkflow?.steps ?? []
+                        // Use workflow binding for display (not currentWorkflow which looks up in service)
+                        // This allows new unsaved workflows to show their steps
+                        let displaySteps = workflow.steps
                         if displaySteps.isEmpty {
                             // Empty state
                             VStack(spacing: Spacing.sm) {
@@ -1476,54 +1470,57 @@ struct WorkflowInlineEditor: View {
             }
         }
         .sheet(isPresented: $showingVisualizer) {
-            WorkflowVisualizerSheet(workflow: editedWorkflow.wrappedValue)
+            WorkflowVisualizerSheet(workflow: workflow)
+        }
+        .onAppear {
+            // Auto-enter edit mode for new unsaved workflows
+            if !hasInitializedEditMode && isNewUnsavedWorkflow {
+                isEditing = true
+                hasInitializedEditMode = true
+            }
+        }
+        .onChange(of: workflow.id) { _, newID in
+            // Reset edit mode tracking when switching to a different workflow
+            hasInitializedEditMode = false
+            // Auto-enter edit mode for new unsaved workflows
+            if workflowService.workflow(byID: newID) == nil {
+                isEditing = true
+                hasInitializedEditMode = true
+            } else {
+                isEditing = false
+            }
         }
     }
 
     private func stepBinding(at index: Int) -> Binding<WorkflowStep> {
-        Binding(
-            get: {
-                guard let wf = workflow, index < wf.steps.count else {
-                    return WorkflowStep(type: .llm, config: .llm(LLMStepConfig(provider: .gemini, prompt: "")), outputKey: "")
-                }
-                return wf.steps[index]
-            },
-            set: { newValue in
-                guard var wf = workflow, index < wf.steps.count else { return }
-                wf.steps[index] = newValue
-                wf.modifiedAt = Date()
-                workflow = wf
-            }
-        )
+        // Use workflow's steps array binding for proper SwiftUI change detection
+        guard index < workflow.steps.count else {
+            return .constant(WorkflowStep(type: .llm, config: .llm(LLMStepConfig(provider: .gemini, prompt: "")), outputKey: ""))
+        }
+        return $workflow.steps[index]
     }
 
     private func addStep(of type: WorkflowStep.StepType) {
-        guard var wf = workflow else { return }
         let newStep = WorkflowStep(
             type: type,
             config: StepConfig.defaultConfig(for: type),
-            outputKey: "output_\(wf.steps.count + 1)"
+            outputKey: "output_\(workflow.steps.count + 1)"
         )
-        wf.steps.append(newStep)
-        wf.modifiedAt = Date()
-        workflow = wf
+        workflow.steps.append(newStep)
+        workflow.modifiedAt = Date()
     }
 
     private func deleteStep(at index: Int) {
-        guard var wf = workflow else { return }
-        guard index < wf.steps.count else { return }
-        wf.steps.remove(at: index)
-        wf.modifiedAt = Date()
-        workflow = wf
+        guard index < workflow.steps.count else { return }
+        workflow.steps.remove(at: index)
+        workflow.modifiedAt = Date()
     }
 
     private func moveStep(from source: Int, to destination: Int) {
-        guard var wf = workflow else { return }
-        guard source < wf.steps.count else { return }
-        let step = wf.steps.remove(at: source)
-        wf.steps.insert(step, at: destination)
-        wf.modifiedAt = Date()
-        workflow = wf
+        guard source < workflow.steps.count else { return }
+        let step = workflow.steps.remove(at: source)
+        workflow.steps.insert(step, at: destination)
+        workflow.modifiedAt = Date()
     }
 }
 
@@ -3515,14 +3512,8 @@ struct LLMStepConfigEditor: View {
                         }
                         .labelsHidden()
                         .font(.system(size: 10, design: .monospaced))
-                        .onAppear {
-                            // Auto-fix invalid model selection
-                            if config.modelId != validatedModelId && !validatedModelId.isEmpty {
-                                var newConfig = config
-                                newConfig.modelId = validatedModelId
-                                step.config = .llm(newConfig)
-                            }
-                        }
+                        // Force picker to recreate when provider changes, ensuring model list updates
+                        .id(config.provider?.rawValue ?? "auto")
                     }
                 }
             }

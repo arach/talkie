@@ -343,6 +343,14 @@ final class BridgeManager {
         }
     }
 
+    /// Send a message with an attached image
+    /// Note: Image sending is not yet supported by the bridge server
+    func sendMessageWithImage(sessionId: String, text: String, image: UIImage) async throws {
+        // TODO: Implement image sending when bridge server supports it
+        // For now, just send the text portion
+        try await sendMessage(sessionId: sessionId, text: text)
+    }
+
     /// Send audio to be transcribed and submitted to Claude
     /// - Returns: The transcript that was sent
     func sendAudio(sessionId: String, audioURL: URL) async throws -> String {

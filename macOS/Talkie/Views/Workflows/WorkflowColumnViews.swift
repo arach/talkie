@@ -16,7 +16,10 @@ struct WorkflowListColumn: View {
     @Binding var selectedWorkflowID: UUID?
     @Binding var editingWorkflow: WorkflowDefinition?
     private let workflowService = WorkflowService.shared
+    private let fileRepo = WorkflowFileRepository.shared
     private let settings = SettingsManager.shared
+
+    @State private var showingTemplatePicker = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -30,7 +33,7 @@ struct WorkflowListColumn: View {
                         .foregroundColor(Theme.current.foregroundSecondary)
                 }
                 Spacer()
-                Button(action: createNewWorkflow) {
+                Button(action: { showingTemplatePicker = true }) {
                     Image(systemName: "plus")
                         .font(Theme.current.fontBody)
                         .foregroundColor(Theme.current.foreground)
@@ -61,13 +64,57 @@ struct WorkflowListColumn: View {
                 .padding(Spacing.sm)
             }
         }
+        .sheet(isPresented: $showingTemplatePicker) {
+            WorkflowTemplatePicker(
+                templates: fileRepo.loadTemplates(),
+                onSelectBlank: {
+                    createNewWorkflow(from: nil)
+                    showingTemplatePicker = false
+                },
+                onSelectTemplate: { template in
+                    createNewWorkflow(from: template)
+                    showingTemplatePicker = false
+                },
+                onCancel: {
+                    showingTemplatePicker = false
+                }
+            )
+        }
     }
 
-    private func createNewWorkflow() {
-        let newWorkflow = WorkflowDefinition(
-            name: "Untitled Workflow",
-            description: ""
-        )
+    private func createNewWorkflow(from template: WorkflowDefinition?) {
+        let newWorkflow: WorkflowDefinition
+        if let template = template {
+            // Create a copy from template with fresh UUID
+            newWorkflow = WorkflowDefinition(
+                id: UUID(),
+                name: template.name,
+                description: template.description,
+                icon: template.icon,
+                color: template.color,
+                steps: template.steps.map { step in
+                    WorkflowStep(
+                        id: UUID(),
+                        type: step.type,
+                        config: step.config,
+                        outputKey: step.outputKey,
+                        isEnabled: step.isEnabled,
+                        condition: step.condition
+                    )
+                },
+                isEnabled: true,
+                isPinned: false,
+                autoRun: false,
+                autoRunOrder: 0,
+                createdAt: Date(),
+                modifiedAt: Date()
+            )
+        } else {
+            newWorkflow = WorkflowDefinition(
+                name: "Untitled Workflow",
+                description: ""
+            )
+        }
         editingWorkflow = newWorkflow
         selectedWorkflowID = newWorkflow.id
     }
@@ -86,9 +133,11 @@ struct WorkflowDetailColumn: View {
     @Binding var editingWorkflow: WorkflowDefinition?
     @Binding var selectedWorkflowID: UUID?
     private let workflowService = WorkflowService.shared
+    private let fileRepo = WorkflowFileRepository.shared
     private let settings = SettingsManager.shared
     private var memosVM: MemosViewModel { MemosViewModel.shared }
     @State private var showingMemoSelector = false
+    @State private var showingTemplatePicker = false
 
     // Get fresh workflow from service (source of truth)
     private var currentWorkflow: Workflow? {
@@ -98,9 +147,9 @@ struct WorkflowDetailColumn: View {
 
     var body: some View {
         Group {
-            if editingWorkflow != nil {
+            if let binding = Binding($editingWorkflow) {
                 WorkflowInlineEditor(
-                    workflow: $editingWorkflow,
+                    workflow: binding,
                     onSave: saveWorkflow,
                     onDelete: deleteCurrentWorkflow,
                     onDuplicate: duplicateCurrentWorkflow,
@@ -116,7 +165,7 @@ struct WorkflowDetailColumn: View {
                         .font(Theme.current.fontXSBold)
                         .foregroundColor(Theme.current.foregroundSecondary)
 
-                    Button(action: createNewWorkflow) {
+                    Button(action: { showingTemplatePicker = true }) {
                         HStack(spacing: 4) {
                             Image(systemName: "plus")
                                 .font(Theme.current.fontXS)
@@ -156,13 +205,57 @@ struct WorkflowDetailColumn: View {
                 )
             }
         }
+        .sheet(isPresented: $showingTemplatePicker) {
+            WorkflowTemplatePicker(
+                templates: fileRepo.loadTemplates(),
+                onSelectBlank: {
+                    createNewWorkflow(from: nil)
+                    showingTemplatePicker = false
+                },
+                onSelectTemplate: { template in
+                    createNewWorkflow(from: template)
+                    showingTemplatePicker = false
+                },
+                onCancel: {
+                    showingTemplatePicker = false
+                }
+            )
+        }
     }
 
-    private func createNewWorkflow() {
-        let newWorkflow = WorkflowDefinition(
-            name: "Untitled Workflow",
-            description: ""
-        )
+    private func createNewWorkflow(from template: WorkflowDefinition?) {
+        let newWorkflow: WorkflowDefinition
+        if let template = template {
+            // Create a copy from template with fresh UUID
+            newWorkflow = WorkflowDefinition(
+                id: UUID(),
+                name: template.name,
+                description: template.description,
+                icon: template.icon,
+                color: template.color,
+                steps: template.steps.map { step in
+                    WorkflowStep(
+                        id: UUID(),
+                        type: step.type,
+                        config: step.config,
+                        outputKey: step.outputKey,
+                        isEnabled: step.isEnabled,
+                        condition: step.condition
+                    )
+                },
+                isEnabled: true,
+                isPinned: false,
+                autoRun: false,
+                autoRunOrder: 0,
+                createdAt: Date(),
+                modifiedAt: Date()
+            )
+        } else {
+            newWorkflow = WorkflowDefinition(
+                name: "Untitled Workflow",
+                description: ""
+            )
+        }
         editingWorkflow = newWorkflow
         selectedWorkflowID = newWorkflow.id
     }

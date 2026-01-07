@@ -14,11 +14,13 @@ private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
 
 struct WorkflowsContentView: View {
     private let workflowService = WorkflowService.shared
+    private let fileRepo = WorkflowFileRepository.shared
     private let settings = SettingsManager.shared
     private var memosVM: MemosViewModel { MemosViewModel.shared }
     @State private var selectedWorkflowID: UUID?
     @State private var editingWorkflow: WorkflowDefinition?
     @State private var showingMemoSelector = false
+    @State private var showingTemplatePicker = false
 
     // Get current workflow from service
     private var currentWorkflow: Workflow? {
@@ -40,7 +42,7 @@ struct WorkflowsContentView: View {
                             .foregroundColor(Theme.current.foregroundSecondary)
                     }
                     Spacer()
-                    Button(action: createNewWorkflow) {
+                    Button(action: { showingTemplatePicker = true }) {
                         Image(systemName: "plus")
                             .font(Theme.current.fontBody)
                             .foregroundColor(Theme.current.foreground)
@@ -78,9 +80,9 @@ struct WorkflowsContentView: View {
                 .opacity(0.5)
 
             // Right: Inline Editor - expands to fill
-            if editingWorkflow != nil {
+            if let binding = Binding($editingWorkflow) {
                 WorkflowInlineEditor(
-                    workflow: $editingWorkflow,
+                    workflow: binding,
                     onSave: saveWorkflow,
                     onDelete: deleteCurrentWorkflow,
                     onDuplicate: duplicateCurrentWorkflow,
@@ -98,7 +100,7 @@ struct WorkflowsContentView: View {
                         .font(Theme.current.fontXSBold)
                         .foregroundColor(.secondary.opacity(0.5))
 
-                    Button(action: createNewWorkflow) {
+                    Button(action: { showingTemplatePicker = true }) {
                         HStack(spacing: 4) {
                             Image(systemName: "plus")
                                 .font(Theme.current.fontXS)
@@ -138,13 +140,59 @@ struct WorkflowsContentView: View {
                 )
             }
         }
+        .sheet(isPresented: $showingTemplatePicker) {
+            WorkflowTemplatePicker(
+                templates: fileRepo.loadTemplates(),
+                onSelectBlank: {
+                    createNewWorkflow(from: nil)
+                    showingTemplatePicker = false
+                },
+                onSelectTemplate: { template in
+                    createNewWorkflow(from: template)
+                    showingTemplatePicker = false
+                },
+                onCancel: {
+                    showingTemplatePicker = false
+                }
+            )
+        }
     }
 
-    private func createNewWorkflow() {
-        let newWorkflow = WorkflowDefinition(
-            name: "Untitled Workflow",
-            description: ""
-        )
+    private func createNewWorkflow(from template: WorkflowDefinition?) {
+        let newWorkflow: WorkflowDefinition
+        if let template = template {
+            // Create a copy from template with fresh UUID
+            newWorkflow = WorkflowDefinition(
+                id: UUID(),
+                name: template.name,
+                description: template.description,
+                icon: template.icon,
+                color: template.color,
+                steps: template.steps.map { step in
+                    // Give each step a fresh UUID too
+                    WorkflowStep(
+                        id: UUID(),
+                        type: step.type,
+                        config: step.config,
+                        outputKey: step.outputKey,
+                        isEnabled: step.isEnabled,
+                        condition: step.condition
+                    )
+                },
+                isEnabled: true,
+                isPinned: false,
+                autoRun: false,
+                autoRunOrder: 0,
+                createdAt: Date(),
+                modifiedAt: Date()
+            )
+        } else {
+            // Create blank workflow
+            newWorkflow = WorkflowDefinition(
+                name: "Untitled Workflow",
+                description: ""
+            )
+        }
         editingWorkflow = newWorkflow
         selectedWorkflowID = newWorkflow.id
     }
@@ -612,3 +660,125 @@ struct MemoSelectorSheet: View {
     }
 }
 
+// MARK: - Workflow Template Picker
+
+struct WorkflowTemplatePicker: View {
+    let templates: [WorkflowDefinition]
+    let onSelectBlank: () -> Void
+    let onSelectTemplate: (WorkflowDefinition) -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("New Workflow")
+                    .font(Theme.current.fontTitleBold)
+                Spacer()
+                Button(action: onCancel) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(Theme.current.fontHeadline)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(Spacing.lg)
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.lg) {
+                    // Blank option
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        Text("START FRESH")
+                            .font(Theme.current.fontXSBold)
+                            .foregroundColor(Theme.current.foregroundSecondary)
+
+                        Button(action: onSelectBlank) {
+                            HStack(spacing: 12) {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Color.secondary.opacity(0.1))
+                                    Image(systemName: "plus")
+                                        .font(Theme.current.fontTitle)
+                                        .foregroundColor(.secondary)
+                                }
+                                .frame(width: 44, height: 44)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Blank Workflow")
+                                        .font(Theme.current.fontBodyMedium)
+                                        .foregroundColor(Theme.current.foreground)
+                                    Text("Start from scratch")
+                                        .font(Theme.current.fontXS)
+                                        .foregroundColor(Theme.current.foregroundSecondary)
+                                }
+
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .font(Theme.current.fontSM)
+                                    .foregroundColor(Theme.current.foregroundMuted)
+                            }
+                            .padding(Spacing.md)
+                            .background(Theme.current.surface1)
+                            .cornerRadius(CornerRadius.sm)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    // Templates section
+                    if !templates.isEmpty {
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            Text("TEMPLATES")
+                                .font(Theme.current.fontXSBold)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+
+                            ForEach(templates) { template in
+                                Button(action: { onSelectTemplate(template) }) {
+                                    HStack(spacing: 12) {
+                                        ZStack {
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(template.color.color.opacity(0.15))
+                                            Image(systemName: template.icon)
+                                                .font(Theme.current.fontBody)
+                                                .foregroundColor(template.color.color)
+                                        }
+                                        .frame(width: 44, height: 44)
+
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(template.name)
+                                                .font(Theme.current.fontBodyMedium)
+                                                .foregroundColor(Theme.current.foreground)
+                                            Text(template.description)
+                                                .font(Theme.current.fontXS)
+                                                .foregroundColor(Theme.current.foregroundSecondary)
+                                                .lineLimit(1)
+                                        }
+
+                                        Spacer()
+
+                                        Text("\(template.steps.count) step\(template.steps.count == 1 ? "" : "s")")
+                                            .font(Theme.current.fontXS)
+                                            .foregroundColor(Theme.current.foregroundMuted)
+
+                                        Image(systemName: "chevron.right")
+                                            .font(Theme.current.fontSM)
+                                            .foregroundColor(Theme.current.foregroundMuted)
+                                    }
+                                    .padding(Spacing.md)
+                                    .background(Theme.current.surface1)
+                                    .cornerRadius(CornerRadius.sm)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+                .padding(Spacing.lg)
+            }
+        }
+        .frame(width: 500, height: 450)
+        .background(Theme.current.surfaceInput)
+    }
+}

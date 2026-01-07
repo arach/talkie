@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import CryptoKit
 import TalkieKit
 
 private let log = Log(.workflow)
@@ -146,30 +145,6 @@ enum SimpleWorkflowLoaderError: Error, LocalizedError {
 /// Loads simplified workflow JSON files
 struct SimpleWorkflowLoader {
 
-    // MARK: - UUID Generation
-
-    /// Generate a deterministic UUID from a slug
-    /// Uses SHA256 hash to create a stable UUID namespace
-    static func uuidFromSlug(_ slug: String, namespace: String = "talkie.workflow") -> UUID {
-        let input = "\(namespace):\(slug)"
-        let hash = SHA256.hash(data: Data(input.utf8))
-        let bytes = Array(hash)
-
-        // Use first 16 bytes of hash to create UUID
-        // Set version (4) and variant (RFC 4122) bits
-        var uuidBytes = Array(bytes.prefix(16))
-        uuidBytes[6] = (uuidBytes[6] & 0x0F) | 0x40  // Version 4
-        uuidBytes[8] = (uuidBytes[8] & 0x3F) | 0x80  // Variant RFC 4122
-
-        let uuid = NSUUID(uuidBytes: uuidBytes) as UUID
-        return uuid
-    }
-
-    /// Generate a UUID for a step within a workflow
-    static func uuidForStep(_ stepIndex: Int, workflowSlug: String) -> UUID {
-        return uuidFromSlug("\(workflowSlug)/step-\(stepIndex)")
-    }
-
     // MARK: - Loading
 
     /// Load a workflow from a file URL
@@ -179,36 +154,35 @@ struct SimpleWorkflowLoader {
         }
 
         let data = try Data(contentsOf: fileURL)
-        let slug = fileURL.deletingPathExtension().lastPathComponent
-            .replacingOccurrences(of: ".twf", with: "")  // Handle legacy .twf.json files
-
-        return try load(from: data, slug: slug)
+        return try load(from: data)
     }
 
-    /// Load a workflow from JSON data with a given slug
-    static func load(from data: Data, slug: String) throws -> WorkflowDefinition {
+    /// Load a workflow from JSON data
+    static func load(from data: Data) throws -> WorkflowDefinition {
         let decoder = JSONDecoder()
 
         let file: SimpleWorkflowFile
         do {
             file = try decoder.decode(SimpleWorkflowFile.self, from: data)
         } catch {
-            throw SimpleWorkflowLoaderError.parseError(slug, error)
+            throw SimpleWorkflowLoaderError.parseError("workflow", error)
         }
 
-        return try convert(file, slug: slug)
+        return try convert(file)
     }
 
     // MARK: - Conversion
 
     /// Convert a SimpleWorkflowFile to WorkflowDefinition
-    static func convert(_ file: SimpleWorkflowFile, slug: String) throws -> WorkflowDefinition {
-        let workflowId = uuidFromSlug(slug)
-
-        // Convert steps
+    static func convert(_ file: SimpleWorkflowFile) throws -> WorkflowDefinition {
+        // Convert steps with fresh UUIDs
         var steps: [WorkflowStep] = []
+        var stepUUIDs: [UUID] = []  // Track for conditional step references
+
         for (index, simpleStep) in file.steps.enumerated() {
-            let step = try convertStep(simpleStep, index: index, workflowSlug: slug, totalSteps: file.steps.count)
+            let stepId = UUID()
+            stepUUIDs.append(stepId)
+            let step = try convertStep(simpleStep, index: index, stepId: stepId, stepUUIDs: stepUUIDs)
             steps.append(step)
         }
 
@@ -216,14 +190,14 @@ struct SimpleWorkflowLoader {
         let color = WorkflowColor(rawValue: file.color ?? "blue") ?? .blue
 
         return WorkflowDefinition(
-            id: workflowId,
+            id: UUID(),  // Fresh UUID each time
             name: file.name,
             description: file.description,
             icon: file.icon ?? "wand.and.stars",
             color: color,
             maintainer: file.maintainer,
             steps: steps,
-            isEnabled: true,  // Preferences handled by GRDB
+            isEnabled: true,
             isPinned: false,
             autoRun: false,
             autoRunOrder: 0,
@@ -233,14 +207,13 @@ struct SimpleWorkflowLoader {
     }
 
     /// Convert a SimpleStep to WorkflowStep
-    private static func convertStep(_ step: SimpleStep, index: Int, workflowSlug: String, totalSteps: Int) throws -> WorkflowStep {
-        let stepId = uuidForStep(index, workflowSlug: workflowSlug)
-
+    private static func convertStep(_ step: SimpleStep, index: Int, stepId: UUID, stepUUIDs: [UUID]) throws -> WorkflowStep {
+        // StepType raw values now match JSON type names directly
         guard let stepType = WorkflowStep.StepType(rawValue: step.type) else {
             throw SimpleWorkflowLoaderError.unknownStepType(step.type)
         }
 
-        let config = try convertConfig(step, stepType: stepType, workflowSlug: workflowSlug, totalSteps: totalSteps)
+        let config = try convertConfig(step, stepType: stepType, stepUUIDs: stepUUIDs)
 
         // Convert condition string to StepCondition if provided
         let stepCondition: StepCondition? = step.condition.map { StepCondition(expression: $0) }
@@ -256,7 +229,7 @@ struct SimpleWorkflowLoader {
     }
 
     /// Convert flat step fields to StepConfig
-    private static func convertConfig(_ step: SimpleStep, stepType: WorkflowStep.StepType, workflowSlug: String, totalSteps: Int) throws -> StepConfig {
+    private static func convertConfig(_ step: SimpleStep, stepType: WorkflowStep.StepType, stepUUIDs: [UUID]) throws -> StepConfig {
         switch stepType {
         case .llm:
             guard let prompt = step.prompt else {
@@ -354,9 +327,13 @@ struct SimpleWorkflowLoader {
                 throw SimpleWorkflowLoaderError.invalidConfig("Conditional step requires 'condition'")
             }
 
-            // Convert step indices to UUIDs
-            let thenUUIDs = (step.thenSteps ?? []).map { uuidForStep($0, workflowSlug: workflowSlug) }
-            let elseUUIDs = (step.elseSteps ?? []).map { uuidForStep($0, workflowSlug: workflowSlug) }
+            // Convert step indices to UUIDs using the tracked stepUUIDs
+            let thenUUIDs = (step.thenSteps ?? []).compactMap { index in
+                index < stepUUIDs.count ? stepUUIDs[index] : nil
+            }
+            let elseUUIDs = (step.elseSteps ?? []).compactMap { index in
+                index < stepUUIDs.count ? stepUUIDs[index] : nil
+            }
 
             return .conditional(ConditionalStepConfig(
                 condition: condition,

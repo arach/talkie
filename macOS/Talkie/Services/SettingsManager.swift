@@ -1406,7 +1406,7 @@ class SettingsManager {
     private var _openaiApiKey: String?
     private var _anthropicApiKey: String?
     private var _groqApiKey: String?
-    private var _selectedModel: String = LLMConfig.shared.defaultModel(for: "gemini") ?? ""
+    private var _selectedModel: String = ""  // Loaded lazily via performLoadSettings()
 
     // Transcription model settings (consolidated from LiveSettings)
     private var _liveTranscriptionModelId: String = "whisper:openai_whisper-small"

@@ -70,6 +70,8 @@
 		395A6A340188A803847D2B7B /* WhisperService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB3C446E2274B6FF1A3F7F55 /* WhisperService.swift */; };
 		3A295348C9E5B3171890C593 /* GeminiService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95F0695BC582E2740F8700BD /* GeminiService.swift */; };
 		3A82694060BF7CD29FC9A051 /* Resources in Resources */ = {isa = PBXBuildFile; fileRef = 48A97AE8636C7CFD039A9631 /* Resources */; };
+		B0DA8E49D1B461E2F4491753 /* WorkflowTemplates in Resources */ = {isa = PBXBuildFile; fileRef = 6DEFA6AA7279256846D6DAE3 /* WorkflowTemplates */; };
+		6442A7121799AE52676493E3 /* SystemWorkflows in Resources */ = {isa = PBXBuildFile; fileRef = 21F4195A128BA818757C9AE8 /* SystemWorkflows */; };
 		3A84FE35A80A8764AA263AC5 /* TalkieData.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7F37679E41BF9883C8531F3 /* TalkieData.swift */; };
 		3AF6A0A6C8984CA0EC7F1E8C /* TranscriptVersionModel+CloudKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DE6D960ECC5B682EB15EE43 /* TranscriptVersionModel+CloudKit.swift */; };
 		3C2E4FC3CFA3A32E047EA825 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4B8093A6824A20E854ECA5C /* HistoryView.swift */; };
@@ -344,6 +346,8 @@
 		47AF9CDED34203DFA830710E /* RadioButtonRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioButtonRow.swift; sourceTree = "<group>"; };
 		488A235114E8DA65A7492161 /* StatusBarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarViewModel.swift; sourceTree = "<group>"; };
 		48A97AE8636C7CFD039A9631 /* Resources */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Resources; sourceTree = SOURCE_ROOT; };
+		6DEFA6AA7279256846D6DAE3 /* WorkflowTemplates */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Resources/WorkflowTemplates; sourceTree = SOURCE_ROOT; };
+		21F4195A128BA818757C9AE8 /* SystemWorkflows */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Resources/SystemWorkflows; sourceTree = SOURCE_ROOT; };
 		496F93FABC0C82D7374B81BA /* AudioPlaybackManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlaybackManager.swift; sourceTree = "<group>"; };
 		499C191C937A588B1FC14A1B /* MLXProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLXProvider.swift; sourceTree = "<group>"; };
 		4AACC22A4D152DCBFB30FE56 /* SettingsColumns.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsColumns.swift; sourceTree = "<group>"; };
@@ -1003,6 +1007,8 @@
 			children = (
 				BB66A9AB5F11CD75E0C5CD7A /* Assets.xcassets */,
 				48A97AE8636C7CFD039A9631 /* Resources */,
+				6DEFA6AA7279256846D6DAE3 /* WorkflowTemplates */,
+				21F4195A128BA818757C9AE8 /* SystemWorkflows */,
 				53A7622465701BF0425306D5 /* App */,
 				BA3B8C877A78851E0E5DA184 /* Components */,
 				A9664001547A848B48A80D43 /* Data */,
@@ -1245,6 +1251,8 @@
 				59B2EC1EB7D88BC8C366D9FD /* LiveHistoryView.swift.disabled in Resources */,
 				AD9D159217AF0A90FEE7D5E0 /* README.md in Resources */,
 				3A82694060BF7CD29FC9A051 /* Resources in Resources */,
+				B0DA8E49D1B461E2F4491753 /* WorkflowTemplates in Resources */,
+				6442A7121799AE52676493E3 /* SystemWorkflows in Resources */,
 				35CAD8238CDD26722C281996 /* TalkieSound.swift.disabled in Resources */,
 				A04FA22CE12BF9DEEA9FD4FF /* TranscriptionTypes.swift.disabled in Resources */,
 				F1877CD113111F5E42C3F170 /* VERCEL_MIGRATION_COMPLETE.md in Resources */,
