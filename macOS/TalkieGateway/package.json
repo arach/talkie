@@ -1,0 +1,24 @@
+{
+  "name": "talkie-gateway",
+  "version": "0.2.0",
+  "description": "External API gateway for Talkie - LLM inference, remote sessions, and web services",
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/server.ts",
+    "dev": "bun --watch run src/server.ts",
+    "stop": "kill $(cat ~/Library/Application\\ Support/Talkie/Gateway/gateway.pid) 2>/dev/null || echo 'Not running'",
+    "status": "cat ~/Library/Application\\ Support/Talkie/Gateway/gateway.pid 2>/dev/null && echo 'Running' || echo 'Stopped'",
+    "labs": "bun run src/labs/server.ts",
+    "labs:dev": "bun --watch run src/labs/server.ts",
+    "labs:stop": "kill $(cat ~/Library/Application\\ Support/Talkie/Gateway/labs.pid) 2>/dev/null || echo 'Not running'",
+    "labs:status": "cat ~/Library/Application\\ Support/Talkie/Gateway/labs.pid 2>/dev/null && echo 'Running' || echo 'Stopped'"
+  },
+  "dependencies": {
+    "openai": "^4.77.0",
+    "@anthropic-ai/sdk": "^0.33.1",
+    "@google/generative-ai": "^0.21.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

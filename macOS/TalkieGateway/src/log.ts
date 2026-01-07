@@ -1,9 +1,9 @@
 /**
- * log.ts - Simple file logger for TalkieBridge
+ * log.ts - Simple file logger for TalkieGateway
  *
  * Two log files:
- * - bridge.log: User-facing logs (info, warn, error, requests)
- * - bridge.dev.log: Developer logs (auth, debug, verbose troubleshooting)
+ * - gateway.log: User-facing logs (info, warn, error, requests)
+ * - gateway.dev.log: Developer logs (auth, debug, verbose troubleshooting)
  */
 
 import { appendFile } from "fs/promises";
@@ -73,7 +73,7 @@ export const log = {
 export async function clearLog() {
   const ts = formatTimestamp();
   try {
-    await Bun.write(LOG_FILE, `[${ts}] [INFO] === Bridge started ===\n`);
+    await Bun.write(LOG_FILE, `[${ts}] [INFO] === Gateway started ===\n`);
     await Bun.write(DEV_LOG_FILE, `[${ts}] [INFO] === Dev log started ===\n`);
   } catch (err) {
     console.error("Failed to clear logs:", err);
