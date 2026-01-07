@@ -134,15 +134,6 @@ final class WorkflowFileRepository {
     private func syncBundledWorkflows() async {
         guard let resourcePath = Bundle.main.resourcePath else { return }
 
-        let systemBundlePath = (resourcePath as NSString).appendingPathComponent("SystemWorkflows")
-        let fm = FileManager.default
-        let destDir = Self.directoryURL(for: .system)
-
-        guard fm.fileExists(atPath: systemBundlePath) else {
-            log.debug("No SystemWorkflows in bundle")
-            return
-        }
-
         // Only sync on first run or app update (not every startup)
         let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
         let lastSyncVersion = UserDefaults.standard.string(forKey: Self.syncVersionKey)
@@ -154,26 +145,44 @@ final class WorkflowFileRepository {
 
         log.info("Syncing system workflows (version \(lastSyncVersion ?? "none") → \(currentVersion))")
 
-        do {
-            let files = try fm.contentsOfDirectory(atPath: systemBundlePath)
-            let jsonFiles = files.filter { $0.hasSuffix(".json") }
-            var synced = 0
+        // Try both direct path and nested Resources/ path (Xcode folder reference creates nesting)
+        let directPath = resourcePath
+        let nestedPath = (resourcePath as NSString).appendingPathComponent("Resources")
 
-            for filename in jsonFiles {
-                let srcURL = URL(fileURLWithPath: systemBundlePath).appendingPathComponent(filename)
-                let destURL = destDir.appendingPathComponent(filename)
+        // System workflows (always overwrite)
+        let systemPaths = [
+            (directPath as NSString).appendingPathComponent("SystemWorkflows"),
+            (nestedPath as NSString).appendingPathComponent("SystemWorkflows")
+        ]
 
-                // Overwrite system workflows from bundle
-                try? fm.removeItem(at: destURL)
-                try fm.copyItem(at: srcURL, to: destURL)
-                synced += 1
+        let fm = FileManager.default
+        let destDir = Self.directoryURL(for: .system)
+        var synced = 0
+
+        for path in systemPaths {
+            if fm.fileExists(atPath: path) {
+                do {
+                    let files = try fm.contentsOfDirectory(atPath: path)
+                    let jsonFiles = files.filter { $0.hasSuffix(".json") }
+
+                    for filename in jsonFiles {
+                        let srcURL = URL(fileURLWithPath: path).appendingPathComponent(filename)
+                        let destURL = destDir.appendingPathComponent(filename)
+
+                        // Overwrite system workflows from bundle
+                        try? fm.removeItem(at: destURL)
+                        try fm.copyItem(at: srcURL, to: destURL)
+                        synced += 1
+                    }
+                } catch {
+                    log.error("Failed to sync system workflows: \(error)")
+                }
+                break
             }
-
-            UserDefaults.standard.set(currentVersion, forKey: Self.syncVersionKey)
-            log.info("Synced \(synced) system workflows")
-        } catch {
-            log.error("Failed to sync system workflows: \(error)")
         }
+
+        UserDefaults.standard.set(currentVersion, forKey: Self.syncVersionKey)
+        log.info("Synced \(synced) system workflows")
     }
 
     // MARK: - Templates (from bundle, not synced)
@@ -186,34 +195,45 @@ final class WorkflowFileRepository {
             return []
         }
 
-        let templatesPath = (resourcePath as NSString).appendingPathComponent("WorkflowTemplates")
+        // Try both direct path and nested Resources/ path
+        let directPath = resourcePath
+        let nestedPath = (resourcePath as NSString).appendingPathComponent("Resources")
+        let templatesPaths = [
+            (directPath as NSString).appendingPathComponent("WorkflowTemplates"),
+            (nestedPath as NSString).appendingPathComponent("WorkflowTemplates")
+        ]
+
         let fm = FileManager.default
-
-        guard fm.fileExists(atPath: templatesPath) else {
-            log.warning("No WorkflowTemplates folder in bundle")
-            return []
-        }
-
         var templates: [WorkflowDefinition] = []
 
-        do {
-            let files = try fm.contentsOfDirectory(atPath: templatesPath)
-            let jsonFiles = files.filter { $0.hasSuffix(".json") }
+        for templatesPath in templatesPaths {
+            guard fm.fileExists(atPath: templatesPath) else { continue }
 
-            for filename in jsonFiles {
-                let fileURL = URL(fileURLWithPath: templatesPath).appendingPathComponent(filename)
-                do {
-                    let template = try SimpleWorkflowLoader.load(from: fileURL)
-                    templates.append(template)
-                } catch {
-                    log.error("Failed to load template \(filename): \(error)")
+            do {
+                let files = try fm.contentsOfDirectory(atPath: templatesPath)
+                let jsonFiles = files.filter { $0.hasSuffix(".json") }
+
+                for filename in jsonFiles {
+                    let fileURL = URL(fileURLWithPath: templatesPath).appendingPathComponent(filename)
+                    do {
+                        let template = try SimpleWorkflowLoader.load(from: fileURL)
+                        templates.append(template)
+                    } catch {
+                        log.error("Failed to load template \(filename): \(error)")
+                    }
                 }
+
+                log.debug("Loaded \(templates.count) workflow templates from \(templatesPath)")
+                break
+            } catch {
+                log.error("Failed to read templates directory: \(error)")
             }
-        } catch {
-            log.error("Failed to read templates directory: \(error)")
         }
 
-        log.debug("Loaded \(templates.count) workflow templates")
+        if templates.isEmpty {
+            log.warning("No WorkflowTemplates folder found in bundle")
+        }
+
         return templates.sorted { $0.name < $1.name }
     }
 
