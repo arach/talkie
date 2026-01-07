@@ -98,9 +98,11 @@ struct VoiceMemoListView: View {
         let hasMore = filteredMemos.count > displayLimit
 
         return NavigationView {
-            ZStack(alignment: .bottom) {
-                Color.surfacePrimary
-                    .ignoresSafeArea()
+            ZStack {
+                // Main content layer
+                ZStack(alignment: .bottom) {
+                    Color.surfacePrimary
+                        .ignoresSafeArea()
 
                 if allVoiceMemos.isEmpty {
                     // Empty state - no memos at all
@@ -438,32 +440,36 @@ struct VoiceMemoListView: View {
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                     .allowsHitTesting(true)
                 }
-            }
-            .navigationTitle("TALKIE")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color.surfacePrimary, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    HStack(spacing: Spacing.xs) {
-                        VStack(spacing: 0) {
-                            Text("TALKIE")
-                                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                .tracking(2)
-                                .foregroundColor(.textPrimary)
-                            Text("\(allVoiceMemos.count) MEMOS")
-                                .font(.techLabelSmall)
-                                .tracking(1)
-                                .foregroundColor(.textTertiary)
-                        }
-
-                        // Connection indicator (green dot when Mac connected)
-                        if bridgeManager.status == .connected {
-                            Circle()
-                                .fill(Color.success)
-                                .frame(width: 6, height: 6)
-                        }
+                }
+                .navigationTitle("TALKIE")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbarBackground(Color.surfacePrimary, for: .navigationBar)
+                .toolbar {
+                    ToolbarItem(placement: .principal) {
+                        TalkieNavigationHeader(
+                            subtitle: "Memos",
+                            showConnectionIndicator: true,
+                            isConnected: bridgeManager.status == .connected
+                        )
                     }
                 }
+
+                // Debug toolbar overlay (DEBUG builds only)
+                #if DEBUG
+                DebugToolbarOverlay(
+                    content: {
+                        ListViewDebugContent()
+                    },
+                    debugInfo: {
+                        [
+                            "View": "Memos",
+                            "Total": "\(allVoiceMemos.count)",
+                            "Displayed": "\(voiceMemos.count)",
+                            "Searching": isSearching ? "Yes" : "No"
+                        ]
+                    }
+                )
+                #endif
             }
             .sheet(isPresented: $showingSettings) {
                 SettingsView()

@@ -12,9 +12,9 @@ export default function PricingSection() {
   // Use env var if provided; otherwise default to your Formspree endpoint
   const formspreeId = process.env.NEXT_PUBLIC_FORMSPREE_ID || 'mkgaanoo'
 
-  // Countdown to 2026
+  // Countdown to end of January 2026
   useEffect(() => {
-    const launchDate = new Date('2026-01-01T00:00:00')
+    const launchDate = new Date('2026-01-31T23:59:59')
 
     const updateCountdown = () => {
       const now = new Date()

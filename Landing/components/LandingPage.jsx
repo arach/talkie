@@ -120,10 +120,10 @@ export default function LandingPage() {
           </div>
           <div className="hidden md:flex items-center gap-3">
             <a
-              href="https://github.com/arach/talkie/releases/latest/download/Talkie-for-Mac.zip"
+              href="#pricing"
               className="px-3 py-2 rounded text-[10px] font-bold uppercase tracking-wider border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-white transition-colors"
             >
-              Download Mac
+              Get Early Access
             </a>
           </div>
           {/* Mobile menu button */}
@@ -345,9 +345,9 @@ export default function LandingPage() {
               <Smartphone className="w-4 h-4 transition-transform group-hover/ios:-rotate-6" />
               <span>Get iOS Early Access</span>
             </a>
-            <a href="https://github.com/arach/talkie/releases/latest/download/Talkie-for-Mac.zip" className="group/mac h-12 px-8 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white font-bold text-xs uppercase tracking-wider hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-600 transition-all flex items-center gap-2 min-w-[200px] justify-center">
+            <a href="#pricing" className="group/mac h-12 px-8 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white font-bold text-xs uppercase tracking-wider hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-600 transition-all flex items-center gap-2 min-w-[200px] justify-center">
               <Laptop className="w-4 h-4 transition-transform group-hover/mac:scale-110" />
-              <span>Download for Mac</span>
+              <span>Get Mac Early Access</span>
             </a>
           </div>
 

@@ -80,6 +80,7 @@ class OpenAIProvider: LLMProvider {
         let url = URL(string: "https://api.openai.com/v1/models")!
         var request = URLRequest(url: url)
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 10  // 10 second timeout for model list fetch
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -111,6 +112,18 @@ class OpenAIProvider: LLMProvider {
                 continue
             }
 
+            // Skip dated snapshot versions (e.g., gpt-4-0613, gpt-4o-2024-05-13)
+            // These clutter the list - prefer canonical names or "-latest" versions
+            if isDateSnapshotModel(modelId) {
+                continue
+            }
+
+            // Skip preview/deprecated variants
+            let skipSuffixes = ["-preview", "-instruct", "-vision-preview"]
+            if skipSuffixes.contains(where: { modelId.hasSuffix($0) }) {
+                continue
+            }
+
             let created = modelData["created"] as? Int ?? 0
 
             let model = LLMModel(
@@ -133,6 +146,24 @@ class OpenAIProvider: LLMProvider {
 
         logger.info("Fetched \(sorted.count) chat models from OpenAI API")
         return sorted
+    }
+
+    /// Check if model ID contains a date snapshot (YYYY-MM-DD or YYYYMMDD or -MMDD)
+    private func isDateSnapshotModel(_ modelId: String) -> Bool {
+        // Match patterns like: -2024-05-13, -0613, -1106, -20240409
+        let datePatterns = [
+            #"-\d{4}-\d{2}-\d{2}"#,  // -YYYY-MM-DD
+            #"-\d{8}"#,              // -YYYYMMDD
+            #"-\d{4}$"#,             // -MMDD at end (e.g., -0613)
+        ]
+
+        for pattern in datePatterns {
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               regex.firstMatch(in: modelId, range: NSRange(modelId.startIndex..., in: modelId)) != nil {
+                return true
+            }
+        }
+        return false
     }
 
     /// Format model ID into readable display name

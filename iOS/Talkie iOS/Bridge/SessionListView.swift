@@ -58,15 +58,7 @@ struct SessionListView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                VStack(spacing: 1) {
-                    Text("TALKIE")
-                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.primary)
-                    Text("with Claude")
-                        .font(.system(size: 9, weight: .regular, design: .monospaced))
-                        .foregroundColor(.secondary)
-                        .tracking(0.5)
-                }
+                TalkieNavigationHeader(subtitle: "Claude")
             }
         }
     }
