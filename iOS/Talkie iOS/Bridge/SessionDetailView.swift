@@ -38,8 +38,15 @@ struct SessionDetailView: View {
     @State private var lastDelivery: DeliveryConfirmation?
 
     // Quick reply options parsed from last assistant message
+    // Only use structured AskUserQuestion tool calls - no text pattern guessing
     private var quickReplyOptions: [QuickReplyOption] {
-        parseQuickReplyOptions(from: messages.last(where: { $0.role == "assistant" }))
+        guard let lastAssistant = messages.last(where: { $0.role == "assistant" }),
+              let askQuestion = lastAssistant.toolCalls?.first(where: { $0.name == "AskUserQuestion" }),
+              let input = askQuestion.input else {
+            return []
+        }
+
+        return parseAskUserQuestionOptions(from: input)
     }
 
     var body: some View {
@@ -367,50 +374,43 @@ struct QuickReplyOption: Identifiable {
     let label: String
 }
 
-/// Parse numbered options from the last assistant message
-/// Looks for patterns like "1. Allow", "[1] Proceed", "1) Skip"
-func parseQuickReplyOptions(from message: SessionMessage?) -> [QuickReplyOption] {
-    guard let message = message, message.role == "assistant" else { return [] }
-
-    var options: [QuickReplyOption] = []
-    let content = message.content
-
-    // Pattern: "1. Label", "2. Label", etc.
-    let dotPattern = /(\d)\.\s+([^\n\d][^\n]{0,30})/
-    for match in content.matches(of: dotPattern) {
-        let number = String(match.1)
-        let label = String(match.2).trimmingCharacters(in: .whitespaces)
-        if !label.isEmpty && options.count < 5 {
-            options.append(QuickReplyOption(id: "\(number)-\(label)", number: number, label: label))
-        }
+/// Parse structured AskUserQuestion tool input (JSON)
+/// Returns numbered options from the first question
+func parseAskUserQuestionOptions(from jsonString: String) -> [QuickReplyOption] {
+    guard let jsonData = jsonString.data(using: .utf8),
+          let parsed = try? JSONDecoder().decode(AskUserQuestionInput.self, from: jsonData),
+          let firstQuestion = parsed.questions.first else {
+        return []
     }
 
-    // Pattern: "[1] Label", "[2] Label", etc.
-    let bracketPattern = /\[(\d)\]\s+([^\n\[]{1,30})/
-    if options.isEmpty {
-        for match in content.matches(of: bracketPattern) {
-            let number = String(match.1)
-            let label = String(match.2).trimmingCharacters(in: .whitespaces)
-            if !label.isEmpty && options.count < 5 {
-                options.append(QuickReplyOption(id: "\(number)-\(label)", number: number, label: label))
-            }
-        }
+    return firstQuestion.options.enumerated().map { (index, option) in
+        let number = String(index + 1)
+        return QuickReplyOption(
+            id: "\(number)-\(option.label)",
+            number: number,
+            label: option.label
+        )
     }
-
-    // Pattern: "1) Label", "2) Label", etc.
-    let parenPattern = /(\d)\)\s+([^\n\d][^\n]{0,30})/
-    if options.isEmpty {
-        for match in content.matches(of: parenPattern) {
-            let number = String(match.1)
-            let label = String(match.2).trimmingCharacters(in: .whitespaces)
-            if !label.isEmpty && options.count < 5 {
-                options.append(QuickReplyOption(id: "\(number)-\(label)", number: number, label: label))
-            }
-        }
-    }
-
-    return options
 }
+
+// MARK: - AskUserQuestion Structures
+
+struct AskUserQuestionInput: Codable {
+    let questions: [Question]
+}
+
+struct Question: Codable {
+    let question: String
+    let header: String
+    let options: [QuestionOption]
+    let multiSelect: Bool
+}
+
+struct QuestionOption: Codable {
+    let label: String
+    let description: String
+}
+
 
 // MARK: - Quick Reply Bar
 

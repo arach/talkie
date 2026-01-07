@@ -17,6 +17,7 @@ struct SessionListView: View {
     @State private var sessionsMeta: SessionsMeta?
     @State private var showUnpairConfirmation = false
     @State private var showMacDetails = false
+    @State private var hasLoadedInitialData = false  // Track if we've ever loaded data
 
     var body: some View {
         Group {
@@ -57,16 +58,15 @@ struct SessionListView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                VStack(spacing: 1) {
                     Text("TALKIE")
-                        .font(.system(size: 14, weight: .medium, design: .monospaced))
+                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
                         .foregroundColor(.primary)
                     Text("with Claude")
-                        .font(.system(size: 12, weight: .regular, design: .monospaced))
+                        .font(.system(size: 9, weight: .regular, design: .monospaced))
                         .foregroundColor(.secondary)
+                        .tracking(0.5)
                 }
-                .frame(height: 20)
-                .padding(.leading, Spacing.sm)
             }
         }
     }
@@ -83,6 +83,33 @@ struct SessionListView: View {
 
                 // Mac status bar - sticky footer
                 macStatusFooter
+            }
+
+            #if DEBUG
+            DebugToolbarOverlay(
+                content: {
+                    BridgeDebugContent(bridgeManager: bridgeManager)
+                },
+                debugInfo: {
+                    [
+                        "View": "SessionList",
+                        "Status": bridgeManager.status.description,
+                        "Projects": "\(bridgeManager.projectPaths.count)",
+                        "Sessions": "\(bridgeManager.sessions.count)",
+                        "HasData": hasLoadedInitialData ? "Yes" : "No"
+                    ]
+                }
+            )
+            #endif
+        }
+        .onAppear {
+            // Trigger initial data load when first connected
+            if !hasLoadedInitialData {
+                Task {
+                    isRefreshing = true
+                    await refreshSessions(deepSync: false)
+                    isRefreshing = false
+                }
             }
         }
     }
@@ -246,44 +273,62 @@ struct SessionListView: View {
 
     private var sessionsList: some View {
         List {
-            // Refresh indicator (braille spinner)
-            if isRefreshing {
+            // Cold state: Initial loading (no data yet)
+            if !hasLoadedInitialData && (isRefreshing || isDeepSyncing) {
                 Section {
-                    HStack {
-                        Spacer()
+                    VStack(spacing: Spacing.md) {
                         BrailleSpinner(speed: 0.06, color: .brandAccent)
-                        Text("syncing")
-                            .font(.techLabelSmall)
-                            .foregroundColor(.textTertiary)
-                        Spacer()
+                            .scaleEffect(1.5)
+                        Text("Loading sessions...")
+                            .font(.monoSmall)
+                            .foregroundColor(.textSecondary)
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, Spacing.xl)
                     .listRowBackground(Color.clear)
                 }
-            }
-
-            // Projects with sessions (grouped view)
-            if !bridgeManager.projectPaths.isEmpty {
-                ForEach(Array(bridgeManager.projectPaths.enumerated()), id: \.element.id) { index, projectPath in
-                    ProjectPathSection(projectPath: projectPath, index: index)
-                        .padding(.top, index == 0 ? Spacing.md : 0)
-                }
-            } else if bridgeManager.sessions.isEmpty {
-                // Fallback: flat sessions or empty
-                Section {
-                    HStack {
-                        Image(systemName: "tray")
-                            .foregroundColor(.secondary)
-                        Text("No active sessions")
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.vertical, 8)
-                }
             } else {
-                // Fallback: flat sessions list
-                Section {
-                    ForEach(bridgeManager.sessions) { session in
-                        NavigationLink(destination: SessionDetailView(session: session)) {
-                            SessionRow(session: session)
+                // Warm state: Show refresh indicator at top (already have data)
+                if isRefreshing || isDeepSyncing {
+                    Section {
+                        HStack {
+                            Spacer()
+                            BrailleSpinner(speed: 0.06, color: .brandAccent)
+                            Text("syncing")
+                                .font(.techLabelSmall)
+                                .foregroundColor(.textTertiary)
+                            Spacer()
+                        }
+                        .listRowBackground(Color.clear)
+                    }
+                }
+
+                // Projects with sessions (grouped view)
+                if !bridgeManager.projectPaths.isEmpty {
+                    ForEach(Array(bridgeManager.projectPaths.enumerated()), id: \.element.id) { index, projectPath in
+                        ProjectPathSection(projectPath: projectPath, index: index)
+                            .padding(.top, index == 0 ? Spacing.md : 0)
+                    }
+                } else if bridgeManager.sessions.isEmpty {
+                    // True empty state (only after we've tried loading)
+                    if hasLoadedInitialData {
+                        Section {
+                            HStack {
+                                Image(systemName: "tray")
+                                    .foregroundColor(.secondary)
+                                Text("No active sessions")
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.vertical, 8)
+                        }
+                    }
+                } else {
+                    // Fallback: flat sessions list
+                    Section {
+                        ForEach(bridgeManager.sessions) { session in
+                            NavigationLink(destination: SessionDetailView(session: session)) {
+                                SessionRow(session: session)
+                            }
                         }
                     }
                 }
@@ -302,7 +347,7 @@ struct SessionListView: View {
                     .padding(.vertical, 4)
                 }
 
-                if bridgeManager.windowCaptures.isEmpty {
+                if bridgeManager.windowCaptures.isEmpty && !isCapturing {
                     HStack {
                         Image(systemName: "macwindow")
                             .foregroundColor(.secondary)
@@ -406,6 +451,7 @@ struct SessionListView: View {
                 bridgeManager.projectPaths = paths.paths
                 bridgeManager.sessions = sessions.sessions
                 sessionsMeta = sessions.meta
+                hasLoadedInitialData = true  // Mark that we've loaded data at least once
             }
         } catch {
             // Handle error silently for now, bridgeManager handles connection state
@@ -794,13 +840,16 @@ struct ProjectPathSection: View {
                 dict[session.id] = session
             }
         }.values.sorted { session1, session2 in
-            // Sort by lastSeen descending (most recent first)
+            // Sort live sessions first, then by lastSeen descending (most recent first)
+            if session1.isLive != session2.isLive {
+                return session1.isLive
+            }
             let formatter = ISO8601DateFormatter()
             let date1 = formatter.date(from: session1.lastSeen) ?? Date.distantPast
             let date2 = formatter.date(from: session2.lastSeen) ?? Date.distantPast
             return date1 > date2
         }
-        
+
         if showAll || uniqueSessions.count <= maxVisibleSessions {
             return Array(uniqueSessions)
         }
@@ -893,35 +942,41 @@ struct PathSessionRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: Spacing.sm) {
+        HStack(alignment: .top, spacing: Spacing.xs) {
             // Live/inactive indicator
             Circle()
                 .fill(session.isLive ? Color.success : Color.textTertiary.opacity(0.3))
-                .frame(width: 6, height: 6)
+                .frame(width: 5, height: 5)
+                .padding(.top, 3)  // Align with first line of text
 
-            // Main content - single line with preview
-            HStack(spacing: 0) {
-                // Preview text (main content)
-                Text(previewText)
-                    .font(.system(size: 13))
-                    .foregroundColor(session.isLive ? .textPrimary : .textSecondary)
-                    .lineLimit(1)
+            // Content - two lines
+            VStack(alignment: .leading, spacing: 2) {
+                // Primary line: preview text + date
+                HStack(spacing: 0) {
+                    Text(previewText)
+                        .font(.system(size: 13))
+                        .foregroundColor(session.isLive ? .textPrimary : .textSecondary)
+                        .lineLimit(1)
 
-                Spacer(minLength: Spacing.sm)
-
-                // Right side: message count + time
-                HStack(spacing: Spacing.xs) {
-                    Text("\(session.messageCount)")
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(.textTertiary)
+                    Spacer(minLength: Spacing.sm)
 
                     Text(compactTimestamp)
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(.textTertiary)
                 }
+
+                // Secondary line: message count with icon
+                HStack(spacing: 3) {
+                    Image(systemName: "bubble.left.and.bubble.right")
+                        .font(.system(size: 9))
+                        .foregroundColor(.textTertiary.opacity(0.7))
+                    Text("\(session.messageCount)")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.textTertiary)
+                }
             }
         }
-        .padding(.vertical, Spacing.xs)
+        .padding(.vertical, 4)  // Tighter: reduced from 6 to 4
     }
 
     private var previewText: String {
@@ -1174,11 +1229,45 @@ struct RefreshControlHider: UIViewRepresentable {
                 refreshControl.backgroundColor = .clear
             }
         }
-        
+
         // Recursively search subviews
         view.subviews.forEach { findAndHideRefreshControl(in: $0) }
     }
 }
+
+#if DEBUG
+// MARK: - Bridge Debug Content
+
+struct BridgeDebugContent: View {
+    let bridgeManager: BridgeManager
+
+    var body: some View {
+        DebugSection(title: "BRIDGE") {
+            VStack(spacing: 4) {
+                DebugActionButton(icon: "arrow.clockwise", label: "Force Refresh") {
+                    Task {
+                        await bridgeManager.connect()
+                    }
+                }
+                DebugActionButton(icon: "wifi.slash", label: "Disconnect") {
+                    bridgeManager.disconnect()
+                }
+            }
+        }
+    }
+}
+
+extension BridgeManager.ConnectionStatus {
+    var description: String {
+        switch self {
+        case .connected: return "Connected"
+        case .connecting: return "Connecting"
+        case .disconnected: return "Disconnected"
+        case .error: return "Error"
+        }
+    }
+}
+#endif
 
 #Preview {
     NavigationView {
