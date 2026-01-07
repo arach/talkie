@@ -28,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // Lazy UI controllers - initialized during boot sequence
     private var overlayController: RecordingOverlayController { RecordingOverlayController.shared }
     private var floatingPill: FloatingPillController { FloatingPillController.shared }
+    private var notchOverlay: NotchOverlayController { NotchOverlayController.shared }
 
     // Settings window (consolidated - includes permissions tab)
     private var settingsWindow: NSWindow?
@@ -267,6 +268,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.updateIcon(for: state)
                 self?.overlayController.updateState(state)
                 self?.floatingPill.updateState(state)
+                self?.notchOverlay.updateState(state)
             }
             .store(in: &cancellables)
 
@@ -280,6 +282,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.liveController.cancelListening()
         }
         overlayController.liveController = liveController  // For mid-recording intent updates
+
+        // Wire up notch overlay controls
+        notchOverlay.onStop = { [weak self] in
+            Task {
+                await self?.liveController.toggleListening()
+            }
+        }
+        notchOverlay.onCancel = { [weak self] in
+            self?.liveController.cancelListening()
+        }
     }
 
     // MARK: - Floating Pill
