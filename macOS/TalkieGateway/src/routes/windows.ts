@@ -140,18 +140,35 @@ export async function getWindowContent(req: Request, windowId: string): Promise<
  * Batch capture: all terminal windows with screenshots + AX
  */
 export async function captureAllWindows(req: Request): Promise<Response> {
-  log.info("GET /windows/captures");
+  log.info("GET /windows/captures - Requesting terminal screenshots from TalkieServer");
 
   if (!(await checkTalkieServer())) {
+    log.warn("GET /windows/captures - TalkieServer not available on port 8766");
     return serviceUnavailable();
   }
 
   try {
     const response = await fetch(`${TALKIESERVER_URL}/screenshot/terminals`);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      log.error(`TalkieServer error (${response.status}): ${errorText}`);
+      return Response.json(
+        { error: "TalkieServer error", details: errorText },
+        { status: response.status }
+      );
+    }
+
     const data = await response.json();
+    const count = data?.count ?? data?.screenshots?.length ?? 0;
+    log.info(`GET /windows/captures - Success: ${count} window(s) captured`);
+
     return Response.json(data);
   } catch (error) {
     log.error(`Failed to capture windows: ${error}`);
-    return Response.json({ error: "Failed to capture windows" }, { status: 500 });
+    return Response.json(
+      { error: "Failed to capture windows", details: String(error) },
+      { status: 500 }
+    );
   }
 }
