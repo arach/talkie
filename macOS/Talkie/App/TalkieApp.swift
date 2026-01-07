@@ -116,7 +116,12 @@ struct TalkieApp: App {
 
     init() {
         StartupProfiler.shared.markEarly("app.init.start")
-        // No CoreData init here - deferred to background
+        // Kick off DB init immediately - don't wait for view to appear
+        Task {
+            StartupProfiler.shared.mark("db.grdb.start")
+            _ = await StartupCoordinator.shared.initializeDatabase()
+            StartupProfiler.shared.mark("db.grdb.ready")
+        }
         StartupProfiler.shared.markEarly("app.init.end")
     }
     // Remove @State from global singletons - they're already observable
@@ -146,12 +151,7 @@ struct TalkieApp: App {
                 .tint(SettingsManager.shared.accentColor.color)
                 // NOTE: URL handling is done via Apple Events in AppDelegate.handleGetURLEvent
                 // Do NOT add .onOpenURL here - it causes SwiftUI to spawn new windows
-                .task {
-                    // Background database initialization - non-blocking
-                    StartupProfiler.shared.mark("db.grdb.start")
-                    _ = await StartupCoordinator.shared.initializeDatabase()
-                    StartupProfiler.shared.mark("db.grdb.ready")
-                }
+                // DB init now starts in TalkieApp.init() for faster startup
                 .sheet(isPresented: Binding(
                     get: { OnboardingManager.shared.shouldShowOnboarding },
                     set: { OnboardingManager.shared.shouldShowOnboarding = $0 }

@@ -54,12 +54,71 @@ ensure_log_dir() {
 install_plists() {
     log_info "Installing launchd plists..."
     mkdir -p "$LAUNCH_AGENTS"
+    ensure_log_dir
 
-    # Copy plists
-    cp "$LAUNCHD_DIR/$PROD_PLIST" "$LAUNCH_AGENTS/"
-    cp "$LAUNCHD_DIR/$DEV_PLIST" "$LAUNCH_AGENTS/"
+    # Stop services if running (prevents "service already loaded" errors)
+    launchctl unload "$LAUNCH_AGENTS/$PROD_PLIST" 2>/dev/null || true
+    launchctl unload "$LAUNCH_AGENTS/$DEV_PLIST" 2>/dev/null || true
+
+    # Generate plists with correct paths for this machine
+    generate_plist "$PROD_LABEL" "" "$LAUNCH_AGENTS/$PROD_PLIST" "bridge.log"
+    generate_plist "$DEV_LABEL" "--local" "$LAUNCH_AGENTS/$DEV_PLIST" "bridge-dev.log"
 
     log_success "Installed to $LAUNCH_AGENTS"
+    log_info "Paths configured for: $BRIDGE_DIR"
+}
+
+generate_plist() {
+    local label="$1"
+    local extra_args="$2"
+    local output_path="$3"
+    local log_name="$4"
+
+    local args="<string>/opt/homebrew/bin/bun</string>
+        <string>run</string>
+        <string>src/server.ts</string>"
+
+    if [ -n "$extra_args" ]; then
+        args="$args
+        <string>$extra_args</string>"
+    fi
+
+    cat > "$output_path" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>$label</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        $args
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>$BRIDGE_DIR</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>$LOG_DIR/$log_name</string>
+
+    <key>StandardErrorPath</key>
+    <string>$LOG_DIR/${log_name%.log}.error.log</string>
+</dict>
+</plist>
+EOF
 }
 
 uninstall_plists() {
@@ -85,7 +144,7 @@ start_prod() {
         exit 1
     fi
 
-    launchctl load "$LAUNCH_AGENTS/$PROD_PLIST" 2>/dev/null || true
+    launchctl load -w "$LAUNCH_AGENTS/$PROD_PLIST" 2>/dev/null || true
     launchctl start "$PROD_LABEL" 2>/dev/null || true
 
     sleep 1
@@ -112,7 +171,7 @@ start_dev() {
         exit 1
     fi
 
-    launchctl load "$LAUNCH_AGENTS/$DEV_PLIST" 2>/dev/null || true
+    launchctl load -w "$LAUNCH_AGENTS/$DEV_PLIST" 2>/dev/null || true
     launchctl start "$DEV_LABEL" 2>/dev/null || true
 
     sleep 1

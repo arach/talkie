@@ -11,7 +11,7 @@ import PhotosUI
 struct SessionDetailView: View {
     let session: ClaudeSession
 
-    @State private var bridgeManager = BridgeManager.shared
+    private let bridgeManager = BridgeManager.shared
     @State private var messages: [SessionMessage] = []
     @State private var isLoading = true
     @State private var errorMessage: String?

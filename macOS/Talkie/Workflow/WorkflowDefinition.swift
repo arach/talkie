@@ -546,25 +546,25 @@ struct WorkflowStep: Identifiable, Codable {
     }
 
     enum StepType: String, Codable, CaseIterable {
-        case llm = "LLM Generation"
-        case shell = "Run Shell Command"
-        case webhook = "Webhook"
-        case email = "Send Email"
-        case notification = "Send Notification"
-        case iOSPush = "Notify iPhone"
-        case appleNotes = "Add to Apple Notes"
-        case appleReminders = "Create Reminder"
-        case appleCalendar = "Create Calendar Event"
-        case clipboard = "Copy to Clipboard"
-        case saveFile = "Save to File"
-        case conditional = "Conditional Branch"
-        case transform = "Transform Data"
-        case transcribe = "Transcribe Audio"  // Local speech-to-text
-        case speak = "Speak Response"  // Text-to-speech reply (Walkie-Talkie mode!)
-        // Trigger-related step types
-        case trigger = "Trigger Detection"
-        case intentExtract = "Extract Intents"
-        case executeWorkflows = "Execute Workflows"
+        // Raw values are machine-friendly identifiers for JSON serialization
+        case llm
+        case shell
+        case webhook
+        case email
+        case notification
+        case iOSPush
+        case appleNotes
+        case appleReminders
+        case appleCalendar
+        case clipboard
+        case saveFile
+        case conditional
+        case transform
+        case transcribe
+        case speak
+        case trigger
+        case intentExtract
+        case executeWorkflows
 
         var icon: String {
             switch self {
@@ -846,21 +846,18 @@ enum WorkflowLLMProvider: String, Codable, CaseIterable {
         case .openai:
             return [
                 // Budget tier - Mini models
-                WorkflowModelOption(id: "gpt-4.1-mini", name: "GPT-4.1 Mini", contextWindow: 1000000,
-                                   costTier: .budget, inputCostPer1M: 0.15, outputCostPer1M: 0.60, maxOutputTokens: 32768),
+                WorkflowModelOption(id: "gpt-4o-mini", name: "GPT-4o Mini", contextWindow: 128000,
+                                   costTier: .budget, inputCostPer1M: 0.15, outputCostPer1M: 0.60, maxOutputTokens: 16384),
                 // Balanced tier - Standard models
-                WorkflowModelOption(id: "gpt-4.1", name: "GPT-4.1", contextWindow: 1000000,
-                                   costTier: .balanced, inputCostPer1M: 2.00, outputCostPer1M: 8.00, maxOutputTokens: 32768),
-                WorkflowModelOption(id: "gpt-5-mini", name: "GPT-5 Mini", contextWindow: 400000,
-                                   costTier: .balanced, inputCostPer1M: 1.50, outputCostPer1M: 6.00, maxOutputTokens: 32768),
-                // Capable tier - Flagship models
-                WorkflowModelOption(id: "gpt-5.1", name: "GPT-5.1", contextWindow: 128000,
-                                   costTier: .capable, inputCostPer1M: 5.00, outputCostPer1M: 15.00, maxOutputTokens: 32768),
-                WorkflowModelOption(id: "gpt-5", name: "GPT-5", contextWindow: 400000,
-                                   costTier: .capable, inputCostPer1M: 5.00, outputCostPer1M: 15.00, maxOutputTokens: 32768),
-                // Reasoning models (special tier)
-                WorkflowModelOption(id: "o4-mini", name: "o4-mini (Reasoning)", contextWindow: 200000,
-                                   costTier: .capable, inputCostPer1M: 1.10, outputCostPer1M: 4.40, maxOutputTokens: 100000),
+                WorkflowModelOption(id: "gpt-4o", name: "GPT-4o", contextWindow: 128000,
+                                   costTier: .balanced, inputCostPer1M: 2.50, outputCostPer1M: 10.00, maxOutputTokens: 16384),
+                WorkflowModelOption(id: "gpt-4-turbo", name: "GPT-4 Turbo", contextWindow: 128000,
+                                   costTier: .balanced, inputCostPer1M: 10.00, outputCostPer1M: 30.00, maxOutputTokens: 4096),
+                // Reasoning models
+                WorkflowModelOption(id: "o1-mini", name: "o1-mini (Reasoning)", contextWindow: 128000,
+                                   costTier: .capable, inputCostPer1M: 3.00, outputCostPer1M: 12.00, maxOutputTokens: 65536),
+                WorkflowModelOption(id: "o1", name: "o1 (Reasoning)", contextWindow: 200000,
+                                   costTier: .capable, inputCostPer1M: 15.00, outputCostPer1M: 60.00, maxOutputTokens: 100000),
             ]
         case .anthropic:
             return [

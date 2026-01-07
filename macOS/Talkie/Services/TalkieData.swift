@@ -74,34 +74,26 @@ class TalkieData {
 
     // MARK: - Startup Checks
 
-    /// Run on app launch - inventory all data sources and reconcile if needed
+    /// Run on app launch - quick count-based inventory (no expensive ID comparison)
     func runStartupChecks() async {
-        log.info("📊 [TalkieData] Running startup inventory...")
+        // Fast count-only inventory - skip expensive ID fetching
+        // GRDB is source of truth, CloudKit sync handles reconciliation
+        let localCount = await countLocal()
+        let liveCount = await countLive()
 
-        // 1. Take inventory
-        let inventory = await takeInventory()
-        self.inventory = inventory
+        self.inventory = DataInventory(
+            cloudKit: nil,
+            coreData: 0,  // Skip CoreData count - it's just a sync layer
+            local: localCount,
+            live: liveCount,
+            timestamp: Date(),
+            coreDataIDs: [],
+            localIDs: []
+        )
 
-        log.info("📊 [TalkieData] Inventory complete:")
-        log.info("   • CoreData: \(inventory.coreData) memos")
-        log.info("   • Local: \(inventory.local) memos")
-        log.info("   • Live: \(inventory.live) dictations")
-        log.info("   • Healthy: \(inventory.isHealthy)")
+        log.info("📊 [TalkieData] Ready: \(localCount) memos, \(liveCount) dictations")
 
-        // 2. Skip automatic sync - GRDB is source of truth
-        // The old logic synced CoreData→GRDB on every launch, but:
-        // - It races with DatabaseManager.initialize() and fails
-        // - Even when it "works", it's 20+ seconds of unnecessary I/O
-        // - GRDB already has the data; CloudKit sync handles new records
-        if inventory.needsFullSync {
-            log.info("ℹ️ [TalkieData] \(inventory.missingFromLocal.count) memo(s) not in local cache (expected on first run or if DB init is still running)")
-        }
-
-        // 3. Mark ready
         isReady = true
-        log.info("✅ [TalkieData] Data layer ready")
-
-        // Notify UI
         NotificationCenter.default.post(name: .talkieDataReady, object: nil)
     }
 
@@ -155,6 +147,16 @@ class TalkieData {
     private func countLive() async -> Int {
         // LiveDatabase uses static methods
         return LiveDatabase.count()
+    }
+
+    private func countLocal() async -> Int {
+        do {
+            let repo = LocalRepository()
+            return try await repo.countMemos()
+        } catch {
+            log.error("Failed to count local memos: \(error.localizedDescription)")
+            return 0
+        }
     }
 
     // MARK: - Bridge Sync (CoreData → GRDB)

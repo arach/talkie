@@ -3,10 +3,11 @@
 //  Talkie macOS
 //
 //  File-based workflow storage with hot-reload support
-//  Workflows are stored as JSON files in three directories:
-//  - system/: Protected workflows (Transcribe, Hey Talkie) - always overwritten on update
-//  - starters/: Template workflows - overwritten unless duplicated to user/
+//  Workflows are stored in two directories:
+//  - system/: Protected workflows (Transcribe, Hey Talkie) - synced from bundle on update
 //  - user/: User-created workflows - never touched by app updates
+//
+//  Templates are loaded directly from the app bundle (not synced to disk)
 //
 
 import Foundation
@@ -19,23 +20,18 @@ private let log = Log(.workflow)
 
 /// Identifies where a workflow came from
 enum WorkflowSource: String, Codable {
-    case system     // Protected, always overwritten on update
-    case starter    // Template, overwritten unless user duplicated
-    case user       // User-created, never touched
+    case system     // Protected, synced from bundle on update
+    case user       // User-created, never touched by app
 
     var directoryName: String {
         switch self {
         case .system: return "system"
-        case .starter: return "starters"
         case .user: return "user"
         }
     }
 
     var isEditable: Bool {
-        switch self {
-        case .system: return false  // Can only enable/disable, duplicate
-        case .starter, .user: return true
-        }
+        self == .user
     }
 }
 
@@ -116,7 +112,7 @@ final class WorkflowFileRepository {
     private func ensureDirectoriesExist() {
         let fm = FileManager.default
 
-        for source in [WorkflowSource.system, .starter, .user] {
+        for source in [WorkflowSource.system, .user] {
             let url = Self.directoryURL(for: source)
             if !fm.fileExists(atPath: url.path) {
                 do {
@@ -131,9 +127,23 @@ final class WorkflowFileRepository {
 
     // MARK: - Bundle Sync
 
-    /// Sync bundled workflow files to system/ and starters/
+    /// Track which app version we last synced system workflows from
+    private static let syncVersionKey = "WorkflowFileRepository.lastSyncVersion"
+
+    /// Sync bundled system workflows to system/ directory (only on app update or first run)
     private func syncBundledWorkflows() async {
         guard let resourcePath = Bundle.main.resourcePath else { return }
+
+        // Only sync on first run or app update (not every startup)
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+        let lastSyncVersion = UserDefaults.standard.string(forKey: Self.syncVersionKey)
+
+        guard lastSyncVersion != currentVersion else {
+            // Already synced for this version
+            return
+        }
+
+        log.info("Syncing system workflows (version \(lastSyncVersion ?? "none") → \(currentVersion))")
 
         // Try both direct path and nested Resources/ path (Xcode folder reference creates nesting)
         let directPath = resourcePath
@@ -144,73 +154,87 @@ final class WorkflowFileRepository {
             (directPath as NSString).appendingPathComponent("SystemWorkflows"),
             (nestedPath as NSString).appendingPathComponent("SystemWorkflows")
         ]
+
+        let fm = FileManager.default
+        let destDir = Self.directoryURL(for: .system)
+        var synced = 0
+
         for path in systemPaths {
-            if FileManager.default.fileExists(atPath: path) {
-                await syncBundleDirectory(from: path, to: .system, alwaysOverwrite: true)
+            if fm.fileExists(atPath: path) {
+                do {
+                    let files = try fm.contentsOfDirectory(atPath: path)
+                    let jsonFiles = files.filter { $0.hasSuffix(".json") }
+
+                    for filename in jsonFiles {
+                        let srcURL = URL(fileURLWithPath: path).appendingPathComponent(filename)
+                        let destURL = destDir.appendingPathComponent(filename)
+
+                        // Overwrite system workflows from bundle
+                        try? fm.removeItem(at: destURL)
+                        try fm.copyItem(at: srcURL, to: destURL)
+                        synced += 1
+                    }
+                } catch {
+                    log.error("Failed to sync system workflows: \(error)")
+                }
                 break
             }
         }
 
-        // Starter workflows (overwrite only if not duplicated to user/)
-        let starterPaths = [
-            (directPath as NSString).appendingPathComponent("StarterWorkflows"),
-            (nestedPath as NSString).appendingPathComponent("StarterWorkflows")
-        ]
-        for path in starterPaths {
-            if FileManager.default.fileExists(atPath: path) {
-                await syncBundleDirectory(from: path, to: .starter, alwaysOverwrite: false)
-                break
-            }
-        }
+        UserDefaults.standard.set(currentVersion, forKey: Self.syncVersionKey)
+        log.info("Synced \(synced) system workflows")
     }
 
-    private func syncBundleDirectory(from bundlePath: String, to source: WorkflowSource, alwaysOverwrite: Bool) async {
-        let fm = FileManager.default
-        let destDir = Self.directoryURL(for: source)
+    // MARK: - Templates (from bundle, not synced)
 
-        guard fm.fileExists(atPath: bundlePath) else {
-            log.debug("No bundle directory at \(bundlePath)")
-            return
+    /// Load workflow templates from bundle for the template picker
+    /// These are NOT synced to disk - just loaded on demand
+    func loadTemplates() -> [WorkflowDefinition] {
+        guard let resourcePath = Bundle.main.resourcePath else {
+            log.error("No bundle resource path")
+            return []
         }
 
-        do {
-            let files = try fm.contentsOfDirectory(atPath: bundlePath)
-            let jsonFiles = files.filter { $0.hasSuffix(".json") || $0.hasSuffix(".twf.json") }
+        // Try both direct path and nested Resources/ path
+        let directPath = resourcePath
+        let nestedPath = (resourcePath as NSString).appendingPathComponent("Resources")
+        let templatesPaths = [
+            (directPath as NSString).appendingPathComponent("WorkflowTemplates"),
+            (nestedPath as NSString).appendingPathComponent("WorkflowTemplates")
+        ]
 
-            for filename in jsonFiles {
-                let srcURL = URL(fileURLWithPath: bundlePath).appendingPathComponent(filename)
-                let destFilename = filename.replacingOccurrences(of: ".twf.json", with: ".json")
-                let destURL = destDir.appendingPathComponent(destFilename)
+        let fm = FileManager.default
+        var templates: [WorkflowDefinition] = []
 
-                // Check if we should skip (user has duplicated this workflow)
-                if !alwaysOverwrite {
-                    if hasUserCopy(of: srcURL) {
-                        log.debug("Skipping \(filename) - user has modified copy")
-                        continue
+        for templatesPath in templatesPaths {
+            guard fm.fileExists(atPath: templatesPath) else { continue }
+
+            do {
+                let files = try fm.contentsOfDirectory(atPath: templatesPath)
+                let jsonFiles = files.filter { $0.hasSuffix(".json") }
+
+                for filename in jsonFiles {
+                    let fileURL = URL(fileURLWithPath: templatesPath).appendingPathComponent(filename)
+                    do {
+                        let template = try SimpleWorkflowLoader.load(from: fileURL)
+                        templates.append(template)
+                    } catch {
+                        log.error("Failed to load template \(filename): \(error)")
                     }
                 }
 
-                // Copy/overwrite
-                try? fm.removeItem(at: destURL)
-                try fm.copyItem(at: srcURL, to: destURL)
-                log.debug("Synced \(filename) to \(source.directoryName)/")
+                log.debug("Loaded \(templates.count) workflow templates from \(templatesPath)")
+                break
+            } catch {
+                log.error("Failed to read templates directory: \(error)")
             }
-        } catch {
-            log.error("Failed to sync bundle directory: \(error)")
         }
-    }
 
-    /// Check if user has a copy of a workflow (by slug)
-    private func hasUserCopy(of bundleURL: URL) -> Bool {
-        // Extract slug from filename
-        let slug = bundleURL.deletingPathExtension().lastPathComponent
-            .replacingOccurrences(of: ".twf", with: "")
+        if templates.isEmpty {
+            log.warning("No WorkflowTemplates folder found in bundle")
+        }
 
-        // Check if a file with this slug exists in user/
-        let userDir = Self.directoryURL(for: .user)
-        let userFile = userDir.appendingPathComponent("\(slug).json")
-
-        return FileManager.default.fileExists(atPath: userFile.path)
+        return templates.sorted { $0.name < $1.name }
     }
 
     // MARK: - Loading
@@ -219,7 +243,7 @@ final class WorkflowFileRepository {
     func reloadAll() async {
         var all: [LoadedWorkflow] = []
 
-        for source in [WorkflowSource.system, .starter, .user] {
+        for source in [WorkflowSource.system, .user] {
             let workflows = await loadWorkflows(from: source)
             all.append(contentsOf: workflows)
         }
@@ -260,7 +284,17 @@ final class WorkflowFileRepository {
     }
 
     private func loadWorkflow(from fileURL: URL) async throws -> WorkflowDefinition {
-        // Use SimpleWorkflowLoader for all JSON files
+        let data = try Data(contentsOf: fileURL)
+
+        // Try native WorkflowDefinition format first
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        if let definition = try? decoder.decode(WorkflowDefinition.self, from: data) {
+            return definition
+        }
+
+        // Fall back to SimpleWorkflowLoader for flat starter workflow format
+        // (flat format uses same type names, just different structure)
         return try SimpleWorkflowLoader.load(from: fileURL)
     }
 
@@ -337,7 +371,7 @@ final class WorkflowFileRepository {
     private func startFileWatching() {
         stopFileWatching()
 
-        for source in [WorkflowSource.system, .starter, .user] {
+        for source in [WorkflowSource.system, .user] {
             let dir = Self.directoryURL(for: source)
             watchDirectory(dir)
         }
