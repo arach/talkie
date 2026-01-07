@@ -695,9 +695,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		B7E9A4D2C1F630E58A3B7C16 /* XCLocalSwiftPackageReference "../../../DebugKit" */ = {
+		B7E9A4D2C1F630E58A3B7C16 /* XCLocalSwiftPackageReference "../../Packages/DebugKit" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = ../../../DebugKit;
+			relativePath = ../../Packages/DebugKit;
 		};
 		C8F3A5D1E9B74026A2D8E9F1 /* XCLocalSwiftPackageReference "../TalkieKit" */ = {
 			isa = XCLocalSwiftPackageReference;

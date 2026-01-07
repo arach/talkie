@@ -71,8 +71,6 @@ struct UnifiedDashboard: View {
     @State private var todayMemos: Int = 0
     @State private var todayDictations: Int = 0
     @State private var totalWords: Int = 0
-    @State private var isLiveRunning: Bool = false
-    @State private var serviceState: TalkieServiceState = .unknown
     @State private var pendingRetryCount: Int = 0
 
     private var todayTotal: Int { todayMemos + todayDictations }
@@ -102,9 +100,6 @@ struct UnifiedDashboard: View {
 
                     // Row 3: Unified Recent Activity
                     recentActivitySection
-
-                    // Row 4: System Status (compact)
-                    systemStatusRow
                 } else {
                     welcomeCard
                 }
@@ -131,8 +126,6 @@ struct UnifiedDashboard: View {
             StartupProfiler.shared.mark("home.onAppear")
             dictationStore.refresh()  // Load dictations from database
             StartupProfiler.shared.mark("home.dictations.refreshed")
-            isLiveRunning = liveState.isRunning
-            serviceState = serviceMonitor.state
             // Async DB call to avoid blocking main thread
             Task.detached {
                 let count = LiveDatabase.countNeedsRetry()
@@ -188,6 +181,50 @@ struct UnifiedDashboard: View {
                 }
                 .font(.system(size: 13, weight: .medium))
             }
+
+            Spacer()
+
+            // Status pills in header (right-aligned)
+            HStack(spacing: 12) {
+                // Live Dictation - observe directly from liveState
+                SystemStatusPill(
+                    icon: "mic.circle.fill",
+                    label: "Live",
+                    isActive: liveState.isRunning
+                )
+
+                // AI Engine - observe directly from serviceMonitor
+                SystemStatusPill(
+                    icon: "cpu",
+                    label: "AI",
+                    isActive: serviceMonitor.isRunning
+                )
+
+                // Cloud Sync
+                SystemStatusPill(
+                    icon: "icloud.fill",
+                    label: "Sync",
+                    isActive: syncManager.lastSyncDate != nil
+                )
+
+                // Pending transcriptions - navigates to filtered dictations view
+                if pendingRetryCount > 0 {
+                    Button(action: handlePendingTap) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 10))
+                            Text("\(pendingRetryCount) pending")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(Color.orange))
+                    }
+                    .buttonStyle(.plain)
+                    .help("View dictations awaiting transcription")
+                }
+            }
         }
     }
 
@@ -213,10 +250,10 @@ struct UnifiedDashboard: View {
                 color: .blue
             )
 
-            // Total Dictations
+            // Total Dictations - use cachedCount for true DB total
             CompactStatCard(
                 icon: "waveform",
-                value: formatNumber(dictationStore.dictations.count),
+                value: formatNumber(dictationStore.cachedCount),
                 label: "Dictations",
                 detail: "Quick captures",
                 color: .purple
@@ -459,79 +496,11 @@ struct UnifiedDashboard: View {
         }
     }
 
-    // MARK: - System Status (Compact)
-
-    private var systemStatusRow: some View {
-        HStack(spacing: 16) {
-            // Live Dictation
-            SystemStatusPill(
-                icon: "mic.circle.fill",
-                label: "Live",
-                isActive: isLiveRunning
-            )
-
-            // AI Engine
-            SystemStatusPill(
-                icon: "cpu",
-                label: "AI",
-                isActive: serviceState == .running
-            )
-
-            // Cloud Sync
-            SystemStatusPill(
-                icon: "icloud.fill",
-                label: "Sync",
-                isActive: syncManager.lastSyncDate != nil
-            )
-
-            // Pending transcriptions - show only when there are items
-            if pendingRetryCount > 0 {
-                Button(action: handlePendingTap) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 10))
-                        Text("\(pendingRetryCount) pending")
-                            .font(.system(size: 11, weight: .medium))
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 10))
-                            .foregroundColor(.white.opacity(0.7))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Capsule().fill(Color.orange))
-                }
-                .buttonStyle(.plain)
-                .help("Click to retry, Option+click to dismiss")
-            }
-
-            Spacer()
-        }
-        .padding(.top, 8)
-    }
-
     // MARK: - Actions
 
     private func handlePendingTap() {
-        let modifiers = NSEvent.modifierFlags
-        if modifiers.contains(.option) {
-            // Option+click: Clear/dismiss pending items
-            clearPendingTranscriptions()
-        } else {
-            // Regular click: Trigger retry via notification to TalkieLive
-            // Since we can't directly call TalkieLive's TranscriptionRetryManager,
-            // we'll just refresh and let the engine auto-retry on reconnect
-            NotificationCenter.default.post(name: .init("RetryPendingTranscriptions"), object: nil)
-            // For now, just refresh the count
-            pendingRetryCount = LiveDatabase.countNeedsRetry()
-        }
-    }
-
-    private func clearPendingTranscriptions() {
-        // TODO: Route through TalkieLive XPC - Talkie is read-only
-        // Would mark all pending items as dismissed
-        print("[UnifiedDashboard] clearPendingTranscriptions not implemented - should route through TalkieLive XPC")
-        pendingRetryCount = 0
+        // Navigate to dictations view with pending filter
+        NotificationCenter.default.post(name: .init("NavigateToDictationsPending"), object: nil)
     }
 
     // MARK: - Welcome Card
@@ -1064,22 +1033,25 @@ struct SystemStatusPill: View {
     let isActive: Bool
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 5) {
             Circle()
-                .fill(isActive ? Color.green : Color.red.opacity(0.7))
+                .fill(isActive ? Color.green : Color.red.opacity(0.6))
                 .frame(width: 6, height: 6)
-
-            Image(systemName: icon)
-                .font(.system(size: 11))
-                .foregroundColor(Theme.current.foregroundSecondary)
 
             Text(label)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(Theme.current.foregroundSecondary)
+                .foregroundColor(isActive ? Theme.current.foreground : Theme.current.foregroundMuted)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .liquidGlassPill(tint: isActive ? .green.opacity(0.2) : nil, depth: .standard)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            Capsule()
+                .fill(Theme.current.surfaceCard.opacity(0.8))
+        )
+        .overlay(
+            Capsule()
+                .strokeBorder(Theme.current.border, lineWidth: 0.5)
+        )
     }
 }
 

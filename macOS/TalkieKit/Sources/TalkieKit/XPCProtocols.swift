@@ -83,6 +83,17 @@ public var kTalkieEngineXPCServiceName: String {
 
     /// Check if screen recording permission is granted
     func hasScreenRecordingPermission(reply: @escaping (_ granted: Bool) -> Void)
+
+    /// Retranscribe a dictation with a different model
+    ///
+    /// TalkieLive owns live.sqlite, so retranscription must go through XPC.
+    /// TalkieLive fetches audio, transcribes via Engine, and updates the database.
+    ///
+    /// - Parameters:
+    ///   - dictationId: The database ID (Int64) of the dictation to retranscribe
+    ///   - modelId: Model identifier (e.g., "whisper:openai_whisper-small" or "parakeet:v3")
+    ///   - reply: Callback with new transcript text on success, or error message on failure
+    func retranscribe(dictationId: Int64, modelId: String, reply: @escaping (_ newText: String?, _ error: String?) -> Void)
 }
 
 /// Protocol for Talkie to receive callbacks from TalkieLive (Live → Talkie events)
