@@ -132,18 +132,32 @@ struct ClaudeView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            // Left: Session list
-            sessionList
-                .frame(width: 240)
+        VStack(spacing: 0) {
+            // Header
+            TalkieViewHeader(
+                subtitle: "with Claude",
+                debugInfo: {
+                    [
+                        "Sessions": "\(sessions.count)",
+                        "Selected": selectedSession?.project ?? "none"
+                    ]
+                }
+            )
 
-            Divider()
+            // Content
+            HStack(spacing: 0) {
+                // Left: Session list
+                sessionList
+                    .frame(width: 240)
 
-            // Right: Detail
-            detailPane
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Divider()
+
+                // Right: Detail
+                detailPane
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.current.background)
         .onAppear {
             loadSessions()

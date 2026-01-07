@@ -58,7 +58,7 @@ protocol SyncProvider {
     var isAvailable: Bool { get async }
 
     /// Last successful sync timestamp
-    var lastSyncDate: Date? { get }
+    var lastSyncDate: Date? { get async }
 
     /// Check connection and return status
     func checkConnection() async -> ConnectionStatus

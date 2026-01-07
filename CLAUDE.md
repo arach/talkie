@@ -2,22 +2,51 @@
 
 Voice-first productivity suite for macOS.
 
-## ⚠️ CRITICAL: Never Kill Production Apps
-
 **The user actively uses Talkie, TalkieLive, and TalkieEngine for live dictation.**
 
 - **NEVER** run `pkill Talkie`, `pkill TalkieLive`, or `pkill TalkieEngine`
 - **NEVER** kill apps in `/Applications/` - user may be mid-recording
 - **OK** to kill debug builds in DerivedData if specifically testing
-- When testing, launch debug builds alongside production - don't replace them
-- If you need to restart an app, ASK the user first
+- When testing, launch debug builds alongside running XCode builds - don't replace them
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Talkie (Swift)                           │
+│              UI • Workflows • Data • Orchestration          │
+└────────────────┬────────────────┬────────────────┬──────────┘
+                 │ XPC            │ XPC            │ HTTP
+                 ▼                ▼                ▼
+        ┌────────────────┐ ┌─────────────┐ ┌──────────────────┐
+        │  TalkieLive    │ │ TalkieEngine│ │  TalkieGateway   │
+        │    (Swift)     │ │   (Swift)   │ │   (TypeScript)   │
+        │  Ears & Hands  │ │ Local Brain │ │  External Brain  │
+        └────────────────┘ └─────────────┘ └──────────────────┘
+          Mic → Keyboard    Whisper         OpenAI, Anthropic
+                            Transcription   Google, Groq
+```
+
+**Talkie** owns user intent — what to do and why.
+**TalkieLive** owns real-time I/O — listening and typing.
+**TalkieEngine** owns local compute — on-device transcription.
+**TalkieGateway** owns external APIs — protocol translation to cloud services.
+
+### The Gateway Rule
+
+> **Gateway translates protocols, not intent.**
+
+- ✅ `POST /inference { provider, model, messages }` — generic, any app could use this
+- ❌ `POST /polish-memo { memoId }` — Talkie-specific, belongs in main app
+
+**Litmus test:** Could a different app use Gateway unchanged? If yes → Gateway. If no → Talkie.
 
 ## Projects
 
 - **macOS/Talkie** - Main macOS app (SwiftUI)
 - **macOS/TalkieLive** - Background helper for live dictation
 - **macOS/TalkieEngine** - Transcription engine service
-- **macOS/TalkieBridge** - iOS-to-Mac bridge server (TypeScript/Bun)
+- **macOS/TalkieGateway** - Web layer for external APIs (TypeScript/Bun)
 - **iOS/Talkie iOS** - iOS companion app (SwiftUI)
 - **Packages/** - Shared Swift packages (WFKit, TalkieKit, DebugKit)
 
@@ -32,8 +61,8 @@ xcodebuild -scheme Talkie -configuration Debug build
 cd macOS/TalkieLive
 xcodebuild -scheme TalkieLive -configuration Debug build
 
-# Run TalkieBridge (TypeScript/Bun)
-cd macOS/TalkieBridge
+# Run TalkieGateway (TypeScript/Bun)
+cd macOS/TalkieGateway
 bun install
 bun run src/server.ts          # Normal mode (requires Tailscale)
 bun run src/server.ts --local  # Local mode (no Tailscale required)
@@ -67,18 +96,18 @@ The script:
 
 ```
 ┌─────────────────────────────────────────────┐
-│              App Layer (UI)                  │
-│         reads/writes from GRDB only          │
+│              App Layer (UI)                 │
+│         reads/writes from GRDB only         │
 └─────────────────┬───────────────────────────┘
                   │
 ┌─────────────────▼───────────────────────────┐
-│                  GRDB                        │
-│         ~/Library/.../Talkie/*.sqlite        │
-│            LOCAL SOURCE OF TRUTH             │
+│                  GRDB                       │
+│         ~/Library/.../Talkie/*.sqlite       │
+│            LOCAL SOURCE OF TRUTH            │
 └─────────────────┬───────────────────────────┘
                   │ bridge sync (background)
 ┌─────────────────▼───────────────────────────┐
-│            Sync Providers                    │
+│            Sync Providers                   │
 │  ┌────────────────────────────────────────┐ │
 │  │ CloudKit (via Core Data bridge)        │ │
 │  │ - NSPersistentCloudKitContainer        │ │
@@ -106,38 +135,16 @@ Started with Core Data + CloudKit as source of truth, evolved to GRDB-primary fo
 - `Models/Persistence.swift` - Core Data + CloudKit bridge
 - `Services/TalkieData.swift` - Bridge sync (CloudKit → GRDB)
 
-## Data Ownership: Talkie ↔ TalkieLive
+## Data Ownership
 
-**TalkieLive owns all writes to `live.sqlite`. Talkie is read-only.**
+Each database has a single writer to prevent corruption:
 
-```
-~/Library/Application Support/Talkie/live.sqlite
-├── TalkieLive: READ + WRITE (schema migrations, all mutations)
-└── Talkie:     READ-ONLY (queries only, opened with config.readonly = true)
-```
+| Database | Writer | Readers |
+|----------|--------|---------|
+| `talkie_grdb.sqlite` (memos) | Talkie | Talkie |
+| `live.sqlite` (dictations) | TalkieLive | Talkie (read-only) |
 
-### Why This Matters
-- **Single writer** prevents corruption and race conditions
-- **SQLite enforces it** - Talkie's read-only config rejects any write attempts
-- **XPC for mutations** - Talkie routes delete/update requests through TalkieLive XPC
-
-### What Each App Does
-
-| Operation | Talkie | TalkieLive |
-|-----------|--------|------------|
-| Schema migrations | ❌ | ✅ |
-| Insert dictations | ❌ | ✅ |
-| Update transcription | ❌ | ✅ |
-| Delete dictations | ❌ (stub + XPC) | ✅ |
-| Update live_state | ❌ | ✅ |
-| Query dictations | ✅ | ✅ |
-| Prune old data | ❌ | ✅ |
-
-### Adding Write Operations
-If Talkie needs to trigger a write (e.g., delete, retranscribe):
-1. Add method to `TalkieLiveXPCProtocol`
-2. Implement in TalkieLive's XPC service
-3. Call via XPC from Talkie (don't touch LiveDatabase directly)
+**If Talkie needs to mutate live.sqlite:** Use XPC → `TalkieLiveXPCProtocol` → TalkieLive writes it.
 
 ## Key Patterns
 

@@ -15,7 +15,11 @@ class iCloudSyncProvider: SyncProvider {
     }
 
     var lastSyncDate: Date? {
-        CloudKitSyncManager.shared.lastSyncDate
+        get async {
+            await MainActor.run {
+                CloudKitSyncManager.shared.lastSyncDate
+            }
+        }
     }
 
     func checkConnection() async -> ConnectionStatus {

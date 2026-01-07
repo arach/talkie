@@ -22,13 +22,11 @@ struct DatabaseSettingsView: View {
     var body: some View {
         @Bindable var live = liveSettings
 
-        SettingsPageContainer {
-            SettingsPageHeader(
-                icon: "cylinder",
-                title: "DATABASE",
-                subtitle: "Configure data retention and cleanup policies."
-            )
-        } content: {
+        SettingsPageView(
+            icon: "cylinder",
+            title: "DATABASE",
+            subtitle: "Configure data retention and cleanup policies."
+        ) {
             // MARK: - Dictation Retention
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 // Section header with accent bar
@@ -333,13 +331,18 @@ struct CloudSettingsView: View {
     @State private var localMemoCount: Int = 0
 
     var body: some View {
-        SettingsPageContainer {
-            SettingsPageHeader(
-                icon: "cloud",
-                title: "CLOUD",
-                subtitle: "Configure cloud sync and backup."
-            )
-        } content: {
+        SettingsPageView(
+            icon: "cloud",
+            title: "CLOUD",
+            subtitle: "Configure cloud sync and backup.",
+            debugInfo: {
+                [
+                    "Enabled": "\(iCloudEnabled)",
+                    "Status": "\(iCloudStatus)",
+                    "Local Memos": "\(localMemoCount)"
+                ]
+            }
+        ) {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 // iCloud Sync Settings
                 VStack(alignment: .leading, spacing: Spacing.md) {
@@ -525,7 +528,8 @@ struct CloudSettingsView: View {
         // Count memos in local GRDB database
         Task {
             do {
-                let count = try await DatabaseManager.shared.countMemos()
+                let repository = LocalRepository()
+                let count = try await repository.countMemos()
                 await MainActor.run {
                     localMemoCount = count
                 }

@@ -194,21 +194,21 @@ private struct WelcomePage: View {
                             .foregroundColor(Color(hex: "9A9A9A"))
                     }
 
-                    // iCloud sync line
+                    // Sync options line
                     HStack(spacing: Spacing.xs) {
                         Image(systemName: "checkmark.circle")
                             .font(.system(size: 10))
                             .foregroundColor(Color(hex: "6A6A6A"))
 
-                        Text("synced via")
+                        Text("local, iCloud, or")
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(Color(hex: "6A6A6A"))
 
-                        Text("your")
+                        Text("direct")
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
                             .foregroundColor(Color(hex: "9A9A9A"))
 
-                        Text("iCloud")
+                        Text("to Mac")
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(Color(hex: "6A6A6A"))
 
@@ -610,7 +610,7 @@ private struct SyncPage: View {
                             .font(.system(size: 20, weight: .bold))
                             .foregroundColor(.white)
 
-                        Text("Record anywhere on your iPhone.\nSync through your own iCloud.\nMac processes with on-device AI.\nAll encrypted, all yours.")
+                        Text("Record anywhere on your iPhone.\nSync locally, via iCloud, or direct to Mac.\nMac processes with on-device AI.\nAll encrypted, all yours.")
                             .font(.system(size: 14))
                             .foregroundColor(Color(hex: "8A8A8A"))
                             .multilineTextAlignment(.center)

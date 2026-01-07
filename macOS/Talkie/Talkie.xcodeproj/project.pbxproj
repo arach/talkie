@@ -7,8 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		541290A2D8A34748AA4ECB7B /* ModelRegistryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C71EF7996EB344539C396977 /* ModelRegistryView.swift */; };
-		7F9BC024C8014855BD7CFDE3 /* ModelPlaygroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34DF50FEB16C4FBBB136B740 /* ModelPlaygroundView.swift */; };
+		23891C7996804BC8BE79CD47 /* TalkieViewHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11A25B13F98747759B730C13 /* TalkieViewHeader.swift */; };
 		ED5C9D66ABD648B4A9225302 /* iCloudSyncProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CDE3623769D498DB219A660 /* iCloudSyncProvider.swift */; };
 		E3CCBC9B5FBA4845B9FCA405 /* SyncProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BF3B038A8142B480F07308 /* SyncProvider.swift */; };
 		6671D8A270FE4F2AB3104C86 /* LocalSyncProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67EF9D4181744ED4AF5722A1 /* LocalSyncProvider.swift */; };
@@ -281,8 +280,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		C71EF7996EB344539C396977 /* ModelRegistryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelRegistryView.swift; sourceTree = "<group>"; };
-		34DF50FEB16C4FBBB136B740 /* ModelPlaygroundView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelPlaygroundView.swift; sourceTree = "<group>"; };
+		11A25B13F98747759B730C13 /* TalkieViewHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieViewHeader.swift; sourceTree = "<group>"; };
 		9CDE3623769D498DB219A660 /* iCloudSyncProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iCloudSyncProvider.swift; sourceTree = "<group>"; };
 		E5BF3B038A8142B480F07308 /* SyncProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncProvider.swift; sourceTree = "<group>"; };
 		67EF9D4181744ED4AF5722A1 /* LocalSyncProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalSyncProvider.swift; sourceTree = "<group>"; };
@@ -883,8 +881,6 @@
 		9A4651765758DD61801D03CA /* Settings */ = {
 			isa = PBXGroup;
 			children = (
-				C71EF7996EB344539C396977 /* ModelRegistryView.swift */,
-				34DF50FEB16C4FBBB136B740 /* ModelPlaygroundView.swift */,
 				C17881FF95CCD644641D298E /* APISettings.swift */,
 				CB9A7709DDDFE4A1859B1326 /* AppearanceSettings.swift */,
 				90C22080263D752683F84C1A /* AuditResultsView.swift */,
@@ -989,6 +985,7 @@
 		BA3B8C877A78851E0E5DA184 /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				11A25B13F98747759B730C13 /* TalkieViewHeader.swift */,
 				8626E21D10A08A15D16F3BCD /* DownloadProgressView.swift */,
 				85BD343AFFEE244146750E16 /* FormControls.swift */,
 				05616E2B0307CDC1B68FE883 /* ModelCard.swift */,
@@ -1312,8 +1309,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				541290A2D8A34748AA4ECB7B /* ModelRegistryView.swift in Sources */,
-				7F9BC024C8014855BD7CFDE3 /* ModelPlaygroundView.swift in Sources */,
+				23891C7996804BC8BE79CD47 /* TalkieViewHeader.swift in Sources */,
 				ED5C9D66ABD648B4A9225302 /* iCloudSyncProvider.swift in Sources */,
 				E3CCBC9B5FBA4845B9FCA405 /* SyncProvider.swift in Sources */,
 				6671D8A270FE4F2AB3104C86 /* LocalSyncProvider.swift in Sources */,

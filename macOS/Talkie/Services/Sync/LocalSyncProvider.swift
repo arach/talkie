@@ -8,7 +8,9 @@ class LocalSyncProvider: SyncProvider {
         get async { true }
     }
 
-    var lastSyncDate: Date? { Date() }
+    var lastSyncDate: Date? {
+        get async { Date() }
+    }
 
     func checkConnection() async -> ConnectionStatus {
         .available

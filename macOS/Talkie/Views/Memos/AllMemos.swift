@@ -173,6 +173,19 @@ struct AllMemos: View {
     @ViewBuilder
     private var listPane: some View {
         VStack(spacing: 0) {
+            // Talkie header wordmark
+            TalkieViewHeader(
+                subtitle: "Memos",
+                debugInfo: {
+                    [
+                        "Total": "\(viewModel.totalCount)",
+                        "Loaded": "\(viewModel.memos.count)",
+                        "Selected": "\(selectedMemoIDs.count)"
+                    ]
+                }
+            )
+
+            // Search and filters
             headerView
 
             if viewModel.isLoading && viewModel.memos.isEmpty {

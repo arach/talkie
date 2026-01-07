@@ -669,6 +669,103 @@ extension SettingsPageContainer where Header == EmptyView {
     }
 }
 
+// MARK: - Settings Page Wrapper with Debug Overlay
+
+/// Reusable wrapper for settings pages with consistent header and debug overlay positioning
+#if DEBUG
+import DebugKit
+
+struct SettingsPageView<Content: View, DebugContent: View>: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let debugInfo: () -> [String: String]
+    let debugContent: DebugContent
+    let content: Content
+
+    init(
+        icon: String,
+        title: String,
+        subtitle: String,
+        debugInfo: @escaping () -> [String: String] = { [:] },
+        @ViewBuilder debugContent: () -> DebugContent,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.icon = icon
+        self.title = title
+        self.subtitle = subtitle
+        self.debugInfo = debugInfo
+        self.debugContent = debugContent()
+        self.content = content()
+    }
+
+    var body: some View {
+        SettingsPageContainer {
+            SettingsPageHeader(icon: icon, title: title, subtitle: subtitle)
+        } content: {
+            content
+        }
+        .overlay(alignment: .bottomTrailing) {
+            TalkieDebugToolbar {
+                debugContent
+            } debugInfo: {
+                var info = debugInfo()
+                info["Page"] = title
+                return info
+            }
+            .padding(.bottom, 40) // Clear the 32px StatusBar
+        }
+    }
+}
+
+// Convenience init for settings pages without custom debug content
+extension SettingsPageView where DebugContent == EmptyView {
+    init(
+        icon: String,
+        title: String,
+        subtitle: String,
+        debugInfo: @escaping () -> [String: String] = { [:] },
+        @ViewBuilder content: () -> Content
+    ) {
+        self.icon = icon
+        self.title = title
+        self.subtitle = subtitle
+        self.debugInfo = debugInfo
+        self.debugContent = EmptyView()
+        self.content = content()
+    }
+}
+
+#else
+// Release build: just the page container (no debug overlay)
+struct SettingsPageView<Content: View>: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let content: Content
+
+    init(
+        icon: String,
+        title: String,
+        subtitle: String,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.icon = icon
+        self.title = title
+        self.subtitle = subtitle
+        self.content = content()
+    }
+
+    var body: some View {
+        SettingsPageContainer {
+            SettingsPageHeader(icon: icon, title: title, subtitle: subtitle)
+        } content: {
+            content
+        }
+    }
+}
+#endif
+
 // MARK: - Settings Section Card
 
 /// A reusable card style for settings sections with Liquid Glass effect
