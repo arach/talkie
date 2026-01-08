@@ -786,21 +786,6 @@ struct ConnectionsSection: View {
         }
     }
 
-    private var activeConnectionCount: Int {
-        var count = 1 // Local is always active
-
-        if cloudStatusManager.status.isAvailable {
-            let enabled = UserDefaults.standard.bool(forKey: "sync_icloud_enabled")
-            if enabled { count += 1 }
-        }
-
-        if bridgeManager.isPaired && bridgeManager.status == .connected {
-            count += 1
-        }
-
-        return count
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             Text("CONNECTIONS")
@@ -825,15 +810,6 @@ struct ConnectionsSection: View {
                     }
 
                     Spacer()
-
-                    // Connection count badge
-                    Text("\(activeConnectionCount)")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .background(activeConnectionCount > 1 ? Color.green : Color.gray)
-                        .cornerRadius(10)
 
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12))
