@@ -946,7 +946,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             } else if let error = error {
                 logger.warning("⚠️ Notification permission error: \(error.localizedDescription)")
             } else {
-                logger.info(Alright, well it seems like stopping from the overlay is maybe a problem"ℹ️ Local notification permissions denied")
+                logger.info("ℹ️ Local notification permissions denied")
             }
         }
     }

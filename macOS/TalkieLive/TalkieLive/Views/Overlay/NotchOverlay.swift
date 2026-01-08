@@ -54,6 +54,59 @@ enum NotchOverlayStyle: String, CaseIterable {
     case minimal     // Particles both sides, single pulsating line below notch (no timer)
 }
 
+// MARK: - CGEventTap Callback (must be global C-style function)
+
+/// Callback for intercepting keyboard events - consumes Right Option + . and Right Option + /
+private func notchKeyEventCallback(
+    proxy: CGEventTapProxy,
+    type: CGEventType,
+    event: CGEvent,
+    refcon: UnsafeMutableRawPointer?
+) -> Unmanaged<CGEvent>? {
+    // Pass through if not a key event
+    guard type == .keyDown else {
+        return Unmanaged.passUnretained(event)
+    }
+
+    // Get controller from refcon
+    guard let refcon = refcon else {
+        return Unmanaged.passUnretained(event)
+    }
+    let controller = Unmanaged<NotchOverlayController>.fromOpaque(refcon).takeUnretainedValue()
+
+    // Only intercept when actively listening (thread-safe check)
+    guard controller.isListeningForShortcuts else {
+        return Unmanaged.passUnretained(event)
+    }
+
+    // Check for Right Option modifier (device-specific flag)
+    let flags = event.flags.rawValue
+    let rightOptionMask: UInt64 = 0x00000040
+    guard (flags & rightOptionMask) != 0 else {
+        return Unmanaged.passUnretained(event)
+    }
+
+    // Check key code
+    let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+
+    switch keyCode {
+    case 47:  // Right Option + . (period) - cancel recording
+        Task { @MainActor in
+            controller.requestCancel()
+        }
+        return nil  // Consume the event
+
+    case 44:  // Right Option + / (slash) - stop and capture
+        Task { @MainActor in
+            controller.requestStop()
+        }
+        return nil  // Consume the event
+
+    default:
+        return Unmanaged.passUnretained(event)
+    }
+}
+
 // MARK: - Notch Overlay Controller
 
 @MainActor
@@ -64,6 +117,9 @@ final class NotchOverlayController: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var mouseMonitor: Any?
     private var proximityTimer: Timer?
+
+    // Thread-safe flag for keyboard shortcut callback (can be read from any thread)
+    nonisolated(unsafe) var isListeningForShortcuts: Bool = false
 
     // State
     @Published var state: LiveState = .idle
@@ -82,8 +138,6 @@ final class NotchOverlayController: ObservableObject {
 
     private var recordingStartTime: Date?
     private var timer: Timer?
-
-    private var keyMonitor: Any?
 
     private init() {
         // Detect notch on init
@@ -115,39 +169,47 @@ final class NotchOverlayController: ObservableObject {
         startProximityMonitoring()
     }
 
-    // MARK: - Keyboard Shortcuts for Quick Stop
+    // MARK: - Keyboard Shortcuts for Quick Stop (CGEventTap to consume keys)
 
-    // Right Option key mask (device-specific flag)
-    private let rightOptionMask: UInt = 0x00000040
+    private var eventTap: CFMachPort?
+    private var runLoopSource: CFRunLoopSource?
 
     private func startKeyMonitoring() {
-        guard keyMonitor == nil else { return }
+        guard eventTap == nil else { return }
 
-        keyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            Task { @MainActor in
-                guard let self, self.state == .listening else { return }
+        // Event mask for key down events
+        let eventMask = (1 << CGEventType.keyDown.rawValue)
 
-                // Check if Right Option is held (not just any option key)
-                let isRightOption = (event.modifierFlags.rawValue & self.rightOptionMask) != 0
-                guard isRightOption else { return }
+        // Store weak reference to self for the callback
+        let refcon = Unmanaged.passUnretained(self).toOpaque()
 
-                switch event.keyCode {
-                case 47:  // Right Option + . (period) - cancel recording
-                    self.requestCancel()
-                case 44:  // Right Option + / (slash) - stop and capture
-                    self.requestStop()
-                default:
-                    break
-                }
-            }
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: CGEventMask(eventMask),
+            callback: notchKeyEventCallback,
+            userInfo: refcon
+        ) else {
+            print("[NotchOverlay] Failed to create event tap - check accessibility permissions")
+            return
         }
+
+        eventTap = tap
+        runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
     }
 
     private func stopKeyMonitoring() {
-        if let monitor = keyMonitor {
-            NSEvent.removeMonitor(monitor)
-            keyMonitor = nil
+        if let tap = eventTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
         }
+        if let source = runLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+            runLoopSource = nil
+        }
+        eventTap = nil
     }
 
     // MARK: - Proximity Monitoring
@@ -296,12 +358,15 @@ final class NotchOverlayController: ObservableObject {
             recordingStartTime = Date()
             elapsedTime = 0
             startTimer()
-            startKeyMonitoring()  // Enable Escape/Return shortcuts
+            isListeningForShortcuts = true
+            startKeyMonitoring()  // Enable Right Option + . / shortcuts
         } else if state == .idle && previousState != .idle {
             stopTimer()
+            isListeningForShortcuts = false
             stopKeyMonitoring()
             elapsedTime = 0
         } else if state != .listening {
+            isListeningForShortcuts = false
             stopKeyMonitoring()
         }
 
@@ -394,6 +459,16 @@ struct NotchOverlayView: View {
 
     private var totalWidth: CGFloat { notchWidth + (pokeOutAmount * 2) }
 
+    // Dynamic height - smaller when at rest to hide completely behind notch
+    private var overlayHeight: CGFloat {
+        switch expansionState {
+        case .rest:
+            return controller.notchInfo.notchHeight - 3  // Fully hidden behind notch
+        case .hover, .active:
+            return controller.notchInfo.notchHeight - 1  // Visible, aligned with notch bottom
+        }
+    }
+
     // Dark overlay that blends with notch
     private let overlayColor = Color(white: 0.05)
 
@@ -417,8 +492,8 @@ struct NotchOverlayView: View {
                     minimalLayout
                 }
             }
-            // Match notch height (subtract 1px to align with notch bottom edge)
-            .frame(width: totalWidth, height: controller.notchInfo.notchHeight - 1)
+            // Dynamic height - hidden at rest, visible when expanded
+            .frame(width: totalWidth, height: overlayHeight)
             .background(
                 // Notch-matching shape with subtle tint
                 UnevenRoundedRectangle(
@@ -445,6 +520,7 @@ struct NotchOverlayView: View {
         .frame(width: maxWindowWidth)  // Center within fixed window width
         // Smooth ease-out animation - fast start, smooth deceleration
         .animation(.easeOut(duration: 0.2), value: pokeOutAmount)
+        .animation(.easeOut(duration: 0.2), value: overlayHeight)
         .contentShape(Rectangle())
         .brightness(isHovered ? 0.05 : 0)  // Subtle brightening on hover
         .onHover { hovering in
