@@ -51,6 +51,14 @@ struct DebugToolbarButton<Content: View>: View {
                             }
                         }
 
+                        DebugSection(title: "BUILD") {
+                            VStack(alignment: .leading, spacing: 2) {
+                                DebugInfoRow(label: "Branch", value: BuildInfo.gitBranch)
+                                DebugInfoRow(label: "Commit", value: BuildInfo.gitCommit)
+                                DebugInfoRow(label: "Built", value: BuildInfo.buildDate)
+                            }
+                        }
+
                         DebugSection(title: "SYSTEM") {
                             VStack(spacing: 4) {
                                 DebugActionButton(icon: "doc.text.magnifyingglass", label: "View Logs") {
@@ -90,6 +98,7 @@ struct DebugToolbarButton<Content: View>: View {
         let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
         lines.append("Talkie iOS \(appVersion) (\(buildNumber))")
         lines.append("iOS \(UIDevice.current.systemVersion)")
+        lines.append("Branch: \(BuildInfo.gitBranch) (\(BuildInfo.gitCommit))")
         lines.append("")
 
         if !info.isEmpty {
