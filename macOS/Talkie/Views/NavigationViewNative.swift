@@ -524,9 +524,8 @@ extension View {
     ) -> some View {
         self
             .onChange(of: memoCount) { _, _ in
-                // Mark memos as received when count changes (still uses Core Data for CloudKit sync)
-                let viewContext = PersistenceController.shared.container.viewContext
-                PersistenceController.markMemosAsReceivedByMac(context: viewContext)
+                // Mark memos as received when count changes (via sync gateway)
+                CoreDataSyncGateway.shared.markMemosAsReceivedByMac()
             }
             .onReceive(NotificationCenter.default.publisher(for: .browseWorkflows)) { _ in
                 selectedSection.wrappedValue = .workflows

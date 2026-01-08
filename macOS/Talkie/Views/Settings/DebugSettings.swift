@@ -392,9 +392,19 @@ struct SettingsJSONExportView: View {
         .onAppear {
             refreshJSON()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .NSPersistentStoreCoordinatorStoresDidChange)) { _ in
+            // Retry when stores become available
+            if jsonText.hasPrefix("//") {
+                refreshJSON()
+            }
+        }
     }
 
     private func refreshJSON() {
+        guard PersistenceController.isReady else {
+            jsonText = "// Waiting for database..."
+            return
+        }
         jsonText = settingsManager.exportSettingsAsJSON()
     }
 

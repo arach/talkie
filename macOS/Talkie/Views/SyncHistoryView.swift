@@ -666,7 +666,10 @@ struct DevSyncStats {
     }
 
     private static func fetchCoreDataInfo() async -> (Int, Set<UUID>) {
-        let context = PersistenceController.shared.container.viewContext
+        // Use gateway for safe Core Data access with isReady check
+        guard let context = await CoreDataSyncGateway.shared.context else {
+            return (0, Set<UUID>())
+        }
         return await context.perform {
             let request: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
             request.propertiesToFetch = ["id"]

@@ -313,7 +313,7 @@ actor SyncQueue {
         // NSPersistentCloudKitContainer automatically exports on save,
         // but we can nudge it by refreshing the context
         await MainActor.run {
-            let context = PersistenceController.shared.container.viewContext
+            guard let context = CoreDataSyncGateway.shared.context else { return }
             context.refreshAllObjects()
         }
 

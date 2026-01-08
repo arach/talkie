@@ -72,4 +72,14 @@
         <attribute name="isRead" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="soundEnabled" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
     </entity>
+    <entity name="MacStatus" representedClassName="MacStatus" syncable="YES" codeGenerationType="class">
+        <attribute name="deviceId" optional="YES" attributeType="String" defaultValueString=""/>
+        <attribute name="hostname" optional="YES" attributeType="String"/>
+        <attribute name="powerState" optional="YES" attributeType="String"/>
+        <attribute name="canProcessMemos" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="canRunWorkflows" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="estimatedAvailability" optional="YES" attributeType="String"/>
+        <attribute name="lastSeen" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="idleMinutes" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+    </entity>
 </model>

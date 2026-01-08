@@ -95,7 +95,12 @@ final class QuickActionRunner {
             return
         }
 
-        let context = PersistenceController.shared.container.viewContext
+        // TODO: Ideally this should create memo in GRDB first (source of truth),
+        // then let the sync layer propagate to Core Data/CloudKit.
+        guard let context = await CoreDataSyncGateway.shared.context else {
+            logger.warning("Cannot promote - Core Data not ready")
+            return
+        }
 
         // Create new VoiceMemo in CoreData
         let memo = VoiceMemo(context: context)

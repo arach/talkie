@@ -2,12 +2,11 @@
 //  SettingsManager.swift
 //  Talkie macOS
 //
-//  Manages app settings stored in Core Data
+//  Manages app settings stored in UserDefaults
 //  API keys are stored securely in macOS Keychain
 //
 
 import Foundation
-import CoreData
 import SwiftUI
 import AppKit
 import os
@@ -1406,9 +1405,11 @@ class SettingsManager {
     private var _openaiApiKey: String?
     private var _anthropicApiKey: String?
     private var _groqApiKey: String?
-    private var _selectedModel: String = ""  // Loaded lazily via performLoadSettings()
+    // Model settings - stored in UserDefaults (no Core Data dependency)
+    private static let selectedModelKey = "selectedModel"
+    private static let liveTranscriptionModelIdKey = "liveTranscriptionModelId"
 
-    // Transcription model settings (consolidated from LiveSettings)
+    private var _selectedModel: String = ""
     private var _liveTranscriptionModelId: String = "whisper:openai_whisper-small"
 
     // TTS voice settings
@@ -1416,9 +1417,9 @@ class SettingsManager {
 
     private let apiKeys = APIKeyStore.shared
 
-    // Public accessors that ensure initialization
+    // Public accessors - API keys loaded from Keychain in init()
     var geminiApiKey: String {
-        get { ensureInitialized(); return _geminiApiKey }
+        get { _geminiApiKey }
         set {
             _geminiApiKey = newValue
             apiKeys.set(newValue.isEmpty ? nil : newValue, for: .gemini)
@@ -1426,7 +1427,7 @@ class SettingsManager {
     }
 
     var openaiApiKey: String? {
-        get { ensureInitialized(); return _openaiApiKey }
+        get { _openaiApiKey }
         set {
             _openaiApiKey = newValue
             apiKeys.set(newValue, for: .openai)
@@ -1434,7 +1435,7 @@ class SettingsManager {
     }
 
     var anthropicApiKey: String? {
-        get { ensureInitialized(); return _anthropicApiKey }
+        get { _anthropicApiKey }
         set {
             _anthropicApiKey = newValue
             apiKeys.set(newValue, for: .anthropic)
@@ -1442,7 +1443,7 @@ class SettingsManager {
     }
 
     var groqApiKey: String? {
-        get { ensureInitialized(); return _groqApiKey }
+        get { _groqApiKey }
         set {
             _groqApiKey = newValue
             apiKeys.set(newValue, for: .groq)
@@ -1490,30 +1491,30 @@ class SettingsManager {
     }
 
     var selectedModel: String {
-        get { ensureInitialized(); return _selectedModel }
-        set { _selectedModel = newValue }
+        get { _selectedModel }
+        set {
+            _selectedModel = newValue
+            UserDefaults.standard.set(newValue, forKey: Self.selectedModelKey)
+        }
     }
 
     // Transcription model for Live Mode (real-time transcription)
     var liveTranscriptionModelId: String {
-        get { ensureInitialized(); return _liveTranscriptionModelId }
-        set { _liveTranscriptionModelId = newValue; saveSettings() }
+        get { _liveTranscriptionModelId }
+        set {
+            _liveTranscriptionModelId = newValue
+            UserDefaults.standard.set(newValue, forKey: Self.liveTranscriptionModelIdKey)
+        }
     }
 
     // TTS voice for text-to-speech synthesis
     var selectedTTSVoiceId: String {
-        get { ensureInitialized(); return _selectedTTSVoiceId }
+        get { _selectedTTSVoiceId }
         set {
             _selectedTTSVoiceId = newValue
             UserDefaults.standard.set(newValue, forKey: "selectedTTSVoiceId")
         }
     }
-
-    private var context: NSManagedObjectContext {
-        return PersistenceController.shared.container.viewContext
-    }
-
-    private var isInitialized = false
 
     private init() {
         StartupProfiler.shared.mark("singleton.SettingsManager.start")
@@ -1645,189 +1646,47 @@ class SettingsManager {
             self._selectedTTSVoiceId = savedVoiceId
         }
 
+        // Initialize model settings from UserDefaults (NO Core Data dependency)
+        if let savedModel = UserDefaults.standard.string(forKey: Self.selectedModelKey) {
+            self._selectedModel = savedModel
+        } else {
+            self._selectedModel = LLMConfig.shared.defaultModel(for: "gemini") ?? ""
+        }
+
+        if let savedLiveModel = UserDefaults.standard.string(forKey: Self.liveTranscriptionModelIdKey) {
+            self._liveTranscriptionModelId = savedLiveModel
+        } else {
+            // Migration: check old key from LiveSettings
+            if let legacyModelId = UserDefaults.standard.string(forKey: "selectedModelId") {
+                self._liveTranscriptionModelId = legacyModelId
+                UserDefaults.standard.removeObject(forKey: "selectedModelId")
+                UserDefaults.standard.set(legacyModelId, forKey: Self.liveTranscriptionModelIdKey)
+            }
+        }
+
+        // Load API keys from encrypted Keychain store (NO Core Data dependency)
+        self._geminiApiKey = apiKeys.get(.gemini) ?? ""
+        self._openaiApiKey = apiKeys.get(.openai)
+        self._anthropicApiKey = apiKeys.get(.anthropic)
+        self._groqApiKey = apiKeys.get(.groq)
+
         // Apply appearance mode on launch
         applyAppearanceMode()
 
         // Apply theme config to TalkieKit design tokens
         applyThemeConfig()
 
-        // Defer Core Data access until first use
         StartupProfiler.shared.mark("singleton.SettingsManager.done")
-    }
-
-    private func ensureInitialized() {
-        guard !isInitialized else { return }
-        isInitialized = true
-        performLoadSettings()
-    }
-
-    // MARK: - Load Settings
-    func loadSettings() {
-        // Public method - always reload
-        performLoadSettings()
-    }
-
-    private func performLoadSettings() {
-        // Migrate API keys from Keychain to new encrypted store (one-time)
-        apiKeys.migrateFromKeychain()
-
-        // Load API keys from encrypted store
-        let geminiKey = apiKeys.get(.gemini) ?? ""
-        let openaiKey = apiKeys.get(.openai)
-        let anthropicKey = apiKeys.get(.anthropic)
-        let groqKey = apiKeys.get(.groq)
-
-        // Load non-sensitive settings from Core Data
-        let fetchRequest: NSFetchRequest<AppSettings> = AppSettings.fetchRequest()
-
-        do {
-            let results = try context.fetch(fetchRequest)
-            if let settings = results.first {
-                let model = settings.selectedModel ?? LLMConfig.shared.defaultModel(for: "gemini") ?? ""
-                let liveModelId = settings.liveTranscriptionModelId ?? "whisper:openai_whisper-small"
-
-                // Migrate API keys from Core Data if present (legacy)
-                if let cdGemini = settings.geminiApiKey, !cdGemini.isEmpty, geminiKey.isEmpty {
-                    apiKeys.set(cdGemini, for: .gemini)
-                }
-                if let cdOpenai = settings.openaiApiKey, !cdOpenai.isEmpty, openaiKey == nil {
-                    apiKeys.set(cdOpenai, for: .openai)
-                }
-                if let cdAnthropic = settings.anthropicApiKey, !cdAnthropic.isEmpty, anthropicKey == nil {
-                    apiKeys.set(cdAnthropic, for: .anthropic)
-                }
-                if let cdGroq = settings.groqApiKey, !cdGroq.isEmpty, groqKey == nil {
-                    apiKeys.set(cdGroq, for: .groq)
-                }
-                // Clear Core Data keys after migration
-                clearApiKeysFromCoreData()
-
-                DispatchQueue.main.async {
-                    self._geminiApiKey = self.apiKeys.get(.gemini) ?? ""
-                    self._openaiApiKey = self.apiKeys.get(.openai)
-                    self._anthropicApiKey = self.apiKeys.get(.anthropic)
-                    self._groqApiKey = self.apiKeys.get(.groq)
-                    self._selectedModel = model
-                    self._liveTranscriptionModelId = liveModelId
-                }
-            } else {
-                logger.info("No settings found in Core Data, creating defaults")
-                createDefaultSettings()
-
-                DispatchQueue.main.async {
-                    self._geminiApiKey = geminiKey
-                    self._openaiApiKey = openaiKey
-                    self._anthropicApiKey = anthropicKey
-                    self._groqApiKey = groqKey
-                }
-            }
-
-            // Migrate transcription model from LiveSettings if needed
-            if let legacyModelId = UserDefaults.standard.string(forKey: "selectedModelId") {
-                logger.info("Migrating transcription model from LiveSettings: \(legacyModelId)")
-                DispatchQueue.main.async {
-                    self._liveTranscriptionModelId = legacyModelId
-                }
-                UserDefaults.standard.removeObject(forKey: "selectedModelId")
-            }
-        } catch {
-            logger.error("Failed to load settings: \(error.localizedDescription)")
-
-            DispatchQueue.main.async {
-                self._geminiApiKey = geminiKey
-                self._openaiApiKey = openaiKey
-                self._anthropicApiKey = anthropicKey
-                self._groqApiKey = groqKey
-            }
-        }
-    }
-
-    /// Clear API keys from Core Data after migration to encrypted store
-    private func clearApiKeysFromCoreData() {
-        let fetchRequest: NSFetchRequest<AppSettings> = AppSettings.fetchRequest()
-
-        do {
-            let results = try context.fetch(fetchRequest)
-            if let settings = results.first {
-                settings.geminiApiKey = nil
-                settings.openaiApiKey = nil
-                settings.anthropicApiKey = nil
-                settings.groqApiKey = nil
-                settings.lastModified = Date()
-                try context.save()
-                logger.info("Cleared API keys from Core Data (migrated to Keychain)")
-            }
-        } catch {
-            logger.error("Failed to clear API keys from Core Data: \(error.localizedDescription)")
-        }
-    }
-
-    // MARK: - Save Settings
-    func saveSettings() {
-        ensureInitialized()
-
-        // API keys are automatically saved to Keychain via property setters
-        // Only save non-sensitive settings to Core Data
-        let fetchRequest: NSFetchRequest<AppSettings> = AppSettings.fetchRequest()
-
-        do {
-            let results = try context.fetch(fetchRequest)
-            let settings: AppSettings
-
-            if let existingSettings = results.first {
-                settings = existingSettings
-            } else {
-                settings = AppSettings(context: context)
-                settings.id = UUID()
-            }
-
-            // Only save non-sensitive data to Core Data
-            // API keys are stored securely in Keychain
-            settings.selectedModel = selectedModel
-            settings.liveTranscriptionModelId = liveTranscriptionModelId
-            settings.lastModified = Date()
-
-            try context.save()
-            logger.debug("Settings saved successfully")
-        } catch {
-            logger.error("Failed to save settings: \(error.localizedDescription)")
-        }
-    }
-
-    // MARK: - Create Default Settings
-    private func createDefaultSettings() {
-        let defaultModel = LLMConfig.shared.defaultModel(for: "gemini") ?? ""
-
-        let settings = AppSettings(context: context)
-        settings.id = UUID()
-        // API keys are stored in Keychain, not Core Data
-        settings.selectedModel = defaultModel
-        settings.liveTranscriptionModelId = "whisper:openai_whisper-small"
-        settings.lastModified = Date()
-
-        do {
-            try context.save()
-            // Use async to avoid "publishing changes during view updates" warning
-            DispatchQueue.main.async {
-                self._selectedModel = defaultModel
-                self._liveTranscriptionModelId = "whisper:openai_whisper-small"
-            }
-            logger.debug("Created default settings")
-        } catch {
-            logger.error("Failed to create default settings: \(error.localizedDescription)")
-        }
     }
 
     // MARK: - Validation
     var hasValidApiKey: Bool {
-        ensureInitialized()
-        return !geminiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !geminiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     // MARK: - JSON Export
     /// Export current settings as JSON (excluding sensitive data like API keys)
     func exportSettingsAsJSON() -> String {
-        ensureInitialized()
 
         var settings: [String: Any] = [:]
 

@@ -106,8 +106,7 @@ struct APISettingsView: View {
                         },
                         onSave: {
                             settingsManager.openaiApiKey = editingKeyInput.isEmpty ? nil : editingKeyInput
-                            settingsManager.saveSettings()
-                            fetchedKeys["openai"] = editingKeyInput.isEmpty ? nil : editingKeyInput
+                                                        fetchedKeys["openai"] = editingKeyInput.isEmpty ? nil : editingKeyInput
                             editingProvider = nil
                             editingKeyInput = ""
                             // Refresh models after saving key
@@ -131,8 +130,7 @@ struct APISettingsView: View {
                         },
                         onDelete: {
                             settingsManager.openaiApiKey = nil
-                            settingsManager.saveSettings()
-                            fetchedKeys["openai"] = nil
+                                                        fetchedKeys["openai"] = nil
                         }
                     )
 
@@ -156,8 +154,7 @@ struct APISettingsView: View {
                         },
                         onSave: {
                             settingsManager.anthropicApiKey = editingKeyInput.isEmpty ? nil : editingKeyInput
-                            settingsManager.saveSettings()
-                            fetchedKeys["anthropic"] = editingKeyInput.isEmpty ? nil : editingKeyInput
+                                                        fetchedKeys["anthropic"] = editingKeyInput.isEmpty ? nil : editingKeyInput
                             editingProvider = nil
                             editingKeyInput = ""
                             Task { await refreshAllModels() }
@@ -180,8 +177,7 @@ struct APISettingsView: View {
                         },
                         onDelete: {
                             settingsManager.anthropicApiKey = nil
-                            settingsManager.saveSettings()
-                            fetchedKeys["anthropic"] = nil
+                                                        fetchedKeys["anthropic"] = nil
                         }
                     )
 
@@ -201,8 +197,7 @@ struct APISettingsView: View {
                         },
                         onSave: {
                             settingsManager.geminiApiKey = editingKeyInput
-                            settingsManager.saveSettings()
-                            editingProvider = nil
+                                                        editingProvider = nil
                             editingKeyInput = ""
                             Task { await refreshAllModels() }
                         },
@@ -219,8 +214,7 @@ struct APISettingsView: View {
                         },
                         onDelete: {
                             settingsManager.geminiApiKey = ""
-                            settingsManager.saveSettings()
-                        }
+                                                    }
                     )
 
                     APIKeyRow(
@@ -243,8 +237,7 @@ struct APISettingsView: View {
                         },
                         onSave: {
                             settingsManager.groqApiKey = editingKeyInput.isEmpty ? nil : editingKeyInput
-                            settingsManager.saveSettings()
-                            fetchedKeys["groq"] = editingKeyInput.isEmpty ? nil : editingKeyInput
+                                                        fetchedKeys["groq"] = editingKeyInput.isEmpty ? nil : editingKeyInput
                             editingProvider = nil
                             editingKeyInput = ""
                             Task { await refreshAllModels() }
@@ -267,8 +260,7 @@ struct APISettingsView: View {
                         },
                         onDelete: {
                             settingsManager.groqApiKey = nil
-                            settingsManager.saveSettings()
-                            fetchedKeys["groq"] = nil
+                                                        fetchedKeys["groq"] = nil
                         }
                     )
 
@@ -291,8 +283,7 @@ struct APISettingsView: View {
                         },
                         onSave: {
                             settingsManager.elevenLabsApiKey = editingKeyInput.isEmpty ? nil : editingKeyInput
-                            settingsManager.saveSettings()
-                            fetchedKeys["elevenlabs"] = editingKeyInput.isEmpty ? nil : editingKeyInput
+                                                        fetchedKeys["elevenlabs"] = editingKeyInput.isEmpty ? nil : editingKeyInput
                             editingProvider = nil
                             editingKeyInput = ""
                         },
@@ -313,8 +304,7 @@ struct APISettingsView: View {
                         },
                         onDelete: {
                             settingsManager.elevenLabsApiKey = nil
-                            settingsManager.saveSettings()
-                            fetchedKeys["elevenlabs"] = nil
+                                                        fetchedKeys["elevenlabs"] = nil
                         }
                     )
                 }

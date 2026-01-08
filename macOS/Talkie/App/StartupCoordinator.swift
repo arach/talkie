@@ -201,8 +201,12 @@ final class StartupCoordinator {
             let syncElapsed = (CFAbsoluteTimeGetCurrent() - syncStart) * 1000
             logger.info("⏱️ Sync manager: \(String(format: "%.0f", syncElapsed))ms")
 
+            // Power state monitoring for iOS awareness (after CloudKit is ready)
+            signposter.emitEvent("Power State")
+            PowerStateManager.shared.setup()
+
             let elapsed = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
-            logger.info("⏱️ Startup[4]: Background \(String(format: "%.0f", elapsed))ms (helpers, XPC, sync)")
+            logger.info("⏱️ Startup[4]: Background \(String(format: "%.0f", elapsed))ms (helpers, XPC, sync, power)")
             signposter.endInterval("Phase 4: Background", state)
         }
     }

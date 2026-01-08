@@ -367,7 +367,13 @@ struct DictationListView: View {
     }
 
     private func promoteToMemo(_ dictation: Dictation) {
-        let context = PersistenceController.shared.container.viewContext
+        // TODO: Ideally this should create memo in GRDB first (source of truth),
+        // then let the sync layer propagate to Core Data/CloudKit.
+        // For now, we create directly in Core Data for CloudKit sync.
+        guard let context = CoreDataSyncGateway.shared.context else {
+            print("[DictationListView] Cannot promote - Core Data not ready")
+            return
+        }
 
         // Create new VoiceMemo with deep copy of dictation metadata
         let memo = VoiceMemo(context: context)

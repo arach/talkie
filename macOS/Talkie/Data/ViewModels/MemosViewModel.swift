@@ -290,6 +290,11 @@ final class MemosViewModel {
     /// Delete from CoreData (triggers CloudKit sync for remote deletion)
     /// Returns number of records deleted
     private func deleteFromCoreData(ids: Set<UUID>) async -> Int {
+        guard PersistenceController.isReady else {
+            log.warning("CoreData not ready, skipping delete operation")
+            return 0
+        }
+
         let context = PersistenceController.shared.container.viewContext
 
         var deletedCount = 0

@@ -10,6 +10,83 @@ import CoreData
 import CloudKit
 import AVFoundation
 
+// MARK: - Mac Status Banner
+
+struct MacStatusBanner: View {
+    @State private var observer = MacStatusObserver.shared
+
+    var body: some View {
+        if let status = observer.macStatus {
+            HStack(spacing: Spacing.sm) {
+                // Status indicator dot
+                Circle()
+                    .fill(statusColor(for: status))
+                    .frame(width: 8, height: 8)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(status.hostname.uppercased())
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.textTertiary)
+
+                    Text(status.statusDescription)
+                        .font(.system(size: 12))
+                        .foregroundColor(.textPrimary)
+                }
+
+                Spacer()
+
+                // Capability indicator
+                if status.canProcessMemos {
+                    Label("Processing", systemImage: "checkmark.circle.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(.success)
+                } else {
+                    Label("Queued", systemImage: "clock")
+                        .font(.system(size: 10))
+                        .foregroundColor(.warning)
+                }
+            }
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, Spacing.xs)
+            .background(Color.surfaceSecondary.opacity(0.5))
+            .cornerRadius(CornerRadius.sm)
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .strokeBorder(Color.borderPrimary.opacity(0.5), lineWidth: 0.5)
+            )
+        } else {
+            // No Mac status - compact "no Mac" indicator
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: "desktopcomputer")
+                    .font(.system(size: 10))
+                    .foregroundColor(.textTertiary)
+                Text("No Mac connected")
+                    .font(.system(size: 11))
+                    .foregroundColor(.textTertiary)
+            }
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, Spacing.xs)
+        }
+    }
+
+    private func statusColor(for status: MacStatusObserver.MacStatusInfo) -> Color {
+        switch status.powerState {
+        case "active":
+            return .success
+        case "idle":
+            return .warning
+        case "screenOff":
+            return status.canProcessMemos ? .success : .warning
+        case "powerNap":
+            return .warning
+        case "sleeping", "shuttingDown":
+            return .textTertiary
+        default:
+            return .textTertiary
+        }
+    }
+}
+
 enum SortOption: String, CaseIterable {
     case dateNewest = "Newest First"
     case dateOldest = "Oldest First"
@@ -178,6 +255,11 @@ struct VoiceMemoListView: View {
                             .padding(.horizontal, Spacing.sm)
                             .padding(.bottom, Spacing.xs)
                         }
+
+                        // Mac status banner - shows Mac availability for async processing
+                        MacStatusBanner()
+                            .padding(.horizontal, Spacing.sm)
+                            .padding(.bottom, Spacing.sm)
 
                     if voiceMemos.isEmpty && !searchText.isEmpty {
                         // No search results
@@ -509,6 +591,9 @@ struct VoiceMemoListView: View {
 
             // Check for Control Center widget trigger
             checkForControlCenterAction()
+
+            // Start observing Mac status for async memo processing awareness
+            MacStatusObserver.shared.startObserving()
 
             // Note: Widget data is only refreshed when memos are saved/deleted
             // WidgetKit handles periodic refresh every 30 minutes via timeline policy
