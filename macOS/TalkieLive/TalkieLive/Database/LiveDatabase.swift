@@ -263,6 +263,28 @@ extension LiveDatabase {
         }
     }
 
+    /// Update text and transcription model for an existing dictation (used by retranscription)
+    static func updateText(id: Int64, text: String, modelId: String?) {
+        do {
+            try shared.write { db in
+                try db.execute(
+                    sql: """
+                        UPDATE dictations SET
+                            text = ?,
+                            transcriptionModel = ?,
+                            transcriptionStatus = 'success',
+                            transcriptionError = NULL
+                        WHERE id = ?
+                        """,
+                    arguments: [text, modelId, id]
+                )
+            }
+            log.info("[LiveDatabase] Updated text for dictation \(id) with model \(modelId ?? "unknown")")
+        } catch {
+            log.error("[LiveDatabase] updateText error: \(error)")
+        }
+    }
+
     static func fetch(id: Int64) -> LiveDictation? {
         try? shared.read { db in
             try LiveDictation.fetchOne(db, id: id)

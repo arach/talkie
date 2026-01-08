@@ -7,6 +7,12 @@
 
 import SwiftUI
 
+/// Filter mode for dictations list
+enum DictationFilterMode: Equatable {
+    case all
+    case pending  // Dictations without transcription (empty text)
+}
+
 /// List view for all Live dictations (harmonized with AllMemos design)
 struct DictationListView: View {
     // Use let for singletons - we subscribe to remote data, we don't own it
@@ -15,6 +21,7 @@ struct DictationListView: View {
     @State private var searchText = ""
     @State private var retranscribingIDs: Set<Dictation.ID> = []
     @State private var lastClickedID: Dictation.ID?
+    @State private var filterMode: DictationFilterMode = .all
 
     // Onboarding state
     @AppStorage("hasDismissedDictationOnboarding") private var hasDismissedOnboarding = false
@@ -22,14 +29,23 @@ struct DictationListView: View {
 
     /// Show onboarding when user has no dictations and hasn't dismissed it
     private var shouldShowOnboarding: Bool {
-        store.dictations.isEmpty && !hasDismissedOnboarding && searchText.isEmpty
+        store.dictations.isEmpty && !hasDismissedOnboarding && searchText.isEmpty && filterMode == .all
     }
 
     private var filteredDictations: [Dictation] {
-        guard !searchText.isEmpty else {
-            return store.dictations
+        var result = store.dictations
+
+        // Apply filter mode
+        if filterMode == .pending {
+            result = result.filter { $0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         }
-        return store.dictations.filter { $0.text.localizedCaseInsensitiveContains(searchText) }
+
+        // Apply search text
+        if !searchText.isEmpty {
+            result = result.filter { $0.text.localizedCaseInsensitiveContains(searchText) }
+        }
+
+        return result
     }
 
     private var selectedDictation: Dictation? {
@@ -63,6 +79,9 @@ struct DictationListView: View {
             if let dictationID = notification.object as? UUID {
                 selectedDictationIDs = [dictationID]
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .init("FilterDictationsPending"))) { _ in
+            filterMode = .pending
         }
     }
 
@@ -213,6 +232,28 @@ struct DictationListView: View {
     private var headerView: some View {
         VStack(spacing: 0) {
             HStack(spacing: Spacing.sm) {
+                // Filter badge (when active)
+                if filterMode == .pending {
+                    Button {
+                        filterMode = .all
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.system(size: 10))
+                            Text("Pending")
+                                .font(.system(size: 11, weight: .medium))
+                            Image(systemName: "xmark")
+                                .font(.system(size: 9, weight: .bold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(Color.orange))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Click to show all dictations")
+                }
+
                 // Search
                 HStack(spacing: Spacing.xs) {
                     Image(systemName: "magnifyingglass")
@@ -242,7 +283,7 @@ struct DictationListView: View {
                 Spacer()
 
                 // Count
-                Text("\(filteredDictations.count) dictations")
+                Text("\(filteredDictations.count) \(filterMode == .pending ? "pending" : "dictations")")
                     .font(Theme.current.fontSM)
                     .foregroundColor(TalkieTheme.textMuted)
             }
@@ -472,37 +513,36 @@ struct DictationListView: View {
     }
 
     private func retranscribe(_ dictation: Dictation, with modelId: String) {
-        guard let audioFilename = dictation.metadata.audioFilename else {
-            print("[DictationListView] Cannot retranscribe: no audio file")
+        guard let liveID = dictation.liveID else {
+            print("[DictationListView] Cannot retranscribe: no database ID")
             return
         }
 
-        // Construct full audio path using shared AudioStorage location
-        let audioPath = AudioStorage.audioDirectory
-            .appendingPathComponent(audioFilename)
-            .path
+        guard dictation.metadata.audioFilename != nil else {
+            print("[DictationListView] Cannot retranscribe: no audio file")
+            return
+        }
 
         retranscribingIDs.insert(dictation.id)
 
         Task {
             do {
-                let engineClient = EngineClient.shared
-                let newText = try await engineClient.transcribe(
-                    audioPath: audioPath,
-                    modelId: modelId,
-                    priority: .userInitiated  // User clicked re-transcribe button
+                // Route through TalkieLive XPC - it owns live.sqlite
+                _ = try await ServiceManager.shared.live.retranscribe(
+                    dictationId: liveID,
+                    modelId: modelId
                 )
 
-                // Update dictation text and model
+                // TalkieLive updates the database and notifies us via dictationWasAdded callback
+                // Just clear the retranscribing state - refresh happens via XPC callback
                 await MainActor.run {
-                    store.updateText(for: dictation.id, newText: newText, modelId: modelId)
                     retranscribingIDs.remove(dictation.id)
                 }
 
                 print("[DictationListView] Successfully retranscribed dictation with \(modelId)")
             } catch {
                 print("[DictationListView] Failed to retranscribe: \(error.localizedDescription)")
-                _ = await MainActor.run {
+                await MainActor.run {
                     retranscribingIDs.remove(dictation.id)
                 }
             }
