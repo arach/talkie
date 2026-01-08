@@ -663,8 +663,8 @@ struct InfinityParticlesView: View {
                             width: particleSize,
                             height: particleSize
                         )
-                        // Use white to match main particle color
-                        context.fill(Circle().path(in: rect), with: .color(TalkieTheme.textSecondary.opacity(max(0.25, min(0.75, opacity)))))
+                        // Use explicit white for overlay context
+                        context.fill(Circle().path(in: rect), with: .color(Color.white.opacity(max(0.25, min(0.75, opacity)))))
                     }
 
                     // Add a subtle glow trail effect - a few larger, more transparent particles
@@ -686,7 +686,8 @@ struct InfinityParticlesView: View {
                             width: glowSize,
                             height: glowSize
                         )
-                        context.fill(Circle().path(in: rect), with: .color(TalkieTheme.textSecondary.opacity(glowOpacity)))
+                        // Use explicit white for overlay context
+                        context.fill(Circle().path(in: rect), with: .color(Color.white.opacity(glowOpacity)))
                     }
                 }
             }
@@ -830,7 +831,8 @@ struct WavyParticlesView: View {
                         width: particleSize,
                         height: particleSize
                     )
-                    context.fill(Circle().path(in: rect), with: .color(TalkieTheme.textSecondary.opacity(opacity)))
+                    // Use explicit white for overlay context (TalkieTheme colors can resolve incorrectly in overlays)
+                    context.fill(Circle().path(in: rect), with: .color(Color.white.opacity(opacity)))
                 }
 
                 // Smooth level update - needed inside Canvas for 60fps responsiveness
@@ -899,12 +901,12 @@ struct WaveformBarsView: View {
                         height: barHeight
                     )
 
-                    // Color/opacity
+                    // Color/opacity - use explicit white for overlay context
                     let baseOpacity = sensitive ? tuning.baseOpacity * 1.25 : tuning.baseOpacity
                     let opacity = baseOpacity + Double(barLevel) * tuning.levelOpacityBoost
                     context.fill(
                         RoundedRectangle(cornerRadius: CGFloat(tuning.cornerRadius)).path(in: barRect),
-                        with: .color(TalkieTheme.textSecondary.opacity(opacity))
+                        with: .color(Color.white.opacity(opacity))
                     )
                 }
 

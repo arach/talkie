@@ -482,6 +482,151 @@ final class ParticleTuning: ObservableObject {
     }
 }
 
+// MARK: - Notch Overlay Tuning
+
+@MainActor
+final class NotchTuning: ObservableObject {
+    static let shared = NotchTuning()
+
+    // Style selection
+    @Published var style: NotchOverlayStyle = .minimal {
+        didSet { saveSettings(); log("style", style.rawValue) }
+    }
+
+    // Dimensions
+    @Published var expandedPokeOut: Double = 20.0 {
+        didSet { saveSettings(); log("expandedPokeOut", expandedPokeOut) }
+    }
+    @Published var collapsedPokeOut: Double = 8.0 {
+        didSet { saveSettings(); log("collapsedPokeOut", collapsedPokeOut) }
+    }
+
+    // Status line appearance
+    @Published var lineWidth: Double = 60.0 {
+        didSet { saveSettings(); log("lineWidth", lineWidth) }
+    }
+    @Published var lineHeight: Double = 2.0 {
+        didSet { saveSettings(); log("lineHeight", lineHeight) }
+    }
+
+    // Particle settings
+    @Published var particleSpeed: Double = 0.35 {
+        didSet { saveSettings(); log("particleSpeed", particleSpeed) }
+    }
+    @Published var particleSize: Double = 2.0 {
+        didSet { saveSettings(); log("particleSize", particleSize) }
+    }
+    @Published var particleCount: Int = 14 {
+        didSet { saveSettings(); log("particleCount", Double(particleCount)) }
+    }
+    @Published var particleOpacity: Double = 0.5 {
+        didSet { saveSettings(); log("particleOpacity", particleOpacity) }
+    }
+
+    // Animation
+    @Published var pulseSpeed: Double = 1.2 {
+        didSet { saveSettings(); log("pulseSpeed", pulseSpeed) }
+    }
+
+    // Show/hide animation speed (lower = faster)
+    @Published var showAnimationDuration: Double = 0.15 {
+        didSet { saveSettings(); log("showAnimationDuration", showAnimationDuration) }
+    }
+    @Published var springResponse: Double = 0.2 {
+        didSet { saveSettings(); log("springResponse", springResponse) }
+    }
+    @Published var springDamping: Double = 0.75 {
+        didSet { saveSettings(); log("springDamping", springDamping) }
+    }
+
+    private let settingsKey = "NotchTuningSettings"
+    private var isSaving = false
+
+    private init() {
+        loadSettings()
+    }
+
+    func reset() {
+        isSaving = true
+        defer {
+            isSaving = false
+            saveSettings()
+        }
+
+        style = .minimal
+        expandedPokeOut = 20.0
+        collapsedPokeOut = 8.0
+        lineWidth = 60.0
+        lineHeight = 2.0
+        particleSpeed = 0.35
+        particleSize = 2.0
+        particleCount = 14
+        particleOpacity = 0.5
+        pulseSpeed = 1.2
+        showAnimationDuration = 0.15
+        springResponse = 0.2
+        springDamping = 0.75
+
+        AppLogger.shared.log(.ui, "Notch tuning reset")
+    }
+
+    private func saveSettings() {
+        guard !isSaving else { return }
+
+        let settings: [String: Any] = [
+            "style": style.rawValue,
+            "expandedPokeOut": expandedPokeOut,
+            "collapsedPokeOut": collapsedPokeOut,
+            "lineWidth": lineWidth,
+            "lineHeight": lineHeight,
+            "particleSpeed": particleSpeed,
+            "particleSize": particleSize,
+            "particleCount": particleCount,
+            "particleOpacity": particleOpacity,
+            "pulseSpeed": pulseSpeed,
+            "showAnimationDuration": showAnimationDuration,
+            "springResponse": springResponse,
+            "springDamping": springDamping
+        ]
+
+        UserDefaults.standard.set(settings, forKey: settingsKey)
+    }
+
+    private func loadSettings() {
+        guard let settings = UserDefaults.standard.dictionary(forKey: settingsKey) else { return }
+
+        isSaving = true
+        defer { isSaving = false }
+
+        if let v = settings["style"] as? String,
+           let s = NotchOverlayStyle(rawValue: v) { style = s }
+        if let v = settings["expandedPokeOut"] as? Double { expandedPokeOut = v }
+        if let v = settings["collapsedPokeOut"] as? Double { collapsedPokeOut = v }
+        if let v = settings["lineWidth"] as? Double { lineWidth = v }
+        if let v = settings["lineHeight"] as? Double { lineHeight = v }
+        if let v = settings["particleSpeed"] as? Double { particleSpeed = v }
+        if let v = settings["particleSize"] as? Double { particleSize = v }
+        if let v = settings["particleCount"] as? Int { particleCount = v }
+        if let v = settings["particleOpacity"] as? Double { particleOpacity = v }
+        if let v = settings["pulseSpeed"] as? Double { pulseSpeed = v }
+        if let v = settings["showAnimationDuration"] as? Double { showAnimationDuration = v }
+        if let v = settings["springResponse"] as? Double { springResponse = v }
+        if let v = settings["springDamping"] as? Double { springDamping = v }
+    }
+
+    private func log(_ param: String, _ value: String) {
+        #if DEBUG
+        print("🔧 Notch: \(param) = \(value)")
+        #endif
+    }
+
+    private func log(_ param: String, _ value: Double) {
+        #if DEBUG
+        print("🔧 Notch: \(param) = \(String(format: "%.2f", value))")
+        #endif
+    }
+}
+
 // MARK: - System Event Logger
 
 @MainActor

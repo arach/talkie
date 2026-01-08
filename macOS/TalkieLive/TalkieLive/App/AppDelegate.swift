@@ -261,6 +261,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: - State Observation
 
     private func setupStateObservation() {
+        let hasNotch = NotchInfo.detect().hasNotch
+
+        // Initialize notch overlay immediately for proximity sensing
+        if hasNotch {
+            notchOverlay.initialize()
+        }
+
         // Observe state changes to update the icon, overlay, and floating pill
         liveController.$state
             .receive(on: DispatchQueue.main)
@@ -268,7 +275,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.updateIcon(for: state)
                 self?.overlayController.updateState(state)
                 self?.floatingPill.updateState(state)
-                self?.notchOverlay.updateState(state)
+
+                // Also update notch overlay on notched displays
+                if hasNotch {
+                    self?.notchOverlay.updateState(state)
+                }
             }
             .store(in: &cancellables)
 

@@ -10,6 +10,8 @@ import SwiftUI
 import Carbon.HIToolbox
 import TalkieKit
 
+private let log = Log(.system)
+
 // MARK: - Appearance Types (from TalkieKit)
 // OverlayStyle, IndicatorPosition, PillPosition are now in TalkieKit
 
@@ -459,13 +461,17 @@ final class LiveSettings: ObservableObject {
         // Read from shared storage (Talkie is the owner, we're just reading)
         // Note: Use TalkieSharedSettings directly since storage property requires self
         let store = TalkieSharedSettings
+        let suiteName = TalkieEnvironment.current.sharedSettingsSuite
+        log.info("LiveSettings.init() loading from suite: \(suiteName)")
 
         // Load toggle hotkey
         if let data = store.data(forKey: LiveSettingsKey.hotkey),
            let config = try? JSONDecoder().decode(HotkeyConfig.self, from: data) {
             self.hotkey = config
+            log.debug("Loaded hotkey: \(config.displayString)")
         } else {
             self.hotkey = .default
+            log.debug("No saved hotkey, using default: \(HotkeyConfig.default.displayString)")
         }
 
         // Load push-to-talk hotkey
@@ -613,9 +619,12 @@ final class LiveSettings: ObservableObject {
 
     private func save() {
         let store = storage
+        let suiteName = TalkieEnvironment.current.sharedSettingsSuite
+        log.debug("LiveSettings.save() to suite: \(suiteName)")
 
         if let data = try? JSONEncoder().encode(hotkey) {
             store.set(data, forKey: LiveSettingsKey.hotkey)
+            log.debug("Saved hotkey: \(hotkey.displayString)")
         }
         if let data = try? JSONEncoder().encode(pttHotkey) {
             store.set(data, forKey: LiveSettingsKey.pttHotkey)
@@ -644,6 +653,9 @@ final class LiveSettings: ObservableObject {
         store.set(returnToOriginAfterPaste, forKey: LiveSettingsKey.returnToOriginAfterPaste)
         store.set(pressEnterAfterPaste, forKey: LiveSettingsKey.pressEnterAfterPaste)
         store.set(autoScratchpadOnSelection, forKey: LiveSettingsKey.autoScratchpadOnSelection)
+
+        // Force immediate write to disk (important for dev builds that may be killed by Xcode)
+        store.synchronize()
     }
 
     // MARK: - Appearance Application
