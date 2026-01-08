@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct SessionListView: View {
+    @Environment(\.dismiss) private var dismiss
     @State private var bridgeManager = BridgeManager.shared
     @State private var isRefreshing = false
     @State private var isDeepSyncing = false
@@ -54,6 +55,17 @@ struct SessionListView: View {
         .toolbarBackground(Color.surfacePrimary, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(action: { dismiss() }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("Memos")
+                            .font(.system(size: 15, weight: .medium))
+                    }
+                    .foregroundColor(.active)
+                }
+            }
             ToolbarItem(placement: .principal) {
                 TalkieNavigationHeader(subtitle: "Claude")
             }
@@ -303,19 +315,31 @@ struct SessionListView: View {
                     // True empty state (only after we've tried loading)
                     if hasLoadedInitialData {
                         Section {
-                            VStack(spacing: Spacing.md) {
-                                Image(systemName: "tray")
-                                    .font(.system(size: 32, weight: .light))
+                            VStack(spacing: Spacing.lg) {
+                                Spacer()
+                                    .frame(height: Spacing.xl)
+
+                                Image(systemName: "terminal")
+                                    .font(.system(size: 48, weight: .light))
                                     .foregroundColor(.textTertiary)
 
-                                Text("No active sessions")
-                                    .font(.bodyMedium)
-                                    .foregroundColor(.textSecondary)
+                                VStack(spacing: Spacing.xs) {
+                                    Text("No Claude Sessions")
+                                        .font(.system(size: 17, weight: .semibold))
+                                        .foregroundColor(.textPrimary)
+
+                                    Text("Start a Claude Code session on your Mac to see it here")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.textSecondary)
+                                        .multilineTextAlignment(.center)
+                                        .padding(.horizontal, Spacing.lg)
+                                }
 
                                 if let meta = sessionsMeta, let syncedAt = meta.syncedAt {
-                                    Text("Last synced: \(formatRelativeTime(syncedAt))")
-                                        .font(.monoSmall)
+                                    Text("Last checked \(formatRelativeTime(syncedAt))")
+                                        .font(.system(size: 12))
                                         .foregroundColor(.textTertiary)
+                                        .padding(.top, Spacing.xs)
                                 }
 
                                 Button(action: {
@@ -326,17 +350,28 @@ struct SessionListView: View {
                                     }
                                 }) {
                                     HStack(spacing: 6) {
-                                        Image(systemName: "arrow.clockwise")
-                                        Text("Refresh")
+                                        if isRefreshing {
+                                            ProgressView()
+                                                .scaleEffect(0.8)
+                                        } else {
+                                            Image(systemName: "arrow.clockwise")
+                                        }
+                                        Text("Check Again")
                                     }
-                                    .font(.system(size: 13, weight: .medium))
+                                    .font(.system(size: 14, weight: .medium))
                                     .foregroundColor(.active)
+                                    .padding(.horizontal, Spacing.md)
+                                    .padding(.vertical, Spacing.sm)
+                                    .background(Color.active.opacity(0.1))
+                                    .cornerRadius(CornerRadius.sm)
                                 }
                                 .buttonStyle(.plain)
+                                .disabled(isRefreshing)
                                 .padding(.top, Spacing.sm)
+
+                                Spacer()
                             }
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, Spacing.xl)
                         }
                     }
                 } else {
@@ -447,75 +482,121 @@ struct SessionListView: View {
     }
 
     private var disconnectedView: some View {
-        VStack(spacing: 24) {
-            Spacer()
+        ZStack {
+            Color.surfacePrimary
+                .ignoresSafeArea()
 
-            Image(systemName: "desktopcomputer")
-                .font(.system(size: 60))
-                .foregroundColor(.secondary)
+            VStack(spacing: Spacing.lg) {
+                Spacer()
 
-            if bridgeManager.isPaired {
-                // Has pairing but disconnected
-                VStack(spacing: 8) {
-                    Text("Mac Disconnected")
-                        .font(.headline)
+                if bridgeManager.isPaired {
+                    // Has pairing but disconnected
+                    Image(systemName: "wifi.slash")
+                        .font(.system(size: 48, weight: .light))
+                        .foregroundColor(.textTertiary)
 
-                    if let error = bridgeManager.errorMessage {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
+                    VStack(spacing: Spacing.xs) {
+                        Text("Mac Disconnected")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.textPrimary)
+
+                        if let error = bridgeManager.errorMessage {
+                            Text(error)
+                                .font(.system(size: 14))
+                                .foregroundColor(.textSecondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, Spacing.lg)
+                        } else {
+                            Text("Unable to reach your Mac")
+                                .font(.system(size: 14))
+                                .foregroundColor(.textSecondary)
+                        }
+
+                        // Show retry status
+                        if bridgeManager.retryCount > 0 && bridgeManager.retryCount < 3 {
+                            Text("Retrying... (\(bridgeManager.retryCount)/3)")
+                                .font(.system(size: 12))
+                                .foregroundColor(.warning)
+                                .padding(.top, Spacing.xxs)
+                        }
                     }
 
-                    // Show retry status
-                    if bridgeManager.retryCount > 0 && bridgeManager.retryCount < 3 {
-                        Text("Retrying... (\(bridgeManager.retryCount)/3)")
-                            .font(.caption)
-                            .foregroundColor(.orange)
+                    Button(action: {
+                        Task {
+                            await bridgeManager.retry()
+                        }
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.clockwise")
+                            Text("Reconnect")
+                        }
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, Spacing.lg)
+                        .padding(.vertical, Spacing.sm)
+                        .background(Color.active)
+                        .cornerRadius(CornerRadius.sm)
                     }
-                }
+                    .buttonStyle(.plain)
+                    .disabled(bridgeManager.status == .connecting)
+                    .padding(.top, Spacing.sm)
 
-                Button("Reconnect") {
-                    Task {
-                        await bridgeManager.retry()  // Resets retry count
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(bridgeManager.status == .connecting)
-
-                Button(action: {
-                    showUnpairConfirmation = true
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "trash")
+                    Button(action: { showUnpairConfirmation = true }) {
                         Text("Unpair Mac")
+                            .font(.system(size: 13))
+                            .foregroundColor(.textTertiary)
                     }
-                    .font(.caption)
-                    .foregroundColor(.red)
-                }
-                .padding(.top, 8)
-            } else {
-                // No pairing
-                VStack(spacing: 8) {
-                    Text("Connect to Mac")
-                        .font(.headline)
+                    .buttonStyle(.plain)
+                    .padding(.top, Spacing.sm)
 
-                    Text("View Claude Code sessions from your Mac remotely")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
+                } else {
+                    // No pairing - first time setup
+                    Image(systemName: "desktopcomputer")
+                        .font(.system(size: 48, weight: .light))
+                        .foregroundColor(.textTertiary)
+
+                    VStack(spacing: Spacing.xs) {
+                        Text("Connect to Your Mac")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.textPrimary)
+
+                        Text("View and interact with Claude Code sessions running on your Mac")
+                            .font(.system(size: 14))
+                            .foregroundColor(.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, Spacing.lg)
+                    }
+
+                    NavigationLink(destination: QRScannerView()) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "qrcode.viewfinder")
+                            Text("Scan QR Code")
+                        }
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, Spacing.lg)
+                        .padding(.vertical, Spacing.sm)
+                        .background(Color.active)
+                        .cornerRadius(CornerRadius.sm)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, Spacing.sm)
+
+                    // Hint about Tailscale
+                    HStack(spacing: Spacing.xxs) {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 11))
+                        Text("Requires Tailscale on both devices")
+                            .font(.system(size: 11))
+                    }
+                    .foregroundColor(.textTertiary)
+                    .padding(.top, Spacing.md)
                 }
 
-                NavigationLink(destination: QRScannerView()) {
-                    Label("Scan QR Code", systemImage: "qrcode.viewfinder")
-                }
-                .buttonStyle(.borderedProminent)
+                Spacer()
             }
-
-            Spacer()
+            .padding(Spacing.md)
         }
-        .padding()
     }
 }
 
