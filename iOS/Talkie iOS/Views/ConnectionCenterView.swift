@@ -14,7 +14,6 @@ enum ConnectionType: String, CaseIterable, Identifiable {
     case local = "local"
     case iCloud = "icloud"
     case macBridge = "bridge"
-    case tailscale = "tailscale"
 
     var id: String { rawValue }
 
@@ -23,7 +22,6 @@ enum ConnectionType: String, CaseIterable, Identifiable {
         case .local: return "Local Storage"
         case .iCloud: return "iCloud"
         case .macBridge: return "Mac Bridge"
-        case .tailscale: return "Tailscale"
         }
     }
 
@@ -32,7 +30,6 @@ enum ConnectionType: String, CaseIterable, Identifiable {
         case .local: return "Your memos on this device"
         case .iCloud: return "Sync across Apple devices"
         case .macBridge: return "Connect to Talkie on Mac"
-        case .tailscale: return "Remote access anywhere"
         }
     }
 
@@ -41,7 +38,6 @@ enum ConnectionType: String, CaseIterable, Identifiable {
         case .local: return "iphone"
         case .iCloud: return "icloud"
         case .macBridge: return "desktopcomputer"
-        case .tailscale: return "network"
         }
     }
 
@@ -50,7 +46,6 @@ enum ConnectionType: String, CaseIterable, Identifiable {
         case .local: return 0
         case .iCloud: return 1
         case .macBridge: return 2
-        case .tailscale: return 3
         }
     }
 }
@@ -224,10 +219,6 @@ struct ConnectionCenterView: View {
             } else {
                 return .notSetUp
             }
-
-        case .tailscale:
-            // TODO: Implement Tailscale detection
-            return .notAvailable
         }
     }
 
@@ -251,10 +242,6 @@ struct ConnectionCenterView: View {
 
         case .macBridge:
             // Navigation handled by NavigationLink in row
-            break
-
-        case .tailscale:
-            // TODO: Open Tailscale or show setup instructions
             break
         }
     }
@@ -340,9 +327,7 @@ struct ConnectionRowView: View {
             return status == ConnectionRowStatus.notSignedIn
         case .macBridge:
             return status == ConnectionRowStatus.notSetUp
-        case .tailscale:
-            return false // Not implemented yet
-        default:
+        case .local:
             return false
         }
     }
