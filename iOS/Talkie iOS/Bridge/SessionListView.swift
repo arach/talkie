@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct SessionListView: View {
+    @Environment(\.dismiss) private var dismiss
     @State private var bridgeManager = BridgeManager.shared
     @State private var isRefreshing = false
     @State private var isDeepSyncing = false
@@ -54,6 +55,17 @@ struct SessionListView: View {
         .toolbarBackground(Color.surfacePrimary, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(action: { dismiss() }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("Memos")
+                            .font(.system(size: 15, weight: .medium))
+                    }
+                    .foregroundColor(.active)
+                }
+            }
             ToolbarItem(placement: .principal) {
                 TalkieNavigationHeader(subtitle: "Claude")
             }
