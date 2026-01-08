@@ -98,6 +98,7 @@ enum ConnectionRowStatus: Equatable {
 struct ConnectionCenterView: View {
     @ObservedObject private var iCloudStatus = iCloudStatusManager.shared
     @State private var bridgeManager = BridgeManager.shared
+    @AppStorage(SyncSettingsKey.iCloudEnabled) private var iCloudEnabled = true
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -175,8 +176,7 @@ struct ConnectionCenterView: View {
             switch iCloudStatus.status {
             case .available:
                 // Check if user has enabled iCloud sync
-                let enabled = UserDefaults.standard.bool(forKey: SyncSettingsKey.iCloudEnabled)
-                if enabled {
+                if iCloudEnabled {
                     return .connected
                 } else {
                     return .disabled
@@ -214,13 +214,21 @@ struct ConnectionCenterView: View {
             break
 
         case .iCloud:
-            // Navigate to iCloud settings or toggle
             let currentStatus = status(for: .iCloud)
-            if case .notSignedIn = currentStatus {
-                // Open system settings
+            switch currentStatus {
+            case .notSignedIn:
+                // Open system settings to sign in
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }
+            case .disabled:
+                // Re-enable iCloud sync
+                iCloudEnabled = true
+            case .connected:
+                // Disable iCloud sync
+                iCloudEnabled = false
+            default:
+                break
             }
 
         case .macBridge:
@@ -283,7 +291,7 @@ struct ConnectionRowView: View {
 
             // Action indicator (only show when there's an action to take)
             if type != .local && !status.isConnected {
-                if type == .macBridge || canSetUp(type) {
+                if type == .macBridge || canTakeAction(type) {
                     HStack(spacing: 4) {
                         Text(actionText(for: type))
                             .font(.system(size: 12, weight: .medium))
@@ -304,12 +312,12 @@ struct ConnectionRowView: View {
         )
     }
 
-    private func canSetUp(_ type: ConnectionType) -> Bool {
+    private func canTakeAction(_ type: ConnectionType) -> Bool {
         switch type {
         case .iCloud:
-            return status == ConnectionRowStatus.notSignedIn
+            return status == .notSignedIn || status == .disabled
         case .macBridge:
-            return status == ConnectionRowStatus.notSetUp
+            return status == .notSetUp
         case .local:
             return false
         }
