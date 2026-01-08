@@ -100,8 +100,10 @@ enum ConnectionRowStatus: Equatable {
 // MARK: - Connection Center View
 
 struct ConnectionCenterView: View {
-    @ObservedObject private var iCloudStatus = iCloudStatusManager.shared
-    @State private var bridgeManager = BridgeManager.shared
+    // Load managers lazily on appear, not during init
+    @State private var iCloudStatus: iCloudStatusManager?
+    @State private var bridgeManager: BridgeManager?
+    @State private var hasLoaded = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -130,6 +132,14 @@ struct ConnectionCenterView: View {
         .background(Color.surfacePrimary)
         .navigationTitle("Connections")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            // Load managers after view appears
+            if !hasLoaded {
+                iCloudStatus = iCloudStatusManager.shared
+                bridgeManager = BridgeManager.shared
+                hasLoaded = true
+            }
+        }
     }
 
     // MARK: - Header
@@ -176,6 +186,10 @@ struct ConnectionCenterView: View {
             return .active
 
         case .iCloud:
+            guard let iCloudStatus = iCloudStatus else {
+                // Show checking state while loading
+                return .syncing(count: 0)
+            }
             switch iCloudStatus.status {
             case .available:
                 // Check if user has enabled iCloud sync
@@ -194,6 +208,10 @@ struct ConnectionCenterView: View {
             }
 
         case .macBridge:
+            guard let bridgeManager = bridgeManager else {
+                // Show checking state while loading
+                return .syncing(count: 0)
+            }
             if bridgeManager.isPaired {
                 switch bridgeManager.status {
                 case .connected:
@@ -223,7 +241,8 @@ struct ConnectionCenterView: View {
 
         case .iCloud:
             // Navigate to iCloud settings or toggle
-            if case .notSignedIn = status(for: .iCloud) {
+            let currentStatus = status(for: .iCloud)
+            if case .notSignedIn = currentStatus {
                 // Open system settings
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
