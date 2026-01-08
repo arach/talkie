@@ -323,7 +323,7 @@ struct DatabaseSettingsView: View {
 
 /// Cloud storage settings: sync configuration
 struct CloudSettingsView: View {
-    @AppStorage("sync_icloud_enabled") private var iCloudEnabled = true
+    @AppStorage(SyncSettingsKey.iCloudEnabled) private var iCloudEnabled = true
     @State private var iCloudStatus: ConnectionStatus = .available
     @State private var isChecking = false
     @State private var showingEnableConfirmation = false

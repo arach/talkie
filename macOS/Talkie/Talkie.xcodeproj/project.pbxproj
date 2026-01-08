@@ -7,9 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		FC81556A832F4DBF88FA35D2 /* CoreDataSyncGateway.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0DBBC4406B047DCA20EAF7C /* CoreDataSyncGateway.swift */; };
-		7C0DCC0D4C3F472292D9F65A /* PowerStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34DE511EE6C24B1A94C2A668 /* PowerStateManager.swift */; };
-		2148C574E3474EE1BA469345 /* MacStatusSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36A940B245884DB2BD88A564 /* MacStatusSync.swift */; };
+		6B3E1D1599CF4ADF81BA3D45 /* ConnectionCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5580C2371E40DCBA0209E0 /* ConnectionCenterView.swift */; };
 		23891C7996804BC8BE79CD47 /* TalkieViewHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11A25B13F98747759B730C13 /* TalkieViewHeader.swift */; };
 		ED5C9D66ABD648B4A9225302 /* iCloudSyncProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CDE3623769D498DB219A660 /* iCloudSyncProvider.swift */; };
 		E3CCBC9B5FBA4845B9FCA405 /* SyncProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BF3B038A8142B480F07308 /* SyncProvider.swift */; };
@@ -283,9 +281,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		B0DBBC4406B047DCA20EAF7C /* CoreDataSyncGateway.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataSyncGateway.swift; sourceTree = "<group>"; };
-		34DE511EE6C24B1A94C2A668 /* PowerStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerStateManager.swift; sourceTree = "<group>"; };
-		36A940B245884DB2BD88A564 /* MacStatusSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacStatusSync.swift; sourceTree = "<group>"; };
+		FB5580C2371E40DCBA0209E0 /* ConnectionCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionCenterView.swift; sourceTree = "<group>"; };
 		11A25B13F98747759B730C13 /* TalkieViewHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieViewHeader.swift; sourceTree = "<group>"; };
 		9CDE3623769D498DB219A660 /* iCloudSyncProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iCloudSyncProvider.swift; sourceTree = "<group>"; };
 		E5BF3B038A8142B480F07308 /* SyncProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncProvider.swift; sourceTree = "<group>"; };
@@ -576,7 +572,6 @@
 		B5DD782E95EC432C8A66157B /* Sync */ = {
 			isa = PBXGroup;
 			children = (
-				B0DBBC4406B047DCA20EAF7C /* CoreDataSyncGateway.swift */,
 				9CDE3623769D498DB219A660 /* iCloudSyncProvider.swift */,
 				E5BF3B038A8142B480F07308 /* SyncProvider.swift */,
 				67EF9D4181744ED4AF5722A1 /* LocalSyncProvider.swift */,
@@ -888,6 +883,7 @@
 		9A4651765758DD61801D03CA /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				FB5580C2371E40DCBA0209E0 /* ConnectionCenterView.swift */,
 				C17881FF95CCD644641D298E /* APISettings.swift */,
 				CB9A7709DDDFE4A1859B1326 /* AppearanceSettings.swift */,
 				90C22080263D752683F84C1A /* AuditResultsView.swift */,
@@ -1151,8 +1147,6 @@
 		FDD3B1848425C2C039CA5F59 /* Services */ = {
 			isa = PBXGroup;
 			children = (
-				34DE511EE6C24B1A94C2A668 /* PowerStateManager.swift */,
-				36A940B245884DB2BD88A564 /* MacStatusSync.swift */,
 				B5DD782E95EC432C8A66157B /* Sync */,
 				75BB8C84F67500324AE2084A /* APIKeyStore.swift */,
 				6F7C961509F087E2FA5C4C24 /* AppEnvironment.swift */,
@@ -1318,9 +1312,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				FC81556A832F4DBF88FA35D2 /* CoreDataSyncGateway.swift in Sources */,
-				7C0DCC0D4C3F472292D9F65A /* PowerStateManager.swift in Sources */,
-				2148C574E3474EE1BA469345 /* MacStatusSync.swift in Sources */,
+				6B3E1D1599CF4ADF81BA3D45 /* ConnectionCenterView.swift in Sources */,
 				23891C7996804BC8BE79CD47 /* TalkieViewHeader.swift in Sources */,
 				ED5C9D66ABD648B4A9225302 /* iCloudSyncProvider.swift in Sources */,
 				E3CCBC9B5FBA4845B9FCA405 /* SyncProvider.swift in Sources */,

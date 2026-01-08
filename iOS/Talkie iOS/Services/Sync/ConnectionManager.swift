@@ -93,7 +93,7 @@ class ConnectionManager {
 
     /// Check if iCloud sync is enabled by user
     private var isICloudEnabled: Bool {
-        UserDefaults.standard.object(forKey: "sync_icloud_enabled") as? Bool ?? true
+        UserDefaults.standard.object(forKey: SyncSettingsKey.iCloudEnabled) as? Bool ?? true
     }
 
     // MARK: - Sync Operations
