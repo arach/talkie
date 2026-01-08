@@ -769,6 +769,52 @@ public final class LiveServiceState: NSObject, TalkieLiveStateObserverProtocol {
         }
     }
 
+    // MARK: - Retranscription
+
+    /// Retranscribe a dictation via TalkieLive XPC
+    /// TalkieLive owns live.sqlite, so all writes must go through XPC
+    /// - Parameters:
+    ///   - dictationId: The database ID (Int64) of the dictation
+    ///   - modelId: Model identifier (e.g., "parakeet:v3")
+    /// - Returns: New transcript text on success
+    /// - Throws: Error if retranscription fails
+    public func retranscribe(dictationId: Int64, modelId: String) async throws -> String {
+        guard let service = xpcManager?.remoteObjectProxy(errorHandler: { error in
+            logger.error("[Live] Retranscribe XPC error: \(error.localizedDescription)")
+        }) else {
+            throw RetranscribeError.notConnected
+        }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            service.retranscribe(dictationId: dictationId, modelId: modelId) { newText, error in
+                if let error = error {
+                    continuation.resume(throwing: RetranscribeError.failed(error))
+                } else if let newText = newText {
+                    continuation.resume(returning: newText)
+                } else {
+                    continuation.resume(throwing: RetranscribeError.emptyResult)
+                }
+            }
+        }
+    }
+
+    public enum RetranscribeError: LocalizedError {
+        case notConnected
+        case failed(String)
+        case emptyResult
+
+        public var errorDescription: String? {
+            switch self {
+            case .notConnected:
+                return "Not connected to TalkieLive"
+            case .failed(let message):
+                return message
+            case .emptyResult:
+                return "Retranscription returned empty result"
+            }
+        }
+    }
+
     // MARK: - Process Detection
 
     /// Refresh process ID by detecting running TalkieLive (backwards compatibility)

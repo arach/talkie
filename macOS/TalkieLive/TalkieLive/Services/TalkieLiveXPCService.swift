@@ -426,6 +426,55 @@ final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol, Observ
         }
     }
 
+    nonisolated func retranscribe(dictationId: Int64, modelId: String, reply: @escaping (String?, String?) -> Void) {
+        Task { @MainActor in
+            NSLog("[TalkieLiveXPC] Retranscribe requested: id=\(dictationId), model=\(modelId)")
+
+            // 1. Fetch dictation from database
+            guard let dictation = LiveDatabase.fetch(id: dictationId) else {
+                NSLog("[TalkieLiveXPC] Retranscribe failed: dictation \(dictationId) not found")
+                reply(nil, "Dictation not found")
+                return
+            }
+
+            // 2. Get audio file path
+            guard let audioFilename = dictation.audioFilename else {
+                NSLog("[TalkieLiveXPC] Retranscribe failed: no audio file for dictation \(dictationId)")
+                reply(nil, "No audio file available for this dictation")
+                return
+            }
+
+            let audioPath = AudioStorage.audioDirectory.appendingPathComponent(audioFilename).path
+
+            guard FileManager.default.fileExists(atPath: audioPath) else {
+                NSLog("[TalkieLiveXPC] Retranscribe failed: audio file not found at \(audioPath)")
+                reply(nil, "Audio file not found")
+                return
+            }
+
+            // 3. Transcribe via Engine
+            do {
+                let newText = try await EngineClient.shared.transcribe(
+                    audioPath: audioPath,
+                    modelId: modelId,
+                    priority: .userInitiated  // User explicitly requested retranscription
+                )
+
+                // 4. Update database
+                LiveDatabase.updateText(id: dictationId, text: newText, modelId: modelId)
+
+                // 5. Notify observers that dictation was updated
+                self.broadcastDictationAdded()
+
+                NSLog("[TalkieLiveXPC] Retranscribe succeeded: \(newText.prefix(50))...")
+                reply(newText, nil)
+            } catch {
+                NSLog("[TalkieLiveXPC] Retranscribe failed: \(error.localizedDescription)")
+                reply(nil, error.localizedDescription)
+            }
+        }
+    }
+
     func addObserverConnection(_ connection: NSXPCConnection) {
         observers.append(connection)
         updateConnectionStatus()

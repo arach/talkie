@@ -568,6 +568,14 @@ extension View {
                     }
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .init("NavigateToDictationsPending"))) { _ in
+                // Navigate to Live Recent with pending filter
+                selectedSection.wrappedValue = .liveRecent
+                // Post follow-up to apply pending filter
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    NotificationCenter.default.post(name: .init("FilterDictationsPending"), object: nil)
+                }
+            }
             // Permission and service alerts
             .onReceive(NotificationCenter.default.publisher(for: .showMicrophonePermissionRequired)) { _ in
                 let alert = NSAlert()
