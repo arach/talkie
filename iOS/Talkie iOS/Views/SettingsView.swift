@@ -116,36 +116,38 @@ struct SettingsView: View {
                         // Sync
                         SyncSection()
 
-                        // Mac Bridge
-                        VStack(alignment: .leading, spacing: Spacing.sm) {
-                            Text("MAC BRIDGE")
-                                .font(.techLabel)
-                                .tracking(2)
-                                .foregroundColor(.textTertiary)
-                                .padding(.horizontal, Spacing.md)
+                        // Mac Bridge - only show if paired
+                        if BridgeManager.shared.isPaired {
+                            VStack(alignment: .leading, spacing: Spacing.sm) {
+                                Text("MAC BRIDGE")
+                                    .font(.techLabel)
+                                    .tracking(2)
+                                    .foregroundColor(.textTertiary)
+                                    .padding(.horizontal, Spacing.md)
 
-                            NavigationLink(destination: BridgeSettingsView()) {
-                                HStack {
-                                    Image(systemName: "desktopcomputer")
-                                        .foregroundColor(.active)
-                                    Text("Connection Settings")
-                                    Spacer()
-                                    BridgeStatusBadge()
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(.textTertiary)
+                                NavigationLink(destination: BridgeSettingsView()) {
+                                    HStack {
+                                        Image(systemName: "desktopcomputer")
+                                            .foregroundColor(.active)
+                                        Text("Connection Settings")
+                                        Spacer()
+                                        BridgeStatusBadge()
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.textTertiary)
+                                    }
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(.textPrimary)
+                                    .padding(Spacing.sm)
+                                    .background(Color.surfaceSecondary)
+                                    .cornerRadius(CornerRadius.sm)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                                            .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
+                                    )
                                 }
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.textPrimary)
-                                .padding(Spacing.sm)
-                                .background(Color.surfaceSecondary)
-                                .cornerRadius(CornerRadius.sm)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: CornerRadius.sm)
-                                        .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
-                                )
+                                .padding(.horizontal, Spacing.md)
                             }
-                            .padding(.horizontal, Spacing.md)
                         }
 
                         // Debug Info
@@ -628,10 +630,19 @@ struct ThemePreview: View {
 
 struct SyncSection: View {
     @AppStorage("sync_icloud_enabled") private var iCloudEnabled = true
-    @State private var iCloudStatus: ConnectionStatus = .available
-    @State private var isChecking = false
+    @ObservedObject var cloudStatusManager = iCloudStatusManager.shared
     @State private var showingEnableConfirmation = false
     @State private var localMemoCount: Int = 0
+
+    /// Whether iCloud is actually available (signed in and accessible)
+    private var isActuallyAvailable: Bool {
+        cloudStatusManager.status.isAvailable
+    }
+
+    /// Effective toggle state: only ON if preference enabled AND actually available
+    private var effectivelyEnabled: Bool {
+        iCloudEnabled && isActuallyAvailable
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -644,15 +655,15 @@ struct SyncSection: View {
             VStack(spacing: 0) {
                 // iCloud Sync Row
                 HStack {
-                    Image(systemName: iCloudEnabled ? "icloud" : "icloud.slash")
-                        .foregroundColor(iCloudEnabled ? .active : .textTertiary)
+                    Image(systemName: cloudStatusManager.status.icon)
+                        .foregroundColor(effectivelyEnabled ? .active : .textTertiary)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("iCloud")
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.textPrimary)
 
-                        Text(iCloudEnabled ? statusMessage : "Disabled")
+                        Text(statusMessage)
                             .font(.system(size: 12))
                             .foregroundColor(.textSecondary)
                     }
@@ -661,21 +672,24 @@ struct SyncSection: View {
 
                     statusBadge
 
-                    Toggle("", isOn: Binding(
-                        get: { iCloudEnabled },
-                        set: { newValue in
-                            if newValue && !iCloudEnabled {
-                                // Enabling - show confirmation
-                                countLocalMemos()
-                                showingEnableConfirmation = true
-                            } else if !newValue && iCloudEnabled {
-                                // Disabling - no confirmation needed, just pause
-                                iCloudEnabled = false
-                                handleToggleChange(false)
+                    // Only show toggle if iCloud is actually available
+                    if isActuallyAvailable {
+                        Toggle("", isOn: Binding(
+                            get: { iCloudEnabled },
+                            set: { newValue in
+                                if newValue && !iCloudEnabled {
+                                    // Enabling - show confirmation
+                                    countLocalMemos()
+                                    showingEnableConfirmation = true
+                                } else if !newValue && iCloudEnabled {
+                                    // Disabling - no confirmation needed, just pause
+                                    iCloudEnabled = false
+                                    handleToggleChange(false)
+                                }
                             }
-                        }
-                    ))
-                    .labelsHidden()
+                        ))
+                        .labelsHidden()
+                    }
                 }
                 .padding(Spacing.sm)
                 .alert("Enable iCloud Sync?", isPresented: $showingEnableConfirmation) {
@@ -690,35 +704,6 @@ struct SyncSection: View {
                          : "Your memos will sync across all your Apple devices via iCloud.")
                 }
 
-                Divider().background(Color.borderPrimary)
-
-                // Bridge Sync Row (Future)
-                HStack {
-                    Image(systemName: "link")
-                        .foregroundColor(.textTertiary)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Direct Connect")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.textPrimary)
-
-                        Text("Coming soon")
-                            .font(.system(size: 12))
-                            .foregroundColor(.textSecondary)
-                    }
-
-                    Spacer()
-
-                    Text("SOON")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(.textTertiary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.surfaceTertiary)
-                        .cornerRadius(3)
-                }
-                .padding(Spacing.sm)
-                .opacity(0.5)
             }
             .background(Color.surfaceSecondary)
             .cornerRadius(CornerRadius.sm)
@@ -728,37 +713,41 @@ struct SyncSection: View {
             )
             .padding(.horizontal, Spacing.md)
         }
-        .task {
-            await checkiCloudStatus()
-        }
     }
 
     private var statusBadge: some View {
         Group {
-            if isChecking {
+            if cloudStatusManager.status == .checking {
                 ProgressView()
                     .controlSize(.small)
-            } else if !iCloudEnabled {
+            } else if !effectivelyEnabled {
                 Circle()
                     .fill(Color.gray)
                     .frame(width: 6, height: 6)
             } else {
                 Circle()
-                    .fill(iCloudStatus == .available ? Color.green : Color.orange)
+                    .fill(Color.green)
                     .frame(width: 6, height: 6)
             }
         }
     }
 
     private var statusMessage: String {
-        if isChecking {
+        switch cloudStatusManager.status {
+        case .checking:
             return "Checking..."
-        } else if iCloudStatus == .available {
-            return "Connected"
-        } else if case .unavailable(let reason) = iCloudStatus {
-            return reason
-        } else {
-            return "Not available"
+        case .available:
+            return iCloudEnabled ? "Connected" : "Disabled"
+        case .noAccount:
+            return "Not signed in"
+        case .restricted:
+            return "Restricted"
+        case .temporarilyUnavailable:
+            return "Temporarily unavailable"
+        case .couldNotDetermine:
+            return "Status unknown"
+        case .error:
+            return "Error"
         }
     }
 
@@ -798,28 +787,6 @@ struct SyncSection: View {
 
         Task {
             await ConnectionManager.shared.checkAllConnections()
-        }
-    }
-
-    private func checkiCloudStatus() async {
-        guard iCloudEnabled else {
-            iCloudStatus = .unavailable(reason: "Disabled")
-            return
-        }
-
-        isChecking = true
-
-        if let provider = ConnectionManager.shared.provider(for: .iCloud) {
-            let status = await provider.checkConnection()
-            await MainActor.run {
-                iCloudStatus = status
-                isChecking = false
-            }
-        } else {
-            await MainActor.run {
-                iCloudStatus = .unavailable(reason: "Not available")
-                isChecking = false
-            }
         }
     }
 }
