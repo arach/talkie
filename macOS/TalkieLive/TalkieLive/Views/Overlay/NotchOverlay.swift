@@ -115,11 +115,16 @@ final class NotchOverlayController: ObservableObject {
 
     private var window: NSPanel?
     private var cancellables = Set<AnyCancellable>()
-    private var mouseMonitor: Any?
-    private var proximityTimer: Timer?
+    private var notificationObserver: NSObjectProtocol?
+    private var isHideAnimating: Bool = false
 
     // Thread-safe flag for keyboard shortcut callback (can be read from any thread)
-    nonisolated(unsafe) var isListeningForShortcuts: Bool = false
+    private nonisolated(unsafe) let shortcutsLock = NSLock()
+    private nonisolated(unsafe) var _isListeningForShortcuts: Bool = false
+    nonisolated var isListeningForShortcuts: Bool {
+        get { shortcutsLock.withLock { _isListeningForShortcuts } }
+        set { shortcutsLock.withLock { _isListeningForShortcuts = newValue } }
+    }
 
     // State
     @Published var state: LiveState = .idle
@@ -128,10 +133,6 @@ final class NotchOverlayController: ObservableObject {
     @Published var isExpanded: Bool = false
     @Published var captureIntent: String = "Paste"
     @Published var style: NotchOverlayStyle = .minimal  // Default to minimal
-
-    // Proximity detection
-    @Published var proximity: CGFloat = 0  // 0 = far, 1 = very close
-    private let proximityRadius: CGFloat = 100  // Distance at which we detect hover
 
     // Notch info
     @Published var notchInfo: NotchInfo = NotchInfo(hasNotch: false, notchWidth: 0, notchHeight: 24, screenFrame: .zero, screenCenter: 0)
@@ -143,17 +144,16 @@ final class NotchOverlayController: ObservableObject {
         // Detect notch on init
         notchInfo = NotchInfo.detect()
 
-        // Listen for screen changes
-        NotificationCenter.default.addObserver(
+        // Listen for screen changes (store observer for cleanup)
+        notificationObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
-                self?.notchInfo = NotchInfo.detect()
-                if self?.window != nil {
-                    self?.updateWindowPosition()
-                }
+            guard let self else { return }
+            self.notchInfo = NotchInfo.detect()
+            if self.window != nil {
+                self.updateWindowPosition()
             }
         }
 
@@ -164,9 +164,15 @@ final class NotchOverlayController: ObservableObject {
                 self?.audioLevel = level
             }
             .store(in: &cancellables)
+    }
 
-        // Start proximity monitoring
-        startProximityMonitoring()
+    deinit {
+        // Clean up notification observer
+        if let observer = notificationObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        // Clean up cancellables
+        cancellables.removeAll()
     }
 
     // MARK: - Keyboard Shortcuts for Quick Stop (CGEventTap to consume keys)
@@ -204,43 +210,13 @@ final class NotchOverlayController: ObservableObject {
     private func stopKeyMonitoring() {
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
+            CFMachPortInvalidate(tap)
         }
         if let source = runLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
             runLoopSource = nil
         }
         eventTap = nil
-    }
-
-    // MARK: - Proximity Monitoring
-
-    private func startProximityMonitoring() {
-        // Poll mouse position at ~20fps for smooth proximity detection
-        proximityTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.updateProximity()
-            }
-        }
-    }
-
-    private func updateProximity() {
-        let mouseLocation = NSEvent.mouseLocation
-        let notchCenter = CGPoint(x: notchInfo.screenCenter, y: notchInfo.screenFrame.maxY - notchInfo.notchHeight / 2)
-
-        // Calculate distance from mouse to notch center
-        let dx = mouseLocation.x - notchCenter.x
-        let dy = mouseLocation.y - notchCenter.y
-        let distance = sqrt(dx * dx + dy * dy)
-
-        // Calculate proximity (1 = at notch, 0 = far away)
-        let newProximity = max(0, min(1, 1 - (distance / proximityRadius)))
-
-        // Only update if changed meaningfully
-        if abs(newProximity - proximity) > 0.05 {
-            withAnimation(.easeOut(duration: 0.15)) {
-                proximity = newProximity
-            }
-        }
     }
 
     // MARK: - Window Management
@@ -250,7 +226,8 @@ final class NotchOverlayController: ObservableObject {
         notchInfo = NotchInfo.detect()
         guard notchInfo.hasNotch else { return }
 
-        guard window == nil else {
+        // Prevent race with hide animation
+        guard window == nil && !isHideAnimating else {
             window?.orderFront(nil)
             return
         }
@@ -304,6 +281,9 @@ final class NotchOverlayController: ObservableObject {
         elapsedTime = 0
 
         guard let panel = window else { return }
+        guard !isHideAnimating else { return }
+
+        isHideAnimating = true
 
         // Animate out quickly (configurable via NotchTuning)
         let animDuration = NotchTuning.shared.showAnimationDuration
@@ -314,6 +294,7 @@ final class NotchOverlayController: ObservableObject {
         }, completionHandler: { [weak self] in
             self?.window?.orderOut(nil)
             self?.window = nil
+            self?.isHideAnimating = false
         })
     }
 
@@ -337,7 +318,7 @@ final class NotchOverlayController: ObservableObject {
     // MARK: - Initialization
 
     func initialize() {
-        // Show the overlay immediately for proximity sensing
+        // Show the overlay immediately for hover detection
         // This should be called at app startup
         notchInfo = NotchInfo.detect()
         if notchInfo.hasNotch {
@@ -351,23 +332,28 @@ final class NotchOverlayController: ObservableObject {
         let previousState = self.state
         self.state = state
 
-        // Always show the notch overlay (for proximity sensing)
+        // Always show the notch overlay (hover detection via SwiftUI onHover)
         show()
 
+        // Entering listening state
         if state == .listening && previousState != .listening {
             recordingStartTime = Date()
             elapsedTime = 0
             startTimer()
             isListeningForShortcuts = true
             startKeyMonitoring()  // Enable Right Option + . / shortcuts
-        } else if state == .idle && previousState != .idle {
+        }
+
+        // Leaving listening state (to any other state)
+        if state != .listening && previousState == .listening {
+            isListeningForShortcuts = false
+            stopKeyMonitoring()
+        }
+
+        // Entering idle state
+        if state == .idle && previousState != .idle {
             stopTimer()
-            isListeningForShortcuts = false
-            stopKeyMonitoring()
             elapsedTime = 0
-        } else if state != .listening {
-            isListeningForShortcuts = false
-            stopKeyMonitoring()
         }
 
         // Expand during active recording, collapse during processing
@@ -433,8 +419,8 @@ struct NotchOverlayView: View {
     private var expansionState: ExpansionState {
         if controller.state != .idle {
             return .active  // Recording/transcribing/routing
-        } else if controller.proximity > 0.15 {
-            return .hover   // Hovering near notch (trigger earlier)
+        } else if isHovered {
+            return .hover   // Hovering over notch area
         } else {
             return .rest    // Idle, not hovering
         }
