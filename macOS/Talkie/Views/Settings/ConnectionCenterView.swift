@@ -67,7 +67,6 @@ enum ConnectionType: String, CaseIterable, Identifiable {
 }
 
 // MARK: - Connection Row Status
-// Note: Similar enum exists in iOS/Talkie iOS/Views/ConnectionCenterView.swift
 
 enum ConnectionRowStatus: Equatable {
     case active
@@ -112,7 +111,7 @@ enum ConnectionRowStatus: Equatable {
 // MARK: - Connection Center View
 
 struct ConnectionCenterView: View {
-    @AppStorage(SyncSettingsKey.iCloudEnabled) private var iCloudEnabled = true
+    @AppStorage("sync_icloud_enabled") private var iCloudEnabled = true
     @State private var bridgeManager = BridgeManager.shared
     @Binding var selectedSection: SettingsSection
 
@@ -258,15 +257,21 @@ struct ConnectionRowView: View {
 
                 Spacer()
 
-                // Action indicator (only show when there's an action to take)
-                if type != .local && !status.isConnected && type.settingsSection != nil {
-                    HStack(spacing: 4) {
-                        Text(actionText(for: type))
-                            .font(Theme.current.fontXSMedium)
-                            .foregroundColor(Theme.current.accent)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundColor(Theme.current.accent)
+                // Action indicator
+                if type != .local {
+                    if status.isConnected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(.green)
+                    } else if type.settingsSection != nil {
+                        HStack(spacing: 4) {
+                            Text(actionText(for: type))
+                                .font(Theme.current.fontXSMedium)
+                                .foregroundColor(Theme.current.accent)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(Theme.current.accent)
+                        }
                     }
                 }
             }

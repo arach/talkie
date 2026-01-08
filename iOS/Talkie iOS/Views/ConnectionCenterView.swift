@@ -14,6 +14,7 @@ enum ConnectionType: String, CaseIterable, Identifiable {
     case local = "local"
     case iCloud = "icloud"
     case macBridge = "bridge"
+    case tailscale = "tailscale"
 
     var id: String { rawValue }
 
@@ -22,6 +23,7 @@ enum ConnectionType: String, CaseIterable, Identifiable {
         case .local: return "Local Storage"
         case .iCloud: return "iCloud"
         case .macBridge: return "Mac Bridge"
+        case .tailscale: return "Tailscale"
         }
     }
 
@@ -30,6 +32,7 @@ enum ConnectionType: String, CaseIterable, Identifiable {
         case .local: return "Your memos on this device"
         case .iCloud: return "Sync across Apple devices"
         case .macBridge: return "Connect to Talkie on Mac"
+        case .tailscale: return "Remote access anywhere"
         }
     }
 
@@ -38,6 +41,7 @@ enum ConnectionType: String, CaseIterable, Identifiable {
         case .local: return "iphone"
         case .iCloud: return "icloud"
         case .macBridge: return "desktopcomputer"
+        case .tailscale: return "network"
         }
     }
 
@@ -46,12 +50,12 @@ enum ConnectionType: String, CaseIterable, Identifiable {
         case .local: return 0
         case .iCloud: return 1
         case .macBridge: return 2
+        case .tailscale: return 3
         }
     }
 }
 
 // MARK: - Connection Row Status (display status for Connection Center UI)
-// Note: Keep in sync with macOS/Talkie/Views/Settings/ConnectionCenterView.swift
 
 enum ConnectionRowStatus: Equatable {
     case active
@@ -98,7 +102,6 @@ enum ConnectionRowStatus: Equatable {
 struct ConnectionCenterView: View {
     @ObservedObject private var iCloudStatus = iCloudStatusManager.shared
     @State private var bridgeManager = BridgeManager.shared
-    @AppStorage(SyncSettingsKey.iCloudEnabled) private var iCloudEnabled = true
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -176,7 +179,8 @@ struct ConnectionCenterView: View {
             switch iCloudStatus.status {
             case .available:
                 // Check if user has enabled iCloud sync
-                if iCloudEnabled {
+                let enabled = UserDefaults.standard.bool(forKey: "sync_icloud_enabled")
+                if enabled {
                     return .connected
                 } else {
                     return .disabled
@@ -202,6 +206,10 @@ struct ConnectionCenterView: View {
             } else {
                 return .notSetUp
             }
+
+        case .tailscale:
+            // TODO: Implement Tailscale detection
+            return .notAvailable
         }
     }
 
@@ -214,25 +222,20 @@ struct ConnectionCenterView: View {
             break
 
         case .iCloud:
-            let currentStatus = status(for: .iCloud)
-            switch currentStatus {
-            case .notSignedIn:
-                // Open system settings to sign in
+            // Navigate to iCloud settings or toggle
+            if case .notSignedIn = status(for: .iCloud) {
+                // Open system settings
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }
-            case .disabled:
-                // Re-enable iCloud sync
-                iCloudEnabled = true
-            case .connected:
-                // Disable iCloud sync
-                iCloudEnabled = false
-            default:
-                break
             }
 
         case .macBridge:
             // Navigation handled by NavigationLink in row
+            break
+
+        case .tailscale:
+            // TODO: Open Tailscale or show setup instructions
             break
         }
     }
@@ -289,9 +292,13 @@ struct ConnectionRowView: View {
 
             Spacer()
 
-            // Action indicator (only show when there's an action to take)
-            if type != .local && !status.isConnected {
-                if type == .macBridge || canTakeAction(type) {
+            // Action indicator
+            if type != .local {
+                if status.isConnected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundColor(.green)
+                } else if type == .macBridge || canSetUp(type) {
                     HStack(spacing: 4) {
                         Text(actionText(for: type))
                             .font(.system(size: 12, weight: .medium))
@@ -312,13 +319,15 @@ struct ConnectionRowView: View {
         )
     }
 
-    private func canTakeAction(_ type: ConnectionType) -> Bool {
+    private func canSetUp(_ type: ConnectionType) -> Bool {
         switch type {
         case .iCloud:
-            return status == .notSignedIn || status == .disabled
+            return status == ConnectionRowStatus.notSignedIn
         case .macBridge:
-            return status == .notSetUp
-        case .local:
+            return status == ConnectionRowStatus.notSetUp
+        case .tailscale:
+            return false // Not implemented yet
+        default:
             return false
         }
     }
