@@ -11,9 +11,6 @@ struct SessionListView: View {
     @State private var bridgeManager = BridgeManager.shared
     @State private var isRefreshing = false
     @State private var isDeepSyncing = false
-    @State private var isCapturing = false
-    @State private var captureError: String?
-    @State private var selectedWindow: WindowCapture?
     @State private var sessionsMeta: SessionsMeta?
     @State private var showUnpairConfirmation = false
     @State private var showMacDetails = false
@@ -60,6 +57,24 @@ struct SessionListView: View {
             ToolbarItem(placement: .principal) {
                 TalkieNavigationHeader(subtitle: "Claude")
             }
+            #if DEBUG
+            ToolbarItem(placement: .topBarTrailing) {
+                DebugToolbarButton(
+                    content: {
+                        BridgeDebugContent(bridgeManager: bridgeManager)
+                    },
+                    debugInfo: {
+                        [
+                            "View": "SessionList",
+                            "Status": bridgeManager.status.description,
+                            "Projects": "\(bridgeManager.projectPaths.count)",
+                            "Sessions": "\(bridgeManager.sessions.count)",
+                            "HasData": hasLoadedInitialData ? "Yes" : "No"
+                        ]
+                    }
+                )
+            }
+            #endif
         }
     }
 
@@ -76,23 +91,6 @@ struct SessionListView: View {
                 // Mac status bar - sticky footer
                 macStatusFooter
             }
-
-            #if DEBUG
-            DebugToolbarOverlay(
-                content: {
-                    BridgeDebugContent(bridgeManager: bridgeManager)
-                },
-                debugInfo: {
-                    [
-                        "View": "SessionList",
-                        "Status": bridgeManager.status.description,
-                        "Projects": "\(bridgeManager.projectPaths.count)",
-                        "Sessions": "\(bridgeManager.sessions.count)",
-                        "HasData": hasLoadedInitialData ? "Yes" : "No"
-                    ]
-                }
-            )
-            #endif
         }
         .onAppear {
             // Trigger initial data load when first connected
@@ -305,13 +303,40 @@ struct SessionListView: View {
                     // True empty state (only after we've tried loading)
                     if hasLoadedInitialData {
                         Section {
-                            HStack {
+                            VStack(spacing: Spacing.md) {
                                 Image(systemName: "tray")
-                                    .foregroundColor(.secondary)
+                                    .font(.system(size: 32, weight: .light))
+                                    .foregroundColor(.textTertiary)
+
                                 Text("No active sessions")
-                                    .foregroundColor(.secondary)
+                                    .font(.bodyMedium)
+                                    .foregroundColor(.textSecondary)
+
+                                if let meta = sessionsMeta, let syncedAt = meta.syncedAt {
+                                    Text("Last synced: \(formatRelativeTime(syncedAt))")
+                                        .font(.monoSmall)
+                                        .foregroundColor(.textTertiary)
+                                }
+
+                                Button(action: {
+                                    Task {
+                                        isRefreshing = true
+                                        await refreshSessions(deepSync: true)
+                                        isRefreshing = false
+                                    }
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "arrow.clockwise")
+                                        Text("Refresh")
+                                    }
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(.active)
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.top, Spacing.sm)
                             }
-                            .padding(.vertical, 8)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, Spacing.xl)
                         }
                     }
                 } else {
@@ -323,67 +348,6 @@ struct SessionListView: View {
                             }
                         }
                     }
-                }
-            }
-
-            // Terminal Windows (Screenshots)
-            Section("Terminal Windows") {
-                if let error = captureError {
-                    HStack {
-                        Image(systemName: "exclamationmark.triangle")
-                            .foregroundColor(.orange)
-                        Text(error)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.vertical, 4)
-                }
-
-                if bridgeManager.windowCaptures.isEmpty && !isCapturing {
-                    HStack {
-                        Image(systemName: "macwindow")
-                            .foregroundColor(.secondary)
-                        Text("No windows captured")
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.vertical, 8)
-
-                    Button(action: captureWindows) {
-                        if isCapturing {
-                            HStack {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                Text("Capturing...")
-                            }
-                        } else {
-                            Label("Capture Windows", systemImage: "camera")
-                        }
-                    }
-                    .disabled(isCapturing)
-                } else {
-                    // Grid of window thumbnails
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                        ForEach(bridgeManager.windowCaptures) { capture in
-                            WindowThumbnailCell(capture: capture)
-                                .onTapGesture {
-                                    selectedWindow = capture
-                                }
-                        }
-                    }
-                    .padding(.vertical, 8)
-
-                    Button(action: captureWindows) {
-                        if isCapturing {
-                            HStack {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                Text("Refreshing...")
-                            }
-                        } else {
-                            Label("Refresh Screenshots", systemImage: "arrow.clockwise")
-                        }
-                    }
-                    .disabled(isCapturing)
                 }
             }
 
@@ -403,9 +367,6 @@ struct SessionListView: View {
         .onAppear {
             // Also use appearance proxy as fallback
             UIRefreshControl.appearance().tintColor = .clear
-        }
-        .sheet(item: $selectedWindow) { window in
-            WindowDetailSheet(capture: window)
         }
     }
 
@@ -458,19 +419,6 @@ struct SessionListView: View {
         let relativeFormatter = RelativeDateTimeFormatter()
         relativeFormatter.unitsStyle = .abbreviated
         return relativeFormatter.localizedString(for: date, relativeTo: Date())
-    }
-
-    private func captureWindows() {
-        isCapturing = true
-        captureError = nil
-        Task {
-            do {
-                try await bridgeManager.refreshWindowCapturesWithError()
-            } catch {
-                captureError = error.localizedDescription
-            }
-            isCapturing = false
-        }
     }
 
     private var connectingView: some View {
@@ -939,36 +887,36 @@ struct PathSessionRow: View {
             Circle()
                 .fill(session.isLive ? Color.success : Color.textTertiary.opacity(0.3))
                 .frame(width: 5, height: 5)
-                .padding(.top, 3)  // Align with first line of text
+                .padding(.top, 2)  // Align with first line of text
 
             // Content - two lines
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 1) {
                 // Primary line: preview text + date
                 HStack(spacing: 0) {
                     Text(previewText)
-                        .font(.system(size: 13))
+                        .font(.system(size: 12))
                         .foregroundColor(session.isLive ? .textPrimary : .textSecondary)
                         .lineLimit(1)
 
                     Spacer(minLength: Spacing.sm)
 
                     Text(compactTimestamp)
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(.textTertiary)
                 }
 
                 // Secondary line: message count with icon
                 HStack(spacing: 3) {
                     Image(systemName: "bubble.left.and.bubble.right")
-                        .font(.system(size: 9))
+                        .font(.system(size: 8))
                         .foregroundColor(.textTertiary.opacity(0.7))
                     Text("\(session.messageCount)")
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(.system(size: 9, design: .monospaced))
                         .foregroundColor(.textTertiary)
                 }
             }
         }
-        .padding(.vertical, 4)  // Tighter: reduced from 6 to 4
+        .padding(.vertical, 2)  // Tighter: reduced from 4 to 2
     }
 
     private var previewText: String {
@@ -1232,19 +1180,70 @@ struct RefreshControlHider: UIViewRepresentable {
 
 struct BridgeDebugContent: View {
     let bridgeManager: BridgeManager
+    @State private var isCapturing = false
+    @State private var captureError: String?
+    @State private var selectedWindow: WindowCapture?
 
     var body: some View {
-        DebugSection(title: "BRIDGE") {
-            VStack(spacing: 4) {
-                DebugActionButton(icon: "arrow.clockwise", label: "Force Refresh") {
-                    Task {
-                        await bridgeManager.connect()
+        VStack(spacing: 10) {
+            DebugSection(title: "BRIDGE") {
+                VStack(spacing: 4) {
+                    DebugActionButton(icon: "arrow.clockwise", label: "Force Refresh") {
+                        Task {
+                            await bridgeManager.connect()
+                        }
+                    }
+                    DebugActionButton(icon: "wifi.slash", label: "Disconnect") {
+                        bridgeManager.disconnect()
                     }
                 }
-                DebugActionButton(icon: "wifi.slash", label: "Disconnect") {
-                    bridgeManager.disconnect()
+            }
+
+            DebugSection(title: "WINDOWS") {
+                VStack(spacing: 4) {
+                    // Window count
+                    HStack(spacing: 6) {
+                        Image(systemName: "macwindow")
+                            .font(.system(size: 10))
+                            .foregroundColor(.textTertiary)
+                        Text("\(bridgeManager.windowCaptures.count) captured")
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .foregroundColor(.textSecondary)
+                        Spacer()
+                    }
+
+                    if let error = captureError {
+                        Text(error)
+                            .font(.system(size: 8))
+                            .foregroundColor(.orange)
+                            .lineLimit(2)
+                    }
+
+                    DebugActionButton(
+                        icon: isCapturing ? "hourglass" : "camera",
+                        label: isCapturing ? "Capturing..." : "Capture Windows"
+                    ) {
+                        captureWindows()
+                    }
+                    .disabled(isCapturing)
                 }
             }
+        }
+        .sheet(item: $selectedWindow) { window in
+            WindowDetailSheet(capture: window)
+        }
+    }
+
+    private func captureWindows() {
+        isCapturing = true
+        captureError = nil
+        Task {
+            do {
+                try await bridgeManager.refreshWindowCapturesWithError()
+            } catch {
+                captureError = error.localizedDescription
+            }
+            isCapturing = false
         }
     }
 }

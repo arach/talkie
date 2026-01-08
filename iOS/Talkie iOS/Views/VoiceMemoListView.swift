@@ -446,30 +446,24 @@ struct VoiceMemoListView: View {
                 .toolbarBackground(Color.surfacePrimary, for: .navigationBar)
                 .toolbar {
                     ToolbarItem(placement: .principal) {
-                        TalkieNavigationHeader(
-                            subtitle: "Memos",
-                            showConnectionIndicator: true,
-                            isConnected: bridgeManager.status == .connected
+                        TalkieNavigationHeader(subtitle: "Memos")
+                    }
+                    #if DEBUG
+                    ToolbarItem(placement: .topBarTrailing) {
+                        DebugToolbarButton(
+                            content: { ListViewDebugContent() },
+                            debugInfo: {
+                                [
+                                    "View": "MemoList",
+                                    "Memos": "\(allVoiceMemos.count)",
+                                    "Displayed": "\(voiceMemos.count)",
+                                    "Search": searchText.isEmpty ? "Off" : "On"
+                                ]
+                            }
                         )
                     }
+                    #endif
                 }
-
-                // Debug toolbar overlay (DEBUG builds only)
-                #if DEBUG
-                DebugToolbarOverlay(
-                    content: {
-                        ListViewDebugContent()
-                    },
-                    debugInfo: {
-                        [
-                            "View": "Memos",
-                            "Total": "\(allVoiceMemos.count)",
-                            "Displayed": "\(voiceMemos.count)",
-                            "Searching": isSearching ? "Yes" : "No"
-                        ]
-                    }
-                )
-                #endif
             }
             .sheet(isPresented: $showingSettings) {
                 SettingsView()

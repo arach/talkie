@@ -560,11 +560,36 @@ private struct PairedDevicesSection: View {
 
 // MARK: - Bridge Logs Section
 
+/// Parsed log entry with optional JSON detail
+private struct BridgeLogEntry: Identifiable {
+    let id = UUID()
+    let timestamp: String
+    let level: String
+    let message: String
+    let jsonDetail: String?  // Extracted JSON if present
+
+    var levelColor: Color {
+        switch level {
+        case "ERROR": return .red
+        case "WARN": return .orange
+        case "DEBUG": return .purple
+        case "REQ": return .blue
+        default: return .green
+        }
+    }
+}
+
 private struct BridgeLogsSection: View {
-    @State private var logContent: String = ""
+    @State private var logEntries: [BridgeLogEntry] = []
     @State private var isAutoRefresh = true
-    private let logFile = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Library/Application Support/Talkie/Bridge/bridge.log")
+    @State private var showDevLogs = false  // Toggle between main and dev logs
+    @State private var commandKeyHeld = false  // Expand all when Command held
+    @State private var expandedEntries: Set<UUID> = []
+
+    private let mainLogFile = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Application Support/Talkie/Bridge/labs.log")
+    private let devLogFile = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Application Support/Talkie/Bridge/labs.dev.log")
     private let timer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -579,6 +604,15 @@ private struct BridgeLogsSection: View {
 
                 Spacer()
 
+                // Dev logs toggle (shows API responses)
+                Toggle(isOn: $showDevLogs) {
+                    Text("API")
+                        .font(.system(size: 9, weight: .medium))
+                }
+                .toggleStyle(.button)
+                .controlSize(.mini)
+                .help("Show API response logs (DEBUG level)")
+
                 Toggle("Auto", isOn: $isAutoRefresh)
                     .toggleStyle(.switch)
                     .controlSize(.mini)
@@ -592,20 +626,48 @@ private struct BridgeLogsSection: View {
                 .foregroundColor(Theme.current.foregroundSecondary)
             }
 
+            // Hint about Command key
+            if !logEntries.isEmpty && logEntries.contains(where: { $0.jsonDetail != nil }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "command")
+                        .font(.system(size: 8))
+                    Text("Hold ⌘ to expand all JSON")
+                        .font(.system(size: 9))
+                }
+                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.7))
+            }
+
             ScrollViewReader { proxy in
                 ScrollView {
-                    Text(logContent.isEmpty ? "No logs yet..." : logContent)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(logContent.isEmpty ? Theme.current.foregroundSecondary : Theme.current.foreground)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
+                    if logEntries.isEmpty {
+                        Text("No logs yet...")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(Theme.current.foregroundSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        LazyVStack(alignment: .leading, spacing: 2) {
+                            ForEach(logEntries) { entry in
+                                BridgeLogEntryRow(
+                                    entry: entry,
+                                    isExpanded: commandKeyHeld || expandedEntries.contains(entry.id),
+                                    onToggle: {
+                                        if expandedEntries.contains(entry.id) {
+                                            expandedEntries.remove(entry.id)
+                                        } else {
+                                            expandedEntries.insert(entry.id)
+                                        }
+                                    }
+                                )
+                            }
+                        }
                         .id("logBottom")
+                    }
                 }
-                .frame(height: 150)
+                .frame(height: 180)
                 .padding(8)
                 .background(Color.black.opacity(0.8))
                 .cornerRadius(6)
-                .onChange(of: logContent) { _, _ in
+                .onChange(of: logEntries.count) { _, _ in
                     withAnimation {
                         proxy.scrollTo("logBottom", anchor: .bottom)
                     }
@@ -613,6 +675,13 @@ private struct BridgeLogsSection: View {
             }
         }
         .onAppear {
+            loadLogs()
+            setupCommandKeyMonitor()
+        }
+        .onDisappear {
+            removeCommandKeyMonitor()
+        }
+        .onChange(of: showDevLogs) { _, _ in
             loadLogs()
         }
         .onReceive(timer) { _ in
@@ -622,16 +691,155 @@ private struct BridgeLogsSection: View {
         }
     }
 
+    // MARK: - Command Key Monitoring
+
+    @State private var eventMonitor: Any?
+
+    private func setupCommandKeyMonitor() {
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+            commandKeyHeld = event.modifierFlags.contains(.command)
+            return event
+        }
+    }
+
+    private func removeCommandKeyMonitor() {
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+            eventMonitor = nil
+        }
+    }
+
+    // MARK: - Log Parsing
+
     private func loadLogs() {
+        let logFile = showDevLogs ? devLogFile : mainLogFile
         do {
             let content = try String(contentsOf: logFile, encoding: .utf8)
-            // Get last 50 lines
-            let lines = content.components(separatedBy: "\n")
-            let lastLines = lines.suffix(50)
-            logContent = lastLines.joined(separator: "\n")
+            let lines = content.components(separatedBy: "\n").suffix(100)
+            logEntries = lines.compactMap { parseLine($0) }
         } catch {
-            logContent = "Could not read log file: \(error.localizedDescription)"
+            logEntries = []
         }
+    }
+
+    private func parseLine(_ line: String) -> BridgeLogEntry? {
+        guard !line.isEmpty else { return nil }
+
+        // Format: [ISO_TIMESTAMP] [LEVEL] message
+        // e.g., [2024-01-08T10:30:00.000Z] [INFO] Labs sessions: 5
+        let pattern = #"\[([^\]]+)\] \[([^\]]+)\] (.+)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) else {
+            // Fallback for malformed lines
+            return BridgeLogEntry(timestamp: "", level: "INFO", message: line, jsonDetail: nil)
+        }
+
+        let timestamp = String(line[Range(match.range(at: 1), in: line)!])
+        let level = String(line[Range(match.range(at: 2), in: line)!])
+        let message = String(line[Range(match.range(at: 3), in: line)!])
+
+        // Extract JSON from API response logs
+        // Format: [API Response] /path → {...}
+        var jsonDetail: String? = nil
+        if message.contains("[API Response]"), let arrowIndex = message.range(of: "→") {
+            let jsonPart = String(message[arrowIndex.upperBound...]).trimmingCharacters(in: .whitespaces)
+            if let data = jsonPart.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data),
+               let prettyData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
+               let prettyString = String(data: prettyData, encoding: .utf8) {
+                jsonDetail = prettyString
+            } else {
+                jsonDetail = jsonPart  // Show raw if can't prettify
+            }
+        }
+
+        // Format timestamp for display (just time, not full ISO)
+        let displayTime = formatTime(timestamp)
+
+        return BridgeLogEntry(timestamp: displayTime, level: level, message: message, jsonDetail: jsonDetail)
+    }
+
+    private func formatTime(_ iso: String) -> String {
+        // Extract just HH:MM:SS from ISO timestamp
+        if let tIndex = iso.firstIndex(of: "T"),
+           let dotIndex = iso.firstIndex(of: ".") {
+            return String(iso[iso.index(after: tIndex)..<dotIndex])
+        }
+        return iso
+    }
+}
+
+// MARK: - Log Entry Row
+
+private struct BridgeLogEntryRow: View {
+    let entry: BridgeLogEntry
+    let isExpanded: Bool
+    let onToggle: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
+                // Expand button if has JSON
+                if entry.jsonDetail != nil {
+                    Button(action: onToggle) {
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(.white.opacity(0.5))
+                            .frame(width: 10)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Spacer().frame(width: 10)
+                }
+
+                // Timestamp
+                Text(entry.timestamp)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.4))
+
+                // Level badge
+                Text(entry.level)
+                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                    .foregroundColor(entry.levelColor)
+                    .padding(.horizontal, 3)
+                    .background(entry.levelColor.opacity(0.2))
+                    .cornerRadius(2)
+
+                // Message (truncated if has detail)
+                Text(truncatedMessage)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.9))
+                    .lineLimit(1)
+
+                Spacer()
+            }
+
+            // Expanded JSON detail
+            if isExpanded, let json = entry.jsonDetail {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    Text(json)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.green.opacity(0.9))
+                        .textSelection(.enabled)
+                }
+                .frame(maxHeight: 150)
+                .padding(6)
+                .background(Color.black.opacity(0.5))
+                .cornerRadius(4)
+                .padding(.leading, 14)
+            }
+        }
+        .padding(.vertical, 1)
+    }
+
+    private var truncatedMessage: String {
+        if entry.jsonDetail != nil {
+            // For API responses, just show the path
+            if let arrowIndex = entry.message.range(of: "→") {
+                return String(entry.message[..<arrowIndex.lowerBound]).trimmingCharacters(in: .whitespaces)
+            }
+        }
+        return entry.message
     }
 }
 

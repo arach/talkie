@@ -16,14 +16,17 @@ struct LogEntry: Identifiable {
     let level: LogLevel
     let category: String
     let message: String
+    let detail: String?  // Optional expandable detail (e.g., full JSON response)
 
     enum LogLevel: String {
+        case debug = "DEBUG"
         case info = "INFO"
         case warning = "WARN"
         case error = "ERROR"
 
         var color: Color {
             switch self {
+            case .debug: return .textTertiary
             case .info: return .secondary
             case .warning: return .orange
             case .error: return .red
@@ -47,9 +50,9 @@ class LogStore: ObservableObject {
 
     private init() {}
 
-    func add(level: LogEntry.LogLevel, category: String, message: String) {
+    func add(level: LogEntry.LogLevel, category: String, message: String, detail: String? = nil) {
         DispatchQueue.main.async {
-            let entry = LogEntry(timestamp: Date(), level: level, category: category, message: message)
+            let entry = LogEntry(timestamp: Date(), level: level, category: category, message: message, detail: detail)
             self.entries.insert(entry, at: 0)
             if self.entries.count > self.maxEntries {
                 self.entries = Array(self.entries.prefix(self.maxEntries))
@@ -67,6 +70,11 @@ class LogStore: ObservableObject {
     var importantEntries: [LogEntry] {
         entries.filter { $0.level == .error || $0.level == .warning }
     }
+
+    /// Filter to show debug entries (useful for API inspection)
+    var debugEntries: [LogEntry] {
+        entries.filter { $0.level == .debug }
+    }
 }
 
 /// Wrapper around os.Logger that also captures to LogStore
@@ -79,24 +87,25 @@ struct CapturedLogger {
         self.category = category
     }
 
-    func debug(_ message: String) {
+    func debug(_ message: String, detail: String? = nil) {
         osLogger.debug("\(message)")
-        // Don't capture debug to LogStore - too verbose
+        // Capture debug with detail to LogStore for API responses
+        LogStore.shared.add(level: .debug, category: category, message: message, detail: detail)
     }
 
-    func info(_ message: String) {
+    func info(_ message: String, detail: String? = nil) {
         osLogger.info("\(message)")
-        LogStore.shared.add(level: .info, category: category, message: message)
+        LogStore.shared.add(level: .info, category: category, message: message, detail: detail)
     }
 
-    func warning(_ message: String) {
+    func warning(_ message: String, detail: String? = nil) {
         osLogger.warning("\(message)")
-        LogStore.shared.add(level: .warning, category: category, message: message)
+        LogStore.shared.add(level: .warning, category: category, message: message, detail: detail)
     }
 
-    func error(_ message: String) {
+    func error(_ message: String, detail: String? = nil) {
         osLogger.error("\(message)")
-        LogStore.shared.add(level: .error, category: category, message: message)
+        LogStore.shared.add(level: .error, category: category, message: message, detail: detail)
     }
 }
 
