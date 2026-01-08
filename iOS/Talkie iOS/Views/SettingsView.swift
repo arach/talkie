@@ -113,39 +113,41 @@ struct SettingsView: View {
                                 .padding(.horizontal, Spacing.md)
                         }
 
-                        // Connections
-                        ConnectionsSection()
+                        // Sync
+                        SyncSection()
 
-                        // Mac Availability
-                        VStack(alignment: .leading, spacing: Spacing.sm) {
-                            Text("MAC AVAILABILITY")
-                                .font(.techLabel)
-                                .tracking(2)
-                                .foregroundColor(.textTertiary)
-                                .padding(.horizontal, Spacing.md)
+                        // Mac Bridge - only show if paired
+                        if BridgeManager.shared.isPaired {
+                            VStack(alignment: .leading, spacing: Spacing.sm) {
+                                Text("MAC BRIDGE")
+                                    .font(.techLabel)
+                                    .tracking(2)
+                                    .foregroundColor(.textTertiary)
+                                    .padding(.horizontal, Spacing.md)
 
-                            NavigationLink(destination: MacAvailabilityCoachView()) {
-                                HStack {
-                                    Image(systemName: "bolt.fill")
-                                        .foregroundColor(.active)
-                                    Text("Power & Availability")
-                                    Spacer()
-                                    MacAvailabilityBadge()
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(.textTertiary)
+                                NavigationLink(destination: BridgeSettingsView()) {
+                                    HStack {
+                                        Image(systemName: "desktopcomputer")
+                                            .foregroundColor(.active)
+                                        Text("Connection Settings")
+                                        Spacer()
+                                        BridgeStatusBadge()
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.textTertiary)
+                                    }
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(.textPrimary)
+                                    .padding(Spacing.sm)
+                                    .background(Color.surfaceSecondary)
+                                    .cornerRadius(CornerRadius.sm)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                                            .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
+                                    )
                                 }
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.textPrimary)
-                                .padding(Spacing.sm)
-                                .background(Color.surfaceSecondary)
-                                .cornerRadius(CornerRadius.sm)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: CornerRadius.sm)
-                                        .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
-                                )
+                                .padding(.horizontal, Spacing.md)
                             }
-                            .padding(.horizontal, Spacing.md)
                         }
 
                         // Debug Info
@@ -627,7 +629,7 @@ struct ThemePreview: View {
 // MARK: - Sync Section
 
 struct SyncSection: View {
-    @AppStorage(SyncSettingsKey.iCloudEnabled) private var iCloudEnabled = true
+    @AppStorage("sync_icloud_enabled") private var iCloudEnabled = true
     @ObservedObject var cloudStatusManager = iCloudStatusManager.shared
     @State private var showingEnableConfirmation = false
     @State private var localMemoCount: Int = 0
@@ -789,77 +791,6 @@ struct SyncSection: View {
     }
 }
 
-// MARK: - Connections Section
-
-struct ConnectionsSection: View {
-    @ObservedObject var cloudStatusManager = iCloudStatusManager.shared
-    @State private var bridgeManager = BridgeManager.shared
-
-    private var connectionSummary: String {
-        var connected: [String] = ["Local"]
-
-        // Check iCloud
-        if cloudStatusManager.status.isAvailable {
-            let enabled = UserDefaults.standard.bool(forKey: SyncSettingsKey.iCloudEnabled)
-            if enabled {
-                connected.append("iCloud")
-            }
-        }
-
-        // Check Bridge
-        if bridgeManager.isPaired && bridgeManager.status == .connected {
-            connected.append("Bridge")
-        }
-
-        if connected.count == 1 {
-            return "Local only"
-        } else {
-            return connected.joined(separator: " + ")
-        }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("CONNECTIONS")
-                .font(.techLabel)
-                .tracking(2)
-                .foregroundColor(.textTertiary)
-                .padding(.horizontal, Spacing.md)
-
-            NavigationLink(destination: ConnectionCenterView()) {
-                HStack {
-                    Image(systemName: "point.3.connected.trianglepath.dotted")
-                        .foregroundColor(.active)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Connection Center")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.textPrimary)
-
-                        Text(connectionSummary)
-                            .font(.system(size: 12))
-                            .foregroundColor(.textSecondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12))
-                        .foregroundColor(.textTertiary)
-                }
-                .padding(Spacing.sm)
-                .background(Color.surfaceSecondary)
-                .cornerRadius(CornerRadius.sm)
-                .overlay(
-                    RoundedRectangle(cornerRadius: CornerRadius.sm)
-                        .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
-                )
-            }
-            .padding(.horizontal, Spacing.md)
-        }
-    }
-}
-
 // MARK: - Bridge Status Badge
 
 struct BridgeStatusBadge: View {
@@ -873,53 +804,6 @@ struct BridgeStatusBadge: View {
             Text(bridgeManager.status.rawValue)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(.textSecondary)
-        }
-    }
-}
-
-// MARK: - Mac Availability Badge
-
-struct MacAvailabilityBadge: View {
-    @State private var observer = MacStatusObserver.shared
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(statusColor)
-                .frame(width: 6, height: 6)
-            Text(statusText)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.textSecondary)
-        }
-        .task {
-            await observer.refresh()
-        }
-    }
-
-    private var statusColor: Color {
-        guard let status = observer.macStatus else {
-            return .textTertiary
-        }
-        switch status.powerState {
-        case "active", "idle":
-            return .success
-        case "screenOff":
-            return status.canProcessMemos ? .success : .warning
-        case "powerNap":
-            return .warning
-        default:
-            return .textTertiary
-        }
-    }
-
-    private var statusText: String {
-        guard let status = observer.macStatus else {
-            return "No Mac"
-        }
-        if status.canProcessMemos {
-            return "Available"
-        } else {
-            return "Unavailable"
         }
     }
 }
