@@ -311,13 +311,9 @@ struct ConnectionRowView: View {
 
             Spacer()
 
-            // Action indicator
-            if type != .local {
-                if status.isConnected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundColor(.green)
-                } else if type == .macBridge || canSetUp(type) {
+            // Action indicator (only show when there's an action to take)
+            if type != .local && !status.isConnected {
+                if type == .macBridge || canSetUp(type) {
                     HStack(spacing: 4) {
                         Text(actionText(for: type))
                             .font(.system(size: 12, weight: .medium))

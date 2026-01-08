@@ -257,21 +257,15 @@ struct ConnectionRowView: View {
 
                 Spacer()
 
-                // Action indicator
-                if type != .local {
-                    if status.isConnected {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(.green)
-                    } else if type.settingsSection != nil {
-                        HStack(spacing: 4) {
-                            Text(actionText(for: type))
-                                .font(Theme.current.fontXSMedium)
-                                .foregroundColor(Theme.current.accent)
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundColor(Theme.current.accent)
-                        }
+                // Action indicator (only show when there's an action to take)
+                if type != .local && !status.isConnected && type.settingsSection != nil {
+                    HStack(spacing: 4) {
+                        Text(actionText(for: type))
+                            .font(Theme.current.fontXSMedium)
+                            .foregroundColor(Theme.current.accent)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(Theme.current.accent)
                     }
                 }
             }
