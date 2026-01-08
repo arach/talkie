@@ -67,6 +67,7 @@ enum ConnectionType: String, CaseIterable, Identifiable {
 }
 
 // MARK: - Connection Row Status
+// Note: Similar enum exists in iOS/Talkie iOS/Views/ConnectionCenterView.swift
 
 enum ConnectionRowStatus: Equatable {
     case active
@@ -111,7 +112,7 @@ enum ConnectionRowStatus: Equatable {
 // MARK: - Connection Center View
 
 struct ConnectionCenterView: View {
-    @AppStorage("sync_icloud_enabled") private var iCloudEnabled = true
+    @AppStorage(SyncSettingsKey.iCloudEnabled) private var iCloudEnabled = true
     @State private var bridgeManager = BridgeManager.shared
     @Binding var selectedSection: SettingsSection
 

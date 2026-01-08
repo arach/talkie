@@ -595,7 +595,7 @@ struct ThemePreview: View {
 // MARK: - Sync Section
 
 struct SyncSection: View {
-    @AppStorage("sync_icloud_enabled") private var iCloudEnabled = true
+    @AppStorage(SyncSettingsKey.iCloudEnabled) private var iCloudEnabled = true
     @ObservedObject var cloudStatusManager = iCloudStatusManager.shared
     @State private var showingEnableConfirmation = false
     @State private var localMemoCount: Int = 0
@@ -768,7 +768,7 @@ struct ConnectionsSection: View {
 
         // Check iCloud
         if cloudStatusManager.status.isAvailable {
-            let enabled = UserDefaults.standard.bool(forKey: "sync_icloud_enabled")
+            let enabled = UserDefaults.standard.bool(forKey: SyncSettingsKey.iCloudEnabled)
             if enabled {
                 connected.append("iCloud")
             }
