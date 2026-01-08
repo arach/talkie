@@ -113,42 +113,8 @@ struct SettingsView: View {
                                 .padding(.horizontal, Spacing.md)
                         }
 
-                        // Sync
-                        SyncSection()
-
-                        // Mac Bridge - only show if paired
-                        if BridgeManager.shared.isPaired {
-                            VStack(alignment: .leading, spacing: Spacing.sm) {
-                                Text("MAC BRIDGE")
-                                    .font(.techLabel)
-                                    .tracking(2)
-                                    .foregroundColor(.textTertiary)
-                                    .padding(.horizontal, Spacing.md)
-
-                                NavigationLink(destination: BridgeSettingsView()) {
-                                    HStack {
-                                        Image(systemName: "desktopcomputer")
-                                            .foregroundColor(.active)
-                                        Text("Connection Settings")
-                                        Spacer()
-                                        BridgeStatusBadge()
-                                        Image(systemName: "chevron.right")
-                                            .font(.system(size: 12))
-                                            .foregroundColor(.textTertiary)
-                                    }
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.textPrimary)
-                                    .padding(Spacing.sm)
-                                    .background(Color.surfaceSecondary)
-                                    .cornerRadius(CornerRadius.sm)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: CornerRadius.sm)
-                                            .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
-                                    )
-                                }
-                                .padding(.horizontal, Spacing.md)
-                            }
-                        }
+                        // Connections
+                        ConnectionsSection()
 
                         // Debug Info
                         VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -787,6 +753,101 @@ struct SyncSection: View {
 
         Task {
             await ConnectionManager.shared.checkAllConnections()
+        }
+    }
+}
+
+// MARK: - Connections Section
+
+struct ConnectionsSection: View {
+    @ObservedObject var cloudStatusManager = iCloudStatusManager.shared
+    @State private var bridgeManager = BridgeManager.shared
+
+    private var connectionSummary: String {
+        var connected: [String] = ["Local"]
+
+        // Check iCloud
+        if cloudStatusManager.status.isAvailable {
+            let enabled = UserDefaults.standard.bool(forKey: "sync_icloud_enabled")
+            if enabled {
+                connected.append("iCloud")
+            }
+        }
+
+        // Check Bridge
+        if bridgeManager.isPaired && bridgeManager.status == .connected {
+            connected.append("Bridge")
+        }
+
+        if connected.count == 1 {
+            return "Local only"
+        } else {
+            return connected.joined(separator: " + ")
+        }
+    }
+
+    private var activeConnectionCount: Int {
+        var count = 1 // Local is always active
+
+        if cloudStatusManager.status.isAvailable {
+            let enabled = UserDefaults.standard.bool(forKey: "sync_icloud_enabled")
+            if enabled { count += 1 }
+        }
+
+        if bridgeManager.isPaired && bridgeManager.status == .connected {
+            count += 1
+        }
+
+        return count
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text("CONNECTIONS")
+                .font(.techLabel)
+                .tracking(2)
+                .foregroundColor(.textTertiary)
+                .padding(.horizontal, Spacing.md)
+
+            NavigationLink(destination: ConnectionCenterView()) {
+                HStack {
+                    Image(systemName: "point.3.connected.trianglepath.dotted")
+                        .foregroundColor(.active)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Connection Center")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.textPrimary)
+
+                        Text(connectionSummary)
+                            .font(.system(size: 12))
+                            .foregroundColor(.textSecondary)
+                    }
+
+                    Spacer()
+
+                    // Connection count badge
+                    Text("\(activeConnectionCount)")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(activeConnectionCount > 1 ? Color.green : Color.gray)
+                        .cornerRadius(10)
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12))
+                        .foregroundColor(.textTertiary)
+                }
+                .padding(Spacing.sm)
+                .background(Color.surfaceSecondary)
+                .cornerRadius(CornerRadius.sm)
+                .overlay(
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
+                )
+            }
+            .padding(.horizontal, Spacing.md)
         }
     }
 }
