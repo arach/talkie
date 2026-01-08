@@ -98,7 +98,7 @@ extension AppTheme {
         switch self {
         case .midnight:
             return ThemeColors(
-                tableHeaderBackground: Color(hex: "1A1A1A", darkHex: "1A1A1A"),
+                tableHeaderBackground: Color(hex: "F0F0F0", darkHex: "1A1A1A"),
                 tableCellBackground: Color(hex: "F5F5F5", darkHex: "000000"),
                 tableDivider: Color(hex: "E0E0E0", darkHex: "FFFFFF").opacity(0.08),
                 tableBorder: Color(hex: "D0D0D0", darkHex: "333333"),

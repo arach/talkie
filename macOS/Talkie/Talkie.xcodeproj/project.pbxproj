@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		6B3E1D1599CF4ADF81BA3D45 /* ConnectionCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5580C2371E40DCBA0209E0 /* ConnectionCenterView.swift */; };
 		23891C7996804BC8BE79CD47 /* TalkieViewHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11A25B13F98747759B730C13 /* TalkieViewHeader.swift */; };
 		ED5C9D66ABD648B4A9225302 /* iCloudSyncProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CDE3623769D498DB219A660 /* iCloudSyncProvider.swift */; };
 		E3CCBC9B5FBA4845B9FCA405 /* SyncProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BF3B038A8142B480F07308 /* SyncProvider.swift */; };
@@ -280,6 +281,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		FB5580C2371E40DCBA0209E0 /* ConnectionCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionCenterView.swift; sourceTree = "<group>"; };
 		11A25B13F98747759B730C13 /* TalkieViewHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieViewHeader.swift; sourceTree = "<group>"; };
 		9CDE3623769D498DB219A660 /* iCloudSyncProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iCloudSyncProvider.swift; sourceTree = "<group>"; };
 		E5BF3B038A8142B480F07308 /* SyncProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncProvider.swift; sourceTree = "<group>"; };
@@ -881,6 +883,7 @@
 		9A4651765758DD61801D03CA /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				FB5580C2371E40DCBA0209E0 /* ConnectionCenterView.swift */,
 				C17881FF95CCD644641D298E /* APISettings.swift */,
 				CB9A7709DDDFE4A1859B1326 /* AppearanceSettings.swift */,
 				90C22080263D752683F84C1A /* AuditResultsView.swift */,
@@ -1309,6 +1312,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6B3E1D1599CF4ADF81BA3D45 /* ConnectionCenterView.swift in Sources */,
 				23891C7996804BC8BE79CD47 /* TalkieViewHeader.swift in Sources */,
 				ED5C9D66ABD648B4A9225302 /* iCloudSyncProvider.swift in Sources */,
 				E3CCBC9B5FBA4845B9FCA405 /* SyncProvider.swift in Sources */,

@@ -23,6 +23,11 @@ public var TalkieSharedSettings: UserDefaults {
 
 // MARK: - Settings Keys
 
+/// Sync-related settings keys
+public enum SyncSettingsKey {
+    public static let iCloudEnabled = "sync_icloud_enabled"
+}
+
 /// All settings keys used by LiveSettings
 /// Centralized here to ensure consistency between Talkie and TalkieLive
 public enum LiveSettingsKey {
