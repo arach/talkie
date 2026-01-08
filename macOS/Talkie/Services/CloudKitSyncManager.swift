@@ -291,7 +291,7 @@ class CloudKitSyncManager {
     /// Trigger a sync immediately
     func syncNow() {
         // Check if iCloud sync is enabled by user
-        guard UserDefaults.standard.object(forKey: "sync_icloud_enabled") as? Bool ?? true else {
+        guard UserDefaults.standard.object(forKey: SyncSettingsKey.iCloudEnabled) as? Bool ?? true else {
             log.info("iCloud sync is disabled by user, skipping")
             return
         }
