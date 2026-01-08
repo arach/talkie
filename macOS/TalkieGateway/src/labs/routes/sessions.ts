@@ -36,5 +36,8 @@ export async function listSessionsRoute(req: Request): Promise<Response> {
     `Labs sessions: ${sessions.length} (cache: ${status.state}, age: ${status.cacheAgeMs}ms)`
   );
 
+  // Log full response for debugging (shown in macOS Bridge settings)
+  labsLog.debug(`[API Response] /sessions → ${JSON.stringify(response)}`);
+
   return Response.json(response);
 }

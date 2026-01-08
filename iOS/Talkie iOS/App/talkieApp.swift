@@ -82,19 +82,6 @@ struct talkieApp: App {
                             )
                         }
                         .transition(.opacity)
-
-                    #if DEBUG
-                    DebugToolbarOverlay(
-                        content: {
-                            ListViewDebugContent()
-                        },
-                        debugInfo: {
-                            [
-                                "View": "MemoList"
-                            ]
-                        }
-                    )
-                    #endif
                 }
             }
             .animation(.easeInOut(duration: 0.3), value: isLoading)

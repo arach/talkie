@@ -94,14 +94,30 @@ actor BridgeClient {
 
     func sessions(deepSync: Bool = false) async throws -> SessionsResponse {
         let path = deepSync ? "/sessions?refresh=deep" : "/sessions"
-        let data = try await get(path)
-        return try JSONDecoder().decode(SessionsResponse.self, from: data)
+        // Use longer timeout for deep sync (scans all sessions)
+        let data = try await get(path, timeout: deepSync ? 30 : 10)
+        let response = try JSONDecoder().decode(SessionsResponse.self, from: data)
+
+        // Log the full response for debugging
+        if let jsonString = String(data: data, encoding: .utf8) {
+            AppLogger.app.info("[Bridge] sessions() returned \(response.sessions.count) sessions - deepSync: \(deepSync)", detail: jsonString)
+        }
+
+        return response
     }
 
     func paths(deepSync: Bool = false) async throws -> PathsResponse {
         let path = deepSync ? "/paths?refresh=deep" : "/paths"
-        let data = try await get(path)
-        return try JSONDecoder().decode(PathsResponse.self, from: data)
+        // Use longer timeout for deep sync (scans all sessions)
+        let data = try await get(path, timeout: deepSync ? 30 : 10)
+        let response = try JSONDecoder().decode(PathsResponse.self, from: data)
+
+        // Log the full response for debugging
+        if let jsonString = String(data: data, encoding: .utf8) {
+            AppLogger.app.info("[Bridge] paths() returned \(response.paths.count) paths - deepSync: \(deepSync)", detail: jsonString)
+        }
+
+        return response
     }
 
     func sessionMessages(id: String, limit: Int = 50) async throws -> SessionMessagesResponse {
@@ -193,7 +209,7 @@ actor BridgeClient {
     }
 
     /// Authenticated GET with HMAC signing
-    private func get(_ path: String, allowRetry: Bool = true) async throws -> Data {
+    private func get(_ path: String, allowRetry: Bool = true, timeout: TimeInterval = 10) async throws -> Data {
         guard let baseURL = baseURL else {
             throw BridgeError.notConfigured
         }
@@ -203,7 +219,7 @@ actor BridgeClient {
         }
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 10
+        request.timeoutInterval = timeout
 
         // Sign request if authenticated
         signRequest(&request)
@@ -218,7 +234,7 @@ actor BridgeClient {
         if httpResponse.statusCode == 401 && allowRetry {
             if let serverTime = try? extractServerTime(from: data) {
                 recalibrateClockFrom(serverTime: serverTime)
-                return try await get(path, allowRetry: false)  // Retry once
+                return try await get(path, allowRetry: false, timeout: timeout)  // Retry once
             }
         }
 

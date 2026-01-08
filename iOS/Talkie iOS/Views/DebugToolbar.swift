@@ -10,6 +10,108 @@ import SwiftUI
 import CoreData
 
 #if DEBUG
+
+/// Debug button for use in navigation toolbar - shows sheet with debug panel
+/// Usage: ToolbarItem(placement: .topBarTrailing) { DebugToolbarButton { YourContent() } }
+struct DebugToolbarButton<Content: View>: View {
+    @State private var showSheet = false
+    @State private var showingLogs = false
+    @State private var showCopiedFeedback = false
+    let contextContent: () -> Content
+    let debugInfo: () -> [String: String]
+
+    init(
+        @ViewBuilder content: @escaping () -> Content,
+        debugInfo: @escaping () -> [String: String] = { [:] }
+    ) {
+        self.contextContent = content
+        self.debugInfo = debugInfo
+    }
+
+    var body: some View {
+        Button(action: { showSheet = true }) {
+            Image(systemName: "ant.fill")
+                .font(.system(size: 14))
+                .foregroundColor(.textTertiary)
+        }
+        .sheet(isPresented: $showSheet) {
+            NavigationView {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        contextContent()
+
+                        let info = debugInfo()
+                        if !info.isEmpty {
+                            DebugSection(title: "STATE") {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    ForEach(Array(info.keys.sorted()), id: \.self) { key in
+                                        DebugInfoRow(label: key, value: info[key] ?? "-")
+                                    }
+                                }
+                            }
+                        }
+
+                        DebugSection(title: "SYSTEM") {
+                            VStack(spacing: 4) {
+                                DebugActionButton(icon: "doc.text.magnifyingglass", label: "View Logs") {
+                                    showingLogs = true
+                                }
+                                DebugActionButton(
+                                    icon: showCopiedFeedback ? "checkmark" : "doc.on.clipboard",
+                                    label: showCopiedFeedback ? "Copied!" : "Copy Debug Info"
+                                ) {
+                                    copyDebugInfo()
+                                }
+                            }
+                        }
+                    }
+                    .padding()
+                }
+                .background(Color.surfacePrimary)
+                .navigationTitle("Debug")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("Done") { showSheet = false }
+                    }
+                }
+            }
+            .sheet(isPresented: $showingLogs) {
+                DebugLogsView()
+            }
+        }
+    }
+
+    private func copyDebugInfo() {
+        let info = debugInfo()
+        var lines: [String] = []
+
+        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+        lines.append("Talkie iOS \(appVersion) (\(buildNumber))")
+        lines.append("iOS \(UIDevice.current.systemVersion)")
+        lines.append("")
+
+        if !info.isEmpty {
+            lines.append("State:")
+            for key in info.keys.sorted() {
+                lines.append("  \(key): \(info[key] ?? "-")")
+            }
+        }
+
+        UIPasteboard.general.string = lines.joined(separator: "\n")
+
+        withAnimation {
+            showCopiedFeedback = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation {
+                showCopiedFeedback = false
+            }
+        }
+    }
+}
+
 /// Reusable debug toolbar with shared chrome and context-specific content
 /// Usage: DebugToolbarOverlay { YourContextActions() }
 struct DebugToolbarOverlay<Content: View>: View {
@@ -206,20 +308,24 @@ struct DebugLogsView: View {
         NavigationView {
             VStack(spacing: 0) {
                 // Filter bar
-                HStack(spacing: 8) {
-                    FilterChip(label: "ALL", isSelected: filterLevel == nil) {
-                        filterLevel = nil
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        FilterChip(label: "ALL", isSelected: filterLevel == nil) {
+                            filterLevel = nil
+                        }
+                        FilterChip(label: "DEBUG", isSelected: filterLevel == .debug) {
+                            filterLevel = .debug
+                        }
+                        FilterChip(label: "INFO", isSelected: filterLevel == .info) {
+                            filterLevel = .info
+                        }
+                        FilterChip(label: "WARN", isSelected: filterLevel == .warning) {
+                            filterLevel = .warning
+                        }
+                        FilterChip(label: "ERROR", isSelected: filterLevel == .error) {
+                            filterLevel = .error
+                        }
                     }
-                    FilterChip(label: "INFO", isSelected: filterLevel == .info) {
-                        filterLevel = .info
-                    }
-                    FilterChip(label: "WARN", isSelected: filterLevel == .warning) {
-                        filterLevel = .warning
-                    }
-                    FilterChip(label: "ERROR", isSelected: filterLevel == .error) {
-                        filterLevel = .error
-                    }
-                    Spacer()
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -289,9 +395,11 @@ struct FilterChip: View {
 
 struct LogEntryRow: View {
     let entry: LogEntry
+    @State private var isExpanded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 4) {
+            // Header with metadata
             HStack(spacing: 6) {
                 Text(entry.formattedTime)
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
@@ -304,12 +412,40 @@ struct LogEntryRow: View {
                 Text(entry.category)
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundColor(.textSecondary)
+
+                Spacer()
+
+                // Expand button if detail exists
+                if entry.detail != nil {
+                    Button(action: { isExpanded.toggle() }) {
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(.textTertiary)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
 
+            // Message
             Text(entry.message)
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(.textPrimary)
-                .lineLimit(3)
+                .lineLimit(isExpanded ? nil : 3)
+
+            // Expanded detail (JSON response, etc.)
+            if isExpanded, let detail = entry.detail {
+                ScrollView {
+                    Text(detail)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.textSecondary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 200)
+                .padding(8)
+                .background(Color.black.opacity(0.2))
+                .cornerRadius(6)
+            }
         }
     }
 }
