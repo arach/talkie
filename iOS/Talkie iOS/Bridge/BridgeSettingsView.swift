@@ -277,26 +277,36 @@ struct BridgeSettingsView: View {
                 .tracking(2)
                 .foregroundColor(.textTertiary)
 
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                troubleshootingRow(icon: "checkmark.circle", text: "Tailscale running on both devices")
-                troubleshootingRow(icon: "checkmark.circle", text: "Both devices on same Tailscale network")
-                troubleshootingRow(icon: "checkmark.circle", text: "TalkieBridge running on Mac")
+            VStack(spacing: 0) {
+                TroubleshootingRow(text: "Tailscale running on both devices")
+                Divider().background(Color.borderPrimary)
+                TroubleshootingRow(text: "Both devices on same Tailscale network")
+                Divider().background(Color.borderPrimary)
+                TroubleshootingRow(text: "TalkieBridge running on Mac")
             }
-            .padding(Spacing.md)
             .background(Color.surfaceSecondary)
             .cornerRadius(CornerRadius.sm)
         }
     }
+}
 
-    private func troubleshootingRow(icon: String, text: String) -> some View {
-        HStack(spacing: Spacing.xs) {
-            Image(systemName: icon)
-                .font(.system(size: 12))
+// MARK: - Troubleshooting Row
+
+private struct TroubleshootingRow: View {
+    let text: String
+
+    var body: some View {
+        HStack {
+            Image(systemName: "circle")
+                .font(.system(size: 6))
                 .foregroundColor(.textTertiary)
             Text(text)
                 .font(.system(size: 13))
                 .foregroundColor(.textSecondary)
+            Spacer()
         }
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.sm)
     }
 }
 
