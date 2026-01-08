@@ -33,6 +33,11 @@ struct BridgeSettingsView: View {
                         connectionInfoSection
                     }
 
+                    // Troubleshooting (when disconnected or error)
+                    if bridgeManager.isPaired && (bridgeManager.status == .disconnected || bridgeManager.status == .error) {
+                        troubleshootingSection
+                    }
+
                     // Pair Button (when not paired)
                     if !bridgeManager.isPaired {
                         pairSection
@@ -213,14 +218,16 @@ struct BridgeSettingsView: View {
                 InfoRow(label: "Status", value: bridgeManager.status.rawValue)
                 Divider().background(Color.borderPrimary)
                 InfoRow(label: "Mac", value: bridgeManager.pairedMacName ?? "Unknown")
-                Divider().background(Color.borderPrimary)
-                InfoRow(label: "Device ID", value: String(bridgeManager.deviceId.prefix(8)) + "...")
                 if bridgeManager.status == .connected {
+                    Divider().background(Color.borderPrimary)
+                    InfoRow(label: "Connection", value: "via Tailscale")
                     Divider().background(Color.borderPrimary)
                     InfoRow(label: "Projects", value: "\(bridgeManager.projectPaths.count)")
                     Divider().background(Color.borderPrimary)
                     InfoRow(label: "Sessions", value: "\(totalSessionCount)")
                 }
+                Divider().background(Color.borderPrimary)
+                InfoRow(label: "Device ID", value: String(bridgeManager.deviceId.prefix(8)) + "...")
             }
             .background(Color.surfaceSecondary)
             .cornerRadius(CornerRadius.sm)
@@ -249,6 +256,46 @@ struct BridgeSettingsView: View {
                 .background(Color.brandAccent)
                 .cornerRadius(CornerRadius.sm)
             }
+
+            // Tailscale requirement hint
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 11))
+                Text("Requires Tailscale on both devices")
+                    .font(.system(size: 11))
+            }
+            .foregroundColor(.textTertiary)
+        }
+    }
+
+    // MARK: - Troubleshooting Section
+
+    private var troubleshootingSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text("TROUBLESHOOTING")
+                .font(.techLabel)
+                .tracking(2)
+                .foregroundColor(.textTertiary)
+
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                troubleshootingRow(icon: "checkmark.circle", text: "Tailscale running on both devices")
+                troubleshootingRow(icon: "checkmark.circle", text: "Both devices on same Tailscale network")
+                troubleshootingRow(icon: "checkmark.circle", text: "TalkieBridge running on Mac")
+            }
+            .padding(Spacing.md)
+            .background(Color.surfaceSecondary)
+            .cornerRadius(CornerRadius.sm)
+        }
+    }
+
+    private func troubleshootingRow(icon: String, text: String) -> some View {
+        HStack(spacing: Spacing.xs) {
+            Image(systemName: icon)
+                .font(.system(size: 12))
+                .foregroundColor(.textTertiary)
+            Text(text)
+                .font(.system(size: 13))
+                .foregroundColor(.textSecondary)
         }
     }
 }
