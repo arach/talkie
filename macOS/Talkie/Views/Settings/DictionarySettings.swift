@@ -725,6 +725,12 @@ struct InlineEntryEditor: View {
     @State private var replacement: String = ""
     @State private var matchType: DictionaryMatchType = .word
 
+    // Focus state for keyboard navigation
+    private enum Field: Hashable {
+        case trigger, replacement
+    }
+    @FocusState private var focusedField: Field?
+
     // Column widths for alignment with entry row
     private let sourceWidth: CGFloat = 120
     private let replaceWidth: CGFloat = 140
@@ -763,6 +769,8 @@ struct InlineEntryEditor: View {
                     .textFieldStyle(.roundedBorder)
                     .font(Theme.current.fontSM.monospaced())
                     .frame(width: sourceWidth)
+                    .focused($focusedField, equals: .trigger)
+                    .onSubmit { focusedField = .replacement }
                     .overlay(
                         RoundedRectangle(cornerRadius: 5)
                             .stroke(matchType == .regex && !trigger.isEmpty && !isRegexValid ? Color.red : Color.clear, lineWidth: 1)
@@ -777,6 +785,8 @@ struct InlineEntryEditor: View {
                     .textFieldStyle(.roundedBorder)
                     .font(Theme.current.fontSM.monospaced())
                     .frame(width: replaceWidth)
+                    .focused($focusedField, equals: .replacement)
+                    .onSubmit { if canSave { save() } }
 
                 // Match type picker (right side, after source → replace)
                 Picker("", selection: $matchType) {
@@ -821,6 +831,12 @@ struct InlineEntryEditor: View {
                 .font(.system(size: 10))
                 .foregroundColor(Theme.current.foregroundMuted)
                 .padding(.leading, 24) // Align with fields
+
+            // Keyboard hints
+            Text("Tab: next field  |  Return: save  |  Esc: cancel")
+                .font(.system(size: 10))
+                .foregroundColor(Theme.current.foregroundMuted.opacity(0.7))
+                .padding(.leading, 24)
         }
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.sm)
@@ -831,6 +847,14 @@ struct InlineEntryEditor: View {
                 replacement = entry.replacement
                 matchType = entry.matchType
             }
+            // Auto-focus trigger field
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                focusedField = .trigger
+            }
+        }
+        .onKeyPress(.escape) {
+            onCancel()
+            return .handled
         }
     }
 
