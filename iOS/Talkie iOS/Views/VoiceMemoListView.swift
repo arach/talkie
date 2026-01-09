@@ -287,7 +287,7 @@ struct VoiceMemoListView: View {
 
                         // Record area container - expands for push-to-talk
                         VStack(spacing: 0) {
-                            // Push-to-talk visualization when active
+                            // Push-to-talk visualization when active - no glass, sharp edges
                             if isPushToTalkActive {
                                 VStack(spacing: Spacing.xs) {
                                     // Quick memo indicator
@@ -296,7 +296,7 @@ struct VoiceMemoListView: View {
                                         .tracking(2)
                                         .foregroundColor(.textTertiary)
 
-                                    // Live waveform - particles style, compact, sharp
+                                    // Live waveform - particles style, compact
                                     LiveWaveformView(
                                         levels: pushToTalkRecorder.audioLevels,
                                         height: 48,
@@ -304,8 +304,6 @@ struct VoiceMemoListView: View {
                                         style: .particles
                                     )
                                     .padding(.horizontal, Spacing.xs)
-                                    .background(Color.surfacePrimary.opacity(0.15))
-                                    .cornerRadius(4)
                                     .padding(.horizontal, Spacing.md)
 
                                     // Duration + release label inline
@@ -325,15 +323,6 @@ struct VoiceMemoListView: View {
                                 }
                                 .padding(.top, Spacing.sm)
                                 .padding(.bottom, Spacing.xs)
-                                .padding(.horizontal, Spacing.sm)
-                                .background {
-                                    // Sharp-edged expansion area
-                                    if #available(iOS 26.0, *) {
-                                        Rectangle()
-                                            .fill(.clear)
-                                            .glassEffect(.regular)
-                                    }
-                                }
                                 .transition(.opacity.combined(with: .move(edge: .bottom)))
                             }
 
@@ -467,10 +456,9 @@ struct VoiceMemoListView: View {
                         .frame(maxWidth: .infinity)
                         .background {
                             if #available(iOS 26.0, *) {
-                                // Liquid Glass background - edge-to-edge, sharp corners
-                                Rectangle()
-                                    .fill(.clear)
-                                    .glassEffect(.regular.interactive())
+                                // Liquid Glass background - edge-to-edge, force sharp corners
+                                Color.clear
+                                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 0))
                                     .ignoresSafeArea(edges: .bottom)
                             } else {
                                 // Fallback solid background for older iOS
