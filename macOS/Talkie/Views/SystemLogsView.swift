@@ -677,30 +677,28 @@ struct SystemLogsView: View {
         .background(bgColor)
     }
 
-    /// Tab-style source selector (cleaner than colored pills)
+    /// Tab-style source selector - compact with subtle background
     private func sourceFilterChip(_ source: SystemEventSource?, label: String) -> some View {
         let isSelected = filterSource == source
 
         return Button(action: { filterSource = source }) {
-            VStack(spacing: 2) {
-                HStack(spacing: 4) {
-                    if let source = source {
-                        Image(systemName: source.icon)
-                            .font(.system(size: 9, weight: .medium))
-                    }
-                    Text(label)
-                        .font(.system(size: 10, weight: isSelected ? .bold : .medium))
+            HStack(spacing: 3) {
+                if let source = source {
+                    Image(systemName: source.icon)
+                        .font(.system(size: 8))
                 }
-                .foregroundColor(isSelected ? Theme.current.foreground : Theme.current.foregroundMuted)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-
-                // Underline indicator
-                Rectangle()
-                    .fill(isSelected ? Theme.current.foreground : Color.clear)
-                    .frame(height: 2)
-                    .cornerRadius(1)
+                Text(label)
+                    .font(.system(size: 9, weight: isSelected ? .semibold : .regular))
             }
+            .foregroundColor(isSelected ? Theme.current.foreground : Theme.current.foregroundMuted)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(isSelected ? Theme.current.surface1 : Color.clear)
+            .cornerRadius(4)
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(isSelected ? Theme.current.divider : Color.clear, lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
     }

@@ -108,6 +108,17 @@ final class BridgeManager {
     private var refreshTimer: Timer?
     private var isStartingBridge = false  // Prevents concurrent start attempts
 
+    // MARK: - DEBUG Helpers
+
+    /// Log full JSON response in DEBUG builds
+    private func logResponse(_ data: Data, endpoint: String) {
+        #if DEBUG
+        if let json = String(data: data, encoding: .utf8) {
+            log.debug("[\(endpoint)] Response: \(json)")
+        }
+        #endif
+    }
+
     // Source code location (derived from this file's compile-time path - works with git worktrees)
     private static var bridgeSourcePath: String {
         // #filePath at compile time: .../macOS/Talkie/Services/Bridge/BridgeManager.swift
@@ -593,6 +604,7 @@ final class BridgeManager {
         do {
             let url = URL(string: "http://localhost:\(port)/devices")!
             let (data, _) = try await URLSession.shared.data(from: url)
+            logResponse(data, endpoint: "/devices")
 
             struct DevicesResponse: Codable {
                 var devices: [PairedDevice]
@@ -611,6 +623,7 @@ final class BridgeManager {
         do {
             let url = URL(string: "http://localhost:\(port)/pair/pending")!
             let (data, _) = try await URLSession.shared.data(from: url)
+            logResponse(data, endpoint: "/pair/pending")
 
             struct PendingResponse: Codable {
                 var pending: [PendingPairing]
@@ -629,6 +642,7 @@ final class BridgeManager {
         do {
             let url = URL(string: "http://localhost:\(port)/pair/info")!
             let (data, _) = try await URLSession.shared.data(from: url)
+            logResponse(data, endpoint: "/pair/info")
             qrData = try JSONDecoder().decode(QRData.self, from: data)
         } catch {
             log.error("Failed to fetch QR data: \(error)")
