@@ -287,42 +287,41 @@ struct VoiceMemoListView: View {
 
                         // Record area container - expands for push-to-talk
                         VStack(spacing: 0) {
-                            // Top padding for record area
-                            Spacer()
-                                .frame(height: Spacing.md)
-
-                            // Push-to-talk visualization when active
+                            // Push-to-talk visualization when active - no glass, sharp edges
                             if isPushToTalkActive {
-                                VStack(spacing: Spacing.sm) {
+                                VStack(spacing: Spacing.xs) {
                                     // Quick memo indicator
                                     Text("QUICK MEMO")
                                         .font(.techLabelSmall)
                                         .tracking(2)
                                         .foregroundColor(.textTertiary)
 
-                                    // Live waveform - particles style
+                                    // Live waveform - particles style, compact
                                     LiveWaveformView(
                                         levels: pushToTalkRecorder.audioLevels,
-                                        height: 60,
+                                        height: 48,
                                         color: .recording,
                                         style: .particles
                                     )
-                                    .padding(.horizontal, Spacing.sm)
-                                    .background(Color.surfacePrimary.opacity(0.5))
-                                    .cornerRadius(CornerRadius.md)
-                                    .padding(.horizontal, Spacing.lg)
+                                    .padding(.horizontal, Spacing.xs)
+                                    .padding(.horizontal, Spacing.md)
 
-                                    // Duration
-                                    Text(formatPushToTalkDuration(pushToTalkRecorder.recordingDuration))
-                                        .font(.monoMedium)
-                                        .foregroundColor(.textPrimary)
+                                    // Duration + release label inline
+                                    HStack(spacing: Spacing.sm) {
+                                        Text(formatPushToTalkDuration(pushToTalkRecorder.recordingDuration))
+                                            .font(.monoSmall)
+                                            .foregroundColor(.textPrimary)
 
-                                    Text("RELEASE TO SAVE")
-                                        .font(.techLabelSmall)
-                                        .tracking(1)
-                                        .foregroundColor(.textTertiary)
+                                        Text("·")
+                                            .foregroundColor(.textTertiary)
+
+                                        Text("RELEASE TO SAVE")
+                                            .font(.techLabelSmall)
+                                            .tracking(1)
+                                            .foregroundColor(.textTertiary)
+                                    }
                                 }
-                                .padding(.top, Spacing.md)
+                                .padding(.top, Spacing.sm)
                                 .padding(.bottom, Spacing.xs)
                                 .transition(.opacity.combined(with: .move(edge: .bottom)))
                             }
@@ -339,30 +338,24 @@ struct VoiceMemoListView: View {
 
                                 Spacer()
 
-                                // Centered record button
+                                // Centered record button - flat, tactical style
                                 ZStack {
                                     // Subtle glow - only when recording
                                     if isPushToTalkActive {
                                         Circle()
                                             .fill(Color.recording)
-                                            .frame(width: 68, height: 68)
-                                            .blur(radius: 20)
-                                            .opacity(0.6)
+                                            .frame(width: 64, height: 64)
+                                            .blur(radius: 16)
+                                            .opacity(0.4)
                                     }
 
-                                    // Main button with subtle border
+                                    // Main button - flat solid fill
                                     Circle()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [Color.recording, Color.recordingGlow],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
-                                        )
-                                        .frame(width: 58, height: 58)
+                                        .fill(Color.recording)
+                                        .frame(width: 56, height: 56)
                                         .overlay(
                                             Circle()
-                                                .strokeBorder(Color.recordingGlow.opacity(0.5), lineWidth: 1.5)
+                                                .strokeBorder(Color.recordingGlow.opacity(0.4), lineWidth: 1)
                                         )
                                         .scaleEffect(pushToTalkScale)
 
@@ -377,8 +370,8 @@ struct VoiceMemoListView: View {
                                             .foregroundColor(.white)
                                     }
                                 }
-                                .scaleEffect(isPushToTalkActive ? 1.15 : 1.0)
-                                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPushToTalkActive)
+                                .scaleEffect(isPushToTalkActive ? 1.1 : 1.0)
+                                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isPushToTalkActive)
                                 .onTapGesture {
                                     // Short tap opens the sheet
                                     showingRecordingView = true
@@ -457,18 +450,16 @@ struct VoiceMemoListView: View {
                                 }
                             }
                             .padding(.horizontal, Spacing.md)
-                            .padding(.top, Spacing.xs)
-                            .padding(.bottom, 10)
+                            .padding(.top, Spacing.sm)
+                            .padding(.bottom, Spacing.sm)
                         }
                         .frame(maxWidth: .infinity)
                         .background {
                             if #available(iOS 26.0, *) {
-                                // Liquid Glass background for iOS 26+
-                                RoundedRectangle(cornerRadius: CornerRadius.lg)
-                                    .fill(.clear)
-                                    .glassEffect(.regular.interactive())
-                                    .padding(.horizontal, Spacing.sm)
-                                    .padding(.top, Spacing.xs)
+                                // Liquid Glass background - edge-to-edge, force sharp corners
+                                Color.clear
+                                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 0))
+                                    .ignoresSafeArea(edges: .bottom)
                             } else {
                                 // Fallback solid background for older iOS
                                 themeManager.colors.cardBackground.opacity(0.95)
@@ -489,14 +480,17 @@ struct VoiceMemoListView: View {
                     .animation(.easeInOut(duration: 0.2), value: isPushToTalkActive)
                 }
 
-                // Floating iCloud status banner - pinned to top of protected area, full bleed
+                // Floating iCloud status banner - pinned above record button area
                 if !iCloudStatus.status.isAvailable && !iCloudStatus.isDismissed && !isPushToTalkActive {
                     VStack {
                         Spacer()
                         iCloudStatusBanner
-                            .padding(.bottom, 88) // Pinned just above record button area
+                            .padding(.horizontal, Spacing.md)
+                            .padding(.bottom, 100) // Above the glass control bar
                     }
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.2), value: iCloudStatus.status.isAvailable)
+                    .zIndex(1) // Ensure banner stays above other content
                     .allowsHitTesting(true)
                 }
                 }
@@ -1153,12 +1147,19 @@ struct VoiceMemoListView: View {
         .padding(.horizontal, Spacing.md)
         .padding(.vertical, Spacing.sm)
         .frame(maxWidth: .infinity)
-        .background(
-            ZStack {
-                Color.black
-                Color.blue.opacity(0.35)
+        .background {
+            if #available(iOS 26.0, *) {
+                RoundedRectangle(cornerRadius: CornerRadius.md)
+                    .fill(.clear)
+                    .glassEffect(.regular.tint(.blue))
+            } else {
+                ZStack {
+                    Color.black
+                    Color.blue.opacity(0.35)
+                }
+                .cornerRadius(CornerRadius.md)
             }
-        )
+        }
     }
 
     /// Warning banner for error states (restricted, unavailable, etc.)
@@ -1188,12 +1189,19 @@ struct VoiceMemoListView: View {
         .padding(.horizontal, Spacing.md)
         .padding(.vertical, Spacing.sm)
         .frame(maxWidth: .infinity)
-        .background(
-            ZStack {
-                Color.black
-                Color.blue.opacity(0.35)
+        .background {
+            if #available(iOS 26.0, *) {
+                RoundedRectangle(cornerRadius: CornerRadius.md)
+                    .fill(.clear)
+                    .glassEffect(.regular.tint(.blue))
+            } else {
+                ZStack {
+                    Color.black
+                    Color.blue.opacity(0.35)
+                }
+                .cornerRadius(CornerRadius.md)
             }
-        )
+        }
     }
 
     private func openICloudSettings() {
@@ -1216,28 +1224,32 @@ struct BottomCircleButton: View {
 
     var body: some View {
         if #available(iOS 26.0, *) {
-            // Liquid Glass button for iOS 26+
+            // Liquid Glass button for iOS 26+ - compact, tactical
             Button(action: action) {
                 Image(systemName: icon)
-                    .font(.system(size: 18, weight: .medium))
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundColor(isActive ? .textPrimary : .textSecondary)
                     .frame(width: 44, height: 44)
+                    .background {
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .fill(.clear)
+                            .glassEffect(.regular.interactive())
+                    }
             }
-            .buttonStyle(.glass)
+            .buttonStyle(.plain)
         } else {
             // Fallback solid button for older iOS
             Button(action: action) {
-                Circle()
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
                     .fill(isActive ? Color.success.opacity(0.08) : Color.surfaceSecondary)
                     .frame(width: 44, height: 44)
                     .overlay(
-                        Circle()
-                            .strokeBorder(isActive ? Color.success.opacity(0.3) : Color.borderPrimary, lineWidth: 1)
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .strokeBorder(isActive ? Color.success.opacity(0.3) : Color.borderPrimary, lineWidth: 0.5)
                     )
-                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                     .overlay {
                         Image(systemName: icon)
-                            .font(.system(size: 18, weight: .medium))
+                            .font(.system(size: 16, weight: .medium))
                             .foregroundColor(isActive ? .textPrimary : .textSecondary)
                     }
             }
