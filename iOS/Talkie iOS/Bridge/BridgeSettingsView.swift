@@ -127,7 +127,7 @@ struct BridgeSettingsView: View {
                     .fill(Color.brandAccent.opacity(0.1))
                     .frame(width: 80, height: 80)
 
-                BrailleSpinner(color: .brandAccent)
+                BrailleSpinner(size: 32, color: .brandAccent)
             }
 
         case .disconnected:
@@ -433,7 +433,7 @@ private struct ConnectionStepRow: View {
                         .font(.system(size: 10, weight: .bold))
                         .foregroundColor(.white)
                 case .inProgress:
-                    BrailleSpinner(color: .white)
+                    BrailleSpinner(size: 12, color: .white)
                 case .pending:
                     Text("\(step)")
                         .font(.system(size: 11, weight: .semibold, design: .monospaced))
@@ -484,7 +484,7 @@ private struct SettingsActionRow: View {
         Button(action: action) {
             HStack {
                 if isLoading {
-                    BrailleSpinner(color: color)
+                    BrailleSpinner(size: 16, color: color)
                         .frame(width: 24)
                 } else {
                     Image(systemName: icon)
