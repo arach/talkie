@@ -392,7 +392,7 @@ struct PatternUsage: Identifiable, Codable {
 
 struct FullAuditReport: Codable {
     let timestamp: Date
-    let screens: [ScreenAuditResult]
+    var screens: [ScreenAuditResult]  // var for in-place updates on rerun
     let screenshotDirectory: String?  // Path to screenshots directory
 
     // Metadata for tracking runs
@@ -642,9 +642,12 @@ class DesignAuditor {
             return nil
         }
 
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
         let reportPath = cacheDirectory.appendingPathComponent("\(latestRun.0)/audit.json")
         guard let data = try? Data(contentsOf: reportPath),
-              let report = try? JSONDecoder().decode(FullAuditReport.self, from: data) else {
+              let report = try? decoder.decode(FullAuditReport.self, from: data) else {
             return nil
         }
 
@@ -686,10 +689,13 @@ class DesignAuditor {
 
         var runs: [AuditRunInfo] = []
 
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
         for (dirname, runNumber) in runDirectories {
             let reportPath = cacheDirectory.appendingPathComponent("\(dirname)/audit.json")
             guard let data = try? Data(contentsOf: reportPath),
-                  let report = try? JSONDecoder().decode(FullAuditReport.self, from: data) else {
+                  let report = try? decoder.decode(FullAuditReport.self, from: data) else {
                 continue
             }
 
@@ -719,8 +725,11 @@ class DesignAuditor {
         let dirname = "run-\(String(format: "%03d", runNumber))"
         let reportPath = cacheDirectory.appendingPathComponent("\(dirname)/audit.json")
 
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
         guard let data = try? Data(contentsOf: reportPath),
-              let report = try? JSONDecoder().decode(FullAuditReport.self, from: data) else {
+              let report = try? decoder.decode(FullAuditReport.self, from: data) else {
             print("❌ Could not load run-\(String(format: "%03d", runNumber))")
             return nil
         }
@@ -773,14 +782,27 @@ class DesignAuditor {
             """
             try summary.write(to: runDirectory.appendingPathComponent("summary.txt"), atomically: true, encoding: .utf8)
 
+            // Index in AuditStore for fast retrieval
+            Task {
+                await AuditStore.shared.indexRun(report, runNumber: actualRunNumber)
+            }
+
             print("✅ Saved audit to: run-\(String(format: "%03d", actualRunNumber))")
         } catch {
             print("❌ Failed to save audit: \(error)")
         }
     }
 
+    /// Screenshot progress callback
+    typealias ScreenshotProgressCallback = @MainActor (AppScreen, Bool, String?) -> Void
+
     /// Capture screenshots of all screens
     private func captureScreenshots(to directory: URL) async {
+        await captureScreenshots(to: directory, onProgress: nil)
+    }
+
+    /// Capture screenshots with progress callback
+    func captureScreenshots(to directory: URL, onProgress: ScreenshotProgressCallback?) async {
         // Find the main Talkie window
         guard let mainWindow = NSApp.windows.first(where: { $0.title.contains("Talkie") && !$0.title.contains("Settings") }) else {
             print("⚠️ No main window found for screenshot capture")
@@ -808,6 +830,7 @@ class DesignAuditor {
             try? await Task.sleep(for: .milliseconds(500))
 
             // Capture window
+            var savedPath: String? = nil
             if let screenshot = captureWindow(mainWindow) {
                 let filename = "\(screen.rawValue).png"
                 let fileURL = directory.appendingPathComponent(filename)
@@ -816,8 +839,14 @@ class DesignAuditor {
                    let bitmapImage = NSBitmapImageRep(data: tiffData),
                    let pngData = bitmapImage.representation(using: .png, properties: [:]) {
                     try? pngData.write(to: fileURL)
+                    savedPath = fileURL.path
                     print("  ✅ Saved: \(filename)")
                 }
+            }
+
+            // Report progress
+            if let onProgress {
+                await onProgress(screen, savedPath != nil, savedPath)
             }
         }
     }
@@ -883,7 +912,10 @@ class DesignAuditor {
 
     /// Capture a window using CGWindowListCreateImage
     private func captureWindow(_ window: NSWindow) -> NSImage? {
-        guard let windowNumber = window.windowNumber as? CGWindowID else {
+        // Convert Int to CGWindowID (UInt32) - don't use as? cast which always fails
+        let windowNumber = CGWindowID(window.windowNumber)
+        guard windowNumber > 0 else {
+            print("⚠️ Invalid window number: \(window.windowNumber)")
             return nil
         }
 
@@ -897,6 +929,7 @@ class DesignAuditor {
             windowNumber,
             [.boundsIgnoreFraming]
         ) else {
+            print("⚠️ CGWindowListCreateImage failed for window \(windowNumber)")
             return nil
         }
 
@@ -1013,6 +1046,83 @@ class DesignAuditor {
 
         print("✅ Audit complete!")
         print("📁 Results saved to: run-\(String(format: "%03d", runNumber))")
+        return report
+    }
+
+    /// Audit a single screen (for progress tracking)
+    func auditScreen(_ screen: AppScreen) async -> ScreenAuditResult {
+        // Small delay to make progress visible and not block UI
+        try? await Task.sleep(for: .milliseconds(50))
+        return performCodeAnalysis(screen: screen)
+    }
+
+    /// Finalize audit without screenshots (faster)
+    func finalizeAuditWithoutScreenshots(results: [ScreenAuditResult]) async -> FullAuditReport {
+        let runNumber = getNextRunNumber()
+        let appVersion = getAppVersion()
+        let gitBranch = getGitBranch()
+        let gitCommit = getGitCommit()
+        let themeName = getCurrentThemeName()
+
+        // Create run directory (no screenshots folder)
+        let runDirectory = cacheDirectory.appendingPathComponent("run-\(String(format: "%03d", runNumber))")
+
+        do {
+            try FileManager.default.createDirectory(at: runDirectory, withIntermediateDirectories: true)
+        } catch {
+            print("❌ Failed to create run directory: \(error)")
+        }
+
+        let report = FullAuditReport(
+            timestamp: Date(),
+            screens: results,
+            screenshotDirectory: nil,
+            appVersion: appVersion,
+            gitBranch: gitBranch,
+            gitCommit: gitCommit,
+            runNumber: runNumber,
+            themeName: themeName
+        )
+
+        saveAudit(report, runNumber: runNumber)
+        return report
+    }
+
+    /// Finalize audit with screenshots and save
+    func finalizeAudit(results: [ScreenAuditResult], onScreenshotProgress: ScreenshotProgressCallback? = nil) async -> FullAuditReport {
+        let runNumber = getNextRunNumber()
+        let appVersion = getAppVersion()
+        let gitBranch = getGitBranch()
+        let gitCommit = getGitCommit()
+        let themeName = getCurrentThemeName()
+
+        // Create run directory
+        let runDirectory = cacheDirectory.appendingPathComponent("run-\(String(format: "%03d", runNumber))")
+        let screenshotsDirectory = runDirectory.appendingPathComponent("screenshots")
+
+        do {
+            try FileManager.default.createDirectory(at: screenshotsDirectory, withIntermediateDirectories: true)
+        } catch {
+            print("❌ Failed to create screenshots directory: \(error)")
+        }
+
+        // Capture screenshots with progress callback
+        await captureScreenshots(to: screenshotsDirectory, onProgress: onScreenshotProgress)
+
+        let report = FullAuditReport(
+            timestamp: Date(),
+            screens: results,
+            screenshotDirectory: screenshotsDirectory.path,
+            appVersion: appVersion,
+            gitBranch: gitBranch,
+            gitCommit: gitCommit,
+            runNumber: runNumber,
+            themeName: themeName
+        )
+
+        // Save to disk
+        saveAudit(report, runNumber: runNumber)
+
         return report
     }
 
