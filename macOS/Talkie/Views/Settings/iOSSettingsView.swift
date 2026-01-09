@@ -246,6 +246,8 @@ private struct ConnectionStatusSection: View {
 
 private struct iCloudSyncSection: View {
     @Binding var enabled: Bool
+    @State private var syncStatus = SyncStatusManager.shared
+    @State private var talkieData = TalkieData.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -256,23 +258,29 @@ private struct iCloudSyncSection: View {
                 Text("ICLOUD SYNC")
                     .font(Theme.current.fontXSMedium)
                     .foregroundColor(Theme.current.foregroundSecondary)
+
+                Spacer()
+
+                // Health indicator
+                if enabled {
+                    healthBadge
+                }
             }
 
+            // Main status row
             HStack(spacing: 12) {
-                Image(systemName: enabled ? "icloud.fill" : "icloud.slash")
+                Image(systemName: statusIcon)
                     .font(.system(size: 20))
-                    .foregroundColor(enabled ? .blue : .gray)
+                    .foregroundColor(statusColor)
                     .frame(width: 36, height: 36)
-                    .background((enabled ? Color.blue : Color.gray).opacity(0.15))
+                    .background(statusColor.opacity(0.15))
                     .cornerRadius(8)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(enabled ? "Sync Enabled" : "Sync Disabled")
+                    Text(statusTitle)
                         .font(Theme.current.fontSMMedium)
                         .foregroundColor(Theme.current.foreground)
-                    Text(enabled
-                         ? "Memos sync across your Apple devices"
-                         : "Memos stored locally only")
+                    Text(statusDescription)
                         .font(Theme.current.fontXS)
                         .foregroundColor(Theme.current.foregroundSecondary)
                 }
@@ -285,6 +293,152 @@ private struct iCloudSyncSection: View {
             .padding(12)
             .background(Theme.current.surface1)
             .cornerRadius(8)
+
+            // Sync details when enabled
+            if enabled {
+                SyncDetailsView(syncStatus: syncStatus, inventory: talkieData.inventory)
+            }
+        }
+    }
+
+    // MARK: - Computed Properties
+
+    private var statusIcon: String {
+        if !enabled { return "icloud.slash" }
+        switch syncStatus.state {
+        case .syncing: return "arrow.triangle.2.circlepath"
+        case .synced: return "icloud.fill"
+        case .error: return "exclamationmark.icloud"
+        case .idle: return "icloud"
+        }
+    }
+
+    private var statusColor: Color {
+        if !enabled { return .gray }
+        switch syncStatus.state {
+        case .syncing: return .blue
+        case .synced: return .green
+        case .error: return .red
+        case .idle: return .blue
+        }
+    }
+
+    private var statusTitle: String {
+        if !enabled { return "Sync Disabled" }
+        switch syncStatus.state {
+        case .syncing: return "Syncing..."
+        case .synced: return "Synced"
+        case .error: return "Sync Error"
+        case .idle: return "Sync Enabled"
+        }
+    }
+
+    private var statusDescription: String {
+        if !enabled { return "Memos stored locally only" }
+        switch syncStatus.state {
+        case .syncing: return "Updating with iCloud..."
+        case .synced: return "Last sync: \(syncStatus.lastSyncAgo)"
+        case .error(let msg): return msg
+        case .idle:
+            if let _ = syncStatus.lastSyncDate {
+                return "Last sync: \(syncStatus.lastSyncAgo)"
+            }
+            return "Memos sync across your Apple devices"
+        }
+    }
+
+    @ViewBuilder
+    private var healthBadge: some View {
+        let isHealthy = talkieData.inventory?.isHealthy ?? true
+        HStack(spacing: 3) {
+            Image(systemName: isHealthy ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .font(.system(size: 8))
+            Text(isHealthy ? "Healthy" : "Needs Sync")
+                .font(.system(size: 9, weight: .medium))
+        }
+        .foregroundColor(isHealthy ? .green : .orange)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background((isHealthy ? Color.green : Color.orange).opacity(0.15))
+        .cornerRadius(4)
+    }
+}
+
+// MARK: - Sync Details View
+
+private struct SyncDetailsView: View {
+    let syncStatus: SyncStatusManager
+    let inventory: DataInventory?
+
+    var body: some View {
+        VStack(spacing: 6) {
+            // Record counts
+            HStack(spacing: 16) {
+                SyncStatItem(
+                    label: "Local",
+                    value: "\(inventory?.local ?? 0)",
+                    icon: "internaldrive"
+                )
+                SyncStatItem(
+                    label: "iCloud",
+                    value: "\(inventory?.coreData ?? 0)",
+                    icon: "icloud"
+                )
+                if let missing = inventory?.missingFromLocal.count, missing > 0 {
+                    SyncStatItem(
+                        label: "Pending",
+                        value: "\(missing)",
+                        icon: "arrow.down.circle",
+                        highlight: true
+                    )
+                }
+
+                Spacer()
+
+                // Last sync time
+                if let lastSync = syncStatus.lastSyncDate {
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text("LAST SYNC")
+                            .font(.system(size: 8, weight: .medium))
+                            .foregroundColor(Theme.current.foregroundSecondary.opacity(0.7))
+                        Text(formatTime(lastSync))
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(Theme.current.foregroundSecondary)
+                    }
+                }
+            }
+        }
+        .padding(10)
+        .background(Theme.current.surface1.opacity(0.5))
+        .cornerRadius(6)
+    }
+
+    private func formatTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return formatter.string(from: date)
+    }
+}
+
+private struct SyncStatItem: View {
+    let label: String
+    let value: String
+    let icon: String
+    var highlight: Bool = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 9))
+                .foregroundColor(highlight ? .orange : Theme.current.foregroundSecondary)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(value)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(highlight ? .orange : Theme.current.foreground)
+                Text(label)
+                    .font(.system(size: 8))
+                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.7))
+            }
         }
     }
 }
