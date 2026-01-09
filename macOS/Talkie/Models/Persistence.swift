@@ -141,7 +141,9 @@ class SyncStatusManager {
     var lastSyncDate: Date?
     var iCloudAvailable: Bool = false
     var pendingChanges: Int = 0
-    private var lastRefresh: Date = Date() // Used to trigger UI updates for relative time strings
+
+    // Tracked property that views observe - incremented to trigger re-render
+    var displayRefreshTick: Int = 0
 
     @ObservationIgnored private var displayTimer: Timer?
 
@@ -149,7 +151,7 @@ class SyncStatusManager {
         // Update display every 30s so "Just now" becomes "30s ago" etc.
         displayTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                self?.lastRefresh = Date() // Trigger UI update for @Observable
+                self?.displayRefreshTick += 1 // Trigger UI update for @Observable
             }
         }
     }
@@ -178,7 +180,8 @@ class SyncStatusManager {
     }
 
     var lastSyncAgo: String {
-        _ = lastRefresh
+        // Access displayRefreshTick to ensure view re-renders when timer fires
+        _ = displayRefreshTick
         guard let lastSync = lastSyncDate else {
             return "—"
         }
@@ -201,6 +204,12 @@ class SyncStatusManager {
 
 struct PersistenceController {
     static let shared = PersistenceController()
+
+    /// Whether persistent stores have finished loading
+    /// Check this before performing Core Data operations to avoid crashes
+    static var isReady: Bool {
+        shared.container.persistentStoreCoordinator.persistentStores.count > 0
+    }
 
     /// Unique identifier for this device (Mac)
     static var deviceId: String {
@@ -278,8 +287,14 @@ struct PersistenceController {
         container.loadPersistentStores { [weak container] storeDescription, error in
             let loadElapsed = (CFAbsoluteTimeGetCurrent() - loadStart) * 1000
             if let error = error as NSError? {
-                logger.error("Persistence: failed - \(error.localizedDescription)")
+                logger.error("Persistence: FAILED - \(error.localizedDescription)")
+                logger.error("Persistence: Store URL: \(storeDescription.url?.path ?? "nil")")
+                logger.error("Persistence: This will cause Core Data operations to fail!")
             } else {
+                // Notify that stores are ready - views can listen for this
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: .persistentStoresDidLoad, object: nil)
+                }
                 let cloudKit = storeDescription.cloudKitContainerOptions?.containerIdentifier ?? "none"
                 let store = storeDescription.url?.lastPathComponent ?? "?"
                 #if DEBUG
@@ -549,4 +564,6 @@ extension Notification.Name {
     static let talkieSyncCompleted = Notification.Name("talkieSyncCompleted")
     /// Posted when sync starts
     static let talkieSyncStarted = Notification.Name("talkieSyncStarted")
+    /// Posted when Core Data persistent stores finish loading
+    static let persistentStoresDidLoad = Notification.Name("persistentStoresDidLoad")
 }

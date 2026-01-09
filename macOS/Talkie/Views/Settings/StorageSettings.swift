@@ -7,6 +7,7 @@
 
 import SwiftUI
 import os
+import TalkieKit
 
 private let logger = Logger(subsystem: "jdi.talkie.core", category: "StorageSettings")
 

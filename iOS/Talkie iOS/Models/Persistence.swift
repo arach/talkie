@@ -17,6 +17,9 @@ import AppKit
 struct PersistenceController {
     static let shared = PersistenceController()
 
+    /// True when persistent stores have finished loading
+    static var isReady: Bool = false
+
     /// Unique identifier for this device
     static var deviceId: String {
         #if os(iOS)
@@ -98,6 +101,9 @@ struct PersistenceController {
                 if let cloudKitOptions = storeDescription.cloudKitContainerOptions {
                     AppLogger.persistence.info("CloudKit container ID: \(cloudKitOptions.containerIdentifier)")
                 }
+
+                // Mark as ready - stores are now loaded
+                PersistenceController.isReady = true
             }
         }
 

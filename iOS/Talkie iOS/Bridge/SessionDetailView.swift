@@ -673,6 +673,7 @@ struct RecordingOverlay: View {
 // MARK: - Braille Spinner
 
 struct BrailleSpinner: View {
+    var size: CGFloat = 14
     var speed: Double = 0.08
     var color: Color = .textSecondary
 
@@ -681,7 +682,7 @@ struct BrailleSpinner: View {
 
     var body: some View {
         Text(frames[frame])
-            .font(.monoMedium)
+            .font(.system(size: size, weight: .medium, design: .monospaced))
             .foregroundColor(color)
             .onAppear { startAnimation() }
     }

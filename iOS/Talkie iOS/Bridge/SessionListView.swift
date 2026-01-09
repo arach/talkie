@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct SessionListView: View {
-    @State private var bridgeManager = BridgeManager.shared
+    private var bridgeManager = BridgeManager.shared
     @State private var isRefreshing = false
     @State private var isDeepSyncing = false
     @State private var sessionsMeta: SessionsMeta?

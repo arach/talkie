@@ -26,7 +26,6 @@ enum NavigationSection: Hashable {
     case allMemos       // All Memos view (GRDB-based with pagination and filters)
     case liveDashboard  // Live home/insights view
     case liveRecent     // Live utterance list
-    case claudeSessions // Claude Code session browser
     case aiResults
     case workflows
     case activityLog
@@ -96,7 +95,6 @@ struct TalkieNavigationViewNative: View {
         case .allMemos: return "AllMemos"
         case .liveDashboard: return "LiveDashboard"
         case .liveRecent: return "LiveRecent"
-        case .claudeSessions: return "ClaudeSessions"
         case .aiResults: return "AIResults"
         case .workflows: return "Workflows"
         case .activityLog: return "ActivityLog"
@@ -223,7 +221,7 @@ struct TalkieNavigationViewNative: View {
     private var usesTwoColumns: Bool {
         switch selectedSection {
         case .home, .scratchPad, .models, .allowedCommands, .aiResults, .allMemos,
-             .liveDashboard, .liveRecent, .claudeSessions, .systemConsole, .pendingActions:
+             .liveDashboard, .liveRecent, .systemConsole, .pendingActions:
             return true
         #if DEBUG
         case .designHome, .designAudit, .designComponents:
@@ -363,7 +361,6 @@ struct TalkieNavigationViewNative: View {
             SidebarRow(section: .home, selectedSection: $selectedSection, title: "Home", icon: "house")
             SidebarRow(section: .allMemos, selectedSection: $selectedSection, title: "Memos", icon: "square.stack")
             SidebarRow(section: .liveRecent, selectedSection: $selectedSection, title: "Dictations", icon: "waveform.badge.mic")
-            SidebarRow(section: .claudeSessions, selectedSection: $selectedSection, title: "Claude", icon: "text.bubble")
 
             // Activity
             Section(settings.uiAllCaps ? "ACTIVITY" : "Activity") {
@@ -459,8 +456,6 @@ struct TalkieNavigationViewNative: View {
                 case .liveRecent:
                     DictationListView()
                         .wrapInTalkieSection("LiveRecent")
-                case .claudeSessions:
-                    ClaudeView()
                 case .systemConsole:
                     SystemLogsView(onClose: { selectedSection = previousSection ?? .home })
                         .wrapInTalkieSection("SystemLogs")
@@ -524,9 +519,8 @@ extension View {
     ) -> some View {
         self
             .onChange(of: memoCount) { _, _ in
-                // Mark memos as received when count changes (still uses Core Data for CloudKit sync)
-                let viewContext = PersistenceController.shared.container.viewContext
-                PersistenceController.markMemosAsReceivedByMac(context: viewContext)
+                // Mark memos as received when count changes (via sync gateway)
+                CoreDataSyncGateway.shared.markMemosAsReceivedByMac()
             }
             .onReceive(NotificationCenter.default.publisher(for: .browseWorkflows)) { _ in
                 selectedSection.wrappedValue = .workflows

@@ -116,6 +116,38 @@ struct SettingsView: View {
                         // Connections
                         ConnectionsSection()
 
+                        // iCloud Memo Processing
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            Text("ICLOUD MEMO PROCESSING")
+                                .font(.techLabel)
+                                .tracking(2)
+                                .foregroundColor(.textTertiary)
+                                .padding(.horizontal, Spacing.md)
+
+                            NavigationLink(destination: MacAvailabilityCoachView()) {
+                                HStack {
+                                    Image(systemName: "icloud")
+                                        .foregroundColor(.active)
+                                    Text("Mac Sync Status")
+                                    Spacer()
+                                    MacAvailabilityBadge()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.textTertiary)
+                                }
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.textPrimary)
+                                .padding(Spacing.sm)
+                                .background(Color.surfaceSecondary)
+                                .cornerRadius(CornerRadius.sm)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                                        .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
+                                )
+                            }
+                            .padding(.horizontal, Spacing.md)
+                        }
+
                         // Debug Info
                         VStack(alignment: .leading, spacing: Spacing.sm) {
                             Text("DEBUG INFO")
@@ -761,7 +793,7 @@ struct SyncSection: View {
 
 struct ConnectionsSection: View {
     @ObservedObject var cloudStatusManager = iCloudStatusManager.shared
-    @State private var bridgeManager = BridgeManager.shared
+    private var bridgeManager = BridgeManager.shared
 
     private var connectionSummary: String {
         var connected: [String] = ["Local"]
@@ -831,7 +863,7 @@ struct ConnectionsSection: View {
 // MARK: - Bridge Status Badge
 
 struct BridgeStatusBadge: View {
-    @State private var bridgeManager = BridgeManager.shared
+    private var bridgeManager = BridgeManager.shared
 
     var body: some View {
         HStack(spacing: 4) {
@@ -841,6 +873,51 @@ struct BridgeStatusBadge: View {
             Text(bridgeManager.status.rawValue)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(.textSecondary)
+        }
+    }
+}
+
+// MARK: - Mac Availability Badge
+
+struct MacAvailabilityBadge: View {
+    @State private var observer = MacStatusObserver.shared
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(statusColor)
+                .frame(width: 6, height: 6)
+            Text(statusText)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.textSecondary)
+        }
+        .task {
+            await observer.refresh()
+        }
+    }
+
+    private var statusColor: Color {
+        guard let status = observer.macStatus else {
+            return .textTertiary
+        }
+        switch status.powerState {
+        case "active", "idle":
+            return .success
+        case "screenOff":
+            return status.canProcessMemos ? .success : .warning
+        default:
+            return .textTertiary
+        }
+    }
+
+    private var statusText: String {
+        guard let status = observer.macStatus else {
+            return "No Mac"
+        }
+        if status.canProcessMemos {
+            return "Available"
+        } else {
+            return "Unavailable"
         }
     }
 }

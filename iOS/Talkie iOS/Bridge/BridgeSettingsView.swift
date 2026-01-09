@@ -8,10 +8,11 @@
 import SwiftUI
 
 struct BridgeSettingsView: View {
-    @State private var bridgeManager = BridgeManager.shared
+    private var bridgeManager = BridgeManager.shared
     @State private var showingQRScanner = false
     @State private var showUnpairConfirmation = false
     @State private var isReconnecting = false
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ZStack {
@@ -23,14 +24,20 @@ struct BridgeSettingsView: View {
                     // Connection Status Card
                     connectionStatusCard
 
-                    // Actions
-                    if bridgeManager.isPaired {
+                    // Actions (when paired and not actively connecting)
+                    if bridgeManager.isPaired && bridgeManager.status != .connecting {
                         actionsSection
                     }
 
-                    // Connection Info
-                    if bridgeManager.isPaired {
+                    // Connection Info (when connected)
+                    if bridgeManager.status == .connected {
                         connectionInfoSection
+                        doneButton
+                    }
+
+                    // Troubleshooting (when disconnected or error)
+                    if bridgeManager.isPaired && (bridgeManager.status == .disconnected || bridgeManager.status == .error) {
+                        troubleshootingSection
                     }
 
                     // Troubleshooting (when disconnected or error)
@@ -58,7 +65,7 @@ struct BridgeSettingsView: View {
                 bridgeManager.unpair()
             }
         } message: {
-            Text("This will remove all pairing data. You'll need to scan the QR code again to reconnect.")
+            Text("This will remove the pairing. Scan the QR code again to reconnect.")
         }
     }
 
@@ -66,16 +73,8 @@ struct BridgeSettingsView: View {
 
     private var connectionStatusCard: some View {
         VStack(spacing: Spacing.md) {
-            // Status icon
-            ZStack {
-                Circle()
-                    .fill(bridgeManager.status.color.opacity(0.15))
-                    .frame(width: 80, height: 80)
-
-                Image(systemName: statusIcon)
-                    .font(.system(size: 32, weight: .medium))
-                    .foregroundColor(bridgeManager.status.color)
-            }
+            // Status icon - different for each state
+            statusIconView
 
             // Status text
             VStack(spacing: Spacing.xxs) {
@@ -85,48 +84,110 @@ struct BridgeSettingsView: View {
 
                 if let macName = bridgeManager.pairedMacName {
                     Text(macName)
-                        .font(.monoSmall)
+                        .font(.system(size: 12, design: .monospaced))
                         .foregroundColor(.textSecondary)
                 }
 
-                if let error = bridgeManager.errorMessage {
+                if let error = bridgeManager.errorMessage, bridgeManager.status == .error {
                     Text(error)
                         .font(.labelSmall)
                         .foregroundColor(.recording)
                         .multilineTextAlignment(.center)
                         .padding(.top, Spacing.xxs)
                 }
-
-                // Retry status
-                if bridgeManager.retryCount > 0 && bridgeManager.retryCount < 3 {
-                    Text("Retrying... (\(bridgeManager.retryCount)/3)")
-                        .font(.monoSmall)
-                        .foregroundColor(.orange)
-                        .padding(.top, Spacing.xxs)
-                }
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Spacing.lg)
-        .background(Color.surfaceSecondary)
+        .background(statusBackground)
         .cornerRadius(CornerRadius.md)
+        .overlay(
+            RoundedRectangle(cornerRadius: CornerRadius.md)
+                .strokeBorder(statusBorderColor, lineWidth: 1)
+        )
     }
 
-    private var statusIcon: String {
+    @ViewBuilder
+    private var statusIconView: some View {
         switch bridgeManager.status {
-        case .connected: return "checkmark.circle.fill"
-        case .connecting: return "antenna.radiowaves.left.and.right"
-        case .disconnected: return "wifi.slash"
-        case .error: return "exclamationmark.triangle.fill"
+        case .connected:
+            // Success state - animated checkmark
+            ZStack {
+                Circle()
+                    .fill(Color.success.opacity(0.15))
+                    .frame(width: 80, height: 80)
+
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 40, weight: .medium))
+                    .foregroundColor(.success)
+            }
+
+        case .connecting:
+            // Connecting - centered spinner
+            ZStack {
+                Circle()
+                    .fill(Color.brandAccent.opacity(0.1))
+                    .frame(width: 80, height: 80)
+
+                BrailleSpinner(size: 32, color: .brandAccent)
+                    .frame(width: 32, height: 32)
+            }
+            .frame(width: 80, height: 80)
+
+        case .disconnected:
+            ZStack {
+                Circle()
+                    .fill(Color.textTertiary.opacity(0.1))
+                    .frame(width: 80, height: 80)
+
+                Image(systemName: "wifi.slash")
+                    .font(.system(size: 32, weight: .medium))
+                    .foregroundColor(.textTertiary)
+            }
+
+        case .error:
+            ZStack {
+                Circle()
+                    .fill(Color.recording.opacity(0.15))
+                    .frame(width: 80, height: 80)
+
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 32, weight: .medium))
+                    .foregroundColor(.recording)
+            }
+        }
+    }
+
+    private var statusBackground: Color {
+        switch bridgeManager.status {
+        case .connected:
+            return Color.success.opacity(0.05)
+        case .connecting:
+            return Color.brandAccent.opacity(0.03)
+        default:
+            return Color.surfaceSecondary
+        }
+    }
+
+    private var statusBorderColor: Color {
+        switch bridgeManager.status {
+        case .connected:
+            return Color.success.opacity(0.3)
+        case .connecting:
+            return Color.brandAccent.opacity(0.2)
+        case .error:
+            return Color.recording.opacity(0.3)
+        default:
+            return Color.borderPrimary
         }
     }
 
     private var statusTitle: String {
         switch bridgeManager.status {
         case .connected: return "Connected"
-        case .connecting: return "Connecting..."
+        case .connecting: return "Connecting"
         case .disconnected: return bridgeManager.isPaired ? "Disconnected" : "Not Paired"
-        case .error: return "Connection Error"
+        case .error: return "Connection Failed"
         }
     }
 
@@ -196,7 +257,7 @@ struct BridgeSettingsView: View {
                 // Unpair
                 SettingsActionRow(
                     icon: "xmark.circle",
-                    title: "Unpair Mac",
+                    title: "Unpair from Mac",
                     color: .recording
                 ) {
                     showUnpairConfirmation = true
@@ -232,6 +293,25 @@ struct BridgeSettingsView: View {
             .background(Color.surfaceSecondary)
             .cornerRadius(CornerRadius.sm)
         }
+    }
+
+    // MARK: - Done Button
+
+    private var doneButton: some View {
+        Button(action: { dismiss() }) {
+            HStack(spacing: Spacing.xs) {
+                Text("Done")
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, Spacing.md)
+            .background(Color.success)
+            .cornerRadius(CornerRadius.sm)
+        }
+        .padding(.top, Spacing.md)
     }
 
     // MARK: - Pair Section
@@ -323,8 +403,7 @@ private struct SettingsActionRow: View {
         Button(action: action) {
             HStack {
                 if isLoading {
-                    ProgressView()
-                        .scaleEffect(0.8)
+                    BrailleSpinner(size: 16, color: color)
                         .frame(width: 24)
                 } else {
                     Image(systemName: icon)

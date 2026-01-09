@@ -178,7 +178,7 @@ struct TalkieApp: App {
             // Replace default Settings menu item with inline navigation
             CommandGroup(replacing: .appSettings) {
                 Button("Settings…") {
-                    settingsNavigation?.showSettings()
+                    NotificationCenter.default.post(name: .navigateToSettings, object: nil)
                 }
                 .keyboardShortcut(",", modifiers: .command)
             }

@@ -18,12 +18,14 @@ enum SystemEventSource: String, CaseIterable {
     case talkie = "Talkie"
     case talkieLive = "TalkieLive"
     case talkieEngine = "Engine"
+    case bridge = "Bridge"
 
     var color: Color {
         switch self {
         case .talkie: return Color(red: 0.4, green: 0.7, blue: 1.0) // Blue
         case .talkieLive: return Color(red: 0.7, green: 0.5, blue: 1.0) // Purple
         case .talkieEngine: return Color(red: 1.0, green: 0.6, blue: 0.3) // Orange
+        case .bridge: return Color(red: 0.3, green: 0.8, blue: 0.7) // Teal
         }
     }
 
@@ -32,6 +34,7 @@ enum SystemEventSource: String, CaseIterable {
         case .talkie: return "app.fill"
         case .talkieLive: return "menubar.rectangle"
         case .talkieEngine: return "gearshape.fill"
+        case .bridge: return "network"
         }
     }
 }
@@ -39,7 +42,7 @@ enum SystemEventSource: String, CaseIterable {
 enum SystemEventType: String, CaseIterable {
     case sync = "SYNC"
     case record = "RECORD"
-    case transcribe = "WHISPER"
+    case transcribe = "TRANSCRIPTION"
     case workflow = "WORKFLOW"
     case error = "ERROR"
     case system = "SYSTEM"
@@ -156,6 +159,9 @@ class LogFileManager {
             return appSupport.appendingPathComponent("TalkieLive/logs", isDirectory: true)
         case .talkieEngine:
             return appSupport.appendingPathComponent("TalkieEngine/logs", isDirectory: true)
+        case .bridge:
+            // Bridge logs are stored in Talkie/Bridge/ (not a logs subdirectory)
+            return appSupport.appendingPathComponent("Talkie/Bridge", isDirectory: true)
         }
     }
 
@@ -238,6 +244,11 @@ class LogFileManager {
 
     /// Load events from a specific source's log file
     func loadEventsFrom(source: SystemEventSource, date: Date, limit: Int = 500) -> [SystemEvent] {
+        // Bridge uses a different log format and filename
+        if source == .bridge {
+            return loadBridgeEvents(limit: limit)
+        }
+
         let sourcePath = logsDirectory(for: source).appendingPathComponent(logFileName(for: date))
         guard let content = try? String(contentsOf: sourcePath, encoding: .utf8) else {
             return []
@@ -251,6 +262,61 @@ class LogFileManager {
             guard !line.isEmpty, let event = SystemEvent.fromLogLine(line) else { continue }
             events.append(event)
             if events.count >= limit { break }
+        }
+
+        return events
+    }
+
+    /// Load events from Bridge's bridge.log (different format)
+    private func loadBridgeEvents(limit: Int = 500) -> [SystemEvent] {
+        let logFile = logsDirectory(for: .bridge).appendingPathComponent("bridge.log")
+        guard let content = try? String(contentsOf: logFile, encoding: .utf8) else {
+            return []
+        }
+
+        let lines = content.components(separatedBy: .newlines)
+        var events: [SystemEvent] = []
+
+        // Bridge log format: [ISO_TIMESTAMP] [LEVEL] message
+        // e.g., [2024-01-08T10:30:00.000Z] [INFO] Labs sessions: 5
+        let pattern = #"\[([^\]]+)\] \[([^\]]+)\] (.+)"#
+        let regex = try? NSRegularExpression(pattern: pattern)
+
+        for line in lines.reversed() {
+            guard !line.isEmpty else { continue }
+
+            if let regex = regex,
+               let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
+               match.numberOfRanges >= 4 {
+                let timestampStr = String(line[Range(match.range(at: 1), in: line)!])
+                let level = String(line[Range(match.range(at: 2), in: line)!])
+                let message = String(line[Range(match.range(at: 3), in: line)!])
+
+                // Parse ISO timestamp
+                let isoFormatter = ISO8601DateFormatter()
+                isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                let timestamp = isoFormatter.date(from: timestampStr) ?? Date()
+
+                // Map Bridge log levels to SystemEventType
+                let eventType: SystemEventType = switch level {
+                case "ERROR": .error
+                case "WARN": .error
+                case "DEBUG": .system
+                case "REQ": .sync
+                default: .system
+                }
+
+                let event = SystemEvent(
+                    id: UUID(),
+                    timestamp: timestamp,
+                    source: .bridge,
+                    type: eventType,
+                    message: message,
+                    detail: nil
+                )
+                events.append(event)
+                if events.count >= limit { break }
+            }
         }
 
         return events
@@ -498,48 +564,51 @@ struct SystemLogsView: View {
                 .font(Theme.current.fontXSBold)
                 .foregroundColor(Theme.current.foreground)
 
-            Spacer()
-
-            // Live indicator
+            // Search field (promoted to header)
             HStack(spacing: 4) {
-                Circle()
-                    .fill(subtleGreen)
-                    .frame(width: 5, height: 5)
-                    .shadow(color: subtleGreen.opacity(0.5), radius: 3)
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 10))
+                    .foregroundColor(Theme.current.foregroundMuted)
 
-                Text("LIVE")
-                    .font(Theme.current.fontXSBold)
-                    .foregroundColor(subtleGreen.opacity(0.8))
+                TextField("Search...", text: $searchQuery)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11))
+                    .foregroundColor(Theme.current.foreground)
+                    .frame(width: 150)
+
+                if !searchQuery.isEmpty {
+                    Button(action: { searchQuery = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(Theme.current.foregroundMuted)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Theme.current.surface1)
+            .cornerRadius(4)
+
+            Spacer()
 
             // Copy All button
             Button(action: copyAllLogs) {
-                HStack(spacing: 3) {
-                    Image(systemName: showCopiedFeedback ? "checkmark" : "doc.on.doc")
-                        .font(.system(size: 9))
-                    Text(showCopiedFeedback ? "COPIED" : "COPY ALL")
-                        .font(Theme.current.fontXS)
-                }
-                .foregroundColor(showCopiedFeedback ? subtleGreen : Theme.current.foregroundMuted)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Theme.current.surface1)
-                .cornerRadius(2)
+                Image(systemName: showCopiedFeedback ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 10))
+                    .foregroundColor(showCopiedFeedback ? subtleGreen : Theme.current.foregroundMuted)
             }
             .buttonStyle(.plain)
-            .help("Copy all visible logs to clipboard (⌘C)")
+            .help("Copy all visible logs (⌘C)")
 
             // Clear button
             Button(action: { eventManager.clear() }) {
-                Text("CLEAR")
-                    .font(Theme.current.fontXS)
+                Image(systemName: "trash")
+                    .font(.system(size: 10))
                     .foregroundColor(Theme.current.foregroundMuted)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Theme.current.surface1)
-                    .cornerRadius(2)
             }
             .buttonStyle(.plain)
+            .help("Clear logs")
 
             // Pop-out button (only shown when in popover mode)
             if let onPopOut = onPopOut {
@@ -579,62 +648,28 @@ struct SystemLogsView: View {
     // MARK: - Filter Bar
 
     private var filterBar: some View {
-        VStack(spacing: 8) {
-            // Top row: Source selection (visually distinct - larger, segmented style)
-            HStack(spacing: 4) {
-                sourceFilterChip(nil, label: "ALL LOGS")
+        VStack(spacing: 6) {
+            // Top row: Source tabs
+            HStack(spacing: 0) {
+                sourceFilterChip(nil, label: "ALL")
                 sourceFilterChip(.talkie, label: "TALKIE")
                 sourceFilterChip(.talkieLive, label: "LIVE")
                 sourceFilterChip(.talkieEngine, label: "ENGINE")
+                sourceFilterChip(.bridge, label: "BRIDGE")
 
                 Spacer()
-
-                // Event count
-                Text("\(filteredEvents.count)")
-                    .font(Theme.current.fontXS)
-                    .foregroundColor(Theme.current.foregroundMuted)
             }
 
-            // Bottom row: Type filters + search
+            // Bottom row: Type filter chips
             HStack(spacing: 6) {
-                Text("FILTER")
-                    .font(Theme.current.fontXSBold)
-                    .foregroundColor(Theme.current.foregroundMuted.opacity(0.6))
-
                 filterChip(nil, label: "ALL")
                 filterChip(.sync, label: "SYNC")
                 filterChip(.record, label: "RECORD")
-                filterChip(.transcribe, label: "WHISPER")
+                filterChip(.transcribe, label: "STT")
                 filterChip(.workflow, label: "WORKFLOW")
                 filterChip(.error, label: "ERROR")
 
                 Spacer()
-
-                // Search field
-                HStack(spacing: 4) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 10))
-                        .foregroundColor(Theme.current.foregroundMuted)
-
-                    TextField("Search...", text: $searchQuery)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(Theme.current.foreground)
-                        .frame(width: 120)
-
-                    if !searchQuery.isEmpty {
-                        Button(action: { searchQuery = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 10))
-                                .foregroundColor(Theme.current.foregroundMuted)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Theme.current.surface1)
-                .cornerRadius(CornerRadius.xs)
             }
         }
         .padding(.horizontal, 12)
@@ -642,30 +677,27 @@ struct SystemLogsView: View {
         .background(bgColor)
     }
 
+    /// Tab-style source selector - compact with subtle background
     private func sourceFilterChip(_ source: SystemEventSource?, label: String) -> some View {
         let isSelected = filterSource == source
-        let chipColor = source?.color ?? .white
 
         return Button(action: { filterSource = source }) {
-            HStack(spacing: 4) {
+            HStack(spacing: 3) {
                 if let source = source {
                     Image(systemName: source.icon)
-                        .font(.system(size: 9, weight: .medium))
+                        .font(.system(size: 8))
                 }
                 Text(label)
-                    .font(.system(size: 10, weight: .semibold))
-                    .tracking(0.3)
+                    .font(.system(size: 9, weight: isSelected ? .semibold : .regular))
             }
-            .foregroundColor(isSelected ? .white : chipColor.opacity(0.7))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: CornerRadius.xs)
-                    .fill(isSelected ? chipColor.opacity(0.85) : chipColor.opacity(0.12))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CornerRadius.xs)
-                            .stroke(isSelected ? chipColor.opacity(0.3) : Color.clear, lineWidth: 1)
-                    )
+            .foregroundColor(isSelected ? Theme.current.foreground : Theme.current.foregroundMuted)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(isSelected ? Theme.current.surface1 : Color.clear)
+            .cornerRadius(4)
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(isSelected ? Theme.current.divider : Color.clear, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)

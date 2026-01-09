@@ -2,57 +2,30 @@
 //  BuildInfo.swift
 //  Talkie iOS
 //
-//  Runtime git info - works in simulator, shows "device" on physical device
+//  Build info - git info is embedded at build time via build phase script
+//  or defaults to placeholder values.
 //
 
 import Foundation
 
 enum BuildInfo {
-    /// Get current git branch (simulator only, returns "device" on physical device)
+    /// Git branch - set via GIT_BRANCH build setting or defaults to "dev"
     static var gitBranch: String {
-        #if DEBUG && targetEnvironment(simulator)
-        return shell("git", "-C", sourceDirectory, "rev-parse", "--abbrev-ref", "HEAD") ?? "unknown"
-        #else
-        return "device"
-        #endif
+        Bundle.main.infoDictionary?["GitBranch"] as? String ?? "dev"
     }
 
-    /// Get current git commit short hash
+    /// Git commit short hash - set via GIT_COMMIT build setting or defaults to "local"
     static var gitCommit: String {
-        #if DEBUG && targetEnvironment(simulator)
-        return shell("git", "-C", sourceDirectory, "rev-parse", "--short", "HEAD") ?? "unknown"
-        #else
-        return "release"
-        #endif
+        Bundle.main.infoDictionary?["GitCommit"] as? String ?? "local"
     }
 
-    /// Source directory derived from #file at compile time
-    private static let sourceDirectory: String = {
-        // #file gives us the path to this source file at compile time
-        // e.g., /Users/arach/dev/talkie/iOS/Talkie iOS/BuildInfo.swift
-        let filePath = #file
-        return (filePath as NSString).deletingLastPathComponent
-    }()
-
-    #if DEBUG && targetEnvironment(simulator)
-    private static func shell(_ args: String...) -> String? {
-        let process = Process()
-        let pipe = Pipe()
-
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = args
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        } catch {
-            return nil
+    /// Build date
+    static var buildDate: String {
+        if let buildDateString = Bundle.main.infoDictionary?["BuildDate"] as? String {
+            return buildDateString
         }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, HH:mm"
+        return formatter.string(from: Date())
     }
-    #endif
 }

@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		FDFFED42BDF045DFBAACD3AA /* iOSSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53EE24E8602B4ADE8A6E8A34 /* iOSSettingsView.swift */; };
+		012B648254964EDE8571757F /* ServerSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F411D2C997054CBD9F29D481 /* ServerSettingsView.swift */; };
+		D146CAB9F60C47FD8F53342F /* CoreDataSyncGateway.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DCA5ABA3708420084D58E14 /* CoreDataSyncGateway.swift */; };
+		62DDC289152A49DD9CBC5B7F /* PowerStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C57503DFEB34B0E94BBB23F /* PowerStateManager.swift */; };
 		BECEA345A6B14806B0D8114E /* ConnectionCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32FDE738B834439783AECFF8 /* ConnectionCenterView.swift */; };
 		E17607B694974D61AD36CB97 /* AuditRunsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F7BD3A2AE20409D92E99FB7 /* AuditRunsListView.swift */; };
 		EF43F1D21FB347C7B82A8BE6 /* AuditRunDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6A8DB8DA8604F4D888A9E52 /* AuditRunDetailView.swift */; };
@@ -284,6 +288,10 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		53EE24E8602B4ADE8A6E8A34 /* iOSSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSSettingsView.swift; sourceTree = "<group>"; };
+		F411D2C997054CBD9F29D481 /* ServerSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerSettingsView.swift; sourceTree = "<group>"; };
+		1DCA5ABA3708420084D58E14 /* CoreDataSyncGateway.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataSyncGateway.swift; sourceTree = "<group>"; };
+		3C57503DFEB34B0E94BBB23F /* PowerStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerStateManager.swift; sourceTree = "<group>"; };
 		32FDE738B834439783AECFF8 /* ConnectionCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionCenterView.swift; sourceTree = "<group>"; };
 		9F7BD3A2AE20409D92E99FB7 /* AuditRunsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuditRunsListView.swift; sourceTree = "<group>"; };
 		F6A8DB8DA8604F4D888A9E52 /* AuditRunDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuditRunDetailView.swift; sourceTree = "<group>"; };
@@ -578,6 +586,7 @@
 		B5DD782E95EC432C8A66157B /* Sync */ = {
 			isa = PBXGroup;
 			children = (
+				1DCA5ABA3708420084D58E14 /* CoreDataSyncGateway.swift */,
 				9CDE3623769D498DB219A660 /* iCloudSyncProvider.swift */,
 				E5BF3B038A8142B480F07308 /* SyncProvider.swift */,
 				67EF9D4181744ED4AF5722A1 /* LocalSyncProvider.swift */,
@@ -891,6 +900,8 @@
 		9A4651765758DD61801D03CA /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				53EE24E8602B4ADE8A6E8A34 /* iOSSettingsView.swift */,
+				F411D2C997054CBD9F29D481 /* ServerSettingsView.swift */,
 				32FDE738B834439783AECFF8 /* ConnectionCenterView.swift */,
 				C17881FF95CCD644641D298E /* APISettings.swift */,
 				CB9A7709DDDFE4A1859B1326 /* AppearanceSettings.swift */,
@@ -1156,6 +1167,7 @@
 		FDD3B1848425C2C039CA5F59 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				3C57503DFEB34B0E94BBB23F /* PowerStateManager.swift */,
 				B5DD782E95EC432C8A66157B /* Sync */,
 				75BB8C84F67500324AE2084A /* APIKeyStore.swift */,
 				6F7C961509F087E2FA5C4C24 /* AppEnvironment.swift */,
@@ -1321,6 +1333,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FDFFED42BDF045DFBAACD3AA /* iOSSettingsView.swift in Sources */,
+				012B648254964EDE8571757F /* ServerSettingsView.swift in Sources */,
+				D146CAB9F60C47FD8F53342F /* CoreDataSyncGateway.swift in Sources */,
+				62DDC289152A49DD9CBC5B7F /* PowerStateManager.swift in Sources */,
 				BECEA345A6B14806B0D8114E /* ConnectionCenterView.swift in Sources */,
 				E17607B694974D61AD36CB97 /* AuditRunsListView.swift in Sources */,
 				EF43F1D21FB347C7B82A8BE6 /* AuditRunDetailView.swift in Sources */,

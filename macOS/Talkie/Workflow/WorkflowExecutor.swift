@@ -570,7 +570,10 @@ class WorkflowExecutor {
         runDate: Date,
         stepOutputsJSON: String?
     ) {
-        let context = PersistenceController.shared.container.viewContext
+        guard let context = CoreDataSyncGateway.shared.context else {
+            logger.warning("⚠️ Cannot sync workflow run - Core Data not ready")
+            return
+        }
         logger.info("☁️ Syncing workflow run to Core Data for CloudKit: \(workflow.name)")
 
         let run = WorkflowRun(context: context)
@@ -1050,7 +1053,10 @@ class WorkflowExecutor {
 
         // Create PushNotification record in Core Data for CloudKit sync
         // This is one of the few places we need Core Data - for iOS push via CloudKit
-        let coreDataContext = PersistenceController.shared.container.viewContext
+        guard let coreDataContext = CoreDataSyncGateway.shared.context else {
+            logger.warning("📱 [iOS Push] ⚠️ Cannot send - Core Data not ready")
+            return "Push notification skipped - sync not ready"
+        }
         return try await coreDataContext.perform {
             let notificationId = UUID()
             let pushNotification = PushNotification(context: coreDataContext)

@@ -375,7 +375,11 @@ struct LocalFilesSettingsView: View {
     }
 
     private func syncNow() {
-        let context = PersistenceController.shared.container.viewContext
+        // Use gateway for safe Core Data access
+        guard let context = CoreDataSyncGateway.shared.context else {
+            statusMessage = "⚠️ Sync not ready"
+            return
+        }
         TranscriptFileManager.shared.syncAllMemos(context: context)
         statusMessage = "✓ Synced local files"
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {

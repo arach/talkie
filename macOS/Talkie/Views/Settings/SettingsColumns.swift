@@ -32,12 +32,14 @@ enum SettingsSection: String, Hashable {
     // STORAGE
     case database            // Retention, cleanup
     case files               // Local paths, exports
-    case cloud               // Sync (future)
+
+    // iOS (user-facing connectivity)
+    case iOS                 // Unified iOS settings (iCloud + Bridge + devices)
 
     // SYSTEM
     case connections         // Connection Center (unified view)
     case helpers             // Background services (TalkieLive, TalkieEngine)
-    case bridge              // iOS Bridge (Tailscale)
+    case server              // TalkieServer (power user / debugging)
     case permissions
     case debugInfo
     case devControl          // Dev control panel (DEBUG only)
@@ -62,10 +64,10 @@ enum SettingsSection: String, Hashable {
         case "llm", "llm-models": return .llmModels
         case "database", "db": return .database
         case "files": return .files
-        case "cloud", "sync": return .cloud
+        case "ios", "iphone", "icloud": return .iOS
         case "connections": return .connections
+        case "server": return .server
         case "helpers": return .helpers
-        case "bridge", "ios-bridge": return .bridge
         case "permissions": return .permissions
         case "debug", "debug-info": return .debugInfo
         case "dev", "dev-control": return .devControl
@@ -89,10 +91,10 @@ enum SettingsSection: String, Hashable {
         case .llmModels: return "llm"
         case .database: return "database"
         case .files: return "files"
-        case .cloud: return "cloud"
+        case .iOS: return "ios"
         case .connections: return "connections"
+        case .server: return "server"
         case .helpers: return "helpers"
-        case .bridge: return "bridge"
         case .permissions: return "permissions"
         case .debugInfo: return "debug"
         case .devControl: return "dev"
@@ -199,8 +201,8 @@ struct SettingsSidebarColumn: View {
                     // APPEARANCE
                     SettingsSidebarSection(title: "APPEARANCE", isActive: selectedSection == .appearance) {
                         SettingsSidebarItem(
-                            icon: "moon.stars",
-                            title: "THEME & COLORS",
+                            icon: "paintbrush",
+                            title: "APPEARANCE",
                             isSelected: selectedSection == .appearance
                         ) {
                             selectedSection = .appearance
@@ -290,7 +292,7 @@ struct SettingsSidebarColumn: View {
                     }
 
                     // STORAGE
-                    SettingsSidebarSection(title: "STORAGE", isActive: selectedSection == .database || selectedSection == .files || selectedSection == .cloud) {
+                    SettingsSidebarSection(title: "STORAGE", isActive: selectedSection == .database || selectedSection == .files) {
                         SettingsSidebarItem(
                             icon: "cylinder",
                             title: "DATABASE",
@@ -305,17 +307,21 @@ struct SettingsSidebarColumn: View {
                         ) {
                             selectedSection = .files
                         }
+                    }
+
+                    // iOS (user-facing connectivity)
+                    SettingsSidebarSection(title: "iOS", isActive: selectedSection == .iOS) {
                         SettingsSidebarItem(
-                            icon: "cloud",
-                            title: "CLOUD",
-                            isSelected: selectedSection == .cloud
+                            icon: "iphone",
+                            title: "CONNECTION",
+                            isSelected: selectedSection == .iOS
                         ) {
-                            selectedSection = .cloud
+                            selectedSection = .iOS
                         }
                     }
 
                     // SYSTEM
-                    SettingsSidebarSection(title: "SYSTEM", isActive: selectedSection == .connections || selectedSection == .helpers || selectedSection == .bridge || selectedSection == .permissions || selectedSection == .debugInfo || selectedSection == .devControl) {
+                    SettingsSidebarSection(title: "SYSTEM", isActive: selectedSection == .connections || selectedSection == .helpers || selectedSection == .server || selectedSection == .permissions || selectedSection == .debugInfo || selectedSection == .devControl) {
                         SettingsSidebarItem(
                             icon: "point.3.connected.trianglepath.dotted",
                             title: "CONNECTIONS",
@@ -331,11 +337,11 @@ struct SettingsSidebarColumn: View {
                             selectedSection = .helpers
                         }
                         SettingsSidebarItem(
-                            icon: "iphone.gen3.radiowaves.left.and.right",
-                            title: "iOS BRIDGE",
-                            isSelected: selectedSection == .bridge
+                            icon: "server.rack",
+                            title: "SERVER",
+                            isSelected: selectedSection == .server
                         ) {
-                            selectedSection = .bridge
+                            selectedSection = .server
                         }
                         SettingsSidebarItem(
                             icon: "lock.shield",
@@ -422,18 +428,20 @@ struct SettingsContentColumn: View {
             DatabaseSettingsView()
         case .files:
             LocalFilesSettingsView()
-        case .cloud:
-            CloudSettingsView()
+
+        // iOS
+        case .iOS:
+            iOSSettingsView()
 
         // SYSTEM
         case .connections:
             ConnectionCenterView(selectedSection: $selectedSection)
         case .helpers:
             HelperAppsSettingsView()
+        case .server:
+            ServerSettingsView()
         case .permissions:
             PermissionsSettingsView()
-        case .bridge:
-            BridgeSettingsView()
         case .debugInfo:
             DebugInfoView()
         case .devControl:

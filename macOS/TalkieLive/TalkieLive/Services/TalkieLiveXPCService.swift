@@ -260,9 +260,38 @@ final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol, Observ
                 }
             }
 
+            // 4. Last resort: If we still have no context but found a Claude terminal,
+            //    use the first Claude terminal as a fallback (likely the active one)
+            if context == nil {
+                let scanResult = TerminalScanner.shared.scanAllTerminals()
+                if let claudeTerminal = scanResult.terminals.first(where: { $0.isClaudeSession }) {
+                    NSLog("[TalkieLiveXPC] Using fallback Claude terminal: \(claudeTerminal.windowTitle) (\(claudeTerminal.bundleID))")
+                    context = SessionContext(
+                        app: claudeTerminal.appName,
+                        bundleId: claudeTerminal.bundleID,
+                        windowTitle: claudeTerminal.windowTitle,
+                        pid: claudeTerminal.pid,
+                        workingDirectory: claudeTerminal.workingDirectory,
+                        timestamp: Date()
+                    )
+                }
+            }
+
             guard let ctx = context else {
                 NSLog("[TalkieLiveXPC] Could not find terminal for session: \(sessionId), project: \(projectPath ?? "nil")")
-                reply(false, "No terminal found for project. Try dictating in that session first.")
+                let scanResult = TerminalScanner.shared.scanAllTerminals()
+                let terminalInfo = scanResult.terminals.map { "\($0.appName): \($0.windowTitle)" }.joined(separator: ", ")
+                let error = """
+                    No terminal found for project '\(projectPath?.components(separatedBy: "/").last ?? sessionId)'.
+
+                    Troubleshooting:
+                    1. Open a terminal in the project directory
+                    2. Start a Claude Code session (run 'claude')
+                    3. Make sure the terminal window title shows the project path
+
+                    Found terminals: \(terminalInfo.isEmpty ? "none" : terminalInfo)
+                    """
+                reply(false, error)
                 return
             }
 
@@ -300,7 +329,18 @@ final class TalkieLiveXPCService: NSObject, TalkieLiveXPCServiceProtocol, Observ
                 reply(true, nil)
             } else {
                 NSLog("[TalkieLiveXPC] Message append failed for \(ctx.app)")
-                reply(false, "Message append failed")
+                let error = """
+                    Failed to insert text into \(ctx.app).
+
+                    Troubleshooting:
+                    1. Check Accessibility permission is granted for TalkieLive
+                    2. Make sure the terminal window is visible (not minimized)
+                    3. The terminal may be blocked by a modal dialog
+                    4. Try clicking on the terminal window first
+
+                    Target: \(ctx.windowTitle)
+                    """
+                reply(false, error)
             }
         }
     }

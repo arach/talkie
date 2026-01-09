@@ -23,9 +23,7 @@ class GeminiProvider: LLMProvider {
     init() {}
 
     private var apiKey: String {
-        let manager = SettingsManager.shared
-        manager.loadSettings() // Ensure initialized
-        return manager.geminiApiKey
+        SettingsManager.shared.geminiApiKey
     }
 
     var isAvailable: Bool {

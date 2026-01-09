@@ -11,23 +11,17 @@ import AudioToolbox
 
 struct QRScannerView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var bridgeManager = BridgeManager.shared
+    private var bridgeManager = BridgeManager.shared
     @State private var isScanning = true
     @State private var scannedCode: String?
     @State private var errorMessage: String?
-    @State private var pairingStatus: String = ""
-    @State private var statusIndex = 0
+    @State private var currentStep = 0
 
-    // Techy status messages during pairing
-    private let pairingStatuses = [
-        "Decoding QR payload...",
-        "Extracting public key...",
-        "Generating keypair...",
-        "Deriving shared secret...",
-        "Establishing secure channel...",
-        "Authenticating device...",
-        "Syncing clocks...",
-        "Verifying connection..."
+    private let pairingSteps = [
+        "Generating keypair",
+        "Deriving shared secret",
+        "Authenticating device",
+        "Syncing clocks"
     ]
 
     var body: some View {
@@ -71,57 +65,62 @@ struct QRScannerView: View {
                     // Pairing in progress
                     VStack(spacing: 24) {
                         if bridgeManager.status == .connecting {
-                            // Techy pairing animation
-                            VStack(spacing: 16) {
-                                BrailleSpinner(speed: 0.06, color: .green)
-
+                            // Organized step list with progression
+                            VStack(spacing: 24) {
                                 Text("PAIRING")
                                     .font(.system(size: 12, weight: .bold, design: .monospaced))
                                     .tracking(4)
                                     .foregroundColor(.green)
 
-                                Text(pairingStatus)
-                                    .font(.system(size: 14, weight: .medium, design: .monospaced))
-                                    .foregroundColor(.white.opacity(0.8))
-                                    .animation(.easeInOut(duration: 0.2), value: pairingStatus)
+                                VStack(alignment: .leading, spacing: 0) {
+                                    ForEach(Array(pairingSteps.enumerated()), id: \.offset) { index, step in
+                                        HStack(alignment: .center, spacing: 12) {
+                                            // Status indicator - fixed width column
+                                            ZStack {
+                                                if index < currentStep {
+                                                    Image(systemName: "checkmark")
+                                                        .font(.system(size: 10, weight: .bold))
+                                                        .foregroundColor(.green)
+                                                } else if index == currentStep {
+                                                    BrailleSpinner(size: 14, speed: 0.08, color: .green)
+                                                } else {
+                                                    Circle()
+                                                        .fill(Color.white.opacity(0.2))
+                                                        .frame(width: 6, height: 6)
+                                                }
+                                            }
+                                            .frame(width: 20, height: 20, alignment: .center)
+
+                                            Text(step)
+                                                .font(.system(size: 13, design: .monospaced))
+                                                .foregroundColor(index <= currentStep ? .white : .white.opacity(0.4))
+                                        }
+                                        .frame(height: 32)
+
+                                        // Connector line
+                                        if index < pairingSteps.count - 1 {
+                                            HStack(spacing: 0) {
+                                                Rectangle()
+                                                    .fill(index < currentStep ? Color.green.opacity(0.5) : Color.white.opacity(0.1))
+                                                    .frame(width: 1, height: 12)
+                                                    .frame(width: 20, alignment: .center)
+                                                Spacer()
+                                            }
+                                        }
+                                    }
+                                }
+                                .frame(width: 240)
                             }
                             .onAppear {
-                                startStatusAnimation()
+                                startStepProgression()
                             }
 
                         } else if bridgeManager.status == .connected {
-                            // Success state
-                            VStack(spacing: 16) {
-                                Text("✓")
-                                    .font(.system(size: 48, weight: .light, design: .monospaced))
-                                    .foregroundColor(.green)
-
-                                Text("PAIRED")
-                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                    .tracking(4)
-                                    .foregroundColor(.green)
-
-                                if let macName = bridgeManager.pairedMacName {
-                                    Text(macName)
-                                        .font(.system(size: 14, weight: .medium, design: .monospaced))
-                                        .foregroundColor(.white.opacity(0.7))
-                                }
-
-                                Text("Secure connection established")
-                                    .font(.system(size: 12, design: .monospaced))
-                                    .foregroundColor(.white.opacity(0.5))
-                            }
-
-                            Button("Done") {
-                                dismiss()
-                            }
-                            .font(.system(size: 14, weight: .medium, design: .monospaced))
-                            .foregroundColor(.black)
-                            .padding(.horizontal, 32)
-                            .padding(.vertical, 12)
-                            .background(Color.green)
-                            .cornerRadius(8)
-                            .padding(.top, 20)
+                            // Success state with delightful animation
+                            SuccessView(
+                                macName: bridgeManager.pairedMacName,
+                                onDone: { dismiss() }
+                            )
 
                         } else if bridgeManager.status == .error {
                             // Error state
@@ -147,7 +146,7 @@ struct QRScannerView: View {
                             Button("Retry") {
                                 isScanning = true
                                 errorMessage = nil
-                                statusIndex = 0
+                                currentStep = 0
                             }
                             .font(.system(size: 14, weight: .medium, design: .monospaced))
                             .foregroundColor(.white)
@@ -172,15 +171,18 @@ struct QRScannerView: View {
         }
     }
 
-    private func startStatusAnimation() {
-        pairingStatus = pairingStatuses[0]
-        Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { timer in
+    private func startStepProgression() {
+        currentStep = 0
+        Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { timer in
             if bridgeManager.status != .connecting {
                 timer.invalidate()
                 return
             }
-            statusIndex = (statusIndex + 1) % pairingStatuses.count
-            pairingStatus = pairingStatuses[statusIndex]
+            if currentStep < pairingSteps.count - 1 {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    currentStep += 1
+                }
+            }
         }
     }
 
@@ -301,6 +303,107 @@ class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsD
         // Stop scanning and report
         stopScanning()
         onCodeScanned?(code)
+    }
+}
+
+// MARK: - Success View with Delightful Animation
+
+private struct SuccessView: View {
+    let macName: String?
+    let onDone: () -> Void
+
+    @State private var showCheckmark = false
+    @State private var showText = false
+    @State private var showButton = false
+    @State private var checkmarkScale: CGFloat = 0.3
+    @State private var ringScale: CGFloat = 0.8
+    @State private var ringOpacity: CGFloat = 1.0
+
+    var body: some View {
+        VStack(spacing: 20) {
+            // Animated checkmark with ring burst
+            ZStack {
+                // Expanding ring effect
+                Circle()
+                    .stroke(Color.green.opacity(ringOpacity), lineWidth: 2)
+                    .frame(width: 80, height: 80)
+                    .scaleEffect(ringScale)
+
+                // Checkmark circle
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 64, height: 64)
+                    .scaleEffect(showCheckmark ? 1 : 0)
+                    .overlay(
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundColor(.black)
+                            .scaleEffect(showCheckmark ? 1 : 0)
+                    )
+            }
+
+            // Text content
+            VStack(spacing: 8) {
+                Text("PAIRED")
+                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                    .tracking(4)
+                    .foregroundColor(.green)
+
+                if let macName = macName {
+                    Text(macName)
+                        .font(.system(size: 16, weight: .medium, design: .monospaced))
+                        .foregroundColor(.white)
+                }
+
+                Text("Secure connection established")
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.5))
+            }
+            .opacity(showText ? 1 : 0)
+            .offset(y: showText ? 0 : 10)
+
+            // Done button
+            Button(action: onDone) {
+                Text("Done")
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundColor(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Color.green)
+                    .cornerRadius(12)
+            }
+            .padding(.horizontal, 40)
+            .padding(.top, 8)
+            .opacity(showButton ? 1 : 0)
+            .scaleEffect(showButton ? 1 : 0.8)
+        }
+        .onAppear {
+            // Haptic feedback
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.success)
+
+            // Sequence the animations
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+                showCheckmark = true
+                checkmarkScale = 1.0
+            }
+
+            // Ring burst
+            withAnimation(.easeOut(duration: 0.6)) {
+                ringScale = 1.8
+                ringOpacity = 0
+            }
+
+            // Text fade in
+            withAnimation(.easeOut(duration: 0.3).delay(0.2)) {
+                showText = true
+            }
+
+            // Button pop in
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.4)) {
+                showButton = true
+            }
+        }
     }
 }
 

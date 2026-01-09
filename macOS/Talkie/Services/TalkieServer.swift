@@ -12,6 +12,35 @@ import TalkieKit
 
 private let log = Log(.system)
 
+// MARK: - Error Messages
+
+/// Actionable error messages with troubleshooting steps
+private enum TalkieServerError {
+    static let talkieLiveNotConnected = """
+        TalkieLive not connected. Troubleshooting:
+        1. Check TalkieLive is running (look for menu bar icon)
+        2. Ensure same build environment (both from Xcode or both from /Applications)
+        3. Verify Accessibility permission is granted (System Settings → Privacy & Security → Accessibility)
+        4. Try restarting TalkieLive from Talkie menu bar
+        """
+
+    static let xpcConnectionFailed = """
+        XPC connection failed. This usually means:
+        1. TalkieLive crashed or was force-quit
+        2. macOS invalidated the XPC connection
+        3. Different code signing between apps
+        Try: Restart TalkieLive from Talkie menu, or restart both apps
+        """
+
+    static let noTerminalFound = """
+        No terminal window found for this project. Troubleshooting:
+        1. Open a terminal in the project directory
+        2. Start a Claude Code session (run 'claude')
+        3. Make sure the terminal window title shows the project path
+        4. Check Accessibility permissions for your terminal app
+        """
+}
+
 /// Request body for /message endpoint
 /// Accepts either text OR audio (base64) - audio gets transcribed first
 private struct MessageRequest: Codable {
@@ -374,9 +403,13 @@ final class TalkieServer {
             }
 
             textToSend = t
-        } else if let text = request.text, !text.isEmpty {
-            // Text mode: use directly
-            log.info("Message for session: \(request.sessionId), text: \(text.prefix(50))...")
+        } else if let text = request.text {
+            // Text mode: use directly (empty text = force Enter only)
+            if text.isEmpty {
+                log.info("Force Enter for session: \(request.sessionId)")
+            } else {
+                log.info("Message for session: \(request.sessionId), text: \(text.prefix(50))...")
+            }
             textToSend = text
         } else {
             sendJSONResponse(connection, statusCode: 400, body: MessageResponse(success: false, error: "Either 'text' or 'audio' is required"))
@@ -411,15 +444,16 @@ final class TalkieServer {
             log.error("XPC error: \(error)")
             Task { @MainActor in
                 let durationMs = Int(Date().timeIntervalSince(xpcStartTime) * 1000)
-                MessageQueue.shared.updateStatus(messageId, status: .failed, error: "TalkieLive not available: \(error.localizedDescription)", xpcDurationMs: durationMs)
-                respondOnce(503, MessageResponse(success: false, error: "TalkieLive not available: \(error.localizedDescription)", transcript: transcript), false)
+                let errorMsg = "\(TalkieServerError.xpcConnectionFailed)\n\nTechnical: \(error.localizedDescription)"
+                MessageQueue.shared.updateStatus(messageId, status: .failed, error: errorMsg, xpcDurationMs: durationMs)
+                respondOnce(503, MessageResponse(success: false, error: errorMsg, transcript: transcript), false)
             }
         }) else {
             log.error("TalkieLive not connected")
-            MessageQueue.shared.updateStatus(messageId, status: .failed, error: "TalkieLive not connected")
+            MessageQueue.shared.updateStatus(messageId, status: .failed, error: TalkieServerError.talkieLiveNotConnected)
             sendJSONResponse(connection, statusCode: 503, body: MessageResponse(
                 success: false,
-                error: "TalkieLive not connected",
+                error: TalkieServerError.talkieLiveNotConnected,
                 transcript: transcript
             ))
             return
@@ -454,7 +488,7 @@ final class TalkieServer {
         guard let proxy = xpcManager?.remoteObjectProxy(errorHandler: { error in
             log.error("XPC error: \(error)")
         }) else {
-            sendErrorResponse(connection, statusCode: 503, error: "TalkieLive not connected")
+            sendErrorResponse(connection, statusCode: 503, error: TalkieServerError.talkieLiveNotConnected)
             return
         }
 
@@ -475,7 +509,7 @@ final class TalkieServer {
         guard let proxy = xpcManager?.remoteObjectProxy(errorHandler: { error in
             log.error("XPC error: \(error)")
         }) else {
-            sendErrorResponse(connection, statusCode: 503, error: "TalkieLive not connected")
+            sendErrorResponse(connection, statusCode: 503, error: TalkieServerError.talkieLiveNotConnected)
             return
         }
 
@@ -494,7 +528,7 @@ final class TalkieServer {
         guard let proxy = xpcManager?.remoteObjectProxy(errorHandler: { error in
             log.error("XPC error: \(error)")
         }) else {
-            sendErrorResponse(connection, statusCode: 503, error: "TalkieLive not connected")
+            sendErrorResponse(connection, statusCode: 503, error: TalkieServerError.talkieLiveNotConnected)
             return
         }
 

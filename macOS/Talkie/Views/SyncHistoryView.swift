@@ -258,7 +258,8 @@ struct SyncHistoryView: View {
                 }
             }
         }
-        .frame(width: 600, height: 500)
+        .frame(minWidth: 400, idealWidth: 500, maxWidth: 700)
+        .frame(minHeight: 350, idealHeight: 450, maxHeight: 600)
         .background(Color(nsColor: .windowBackgroundColor))
         .task {
             await loadPendingDeletions()
@@ -628,6 +629,232 @@ struct SyncRecordDetailRow: View {
     }
 }
 
+// MARK: - Sync Event Detail View
+
+struct SyncEventDetailView: View {
+    let event: SyncEvent
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Button(action: { dismiss() }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 12, weight: .medium))
+                        Text("Back")
+                            .font(.system(size: 13))
+                    }
+                    .foregroundColor(.blue)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                Button("Done") {
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding()
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Event summary card
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 12) {
+                            Image(systemName: event.status.icon)
+                                .font(.system(size: 24))
+                                .foregroundColor(event.status.color)
+                                .frame(width: 40, height: 40)
+                                .background(event.status.color.opacity(0.15))
+                                .cornerRadius(10)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(formatDateTime(event.timestamp))
+                                    .font(.system(size: 16, weight: .semibold))
+
+                                HStack(spacing: 8) {
+                                    Text(event.status.rawValue.capitalized)
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(event.status.color)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 2)
+                                        .background(event.status.color.opacity(0.15))
+                                        .cornerRadius(4)
+
+                                    if let duration = event.duration {
+                                        Text(String(format: "%.1fs", duration))
+                                            .font(.system(size: 12))
+                                            .foregroundColor(Theme.current.foregroundSecondary)
+                                    }
+                                }
+                            }
+
+                            Spacer()
+                        }
+
+                        if let error = event.errorMessage {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.red)
+                                Text(error)
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.red)
+                            }
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.red.opacity(0.1))
+                            .cornerRadius(6)
+                        }
+                    }
+                    .padding(16)
+                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+                    .cornerRadius(10)
+
+                    // Records changed section
+                    if !event.details.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("Records Changed")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(Theme.current.foregroundSecondary)
+
+                                Spacer()
+
+                                Text("\(event.details.count) item\(event.details.count == 1 ? "" : "s")")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(Theme.current.foregroundSecondary)
+                            }
+
+                            // Group by change type
+                            let added = event.details.filter { $0.changeType == .added }
+                            let modified = event.details.filter { $0.changeType == .modified }
+                            let deleted = event.details.filter { $0.changeType == .deleted }
+
+                            if !added.isEmpty {
+                                ChangeGroupSection(title: "Added", icon: "plus.circle.fill", color: .green, records: added)
+                            }
+
+                            if !modified.isEmpty {
+                                ChangeGroupSection(title: "Modified", icon: "pencil.circle.fill", color: .blue, records: modified)
+                            }
+
+                            if !deleted.isEmpty {
+                                ChangeGroupSection(title: "Deleted", icon: "minus.circle.fill", color: .red, records: deleted)
+                            }
+                        }
+                    } else {
+                        VStack(spacing: 12) {
+                            Image(systemName: "tray")
+                                .font(.system(size: 32))
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                            Text("No record details available")
+                                .font(.system(size: 13))
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 40)
+                    }
+                }
+                .padding(16)
+            }
+        }
+        .frame(minWidth: 400, idealWidth: 500, maxWidth: 700)
+        .frame(minHeight: 350, idealHeight: 450, maxHeight: 600)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private func formatDateTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - Change Group Section
+
+private struct ChangeGroupSection: View {
+    let title: String
+    let icon: String
+    let color: Color
+    let records: [SyncRecordDetail]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 11))
+                    .foregroundColor(color)
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(color)
+                Text("(\(records.count))")
+                    .font(.system(size: 10))
+                    .foregroundColor(Theme.current.foregroundSecondary)
+            }
+
+            VStack(spacing: 0) {
+                ForEach(records) { record in
+                    HStack(spacing: 10) {
+                        Text(record.recordType)
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(recordTypeColor(record.recordType))
+                            .cornerRadius(4)
+
+                        Text(record.title.isEmpty ? "Untitled" : record.title)
+                            .font(.system(size: 12))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+
+                        Spacer()
+
+                        if let modDate = record.modificationDate {
+                            Text(formatShortDate(modDate))
+                                .font(.system(size: 10))
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+
+                    if record.id != records.last?.id {
+                        Divider()
+                            .padding(.leading, 10)
+                    }
+                }
+            }
+            .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+            .cornerRadius(6)
+        }
+    }
+
+    private func recordTypeColor(_ type: String) -> Color {
+        switch type {
+        case "VoiceMemo": return .blue
+        case "Workflow": return .purple
+        case "WorkflowStep": return .indigo
+        case "TranscriptionSegment": return .teal
+        default: return .gray
+        }
+    }
+
+    private func formatShortDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+}
+
 // MARK: - Dev Mode Sync Section
 
 struct DevSyncStats {
@@ -666,7 +893,10 @@ struct DevSyncStats {
     }
 
     private static func fetchCoreDataInfo() async -> (Int, Set<UUID>) {
-        let context = PersistenceController.shared.container.viewContext
+        // Use gateway for safe Core Data access with isReady check
+        guard let context = await CoreDataSyncGateway.shared.context else {
+            return (0, Set<UUID>())
+        }
         return await context.perform {
             let request: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
             request.propertiesToFetch = ["id"]

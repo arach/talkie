@@ -106,12 +106,34 @@ final class BridgeManager {
 
     private var bridgeProcess: Process?
     private var refreshTimer: Timer?
+    private var isStartingBridge = false  // Prevents concurrent start attempts
 
-    // Source code location (repo)
-    private let bridgeSourcePath = "\(FileManager.default.homeDirectoryForCurrentUser.path)/dev/talkie-tailscale/macOS/TalkieBridge"
+    // MARK: - DEBUG Helpers
+
+    /// Log full JSON response in DEBUG builds
+    private func logResponse(_ data: Data, endpoint: String) {
+        #if DEBUG
+        if let json = String(data: data, encoding: .utf8) {
+            log.debug("[\(endpoint)] Response: \(json)")
+        }
+        #endif
+    }
+
+    // Source code location (derived from this file's compile-time path - works with git worktrees)
+    private static var bridgeSourcePath: String {
+        // #filePath at compile time: .../macOS/Talkie/Services/Bridge/BridgeManager.swift
+        // We need: .../macOS/TalkieServer
+        let thisFile = URL(fileURLWithPath: #filePath)
+        let macOSDir = thisFile
+            .deletingLastPathComponent() // BridgeManager.swift → Bridge/
+            .deletingLastPathComponent() // Bridge/ → Services/
+            .deletingLastPathComponent() // Services/ → Talkie/
+            .deletingLastPathComponent() // Talkie/ → macOS/
+        return macOSDir.appendingPathComponent("TalkieServer").path
+    }
     // Runtime data location (App Support)
-    private let bridgeDataPath = "\(FileManager.default.homeDirectoryForCurrentUser.path)/Library/Application Support/Talkie/Bridge"
-    private var pidFile: String { "\(bridgeDataPath)/bridge.pid" }
+    private static let bridgeDataPath = "\(FileManager.default.homeDirectoryForCurrentUser.path)/Library/Application Support/Talkie/Bridge"
+    private var pidFile: String { "\(Self.bridgeDataPath)/bridge.pid" }
     private let port = 8765
 
     // Known Tailscale CLI locations (in priority order)
@@ -192,7 +214,15 @@ final class BridgeManager {
     }
 
     func startBridge() async {
+        // Prevent concurrent start attempts (race condition guard)
+        guard !isStartingBridge else {
+            log.debug("Bridge start already in progress, skipping")
+            return
+        }
         guard bridgeStatus != .running && bridgeStatus != .starting else { return }
+
+        isStartingBridge = true
+        defer { isStartingBridge = false }
 
         // Find bun runtime
         guard let bunPath = findBunPath() else {
@@ -208,21 +238,49 @@ final class BridgeManager {
         // Kill any stray processes before starting
         await killStrayBridgeProcesses()
 
+        // Verify source path exists
+        let sourcePath = Self.bridgeSourcePath
+        guard FileManager.default.fileExists(atPath: sourcePath) else {
+            let msg = "Bridge source not found at: \(sourcePath)"
+            log.error(msg)
+            bridgeStatus = .error
+            errorMessage = msg
+            return
+        }
+
+        // Verify server.ts exists
+        let serverScript = "\(sourcePath)/src/server.ts"
+        guard FileManager.default.fileExists(atPath: serverScript) else {
+            let msg = "server.ts not found at: \(serverScript)"
+            log.error(msg)
+            bridgeStatus = .error
+            errorMessage = msg
+            return
+        }
+
         do {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: bunPath)
             process.arguments = ["run", "src/server.ts"]
-            process.currentDirectoryURL = URL(fileURLWithPath: bridgeSourcePath)
+            process.currentDirectoryURL = URL(fileURLWithPath: sourcePath)
+
+            // Set environment (inherit current + DEBUG flag)
+            var env = ProcessInfo.processInfo.environment
+            #if DEBUG
+            env["TALKIE_DEBUG"] = "1"
+            #endif
+            process.environment = env
 
             // Capture output for debugging
-            let pipe = Pipe()
-            process.standardOutput = pipe
-            process.standardError = pipe
+            let outputPipe = Pipe()
+            let errorPipe = Pipe()
+            process.standardOutput = outputPipe
+            process.standardError = errorPipe
 
             try process.run()
             bridgeProcess = process
 
-            log.info("TalkieBridge started with PID \(process.processIdentifier)")
+            log.info("Bridge started with PID \(process.processIdentifier) from \(sourcePath)")
 
             // Poll until server is ready (max 5 seconds)
             let ready = await waitForBridgeReady(maxAttempts: 10, delayMs: 500)
@@ -230,9 +288,22 @@ final class BridgeManager {
                 bridgeStatus = .running
                 await fetchQRData()
             } else {
+                // Read any error output
+                let errorData = errorPipe.fileHandleForReading.availableData
+                let errorOutput = String(data: errorData, encoding: .utf8) ?? ""
+                let outputData = outputPipe.fileHandleForReading.availableData
+                let stdOutput = String(data: outputData, encoding: .utf8) ?? ""
+
                 log.error("Bridge started but not responding")
+                if !errorOutput.isEmpty {
+                    log.error("stderr: \(errorOutput)")
+                }
+                if !stdOutput.isEmpty {
+                    log.info("stdout: \(stdOutput)")
+                }
+
                 bridgeStatus = .error
-                errorMessage = "Bridge started but not responding"
+                errorMessage = errorOutput.isEmpty ? "Bridge started but not responding" : errorOutput
                 return
             }
 
@@ -242,7 +313,7 @@ final class BridgeManager {
             // Start refresh timer
             startRefreshTimer()
         } catch {
-            log.error("Failed to start TalkieBridge: \(error)")
+            log.error("Failed to start Bridge: \(error)")
             bridgeStatus = .error
             errorMessage = error.localizedDescription
         }
@@ -328,7 +399,7 @@ final class BridgeManager {
         // Also kill any bun processes running our server script
         let pgrepProcess = Process()
         pgrepProcess.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
-        pgrepProcess.arguments = ["-f", "bun.*TalkieBridge.*server"]
+        pgrepProcess.arguments = ["-f", "bun.*TalkieServer.*server"]
 
         let pgrepPipe = Pipe()
         pgrepProcess.standardOutput = pgrepPipe
@@ -399,6 +470,46 @@ final class BridgeManager {
             await refreshPendingPairings()
         } catch {
             log.error("Failed to reject pairing: \(error)")
+        }
+    }
+
+    /// Remove a paired device
+    func removeDevice(_ deviceId: String) async {
+        do {
+            let url = URL(string: "http://localhost:\(port)/devices/\(deviceId)")!
+            var request = URLRequest(url: url)
+            request.httpMethod = "DELETE"
+
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                throw BridgeError.requestFailed
+            }
+
+            log.info("Removed device: \(deviceId)")
+            await refreshDevices()
+        } catch {
+            log.error("Failed to remove device: \(error)")
+        }
+    }
+
+    /// Remove all paired devices
+    func removeAllDevices() async {
+        do {
+            let url = URL(string: "http://localhost:\(port)/devices")!
+            var request = URLRequest(url: url)
+            request.httpMethod = "DELETE"
+
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                throw BridgeError.requestFailed
+            }
+
+            log.info("Removed all devices")
+            await refreshDevices()
+        } catch {
+            log.error("Failed to remove all devices: \(error)")
         }
     }
 
@@ -540,6 +651,7 @@ final class BridgeManager {
         do {
             let url = URL(string: "http://localhost:\(port)/devices")!
             let (data, _) = try await URLSession.shared.data(from: url)
+            logResponse(data, endpoint: "/devices")
 
             struct DevicesResponse: Codable {
                 var devices: [PairedDevice]
@@ -558,6 +670,7 @@ final class BridgeManager {
         do {
             let url = URL(string: "http://localhost:\(port)/pair/pending")!
             let (data, _) = try await URLSession.shared.data(from: url)
+            logResponse(data, endpoint: "/pair/pending")
 
             struct PendingResponse: Codable {
                 var pending: [PendingPairing]
@@ -576,6 +689,7 @@ final class BridgeManager {
         do {
             let url = URL(string: "http://localhost:\(port)/pair/info")!
             let (data, _) = try await URLSession.shared.data(from: url)
+            logResponse(data, endpoint: "/pair/info")
             qrData = try JSONDecoder().decode(QRData.self, from: data)
         } catch {
             log.error("Failed to fetch QR data: \(error)")

@@ -94,8 +94,8 @@ actor BridgeClient {
 
     func sessions(deepSync: Bool = false) async throws -> SessionsResponse {
         let path = deepSync ? "/sessions?refresh=deep" : "/sessions"
-        // Use longer timeout for deep sync (scans all sessions)
-        let data = try await get(path, timeout: deepSync ? 30 : 10)
+        // Use longer timeout for mobile network + Tailscale latency
+        let data = try await get(path, timeout: deepSync ? 60 : 30)
         let response = try JSONDecoder().decode(SessionsResponse.self, from: data)
 
         // Log the full response for debugging
@@ -108,8 +108,8 @@ actor BridgeClient {
 
     func paths(deepSync: Bool = false) async throws -> PathsResponse {
         let path = deepSync ? "/paths?refresh=deep" : "/paths"
-        // Use longer timeout for deep sync (scans all sessions)
-        let data = try await get(path, timeout: deepSync ? 30 : 10)
+        // Use longer timeout for mobile network + Tailscale latency
+        let data = try await get(path, timeout: deepSync ? 60 : 30)
         let response = try JSONDecoder().decode(PathsResponse.self, from: data)
 
         // Log the full response for debugging
@@ -132,7 +132,7 @@ actor BridgeClient {
     }
 
     func sendMessage(sessionId: String, text: String) async throws -> MessageResponse {
-        let body = MessageRequest(text: text)
+        let body = MessageRequest(message: text)
         let data = try await post("/sessions/\(sessionId)/message", body: body)
         return try JSONDecoder().decode(MessageResponse.self, from: data)
     }
@@ -155,8 +155,8 @@ actor BridgeClient {
     /// Useful when auto-submit doesn't work
     /// Sends empty message which triggers just pressing Enter
     func forceEnter(sessionId: String) async throws -> MessageResponse {
-        // Send empty text - server will just press Enter without inserting anything
-        let body = MessageRequest(text: "")
+        // Send empty message - server will just press Enter without inserting anything
+        let body = MessageRequest(message: "")
         let data = try await post("/sessions/\(sessionId)/message", body: body)
         return try JSONDecoder().decode(MessageResponse.self, from: data)
     }
@@ -175,8 +175,9 @@ actor BridgeClient {
     }
 
     /// Get all terminal window screenshots with metadata
+    /// Uses longer timeout since response includes base64-encoded images
     func windowCaptures() async throws -> WindowCapturesResponse {
-        let data = try await get("/windows/captures")
+        let data = try await get("/windows/captures", timeout: 30)
         return try JSONDecoder().decode(WindowCapturesResponse.self, from: data)
     }
 
@@ -193,7 +194,7 @@ actor BridgeClient {
         }
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 10
+        request.timeoutInterval = 30  // Longer timeout for mobile + Tailscale
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -209,7 +210,7 @@ actor BridgeClient {
     }
 
     /// Authenticated GET with HMAC signing
-    private func get(_ path: String, allowRetry: Bool = true, timeout: TimeInterval = 10) async throws -> Data {
+    private func get(_ path: String, allowRetry: Bool = true, timeout: TimeInterval = 30) async throws -> Data {
         guard let baseURL = baseURL else {
             throw BridgeError.notConfigured
         }
@@ -246,7 +247,7 @@ actor BridgeClient {
     }
 
     /// Authenticated POST with HMAC signing
-    private func post<T: Encodable>(_ path: String, body: T, timeout: TimeInterval = 10, allowRetry: Bool = true) async throws -> Data {
+    private func post<T: Encodable>(_ path: String, body: T, timeout: TimeInterval = 30, allowRetry: Bool = true) async throws -> Data {
         guard let baseURL = baseURL else {
             throw BridgeError.notConfigured
         }
@@ -414,7 +415,7 @@ struct PairResponse: Codable {
 }
 
 struct MessageRequest: Codable {
-    let text: String
+    let message: String
 }
 
 

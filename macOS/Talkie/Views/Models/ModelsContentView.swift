@@ -188,8 +188,7 @@ struct ModelsContentView: View {
                     }
                 },
                 onSave: {
-                    settingsManager.saveSettings()
-                    withAnimation {
+                                        withAnimation {
                         configuringProvider = nil
                     }
                 }
@@ -221,8 +220,7 @@ struct ModelsContentView: View {
                     }
                 },
                 onSave: {
-                    settingsManager.saveSettings()
-                    withAnimation {
+                                        withAnimation {
                         configuringProvider = nil
                     }
                 }
@@ -251,8 +249,7 @@ struct ModelsContentView: View {
                     }
                 },
                 onSave: {
-                    settingsManager.saveSettings()
-                    withAnimation {
+                                        withAnimation {
                         configuringProvider = nil
                     }
                 }
@@ -284,8 +281,7 @@ struct ModelsContentView: View {
                     }
                 },
                 onSave: {
-                    settingsManager.saveSettings()
-                    withAnimation {
+                                        withAnimation {
                         configuringProvider = nil
                     }
                 }

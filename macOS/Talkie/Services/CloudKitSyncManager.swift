@@ -57,9 +57,14 @@ class CloudKitSyncManager {
     @ObservationIgnored private var debounceTimer: Timer?
     @ObservationIgnored private let debounceInterval: TimeInterval = 3.0 // Coalesce rapid notifications
 
-    // Sync interval from settings (default 10 minutes)
+    // Sync interval from settings (default 10 minutes, DEBUG: 60 minutes)
     private var syncInterval: TimeInterval {
-        SettingsManager.shared.syncIntervalSeconds
+        #if DEBUG
+        // Dev override: sync once per hour to reduce noise
+        return 60 * 60  // 1 hour
+        #else
+        return SettingsManager.shared.syncIntervalSeconds
+        #endif
     }
 
     // Background activity scheduler - wakes app even when terminated
@@ -414,16 +419,19 @@ class CloudKitSyncManager {
                 self.isSyncing = false
                 SyncStatusManager.shared.setSynced(changes: result.changeCount)
 
-                // Add to sync history
-                let event = SyncEvent(
-                    timestamp: startTime,
-                    status: .success,
-                    itemCount: result.changeCount,
-                    duration: duration,
-                    errorMessage: nil,
-                    details: result.details
-                )
-                self.addSyncEvent(event)
+                // Only log meaningful user actions (memos), not CloudKit housekeeping
+                let meaningfulDetails = self.filterMeaningfulChanges(result.details)
+                if !meaningfulDetails.isEmpty {
+                    let event = SyncEvent(
+                        timestamp: startTime,
+                        status: .success,
+                        itemCount: meaningfulDetails.count,
+                        duration: duration,
+                        errorMessage: nil,
+                        details: meaningfulDetails
+                    )
+                    self.addSyncEvent(event)
+                }
             }
 
             NotificationCenter.default.post(
@@ -685,6 +693,33 @@ class CloudKitSyncManager {
         }
     }
 
+    /// Filter sync details to only meaningful user actions
+    /// Excludes: internal record types (WorkflowRun, TranscriptVersion), bulk reconciliation
+    private func filterMeaningfulChanges(_ details: [SyncRecordDetail]) -> [SyncRecordDetail] {
+        // Only keep VoiceMemo changes - these are user-facing
+        let memoChanges = details.filter { $0.recordType == "VoiceMemo" }
+
+        // If many memos changed at once with same timestamp, it's likely a token reset
+        // or full reconciliation - not individual user actions
+        if memoChanges.count > 10 {
+            // Check if modification dates are clustered (within 1 minute = bulk sync)
+            let dates = memoChanges.compactMap { $0.modificationDate }
+            if !dates.isEmpty {
+                let minDate = dates.min()!
+                let maxDate = dates.max()!
+                let spread = maxDate.timeIntervalSince(minDate)
+
+                // All changes within 60 seconds = bulk sync, not user activity
+                if spread < 60 {
+                    log.debug("Skipping bulk sync of \(memoChanges.count) memos (likely token reset)")
+                    return []
+                }
+            }
+        }
+
+        return memoChanges
+    }
+
     private func addSyncEvent(_ event: SyncEvent) {
         // Add to beginning of in-memory array (most recent first)
         syncHistory.insert(event, at: 0)
@@ -851,12 +886,19 @@ class CloudKitSyncManager {
                 let cdMemos = try context.fetch(fetchRequest)
                 if cdMemos.isEmpty {
                     if fullSync {
-                        log.info("🌉 [Bridge 1] Full sync: no memos in CoreData")
+                        log.debug("🌉 [Bridge 1] Full sync: no memos in CoreData")
                     }
                     return []
                 }
-                let syncType = fullSync ? "FULL sync" : "incremental sync"
-                log.info("🌉 [Bridge 1] \(syncType): \(cdMemos.count) memo(s)")
+
+                // Only log at INFO if there are a meaningful number of memos to sync
+                // Debug mode gets per-memo details, INFO just gets summary
+                let syncType = fullSync ? "FULL sync" : "incremental"
+                if cdMemos.count > 10 {
+                    log.debug("🌉 [Bridge 1] \(syncType): checking \(cdMemos.count) memo(s)")
+                } else {
+                    log.info("🌉 [Bridge 1] \(syncType): \(cdMemos.count) memo(s)")
+                }
 
                 // Convert all memos to MemoModel while still on context queue
                 var models: [MemoModel] = []
@@ -895,22 +937,22 @@ class CloudKitSyncManager {
                         if let existing = existingMemo {
                             // Skip soft-deleted memos - respect local deletion
                             if existing.memo.deletedAt != nil {
-                                log.info("⏭️ [Bridge 1] Skipping soft-deleted memo: '\(memoModel.title ?? "Untitled")'")
+                                log.debug("⏭️ [Bridge 1] Skipping soft-deleted memo: '\(memoModel.title ?? "Untitled")'")
                                 return (0, 0, 0)
                             }
 
                             // Compare timestamps - Core Data wins (source of truth from phone)
                             if memoModel.lastModified > existing.memo.lastModified {
-                                log.info("🌉 [Bridge 1] Updating memo: '\(memoModel.title ?? "Untitled")'")
+                                log.debug("🌉 [Bridge 1] Updating memo: '\(memoModel.title ?? "Untitled")'")
                                 try await repository.saveMemo(memoModel)
                                 return (0, 1, 0)
                             } else {
-                                log.info("⏭️ [Bridge 1] Skipping memo (GRDB is newer): '\(memoModel.title ?? "Untitled")'")
+                                // Already synced - skip silently (most common case)
                                 return (0, 0, 0)
                             }
                         } else {
                             // New memo - create in GRDB
-                            log.info("🌉 [Bridge 1] Creating new memo in GRDB: '\(memoModel.title ?? "Untitled")'")
+                            log.debug("🌉 [Bridge 1] Creating new memo in GRDB: '\(memoModel.title ?? "Untitled")'")
                             try await repository.saveMemo(memoModel)
                             return (1, 0, 0)
                         }
@@ -947,7 +989,7 @@ class CloudKitSyncManager {
         // Convert sort order (Core Data uses Int32, GRDB uses Int)
         let sortOrder = Int(cdMemo.sortOrder)
 
-        log.info("🔄 [Bridge 1] Converting memo: '\(cdMemo.title ?? "Untitled")' (id: \(id))")
+        log.debug("🔄 [Bridge 1] Converting memo: '\(cdMemo.title ?? "Untitled")' (id: \(id))")
 
         return MemoModel(
             id: id,

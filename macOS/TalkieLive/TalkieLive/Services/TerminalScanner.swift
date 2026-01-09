@@ -209,6 +209,9 @@ final class TerminalScanner {
     private func detectClaudeSession(title: String, workingDir: String?) -> Bool {
         let lowerTitle = title.lowercased()
 
+        // Claude Code task indicator prefix (e.g., "✳ Live XPC Running")
+        if title.hasPrefix("✳") { return true }
+
         // Direct mentions
         if lowerTitle.contains("claude") { return true }
 

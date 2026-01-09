@@ -9,6 +9,7 @@ import Foundation
 import CryptoKit
 import SwiftUI
 
+@MainActor
 @Observable
 final class BridgeManager {
     static let shared = BridgeManager()
@@ -50,6 +51,9 @@ final class BridgeManager {
     private(set) var errorMessage: String?
     private(set) var pairedMacName: String?
     private(set) var retryCount = 0
+
+    /// Set to true when pairing completes, UI should consume and reset
+    var justCompletedPairing = false
 
     let client = BridgeClient()
     private var retryTask: Task<Void, Never>?
@@ -149,6 +153,9 @@ final class BridgeManager {
                 let health = try await client.health()
                 pairedMacName = health.hostname
                 UserDefaults.standard.set(health.hostname, forKey: pairedMacKey)
+
+                // Mark as just paired (for UI animation)
+                justCompletedPairing = true
 
                 status = .connected
                 await refreshPaths()
