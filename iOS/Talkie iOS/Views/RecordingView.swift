@@ -16,8 +16,6 @@ struct RecordingView: View {
     @State private var recordingTitle = ""
     @State private var defaultTitle = ""
     @State private var recPulse = false
-    @State private var showResumeTooltip = false
-    @AppStorage("hasSeenResumeTooltip") private var hasSeenResumeTooltip = false
     @State private var waveformStyle: WaveformStyle = .particles
     @State private var sheetDetent: PresentationDetent = .height(280)
     @State private var hasAppeared = false
@@ -189,17 +187,17 @@ struct RecordingView: View {
                 }
 
                 // Title input - expands to fill
-                TextField("", text: $recordingTitle, prompt: Text(defaultTitle).foregroundColor(.white.opacity(0.6)))
+                TextField("", text: $recordingTitle, prompt: Text(defaultTitle).foregroundColor(.textSecondary))
                     .font(.bodySmall)
                     .multilineTextAlignment(.center)
-                    .foregroundColor(.white)
+                    .foregroundColor(.textPrimary)
                     .padding(.vertical, Spacing.xs)
                     .padding(.horizontal, Spacing.sm)
-                    .background(Color.surfacePrimary)
+                    .background(Color.surfacePrimary.opacity(0.8))
                     .cornerRadius(CornerRadius.sm)
                     .overlay(
                         RoundedRectangle(cornerRadius: CornerRadius.sm)
-                            .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
+                            .strokeBorder(Color.borderPrimary.opacity(0.5), lineWidth: 0.5)
                     )
 
                 // READY indicator
@@ -236,48 +234,20 @@ struct RecordingView: View {
 
             // Action buttons - Resume left, Save center
             HStack(spacing: Spacing.lg) {
-                // Resume button with tooltip
+                // Resume button - subtle, secondary action
                 Button(action: {
-                    hasSeenResumeTooltip = true
-                    showResumeTooltip = false
                     resumeRecording()
                 }) {
                     Image(systemName: "mic.fill")
                         .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(.recording.opacity(0.7))
-                        .frame(width: 44, height: 44)
-                        .background(Color.surfaceSecondary)
-                        .cornerRadius(CornerRadius.full)
+                        .foregroundColor(.recording.opacity(0.6))
+                        .frame(width: 48, height: 48)
+                        .background(Color.surfaceSecondary.opacity(0.6))
+                        .clipShape(Circle())
                         .overlay(
                             Circle()
-                                .strokeBorder(Color.recording.opacity(0.7), lineWidth: 1)
+                                .strokeBorder(Color.recording.opacity(0.3), lineWidth: 1)
                         )
-                }
-                .overlay(alignment: .top) {
-                    if showResumeTooltip {
-                        VStack(spacing: 0) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "info.circle.fill")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.white.opacity(0.7))
-                                Text("You can tap the mic to resume recording")
-                                    .font(.caption2)
-                                    .foregroundColor(.white)
-                            }
-                            .fixedSize()
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.black.opacity(0.85))
-                            .cornerRadius(6)
-
-                            // Arrow pointing down
-                            Triangle()
-                                .fill(Color.black.opacity(0.85))
-                                .frame(width: 10, height: 5)
-                        }
-                        .offset(y: -42)
-                        .transition(.opacity.combined(with: .scale))
-                    }
                 }
 
                 // Save button - primary action, centered
@@ -291,8 +261,9 @@ struct RecordingView: View {
                             .frame(width: 58, height: 58)
                             .overlay(
                                 Circle()
-                                    .strokeBorder(Color.success.opacity(0.6), lineWidth: 1.5)
+                                    .strokeBorder(Color.white.opacity(0.3), lineWidth: 1)
                             )
+                            .shadow(color: Color.success.opacity(0.3), radius: 6, x: 0, y: 3)
 
                         Image(systemName: "checkmark")
                             .font(.system(size: 22, weight: .semibold))
@@ -301,16 +272,9 @@ struct RecordingView: View {
                 }
 
                 // Balance spacer for resume button
-                Color.clear.frame(width: 44, height: 44)
+                Color.clear.frame(width: 48, height: 48)
             }
             .padding(.bottom, 7)
-        }
-        .onAppear {
-            if !hasSeenResumeTooltip {
-                withAnimation(.easeOut(duration: 0.3).delay(0.5)) {
-                    showResumeTooltip = true
-                }
-            }
         }
     }
 
@@ -453,19 +417,6 @@ struct RecordingView: View {
         case .spectrum: return "SPECTRUM"
         case .particles: return "PARTICLES"
         }
-    }
-}
-
-// MARK: - Triangle Shape
-
-struct Triangle: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.midX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        path.closeSubpath()
-        return path
     }
 }
 

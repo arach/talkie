@@ -345,40 +345,65 @@ struct VoiceMemoListView: View {
                                     if isPushToTalkActive {
                                         Circle()
                                             .fill(Color.recording)
-                                            .frame(width: 68, height: 68)
-                                            .blur(radius: 20)
-                                            .opacity(0.6)
+                                            .frame(width: 72, height: 72)
+                                            .blur(radius: 24)
+                                            .opacity(0.5)
                                     }
 
-                                    // Main button with subtle border
-                                    Circle()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [Color.recording, Color.recordingGlow],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
+                                    // Main button with glass-integrated styling
+                                    if #available(iOS 26.0, *) {
+                                        // Glass-tinted record button for iOS 26+
+                                        Circle()
+                                            .fill(Color.recording.opacity(0.9))
+                                            .frame(width: 62, height: 62)
+                                            .overlay {
+                                                // Glass highlight overlay
+                                                Circle()
+                                                    .fill(
+                                                        LinearGradient(
+                                                            colors: [Color.white.opacity(0.3), Color.clear],
+                                                            startPoint: .topLeading,
+                                                            endPoint: .bottomTrailing
+                                                        )
+                                                    )
+                                            }
+                                            .overlay {
+                                                Circle()
+                                                    .strokeBorder(Color.white.opacity(0.4), lineWidth: 1)
+                                            }
+                                            .shadow(color: Color.recording.opacity(0.4), radius: 8, x: 0, y: 4)
+                                            .scaleEffect(pushToTalkScale)
+                                    } else {
+                                        // Original gradient for older iOS
+                                        Circle()
+                                            .fill(
+                                                LinearGradient(
+                                                    colors: [Color.recording, Color.recordingGlow],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                )
                                             )
-                                        )
-                                        .frame(width: 58, height: 58)
-                                        .overlay(
-                                            Circle()
-                                                .strokeBorder(Color.recordingGlow.opacity(0.5), lineWidth: 1.5)
-                                        )
-                                        .scaleEffect(pushToTalkScale)
+                                            .frame(width: 62, height: 62)
+                                            .overlay(
+                                                Circle()
+                                                    .strokeBorder(Color.recordingGlow.opacity(0.5), lineWidth: 1.5)
+                                            )
+                                            .scaleEffect(pushToTalkScale)
+                                    }
 
                                     // Icon changes based on state
                                     if isPushToTalkActive {
-                                        RoundedRectangle(cornerRadius: 3)
+                                        RoundedRectangle(cornerRadius: 4)
                                             .fill(Color.white)
-                                            .frame(width: 18, height: 18)
+                                            .frame(width: 20, height: 20)
                                     } else {
                                         Image(systemName: "mic.fill")
-                                            .font(.system(size: 22, weight: .medium))
+                                            .font(.system(size: 24, weight: .medium))
                                             .foregroundColor(.white)
                                     }
                                 }
-                                .scaleEffect(isPushToTalkActive ? 1.15 : 1.0)
-                                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPushToTalkActive)
+                                .scaleEffect(isPushToTalkActive ? 1.12 : 1.0)
+                                .animation(.spring(response: 0.35, dampingFraction: 0.65), value: isPushToTalkActive)
                                 .onTapGesture {
                                     // Short tap opens the sheet
                                     showingRecordingView = true
@@ -421,10 +446,10 @@ struct VoiceMemoListView: View {
                                     } else {
                                         // Invisible placeholder to keep record button centered
                                         Color.clear
-                                            .frame(width: 44, height: 44)
+                                            .frame(width: 52, height: 52)
                                     }
                                 }
-                                .frame(width: 44, height: 44)
+                                .frame(width: 52, height: 52)
                                 .onAppear {
                                     // Check if we just completed pairing (from another view)
                                     if bridgeManager.justCompletedPairing {
@@ -456,19 +481,19 @@ struct VoiceMemoListView: View {
                                     }
                                 }
                             }
-                            .padding(.horizontal, Spacing.md)
-                            .padding(.top, Spacing.xs)
-                            .padding(.bottom, 10)
+                            .padding(.horizontal, Spacing.lg)
+                            .padding(.top, Spacing.md)
+                            .padding(.bottom, Spacing.md)
                         }
                         .frame(maxWidth: .infinity)
                         .background {
                             if #available(iOS 26.0, *) {
                                 // Liquid Glass background for iOS 26+
-                                RoundedRectangle(cornerRadius: CornerRadius.lg)
+                                RoundedRectangle(cornerRadius: CornerRadius.xl)
                                     .fill(.clear)
                                     .glassEffect(.regular.interactive())
-                                    .padding(.horizontal, Spacing.sm)
-                                    .padding(.top, Spacing.xs)
+                                    .padding(.horizontal, Spacing.md)
+                                    .padding(.top, Spacing.sm)
                             } else {
                                 // Fallback solid background for older iOS
                                 themeManager.colors.cardBackground.opacity(0.95)
@@ -489,14 +514,17 @@ struct VoiceMemoListView: View {
                     .animation(.easeInOut(duration: 0.2), value: isPushToTalkActive)
                 }
 
-                // Floating iCloud status banner - pinned to top of protected area, full bleed
+                // Floating iCloud status banner - pinned above record button area
                 if !iCloudStatus.status.isAvailable && !iCloudStatus.isDismissed && !isPushToTalkActive {
                     VStack {
                         Spacer()
                         iCloudStatusBanner
-                            .padding(.bottom, 88) // Pinned just above record button area
+                            .padding(.horizontal, Spacing.md)
+                            .padding(.bottom, 100) // Above the glass control bar
                     }
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.2), value: iCloudStatus.status.isAvailable)
+                    .zIndex(1) // Ensure banner stays above other content
                     .allowsHitTesting(true)
                 }
                 }
@@ -1155,12 +1183,19 @@ struct VoiceMemoListView: View {
         .padding(.horizontal, Spacing.md)
         .padding(.vertical, Spacing.sm)
         .frame(maxWidth: .infinity)
-        .background(
-            ZStack {
-                Color.black
-                Color.blue.opacity(0.35)
+        .background {
+            if #available(iOS 26.0, *) {
+                RoundedRectangle(cornerRadius: CornerRadius.md)
+                    .fill(.clear)
+                    .glassEffect(.regular.tint(.blue))
+            } else {
+                ZStack {
+                    Color.black
+                    Color.blue.opacity(0.35)
+                }
+                .cornerRadius(CornerRadius.md)
             }
-        )
+        }
     }
 
     /// Warning banner for error states (restricted, unavailable, etc.)
@@ -1190,12 +1225,19 @@ struct VoiceMemoListView: View {
         .padding(.horizontal, Spacing.md)
         .padding(.vertical, Spacing.sm)
         .frame(maxWidth: .infinity)
-        .background(
-            ZStack {
-                Color.black
-                Color.blue.opacity(0.35)
+        .background {
+            if #available(iOS 26.0, *) {
+                RoundedRectangle(cornerRadius: CornerRadius.md)
+                    .fill(.clear)
+                    .glassEffect(.regular.tint(.blue))
+            } else {
+                ZStack {
+                    Color.black
+                    Color.blue.opacity(0.35)
+                }
+                .cornerRadius(CornerRadius.md)
             }
-        )
+        }
     }
 
     private func openICloudSettings() {
@@ -1218,20 +1260,25 @@ struct BottomCircleButton: View {
 
     var body: some View {
         if #available(iOS 26.0, *) {
-            // Liquid Glass button for iOS 26+
+            // Liquid Glass button for iOS 26+ - explicit circle shape
             Button(action: action) {
                 Image(systemName: icon)
                     .font(.system(size: 18, weight: .medium))
                     .foregroundColor(isActive ? .textPrimary : .textSecondary)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 52, height: 52)
+                    .background {
+                        Circle()
+                            .fill(.clear)
+                            .glassEffect(.regular.interactive())
+                    }
             }
-            .buttonStyle(.glass)
+            .buttonStyle(.plain)
         } else {
             // Fallback solid button for older iOS
             Button(action: action) {
                 Circle()
                     .fill(isActive ? Color.success.opacity(0.08) : Color.surfaceSecondary)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 52, height: 52)
                     .overlay(
                         Circle()
                             .strokeBorder(isActive ? Color.success.opacity(0.3) : Color.borderPrimary, lineWidth: 1)
