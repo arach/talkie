@@ -59,8 +59,8 @@ enum ConnectionType: String, CaseIterable, Identifiable {
     var settingsSection: SettingsSection? {
         switch self {
         case .local: return nil // Always active
-        case .iCloud: return .cloud
-        case .iosBridge: return .bridge
+        case .iCloud: return .iOS  // iCloud settings in iOS section
+        case .iosBridge: return .iOS  // Bridge settings in iOS section
         case .tailscale: return nil // Shown in Bridge
         }
     }
@@ -306,7 +306,7 @@ struct ConnectionRowView: View {
 // MARK: - Preview
 
 #Preview {
-    @Previewable @State var section: SettingsSection = .cloud
+    @Previewable @State var section: SettingsSection = .connections
     ConnectionCenterView(selectedSection: $section)
         .frame(width: 400, height: 500)
 }
