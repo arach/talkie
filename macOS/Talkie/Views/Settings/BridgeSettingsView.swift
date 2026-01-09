@@ -2,7 +2,7 @@
 //  BridgeSettingsView.swift
 //  Talkie macOS
 //
-//  Settings view for managing TalkieBridge (iOS connectivity via Tailscale)
+//  Settings view for iOS Bridge - device pairing and connectivity
 //
 
 import SwiftUI
@@ -19,8 +19,8 @@ struct BridgeSettingsView: View {
             HStack {
                 SettingsPageHeader(
                     icon: "iphone.gen3.radiowaves.left.and.right",
-                    title: "iOS BRIDGE",
-                    subtitle: "Connect your iPhone to view Claude Code sessions remotely."
+                    title: "BRIDGE",
+                    subtitle: "iOS device pairing and connectivity."
                 )
                 Spacer()
                 Button(action: refresh) {
@@ -43,18 +43,9 @@ struct BridgeSettingsView: View {
             }
         } content: {
             VStack(alignment: .leading, spacing: 16) {
-                // Tailscale Status
-                TailscaleStatusSection(status: bridgeManager.tailscaleStatus)
-
-                Divider()
-
-                // Bridge Server Status
-                BridgeServerSection(
-                    status: bridgeManager.bridgeStatus,
-                    tailscaleReady: bridgeManager.tailscaleStatus.isReady,
-                    onStart: { Task { await bridgeManager.startBridge() } },
-                    onStop: { Task { await bridgeManager.stopBridge() } },
-                    onRestart: { Task { await bridgeManager.restartBridge() } },
+                // Pairing Section
+                PairingSection(
+                    serverStatus: bridgeManager.bridgeStatus,
                     onShowQR: { showingQRSheet = true }
                 )
 
@@ -69,16 +60,11 @@ struct BridgeSettingsView: View {
                 }
 
                 // Paired Devices
-                if !bridgeManager.pairedDevices.isEmpty {
-                    Divider()
-                    PairedDevicesSection(devices: bridgeManager.pairedDevices)
-                }
+                Divider()
+                PairedDevicesSection(devices: bridgeManager.pairedDevices)
 
-                // Logs (show when bridge is running)
+                // Message Queue (show when bridge is running)
                 if bridgeManager.bridgeStatus == .running {
-                    Divider()
-                    BridgeLogsSection()
-
                     Divider()
                     BridgeMessageQueueSection()
                 }
@@ -92,7 +78,7 @@ struct BridgeSettingsView: View {
                         .font(Theme.current.fontXS)
                         .foregroundColor(Theme.current.foregroundSecondary)
 
-                    Text("The iOS Bridge uses Tailscale to securely connect your iPhone to this Mac. Both devices must be on the same Tailscale network.")
+                    Text("Bridge enables iOS devices to connect to this Mac. Pair your iPhone by scanning the QR code with Talkie iOS.")
                         .font(Theme.current.fontXS)
                         .foregroundColor(Theme.current.foregroundSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -119,315 +105,65 @@ struct BridgeSettingsView: View {
     }
 }
 
-// MARK: - Tailscale Status Section
+// MARK: - Pairing Section
 
-private struct TailscaleStatusSection: View {
-    let status: BridgeManager.TailscaleStatus
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "network")
-                    .font(Theme.current.fontXS)
-                    .foregroundColor(Theme.current.foregroundSecondary)
-                Text("TAILSCALE")
-                    .font(Theme.current.fontXSMedium)
-                    .foregroundColor(Theme.current.foregroundSecondary)
-            }
-
-            HStack(spacing: 12) {
-                // Status indicator
-                Image(systemName: statusIcon)
-                    .font(.system(size: 24))
-                    .foregroundColor(statusColor)
-                    .frame(width: 40, height: 40)
-                    .background(statusColor.opacity(0.15))
-                    .cornerRadius(8)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(statusTitle)
-                        .font(Theme.current.fontSMMedium)
-                        .foregroundColor(Theme.current.foreground)
-
-                    Text(status.message)
-                        .font(Theme.current.fontXS)
-                        .foregroundColor(Theme.current.foregroundSecondary)
-                }
-
-                Spacer()
-
-                // Action button based on status
-                actionButton
-            }
-            .padding(12)
-            .background(Theme.current.surface1)
-            .cornerRadius(8)
-        }
-    }
-
-    private var statusIcon: String {
-        switch status {
-        case .notInstalled: return "xmark.circle.fill"
-        case .notRunning: return "pause.circle.fill"
-        case .needsLogin: return "person.crop.circle.badge.exclamationmark"
-        case .offline: return "wifi.slash"
-        case .noPeers: return "checkmark.circle.fill"
-        case .ready: return "checkmark.circle.fill"
-        }
-    }
-
-    private var statusColor: Color {
-        switch status {
-        case .notInstalled, .notRunning: return .red
-        case .needsLogin, .offline: return .orange
-        case .noPeers, .ready: return .green
-        }
-    }
-
-    private var statusTitle: String {
-        switch status {
-        case .notInstalled: return "Not Installed"
-        case .notRunning: return "Not Running"
-        case .needsLogin: return "Login Required"
-        case .offline: return "Offline"
-        case .noPeers: return "Connected"
-        case .ready: return "Ready"
-        }
-    }
-
-    @ViewBuilder
-    private var actionButton: some View {
-        switch status {
-        case .notInstalled:
-            Button(action: openTailscaleDownload) {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.down.circle")
-                        .font(Theme.current.fontXS)
-                    Text("INSTALL")
-                        .font(Theme.current.fontXSMedium)
-                }
-                .foregroundColor(.blue)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(6)
-            }
-            .buttonStyle(.plain)
-
-        case .notRunning:
-            Button(action: openTailscale) {
-                HStack(spacing: 4) {
-                    Image(systemName: "play.fill")
-                        .font(Theme.current.fontXS)
-                    Text("OPEN")
-                        .font(Theme.current.fontXSMedium)
-                }
-                .foregroundColor(.blue)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(6)
-            }
-            .buttonStyle(.plain)
-
-        case .needsLogin(let authUrl):
-            Button(action: { openAuthUrl(authUrl) }) {
-                HStack(spacing: 4) {
-                    Image(systemName: "person.fill")
-                        .font(Theme.current.fontXS)
-                    Text("LOGIN")
-                        .font(Theme.current.fontXSMedium)
-                }
-                .foregroundColor(.blue)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(6)
-            }
-            .buttonStyle(.plain)
-
-        case .offline:
-            EmptyView()
-
-        case .noPeers:
-            Text("Set up Tailscale on iPhone")
-                .font(Theme.current.fontXS)
-                .foregroundColor(.orange)
-
-        case .ready:
-            EmptyView()
-        }
-    }
-
-    private func openTailscaleDownload() {
-        if let url = URL(string: "https://tailscale.com/download/mac") {
-            NSWorkspace.shared.open(url)
-        }
-    }
-
-    private func openTailscale() {
-        let tailscaleURL = URL(fileURLWithPath: "/Applications/Tailscale.app")
-        NSWorkspace.shared.openApplication(at: tailscaleURL, configuration: NSWorkspace.OpenConfiguration())
-    }
-
-    private func openAuthUrl(_ authUrl: String?) {
-        if let urlString = authUrl, let url = URL(string: urlString) {
-            NSWorkspace.shared.open(url)
-        } else {
-            openTailscale()
-        }
-    }
-}
-
-// MARK: - Bridge Server Section
-
-private struct BridgeServerSection: View {
-    let status: BridgeManager.BridgeStatus
-    let tailscaleReady: Bool
-    let onStart: () -> Void
-    let onStop: () -> Void
-    let onRestart: () -> Void
+private struct PairingSection: View {
+    let serverStatus: BridgeManager.BridgeStatus
     let onShowQR: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Image(systemName: "server.rack")
+                Image(systemName: "qrcode")
                     .font(Theme.current.fontXS)
                     .foregroundColor(Theme.current.foregroundSecondary)
-                Text("BRIDGE SERVER")
+                Text("PAIR NEW DEVICE")
                     .font(Theme.current.fontXSMedium)
                     .foregroundColor(Theme.current.foregroundSecondary)
             }
 
             HStack(spacing: 12) {
-                // Status indicator
-                Image(systemName: status.icon)
+                Image(systemName: "iphone.badge.plus")
                     .font(.system(size: 24))
-                    .foregroundColor(statusColor)
+                    .foregroundColor(serverStatus == .running ? .blue : .gray)
                     .frame(width: 40, height: 40)
-                    .background(statusColor.opacity(0.15))
+                    .background((serverStatus == .running ? Color.blue : Color.gray).opacity(0.15))
                     .cornerRadius(8)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(status.rawValue)
+                    Text(serverStatus == .running ? "Ready to Pair" : "Server Not Running")
                         .font(Theme.current.fontSMMedium)
                         .foregroundColor(Theme.current.foreground)
 
-                    Text(statusDescription)
+                    Text(serverStatus == .running
+                         ? "Scan QR code with Talkie on iPhone"
+                         : "Start TalkieServer to enable pairing")
                         .font(Theme.current.fontXS)
                         .foregroundColor(Theme.current.foregroundSecondary)
                 }
 
                 Spacer()
 
-                // Controls
-                HStack(spacing: 8) {
-                    if status == .running {
-                        Button(action: onShowQR) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "qrcode")
-                                    .font(Theme.current.fontXS)
-                                Text("PAIR")
-                                    .font(Theme.current.fontXSMedium)
-                            }
-                            .foregroundColor(.blue)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.blue.opacity(0.1))
-                            .cornerRadius(6)
+                if serverStatus == .running {
+                    Button(action: onShowQR) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "qrcode")
+                                .font(Theme.current.fontXS)
+                            Text("SHOW QR")
+                                .font(Theme.current.fontXSMedium)
                         }
-                        .buttonStyle(.plain)
-
-                        Button(action: onRestart) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(Theme.current.fontXS)
-                                Text("RESTART")
-                                    .font(Theme.current.fontXSMedium)
-                            }
-                            .foregroundColor(.orange)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.orange.opacity(0.1))
-                            .cornerRadius(6)
-                        }
-                        .buttonStyle(.plain)
-
-                        Button(action: onStop) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "stop.fill")
-                                    .font(Theme.current.fontXS)
-                                Text("STOP")
-                                    .font(Theme.current.fontXSMedium)
-                            }
-                            .foregroundColor(.red)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.red.opacity(0.1))
-                            .cornerRadius(6)
-                        }
-                        .buttonStyle(.plain)
-                    } else if status == .stopped {
-                        Button(action: onStart) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "play.fill")
-                                    .font(Theme.current.fontXS)
-                                Text("START")
-                                    .font(Theme.current.fontXSMedium)
-                            }
-                            .foregroundColor(.green)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.green.opacity(0.1))
-                            .cornerRadius(6)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(!tailscaleReady)
-                    } else if status == .error {
-                        // Force restart when in error state (kills stray processes)
-                        Button(action: onRestart) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(Theme.current.fontXS)
-                                Text("FORCE RESTART")
-                                    .font(Theme.current.fontXSMedium)
-                            }
-                            .foregroundColor(.orange)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.orange.opacity(0.1))
-                            .cornerRadius(6)
-                        }
-                        .buttonStyle(.plain)
-                    } else if status == .starting {
-                        BrailleSpinner(speed: 0.08)
-                            .font(.system(size: 12))
-                            .foregroundColor(.orange)
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(6)
                     }
+                    .buttonStyle(.plain)
                 }
             }
             .padding(12)
             .background(Theme.current.surface1)
             .cornerRadius(8)
-        }
-    }
-
-    private var statusColor: Color {
-        switch status {
-        case .stopped: return .gray
-        case .starting: return .orange
-        case .running: return .green
-        case .error: return .red
-        }
-    }
-
-    private var statusDescription: String {
-        switch status {
-        case .stopped: return "Bridge is not running"
-        case .starting: return "Starting bridge server..."
-        case .running: return "Listening on port 8765"
-        case .error: return "Bridge encountered an error"
         }
     }
 }
@@ -510,39 +246,70 @@ private struct PairedDevicesSection: View {
             HStack(spacing: 6) {
                 Image(systemName: "checkmark.seal.fill")
                     .font(Theme.current.fontXS)
-                    .foregroundColor(.green)
+                    .foregroundColor(devices.isEmpty ? Theme.current.foregroundSecondary : .green)
                 Text("PAIRED DEVICES")
                     .font(Theme.current.fontXSMedium)
                     .foregroundColor(Theme.current.foregroundSecondary)
+
+                if !devices.isEmpty {
+                    Text("(\(devices.count))")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                }
             }
 
-            ForEach(devices) { device in
-                HStack(spacing: 12) {
-                    Image(systemName: "iphone")
+            if devices.isEmpty {
+                HStack(spacing: 10) {
+                    Image(systemName: "iphone.slash")
                         .font(.system(size: 20))
-                        .foregroundColor(.green)
+                        .foregroundColor(.gray)
                         .frame(width: 36, height: 36)
-                        .background(Color.green.opacity(0.15))
+                        .background(Color.gray.opacity(0.15))
                         .cornerRadius(8)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(device.name)
+                        Text("No devices paired")
                             .font(Theme.current.fontSMMedium)
                             .foregroundColor(Theme.current.foreground)
-                        Text("Paired \(formatDate(device.pairedAt))")
+                        Text("Pair an iPhone to connect remotely")
                             .font(Theme.current.fontXS)
                             .foregroundColor(Theme.current.foregroundSecondary)
                     }
 
                     Spacer()
-
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(Theme.current.fontSM)
-                        .foregroundColor(.green)
                 }
                 .padding(10)
                 .background(Theme.current.surface1)
                 .cornerRadius(8)
+            } else {
+                ForEach(devices) { device in
+                    HStack(spacing: 12) {
+                        Image(systemName: "iphone")
+                            .font(.system(size: 20))
+                            .foregroundColor(.green)
+                            .frame(width: 36, height: 36)
+                            .background(Color.green.opacity(0.15))
+                            .cornerRadius(8)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(device.name)
+                                .font(Theme.current.fontSMMedium)
+                                .foregroundColor(Theme.current.foreground)
+                            Text("Paired \(formatDate(device.pairedAt))")
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(Theme.current.fontSM)
+                            .foregroundColor(.green)
+                    }
+                    .padding(10)
+                    .background(Theme.current.surface1)
+                    .cornerRadius(8)
+                }
             }
         }
     }
@@ -555,291 +322,6 @@ private struct PairedDevicesSection: View {
         let relativeFormatter = RelativeDateTimeFormatter()
         relativeFormatter.unitsStyle = .abbreviated
         return relativeFormatter.localizedString(for: date, relativeTo: Date())
-    }
-}
-
-// MARK: - Bridge Logs Section
-
-/// Parsed log entry with optional JSON detail
-private struct BridgeLogEntry: Identifiable {
-    let id = UUID()
-    let timestamp: String
-    let level: String
-    let message: String
-    let jsonDetail: String?  // Extracted JSON if present
-
-    var levelColor: Color {
-        switch level {
-        case "ERROR": return .red
-        case "WARN": return .orange
-        case "DEBUG": return .purple
-        case "REQ": return .blue
-        default: return .green
-        }
-    }
-}
-
-private struct BridgeLogsSection: View {
-    @State private var logEntries: [BridgeLogEntry] = []
-    @State private var isAutoRefresh = true
-    @State private var showDevLogs = false  // Toggle between main and dev logs
-    @State private var commandKeyHeld = false  // Expand all when Command held
-    @State private var expandedEntries: Set<UUID> = []
-
-    private let mainLogFile = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Library/Application Support/Talkie/Bridge/bridge.log")
-    private let devLogFile = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Library/Application Support/Talkie/Bridge/bridge.dev.log")
-    private let timer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "doc.text")
-                    .font(Theme.current.fontXS)
-                    .foregroundColor(Theme.current.foregroundSecondary)
-                Text("BRIDGE LOGS")
-                    .font(Theme.current.fontXSMedium)
-                    .foregroundColor(Theme.current.foregroundSecondary)
-
-                Spacer()
-
-                // Dev logs toggle (shows API responses)
-                Toggle(isOn: $showDevLogs) {
-                    Text("API")
-                        .font(.system(size: 9, weight: .medium))
-                }
-                .toggleStyle(.button)
-                .controlSize(.mini)
-                .help("Show API response logs (DEBUG level)")
-
-                Toggle("Auto", isOn: $isAutoRefresh)
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    .labelsHidden()
-
-                Button(action: loadLogs) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 10))
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(Theme.current.foregroundSecondary)
-            }
-
-            // Hint about Command key
-            if !logEntries.isEmpty && logEntries.contains(where: { $0.jsonDetail != nil }) {
-                HStack(spacing: 4) {
-                    Image(systemName: "command")
-                        .font(.system(size: 8))
-                    Text("Hold ⌘ to expand all JSON")
-                        .font(.system(size: 9))
-                }
-                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.7))
-            }
-
-            ScrollViewReader { proxy in
-                ScrollView {
-                    if logEntries.isEmpty {
-                        Text("No logs yet...")
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(Theme.current.foregroundSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        LazyVStack(alignment: .leading, spacing: 2) {
-                            ForEach(logEntries) { entry in
-                                BridgeLogEntryRow(
-                                    entry: entry,
-                                    isExpanded: commandKeyHeld || expandedEntries.contains(entry.id),
-                                    onToggle: {
-                                        if expandedEntries.contains(entry.id) {
-                                            expandedEntries.remove(entry.id)
-                                        } else {
-                                            expandedEntries.insert(entry.id)
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                        .id("logBottom")
-                    }
-                }
-                .frame(height: 180)
-                .padding(8)
-                .background(Color.black.opacity(0.8))
-                .cornerRadius(6)
-                .onChange(of: logEntries.count) { _, _ in
-                    withAnimation {
-                        proxy.scrollTo("logBottom", anchor: .bottom)
-                    }
-                }
-            }
-        }
-        .onAppear {
-            loadLogs()
-            setupCommandKeyMonitor()
-        }
-        .onDisappear {
-            removeCommandKeyMonitor()
-        }
-        .onChange(of: showDevLogs) { _, _ in
-            loadLogs()
-        }
-        .onReceive(timer) { _ in
-            if isAutoRefresh {
-                loadLogs()
-            }
-        }
-    }
-
-    // MARK: - Command Key Monitoring
-
-    @State private var eventMonitor: Any?
-
-    private func setupCommandKeyMonitor() {
-        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
-            commandKeyHeld = event.modifierFlags.contains(.command)
-            return event
-        }
-    }
-
-    private func removeCommandKeyMonitor() {
-        if let monitor = eventMonitor {
-            NSEvent.removeMonitor(monitor)
-            eventMonitor = nil
-        }
-    }
-
-    // MARK: - Log Parsing
-
-    private func loadLogs() {
-        let logFile = showDevLogs ? devLogFile : mainLogFile
-        do {
-            let content = try String(contentsOf: logFile, encoding: .utf8)
-            let lines = content.components(separatedBy: "\n").suffix(100)
-            logEntries = lines.compactMap { parseLine($0) }
-        } catch {
-            logEntries = []
-        }
-    }
-
-    private func parseLine(_ line: String) -> BridgeLogEntry? {
-        guard !line.isEmpty else { return nil }
-
-        // Format: [ISO_TIMESTAMP] [LEVEL] message
-        // e.g., [2024-01-08T10:30:00.000Z] [INFO] Labs sessions: 5
-        let pattern = #"\[([^\]]+)\] \[([^\]]+)\] (.+)"#
-        guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) else {
-            // Fallback for malformed lines
-            return BridgeLogEntry(timestamp: "", level: "INFO", message: line, jsonDetail: nil)
-        }
-
-        let timestamp = String(line[Range(match.range(at: 1), in: line)!])
-        let level = String(line[Range(match.range(at: 2), in: line)!])
-        let message = String(line[Range(match.range(at: 3), in: line)!])
-
-        // Extract JSON from API response logs
-        // Format: [API Response] /path → {...}
-        var jsonDetail: String? = nil
-        if message.contains("[API Response]"), let arrowIndex = message.range(of: "→") {
-            let jsonPart = String(message[arrowIndex.upperBound...]).trimmingCharacters(in: .whitespaces)
-            if let data = jsonPart.data(using: .utf8),
-               let json = try? JSONSerialization.jsonObject(with: data),
-               let prettyData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
-               let prettyString = String(data: prettyData, encoding: .utf8) {
-                jsonDetail = prettyString
-            } else {
-                jsonDetail = jsonPart  // Show raw if can't prettify
-            }
-        }
-
-        // Format timestamp for display (just time, not full ISO)
-        let displayTime = formatTime(timestamp)
-
-        return BridgeLogEntry(timestamp: displayTime, level: level, message: message, jsonDetail: jsonDetail)
-    }
-
-    private func formatTime(_ iso: String) -> String {
-        // Extract just HH:MM:SS from ISO timestamp
-        if let tIndex = iso.firstIndex(of: "T"),
-           let dotIndex = iso.firstIndex(of: ".") {
-            return String(iso[iso.index(after: tIndex)..<dotIndex])
-        }
-        return iso
-    }
-}
-
-// MARK: - Log Entry Row
-
-private struct BridgeLogEntryRow: View {
-    let entry: BridgeLogEntry
-    let isExpanded: Bool
-    let onToggle: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                // Expand button if has JSON
-                if entry.jsonDetail != nil {
-                    Button(action: onToggle) {
-                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundColor(.white.opacity(0.5))
-                            .frame(width: 10)
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    Spacer().frame(width: 10)
-                }
-
-                // Timestamp
-                Text(entry.timestamp)
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.4))
-
-                // Level badge
-                Text(entry.level)
-                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                    .foregroundColor(entry.levelColor)
-                    .padding(.horizontal, 3)
-                    .background(entry.levelColor.opacity(0.2))
-                    .cornerRadius(2)
-
-                // Message (truncated if has detail)
-                Text(truncatedMessage)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.9))
-                    .lineLimit(1)
-
-                Spacer()
-            }
-
-            // Expanded JSON detail
-            if isExpanded, let json = entry.jsonDetail {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    Text(json)
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(.green.opacity(0.9))
-                        .textSelection(.enabled)
-                }
-                .frame(maxHeight: 150)
-                .padding(6)
-                .background(Color.black.opacity(0.5))
-                .cornerRadius(4)
-                .padding(.leading, 14)
-            }
-        }
-        .padding(.vertical, 1)
-    }
-
-    private var truncatedMessage: String {
-        if entry.jsonDetail != nil {
-            // For API responses, just show the path
-            if let arrowIndex = entry.message.range(of: "→") {
-                return String(entry.message[..<arrowIndex.lowerBound]).trimmingCharacters(in: .whitespaces)
-            }
-        }
-        return entry.message
     }
 }
 

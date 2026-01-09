@@ -34,9 +34,13 @@ enum SettingsSection: String, Hashable {
     case files               // Local paths, exports
     case cloud               // Sync (future)
 
+    // SERVER
+    case server              // TalkieServer process control
+    case bridge              // iOS Bridge (Tailscale connectivity)
+    case gateway             // External API gateway
+
     // SYSTEM
     case helpers             // Background services (TalkieLive, TalkieEngine)
-    case bridge              // iOS Bridge (Tailscale)
     case permissions
     case debugInfo
     case devControl          // Dev control panel (DEBUG only)
@@ -62,8 +66,10 @@ enum SettingsSection: String, Hashable {
         case "database", "db": return .database
         case "files": return .files
         case "cloud", "sync": return .cloud
-        case "helpers": return .helpers
+        case "server": return .server
         case "bridge", "ios-bridge": return .bridge
+        case "gateway": return .gateway
+        case "helpers": return .helpers
         case "permissions": return .permissions
         case "debug", "debug-info": return .debugInfo
         case "dev", "dev-control": return .devControl
@@ -88,8 +94,10 @@ enum SettingsSection: String, Hashable {
         case .database: return "database"
         case .files: return "files"
         case .cloud: return "cloud"
-        case .helpers: return "helpers"
+        case .server: return "server"
         case .bridge: return "bridge"
+        case .gateway: return "gateway"
+        case .helpers: return "helpers"
         case .permissions: return "permissions"
         case .debugInfo: return "debug"
         case .devControl: return "dev"
@@ -311,21 +319,39 @@ struct SettingsSidebarColumn: View {
                         }
                     }
 
+                    // SERVER
+                    SettingsSidebarSection(title: "SERVER", isActive: selectedSection == .server || selectedSection == .bridge || selectedSection == .gateway) {
+                        SettingsSidebarItem(
+                            icon: "server.rack",
+                            title: "TALKIE SERVER",
+                            isSelected: selectedSection == .server
+                        ) {
+                            selectedSection = .server
+                        }
+                        SettingsSidebarItem(
+                            icon: "iphone.gen3.radiowaves.left.and.right",
+                            title: "BRIDGE",
+                            isSelected: selectedSection == .bridge
+                        ) {
+                            selectedSection = .bridge
+                        }
+                        SettingsSidebarItem(
+                            icon: "arrow.up.arrow.down.circle",
+                            title: "GATEWAY",
+                            isSelected: selectedSection == .gateway
+                        ) {
+                            selectedSection = .gateway
+                        }
+                    }
+
                     // SYSTEM
-                    SettingsSidebarSection(title: "SYSTEM", isActive: selectedSection == .helpers || selectedSection == .bridge || selectedSection == .permissions || selectedSection == .debugInfo || selectedSection == .devControl) {
+                    SettingsSidebarSection(title: "SYSTEM", isActive: selectedSection == .helpers || selectedSection == .permissions || selectedSection == .debugInfo || selectedSection == .devControl) {
                         SettingsSidebarItem(
                             icon: "app.connected.to.app.below.fill",
                             title: "HELPERS",
                             isSelected: selectedSection == .helpers
                         ) {
                             selectedSection = .helpers
-                        }
-                        SettingsSidebarItem(
-                            icon: "iphone.gen3.radiowaves.left.and.right",
-                            title: "iOS BRIDGE",
-                            isSelected: selectedSection == .bridge
-                        ) {
-                            selectedSection = .bridge
                         }
                         SettingsSidebarItem(
                             icon: "lock.shield",
@@ -415,13 +441,19 @@ struct SettingsContentColumn: View {
         case .cloud:
             CloudSettingsView()
 
+        // SERVER
+        case .server:
+            ServerSettingsView()
+        case .bridge:
+            BridgeSettingsView()
+        case .gateway:
+            GatewaySettingsView()
+
         // SYSTEM
         case .helpers:
             HelperAppsSettingsView()
         case .permissions:
             PermissionsSettingsView()
-        case .bridge:
-            BridgeSettingsView()
         case .debugInfo:
             DebugInfoView()
         case .devControl:

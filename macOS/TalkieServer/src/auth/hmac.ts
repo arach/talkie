@@ -108,6 +108,7 @@ export function isExemptPath(path: string, method: string): boolean {
   if (path === "/pair/pending" && method === "GET") return true;
   if (path.match(/^\/pair\/[^/]+\/approve$/) && method === "POST") return true;
   if (path.match(/^\/pair\/[^/]+\/reject$/) && method === "POST") return true;
+  if (path === "/devices" && method === "GET") return true;
 
   return false;
 }
