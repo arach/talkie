@@ -52,14 +52,21 @@ const PORT =
 
 // ===== Server Config =====
 
-let hostname = "localhost";
+// Hostname will be updated after Tailscale check in main()
+// Using object so state reference stays valid after update
+const serverConfig = {
+  hostname: "localhost",
+  port: PORT,
+};
 
 // ===== Create Server =====
 
 const app = new Elysia()
-  // Shared state for plugins
-  .state("hostname", hostname)
-  .state("port", PORT)
+  // Shared state for plugins (use derive to get live values)
+  .derive(() => ({
+    hostname: serverConfig.hostname,
+    port: serverConfig.port,
+  }))
 
   // Strip trailing slashes
   .onRequest(({ request }) => {
@@ -146,8 +153,10 @@ async function main() {
       process.exit(1);
     }
 
-    hostname = tailscaleState.hostname;
+    serverConfig.hostname = tailscaleState.hostname;
   }
+
+  log.info(`Hostname for pairing: ${serverConfig.hostname}`);
 
   // Initialize server key pair
   const keyPair = await getOrCreateKeyPair();
@@ -177,7 +186,7 @@ async function main() {
 
   // Start HTTP server
   app.listen(PORT);
-  log.info(`TalkieServer HTTP at http://${hostname}:${PORT}`);
+  log.info(`TalkieServer HTTP at http://${serverConfig.hostname}:${PORT}`);
   log.info(`Local: http://localhost:${PORT}`);
 
   // Start Unix socket server (if enabled)
