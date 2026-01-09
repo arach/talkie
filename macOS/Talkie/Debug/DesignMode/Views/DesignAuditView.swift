@@ -13,44 +13,33 @@ import TalkieKit
 
 #if DEBUG
 
-/// Text that shows underline and pointer cursor only when Cmd is held
+private let log = Log(.system)
+
+/// Text that becomes clickable with Cmd+Click
 struct ClickableLogText: View {
     let text: String
     let color: Color
     let onCommandClick: () -> Void
 
     @State private var isHovering = false
-    @State private var isCmdHeld = false
 
     var body: some View {
         Text(text)
             .foregroundColor(color)
-            .underline(isCmdHeld && isHovering, color: color.opacity(0.7))
             .onHover { hovering in
                 isHovering = hovering
-                updateCursor()
+                // Show pointer cursor when hovering (user can hold Cmd to click)
+                if hovering {
+                    NSCursor.pointingHand.push()
+                } else {
+                    NSCursor.pop()
+                }
             }
             .onTapGesture {
                 if NSEvent.modifierFlags.contains(.command) {
                     onCommandClick()
                 }
             }
-            .onAppear {
-                // Monitor modifier key changes
-                NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
-                    isCmdHeld = event.modifierFlags.contains(.command)
-                    if isHovering { updateCursor() }
-                    return event
-                }
-            }
-    }
-
-    private func updateCursor() {
-        if isHovering && NSEvent.modifierFlags.contains(.command) {
-            NSCursor.pointingHand.push()
-        } else {
-            NSCursor.pop()
-        }
     }
 }
 
@@ -476,6 +465,7 @@ struct DesignAuditView: View {
     }
 
     private func runAudit() {
+        log.debug("Starting design audit")
         auditLogs = []
         screensCompleted = 0
         totalScreens = AppScreen.allCases.count
@@ -484,10 +474,12 @@ struct DesignAuditView: View {
         isRunningAudit = true
         currentPhase = .analysis
 
+        log.debug("Audit targeting \(totalScreens) screens")
         addLog("design-audit v1.0", type: .info)
         addLog("mode: \(includeScreenshots ? "full" : "analysis-only")", type: .info)
 
         Task {
+            log.debug("Audit task started")
             await MainActor.run {
                 addLog("target: \(totalScreens) screens", type: .info)
                 addLog("", type: .info)
@@ -495,11 +487,13 @@ struct DesignAuditView: View {
 
             var results: [ScreenAuditResult] = []
 
+            log.debug("Starting screen analysis loop")
             for (index, screen) in AppScreen.allCases.enumerated() {
                 await MainActor.run {
                     currentScreen = screen.title
                 }
 
+                log.debug("Auditing screen \(index + 1)/\(totalScreens): \(screen.title)")
                 let result = await DesignAuditor.shared.auditScreen(screen)
                 results.append(result)
 
@@ -512,9 +506,11 @@ struct DesignAuditView: View {
                 }
             }
 
+            log.debug("Screen analysis complete, \(results.count) results")
             var report: FullAuditReport
 
             if includeScreenshots {
+                log.debug("Starting screenshots phase")
                 await MainActor.run {
                     currentPhase = .screenshots
                     screensCompleted = 0
@@ -536,14 +532,17 @@ struct DesignAuditView: View {
                     screensCompleted += 1
                 }
 
+                log.debug("Screenshots complete: \(captured) captured, \(failed) failed")
                 await MainActor.run {
                     let summaryType: AuditLogEntry.LogType = failed == 0 ? .perfect : .caution
                     addLog("captured: \(captured)" + (failed > 0 ? " failed: \(failed)" : ""), type: summaryType)
                 }
             } else {
+                log.debug("Skipping screenshots, finalizing without")
                 report = await DesignAuditor.shared.finalizeAuditWithoutScreenshots(results: results)
             }
 
+            log.debug("Audit finalizing, grade: \(report.grade)")
             await MainActor.run {
                 currentPhase = .complete
                 addLog("", type: .info)
@@ -557,6 +556,7 @@ struct DesignAuditView: View {
             try? await Task.sleep(for: .milliseconds(500))
 
             let updatedRuns = DesignAuditor.shared.listAllRuns()
+            log.debug("Found \(updatedRuns.count) audit runs")
 
             await MainActor.run {
                 selectedReport = report
@@ -565,6 +565,7 @@ struct DesignAuditView: View {
                     selectedRunNumber = runNumber
                     logRunNumber = runNumber  // Save which run the logs belong to
                 }
+                log.info("Design audit complete: \(report.grade) (\(report.overallScore)%)")
             }
         }
     }
