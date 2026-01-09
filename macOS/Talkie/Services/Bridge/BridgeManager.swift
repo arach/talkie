@@ -107,11 +107,20 @@ final class BridgeManager {
     private var bridgeProcess: Process?
     private var refreshTimer: Timer?
 
-    // Source code location (repo)
-    private let bridgeSourcePath = "\(FileManager.default.homeDirectoryForCurrentUser.path)/dev/talkie-tailscale/macOS/TalkieBridge"
+    // Source code location (derived from this file's compile-time path - works with git worktrees)
+    private static var bridgeSourcePath: String {
+        // #filePath at compile time: .../macOS/Talkie/Services/Bridge/BridgeManager.swift
+        // We need: .../macOS/TalkieBridge
+        let thisFile = URL(fileURLWithPath: #filePath)
+        let macOSDir = thisFile
+            .deletingLastPathComponent() // Bridge/
+            .deletingLastPathComponent() // Services/
+            .deletingLastPathComponent() // Talkie/
+        return macOSDir.appendingPathComponent("TalkieBridge").path
+    }
     // Runtime data location (App Support)
-    private let bridgeDataPath = "\(FileManager.default.homeDirectoryForCurrentUser.path)/Library/Application Support/Talkie/Bridge"
-    private var pidFile: String { "\(bridgeDataPath)/bridge.pid" }
+    private static let bridgeDataPath = "\(FileManager.default.homeDirectoryForCurrentUser.path)/Library/Application Support/Talkie/Bridge"
+    private var pidFile: String { "\(Self.bridgeDataPath)/bridge.pid" }
     private let port = 8765
 
     // Known Tailscale CLI locations (in priority order)
@@ -212,7 +221,7 @@ final class BridgeManager {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: bunPath)
             process.arguments = ["run", "src/server.ts"]
-            process.currentDirectoryURL = URL(fileURLWithPath: bridgeSourcePath)
+            process.currentDirectoryURL = URL(fileURLWithPath: Self.bridgeSourcePath)
 
             // Capture output for debugging
             let pipe = Pipe()

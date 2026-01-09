@@ -9,7 +9,6 @@
 //  - active: User present, fully awake
 //  - idle: User away, system awake
 //  - screenOff: Display off, system may be running
-//  - powerNap: Light sleep with periodic wake
 //  - sleeping: Deep sleep
 //  - shuttingDown: Shutting down
 //
@@ -33,7 +32,6 @@ final class PowerStateManager {
         case active        // User present, fully awake
         case idle          // User away, system awake
         case screenOff     // Display off, system may be running
-        case powerNap      // Light sleep with periodic wake
         case sleeping      // Deep sleep
         case shuttingDown  // Shutting down
     }
@@ -65,12 +63,6 @@ final class PowerStateManager {
                 canProcessMemos: preventsSleep,
                 canRunWorkflows: preventsSleep,
                 estimatedAvailability: preventsSleep ? "now" : "when display wakes"
-            )
-        case .powerNap:
-            return Capabilities(
-                canProcessMemos: true,  // CloudKit can wake
-                canRunWorkflows: false, // Too risky for long tasks
-                estimatedAvailability: "periodic (Power Nap)"
             )
         case .sleeping, .shuttingDown:
             return Capabilities(
@@ -262,7 +254,7 @@ final class PowerStateManager {
 
     private func syncToCloudKit() {
         Task {
-            await MacStatusSync.shared.updateStatus(
+            await CoreDataSyncGateway.shared.updateMacStatus(
                 powerState: state,
                 capabilities: currentCapabilities,
                 idleTime: idleTime

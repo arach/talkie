@@ -9,6 +9,7 @@
 import Foundation
 import SwiftUI
 import AppKit
+import CoreData
 import os
 import Observation
 import TalkieKit
@@ -1647,8 +1648,21 @@ class SettingsManager {
         }
 
         // Initialize model settings from UserDefaults (NO Core Data dependency)
+        // Migration: One-time copy from Core Data if UserDefaults is empty
+        let migrationKey = "settingsManager.migratedFromCoreData"
+        let needsMigration = !UserDefaults.standard.bool(forKey: migrationKey)
+
         if let savedModel = UserDefaults.standard.string(forKey: Self.selectedModelKey) {
             self._selectedModel = savedModel
+        } else if needsMigration {
+            // Try to migrate from Core Data if stores are ready
+            if let migratedModel = Self.migrateSettingFromCoreData(key: "selectedModel") {
+                self._selectedModel = migratedModel
+                UserDefaults.standard.set(migratedModel, forKey: Self.selectedModelKey)
+                logger.info("Migrated selectedModel from Core Data: \(migratedModel)")
+            } else {
+                self._selectedModel = LLMConfig.shared.defaultModel(for: "gemini") ?? ""
+            }
         } else {
             self._selectedModel = LLMConfig.shared.defaultModel(for: "gemini") ?? ""
         }
@@ -1661,7 +1675,19 @@ class SettingsManager {
                 self._liveTranscriptionModelId = legacyModelId
                 UserDefaults.standard.removeObject(forKey: "selectedModelId")
                 UserDefaults.standard.set(legacyModelId, forKey: Self.liveTranscriptionModelIdKey)
+            } else if needsMigration {
+                // Try to migrate from Core Data if stores are ready
+                if let migratedModel = Self.migrateSettingFromCoreData(key: "liveTranscriptionModelId") {
+                    self._liveTranscriptionModelId = migratedModel
+                    UserDefaults.standard.set(migratedModel, forKey: Self.liveTranscriptionModelIdKey)
+                    logger.info("Migrated liveTranscriptionModelId from Core Data: \(migratedModel)")
+                }
             }
+        }
+
+        // Mark migration as complete
+        if needsMigration {
+            UserDefaults.standard.set(true, forKey: migrationKey)
         }
 
         // Load API keys from encrypted Keychain store (NO Core Data dependency)
@@ -1677,6 +1703,36 @@ class SettingsManager {
         applyThemeConfig()
 
         StartupProfiler.shared.mark("singleton.SettingsManager.done")
+    }
+
+    // MARK: - Core Data Migration Helper
+
+    /// Attempt to read a setting value from the legacy Core Data AppSettings entity.
+    /// Returns nil if Core Data isn't ready or the setting doesn't exist.
+    private static func migrateSettingFromCoreData(key: String) -> String? {
+        // Only attempt migration if Core Data stores are loaded
+        guard PersistenceController.isReady else {
+            logger.debug("Core Data not ready, skipping migration for \(key)")
+            return nil
+        }
+
+        let context = PersistenceController.shared.container.viewContext
+        var result: String?
+
+        context.performAndWait {
+            let request = NSFetchRequest<NSManagedObject>(entityName: "AppSettings")
+            request.fetchLimit = 1
+
+            do {
+                if let settings = try context.fetch(request).first {
+                    result = settings.value(forKey: key) as? String
+                }
+            } catch {
+                logger.error("Failed to migrate \(key) from Core Data: \(error.localizedDescription)")
+            }
+        }
+
+        return result
     }
 
     // MARK: - Validation

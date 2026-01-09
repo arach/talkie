@@ -55,17 +55,8 @@ struct MacStatusBanner: View {
                     .strokeBorder(Color.borderPrimary.opacity(0.5), lineWidth: 0.5)
             )
         } else {
-            // No Mac status - compact "no Mac" indicator
-            HStack(spacing: Spacing.xs) {
-                Image(systemName: "desktopcomputer")
-                    .font(.system(size: 10))
-                    .foregroundColor(.textTertiary)
-                Text("No Mac connected")
-                    .font(.system(size: 11))
-                    .foregroundColor(.textTertiary)
-            }
-            .padding(.horizontal, Spacing.sm)
-            .padding(.vertical, Spacing.xs)
+            // No Mac status - show nothing (don't clutter the UI)
+            EmptyView()
         }
     }
 
@@ -77,8 +68,6 @@ struct MacStatusBanner: View {
             return .warning
         case "screenOff":
             return status.canProcessMemos ? .success : .warning
-        case "powerNap":
-            return .warning
         case "sleeping", "shuttingDown":
             return .textTertiary
         default:
@@ -591,6 +580,10 @@ struct VoiceMemoListView: View {
 
             // Note: Widget data is only refreshed when memos are saved/deleted
             // WidgetKit handles periodic refresh every 30 minutes via timeline policy
+        }
+        .onDisappear {
+            // Stop observing Mac status when view disappears
+            MacStatusObserver.shared.stopObserving()
         }
     }
 

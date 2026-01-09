@@ -905,8 +905,6 @@ struct MacAvailabilityBadge: View {
             return .success
         case "screenOff":
             return status.canProcessMemos ? .success : .warning
-        case "powerNap":
-            return .warning
         default:
             return .textTertiary
         }

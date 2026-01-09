@@ -39,8 +39,6 @@ final class MacStatusObserver {
                 return canProcessMemos
                     ? "Display off, still processing"
                     : "Display off, may sleep soon"
-            case "powerNap":
-                return "Mac in Power Nap mode"
             case "sleeping":
                 return "Mac is sleeping"
             case "shuttingDown":
@@ -70,9 +68,34 @@ final class MacStatusObserver {
 
     // MARK: - Refresh
 
+    /// Debounce tracking to prevent multiple concurrent refreshes
+    @ObservationIgnored private var isRefreshing = false
+    @ObservationIgnored private var pendingRefresh = false
+
     func refresh() async {
+        // Debounce: if already refreshing, mark pending and return
+        if isRefreshing {
+            pendingRefresh = true
+            return
+        }
+
+        // Check if Core Data stores are ready
+        guard PersistenceController.isReady else {
+            AppLogger.persistence.debug("MacStatusObserver: Core Data not ready, skipping refresh")
+            return
+        }
+
+        isRefreshing = true
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+            isRefreshing = false
+            // If a refresh was requested while we were busy, do one more
+            if pendingRefresh {
+                pendingRefresh = false
+                Task { await refresh() }
+            }
+        }
 
         let context = PersistenceController.shared.container.viewContext
 
@@ -97,7 +120,7 @@ final class MacStatusObserver {
                     idleMinutes: Int(status.value(forKey: "idleMinutes") as? Int16 ?? 0)
                 )
             } catch {
-                print("Failed to fetch MacStatus: \(error)")
+                AppLogger.persistence.error("Failed to fetch MacStatus: \(error.localizedDescription)")
                 self.macStatus = nil
             }
         }
@@ -105,9 +128,22 @@ final class MacStatusObserver {
 
     // MARK: - Observation
 
-    private var remoteChangeObserver: Any?
+    @ObservationIgnored private var remoteChangeObserver: Any?
+    @ObservationIgnored private var observerCount = 0
 
+    /// Start observing CloudKit changes. Uses reference counting so multiple
+    /// callers can start/stop without interfering with each other.
     func startObserving() {
+        observerCount += 1
+
+        // Only add observer once
+        guard remoteChangeObserver == nil else {
+            AppLogger.persistence.debug("MacStatusObserver: Already observing (count: \(observerCount))")
+            return
+        }
+
+        AppLogger.persistence.info("MacStatusObserver: Starting CloudKit observation")
+
         // Observe CloudKit changes
         remoteChangeObserver = NotificationCenter.default.addObserver(
             forName: .NSPersistentStoreRemoteChange,
@@ -121,8 +157,18 @@ final class MacStatusObserver {
         Task { await refresh() }
     }
 
+    /// Stop observing CloudKit changes. Only removes the observer when all
+    /// callers have stopped.
     func stopObserving() {
+        observerCount = max(0, observerCount - 1)
+
+        guard observerCount == 0 else {
+            AppLogger.persistence.debug("MacStatusObserver: Still has \(observerCount) observer(s)")
+            return
+        }
+
         if let observer = remoteChangeObserver {
+            AppLogger.persistence.info("MacStatusObserver: Stopping CloudKit observation")
             NotificationCenter.default.removeObserver(observer)
             remoteChangeObserver = nil
         }

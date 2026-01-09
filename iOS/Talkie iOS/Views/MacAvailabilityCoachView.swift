@@ -304,8 +304,6 @@ private struct StatusBadge: View {
             return .warning
         case "screenOff":
             return status.canProcessMemos ? .success : .warning
-        case "powerNap":
-            return .warning
         case "sleeping", "shuttingDown":
             return .textTertiary
         default:

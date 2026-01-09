@@ -587,9 +587,9 @@ private struct BridgeLogsSection: View {
     @State private var expandedEntries: Set<UUID> = []
 
     private let mainLogFile = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Library/Application Support/Talkie/Bridge/labs.log")
+        .appendingPathComponent("Library/Application Support/Talkie/Bridge/bridge.log")
     private let devLogFile = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Library/Application Support/Talkie/Bridge/labs.dev.log")
+        .appendingPathComponent("Library/Application Support/Talkie/Bridge/bridge.dev.log")
     private let timer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     var body: some View {

@@ -35,7 +35,6 @@ enum SettingsSection: String, Hashable {
     case cloud               // Sync (future)
 
     // SYSTEM
-    case connections         // Connection Center (unified view)
     case helpers             // Background services (TalkieLive, TalkieEngine)
     case bridge              // iOS Bridge (Tailscale)
     case permissions
@@ -63,7 +62,6 @@ enum SettingsSection: String, Hashable {
         case "database", "db": return .database
         case "files": return .files
         case "cloud", "sync": return .cloud
-        case "connections": return .connections
         case "helpers": return .helpers
         case "bridge", "ios-bridge": return .bridge
         case "permissions": return .permissions
@@ -90,7 +88,6 @@ enum SettingsSection: String, Hashable {
         case .database: return "database"
         case .files: return "files"
         case .cloud: return "cloud"
-        case .connections: return "connections"
         case .helpers: return "helpers"
         case .bridge: return "bridge"
         case .permissions: return "permissions"
@@ -315,14 +312,7 @@ struct SettingsSidebarColumn: View {
                     }
 
                     // SYSTEM
-                    SettingsSidebarSection(title: "SYSTEM", isActive: selectedSection == .connections || selectedSection == .helpers || selectedSection == .bridge || selectedSection == .permissions || selectedSection == .debugInfo || selectedSection == .devControl) {
-                        SettingsSidebarItem(
-                            icon: "point.3.connected.trianglepath.dotted",
-                            title: "CONNECTIONS",
-                            isSelected: selectedSection == .connections
-                        ) {
-                            selectedSection = .connections
-                        }
+                    SettingsSidebarSection(title: "SYSTEM", isActive: selectedSection == .helpers || selectedSection == .bridge || selectedSection == .permissions || selectedSection == .debugInfo || selectedSection == .devControl) {
                         SettingsSidebarItem(
                             icon: "app.connected.to.app.below.fill",
                             title: "HELPERS",
@@ -426,8 +416,6 @@ struct SettingsContentColumn: View {
             CloudSettingsView()
 
         // SYSTEM
-        case .connections:
-            ConnectionCenterView(selectedSection: $selectedSection)
         case .helpers:
             HelperAppsSettingsView()
         case .permissions:

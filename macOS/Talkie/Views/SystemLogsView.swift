@@ -18,12 +18,14 @@ enum SystemEventSource: String, CaseIterable {
     case talkie = "Talkie"
     case talkieLive = "TalkieLive"
     case talkieEngine = "Engine"
+    case bridge = "Bridge"
 
     var color: Color {
         switch self {
         case .talkie: return Color(red: 0.4, green: 0.7, blue: 1.0) // Blue
         case .talkieLive: return Color(red: 0.7, green: 0.5, blue: 1.0) // Purple
         case .talkieEngine: return Color(red: 1.0, green: 0.6, blue: 0.3) // Orange
+        case .bridge: return Color(red: 0.3, green: 0.8, blue: 0.7) // Teal
         }
     }
 
@@ -32,6 +34,7 @@ enum SystemEventSource: String, CaseIterable {
         case .talkie: return "app.fill"
         case .talkieLive: return "menubar.rectangle"
         case .talkieEngine: return "gearshape.fill"
+        case .bridge: return "network"
         }
     }
 }
@@ -156,6 +159,9 @@ class LogFileManager {
             return appSupport.appendingPathComponent("TalkieLive/logs", isDirectory: true)
         case .talkieEngine:
             return appSupport.appendingPathComponent("TalkieEngine/logs", isDirectory: true)
+        case .bridge:
+            // Bridge logs are stored in Talkie/Bridge/ (not a logs subdirectory)
+            return appSupport.appendingPathComponent("Talkie/Bridge", isDirectory: true)
         }
     }
 
@@ -238,6 +244,11 @@ class LogFileManager {
 
     /// Load events from a specific source's log file
     func loadEventsFrom(source: SystemEventSource, date: Date, limit: Int = 500) -> [SystemEvent] {
+        // Bridge uses a different log format and filename
+        if source == .bridge {
+            return loadBridgeEvents(limit: limit)
+        }
+
         let sourcePath = logsDirectory(for: source).appendingPathComponent(logFileName(for: date))
         guard let content = try? String(contentsOf: sourcePath, encoding: .utf8) else {
             return []
@@ -251,6 +262,61 @@ class LogFileManager {
             guard !line.isEmpty, let event = SystemEvent.fromLogLine(line) else { continue }
             events.append(event)
             if events.count >= limit { break }
+        }
+
+        return events
+    }
+
+    /// Load events from Bridge's bridge.log (different format)
+    private func loadBridgeEvents(limit: Int = 500) -> [SystemEvent] {
+        let logFile = logsDirectory(for: .bridge).appendingPathComponent("bridge.log")
+        guard let content = try? String(contentsOf: logFile, encoding: .utf8) else {
+            return []
+        }
+
+        let lines = content.components(separatedBy: .newlines)
+        var events: [SystemEvent] = []
+
+        // Bridge log format: [ISO_TIMESTAMP] [LEVEL] message
+        // e.g., [2024-01-08T10:30:00.000Z] [INFO] Labs sessions: 5
+        let pattern = #"\[([^\]]+)\] \[([^\]]+)\] (.+)"#
+        let regex = try? NSRegularExpression(pattern: pattern)
+
+        for line in lines.reversed() {
+            guard !line.isEmpty else { continue }
+
+            if let regex = regex,
+               let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
+               match.numberOfRanges >= 4 {
+                let timestampStr = String(line[Range(match.range(at: 1), in: line)!])
+                let level = String(line[Range(match.range(at: 2), in: line)!])
+                let message = String(line[Range(match.range(at: 3), in: line)!])
+
+                // Parse ISO timestamp
+                let isoFormatter = ISO8601DateFormatter()
+                isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                let timestamp = isoFormatter.date(from: timestampStr) ?? Date()
+
+                // Map Bridge log levels to SystemEventType
+                let eventType: SystemEventType = switch level {
+                case "ERROR": .error
+                case "WARN": .error
+                case "DEBUG": .system
+                case "REQ": .sync
+                default: .system
+                }
+
+                let event = SystemEvent(
+                    id: UUID(),
+                    timestamp: timestamp,
+                    source: .bridge,
+                    type: eventType,
+                    message: message,
+                    detail: nil
+                )
+                events.append(event)
+                if events.count >= limit { break }
+            }
         }
 
         return events
@@ -586,6 +652,7 @@ struct SystemLogsView: View {
                 sourceFilterChip(.talkie, label: "TALKIE")
                 sourceFilterChip(.talkieLive, label: "LIVE")
                 sourceFilterChip(.talkieEngine, label: "ENGINE")
+                sourceFilterChip(.bridge, label: "BRIDGE")
 
                 Spacer()
 
