@@ -95,7 +95,7 @@ struct iOSSettingsView: View {
                         .font(Theme.current.fontXS)
                         .foregroundColor(Theme.current.foregroundSecondary)
 
-                    Text("iCloud syncs your memos automatically. Real-time features (like Claude Code sessions) require the Talkie Server running with Tailscale.")
+                    Text("iCloud syncs your memos across Apple devices. Direct Mac Connection enables real-time features like Claude Code sessions via Tailscale.")
                         .font(Theme.current.fontXS)
                         .foregroundColor(Theme.current.foregroundSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -122,67 +122,67 @@ struct iOSSettingsView: View {
     }
 }
 
-// MARK: - Connection Status Section
+// MARK: - Connection Overview Section
 
 private struct ConnectionStatusSection: View {
     let iCloudEnabled: Bool
     let bridgeStatus: BridgeManager.BridgeStatus
     let deviceCount: Int
 
-    private var overallStatus: OverallStatus {
-        let cloudOK = iCloudEnabled
-        let realtimeOK = bridgeStatus == .running
-
-        if cloudOK && realtimeOK {
-            return .fullyConnected
-        } else if cloudOK && !realtimeOK {
-            return .cloudOnly
-        } else if !cloudOK && realtimeOK {
-            return .realtimeOnly
-        } else {
-            return .disconnected
+    private var enabledFeatures: [EnabledFeature] {
+        var features: [EnabledFeature] = []
+        if iCloudEnabled {
+            features.append(EnabledFeature(
+                icon: "icloud.fill",
+                title: "iCloud Sync",
+                description: "Memos sync across your Apple devices",
+                color: .green
+            ))
         }
+        if bridgeStatus == .running {
+            features.append(EnabledFeature(
+                icon: "bolt.fill",
+                title: "Direct Mac Connection",
+                description: "Real-time features available",
+                color: .green
+            ))
+        }
+        return features
     }
 
-    enum OverallStatus {
-        case fullyConnected
-        case cloudOnly
-        case realtimeOnly
-        case disconnected
-
-        var icon: String {
-            switch self {
-            case .fullyConnected: return "checkmark.circle.fill"
-            case .cloudOnly, .realtimeOnly: return "exclamationmark.circle.fill"
-            case .disconnected: return "xmark.circle.fill"
-            }
+    private var availableUpgrades: [FeatureUpsell] {
+        var upgrades: [FeatureUpsell] = []
+        if !iCloudEnabled {
+            upgrades.append(FeatureUpsell(
+                icon: "icloud",
+                title: "Enable iCloud Sync",
+                benefit: "Keep your memos backed up and synced across all your Apple devices",
+                action: "Enable below"
+            ))
         }
-
-        var color: Color {
-            switch self {
-            case .fullyConnected: return .green
-            case .cloudOnly, .realtimeOnly: return .orange
-            case .disconnected: return .red
-            }
+        if bridgeStatus != .running {
+            upgrades.append(FeatureUpsell(
+                icon: "bolt",
+                title: "Direct Mac Connection",
+                benefit: "Run Claude Code sessions, send messages to Mac, and more",
+                action: "Start server below"
+            ))
         }
+        return upgrades
+    }
 
-        var title: String {
-            switch self {
-            case .fullyConnected: return "Fully Connected"
-            case .cloudOnly: return "iCloud Only"
-            case .realtimeOnly: return "Real-time Only"
-            case .disconnected: return "Not Connected"
-            }
-        }
+    struct EnabledFeature {
+        let icon: String
+        let title: String
+        let description: String
+        let color: Color
+    }
 
-        var description: String {
-            switch self {
-            case .fullyConnected: return "Memos sync and real-time features available"
-            case .cloudOnly: return "Memos sync, but real-time features unavailable"
-            case .realtimeOnly: return "Real-time features work, but memos don't sync"
-            case .disconnected: return "Enable iCloud or start server to connect"
-            }
-        }
+    struct FeatureUpsell {
+        let icon: String
+        let title: String
+        let benefit: String
+        let action: String
     }
 
     var body: some View {
@@ -191,53 +191,73 @@ private struct ConnectionStatusSection: View {
                 Image(systemName: "antenna.radiowaves.left.and.right")
                     .font(Theme.current.fontXS)
                     .foregroundColor(Theme.current.foregroundSecondary)
-                Text("CONNECTION STATUS")
+                Text("CONNECTION OVERVIEW")
                     .font(Theme.current.fontXSMedium)
                     .foregroundColor(Theme.current.foregroundSecondary)
             }
 
-            HStack(spacing: 12) {
-                Image(systemName: overallStatus.icon)
-                    .font(.system(size: 28))
-                    .foregroundColor(overallStatus.color)
-                    .frame(width: 44, height: 44)
-                    .background(overallStatus.color.opacity(0.15))
-                    .cornerRadius(10)
+            VStack(spacing: 8) {
+                // Show enabled features first (positive framing)
+                ForEach(enabledFeatures, id: \.title) { feature in
+                    HStack(spacing: 12) {
+                        Image(systemName: feature.icon)
+                            .font(.system(size: 16))
+                            .foregroundColor(feature.color)
+                            .frame(width: 32, height: 32)
+                            .background(feature.color.opacity(0.15))
+                            .cornerRadius(8)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(overallStatus.title)
-                        .font(Theme.current.fontSMMedium)
-                        .foregroundColor(Theme.current.foreground)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(feature.title)
+                                .font(Theme.current.fontSMMedium)
+                                .foregroundColor(Theme.current.foreground)
+                            Text(feature.description)
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                        }
 
-                    Text(overallStatus.description)
-                        .font(Theme.current.fontXS)
-                        .foregroundColor(Theme.current.foregroundSecondary)
+                        Spacer()
+
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(.green)
+                    }
+                    .padding(10)
+                    .background(Theme.current.surface1)
+                    .cornerRadius(8)
                 }
 
-                Spacer()
+                // Show upsells for disabled features (gentle, helpful)
+                ForEach(availableUpgrades, id: \.title) { upsell in
+                    HStack(spacing: 12) {
+                        Image(systemName: upsell.icon)
+                            .font(.system(size: 16))
+                            .foregroundColor(Theme.current.foregroundSecondary)
+                            .frame(width: 32, height: 32)
+                            .background(Theme.current.foregroundSecondary.opacity(0.1))
+                            .cornerRadius(8)
 
-                // Quick status indicators
-                VStack(alignment: .trailing, spacing: 4) {
-                    HStack(spacing: 4) {
-                        Image(systemName: iCloudEnabled ? "checkmark" : "xmark")
-                            .font(.system(size: 8, weight: .bold))
-                        Text("iCloud")
-                            .font(.system(size: 10))
-                    }
-                    .foregroundColor(iCloudEnabled ? .green : .gray)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(upsell.title)
+                                .font(Theme.current.fontSMMedium)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                            Text(upsell.benefit)
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.8))
+                                .lineLimit(2)
+                        }
 
-                    HStack(spacing: 4) {
-                        Image(systemName: bridgeStatus == .running ? "checkmark" : "xmark")
-                            .font(.system(size: 8, weight: .bold))
-                        Text("Real-time")
-                            .font(.system(size: 10))
+                        Spacer()
+
+                        Text(upsell.action)
+                            .font(.system(size: 9))
+                            .foregroundColor(.blue.opacity(0.8))
                     }
-                    .foregroundColor(bridgeStatus == .running ? .green : .gray)
+                    .padding(10)
+                    .background(Theme.current.surface1.opacity(0.5))
+                    .cornerRadius(8)
                 }
             }
-            .padding(12)
-            .background(Theme.current.surface1)
-            .cornerRadius(8)
         }
     }
 }
@@ -379,69 +399,70 @@ private struct SyncDetailsView: View {
     let inventory: DataInventory?
     let onShowHistory: () -> Void
     @State private var syncManager = CloudKitSyncManager.shared
+    @State private var showingSyncHistory = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // Summary line: "246 memos • Last sync 9:02 PM [History >]"
-            HStack(spacing: 0) {
-                HStack(spacing: 4) {
-                    Image(systemName: "doc.text")
-                        .font(.system(size: 9))
-                    Text("\(inventory?.local ?? 0) memos")
-                        .font(.system(size: 10, weight: .medium))
-                }
-                .foregroundColor(Theme.current.foregroundSecondary)
-
-                Text(" • ")
-                    .font(.system(size: 10))
-                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.5))
-
-                if let lastSync = syncStatus.lastSyncDate {
-                    Text("Last sync \(formatTime(lastSync))")
-                        .font(.system(size: 10))
-                        .foregroundColor(Theme.current.foregroundSecondary)
-                } else {
-                    Text("Never synced")
-                        .font(.system(size: 10))
-                        .foregroundColor(Theme.current.foregroundSecondary.opacity(0.7))
-                }
+        VStack(alignment: .leading, spacing: 8) {
+            // Recent syncs header
+            HStack {
+                Text("Recent Activity")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(Theme.current.foregroundSecondary)
 
                 Spacer()
 
-                Button(action: onShowHistory) {
-                    HStack(spacing: 3) {
-                        Text("History")
+                // Nice button for full sync history
+                Button(action: { showingSyncHistory = true }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 9))
+                        Text("Sync History")
                             .font(.system(size: 9, weight: .medium))
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 7, weight: .semibold))
                     }
-                    .foregroundColor(Theme.current.foregroundSecondary)
+                    .foregroundColor(.blue)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(4)
                 }
                 .buttonStyle(.plain)
             }
 
-            // Recent activity (now filtered to meaningful changes only)
+            // Recent syncs list (clickable rows)
             let recentEvents = Array(syncManager.syncHistory.prefix(5))
             if !recentEvents.isEmpty {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 0) {
                     ForEach(recentEvents) { event in
-                        SyncActivityRow(event: event)
+                        SyncActivityRow(event: event, onTap: { showingSyncHistory = true })
+                        if event.id != recentEvents.last?.id {
+                            Divider()
+                                .background(Theme.current.divider.opacity(0.5))
+                        }
                     }
                 }
-                .padding(8)
                 .background(Theme.current.background.opacity(0.5))
-                .cornerRadius(4)
+                .cornerRadius(6)
+            } else {
+                HStack {
+                    Image(systemName: "checkmark.circle")
+                        .font(.system(size: 10))
+                        .foregroundColor(.green.opacity(0.7))
+                    Text("No recent changes")
+                        .font(.system(size: 10))
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(0.7))
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.current.background.opacity(0.5))
+                .cornerRadius(6)
             }
         }
         .padding(10)
         .background(Theme.current.surface1.opacity(0.5))
         .cornerRadius(6)
-    }
-
-    private func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        return formatter.string(from: date)
+        .sheet(isPresented: $showingSyncHistory) {
+            SyncHistorySheet()
+        }
     }
 }
 
@@ -449,24 +470,38 @@ private struct SyncDetailsView: View {
 
 private struct SyncActivityRow: View {
     let event: SyncEvent
+    var onTap: (() -> Void)? = nil
+
+    @State private var isHovering = false
 
     var body: some View {
-        HStack(spacing: 6) {
-            Text(formatTime(event.timestamp))
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.5))
+        Button(action: { onTap?() }) {
+            HStack(spacing: 6) {
+                Text(formatTime(event.timestamp))
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.6))
 
-            Image(systemName: changeIcon)
-                .font(.system(size: 7))
-                .foregroundColor(changeColor)
+                Image(systemName: changeIcon)
+                    .font(.system(size: 8))
+                    .foregroundColor(changeColor)
 
-            Text(description)
-                .font(.system(size: 9))
-                .foregroundColor(Theme.current.foregroundSecondary)
-                .lineLimit(1)
+                Text(description)
+                    .font(.system(size: 10))
+                    .foregroundColor(Theme.current.foregroundSecondary)
+                    .lineLimit(1)
 
-            Spacer()
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 8))
+                    .foregroundColor(Theme.current.foregroundSecondary.opacity(isHovering ? 0.6 : 0.3))
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(isHovering ? Theme.current.surface1.opacity(0.5) : Color.clear)
         }
+        .buttonStyle(.plain)
+        .onHover { hovering in isHovering = hovering }
     }
 
     private var changeIcon: String {
@@ -536,7 +571,7 @@ private struct RealTimeFeaturesSection: View {
                 Image(systemName: "bolt.horizontal")
                     .font(Theme.current.fontXS)
                     .foregroundColor(Theme.current.foregroundSecondary)
-                Text("REAL-TIME FEATURES")
+                Text("DIRECT MAC CONNECTION")
                     .font(Theme.current.fontXSMedium)
                     .foregroundColor(Theme.current.foregroundSecondary)
             }
@@ -621,13 +656,13 @@ private struct RealTimeFeaturesSection: View {
 
     private var statusDescription: String {
         switch bridgeStatus {
-        case .running: return "Server running on port 8765"
+        case .running: return "Connected via Tailscale"
         case .starting: return "Starting Talkie Server..."
         case .stopped:
             if !tailscaleStatus.isReady {
                 return tailscaleStatus.message
             }
-            return "Start server to enable real-time features"
+            return "Start server to connect directly to Mac"
         case .error: return bridgeManager.errorMessage ?? "Server encountered an error"
         }
     }
