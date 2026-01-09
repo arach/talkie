@@ -369,9 +369,10 @@ private struct iCloudSyncSection: View {
 private struct SyncDetailsView: View {
     let syncStatus: SyncStatusManager
     let inventory: DataInventory?
+    @State private var syncManager = CloudKitSyncManager.shared
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 8) {
             // Record counts
             HStack(spacing: 16) {
                 SyncStatItem(
@@ -407,6 +408,11 @@ private struct SyncDetailsView: View {
                     }
                 }
             }
+
+            // Mini sync log
+            if !syncManager.syncHistory.isEmpty {
+                SyncMiniLog(events: Array(syncManager.syncHistory.prefix(5)))
+            }
         }
         .padding(10)
         .background(Theme.current.surface1.opacity(0.5))
@@ -416,6 +422,126 @@ private struct SyncDetailsView: View {
     private func formatTime(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - Sync Mini Log
+
+private struct SyncMiniLog: View {
+    let events: [SyncEvent]
+    @State private var copied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            // Header with copy button
+            HStack {
+                Text("RECENT ACTIVITY")
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.7))
+
+                Spacer()
+
+                Button(action: copyLog) {
+                    HStack(spacing: 3) {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 8))
+                        Text(copied ? "Copied" : "Copy")
+                            .font(.system(size: 8, weight: .medium))
+                    }
+                    .foregroundColor(copied ? .green : Theme.current.foregroundSecondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.secondary.opacity(0.1))
+                    .cornerRadius(3)
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Log entries
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(events) { event in
+                    SyncMiniLogEntry(event: event)
+                }
+            }
+            .padding(6)
+            .background(Theme.current.background.opacity(0.5))
+            .cornerRadius(4)
+        }
+    }
+
+    private func copyLog() {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "HH:mm:ss"
+
+        var lines: [String] = []
+        for event in events {
+            let time = dateFormatter.string(from: event.timestamp)
+            let status = event.status.rawValue.uppercased()
+            let items = event.itemCount > 0 ? " (\(event.itemCount) items)" : ""
+            let duration = event.duration.map { String(format: " %.1fs", $0) } ?? ""
+            let error = event.errorMessage.map { " - \($0)" } ?? ""
+            lines.append("[\(time)] \(status)\(items)\(duration)\(error)")
+        }
+
+        let logText = lines.joined(separator: "\n")
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(logText, forType: .string)
+
+        copied = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            copied = false
+        }
+    }
+}
+
+private struct SyncMiniLogEntry: View {
+    let event: SyncEvent
+
+    var body: some View {
+        HStack(spacing: 6) {
+            // Timestamp
+            Text(formatTime(event.timestamp))
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.7))
+                .frame(width: 50, alignment: .leading)
+
+            // Status icon
+            Image(systemName: event.status.icon)
+                .font(.system(size: 8))
+                .foregroundColor(event.status.color)
+
+            // Status + item count
+            Text(statusText)
+                .font(.system(size: 9))
+                .foregroundColor(Theme.current.foregroundSecondary)
+                .lineLimit(1)
+
+            Spacer()
+
+            // Duration
+            if let duration = event.duration {
+                Text(String(format: "%.1fs", duration))
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.6))
+            }
+        }
+    }
+
+    private var statusText: String {
+        var text = event.status.rawValue.capitalized
+        if event.itemCount > 0 {
+            text += " (\(event.itemCount))"
+        }
+        if let error = event.errorMessage, !error.isEmpty {
+            text += " - " + error.prefix(30) + (error.count > 30 ? "…" : "")
+        }
+        return text
+    }
+
+    private func formatTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
         return formatter.string(from: date)
     }
 }
