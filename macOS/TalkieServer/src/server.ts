@@ -75,9 +75,16 @@ const app = new Elysia()
     const url = new URL(request.url);
     log.request(request.method, url.pathname);
   })
-  .onAfterHandle(({ request, set }) => {
+  .onAfterHandle(({ request, response, set }) => {
     const url = new URL(request.url);
-    log.info(`${request.method} ${url.pathname} → ${set.status || 200}`);
+    const status = set.status || 200;
+    log.info(`${request.method} ${url.pathname} → ${status}`);
+
+    // Log full response JSON for debugging (set TALKIE_DEBUG=1 to enable)
+    const debugEnabled = LOCAL_MODE || process.env.TALKIE_DEBUG === "1";
+    if (debugEnabled && response && typeof response === "object" && !(response instanceof Response)) {
+      log.debug(`Response: ${JSON.stringify(response)}`);
+    }
   })
 
   // Auth middleware

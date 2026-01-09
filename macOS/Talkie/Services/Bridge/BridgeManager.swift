@@ -264,6 +264,13 @@ final class BridgeManager {
             process.arguments = ["run", "src/server.ts"]
             process.currentDirectoryURL = URL(fileURLWithPath: sourcePath)
 
+            // Set environment (inherit current + DEBUG flag)
+            var env = ProcessInfo.processInfo.environment
+            #if DEBUG
+            env["TALKIE_DEBUG"] = "1"
+            #endif
+            process.environment = env
+
             // Capture output for debugging
             let outputPipe = Pipe()
             let errorPipe = Pipe()
