@@ -26,6 +26,13 @@ enum BuildInfo {
         #endif
     }
 
+    /// Build date
+    static var buildDate: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, HH:mm"
+        return formatter.string(from: Date())
+    }
+
     /// Source directory derived from #file at compile time
     private static let sourceDirectory: String = {
         // #file gives us the path to this source file at compile time
