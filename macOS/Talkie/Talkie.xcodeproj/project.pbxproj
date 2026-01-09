@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0F74ED8624934C10B8F53260 /* iOSSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C81F68A710C47D69BDE9A0E /* iOSSettingsView.swift */; };
+		2A9127B354464C62A9016955 /* ServerSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF66BE1FE4DB46F494AF9F5C /* ServerSettingsView.swift */; };
 		FC81556A832F4DBF88FA35D2 /* CoreDataSyncGateway.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0DBBC4406B047DCA20EAF7C /* CoreDataSyncGateway.swift */; };
 		7C0DCC0D4C3F472292D9F65A /* PowerStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34DE511EE6C24B1A94C2A668 /* PowerStateManager.swift */; };
 		23891C7996804BC8BE79CD47 /* TalkieViewHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11A25B13F98747759B730C13 /* TalkieViewHeader.swift */; };
@@ -36,7 +38,6 @@
 		105F1CFFCA8FF0A934729073 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB66A9AB5F11CD75E0C5CD7A /* Assets.xcassets */; };
 		119EA3887C3286DADA59BDC9 /* LLMConfigView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6D2650BC604AA31C36089CE /* LLMConfigView.swift */; };
 		11CC1242517994016086537D /* MemosSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9757133990EAA3D0DC070A1D /* MemosSettings.swift */; };
-		11D77EA8FD784E12937C7B2A /* BridgeSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75AF8AAF9EAF0A01230AE518 /* BridgeSettingsView.swift */; };
 		12BA22E0ACD2960618C9A646 /* UnifiedDashboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F72A32CB402C264345059C3 /* UnifiedDashboard.swift */; };
 		12C09E722FE7AF0829E5E085 /* PillDemoAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F790DA32AE2B8AF3B97C2132 /* PillDemoAnimation.swift */; };
 		147F39FAD670E625E50DE30F /* DownloadProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8626E21D10A08A15D16F3BCD /* DownloadProgressView.swift */; };
@@ -282,6 +283,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		9C81F68A710C47D69BDE9A0E /* iOSSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSSettingsView.swift; sourceTree = "<group>"; };
+		FF66BE1FE4DB46F494AF9F5C /* ServerSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerSettingsView.swift; sourceTree = "<group>"; };
 		B0DBBC4406B047DCA20EAF7C /* CoreDataSyncGateway.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataSyncGateway.swift; sourceTree = "<group>"; };
 		34DE511EE6C24B1A94C2A668 /* PowerStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerStateManager.swift; sourceTree = "<group>"; };
 		11A25B13F98747759B730C13 /* TalkieViewHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieViewHeader.swift; sourceTree = "<group>"; };
@@ -407,7 +410,6 @@
 		74B4590EE33C2B05AD9B3FF7 /* XPCServiceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XPCServiceManager.swift; sourceTree = "<group>"; };
 		74D473872902E2F5B58F8F49 /* TranscriptionTypes.swift.disabled */ = {isa = PBXFileReference; path = TranscriptionTypes.swift.disabled; sourceTree = "<group>"; };
 		752B86504E0C529AC40DE96E /* AudioStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioStorage.swift; sourceTree = "<group>"; };
-		75AF8AAF9EAF0A01230AE518 /* BridgeSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeSettingsView.swift; sourceTree = "<group>"; };
 		75BB8C84F67500324AE2084A /* APIKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeyStore.swift; sourceTree = "<group>"; };
 		75EDCF1634C7AEDAAB6BCA80 /* ExecutionBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutionBackend.swift; sourceTree = "<group>"; };
 		76D097437D3CBB76ADE1BD3B /* BuildInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildInfo.swift; sourceTree = "<group>"; };
@@ -886,11 +888,12 @@
 		9A4651765758DD61801D03CA /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				9C81F68A710C47D69BDE9A0E /* iOSSettingsView.swift */,
+				FF66BE1FE4DB46F494AF9F5C /* ServerSettingsView.swift */,
 				C17881FF95CCD644641D298E /* APISettings.swift */,
 				CB9A7709DDDFE4A1859B1326 /* AppearanceSettings.swift */,
 				90C22080263D752683F84C1A /* AuditResultsView.swift */,
 				BADBB832DB3FA8A73480B2EA /* AutomationsSettings.swift */,
-				75AF8AAF9EAF0A01230AE518 /* BridgeSettingsView.swift */,
 				3C96A04FEABC5B772E63AD67 /* DebugSettings.swift */,
 				5D84377B406BB0FA904DC067 /* DevControlPanel.swift */,
 				66A1F86B2A39089F26E7F97B /* DictationSettings.swift */,
@@ -1315,6 +1318,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0F74ED8624934C10B8F53260 /* iOSSettingsView.swift in Sources */,
+				2A9127B354464C62A9016955 /* ServerSettingsView.swift in Sources */,
 				FC81556A832F4DBF88FA35D2 /* CoreDataSyncGateway.swift in Sources */,
 				7C0DCC0D4C3F472292D9F65A /* PowerStateManager.swift in Sources */,
 				23891C7996804BC8BE79CD47 /* TalkieViewHeader.swift in Sources */,
@@ -1343,7 +1348,6 @@
 				D2F1E3D8A57F3DFB0F6A91CE /* AutoRunProcessor.swift in Sources */,
 				DFD7BC125136392000FC1C63 /* AutomationsSettings.swift in Sources */,
 				8B06E938F1C7FA7F257856D0 /* BridgeManager.swift in Sources */,
-				11D77EA8FD784E12937C7B2A /* BridgeSettingsView.swift in Sources */,
 				4D0FF6D8AA2B517D6F329293 /* BuildInfo.swift in Sources */,
 				422E4D19541B60DE20FA7ABE /* CenterGuidesOverlay.swift in Sources */,
 				000B06752659571E4EA8208D /* ClaudeView.swift in Sources */,
