@@ -935,30 +935,70 @@ struct Theme: Equatable {
 }
 
 // MARK: - TalkieTheme (for Live UI)
+// Uses system-adaptive colors that automatically respond to light/dark mode
 
 enum TalkieTheme {
-    // System backgrounds
+    // System backgrounds - automatically adapt to light/dark mode
     static let background = Color(NSColor.windowBackgroundColor)
     static let secondaryBackground = Color(NSColor.controlBackgroundColor)
     static let tertiaryBackground = Color(NSColor.underPageBackgroundColor)
 
-    private static func currentPalette() -> ThemeColorPalette {
-        return ThemeColorPalette.midnight()
+    // Adaptive surface colors using NSColor which automatically adapts
+    static var surface: Color {
+        Color(NSColor.windowBackgroundColor)
     }
 
-    static var surface: Color { currentPalette().surface }
-    static var surfaceElevated: Color { currentPalette().surfaceElevated }
-    static var surfaceCard: Color { currentPalette().surfaceCard }
-    static var textPrimary: Color { currentPalette().textPrimary }
-    static var textSecondary: Color { currentPalette().textSecondary }
-    static var textTertiary: Color { currentPalette().textTertiary }
-    static var textMuted: Color { currentPalette().textMuted }
-    static var border: Color { currentPalette().border }
-    static var borderSubtle: Color { currentPalette().borderSubtle }
-    static var divider: Color { currentPalette().divider }
-    static var hover: Color { currentPalette().hover }
-    static var accent: Color { currentPalette().accent }
-    static var selected: Color { accent.opacity(0.2) }
+    static var surfaceElevated: Color {
+        Color(NSColor.controlBackgroundColor)
+    }
+
+    static var surfaceCard: Color {
+        Color(NSColor.controlBackgroundColor)
+    }
+
+    // Adaptive text colors
+    static var textPrimary: Color {
+        Color(NSColor.labelColor)
+    }
+
+    static var textSecondary: Color {
+        Color(NSColor.secondaryLabelColor)
+    }
+
+    static var textTertiary: Color {
+        Color(NSColor.tertiaryLabelColor)
+    }
+
+    static var textMuted: Color {
+        Color(NSColor.tertiaryLabelColor)
+    }
+
+    // Adaptive border/divider colors
+    static var border: Color {
+        Color(NSColor.separatorColor)
+    }
+
+    static var borderSubtle: Color {
+        Color(NSColor.separatorColor).opacity(0.5)
+    }
+
+    static var divider: Color {
+        Color(NSColor.separatorColor)
+    }
+
+    // Hover state
+    static var hover: Color {
+        Color(NSColor.unemphasizedSelectedContentBackgroundColor)
+    }
+
+    // Accent
+    static var accent: Color {
+        Color.accentColor
+    }
+
+    static var selected: Color {
+        Color.accentColor.opacity(0.2)
+    }
 }
 
 struct ThemeColorPalette {
@@ -988,6 +1028,24 @@ struct ThemeColorPalette {
             borderSubtle: Color.white.opacity(0.06),
             divider: Color.white.opacity(0.1),
             hover: Color.white.opacity(0.05),
+            accent: Color.cyan
+        )
+    }
+
+    /// Daylight theme palette - clean light mode with proper contrast
+    static func daylight() -> ThemeColorPalette {
+        ThemeColorPalette(
+            surface: Color(NSColor.windowBackgroundColor),
+            surfaceElevated: Color(NSColor.controlBackgroundColor),
+            surfaceCard: Color(white: 0.96),
+            textPrimary: Color(white: 0.1),
+            textSecondary: Color(white: 0.35),
+            textTertiary: Color(white: 0.5),
+            textMuted: Color(white: 0.6),
+            border: Color.black.opacity(0.1),
+            borderSubtle: Color.black.opacity(0.06),
+            divider: Color.black.opacity(0.1),
+            hover: Color.black.opacity(0.04),
             accent: Color.cyan
         )
     }
