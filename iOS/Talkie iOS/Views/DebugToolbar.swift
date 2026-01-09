@@ -159,7 +159,7 @@ struct DebugToolbarOverlay<Content: View>: View {
                         Spacer()
 
                         Button(action: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
+                            withAnimation(.easeOut(duration: 0.12)) {
                                 showToolbar = false
                             }
                         }) {
@@ -225,7 +225,7 @@ struct DebugToolbarOverlay<Content: View>: View {
 
             // Toggle button (always visible - shared chrome)
             Button(action: {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                withAnimation(.spring(response: 0.18, dampingFraction: 0.75)) {
                     showToolbar.toggle()
                 }
             }) {
@@ -233,7 +233,7 @@ struct DebugToolbarOverlay<Content: View>: View {
                     .font(.system(size: 14))
                     .foregroundColor(showToolbar ? .active : .textTertiary)
                     .rotationEffect(.degrees(showToolbar ? 180 : 0))
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showToolbar)
+                    .animation(.spring(response: 0.18, dampingFraction: 0.75), value: showToolbar)
                     .frame(width: 32, height: 32)
                     .background(
                         Circle()
