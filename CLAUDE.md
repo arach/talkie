@@ -181,3 +181,7 @@ When moving/adding Swift files:
 1. Move the file in Finder/Xcode
 2. Run `./scripts/sync-xcode-files.py --check` to verify
 3. Run `./scripts/sync-xcode-files.py` to add missing files
+
+## Release & Shipping
+
+See [SHIPPING.md](SHIPPING.md) for version management, build scripts, and release process.
