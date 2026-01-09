@@ -34,7 +34,7 @@ public enum LogSource: String, Sendable {
 public enum LogEventType: String, Sendable {
     case sync = "SYNC"
     case record = "RECORD"
-    case transcribe = "WHISPER"
+    case transcribe = "TRANSCRIPTION"
     case workflow = "WORKFLOW"
     case error = "ERROR"
     case system = "SYSTEM"
