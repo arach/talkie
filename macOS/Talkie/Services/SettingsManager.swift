@@ -791,18 +791,18 @@ class SettingsManager {
     /// Secondary text
     var tacticalForegroundSecondary: Color {
         if useTacticalColors {
-            return isDarkMode ? Color(white: 0.72) : Color(white: 0.32)
+            return isDarkMode ? Color(white: 0.78) : Color(white: 0.28)
         }
         if isLinearTheme {
-            // Linear: Gray text (~#888) - for descriptions
-            return Color(white: 0.53)
+            // Linear: Gray text - for descriptions
+            return Color(white: 0.65)
         }
         if isMinimalTheme {
-            return isDarkMode ? Color(white: 0.65) : Color(white: 0.38)
+            return isDarkMode ? Color(white: 0.72) : Color(white: 0.35)
         }
         if isTerminalTheme {
-            // Terminal: Dim gray - clean, no gimmicks
-            return Color(white: 0.55)
+            // Terminal: Secondary gray - readable but subdued
+            return Color(white: 0.68)
         }
         return Color.secondary
     }
@@ -810,20 +810,20 @@ class SettingsManager {
     /// Muted text for timestamps, metadata
     var tacticalForegroundMuted: Color {
         if useTacticalColors {
-            return isDarkMode ? Color(white: 0.52) : Color(white: 0.48)
+            return isDarkMode ? Color(white: 0.58) : Color(white: 0.45)
         }
         if isLinearTheme {
-            // Linear: Muted gray (~#666) - for metadata
-            return Color(white: 0.40)
+            // Linear: Muted gray - for metadata
+            return Color(white: 0.50)
         }
         if isMinimalTheme {
-            return isDarkMode ? Color(white: 0.48) : Color(white: 0.50)
+            return isDarkMode ? Color(white: 0.55) : Color(white: 0.48)
         }
         if isTerminalTheme {
-            // Terminal: Subtle gray
-            return Color(white: 0.40)
+            // Terminal: Subtle gray - still readable
+            return Color(white: 0.52)
         }
-        return isDarkMode ? Color(white: 0.42) : Color(white: 0.58)
+        return isDarkMode ? Color(white: 0.50) : Color(white: 0.55)
     }
 
     /// Divider/border color
@@ -1733,6 +1733,84 @@ class SettingsManager {
         }
 
         return result
+    }
+
+    /// Clear API keys from Core Data after migration to encrypted store
+    private func clearApiKeysFromCoreData() {
+        let fetchRequest: NSFetchRequest<AppSettings> = AppSettings.fetchRequest()
+
+        do {
+            let results = try context.fetch(fetchRequest)
+            if let settings = results.first {
+                // Use empty strings instead of nil to avoid CloudKit/NSSet nil insertion crashes
+                settings.geminiApiKey = ""
+                settings.openaiApiKey = ""
+                settings.anthropicApiKey = ""
+                settings.groqApiKey = ""
+                settings.lastModified = Date()
+                try context.save()
+                logger.info("Cleared API keys from Core Data (migrated to Keychain)")
+            }
+        } catch {
+            // Non-fatal - keys are already in Keychain, just log and continue
+            logger.warning("Could not clear API keys from Core Data: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Save Settings
+    func saveSettings() {
+        ensureInitialized()
+
+        // API keys are automatically saved to Keychain via property setters
+        // Only save non-sensitive settings to Core Data
+        let fetchRequest: NSFetchRequest<AppSettings> = AppSettings.fetchRequest()
+
+        do {
+            let results = try context.fetch(fetchRequest)
+            let settings: AppSettings
+
+            if let existingSettings = results.first {
+                settings = existingSettings
+            } else {
+                settings = AppSettings(context: context)
+                settings.id = UUID()
+            }
+
+            // Only save non-sensitive data to Core Data
+            // API keys are stored securely in Keychain
+            settings.selectedModel = selectedModel
+            settings.liveTranscriptionModelId = liveTranscriptionModelId
+            settings.lastModified = Date()
+
+            try context.save()
+            logger.debug("Settings saved successfully")
+        } catch {
+            logger.error("Failed to save settings: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Create Default Settings
+    private func createDefaultSettings() {
+        let defaultModel = LLMConfig.shared.defaultModel(for: "gemini") ?? ""
+
+        let settings = AppSettings(context: context)
+        settings.id = UUID()
+        // API keys are stored in Keychain, not Core Data
+        settings.selectedModel = defaultModel
+        settings.liveTranscriptionModelId = "whisper:openai_whisper-small"
+        settings.lastModified = Date()
+
+        do {
+            try context.save()
+            // Use async to avoid "publishing changes during view updates" warning
+            DispatchQueue.main.async {
+                self._selectedModel = defaultModel
+                self._liveTranscriptionModelId = "whisper:openai_whisper-small"
+            }
+            logger.debug("Created default settings")
+        } catch {
+            logger.error("Failed to create default settings: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Validation

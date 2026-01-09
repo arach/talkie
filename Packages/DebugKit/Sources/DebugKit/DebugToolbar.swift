@@ -302,8 +302,9 @@ extension DebugToolbar {
                 toggleButton
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 16)
+        .padding(.horizontal, 8)
+        .padding(.bottom, 6)
+        .padding(.top, 8)
     }
 
     private func setupKeyboardShortcut() {

@@ -37,6 +37,7 @@ enum SettingsSection: String, Hashable {
     case iOS                 // Unified iOS settings (iCloud + Bridge + devices)
 
     // SYSTEM
+    case connections         // Connection Center (unified view)
     case helpers             // Background services (TalkieLive, TalkieEngine)
     case server              // TalkieServer (power user / debugging)
     case permissions
@@ -64,6 +65,7 @@ enum SettingsSection: String, Hashable {
         case "database", "db": return .database
         case "files": return .files
         case "ios", "iphone", "icloud": return .iOS
+        case "connections": return .connections
         case "server": return .server
         case "helpers": return .helpers
         case "permissions": return .permissions
@@ -90,6 +92,7 @@ enum SettingsSection: String, Hashable {
         case .database: return "database"
         case .files: return "files"
         case .iOS: return "ios"
+        case .connections: return "connections"
         case .server: return "server"
         case .helpers: return "helpers"
         case .permissions: return "permissions"
@@ -318,7 +321,14 @@ struct SettingsSidebarColumn: View {
                     }
 
                     // SYSTEM
-                    SettingsSidebarSection(title: "SYSTEM", isActive: selectedSection == .helpers || selectedSection == .server || selectedSection == .permissions || selectedSection == .debugInfo || selectedSection == .devControl) {
+                    SettingsSidebarSection(title: "SYSTEM", isActive: selectedSection == .connections || selectedSection == .helpers || selectedSection == .server || selectedSection == .permissions || selectedSection == .debugInfo || selectedSection == .devControl) {
+                        SettingsSidebarItem(
+                            icon: "point.3.connected.trianglepath.dotted",
+                            title: "CONNECTIONS",
+                            isSelected: selectedSection == .connections
+                        ) {
+                            selectedSection = .connections
+                        }
                         SettingsSidebarItem(
                             icon: "app.connected.to.app.below.fill",
                             title: "HELPERS",
@@ -424,6 +434,8 @@ struct SettingsContentColumn: View {
             iOSSettingsView()
 
         // SYSTEM
+        case .connections:
+            ConnectionCenterView(selectedSection: $selectedSection)
         case .helpers:
             HelperAppsSettingsView()
         case .server:

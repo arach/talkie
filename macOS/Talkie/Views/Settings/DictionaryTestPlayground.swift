@@ -9,6 +9,7 @@ import SwiftUI
 import TalkieKit
 
 struct DictionaryTestPlayground: View {
+    @Environment(\.dismiss) private var dismiss
     @ObservedObject private var manager = DictionaryManager.shared
 
     @State private var inputText: String = ""
@@ -27,49 +28,75 @@ struct DictionaryTestPlayground: View {
     @State private var isLoadingSamples: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.lg) {
-            // Header
-            header
+        VStack(spacing: 0) {
+            // Title bar with close button
+            titleBar
 
-            // Input section
-            inputSection
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.lg) {
+                    // Input section
+                    inputSection
 
-            // Run button
-            runButton
+                    // Run button
+                    runButton
 
-            // Performance metrics
-            if let metrics = metrics {
-                metricsSection(metrics)
+                    // Performance metrics
+                    if let metrics = metrics {
+                        metricsSection(metrics)
+                    }
+
+                    // Output section
+                    outputSection
+
+                    // Replacements summary
+                    if !replacements.isEmpty {
+                        replacementsSummary
+                    }
+                }
+                .padding(Spacing.lg)
             }
-
-            // Output section
-            outputSection
-
-            // Replacements summary
-            if !replacements.isEmpty {
-                replacementsSummary
-            }
-
-            Spacer()
         }
-        .padding(Spacing.lg)
+        .background(Theme.current.background)
         .task {
             await loadSampleSources()
         }
     }
 
-    // MARK: - Header
+    // MARK: - Title Bar
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            Text("TEST PLAYGROUND")
-                .font(Theme.current.fontXSBold)
-                .foregroundColor(Theme.current.foregroundSecondary)
+    private var titleBar: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Test Playground")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(Theme.current.foreground)
 
-            Text("Test your dictionary rules against sample text")
-                .font(Theme.current.fontXS)
-                .foregroundColor(Theme.current.foregroundMuted)
+                Text("Test your dictionary rules against sample text")
+                    .font(.system(size: 11))
+                    .foregroundColor(Theme.current.foregroundMuted)
+            }
+
+            Spacer()
+
+            Button {
+                dismiss()
+            } label: {
+                Text("Done")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.accentColor)
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut(.escape, modifiers: [])
         }
+        .padding(.horizontal, Spacing.lg)
+        .padding(.vertical, Spacing.md)
+        .background(Theme.current.backgroundSecondary)
+        .overlay(
+            Rectangle()
+                .fill(Theme.current.divider)
+                .frame(height: 1),
+            alignment: .bottom
+        )
     }
 
     // MARK: - Input Section

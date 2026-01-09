@@ -40,6 +40,11 @@ struct BridgeSettingsView: View {
                         troubleshootingSection
                     }
 
+                    // Troubleshooting (when disconnected or error)
+                    if bridgeManager.isPaired && (bridgeManager.status == .disconnected || bridgeManager.status == .error) {
+                        troubleshootingSection
+                    }
+
                     // Pair Button (when not paired)
                     if !bridgeManager.isPaired {
                         pairSection

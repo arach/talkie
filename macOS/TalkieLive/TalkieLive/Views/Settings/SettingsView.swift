@@ -231,33 +231,13 @@ struct EmbeddedSettingsRow: View {
             }
             .padding(.horizontal, Spacing.sm)
             .padding(.vertical, 7)
-            .background(
-                ZStack {
-                    // Base fill
-                    RoundedRectangle(cornerRadius: CornerRadius.sm)
-                        .fill(
-                            isSelected
-                                ? TalkieTheme.accent.opacity(0.18)
-                                : (isHovered ? Color.white.opacity(0.08) : Color.clear)
-                        )
-
-                    // Top highlight on selection/hover
-                    if isSelected || isHovered {
-                        RoundedRectangle(cornerRadius: CornerRadius.sm)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(isSelected ? 0.2 : 0.1),
-                                        Color.clear
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .center
-                                ),
-                                lineWidth: 0.5
-                            )
-                    }
-                }
+            .liquidGlassCard(
+                cornerRadius: CornerRadius.sm,
+                tint: isSelected ? TalkieTheme.accent : nil,
+                isInteractive: true,
+                depth: isSelected ? .standard : (isHovered ? .subtle : .subtle)
             )
+            .opacity(isSelected || isHovered ? 1.0 : 0.0)
             .shadow(color: isSelected ? TalkieTheme.accent.opacity(0.2) : Color.clear, radius: 4, y: 1)
         }
         .buttonStyle(.plain)
@@ -543,10 +523,13 @@ struct SettingsSidebarItem: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: CornerRadius.xs)
-                .fill(isSelected ? Color.accentColor : (isHovered ? TalkieTheme.hover : Color.clear))
+        .liquidGlassCard(
+            cornerRadius: CornerRadius.xs,
+            tint: isSelected ? Color.accentColor : nil,
+            isInteractive: true,
+            depth: isSelected ? .standard : .subtle
         )
+        .opacity(isSelected || isHovered ? 1.0 : 0.0)
         .contentShape(Rectangle())
         .onTapGesture {
             action()
@@ -661,10 +644,12 @@ struct SettingsPageHeader: View {
 
 struct SettingsCard<Content: View>: View {
     let title: String?
+    var depth: GlassDepth = .subtle
     @ViewBuilder let content: Content
 
-    init(title: String? = nil, @ViewBuilder content: () -> Content) {
+    init(title: String? = nil, depth: GlassDepth = .subtle, @ViewBuilder content: () -> Content) {
         self.title = title
+        self.depth = depth
         self.content = content()
     }
 
@@ -682,26 +667,7 @@ struct SettingsCard<Content: View>: View {
             }
             .padding(Spacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                ZStack {
-                    // Consistent glass-like card background
-                    RoundedRectangle(cornerRadius: CornerRadius.sm)
-                        .fill(Color.white.opacity(0.04))
-                    RoundedRectangle(cornerRadius: CornerRadius.sm)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.06),
-                                    Color.white.opacity(0.02)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                    RoundedRectangle(cornerRadius: CornerRadius.sm)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
-                }
-            )
+            .liquidGlassCard(cornerRadius: CornerRadius.sm, depth: depth)
         }
     }
 }
@@ -835,88 +801,135 @@ struct QuickSettingsView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Glass tab bar - full width with evenly distributed tabs
-            HStack(spacing: 0) {
-                ForEach(QuickSettingsTab.allCases, id: \.self) { tab in
-                    QuickSettingsTabButton(
-                        tab: tab,
-                        isSelected: selectedTab == tab,
-                        showWarning: tab == .permissions && !permissionManager.allRequiredGranted
-                    ) {
-                        withAnimation(.easeInOut(duration: 0.15)) {
-                            selectedTab = tab
-                        }
+        NavigationSplitView {
+            List(selection: $selectedTab) {
+                Section("Input") {
+                    ForEach([QuickSettingsTab.shortcuts, .audio, .ambient], id: \.self) { tab in
+                        Label(tab.title, systemImage: tab.icon)
+                            .tag(tab)
                     }
-                    .frame(maxWidth: .infinity)  // Each tab takes equal width
+                }
+
+                Section("Output") {
+                    ForEach([QuickSettingsTab.sounds, .feedback, .output], id: \.self) { tab in
+                        Label(tab.title, systemImage: tab.icon)
+                            .tag(tab)
+                    }
+                }
+
+                Section("System") {
+                    ForEach([QuickSettingsTab.permissions, .connections, .accessibility, .performance], id: \.self) { tab in
+                        HStack {
+                            Label(tab.title, systemImage: tab.icon)
+                            if tab == .permissions && !permissionManager.allRequiredGranted {
+                                Spacer()
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.orange)
+                                    .font(.system(size: 10))
+                            }
+                        }
+                        .tag(tab)
+                    }
                 }
             }
-            .padding(.horizontal, Spacing.sm)
-            .padding(.top, Spacing.md)
-            .padding(.bottom, Spacing.sm)
-            .background(
-                ZStack {
-                    if settings.glassMode {
-                        // Glass mode: Frosted glass base
-                        Rectangle()
-                            .fill(.thinMaterial)
-
-                        // Top highlight
-                        Rectangle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.08),
-                                        Color.clear
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                    } else {
-                        // Legacy mode: Solid dark background
-                        Rectangle()
-                            .fill(Color(white: 0.10))
-                    }
-
-                    // Bottom edge (subtle separator)
-                    VStack {
-                        Spacer()
-                        Rectangle()
-                            .fill(Color.white.opacity(settings.glassMode ? 0.06 : 0.12))
-                            .frame(height: 1)
-                    }
-                }
-            )
-
-            // Content with glass background
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
+        } detail: {
             ScrollView {
-                switch selectedTab {
-                case .shortcuts:
-                    ShortcutsQuickSection()
-                case .sounds:
-                    SoundsSettingsSection()
-                case .audio:
-                    AudioSettingsSection()
-                case .feedback:
-                    OverlaySettingsSection()
-                case .output:
-                    OutputSettingsSection()
-                case .ambient:
-                    AmbientSettingsSection()
-                case .permissions:
-                    PermissionsSettingsSection()
-                case .connections:
-                    ConnectionsSettingsSection()
-                case .accessibility:
-                    AccessibilityInventorySection()
-                case .performance:
-                    PerformanceSettingsSection()
+                VStack(spacing: 0) {
+                    switch selectedTab {
+                    case .shortcuts:
+                        ShortcutsQuickSection()
+                    case .sounds:
+                        SoundsSettingsSection()
+                    case .audio:
+                        AudioSettingsSection()
+                    case .feedback:
+                        OverlaySettingsSection()
+                    case .output:
+                        OutputSettingsSection()
+                    case .ambient:
+                        AmbientSettingsSection()
+                    case .permissions:
+                        PermissionsSettingsSection()
+                    case .connections:
+                        ConnectionsSettingsSection()
+                    case .accessibility:
+                        AccessibilityInventorySection()
+                    case .performance:
+                        PerformanceSettingsSection()
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .glassPanel()
+        .navigationSplitViewStyle(.balanced)
+    }
+}
+
+// MARK: - Sidebar Section Header
+
+struct QuickSettingsSidebarSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Text(title)
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(0.5)
+                .foregroundColor(TalkieTheme.textTertiary)
+                .padding(.leading, Spacing.sm)
+                .padding(.bottom, 2)
+
+            content
+        }
+    }
+}
+
+// MARK: - Sidebar Navigation Item
+
+struct QuickSettingsSidebarItem: View {
+    let tab: QuickSettingsTab
+    let isSelected: Bool
+    var showWarning: Bool = false
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Spacing.sm) {
+                Image(systemName: tab.icon)
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(width: 18)
+
+                Text(tab.title)
+                    .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+
+                Spacer()
+
+                if showWarning {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 9))
+                        .foregroundColor(.orange)
+                }
+            }
+            .foregroundColor(isSelected ? .primary : TalkieTheme.textSecondary)
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, Spacing.sm)
+            .liquidGlassCard(
+                cornerRadius: CornerRadius.sm,
+                isInteractive: true,
+                depth: isSelected ? .standard : .subtle
+            )
+            .opacity(isSelected || isHovered ? 1.0 : 0.0)
+            .contentShape(RoundedRectangle(cornerRadius: CornerRadius.sm))
+        }
+        .buttonStyle(.plain)
+        .animation(TalkieAnimation.fast, value: isSelected)
+        .animation(TalkieAnimation.fast, value: isHovered)
+        .onHover { isHovered = $0 }
     }
 }
 
@@ -927,81 +940,51 @@ struct QuickSettingsTabButton: View {
     let action: () -> Void
 
     @State private var isHovered = false
-    @ObservedObject private var settings = LiveSettings.shared
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 4) {
+            // Fixed geometry - icon with optional warning badge
+            HStack(spacing: 5) {
                 Image(systemName: tab.icon)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 16, weight: .medium))
 
                 if showWarning {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 8))
+                        .font(.system(size: 10))
                         .foregroundColor(.orange)
                 }
             }
-            .foregroundColor(isSelected ? .white : TalkieTheme.textSecondary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
+            .foregroundColor(isSelected ? .primary : TalkieTheme.textSecondary)
+            .frame(height: 36)
+            .padding(.horizontal, 14)
             .background(
-                ZStack {
+                // Inner selection indicator
+                Group {
                     if isSelected {
-                        // Selected: accent color
                         RoundedRectangle(cornerRadius: CornerRadius.sm)
-                            .fill(TalkieTheme.accent)
-
-                        if settings.glassMode {
-                            // Glass highlight on top
-                            RoundedRectangle(cornerRadius: CornerRadius.sm)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(0.3),
-                                            Color.white.opacity(0.1),
-                                            Color.clear
-                                        ],
-                                        startPoint: .top,
-                                        endPoint: .center
-                                    )
-                                )
-                        }
+                            .fill(.regularMaterial)
+                            .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
                     } else if isHovered {
-                        if settings.glassMode {
-                            // Glass mode: subtle glass hover
-                            RoundedRectangle(cornerRadius: CornerRadius.sm)
-                                .fill(Color.white.opacity(0.1))
-
-                            RoundedRectangle(cornerRadius: CornerRadius.sm)
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(0.15),
-                                            Color.clear
-                                        ],
-                                        startPoint: .top,
-                                        endPoint: .center
-                                    ),
-                                    lineWidth: 0.5
-                                )
-                        } else {
-                            // Legacy mode: solid hover
-                            RoundedRectangle(cornerRadius: CornerRadius.sm)
-                                .fill(Color(white: 0.2))
-
-                            RoundedRectangle(cornerRadius: CornerRadius.sm)
-                                .stroke(Color.white.opacity(0.15), lineWidth: 1)
-                        }
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .fill(Color.primary.opacity(0.08))
                     }
                 }
             )
-            .shadow(color: isSelected ? TalkieTheme.accent.opacity(settings.glassMode ? 0.4 : 0.2) : Color.clear, radius: settings.glassMode ? 6 : 3, y: 2)
+            .contentShape(RoundedRectangle(cornerRadius: CornerRadius.sm))
+            // Label floats below - subtle, smaller treatment
+            .overlay(alignment: .bottom) {
+                Text(tab.title.uppercased())
+                    .font(.system(size: 7, weight: .semibold))
+                    .tracking(0.3)
+                    .foregroundColor(TalkieTheme.textTertiary)
+                    .opacity(isSelected || isHovered ? 1.0 : 0.0)
+                    .offset(y: 16)
+            }
         }
         .buttonStyle(.plain)
         .animation(TalkieAnimation.fast, value: isSelected)
         .animation(TalkieAnimation.fast, value: isHovered)
         .onHover { isHovered = $0 }
-        .help(tab.title)
     }
 }
 
@@ -1143,18 +1126,38 @@ struct ShortcutsQuickSection: View {
     }
 }
 
-// MARK: - Glass Card Component
+// MARK: - Glass Card Component (Liquid Glass)
 
 struct GlassCard<Content: View>: View {
-    var intensity: GlassIntensity = .subtle
+    var depth: GlassDepth = .subtle
+    var isInteractive: Bool = false
     @ViewBuilder let content: () -> Content
+
+    // Legacy initializer for compatibility
+    init(intensity: GlassIntensity = .subtle, @ViewBuilder content: @escaping () -> Content) {
+        // Map old intensity to new depth
+        switch intensity {
+        case .subtle: self.depth = .subtle
+        case .medium: self.depth = .standard
+        case .strong: self.depth = .prominent
+        }
+        self.isInteractive = false
+        self.content = content
+    }
+
+    // New Liquid Glass initializer
+    init(depth: GlassDepth = .subtle, isInteractive: Bool = false, @ViewBuilder content: @escaping () -> Content) {
+        self.depth = depth
+        self.isInteractive = isInteractive
+        self.content = content
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             content()
         }
         .padding(Spacing.md)
-        .glassBackground(intensity: intensity, cornerRadius: CornerRadius.md)
+        .liquidGlassCard(cornerRadius: CornerRadius.md, isInteractive: isInteractive, depth: depth)
     }
 }
 

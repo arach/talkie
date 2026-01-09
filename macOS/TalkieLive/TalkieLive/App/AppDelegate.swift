@@ -7,7 +7,7 @@ import Combine
 private let log = Log(.system)
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate {
     private var statusItem: NSStatusItem!
     private var liveController: LiveController!
 
@@ -809,31 +809,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func showSettings() {
-        // If window already exists, bring it to front
-        if let window = settingsWindow {
+        // If window already exists and is visible, bring it to front
+        if let window = settingsWindow, window.isVisible {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
 
+        // Close old window if it exists but isn't visible
+        settingsWindow?.close()
+        settingsWindow = nil
+
         // Create focused settings window (Capture + Output + Permissions)
         let contentView = QuickSettingsView()
-            .frame(minWidth: 500, minHeight: 450)
-            .background(TalkieTheme.background)
+            .frame(minWidth: 650, minHeight: 550)
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 550, height: 500),
-            styleMask: [.titled, .closable, .resizable],
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 600),
+            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
-        window.title = "TalkieLive Settings"
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .visible
+        window.title = "Settings"
         window.contentView = NSHostingView(rootView: contentView)
         window.center()
         window.isReleasedWhenClosed = false
+        window.delegate = self
 
         // Store reference
         settingsWindow = window
+
+        // Show in Dock/Cmd+Tab while window is open
+        NSApp.setActivationPolicy(.regular)
 
         // Show window
         window.makeKeyAndOrderFront(nil)
@@ -841,41 +850,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func showPermissions() {
-        // If settings window exists, bring it to front (permissions is a tab within settings)
-        if let window = settingsWindow {
-            // Update content to show permissions tab
+        // If window already exists and is visible, just switch to permissions tab
+        if let window = settingsWindow, window.isVisible {
             let contentView = QuickSettingsView(initialTab: .permissions)
-                .frame(minWidth: 500, minHeight: 450)
-                .background(TalkieTheme.background)
+                .frame(minWidth: 650, minHeight: 550)
             window.contentView = NSHostingView(rootView: contentView)
-            window.title = "TalkieLive Settings"
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
 
+        // Close old window if it exists but isn't visible
+        settingsWindow?.close()
+        settingsWindow = nil
+
         // Create settings window with permissions tab selected
         let contentView = QuickSettingsView(initialTab: .permissions)
-            .frame(minWidth: 500, minHeight: 450)
-            .background(TalkieTheme.background)
+            .frame(minWidth: 650, minHeight: 550)
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 550, height: 500),
-            styleMask: [.titled, .closable, .resizable],
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 600),
+            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
-        window.title = "TalkieLive Settings"
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .visible
+        window.title = "Settings"
         window.contentView = NSHostingView(rootView: contentView)
         window.center()
         window.isReleasedWhenClosed = false
+        window.delegate = self
 
         // Store in settings window (consolidate into one window)
         settingsWindow = window
 
+        // Show in Dock/Cmd+Tab while window is open
+        NSApp.setActivationPolicy(.regular)
+
         // Show window
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    // MARK: - NSWindowDelegate
+
+    func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              window === settingsWindow else { return }
+
+        // Return to menu bar app mode (no Dock icon)
+        settingsWindow = nil
+        NSApp.setActivationPolicy(.accessory)
     }
 
     private func updateIcon(for state: LiveState) {

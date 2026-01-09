@@ -41,6 +41,15 @@ enum PermissionType: String, CaseIterable, Identifiable {
         }
     }
 
+    var shortDescription: String {
+        switch self {
+        case .microphone:
+            return "For recording audio"
+        case .accessibility:
+            return "For auto-paste"
+        }
+    }
+
     var isRequired: Bool {
         // Both permissions are required for TalkieLive to function
         return true
@@ -443,7 +452,7 @@ struct PermissionsSettingsSection: View {
     }
 }
 
-// MARK: - Permission Row
+// MARK: - Permission Row (Clean but informative)
 
 struct PermissionSettingsRow: View {
     let permission: PermissionType
@@ -451,78 +460,54 @@ struct PermissionSettingsRow: View {
     let onRequest: () -> Void
 
     @State private var isHovered = false
-    @State private var isButtonHovered = false
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            // Icon
-            ZStack {
-                RoundedRectangle(cornerRadius: CornerRadius.sm)
-                    .fill(status.color.opacity(0.15))
-                    .frame(width: 36, height: 36)
+            // Simple status indicator
+            Image(systemName: status == .granted ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 18))
+                .foregroundColor(status == .granted ? .green : TalkieTheme.textTertiary)
 
-                Image(systemName: permission.icon)
-                    .font(.system(size: 16))
-                    .foregroundColor(status.color)
-            }
-
-            // Info
+            // Name + description (or status on hover)
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: Spacing.xs) {
-                    Text(permission.title)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(TalkieTheme.textPrimary)
-                        .lineLimit(1)
+                Text(permission.title)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(TalkieTheme.textPrimary)
 
-                    if permission.isRequired {
-                        Text("Required")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(.orange)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(Color.orange.opacity(0.15))
-                            .cornerRadius(3)
-                    }
-
-                    Spacer()
-
-                    // Status badge (moved inline with title)
-                    HStack(spacing: 4) {
-                        Image(systemName: status.icon)
-                            .font(.system(size: 10))
-                        Text(status.label)
-                            .font(.system(size: 10, weight: .medium))
-                    }
-                    .foregroundColor(status.color)
+                // Show status on hover, description otherwise
+                if isHovered {
+                    Text(status == .granted ? "Permission granted" : "Permission required")
+                        .font(.system(size: 11))
+                        .foregroundColor(status == .granted ? .green : .orange)
+                } else {
+                    Text(permission.shortDescription)
+                        .font(.system(size: 11))
+                        .foregroundColor(TalkieTheme.textTertiary)
                 }
-
-                Text(permission.description)
-                    .font(.system(size: 11))
-                    .foregroundColor(TalkieTheme.textSecondary)
-                    .lineLimit(1)
             }
 
             Spacer()
 
-            // Action button - glass style with hover
+            // Open Settings button
             Button(action: onRequest) {
                 Text("Open Settings")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(isButtonHovered ? TalkieTheme.textPrimary : TalkieTheme.textSecondary)
+                    .foregroundColor(TalkieTheme.textSecondary)
                     .padding(.horizontal, Spacing.sm)
-                    .padding(.vertical, 6)
-                    .glassHover(
-                        isHovered: isButtonHovered,
-                        cornerRadius: CornerRadius.xs,
-                        baseOpacity: 0.04,
-                        hoverOpacity: 0.15
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: CornerRadius.xs)
+                            .fill(Color.primary.opacity(0.06))
                     )
             }
             .buttonStyle(.plain)
-            .onHover { isButtonHovered = $0 }
         }
-        .padding(Spacing.md)
-        .glassHover(isHovered: isHovered, cornerRadius: CornerRadius.md)
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
+                .fill(isHovered ? Color.primary.opacity(0.04) : Color.clear)
+        )
         .onHover { isHovered = $0 }
     }
 }

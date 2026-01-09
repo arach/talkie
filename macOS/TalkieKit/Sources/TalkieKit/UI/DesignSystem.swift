@@ -292,14 +292,24 @@ public enum GlassIntensity {
 
 public struct GlassSidebar<Content: View>: View {
     let content: Content
+    let spacing: CGFloat
 
-    public init(@ViewBuilder content: () -> Content) {
+    public init(spacing: CGFloat = 12, @ViewBuilder content: () -> Content) {
+        self.spacing = spacing
         self.content = content()
     }
 
     public var body: some View {
-        content
+        if #available(macOS 26.0, *) {
+            // Use GlassEffectContainer for morphing effects between sidebar items
+            GlassEffectContainer(spacing: spacing) {
+                content
+            }
             .background(.ultraThinMaterial)
+        } else {
+            content
+                .background(.ultraThinMaterial)
+        }
     }
 }
 
