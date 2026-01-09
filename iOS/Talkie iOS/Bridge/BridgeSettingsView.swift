@@ -23,13 +23,18 @@ struct BridgeSettingsView: View {
                     // Connection Status Card
                     connectionStatusCard
 
-                    // Actions
-                    if bridgeManager.isPaired {
+                    // When connecting, show step sequence
+                    if bridgeManager.status == .connecting {
+                        connectionStepsView
+                    }
+
+                    // Actions (when paired and not actively connecting)
+                    if bridgeManager.isPaired && bridgeManager.status != .connecting {
                         actionsSection
                     }
 
-                    // Connection Info
-                    if bridgeManager.isPaired {
+                    // Connection Info (when connected)
+                    if bridgeManager.status == .connected {
                         connectionInfoSection
                     }
 
@@ -66,16 +71,8 @@ struct BridgeSettingsView: View {
 
     private var connectionStatusCard: some View {
         VStack(spacing: Spacing.md) {
-            // Status icon
-            ZStack {
-                Circle()
-                    .fill(bridgeManager.status.color.opacity(0.15))
-                    .frame(width: 80, height: 80)
-
-                Image(systemName: statusIcon)
-                    .font(.system(size: 32, weight: .medium))
-                    .foregroundColor(bridgeManager.status.color)
-            }
+            // Status icon - different for each state
+            statusIconView
 
             // Status text
             VStack(spacing: Spacing.xxs) {
@@ -85,53 +82,152 @@ struct BridgeSettingsView: View {
 
                 if let macName = bridgeManager.pairedMacName {
                     Text(macName)
-                        .font(.monoSmall)
+                        .font(.system(size: 12, design: .monospaced))
                         .foregroundColor(.textSecondary)
                 }
 
-                if let error = bridgeManager.errorMessage {
+                if let error = bridgeManager.errorMessage, bridgeManager.status == .error {
                     Text(error)
                         .font(.labelSmall)
                         .foregroundColor(.recording)
                         .multilineTextAlignment(.center)
                         .padding(.top, Spacing.xxs)
                 }
-
-                // Retry status
-                if bridgeManager.retryCount > 0 && bridgeManager.retryCount < 3 {
-                    Text("Retrying... (\(bridgeManager.retryCount)/3)")
-                        .font(.monoSmall)
-                        .foregroundColor(.orange)
-                        .padding(.top, Spacing.xxs)
-                }
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Spacing.lg)
-        .background(Color.surfaceSecondary)
+        .background(statusBackground)
         .cornerRadius(CornerRadius.md)
+        .overlay(
+            RoundedRectangle(cornerRadius: CornerRadius.md)
+                .strokeBorder(statusBorderColor, lineWidth: 1)
+        )
     }
 
-    private var statusIcon: String {
+    @ViewBuilder
+    private var statusIconView: some View {
         switch bridgeManager.status {
-        case .connected: return "checkmark.circle.fill"
-        case .connecting: return "antenna.radiowaves.left.and.right"
-        case .disconnected: return "wifi.slash"
-        case .error: return "exclamationmark.triangle.fill"
+        case .connected:
+            // Success state - animated checkmark
+            ZStack {
+                Circle()
+                    .fill(Color.success.opacity(0.15))
+                    .frame(width: 80, height: 80)
+
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 40, weight: .medium))
+                    .foregroundColor(.success)
+            }
+
+        case .connecting:
+            // Connecting - pulsing antenna
+            ZStack {
+                Circle()
+                    .fill(Color.brandAccent.opacity(0.1))
+                    .frame(width: 80, height: 80)
+
+                BrailleSpinner(size: 32, color: .brandAccent)
+            }
+
+        case .disconnected:
+            ZStack {
+                Circle()
+                    .fill(Color.textTertiary.opacity(0.1))
+                    .frame(width: 80, height: 80)
+
+                Image(systemName: "wifi.slash")
+                    .font(.system(size: 32, weight: .medium))
+                    .foregroundColor(.textTertiary)
+            }
+
+        case .error:
+            ZStack {
+                Circle()
+                    .fill(Color.recording.opacity(0.15))
+                    .frame(width: 80, height: 80)
+
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 32, weight: .medium))
+                    .foregroundColor(.recording)
+            }
+        }
+    }
+
+    private var statusBackground: Color {
+        switch bridgeManager.status {
+        case .connected:
+            return Color.success.opacity(0.05)
+        case .connecting:
+            return Color.brandAccent.opacity(0.03)
+        default:
+            return Color.surfaceSecondary
+        }
+    }
+
+    private var statusBorderColor: Color {
+        switch bridgeManager.status {
+        case .connected:
+            return Color.success.opacity(0.3)
+        case .connecting:
+            return Color.brandAccent.opacity(0.2)
+        case .error:
+            return Color.recording.opacity(0.3)
+        default:
+            return Color.borderPrimary
         }
     }
 
     private var statusTitle: String {
         switch bridgeManager.status {
         case .connected: return "Connected"
-        case .connecting: return "Connecting..."
+        case .connecting: return "Connecting"
         case .disconnected: return bridgeManager.isPaired ? "Disconnected" : "Not Paired"
-        case .error: return "Connection Error"
+        case .error: return "Connection Failed"
         }
     }
 
     private var totalSessionCount: Int {
         bridgeManager.projectPaths.reduce(0) { $0 + $1.sessions.count }
+    }
+
+    // MARK: - Connection Steps View
+
+    private var connectionStepsView: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text("ESTABLISHING CONNECTION")
+                .font(.techLabel)
+                .tracking(2)
+                .foregroundColor(.textTertiary)
+
+            VStack(spacing: 0) {
+                ConnectionStepRow(
+                    step: 1,
+                    label: "Resolving hostname",
+                    status: .complete
+                )
+                Divider().background(Color.borderPrimary)
+                ConnectionStepRow(
+                    step: 2,
+                    label: "Connecting to Mac",
+                    status: bridgeManager.retryCount == 0 ? .inProgress : .complete
+                )
+                Divider().background(Color.borderPrimary)
+                ConnectionStepRow(
+                    step: 3,
+                    label: "Authenticating",
+                    status: bridgeManager.retryCount > 0 ? .inProgress : .pending
+                )
+                Divider().background(Color.borderPrimary)
+                ConnectionStepRow(
+                    step: 4,
+                    label: "Loading sessions",
+                    status: .pending
+                )
+            }
+            .background(Color.surfaceSecondary)
+            .cornerRadius(CornerRadius.sm)
+        }
     }
 
     // MARK: - Actions Section
@@ -310,6 +406,71 @@ private struct TroubleshootingRow: View {
     }
 }
 
+// MARK: - Connection Step Row
+
+private enum StepStatus {
+    case pending
+    case inProgress
+    case complete
+}
+
+private struct ConnectionStepRow: View {
+    let step: Int
+    let label: String
+    let status: StepStatus
+
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            // Step indicator
+            ZStack {
+                Circle()
+                    .fill(stepBackground)
+                    .frame(width: 24, height: 24)
+
+                switch status {
+                case .complete:
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                case .inProgress:
+                    BrailleSpinner(size: 12, color: .white)
+                case .pending:
+                    Text("\(step)")
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.textTertiary)
+                }
+            }
+
+            Text(label)
+                .font(.system(size: 13))
+                .foregroundColor(status == .pending ? .textTertiary : .textPrimary)
+
+            Spacer()
+
+            // Status text
+            if status == .complete {
+                Text("DONE")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.success)
+            } else if status == .inProgress {
+                Text("...")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.brandAccent)
+            }
+        }
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.sm)
+    }
+
+    private var stepBackground: Color {
+        switch status {
+        case .complete: return .success
+        case .inProgress: return .brandAccent
+        case .pending: return Color.textTertiary.opacity(0.2)
+        }
+    }
+}
+
 // MARK: - Settings Action Row
 
 private struct SettingsActionRow: View {
@@ -323,8 +484,7 @@ private struct SettingsActionRow: View {
         Button(action: action) {
             HStack {
                 if isLoading {
-                    ProgressView()
-                        .scaleEffect(0.8)
+                    BrailleSpinner(size: 16, color: color)
                         .frame(width: 24)
                 } else {
                     Image(systemName: icon)

@@ -10,50 +10,6 @@ import CoreData
 import CloudKit
 import AVFoundation
 
-// MARK: - Mac Status Footer
-// Shows async memo processing status via iCloud sync (NOT direct connection)
-
-struct MacStatusFooter: View {
-    @State private var observer = MacStatusObserver.shared
-
-    var body: some View {
-        if let status = observer.macStatus {
-            HStack(spacing: 6) {
-                // Status dot
-                Circle()
-                    .fill(statusColor(for: status))
-                    .frame(width: 6, height: 6)
-
-                // Compact status text
-                Text(statusText(for: status))
-                    .font(.system(size: 10))
-                    .foregroundColor(.textTertiary)
-            }
-        }
-    }
-
-    private func statusText(for status: MacStatusObserver.MacStatusInfo) -> String {
-        if status.canProcessMemos {
-            return "\(status.hostname) ready"
-        } else {
-            return "\(status.hostname) \(status.powerState)"
-        }
-    }
-
-    private func statusColor(for status: MacStatusObserver.MacStatusInfo) -> Color {
-        switch status.powerState {
-        case "active", "idle":
-            return .success
-        case "screenOff":
-            return status.canProcessMemos ? .success : .warning
-        case "sleeping", "shuttingDown":
-            return .textTertiary
-        default:
-            return .textTertiary
-        }
-    }
-}
-
 enum SortOption: String, CaseIterable {
     case dateNewest = "Newest First"
     case dateOldest = "Oldest First"
@@ -367,12 +323,6 @@ struct VoiceMemoListView: View {
                                 .padding(.top, Spacing.md)
                                 .padding(.bottom, Spacing.xs)
                                 .transition(.opacity.combined(with: .move(edge: .bottom)))
-                            }
-
-                            // Mac status footer (iCloud-synced processing status)
-                            if !isPushToTalkActive {
-                                MacStatusFooter()
-                                    .padding(.bottom, Spacing.xs)
                             }
 
                             // Button row: Settings (left) - Record (center) - Mac (right)
