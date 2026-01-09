@@ -56,7 +56,7 @@ export { sessionCache } from "../discovery/session-cache";
  */
 export const bridge = new Elysia({ name: "bridge" })
   // ===== Health =====
-  .get("/health", ({ store }) => healthRoute((store as { hostname: string }).hostname))
+  .get("/health", ({ hostname }) => healthRoute(hostname))
 
   // ===== Sessions =====
   .get("/paths", ({ query }) => pathsRoute(query.refresh === "deep"), {
@@ -145,10 +145,7 @@ export const bridge = new Elysia({ name: "bridge" })
       name: t.String(),
     }),
   })
-  .get("/pair/info", ({ store }) => {
-    const s = store as { hostname: string; port: number };
-    return pairInfoRoute(s.hostname, s.port);
-  })
+  .get("/pair/info", ({ hostname, port }) => pairInfoRoute(hostname, port))
   .get("/pair/pending", () => pairPendingRoute())
   .post("/pair/:deviceId/approve", ({ params }) => pairApproveRoute(params.deviceId), {
     params: t.Object({
