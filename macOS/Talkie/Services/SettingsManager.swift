@@ -791,18 +791,18 @@ class SettingsManager {
     /// Secondary text
     var tacticalForegroundSecondary: Color {
         if useTacticalColors {
-            return isDarkMode ? Color(white: 0.72) : Color(white: 0.32)
+            return isDarkMode ? Color(white: 0.78) : Color(white: 0.28)
         }
         if isLinearTheme {
-            // Linear: Gray text (~#888) - for descriptions
-            return Color(white: 0.53)
+            // Linear: Gray text - for descriptions
+            return Color(white: 0.65)
         }
         if isMinimalTheme {
-            return isDarkMode ? Color(white: 0.65) : Color(white: 0.38)
+            return isDarkMode ? Color(white: 0.72) : Color(white: 0.35)
         }
         if isTerminalTheme {
-            // Terminal: Dim gray - clean, no gimmicks
-            return Color(white: 0.55)
+            // Terminal: Secondary gray - readable but subdued
+            return Color(white: 0.68)
         }
         return Color.secondary
     }
@@ -810,20 +810,20 @@ class SettingsManager {
     /// Muted text for timestamps, metadata
     var tacticalForegroundMuted: Color {
         if useTacticalColors {
-            return isDarkMode ? Color(white: 0.52) : Color(white: 0.48)
+            return isDarkMode ? Color(white: 0.58) : Color(white: 0.45)
         }
         if isLinearTheme {
-            // Linear: Muted gray (~#666) - for metadata
-            return Color(white: 0.40)
+            // Linear: Muted gray - for metadata
+            return Color(white: 0.50)
         }
         if isMinimalTheme {
-            return isDarkMode ? Color(white: 0.48) : Color(white: 0.50)
+            return isDarkMode ? Color(white: 0.55) : Color(white: 0.48)
         }
         if isTerminalTheme {
-            // Terminal: Subtle gray
-            return Color(white: 0.40)
+            // Terminal: Subtle gray - still readable
+            return Color(white: 0.52)
         }
-        return isDarkMode ? Color(white: 0.42) : Color(white: 0.58)
+        return isDarkMode ? Color(white: 0.50) : Color(white: 0.55)
     }
 
     /// Divider/border color
@@ -1749,16 +1749,18 @@ class SettingsManager {
         do {
             let results = try context.fetch(fetchRequest)
             if let settings = results.first {
-                settings.geminiApiKey = nil
-                settings.openaiApiKey = nil
-                settings.anthropicApiKey = nil
-                settings.groqApiKey = nil
+                // Use empty strings instead of nil to avoid CloudKit/NSSet nil insertion crashes
+                settings.geminiApiKey = ""
+                settings.openaiApiKey = ""
+                settings.anthropicApiKey = ""
+                settings.groqApiKey = ""
                 settings.lastModified = Date()
                 try context.save()
                 logger.info("Cleared API keys from Core Data (migrated to Keychain)")
             }
         } catch {
-            logger.error("Failed to clear API keys from Core Data: \(error.localizedDescription)")
+            // Non-fatal - keys are already in Keychain, just log and continue
+            logger.warning("Could not clear API keys from Core Data: \(error.localizedDescription)")
         }
     }
 

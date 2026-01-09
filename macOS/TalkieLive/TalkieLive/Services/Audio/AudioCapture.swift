@@ -262,9 +262,18 @@ final class MicrophoneCapture: LiveAudioCapture {
     func stopCapture() {
         guard isCapturing else { return }
 
+        // Stop the engine first to prevent new buffers from being written
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         isCapturing = false
+
+        // Append silence padding after stopping to ensure trailing speech is captured
+        // This gives the transcription engine time to process the final words
+        appendSilencePadding()
+
+        // Small delay to let AAC encoder flush any pending frames
+        // AAC encoding has a lookahead that can cause the last few frames to be lost
+        Thread.sleep(forTimeInterval: 0.1)
 
         // Reset audio level and silence tracking
         Task { @MainActor in
@@ -272,7 +281,7 @@ final class MicrophoneCapture: LiveAudioCapture {
             AudioLevelMonitor.shared.resetSilenceTracking()
         }
 
-        // Close the audio file
+        // Close the audio file (this flushes the encoder)
         audioFile = nil
 
         // Deliver the file path - caller is responsible for cleanup after transcription
@@ -306,6 +315,47 @@ final class MicrophoneCapture: LiveAudioCapture {
         // Log warning if suspiciously few buffers (likely a problem)
         if capturedBuffers < 10 {
             log.warning("Very short recording", detail: "Only \(capturedBuffers) audio buffers captured")
+        }
+    }
+
+    /// Append silence padding to the end of the recording
+    /// This helps transcription engines process trailing speech that might otherwise be clipped
+    private func appendSilencePadding() {
+        guard let audioFile = audioFile else {
+            log.debug("No audio file to pad")
+            return
+        }
+
+        // Get the format from the audio file
+        let format = audioFile.processingFormat
+        let sampleRate = format.sampleRate
+        let channelCount = format.channelCount
+
+        // 1.5 seconds of silence to ensure trailing speech is fully captured
+        // Whisper and other transcription engines need this buffer to process final words
+        let silenceDurationSeconds: Double = 1.5
+        let frameCount = AVAudioFrameCount(sampleRate * silenceDurationSeconds)
+
+        // Create a silent buffer
+        guard let silentBuffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
+            log.warning("Failed to create silence buffer")
+            return
+        }
+        silentBuffer.frameLength = frameCount
+
+        // Fill with zeros (silence)
+        if let channelData = silentBuffer.floatChannelData {
+            for channel in 0..<Int(channelCount) {
+                memset(channelData[channel], 0, Int(frameCount) * MemoryLayout<Float>.size)
+            }
+        }
+
+        // Write silence to the file
+        do {
+            try audioFile.write(from: silentBuffer)
+            log.debug("Added silence padding", detail: "\(Int(silenceDurationSeconds * 1000))ms")
+        } catch {
+            log.warning("Failed to write silence padding", error: error)
         }
     }
 

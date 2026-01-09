@@ -58,7 +58,7 @@ struct DictionarySettingsView: View {
         }
         .sheet(isPresented: $showPlayground) {
             DictionaryTestPlayground()
-                .frame(width: 550, height: 550)
+                .frame(width: 520, height: 580)
         }
         .sheet(isPresented: $showSuggestions) {
             DictionarySuggestionsView()

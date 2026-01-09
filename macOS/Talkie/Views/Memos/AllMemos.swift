@@ -173,19 +173,7 @@ struct AllMemos: View {
     @ViewBuilder
     private var listPane: some View {
         VStack(spacing: 0) {
-            // Talkie header wordmark
-            TalkieViewHeader(
-                subtitle: "Memos",
-                debugInfo: {
-                    [
-                        "Total": "\(viewModel.totalCount)",
-                        "Loaded": "\(viewModel.memos.count)",
-                        "Selected": "\(selectedMemoIDs.count)"
-                    ]
-                }
-            )
-
-            // Search and filters
+            // Search and filters (no wordmark header - sidebar provides context)
             headerView
 
             if viewModel.isLoading && viewModel.memos.isEmpty {
@@ -238,10 +226,7 @@ struct AllMemos: View {
 
         // In compact mode, show inspector as sheet for single selection
         if shouldShowInspector && isCompactMode && selectedMemoIDs.count == 1 {
-            // Small delay to let the memo load
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                showInspectorSheet = true
-            }
+            showInspectorSheet = true
         }
     }
 
@@ -1111,8 +1096,8 @@ struct MemoRowPreview: View {
         )
         .shadow(color: .black.opacity(isHovering ? 0.15 : 0.1), radius: isHovering ? 8 : 4, y: isHovering ? 4 : 2)
         .scaleEffect(isHovering ? 1.01 : 1.0)
-        .animation(.easeOut(duration: 0.15), value: isHovering)
-        .animation(.easeOut(duration: 0.15), value: isSelected)
+        .animation(.easeOut(duration: 0.08), value: isHovering)
+        .animation(.easeOut(duration: 0.05), value: isSelected)
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
         .buttonStyle(.plain)
@@ -1149,7 +1134,7 @@ struct MemoRowEnhanced: View {
                 Rectangle()
                     .fill(isSelected ? Color.accentColor : Color.clear)
                     .frame(width: 3)
-                    .animation(.easeOut(duration: 0.15), value: isSelected)
+                    .animation(.easeOut(duration: 0.05), value: isSelected)
 
                 // Checkbox - only in multi-select mode, with animation
                 if isMultiSelected {

@@ -445,6 +445,18 @@ struct NotchOverlayView: View {
 
     private var totalWidth: CGFloat { notchWidth + (pokeOutAmount * 2) }
 
+    // Clickable width - narrower at rest to avoid catching menu bar clicks
+    private var clickableWidth: CGFloat {
+        switch expansionState {
+        case .rest:
+            return 100  // Very narrow - only center of notch is clickable
+        case .hover:
+            return totalWidth - 20  // Slightly narrower than visual
+        case .active:
+            return totalWidth  // Full width when recording
+        }
+    }
+
     // Dynamic height - smaller when at rest to hide completely behind notch
     private var overlayHeight: CGFloat {
         switch expansionState {
@@ -507,19 +519,27 @@ struct NotchOverlayView: View {
         // Smooth ease-out animation - fast start, smooth deceleration
         .animation(.easeOut(duration: 0.2), value: pokeOutAmount)
         .animation(.easeOut(duration: 0.2), value: overlayHeight)
-        .contentShape(Rectangle())
+        // Disable hit-testing on the full container - let the overlay handle it
+        .allowsHitTesting(false)
         .brightness(isHovered ? 0.05 : 0)  // Subtle brightening on hover
-        .onHover { hovering in
-            withAnimation(.easeOut(duration: 0.15)) {
-                isHovered = hovering
-            }
-        }
-        .onTapGesture {
-            if controller.state == .idle {
-                controller.requestStop()
-            } else if controller.state == .listening {
-                controller.requestStop()
-            }
+        // Overlay a hit-testing layer - narrow at rest, expands when active
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Color.clear)
+                .frame(width: clickableWidth, height: overlayHeight + clickZoneBelow)
+                .contentShape(Rectangle())
+                .onHover { hovering in
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        isHovered = hovering
+                    }
+                }
+                .onTapGesture {
+                    if controller.state == .idle {
+                        controller.requestStop()
+                    } else if controller.state == .listening {
+                        controller.requestStop()
+                    }
+                }
         }
     }
 

@@ -304,7 +304,10 @@ final class PerformanceMonitor {
         actions.insert(action, at: 0) // Most recent first
         activeActionID = action.id
 
-        print("📊 PerformanceMonitor: Action started - [\(type)] \(name)")
+        #if DEBUG
+        // Only print in debug builds to avoid UI lag
+        // print("📊 PerformanceMonitor: Action started - [\(type)] \(name)")
+        #endif
 
         // Keep last 50 actions
         if actions.count > 50 {
@@ -326,7 +329,10 @@ final class PerformanceMonitor {
         totalActions += 1
         updateMetrics()
 
-        print("📊 PerformanceMonitor: Action completed - \(action.actionName) (processing: \(Int(action.processingTime * 1000))ms)")
+        #if DEBUG
+        // Only print in debug builds to avoid UI lag
+        // print("📊 PerformanceMonitor: Action completed - \(action.actionName) (processing: \(Int(action.processingTime * 1000))ms)")
+        #endif
 
         activeActionID = nil
     }
@@ -379,7 +385,7 @@ final class PerformanceMonitor {
         let tti = action.timeToInteractive ?? 0
         let renderTime = action.renderingTime ?? 0
 
-        print("🎨 PerformanceMonitor: View rendered - \(action.actionName) (TTI: \(Int(tti * 1000))ms, render: \(Int(renderTime * 1000))ms)")
+        // print("🎨 PerformanceMonitor: View rendered - \(action.actionName) (TTI: \(Int(tti * 1000))ms, render: \(Int(renderTime * 1000))ms)")
     }
 
     /// Add an operation to the current active action
@@ -406,7 +412,7 @@ final class PerformanceMonitor {
         action.operations.append(op)
         actions[index] = action
 
-        print("📊 PerformanceMonitor: [\(category.rawValue)] \(name) (\(Int(duration * 1000))ms) @ +\(Int(relativeTime * 1000))ms")
+        // print("📊 PerformanceMonitor: [\(category.rawValue)] \(name) (\(Int(duration * 1000))ms) @ +\(Int(relativeTime * 1000))ms")
     }
 
     /// Legacy event handler for backwards compatibility

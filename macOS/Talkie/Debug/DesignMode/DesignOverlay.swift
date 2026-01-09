@@ -107,7 +107,10 @@ struct DesignToolsOverlay<CustomContent: View>: View {
                         Spacer()
                     }
                 }
-                .padding(Spacing.sm)
+                // Minimal padding at top to sit right against title bar, more on sides/bottom
+                .padding(.top, 2)
+                .padding(.horizontal, Spacing.sm)
+                .padding(.bottom, Spacing.sm)
             }
         }
     }
@@ -135,25 +138,17 @@ struct DesignToolsOverlay<CustomContent: View>: View {
                     .transition(.scale(scale: 0.8, anchor: overlayPosition.scaleAnchor).combined(with: .opacity))
             }
 
-            // Floating button
+            // Floating button - compact circle when collapsed
             Button(action: { withAnimation(.spring(response: 0.3)) { isExpanded.toggle() } }) {
-                HStack(spacing: 6) {
-                    Image(systemName: isExpanded ? "xmark.circle.fill" : "paintbrush.fill")
-                        .font(.system(size: 14, weight: .semibold))
-
-                    if !isExpanded {
-                        Text("Design")
-                            .font(.system(size: 11, weight: .semibold))
-                    }
-                }
-                .foregroundColor(.white)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(Color.cyan.opacity(0.9))
-                        .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
-                )
+                Image(systemName: isExpanded ? "xmark" : "paintbrush.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Circle()
+                            .fill(Color.cyan.opacity(0.9))
+                            .shadow(color: .black.opacity(0.3), radius: 3, x: 0, y: 2)
+                    )
             }
             .buttonStyle(.plain)
             .onTapGesture(count: 2) {
