@@ -5,6 +5,8 @@ import {
   ArrowLeft,
   ArrowRight,
   Mic,
+  Smartphone,
+  Watch,
   Command,
   Clock,
   Clipboard,
@@ -15,7 +17,10 @@ import {
   Laptop,
   Download,
   Cpu,
+  Database,
   HardDrive,
+  Lock,
+  Search,
   Sparkles,
   Lightbulb,
   Target,
@@ -27,12 +32,15 @@ import {
   FileText,
   Palette,
   RefreshCw,
+  Settings2,
+  Terminal,
   Keyboard,
   Circle,
   AudioWaveform,
 } from 'lucide-react'
 import Container from './Container'
 import ThemeToggle from './ThemeToggle'
+import SubNav from './SubNav'
 
 const FeatureCard = ({ icon: Icon, title, description }) => (
   <div className="group border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-6 hover:border-emerald-500/50 dark:hover:border-emerald-500/50 transition-colors">
@@ -82,6 +90,20 @@ const StatCard = ({ value, label }) => (
   </div>
 )
 
+const TechPill = ({ label, value, valueClass = 'text-emerald-500' }) => (
+  <div className="flex flex-col gap-1 p-3 bg-zinc-100 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-lg">
+    <span className="text-[8px] font-mono font-bold uppercase text-zinc-400 tracking-widest">{label}</span>
+    <span className={`text-xs font-mono font-bold ${valueClass}`}>{value}</span>
+  </div>
+)
+
+const ConfigLine = ({ label, value }) => (
+  <div className="flex items-center justify-between py-2 border-b border-zinc-100 dark:border-zinc-800/50 last:border-0">
+    <span className="text-[10px] font-mono text-zinc-500 uppercase">{label}</span>
+    <span className="text-[10px] font-mono text-zinc-800 dark:text-zinc-200">{value}</span>
+  </div>
+)
+
 export default function LivePage() {
   const [scrolled, setScrolled] = useState(false)
   const [activeFeature, setActiveFeature] = useState(null) // 'hotkeys' | 'models' | 'paste' | null
@@ -102,7 +124,7 @@ export default function LivePage() {
 
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto max-w-5xl px-4 sm:px-6 h-14 flex items-center justify-between">
+        <Container className="h-14 flex items-center justify-between">
           <Link
             href="/"
             className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-black dark:hover:text-white transition-colors group"
@@ -111,58 +133,198 @@ export default function LivePage() {
             BACK
           </Link>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-            <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-900 dark:text-white">TALKIE LIVE</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-900 dark:text-white">Talkie for Mac</span>
           </div>
-        </div>
+        </Container>
       </nav>
 
-      {/* Hero Section - More Dramatic */}
-      <section className="relative pt-28 pb-20 md:pt-40 md:pb-32 overflow-hidden bg-zinc-100 dark:bg-zinc-950 group/hero">
-        <div className="absolute inset-0 z-0 bg-tactical-grid dark:bg-tactical-grid-dark bg-[size:40px_40px] opacity-60 pointer-events-none" />
+      {/* Hero Section */}
+      <section className="relative pt-20 pb-16 md:pt-22 md:pb-20 overflow-hidden bg-zinc-100 dark:bg-zinc-950">
+        <div className="absolute inset-0 z-0 bg-grid-fade pointer-events-none opacity-40" />
 
         <Container className="relative z-10">
-          <div>
-            <div className="max-w-4xl">
-              {/* Badge */}
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full mb-8">
-                <Sparkles className="w-3 h-3 text-emerald-500" />
-                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Start Free • No Account Required • 100% Local</span>
-              </div>
+          {/* Sub Navigation */}
+          <div className="flex justify-center mb-6">
+            <SubNav />
+          </div>
 
-              <div className="flex items-center gap-6 md:gap-10 mb-6 group/headline">
-                <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tighter text-zinc-900 dark:text-white uppercase leading-none whitespace-nowrap">
-                  <span>Thoughts</span> <span className="text-zinc-400 dark:text-zinc-500">→</span> <span className="transition-colors duration-300 group-hover/headline:text-emerald-500">Action</span>
-                </h1>
-                {/* Logo - inline with headline */}
-                <div className="hidden lg:flex items-center justify-center relative group/icon flex-shrink-0 w-40 h-28">
-                  <div className="absolute inset-0 m-auto w-48 h-36 bg-emerald-500/5 rounded-full blur-2xl transition-all duration-500 group-hover/icon:bg-emerald-500/20 group-hover/icon:scale-125 group-hover/headline:bg-emerald-500/15 pointer-events-none" />
-                  <img
-                    src="/talkie-live-logo.png"
-                    alt="Talkie Live"
-                    className="w-36 md:w-40 relative z-10 opacity-90 transition-all duration-300 group-hover/icon:opacity-100 group-hover/icon:scale-105 group-hover/icon:rotate-1 group-hover/headline:opacity-100 group-hover/headline:rotate-1"
-                  />
+          <div className="max-w-3xl mx-auto text-center">
+            <h1 className="text-5xl md:text-7xl tracking-tighter text-zinc-900 dark:text-white leading-[0.95] mb-6">
+              <span className="font-display italic">Voice</span> <span className="text-zinc-400 dark:text-zinc-500">to</span>{' '}
+              <span className="font-bold bg-gradient-to-r from-emerald-500 to-teal-400 bg-clip-text text-transparent">Action.</span>
+            </h1>
+
+            <p className="text-xl md:text-2xl text-zinc-700 dark:text-zinc-300 leading-snug mb-4 font-display">
+              You speak faster than you type.
+            </p>
+            <p className="text-base text-zinc-500 dark:text-zinc-400 leading-relaxed max-w-xl mx-auto mb-10">
+              Speak and Talkie types, transcribes, or triggers workflows. Your Mac voice system — local-first and private.
+            </p>
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <a href="/#pricing" className="h-12 px-8 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm uppercase tracking-wider hover:scale-105 transition-all flex items-center gap-3 shadow-xl shadow-emerald-500/25">
+                <Download className="w-4 h-4" />
+                <span>Get Early Access</span>
+              </a>
+              <div className="flex flex-col gap-1 text-left">
+                <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-500 uppercase">
+                  <Laptop className="w-3 h-3" />
+                  macOS 13+ • Apple Silicon
+                </div>
+                <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400 uppercase">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                  Signed & Notarized by Apple
                 </div>
               </div>
+            </div>
+          </div>
+        </Container>
+      </section>
 
-              <p className="text-lg md:text-xl text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-xl mb-10">
-                Speaking is the most natural way to express complex thoughts. Talkie Live turns your voice into text instantly, so you can capture ideas at the speed you think them.
+      {/* Command Center */}
+      <section className="py-16 md:py-24 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800">
+        <Container>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
+            <div className="lg:col-span-4">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full mb-6">
+                <Command className="w-3 h-3 text-emerald-500" />
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Command Center</span>
+              </div>
+              <h2 className="text-3xl md:text-4xl text-zinc-900 dark:text-white tracking-tight mb-4">
+                <span className="font-display italic">Voice</span> <span className="font-bold">to system actions.</span>
+              </h2>
+              <p className="text-zinc-600 dark:text-zinc-400 leading-relaxed mb-8">
+                Talkie for Mac sits at the center of your workflow, turning intent into precise actions with local-first speed.
               </p>
-
-              <div className="flex flex-col sm:flex-row items-start gap-4">
-                <a href="/#pricing" className="h-14 px-10 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm uppercase tracking-wider hover:scale-105 transition-all flex items-center gap-3 shadow-xl shadow-emerald-500/25">
-                  <Download className="w-5 h-5" />
-                  <span>Get Early Access</span>
-                </a>
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-500 uppercase">
-                    <Laptop className="w-3 h-3" />
-                    macOS 13+ • Apple Silicon
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg">
+                  <div className="flex items-center gap-3 mb-2">
+                    <Database className="w-4 h-4 text-emerald-500" />
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-500">Local First</span>
                   </div>
-                  <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400 uppercase">
-                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                    Signed & Notarized by Apple
+                  <p className="text-[10px] text-zinc-500 uppercase leading-relaxed tracking-wide">
+                    Everything stays on your device, with optional iCloud sync.
+                  </p>
+                </div>
+                <div className="p-4 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg">
+                  <div className="flex items-center gap-3 mb-2">
+                    <Cpu className="w-4 h-4 text-emerald-500" />
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-500">M-Series Native</span>
+                  </div>
+                  <p className="text-[10px] text-zinc-500 uppercase leading-relaxed tracking-wide">
+                    Neural Engine acceleration for fast, private inference.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:col-span-8 relative">
+              <div className="relative bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-[0_40px_100px_rgba(0,0,0,0.08)] dark:shadow-[0_40px_100px_rgba(0,0,0,0.6)] rounded-xl overflow-hidden">
+                <div className="h-11 bg-zinc-50/80 dark:bg-zinc-900/80 backdrop-blur-md flex items-center justify-between px-5 border-b border-zinc-100 dark:border-zinc-800">
+                  <div className="flex gap-2">
+                    <div className="w-3 h-3 rounded-full bg-zinc-200 dark:bg-zinc-800"></div>
+                    <div className="w-3 h-3 rounded-full bg-zinc-200 dark:bg-zinc-800"></div>
+                    <div className="w-3 h-3 rounded-full bg-zinc-200 dark:bg-zinc-800"></div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Command className="w-3.5 h-3.5 text-zinc-400" />
+                    <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-widest">TALKIE_MAC_CENTER</span>
+                  </div>
+                  <Settings2 className="w-4 h-4 text-zinc-400" />
+                </div>
+
+                <div className="p-6 md:p-8 min-h-[520px] flex flex-col bg-white dark:bg-black/50">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+                    <TechPill label="Latency" value="12.4ms" />
+                    <TechPill label="Throughput" value="1.4T/s" />
+                    <TechPill label="Auth" value="ENCLAVE" valueClass="text-blue-500" />
+                    <TechPill label="Storage" value="SQLITE" valueClass="text-zinc-500" />
+                  </div>
+
+                  <div className="flex-1 flex flex-col gap-6">
+                    <div className="relative p-6 bg-zinc-50 dark:bg-zinc-900/50 border border-emerald-500/20 rounded-lg">
+                      <div className="absolute top-4 right-4 flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-[9px] font-mono font-bold uppercase text-emerald-500">Listening...</span>
+                      </div>
+                      <div className="text-[10px] font-mono text-zinc-500 uppercase mb-4 tracking-widest">Real-time Inference</div>
+                      <p className="text-lg font-medium tracking-tight text-zinc-800 dark:text-zinc-100 italic leading-snug">
+                        "Hey Talkie, open the last PR on the web-app repo and draft a summary for the weekly standup."
+                      </p>
+                    </div>
+
+                    <div className="bg-zinc-900 rounded-lg overflow-hidden border border-zinc-800 shadow-xl">
+                      <div className="px-4 py-2 bg-zinc-800/50 border-b border-zinc-700/50 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Terminal className="w-3 h-3 text-emerald-500" />
+                          <span className="text-[9px] font-mono text-zinc-400 uppercase tracking-widest">Shell Execution Log</span>
+                        </div>
+                        <span className="text-[9px] font-mono text-zinc-600">PID: 14242</span>
+                      </div>
+                      <div className="p-4 font-mono text-[11px] space-y-2">
+                        <div className="flex gap-3 text-zinc-500">
+                          <span>[09:42:01]</span>
+                          <span className="text-blue-400">➜</span>
+                          <span>gh pr list --limit 1 --json number,title</span>
+                        </div>
+                        <div className="flex gap-3 text-zinc-300 pl-6">
+                          <span>[RESULT]</span>
+                          <span>#442: Refactor(core): Auth Middleware Fix</span>
+                        </div>
+                        <div className="flex gap-3 text-zinc-500 pt-2">
+                          <span>[09:42:02]</span>
+                          <span className="text-purple-400">➜</span>
+                          <span>Invoke LLM(context: #442) &rarr; StandupSummary.json</span>
+                        </div>
+                        <div className="flex gap-3 text-emerald-500 pt-2">
+                          <span>[09:42:04]</span>
+                          <span>SUCCESS: Summary exported to ~/Documents/Standups/</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <Keyboard className="w-3.5 h-3.5 text-zinc-400" />
+                          <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-500">Global Hotkeys</span>
+                        </div>
+                        <div className="space-y-1">
+                          <ConfigLine label="Start Capture" value="⌥ + Space" />
+                          <ConfigLine label="Instant Action" value="⌘ + ⇧ + A" />
+                          <ConfigLine label="Abort Flow" value="Esc" />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <Settings2 className="w-3.5 h-3.5 text-zinc-400" />
+                          <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-500">Post Processing</span>
+                        </div>
+                        <div className="space-y-1">
+                          <ConfigLine label="Auto-JSON" value="Enabled" />
+                          <ConfigLine label="Dictionaries" value="Tech Core" />
+                          <ConfigLine label="Sanitize PII" value="Strict" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 h-px bg-zinc-200 dark:bg-zinc-800"></div>
+                  <div className="mt-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-[9px] font-mono text-zinc-500 uppercase">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-1.5">
+                        <Lock className="w-3 h-3 text-emerald-500" />
+                        <span>Secure Enclave Locked</span>
+                      </div>
+                      <div className="w-px h-3 bg-zinc-200 dark:bg-zinc-800 hidden md:block"></div>
+                      <div className="flex items-center gap-1.5">
+                        <Search className="w-3 h-3 text-zinc-400" />
+                        <span>Global Index: 8.4k Thoughts</span>
+                      </div>
+                    </div>
+                    <span>v1.2.0-stable</span>
                   </div>
                 </div>
               </div>
@@ -184,14 +346,14 @@ export default function LivePage() {
               <span className="text-emerald-500">speed of thought.</span>
             </h2>
             <p className="text-zinc-600 dark:text-zinc-400 max-w-2xl mx-auto leading-relaxed">
-              Speaking is the most natural way to express complex thoughts. Talkie Live turns your voice into text instantly, so you can capture ideas at the speed you think them.
+              Speaking is the most natural way to express complex thoughts. Talkie turns your voice into text instantly, so you can capture ideas at the speed you think them.
             </p>
           </div>
 
           {/* Stats */}
           <div className="grid grid-cols-3 gap-8 max-w-2xl mx-auto mb-16">
             <StatCard value="~40" label="Keyboard WPM" />
-            <StatCard value="200+" label="Talkie Live WPM" />
+            <StatCard value="200+" label="Talkie WPM" />
             <StatCard value="5x" label="Faster" />
           </div>
 
@@ -212,7 +374,7 @@ export default function LivePage() {
             <BenefitCard
               icon={Rocket}
               title="Ecosystem"
-              description="Start with a quick capture in Talkie Live. Continue with AI workflows in Talkie for Mac. Your ideas grow with the same tools."
+              description="Capture on iPhone or Watch, then continue on Mac with workflows that turn speech into action."
               highlight="Memo → Workflow → Action"
             />
           </div>
@@ -666,7 +828,7 @@ export default function LivePage() {
               Ideas → Action
             </h2>
             <p className="text-zinc-600 dark:text-zinc-400 max-w-xl mx-auto">
-              Every bit of friction between thought and capture is a chance for an idea to vanish. Here are a few ways Talkie Live gets used in real work.
+              Every bit of friction between thought and capture is a chance for an idea to vanish. Here are a few ways Talkie gets used in real work.
             </p>
           </div>
 
@@ -789,7 +951,7 @@ export default function LivePage() {
             <FeatureCard
               icon={MousePointer2}
               title="Return to Origin"
-              description="Talkie Live remembers which app and text field you were in. Text gets pasted right back where you were working."
+              description="Talkie remembers which app and text field you were in. Text gets pasted right back where you were working."
             />
             <FeatureCard
               icon={Timer}
@@ -827,7 +989,7 @@ export default function LivePage() {
               Your voice stays on your Mac.
             </h2>
             <p className="text-zinc-400 leading-relaxed mb-10 max-w-xl mx-auto">
-              No audio leaves your computer. No cloud processing. No API keys. No account required.
+              No audio leaves your computer. No cloud processing. No API keys. No cloud accounts.
             </p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4">
@@ -851,94 +1013,72 @@ export default function LivePage() {
         </Container>
       </section>
 
-      {/* Talkie Live vs Talkie */}
+      {/* One Product, Three Surfaces */}
       <section className="py-20 md:py-28 bg-white dark:bg-zinc-900">
         <Container>
           <div className="text-center mb-12">
             <h2 className="text-2xl md:text-3xl font-bold text-zinc-900 dark:text-white uppercase tracking-tight mb-4">
-              Live vs Full Talkie
+              One product, three surfaces.
             </h2>
             <p className="text-zinc-600 dark:text-zinc-400 max-w-xl mx-auto">
-              Talkie Live is for instant capture. The full Talkie app is for organizing and processing your voice memos with AI workflows.
+              Dictate on Mac, capture on iPhone and Watch, and keep everything in one local-first library.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            {/* Live */}
-            <div className="border-2 border-emerald-500 rounded-xl p-8 bg-emerald-500/5">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center">
-                  <Zap className="w-6 h-6 text-white" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+            <div className="border border-zinc-200 dark:border-zinc-700 rounded-xl p-6 bg-white dark:bg-zinc-950/60">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-zinc-900 dark:bg-white rounded-xl flex items-center justify-center">
+                  <Laptop className="w-5 h-5 text-white dark:text-black" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-zinc-900 dark:text-white uppercase">Talkie Live</h3>
-                  <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400 uppercase">Free Forever</span>
+                  <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase">Mac</h3>
+                  <span className="text-[10px] font-mono text-zinc-500 uppercase">Dictation + workflows</span>
                 </div>
               </div>
-              <ul className="space-y-3 text-sm text-zinc-600 dark:text-zinc-400">
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  Menu bar presence
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  Global hotkey recording
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  On-device transcription
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  48h echo history
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  Paste-to-origin
-                </li>
-              </ul>
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                Talk to Talkie, then turn speech into structured tasks, summaries, and output.
+              </p>
             </div>
 
-            {/* Full */}
-            <div className="border border-zinc-200 dark:border-zinc-700 rounded-xl p-8">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-12 h-12 bg-zinc-900 dark:bg-white rounded-xl flex items-center justify-center">
-                  <Mic className="w-6 h-6 text-white dark:text-black" />
+            <div className="border border-zinc-200 dark:border-zinc-700 rounded-xl p-6 bg-white dark:bg-zinc-950/60">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center">
+                  <Smartphone className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-zinc-900 dark:text-white uppercase">Talkie</h3>
-                  <span className="text-xs font-mono text-zinc-500 uppercase">Full App</span>
+                  <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase">iPhone</h3>
+                  <span className="text-[10px] font-mono text-zinc-500 uppercase">Quick capture</span>
                 </div>
               </div>
-              <ul className="space-y-3 text-sm text-zinc-600 dark:text-zinc-400">
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-zinc-400" />
-                  Everything in Live, plus...
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-zinc-400" />
-                  Permanent memo library
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-zinc-400" />
-                  iCloud sync (iPhone + Mac)
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-zinc-400" />
-                  AI workflows & automation
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-zinc-400" />
-                  Multi-provider LLM support
-                </li>
-              </ul>
-              <Link
-                href="/features"
-                className="inline-flex items-center gap-2 mt-6 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
-              >
-                See all features <ArrowRight className="w-3 h-3" />
-              </Link>
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                Grab a thought in seconds, sync it to Mac, and keep moving.
+              </p>
             </div>
+
+            <div className="border border-zinc-200 dark:border-zinc-700 rounded-xl p-6 bg-white dark:bg-zinc-950/60">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-zinc-800 rounded-xl flex items-center justify-center">
+                  <Watch className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase">Watch</h3>
+                  <span className="text-[10px] font-mono text-zinc-500 uppercase">Hands-free moments</span>
+                </div>
+              </div>
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                Tap once, speak once, and let the rest happen when you&apos;re back at the Mac.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-10 text-center">
+            <Link
+              href="/capture"
+              className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
+            >
+              Explore on-the-go capture <ArrowRight className="w-3 h-3" />
+            </Link>
           </div>
         </Container>
       </section>
@@ -953,7 +1093,7 @@ export default function LivePage() {
             Accelerate thoughts<br/>to action.
           </h2>
           <p className="text-lg text-zinc-600 dark:text-zinc-400 mb-10 max-w-lg mx-auto">
-            Download Talkie Live for free. No account needed, no credit card, no catch. Just faster thinking.
+            Get early access to Talkie and turn voice into action across Mac, iPhone, and Watch.
           </p>
           <a href="/#pricing" className="inline-flex h-14 px-10 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm uppercase tracking-wider hover:scale-105 transition-all items-center gap-3 shadow-xl shadow-emerald-500/25">
             <Download className="w-5 h-5" />
@@ -963,42 +1103,18 @@ export default function LivePage() {
         </Container>
       </section>
 
-      {/* Ecosystem Bar */}
-      <section className="py-8 bg-zinc-100 dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800">
-        <Container>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-8">
-            <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-400">Talkie Ecosystem</span>
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-sm"></div>
-                <span className="text-[10px] font-mono uppercase text-zinc-500">Engine</span>
-                <span className="text-[10px] text-zinc-400 hidden sm:inline">powers transcription</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                <span className="text-[10px] font-mono uppercase text-emerald-600 dark:text-emerald-400 font-bold">Live</span>
-                <span className="text-[10px] text-zinc-400 hidden sm:inline">you&apos;re here</span>
-              </div>
-              <Link href="/features" className="flex items-center gap-2 group">
-                <div className="w-2 h-2 bg-orange-500 rounded-sm"></div>
-                <span className="text-[10px] font-mono uppercase text-zinc-500 group-hover:text-orange-500 transition-colors">Talkie</span>
-                <span className="text-[10px] text-zinc-400 hidden sm:inline group-hover:text-zinc-600 dark:group-hover:text-zinc-300 transition-colors">full app →</span>
-              </Link>
-            </div>
-          </div>
-        </Container>
-      </section>
-
       {/* Footer */}
       <footer className="py-12 bg-zinc-100 dark:bg-zinc-950 border-t border-zinc-200 dark:border-zinc-800">
         <Container className="flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-emerald-500 rounded-sm"></div>
-            <span className="text-sm font-bold uppercase tracking-widest text-zinc-900 dark:text-white">Talkie Live</span>
+            <span className="text-sm font-bold uppercase tracking-widest text-zinc-900 dark:text-white">Talkie</span>
           </div>
           <div className="flex gap-8 text-[10px] font-mono uppercase text-zinc-500">
             <Link href="/" className="hover:text-black dark:hover:text-white transition-colors">Home</Link>
-            <Link href="/features" className="hover:text-black dark:hover:text-white transition-colors">Full App</Link>
+            <Link href="/dictation" className="hover:text-black dark:hover:text-white transition-colors">Dictation</Link>
+            <Link href="/capture" className="hover:text-black dark:hover:text-white transition-colors">On The Go</Link>
+            <Link href="/workflows" className="hover:text-black dark:hover:text-white transition-colors">Workflows</Link>
             <Link href="/security" className="hover:text-black dark:hover:text-white transition-colors">Security</Link>
             <Link href="/privacypolicy" className="hover:text-black dark:hover:text-white transition-colors">Privacy</Link>
           </div>

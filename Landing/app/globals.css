@@ -13,19 +13,35 @@ html { scroll-behavior: smooth; }
 .pill { @apply rounded-full border border-zinc-300/70 dark:border-zinc-700/70 bg-white/70 dark:bg-zinc-950/60 backdrop-blur px-4 py-2 text-xs font-semibold text-zinc-800 dark:text-zinc-100 hover:bg-white/90 dark:hover:bg-zinc-900/80 transition-colors; box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 6px 20px -12px rgba(2,6,23,0.25); }
 .pill:focus-visible { outline: none; box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 0 0 2px rgba(2,6,23,0.15), 0 10px 28px -14px rgba(2,6,23,0.35); }
 
-/* Tactical grid backgrounds for design */
+/* Blueprint grid backgrounds - architect drawing feel */
 .bg-tactical-grid {
   background-image:
-    linear-gradient(to right, rgba(2,6,23,0.06) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(2,6,23,0.06) 1px, transparent 1px);
-  background-size: 40px 40px;
+    linear-gradient(to right, rgba(2,6,23,0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(2,6,23,0.03) 1px, transparent 1px);
+  background-size: 80px 80px;
 }
 .dark .bg-tactical-grid,
 .bg-tactical-grid-dark {
   background-image:
-    linear-gradient(to right, rgba(255,255,255,0.06) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255,255,255,0.06) 1px, transparent 1px);
-  background-size: 40px 40px;
+    linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 80px 80px;
+}
+
+/* Grid with radial fade - softer at edges */
+.bg-grid-fade {
+  background-image:
+    linear-gradient(to right, rgba(2,6,23,0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(2,6,23,0.03) 1px, transparent 1px);
+  background-size: 80px 80px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 30%, transparent 70%);
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 30%, transparent 70%);
+}
+.dark .bg-grid-fade {
+  background-image:
+    linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 80px 80px;
 }
 
 /* Subtle film grain */
@@ -75,3 +91,20 @@ html { scroll-behavior: smooth; }
 
 /* Inner frame for large cards */
 .inner-frame { position: absolute; inset: 12px; border: 1px solid rgba(255,255,255,0.06); pointer-events: none; border-radius: 4px; }
+
+/* Gradient section divider */
+.gradient-divider {
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(16,185,129,0.3), transparent);
+}
+
+/* Soft background glow */
+.bg-glow-emerald {
+  position: absolute;
+  width: 800px;
+  height: 800px;
+  background: radial-gradient(circle, rgba(16,185,129,0.08) 0%, transparent 70%);
+  pointer-events: none;
+  border-radius: 9999px;
+  filter: blur(100px);
+}

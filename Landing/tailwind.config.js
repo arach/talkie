@@ -42,17 +42,9 @@ module.exports = {
         }
       },
       fontFamily: {
-        display: [
-          'ui-sans-serif',
-          'system-ui',
-          'Segoe UI',
-          'Roboto',
-          'Helvetica Neue',
-          'Arial',
-          'Noto Sans',
-          'Apple Color Emoji',
-          'Segoe UI Emoji'
-        ]
+        display: ['var(--font-display)', 'Georgia', 'serif'],
+        sans: ['var(--font-sans)', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-mono)', 'monospace'],
       },
       boxShadow: {
         soft: '0 10px 30px -12px rgba(2,6,23,0.2)'

@@ -1,5 +1,5 @@
 "use client"
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
   Mic,
@@ -14,11 +14,13 @@ import {
   HardDrive,
   Menu,
   X,
-  Layers,
-  FileText,
+  Bot,
   DollarSign,
   Zap,
+  Sparkles,
   Wand2,
+  Book,
+  Terminal,
 } from 'lucide-react'
 import Container from './Container'
 import HeroBadge from './HeroBadge'
@@ -29,24 +31,11 @@ export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false)
   const [pricingActive, setPricingActive] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [iosHover, setIosHover] = useState(false)
-  const [scrollProgress, setScrollProgress] = useState(0)
-  const [mobileVideoVisible, setMobileVideoVisible] = useState(false)
-  const expandedVideoRef = useRef(null)
-
-  // Ensure expanded video plays when visible
-  useEffect(() => {
-    if (mobileVideoVisible && expandedVideoRef.current) {
-      expandedVideoRef.current.play().catch(() => {})
-    }
-  }, [mobileVideoVisible])
+  const [featureTab, setFeatureTab] = useState('mac')
 
   useEffect(() => {
     const onScroll = () => {
       setScrolled(window.scrollY > 8)
-      // Fade out iPhone over first 200px of scroll
-      const progress = Math.min(window.scrollY / 200, 1)
-      setScrollProgress(progress)
     }
     onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
@@ -69,11 +58,6 @@ export default function LandingPage() {
     return () => obs.disconnect()
   }, [])
 
-  const handleLaunch = () => {
-    if (typeof window !== 'undefined') {
-      document.getElementById('get')?.scrollIntoView({ behavior: 'smooth' })
-    }
-  }
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans selection:bg-zinc-900 selection:text-white dark:selection:bg-white dark:selection:text-black">
       {/* Navigation */}
@@ -82,7 +66,7 @@ export default function LandingPage() {
         scrolled
           ? 'bg-white/85 dark:bg-zinc-950/85 border-zinc-200/60 dark:border-zinc-800/60 shadow-[0_4px_12px_rgba(0,0,0,0.05)]'
           : 'bg-white/70 dark:bg-zinc-950/70 border-zinc-200/40 dark:border-zinc-800/40'
-      } ${mobileVideoVisible ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      }`}>
         <Container className="h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="flex h-7 w-7 items-center justify-center rounded bg-gradient-to-br from-emerald-500 to-teal-400 text-white shadow-sm">
@@ -92,22 +76,28 @@ export default function LandingPage() {
           </div>
           <div className="hidden md:flex items-center gap-8 text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-500">
             <Link
-              href="/features"
+              href="/dictation"
               className="cursor-pointer hover:text-black dark:hover:text-white transition-colors"
             >
-              Features
+              Talkie for Mac
             </Link>
             <Link
-              href="/manifesto"
+              href="/capture"
               className="cursor-pointer hover:text-black dark:hover:text-white transition-colors"
             >
-              Manifesto
+              Talkie for Mobile
             </Link>
             <Link
-              href="/security"
+              href="/workflows"
               className="cursor-pointer hover:text-black dark:hover:text-white transition-colors"
             >
-              Security
+              Talkie for Agents
+            </Link>
+            <Link
+              href="/philosophy"
+              className="cursor-pointer hover:text-black dark:hover:text-white transition-colors"
+            >
+              Philosophy
             </Link>
             <a
               href="#pricing"
@@ -116,14 +106,6 @@ export default function LandingPage() {
               }`}
             >
               Pricing
-            </a>
-          </div>
-          <div className="hidden md:flex items-center gap-3">
-            <a
-              href="#pricing"
-              className="px-3 py-2 rounded text-[10px] font-bold uppercase tracking-wider border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-white transition-colors"
-            >
-              Get Early Access
             </a>
           </div>
           {/* Mobile menu button */}
@@ -140,28 +122,36 @@ export default function LandingPage() {
           <div className="md:hidden border-t border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md">
             <Container className="py-4 flex flex-col gap-3">
               <Link
-                href="/features"
+                href="/dictation"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-2.5 text-sm font-mono font-medium uppercase tracking-wider text-zinc-900 dark:text-zinc-100 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+              >
+                <Laptop className="w-4 h-4" />
+                Talkie for Mac
+              </Link>
+              <Link
+                href="/capture"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-2.5 text-sm font-mono font-medium uppercase tracking-wider text-zinc-900 dark:text-zinc-100 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+              >
+                <Smartphone className="w-4 h-4" />
+                Talkie for Mobile
+              </Link>
+              <Link
+                href="/workflows"
                 onClick={() => setMobileMenuOpen(false)}
                 className="flex items-center gap-2.5 text-sm font-mono font-medium uppercase tracking-wider text-zinc-900 dark:text-zinc-100 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
               >
                 <Layers className="w-4 h-4" />
-                Features
+                Automation
               </Link>
               <Link
-                href="/manifesto"
+                href="/philosophy"
                 onClick={() => setMobileMenuOpen(false)}
                 className="flex items-center gap-2.5 text-sm font-mono font-medium uppercase tracking-wider text-zinc-900 dark:text-zinc-100 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
               >
-                <FileText className="w-4 h-4" />
-                Manifesto
-              </Link>
-              <Link
-                href="/security"
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-2.5 text-sm font-mono font-medium uppercase tracking-wider text-zinc-900 dark:text-zinc-100 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
-              >
-                <ShieldCheck className="w-4 h-4" />
-                Security
+                <Quote className="w-4 h-4" />
+                Philosophy
               </Link>
               <a
                 href="#pricing"
@@ -177,24 +167,17 @@ export default function LandingPage() {
       </nav>
 
       {/* Announcement Banner - below nav */}
-      <div className={`fixed top-14 left-0 right-0 z-40 bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 border-b border-emerald-400/30 group/banner transition-opacity duration-300 ${
-        mobileVideoVisible ? 'opacity-0 pointer-events-none' : 'opacity-100'
-      }`}>
-        <Link href="/live" className="block">
+      <div className="fixed top-14 left-0 right-0 z-40 bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 border-b border-emerald-400/30 group/banner transition-opacity duration-300">
+        <Link href="/dictation" className="block">
           <div className="h-10 flex items-center justify-center text-[11px] px-4">
             {/* Left spacer to counterbalance right reserved area */}
             <div className="w-10" />
-            <span className="text-white font-bold">Introducing Talkie Live</span>
+            <span className="text-white font-bold">Talkie for Mac</span>
             <span className="text-white/40 mx-2">•</span>
-            <span className="text-white/90">Voice-to-text that works anywhere on your Mac</span>
-            {/* Reserved area for logo + arrow */}
+            <span className="text-white/90">Dictation plus workflows, with iPhone &amp; Watch capture</span>
+            {/* Reserved area for arrow */}
             <div className="w-10 flex items-center ml-0.5">
-              <img
-                src="/talkie-live-logo.png"
-                alt=""
-                className="h-5 w-auto transition-all duration-300 ease-out opacity-0 scale-0 group-hover/banner:opacity-100 group-hover/banner:scale-100 -mr-1 -ml-1"
-              />
-              <ArrowRight className="w-3 h-3 text-white flex-shrink-0 transition-all duration-300 ease-out -translate-x-5 group-hover/banner:translate-x-0" />
+              <ArrowRight className="w-3 h-3 text-white flex-shrink-0 transition-all duration-300 ease-out -translate-x-2 group-hover/banner:translate-x-0" />
             </div>
           </div>
         </Link>
@@ -202,309 +185,247 @@ export default function LandingPage() {
 
       {/* Hero Section - Technical Grid Background */}
       <section className="relative pt-36 pb-12 md:pt-40 md:pb-16 overflow-hidden bg-zinc-100 dark:bg-zinc-950">
-        <div className={`absolute inset-0 z-0 bg-tactical-grid dark:bg-tactical-grid-dark bg-[size:40px_40px] pointer-events-none transition-opacity duration-300 ease-out ${iosHover ? 'opacity-0' : 'opacity-60'}`} />
+        <div className="absolute inset-0 z-0 bg-grid-fade pointer-events-none opacity-40" />
 
-        {/* Left hover zone for video reveal - only at xl+ where fixed video is visible */}
-        <div
-          className="absolute left-0 top-0 w-1/2 h-full hidden xl:block z-20"
-          onMouseEnter={() => setIosHover(true)}
-          onMouseLeave={() => setIosHover(false)}
-        />
 
-        {/* iPhone video - only shows at xl+ (1280px+)
-            - Hidden below xl to avoid covering hero content
-            - Below xl, the expandable slice preview is shown instead
-        */}
-        <div
-          className={`fixed left-16 top-[52px] w-[330px] pointer-events-none select-none hidden xl:block rounded-[2rem] overflow-hidden bg-black shadow-[0_8px_30px_rgba(0,0,0,0.4)] ${iosHover ? 'z-50' : 'z-20'} transition-opacity duration-150`}
-          style={{ isolation: 'isolate', opacity: 1 - scrollProgress }}
-        >
-          <div className={`rounded-[2rem] border-[3px] border-zinc-700 overflow-hidden transition-opacity duration-300 ease-out ${iosHover ? 'opacity-100' : 'opacity-30'}`}>
-            <video
-              src="/recording-preview-half.mp4"
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="w-full h-auto block"
-              style={{ marginBottom: '-12px' }}
-              aria-hidden="true"
-            />
-          </div>
-        </div>
 
         <Container className="relative z-10 text-center">
-          <div className="mb-8 flex justify-center"><HeroBadge /></div>
-
           <h1 className="text-5xl md:text-8xl font-bold tracking-tighter text-zinc-900 dark:text-white mb-6 leading-[0.9] group cursor-default">
-            <span className="transition-all duration-300 group-hover:drop-shadow-[0_0_30px_rgba(255,255,255,0.4)] dark:group-hover:drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]">VOICE MEMOS</span><br />
-            <span className="text-zinc-400 dark:text-zinc-600 font-normal">+</span>{' '}
-            <span className="transition-all duration-300 group-hover:text-emerald-400">AI.</span>
+            <span className="font-display italic font-medium transition-all duration-300 group-hover:drop-shadow-[0_0_30px_rgba(16,185,129,0.35)]">Voice</span>{' '}
+            <span className="text-zinc-400 dark:text-zinc-600 font-normal">to</span>{' '}
+            <span className="relative inline-flex items-center">
+              <span className="bg-gradient-to-r from-emerald-500 to-teal-400 bg-clip-text text-transparent">Action.</span>
+              <Sparkles className="absolute -top-5 -right-7 h-5 w-5 text-emerald-400/80" />
+            </span>
           </h1>
 
-          <p className="mx-auto max-w-2xl text-lg text-zinc-600 dark:text-zinc-400 mb-10 leading-relaxed">
-            Capture on iPhone. Process on Mac. Synced through your encrypted iCloud — not our servers. Your data never leaves your Apple ecosystem.
+          <p className="mx-auto max-w-xl text-xl md:text-2xl text-zinc-700 dark:text-zinc-300 mb-4 leading-snug font-display">
+            Your unified voice system.
+          </p>
+          <p className="mx-auto max-w-2xl text-base text-zinc-500 dark:text-zinc-400 mb-10 leading-relaxed">
+            Drive all your Mac apps when you&apos;re working. Capture memos on iPhone and Watch when you&apos;re on the go.
           </p>
 
-          {/* Video Preview - shows below xl (1280px) as expandable slice */}
-          <div className="xl:hidden mb-8">
-            {/* Container - slice and expanded phone share same video position */}
-            <div className="relative flex flex-col items-center gap-3">
-
-              {/* Backdrop - fades in, covers everything including header */}
-              <div
-                className={`fixed inset-0 z-[100] bg-black/90 backdrop-blur-md transition-opacity duration-300 ${
-                  mobileVideoVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                }`}
-                onClick={() => setMobileVideoVisible(false)}
-              />
-
-              {/* Video container - holds both slice view and expanded view */}
-              <div className="relative">
-                {/* Expanded phone frame - emerges around the slice */}
-                {/* Starts higher, settles down to create breathing room at top */}
-                <div
-                  className={`absolute z-[110] transition-all duration-700 ${
-                    mobileVideoVisible
-                      ? 'opacity-100 translate-y-10'
-                      : 'opacity-0 -translate-y-4 pointer-events-none'
-                  }`}
-                  style={{
-                    top: '-445px',  // Position so video at 445px aligns with slice
-                    left: '-3px',   // Account for border
-                    width: '306px', // 300px video + 6px border
-                    transitionTimingFunction: 'cubic-bezier(0.33, 1, 0.68, 1)', // easeOutCubic
-                  }}
-                >
-                  <div className="rounded-[2rem] overflow-hidden bg-black shadow-[0_8px_40px_rgba(0,0,0,0.5)]">
-                    <div className="rounded-[2rem] border-[3px] border-zinc-700 overflow-hidden">
-                      <video
-                        ref={expandedVideoRef}
-                        src="/recording-preview-half.mp4"
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                        className="w-[300px] h-auto block"
-                        style={{ marginBottom: '-10px' }}
-                      />
-                    </div>
-                  </div>
-                  {/* Dismiss button */}
-                  <button
-                    onClick={() => setMobileVideoVisible(false)}
-                    className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-white/90 text-black/70 flex items-center justify-center shadow-md hover:bg-white hover:text-black transition-all"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Slice - the window into the video */}
-                <button
-                  onClick={() => setMobileVideoVisible(true)}
-                  className="group relative z-30 w-[300px] h-[72px] overflow-hidden rounded-2xl bg-black shadow-lg border border-zinc-700/50 hover:border-zinc-600 transition-all"
-                >
-                  {/* Video positioned to show particle waveform area */}
-                  <video
-                    src="/recording-preview-half.mp4"
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    className="w-[300px] h-auto block absolute left-0"
-                    style={{ top: '-445px' }}
-                  />
-                  {/* Play button overlay - fades out when expanded */}
-                  <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${
-                    mobileVideoVisible ? 'opacity-0' : 'opacity-100'
-                  }`}>
-                    <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm group-hover:bg-white/30 flex items-center justify-center transition-all group-hover:scale-110 shadow-lg">
-                      <div className="w-0 h-0 border-l-[14px] border-l-white border-y-[8px] border-y-transparent ml-1" />
-                    </div>
-                  </div>
-                </button>
+          <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4 text-left">
+            <div className="group/triad rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-900/60 p-4 backdrop-blur-xl transition-all duration-300 hover:backdrop-blur-2xl hover:bg-white/80 dark:hover:bg-zinc-900/70 hover:border-emerald-400/70 hover:shadow-[0_0_0_1px_rgba(16,185,129,0.25),0_12px_30px_rgba(16,185,129,0.16)]">
+              <div className="flex items-center gap-2 mb-2">
+                <Laptop className="w-4 h-4 text-emerald-500" />
+                <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-zinc-600 dark:text-zinc-400">Talkie for Mac</span>
               </div>
-
-              {/* Text label */}
-              <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-opacity duration-300 ${
-                mobileVideoVisible ? 'opacity-0' : 'opacity-100'
-              }`}>
-                <span>See it in action</span>
-                <ArrowRight className="w-3 h-3" />
-              </span>
+              <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                Voice to action with dictation and workflows.
+              </p>
+            </div>
+            <div className="group/triad rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-900/60 p-4 backdrop-blur-xl transition-all duration-300 hover:backdrop-blur-2xl hover:bg-white/80 dark:hover:bg-zinc-900/70 hover:border-emerald-400/70 hover:shadow-[0_0_0_1px_rgba(16,185,129,0.25),0_12px_30px_rgba(16,185,129,0.16)]">
+              <div className="flex items-center gap-2 mb-2">
+                <Smartphone className="w-4 h-4 text-emerald-500" />
+                <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-zinc-600 dark:text-zinc-400">Talkie for Mobile</span>
+              </div>
+              <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                Capture on iPhone and Watch, synced to Mac.
+              </p>
+            </div>
+            <div className="group/triad rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-900/60 p-4 backdrop-blur-xl transition-all duration-300 hover:backdrop-blur-2xl hover:bg-white/80 dark:hover:bg-zinc-900/70 hover:border-emerald-400/70 hover:shadow-[0_0_0_1px_rgba(16,185,129,0.25),0_12px_30px_rgba(16,185,129,0.16)]">
+              <div className="flex items-center gap-2 mb-2">
+                <Bot className="w-4 h-4 text-emerald-500" />
+                <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-zinc-600 dark:text-zinc-400">Talkie for Agents</span>
+              </div>
+              <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                Voice-initiated workflows for tasks and documents.
+              </p>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <a
-              href="#pricing"
-              className="group/ios h-12 px-8 rounded bg-zinc-900 dark:bg-white text-white dark:text-black font-bold text-xs uppercase tracking-wider hover:scale-105 transition-all flex items-center gap-2 shadow-xl hover:shadow-2xl min-w-[200px] justify-center"
-              onMouseEnter={() => setIosHover(true)}
-              onMouseLeave={() => setIosHover(false)}
+          <div className="mt-8 flex justify-center">
+            <Link
+              href="/dictation"
+              className="h-12 px-8 rounded bg-zinc-900 dark:bg-white text-white dark:text-black font-bold text-xs uppercase tracking-wider hover:scale-105 transition-all flex items-center gap-2 shadow-xl hover:shadow-2xl"
             >
-              <Smartphone className="w-4 h-4 transition-transform group-hover/ios:-rotate-6" />
-              <span>Get iOS Early Access</span>
-            </a>
-            <a href="#pricing" className="group/mac h-12 px-8 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white font-bold text-xs uppercase tracking-wider hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-600 transition-all flex items-center gap-2 min-w-[200px] justify-center">
-              <Laptop className="w-4 h-4 transition-transform group-hover/mac:scale-110" />
-              <span>Get Mac Early Access</span>
-            </a>
-          </div>
-
-          <div className="mt-12">
-            <button
-              onClick={handleLaunch}
-              className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 underline underline-offset-4 decoration-zinc-300 dark:decoration-zinc-700"
-            >
-              View Interface Design System
-            </button>
+              <Laptop className="w-4 h-4" />
+              <span>Download Talkie for Mac</span>
+            </Link>
           </div>
         </Container>
       </section>
 
-      {/* Features Grid */}
-      <section className="relative">
-        {/* Background layer - below phone */}
-        <div className="absolute inset-0 py-8 md:py-16 bg-zinc-100 dark:bg-zinc-900 border-t border-b border-zinc-200 dark:border-zinc-800 overflow-hidden z-10">
-          {/* Subtle Background Glows */}
-          <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-zinc-300/20 dark:bg-zinc-800/20 rounded-full blur-[128px] pointer-events-none mix-blend-multiply dark:mix-blend-screen" />
-          <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-zinc-200/40 dark:bg-zinc-800/10 rounded-full blur-[128px] pointer-events-none mix-blend-multiply dark:mix-blend-screen" />
-        </div>
+      {/* Features Section */}
+      <section className="relative py-16 md:py-24 bg-white dark:bg-black border-y border-zinc-200 dark:border-zinc-800">
+        <Container>
+          <div className="text-center mb-8">
+            <h2 className="text-4xl md:text-5xl font-bold tracking-tighter text-zinc-900 dark:text-white leading-tight">
+              <span className="font-display italic font-medium">Voice</span> to Everything, <span className="bg-gradient-to-r from-emerald-500 to-teal-400 bg-clip-text text-transparent">Instantly.</span>
+            </h2>
+            <p className="mt-4 text-lg text-zinc-600 dark:text-zinc-400 max-w-2xl mx-auto">
+              Talkie is the connective tissue — driving your favorite tools with the right context, then pinging you when it's done.
+            </p>
+          </div>
 
-        {/* Content layer - above phone */}
-        <div className="relative z-30 py-8 md:py-16 mx-auto max-w-6xl px-6">
-
-          <div className="mb-6 md:mb-10 md:flex items-end justify-between group/primitives-header">
-            <div className="max-w-xl">
-              <h2 className="text-3xl font-bold text-zinc-900 dark:text-white mb-4 tracking-tight uppercase transition-colors group-hover/primitives-header:text-emerald-600 dark:group-hover/primitives-header:text-emerald-400">Powerful Primitives.</h2>
-              <p className="text-zinc-600 dark:text-zinc-400 text-sm leading-relaxed">
-                We&apos;ve rebuilt the recording stack from the ground up. Talkie combines a professional‑grade audio engine with a node‑based automation system.
-              </p>
+          <div className="rounded-2xl border border-zinc-200/70 dark:border-zinc-800/70 bg-white/60 dark:bg-zinc-900/50 backdrop-blur-2xl overflow-hidden">
+            <div className="p-2">
+              <div className="flex flex-wrap justify-center gap-2 rounded-lg bg-white/80 dark:bg-zinc-950/60 px-2.5 py-1.5 backdrop-blur-2xl">
+                {[
+                  { id: 'mac', label: 'Talkie for Mac', icon: Laptop },
+                  { id: 'go', label: 'Talkie for Mobile', icon: Smartphone },
+                  { id: 'agents', label: 'Talkie for Agents', icon: Bot },
+                ].map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setFeatureTab(id)}
+                  className={`group inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-widest transition-all ${
+                    featureTab === id
+                      ? 'bg-zinc-900 text-white dark:bg-white dark:text-black shadow-[0_10px_30px_rgba(0,0,0,0.18)]'
+                      : 'bg-white/70 text-zinc-600 dark:bg-zinc-900/70 dark:text-zinc-400 hover:backdrop-blur-2xl hover:text-zinc-900 dark:hover:text-white'
+                    }`}
+                    aria-pressed={featureTab === id}
+                  >
+                    <Icon className={`h-3.5 w-3.5 ${featureTab === id ? 'text-emerald-400' : 'text-emerald-500'}`} />
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="hidden md:block">
-              <Layers className="w-6 h-6 text-zinc-300 dark:text-zinc-700 transition-all group-hover/primitives-header:text-emerald-500 group-hover/primitives-header:rotate-12" />
+
+            <div className="p-5 md:p-6">
+              {featureTab === 'mac' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-center">
+                  {[
+                    {
+                      icon: Terminal,
+                      title: 'Universal Voice Input',
+                      body: 'Dictate into any app. Talkie types wherever your cursor is, no plugins required.',
+                    },
+                    {
+                      icon: Wand2,
+                      title: 'Blazing-Fast & Accurate',
+                      body: 'Real-time transcription that keeps up with your thoughts, powered by a state-of-the-art audio engine.',
+                    },
+                    {
+                      icon: Book,
+                      title: 'Teach It Your Language',
+                      body: 'Ensure near-perfect accuracy for your specific jargon with Personal Dictionaries.',
+                    },
+                    {
+                      icon: Cpu,
+                      title: 'Local-First Engine',
+                      body: 'Process speech on-device by default, with privacy built into every step.',
+                    },
+                  ].map(({ icon: Icon, title, body }) => (
+                    <div key={title} className="rounded-lg border border-zinc-200/70 dark:border-zinc-800/60 bg-white/80 dark:bg-zinc-950/50 p-5 backdrop-blur-lg transition-all hover:backdrop-blur-2xl hover:border-emerald-400/70 hover:shadow-[0_10px_30px_rgba(16,185,129,0.14)]">
+                      <Icon className="w-6 h-6 mx-auto text-emerald-500 mb-3" />
+                      <h4 className="font-bold text-zinc-800 dark:text-zinc-200">{title}</h4>
+                      <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">{body}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {featureTab === 'go' && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                  {[
+                    {
+                      icon: Zap,
+                      title: 'Instant Capture',
+                      body: 'Open, speak, done. Capture ideas anywhere with iPhone or Apple Watch.',
+                    },
+                    {
+                      icon: ShieldCheck,
+                      title: 'On-Device Transcription',
+                      body: 'Get a high-quality, private transcript immediately - no internet required.',
+                    },
+                    {
+                      icon: Cloud,
+                      title: 'Seamless iCloud Sync',
+                      body: 'Your notes show up on your Mac moments later, ready for the next step.',
+                    },
+                  ].map(({ icon: Icon, title, body }) => (
+                    <div key={title} className="rounded-lg border border-zinc-200/70 dark:border-zinc-800/60 bg-white/80 dark:bg-zinc-950/50 p-5 backdrop-blur-lg transition-all hover:backdrop-blur-2xl hover:border-emerald-400/70 hover:shadow-[0_10px_30px_rgba(16,185,129,0.14)]">
+                      <Icon className="w-6 h-6 mx-auto text-emerald-500 mb-3" />
+                      <h4 className="font-bold text-zinc-800 dark:text-zinc-200">{title}</h4>
+                      <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">{body}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {featureTab === 'agents' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-center">
+                  {[
+                    {
+                      icon: Layers,
+                      title: 'Agent Pipelines',
+                      body: 'Chain steps that transform raw speech into structured output.',
+                    },
+                    {
+                      icon: Wand2,
+                      title: 'LLM Steps',
+                      body: 'Summaries, extraction, and transformations tuned for your workflows.',
+                    },
+                    {
+                      icon: Terminal,
+                      title: 'Tool Actions',
+                      body: 'Trigger scripts, export files, and route results where you work.',
+                    },
+                    {
+                      icon: Book,
+                      title: 'Personal Knowledge',
+                      body: 'Keep outputs consistent with your language, style, and taxonomy.',
+                    },
+                  ].map(({ icon: Icon, title, body }) => (
+                    <div key={title} className="rounded-lg border border-zinc-200/70 dark:border-zinc-800/60 bg-white/80 dark:bg-zinc-950/50 p-5 backdrop-blur-lg transition-all hover:backdrop-blur-2xl hover:border-emerald-400/70 hover:shadow-[0_10px_30px_rgba(16,185,129,0.14)]">
+                      <Icon className="w-6 h-6 mx-auto text-emerald-500 mb-3" />
+                      <h4 className="font-bold text-zinc-800 dark:text-zinc-200">{title}</h4>
+                      <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">{body}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-6 text-center">
+                {featureTab === 'mac' && (
+                  <Link
+                    href="/dictation"
+                    className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                  >
+                    Explore Talkie for Mac <ArrowRight className="w-3 h-3" />
+                  </Link>
+                )}
+                {featureTab === 'go' && (
+                  <Link
+                    href="/capture"
+                    className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                  >
+                    Explore Talkie for Mobile <ArrowRight className="w-3 h-3" />
+                  </Link>
+                )}
+                {featureTab === 'agents' && (
+                  <Link
+                    href="/workflows"
+                    className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                  >
+                    Explore Automation <ArrowRight className="w-3 h-3" />
+                  </Link>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-4 md:auto-rows-fr">
-
-            {/* 1. Local AI Workflows (Large) */}
-            <div className="col-span-1 md:col-span-2 md:row-span-2 relative bg-white/60 dark:bg-zinc-950/60 backdrop-blur-xl border border-white/20 dark:border-white/10 hover:border-emerald-500/30 p-4 md:p-6 flex flex-col md:justify-between group/workflows overflow-hidden rounded-sm shadow-sm hover:shadow-md transition-all duration-500">
-              <div className="absolute top-0 right-0 p-6 opacity-5 group-hover/workflows:opacity-10 transition-opacity transform group-hover/workflows:scale-110 duration-700">
-                <Wand2 className="w-40 h-40" strokeWidth={0.5} />
-              </div>
-
-              <div className="relative z-10">
-                <div className="w-9 h-9 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mb-4 transition-colors group-hover/workflows:bg-emerald-100 dark:group-hover/workflows:bg-emerald-900/30">
-                  <Zap className="w-4 h-4 text-zinc-900 dark:text-white transition-all group-hover/workflows:text-emerald-600 dark:group-hover/workflows:text-emerald-400 group-hover/workflows:scale-110" />
-                </div>
-                <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-2 uppercase tracking-wide transition-colors group-hover/workflows:text-emerald-600 dark:group-hover/workflows:text-emerald-400">Local AI Workflows</h3>
-                <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-sm">
-                  Don&apos;t just record. Process. Configure pipelines to automatically summarize meetings, extract action items, or reformat ramblings into clear prose.
-                </p>
-              </div>
-
-              <div className="mt-4 md:mt-8 space-y-1.5 md:space-y-2">
-                <div className="flex items-center gap-3 text-xs font-mono text-zinc-500">
-                  <div className="w-1.5 h-1.5 bg-zinc-400 rounded-full"></div>
-                  <span>Input: Audio Recording (RAW)</span>
-                </div>
-                <div className="w-px h-3 bg-zinc-300 dark:bg-zinc-700 ml-[2.5px]"></div>
-                <div className="flex items-center gap-3 text-xs font-mono text-zinc-500">
-                  <div className="w-1.5 h-1.5 bg-zinc-400 rounded-full"></div>
-                  <span>Process: Whisper (Quantized)</span>
-                </div>
-                <div className="w-px h-3 bg-zinc-300 dark:bg-zinc-700 ml-[2.5px]"></div>
-                <div className="flex items-center gap-3 text-xs font-mono text-blue-500">
-                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
-                  <span>LLM: Summarize &amp; Extract Tasks</span>
-                </div>
-                <div className="w-px h-3 bg-zinc-300 dark:bg-zinc-700 ml-[2.5px]"></div>
-                <div className="flex items-center gap-3 text-xs font-mono text-zinc-900 dark:text-white font-bold">
-                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
-                  <span>Output: Draft Email / Notion Page</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 2. On-Device Only (Tall) */}
-            <div className="col-span-1 md:col-span-1 md:row-span-2 bg-white/60 dark:bg-zinc-950/60 backdrop-blur-xl border border-white/20 dark:border-white/10 hover:border-emerald-500/30 p-4 md:p-5 flex flex-col group/device rounded-sm shadow-sm hover:shadow-md transition-all duration-300">
-              <div className="flex items-center gap-2 mb-1.5 md:mb-2">
-                <Lock className="w-4 h-4 text-zinc-900 dark:text-white transition-all group-hover/device:text-emerald-500 group-hover/device:scale-110" />
-                <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide transition-colors group-hover/device:text-emerald-600 dark:group-hover/device:text-emerald-400">On‑Device Only</h3>
-              </div>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed mb-2 md:mb-3">
-                Your voice is your biometric identity. It should never touch a server. The only cloud we use is the one you already trust: iCloud.
-              </p>
-              <div className="mt-auto border-t border-zinc-200 dark:border-zinc-800 pt-2 md:pt-3">
-                <div className="flex items-center justify-between text-[10px] font-mono uppercase text-zinc-500 mb-1.5 md:mb-2">
-                  <span>Tracker Count</span>
-                  <span className="text-zinc-300 dark:text-zinc-700">0</span>
-                </div>
-                <div className="flex items-center justify-between text-[10px] font-mono uppercase text-zinc-500 mb-1.5 md:mb-2">
-                  <span>Cloud Processing</span>
-                  <span className="text-emerald-600 dark:text-emerald-400">Permission Based</span>
-                </div>
-                <div className="flex items-center justify-between text-[10px] font-mono uppercase text-zinc-500 mb-1.5 md:mb-2">
-                  <span>Offline Mode</span>
-                  <span className="text-emerald-600 dark:text-emerald-400">Active</span>
-                </div>
-                <div className="flex items-center justify-between text-[10px] font-mono uppercase text-zinc-500">
-                  <span>Storage</span>
-                  <span className="text-blue-500">Apple iCloud</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 3. iCloud Sync */}
-            <div className="col-span-1 bg-white/60 dark:bg-zinc-950/60 backdrop-blur-xl border border-white/20 dark:border-white/10 hover:border-blue-500/30 p-4 md:p-5 flex flex-col md:justify-between group/icloud rounded-sm shadow-sm hover:shadow-md transition-all duration-300">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-2">
-                    <Cloud className="w-4 h-4 text-zinc-900 dark:text-white transition-all group-hover/icloud:text-blue-500 group-hover/icloud:scale-110" />
-                    <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide transition-colors group-hover/icloud:text-blue-600 dark:group-hover/icloud:text-blue-400">iCloud Sync</h3>
-                  </div>
-                  <div className="w-2 h-2 rounded-full bg-blue-500 transition-all group-hover/icloud:scale-125 group-hover/icloud:shadow-[0_0_8px_rgba(59,130,246,0.6)]"></div>
-                </div>
-                <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                  Start recording on iPhone. Tag it. It appears instantly on your Mac for deep work.
-                </p>
-              </div>
-            </div>
-
-            {/* 4. Pro Audio */}
-            <div className="col-span-1 bg-white/60 dark:bg-zinc-950/60 backdrop-blur-xl border border-white/20 dark:border-white/10 hover:border-emerald-500/30 p-4 md:p-5 flex flex-col md:justify-between group/audio rounded-sm shadow-sm hover:shadow-md transition-all duration-300">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-2">
-                    <Mic className="w-4 h-4 text-zinc-900 dark:text-white transition-all group-hover/audio:text-emerald-500 group-hover/audio:scale-110" />
-                    <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wide transition-colors group-hover/audio:text-emerald-600 dark:group-hover/audio:text-emerald-400">Pro Audio</h3>
-                  </div>
-                  <span className="text-[10px] font-mono text-zinc-400 transition-colors group-hover/audio:text-emerald-500">WHISPER‑V3</span>
-                </div>
-                <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                  32‑bit float audio pipeline. Stereo recording. Automatic noise reduction.
-                </p>
-              </div>
-            </div>
-
-          </div>
-        </div>
+        </Container>
       </section>
 
       {/* Manifesto Section (Preview) */}
-      <section id="manifesto" className="py-12 md:py-16 bg-white dark:bg-zinc-950 border-t border-b border-zinc-200 dark:border-zinc-800">
+      <section id="philosophy" className="py-12 md:py-16 bg-white dark:bg-zinc-950 border-t border-b border-zinc-200 dark:border-zinc-800">
         <Container>
           <div className="max-w-4xl mx-auto space-y-6">
 
             {/* Header/Intro */}
-            <div className="space-y-4 group/manifesto-header">
+            <div className="space-y-4 group/philosophy-header">
               <div className="flex items-center gap-3">
-                <Quote className="w-3 h-3 text-zinc-400 transition-colors group-hover/manifesto-header:text-emerald-500" />
-                <h3 className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-500 transition-colors group-hover/manifesto-header:text-emerald-500">The Manifesto</h3>
+                <Quote className="w-3 h-3 text-zinc-400 transition-colors group-hover/philosophy-header:text-emerald-500" />
+                <h3 className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-500 transition-colors group-hover/philosophy-header:text-emerald-500">Our Philosophy</h3>
               </div>
-              <h2 className="text-lg md:text-xl font-bold tracking-tight text-zinc-900 dark:text-white leading-[1.2] uppercase transition-transform origin-left group-hover/manifesto-header:scale-[1.02]">
-                Your best ideas don&apos;t wait for you to sit down.
+              <h2 className="text-xl md:text-2xl tracking-tight text-zinc-900 dark:text-white leading-[1.2] transition-transform origin-left group-hover/philosophy-header:scale-[1.02]">
+                <span className="font-display italic">Your best ideas</span> <span className="font-bold">don&apos;t wait for you to sit down.</span>
               </h2>
               <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-2xl">
                 Your ideas show up anywhere, at any time. On a walk, between meetings, in the middle of something unrelated. Builders know this rhythm well. Sparks arrive fast, unpolished, and usually at inconvenient times.
@@ -550,7 +471,7 @@ export default function LandingPage() {
 
       {/* Security Architecture Preview Section */}
       <section id="security-preview" className="py-16 md:py-24 bg-zinc-900 border-t border-b border-zinc-800 relative overflow-hidden">
-        <div className="absolute inset-0 bg-tactical-grid-dark bg-[size:40px_40px] opacity-20 pointer-events-none" />
+        <div className="absolute inset-0 bg-tactical-grid-dark opacity-15 pointer-events-none" />
 
         <Container className="relative z-10">
           {/* Header */}
@@ -560,9 +481,9 @@ export default function LandingPage() {
                 <Lock className="w-4 h-4 text-emerald-500" />
                 <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-500">Data Sovereignty</span>
               </div>
-              <h2 className="text-2xl md:text-3xl font-bold text-white uppercase tracking-tight leading-tight">
-                Our servers don&apos;t listen.<br/>
-                <span className="text-zinc-500">Your voice stays yours.</span>
+              <h2 className="text-2xl md:text-3xl text-white tracking-tight leading-tight">
+                <span className="font-display italic">Our servers don&apos;t listen.</span><br/>
+                <span className="text-zinc-500 font-bold">Your voice stays yours.</span>
               </h2>
             </div>
             <Link
@@ -636,12 +557,12 @@ export default function LandingPage() {
         <div className="absolute inset-0 pointer-events-none bg-noise" />
         <div className="relative mx-auto max-w-4xl px-6 text-center">
           <Cpu className="w-8 h-8 mx-auto text-zinc-400 mb-6 transition-all duration-500 group-hover/cta:text-emerald-500 group-hover/cta:rotate-180" strokeWidth={1} />
-          <h2 className="text-xl md:text-3xl font-bold text-zinc-900 dark:text-white mb-8 tracking-tight uppercase leading-tight transition-transform duration-300 group-hover/cta:scale-[1.01]">
-            Stop uploading your thoughts <br className="hidden md:block" /> to someone else's cloud.
+          <h2 className="text-xl md:text-3xl text-zinc-900 dark:text-white mb-8 tracking-tight leading-tight transition-transform duration-300 group-hover/cta:scale-[1.01]">
+            <span className="font-display italic">Stop uploading your thoughts</span> <br className="hidden md:block" /> <span className="font-bold">to someone else&apos;s cloud.</span>
           </h2>
           <div className="flex justify-center">
             <a href="#pricing" className="group/btn relative inline-flex items-center gap-2 px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-black font-bold text-xs uppercase tracking-wider overflow-hidden rounded hover:shadow-lg transition-shadow">
-              <span className="relative z-10">Get Early Access</span>
+              <span className="relative z-10">Request Early Access</span>
               <ArrowRight className="w-4 h-4 relative z-10 group-hover/btn:translate-x-1 transition-transform" />
             </a>
           </div>
@@ -659,6 +580,7 @@ export default function LandingPage() {
             <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="hover:text-black dark:hover:text-white transition-colors">Twitter</a>
             <a href="https://discord.com" target="_blank" rel="noopener noreferrer" className="hover:text-black dark:hover:text-white transition-colors">Discord</a>
             <a href="mailto:hello@talkie.arach.dev" className="hover:text-black dark:hover:text-white transition-colors">Email</a>
+            <a href="/philosophy" className="hover:text-black dark:hover:text-white transition-colors">Philosophy</a>
             <a href="/privacypolicy" className="hover:text-black dark:hover:text-white transition-colors">Privacy</a>
           </div>
           <p className="text-[10px] font-mono uppercase text-zinc-400">© {new Date().getFullYear()} Talkie Systems Inc.</p>

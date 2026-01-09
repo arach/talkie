@@ -3,6 +3,8 @@ import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
   ArrowLeft,
+  Code,
+  Layers,
   Mic,
   Workflow,
   Terminal,
@@ -17,15 +19,18 @@ import {
   Copy,
   Globe,
   LayoutGrid,
+  RefreshCw,
   MessageCircle,
   Smartphone,
   Watch,
   Search,
   Play,
   Hash,
+  Bot,
 } from 'lucide-react'
 import Container from './Container'
 import ThemeToggle from './ThemeToggle'
+import SubNav from './SubNav'
 import { SecurityInfographic } from './SecurityInfographic'
 import ScreenshotsSection from './ScreenshotsSection'
 
@@ -58,8 +63,19 @@ const WorkflowStepRow = ({ icon: Icon, label, desc }) => (
   </div>
 )
 
+const ArchitectNode = ({ label, icon: Icon, active, activeClass, iconActiveClass, pingClass = 'bg-emerald-500' }) => (
+  <div className={`flex flex-col items-center gap-3 transition-all duration-500 ${active ? 'scale-110' : 'opacity-40 grayscale'}`}>
+    <div className={`w-14 h-14 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-center relative shadow-2xl transition-all ${active ? activeClass : ''}`}>
+      <Icon className={`w-6 h-6 ${active ? iconActiveClass : 'text-zinc-600'}`} />
+      {active && <div className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full animate-ping ${pingClass}`} />}
+    </div>
+    <span className="text-[9px] font-mono font-bold uppercase tracking-[0.15em] text-zinc-500">{label}</span>
+  </div>
+)
+
 export default function FeaturesPage() {
   const [scrolled, setScrolled] = useState(false)
+  const [activeStep, setActiveStep] = useState(0)
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -72,12 +88,25 @@ export default function FeaturesPage() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setActiveStep((prev) => (prev + 1) % 3)
+    }, 3500)
+    return () => clearInterval(timer)
+  }, [])
+
+  const statusLabels = [
+    'Talkie capture streaming...',
+    'Claude Code responding...',
+    'Feedback loop synced...',
+  ]
+
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-sans selection:bg-zinc-900 selection:text-white dark:selection:bg-white dark:selection:text-black">
 
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto max-w-5xl px-4 sm:px-6 h-14 flex items-center justify-between">
+        <Container className="h-14 flex items-center justify-between">
           <Link
             href="/"
             className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-black dark:hover:text-white transition-colors group"
@@ -86,28 +115,124 @@ export default function FeaturesPage() {
             BACK
           </Link>
 
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="h-3 w-px bg-zinc-300 dark:bg-zinc-700"></div>
-            <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-900 dark:text-white">FEATURES &amp; SPECS</span>
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-900 dark:text-white">Talkie for Agents</span>
           </div>
-        </div>
+        </Container>
       </nav>
 
-      <main className="pt-32 pb-32 px-6">
-        <div className="mx-auto max-w-5xl">
-
-          {/* Hero */}
-          <div className="max-w-3xl mb-24">
-            <h1 className="text-4xl md:text-6xl font-bold tracking-tighter text-zinc-900 dark:text-white uppercase mb-6 leading-[0.9]">
-              Voice memos, <br/>
-              <span className="text-emerald-500">supercharged</span> with <br/>
-              AI workflows.
-            </h1>
-            <p className="text-lg text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-2xl border-l-2 border-emerald-500 pl-6">
-              Talkie turns your spoken thoughts into structured, automated output — all on your devices, powered by iCloud, and designed for builders who want speed, sovereignty, and flow.
-            </p>
+      {/* Hero */}
+      <section className="relative pt-20 pb-16 md:pt-22 md:pb-20 overflow-hidden bg-zinc-100 dark:bg-zinc-950">
+        <div className="absolute inset-0 z-0 bg-grid-fade pointer-events-none opacity-40" />
+        <Container className="relative z-10">
+          {/* Sub Navigation */}
+          <div className="flex justify-center mb-6">
+            <SubNav />
           </div>
 
+          <div className="max-w-3xl mx-auto text-center">
+            <h1 className="text-5xl md:text-7xl tracking-tighter text-zinc-900 dark:text-white leading-[0.95] mb-6">
+              <span className="font-display italic">Voice</span> <span className="text-zinc-400 dark:text-zinc-500">to</span>{' '}
+              <span className="font-bold bg-gradient-to-r from-purple-500 to-violet-400 bg-clip-text text-transparent">Agents.</span>
+            </h1>
+
+            <p className="text-xl md:text-2xl text-zinc-700 dark:text-zinc-300 leading-snug mb-4 font-display">
+              Speak once, run everywhere.
+            </p>
+            <p className="text-base text-zinc-500 dark:text-zinc-400 leading-relaxed max-w-xl mx-auto mb-10">
+              Voice-driven workflows turn your words into documents, tasks, and actions across your Mac — local-first and private.
+            </p>
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <a href="/#pricing" className="h-12 px-8 rounded-lg bg-purple-500 hover:bg-purple-600 text-white font-bold text-sm uppercase tracking-wider hover:scale-105 transition-all flex items-center gap-3 shadow-xl shadow-purple-500/25">
+                <Bot className="w-4 h-4" />
+                <span>Get Early Access</span>
+              </a>
+              <div className="flex flex-col gap-1 text-left">
+                <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-500 uppercase">
+                  <Monitor className="w-3 h-3" />
+                  macOS 13+ • Workflow Editor
+                </div>
+                <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400 uppercase">
+                  <Terminal className="w-3 h-3 text-purple-500" />
+                  Claude CLI • Shell Commands
+                </div>
+              </div>
+            </div>
+          </div>
+        </Container>
+      </section>
+
+      {/* Agent Orchestrator */}
+      <section className="py-16 md:py-20 bg-white dark:bg-black border-t border-zinc-200 dark:border-zinc-800">
+        <Container>
+            <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 md:p-10 text-white shadow-2xl">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                    <Layers className="w-4 h-4 text-purple-400" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-400">Talkie Capture → Claude Code → Feedback</span>
+                    <span className="text-[11px] text-zinc-500">Auto-paced loop that accelerates collaboration with Claude.</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
+                  <Zap className="w-3 h-3 text-emerald-400" />
+                  <span className="text-[9px] font-mono text-emerald-400 uppercase font-bold tracking-widest">Speed: 120ms</span>
+                </div>
+              </div>
+
+              <div className="bg-zinc-950/80 border border-zinc-800 rounded-xl p-6 md:p-8">
+                <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8">
+                    <ArchitectNode
+                      label="Talkie Capture"
+                    icon={Mic}
+                    active={activeStep === 0}
+                    activeClass="border-emerald-500 bg-zinc-900 shadow-[0_0_25px_rgba(16,185,129,0.35)]"
+                    iconActiveClass="text-emerald-400"
+                  />
+
+                  <div className="hidden md:block flex-1 h-px border-t border-dashed border-zinc-700" />
+                  <div className="md:hidden h-6 w-px border-l border-dashed border-zinc-700" />
+
+                  <ArchitectNode
+                    label="Claude Code"
+                    icon={Code}
+                    active={activeStep === 1}
+                    activeClass="border-purple-500 bg-zinc-900 shadow-[0_0_25px_rgba(168,85,247,0.35)]"
+                    iconActiveClass="text-purple-400"
+                    pingClass="bg-purple-500"
+                  />
+
+                  <div className="hidden md:block flex-1 h-px border-t border-dashed border-zinc-700" />
+                  <div className="md:hidden h-6 w-px border-l border-dashed border-zinc-700" />
+
+                  <ArchitectNode
+                    label="Feedback Loop"
+                    icon={RefreshCw}
+                    active={activeStep === 2}
+                    activeClass="border-emerald-500 bg-zinc-900 shadow-[0_0_25px_rgba(16,185,129,0.35)]"
+                    iconActiveClass="text-emerald-400"
+                  />
+                </div>
+
+                <div className="mt-6 flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-[10px] font-mono">
+                  <span className="text-zinc-400 uppercase tracking-widest">{statusLabels[activeStep]}</span>
+                  <div className="flex items-center gap-2 text-zinc-600">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-zinc-500">Auto-paced loop, accelerating collaboration with Claude</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+        </Container>
+      </section>
+
+      {/* Main Content */}
+      <main className="py-16 md:py-20 bg-zinc-50 dark:bg-zinc-950">
+        <Container>
           {/* 1. Example Workflows - Lead with what you can DO */}
           <section className="mb-24">
              <SectionHeader label="Example Workflows" icon={Workflow} />
@@ -339,8 +464,7 @@ export default function FeaturesPage() {
              </div>
 
           </div>
-
-        </div>
+        </Container>
       </main>
 
       <ThemeToggle />

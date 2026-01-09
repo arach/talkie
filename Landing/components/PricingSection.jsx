@@ -94,7 +94,7 @@ export default function PricingSection() {
 
               <ul className="space-y-3">
                 {[
-                  "Native iOS & macOS Apps",
+                  "Mac app + iPhone + Watch companion",
                   "Encrypted iCloud Sync",
                   "Unlimited Local Transcription",
                   "Zero Vendor Lock-in"
@@ -116,7 +116,7 @@ export default function PricingSection() {
               <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-zinc-900 dark:border-white transition-all group-hover/card:w-4 group-hover/card:h-4 group-hover/card:border-emerald-500" />
 
               <div className="text-center mb-6">
-                <p className="text-[10px] font-mono uppercase text-zinc-400 mb-2">iOS & macOS</p>
+                <p className="text-[10px] font-mono uppercase text-zinc-400 mb-2">Mac + iPhone + Watch</p>
                 <p className="text-2xl font-bold text-zinc-900 dark:text-white uppercase tracking-tight mb-3">Public Launch 2026</p>
 
                 {/* Countdown Timer */}

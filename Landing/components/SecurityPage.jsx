@@ -2,6 +2,7 @@
 import React, { useEffect } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, ShieldCheck, Database, Cloud, FileText, Key, Eye, Lock, Server, Cpu, HardDrive, Ban, ArrowDown, UserCheck, Code, ExternalLink, Smartphone } from 'lucide-react'
+import Container from './Container'
 import { SecurityInfographic } from './SecurityInfographic'
 
 const SecurityFeature = ({ icon: Icon, title, subtitle, description }) => (
@@ -35,7 +36,7 @@ export default function SecurityPage() {
 
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 h-14 flex items-center justify-between">
+        <Container className="h-14 flex items-center justify-between">
           <Link
             href="/"
             className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-black dark:hover:text-white transition-colors group"
@@ -49,7 +50,7 @@ export default function SecurityPage() {
             <div className="h-3 w-px bg-zinc-300 dark:bg-zinc-700"></div>
             <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-900 dark:text-white">SECURITY</span>
           </div>
-        </div>
+        </Container>
       </nav>
 
       <main className="pt-32 pb-32 px-6">

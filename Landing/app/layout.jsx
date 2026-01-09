@@ -1,20 +1,21 @@
 import './globals.css'
 import Script from 'next/script'
-import { Space_Grotesk, JetBrains_Mono } from 'next/font/google'
+import { Space_Grotesk, JetBrains_Mono, Fraunces } from 'next/font/google'
 
 const grotesk = Space_Grotesk({ subsets: ['latin'], variable: '--font-sans', display: 'swap' })
 const jetmono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' })
+const fraunces = Fraunces({ subsets: ['latin'], variable: '--font-display', display: 'swap' })
 
 export const metadata = {
-  title: 'Talkie — Voice memos that think with you',
+  title: 'Talkie - Voice to action on Mac',
   description:
-    'Record once. Talkie transcribes, summarizes, and turns memos into tasks — synced across iOS and macOS.',
+    'Talk to Talkie. It turns speech into tasks, summaries, and workflows on your Mac - local-first and private. Capture on iPhone or Apple Watch when you\'re away.',
   applicationName: 'Talkie',
   metadataBase: new URL('https://usetalkie.com'),
   openGraph: {
-    title: 'Talkie — Voice memos that think with you',
+    title: 'Talkie - Voice to action on Mac',
     description:
-      'Record once. Talkie transcribes, summarizes, and turns memos into tasks — synced across iOS and macOS.',
+      'Talk to Talkie. It turns speech into tasks, summaries, and workflows on your Mac - local-first and private. Capture on iPhone or Apple Watch when you\'re away.',
     url: 'https://usetalkie.com',
     siteName: 'Talkie',
     locale: 'en_US',
@@ -24,7 +25,7 @@ export const metadata = {
         url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Talkie — Voice memos that think with you',
+        alt: 'Talkie - Voice to action on Mac',
       },
     ],
   },
@@ -40,9 +41,9 @@ export const metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Talkie — Voice memos that think with you',
+    title: 'Talkie - Voice to action on Mac',
     description:
-      'Record once. Talkie transcribes, summarizes, and turns memos into tasks — synced across iOS and macOS.',
+      'Talk to Talkie. It turns speech into tasks, summaries, and workflows on your Mac - local-first and private. Capture on iPhone or Apple Watch when you\'re away.',
     images: ['/og-image.png'],
   },
 }
@@ -56,7 +57,7 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={`${grotesk.variable} ${jetmono.variable} dark`}>
+    <html lang="en" className={`${grotesk.variable} ${jetmono.variable} ${fraunces.variable} dark`}>
       <head>
         {/* Apply saved/system theme before paint to prevent FOUC */}
         <Script id="theme-init" strategy="beforeInteractive">

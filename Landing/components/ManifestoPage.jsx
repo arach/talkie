@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Mic } from 'lucide-react'
+import Container from './Container'
 
 const ConsoleHeader = ({ label, color = "text-zinc-500" }) => (
   <div className="mb-6 mt-4 select-none">
@@ -29,7 +30,7 @@ export default function ManifestoPage() {
 
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto max-w-3xl px-4 sm:px-6 h-14 flex items-center justify-between">
+        <Container className="h-14 flex items-center justify-between">
           <Link
             href="/"
             className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-black dark:hover:text-white transition-colors group"
@@ -40,9 +41,9 @@ export default function ManifestoPage() {
 
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="h-3 w-px bg-zinc-300 dark:bg-zinc-700"></div>
-            <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-900 dark:text-white">MANIFESTO</span>
+            <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-900 dark:text-white">PHILOSOPHY</span>
           </div>
-        </div>
+        </Container>
       </nav>
 
       <main className="pt-24 pb-32 px-6 relative overflow-hidden">
