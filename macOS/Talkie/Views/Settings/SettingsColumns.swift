@@ -32,15 +32,13 @@ enum SettingsSection: String, Hashable {
     // STORAGE
     case database            // Retention, cleanup
     case files               // Local paths, exports
-    case cloud               // Sync (future)
 
-    // SERVER
-    case server              // TalkieServer process control
-    case bridge              // iOS Bridge (Tailscale connectivity)
-    case gateway             // External API gateway
+    // iOS (user-facing connectivity)
+    case iOS                 // Unified iOS settings (iCloud + Bridge + devices)
 
     // SYSTEM
     case helpers             // Background services (TalkieLive, TalkieEngine)
+    case server              // TalkieServer (power user / debugging)
     case permissions
     case debugInfo
     case devControl          // Dev control panel (DEBUG only)
@@ -65,10 +63,8 @@ enum SettingsSection: String, Hashable {
         case "llm", "llm-models": return .llmModels
         case "database", "db": return .database
         case "files": return .files
-        case "cloud", "sync": return .cloud
+        case "ios", "iphone", "icloud": return .iOS
         case "server": return .server
-        case "bridge", "ios-bridge": return .bridge
-        case "gateway": return .gateway
         case "helpers": return .helpers
         case "permissions": return .permissions
         case "debug", "debug-info": return .debugInfo
@@ -93,10 +89,8 @@ enum SettingsSection: String, Hashable {
         case .llmModels: return "llm"
         case .database: return "database"
         case .files: return "files"
-        case .cloud: return "cloud"
+        case .iOS: return "ios"
         case .server: return "server"
-        case .bridge: return "bridge"
-        case .gateway: return "gateway"
         case .helpers: return "helpers"
         case .permissions: return "permissions"
         case .debugInfo: return "debug"
@@ -295,7 +289,7 @@ struct SettingsSidebarColumn: View {
                     }
 
                     // STORAGE
-                    SettingsSidebarSection(title: "STORAGE", isActive: selectedSection == .database || selectedSection == .files || selectedSection == .cloud) {
+                    SettingsSidebarSection(title: "STORAGE", isActive: selectedSection == .database || selectedSection == .files) {
                         SettingsSidebarItem(
                             icon: "cylinder",
                             title: "DATABASE",
@@ -310,48 +304,34 @@ struct SettingsSidebarColumn: View {
                         ) {
                             selectedSection = .files
                         }
-                        SettingsSidebarItem(
-                            icon: "cloud",
-                            title: "CLOUD",
-                            isSelected: selectedSection == .cloud
-                        ) {
-                            selectedSection = .cloud
-                        }
                     }
 
-                    // SERVER
-                    SettingsSidebarSection(title: "SERVER", isActive: selectedSection == .server || selectedSection == .bridge || selectedSection == .gateway) {
+                    // iOS (user-facing connectivity)
+                    SettingsSidebarSection(title: "iOS", isActive: selectedSection == .iOS) {
                         SettingsSidebarItem(
-                            icon: "server.rack",
-                            title: "TALKIE SERVER",
-                            isSelected: selectedSection == .server
+                            icon: "iphone",
+                            title: "CONNECTION",
+                            isSelected: selectedSection == .iOS
                         ) {
-                            selectedSection = .server
-                        }
-                        SettingsSidebarItem(
-                            icon: "iphone.gen3.radiowaves.left.and.right",
-                            title: "BRIDGE",
-                            isSelected: selectedSection == .bridge
-                        ) {
-                            selectedSection = .bridge
-                        }
-                        SettingsSidebarItem(
-                            icon: "arrow.up.arrow.down.circle",
-                            title: "GATEWAY",
-                            isSelected: selectedSection == .gateway
-                        ) {
-                            selectedSection = .gateway
+                            selectedSection = .iOS
                         }
                     }
 
                     // SYSTEM
-                    SettingsSidebarSection(title: "SYSTEM", isActive: selectedSection == .helpers || selectedSection == .permissions || selectedSection == .debugInfo || selectedSection == .devControl) {
+                    SettingsSidebarSection(title: "SYSTEM", isActive: selectedSection == .helpers || selectedSection == .server || selectedSection == .permissions || selectedSection == .debugInfo || selectedSection == .devControl) {
                         SettingsSidebarItem(
                             icon: "app.connected.to.app.below.fill",
                             title: "HELPERS",
                             isSelected: selectedSection == .helpers
                         ) {
                             selectedSection = .helpers
+                        }
+                        SettingsSidebarItem(
+                            icon: "server.rack",
+                            title: "SERVER",
+                            isSelected: selectedSection == .server
+                        ) {
+                            selectedSection = .server
                         }
                         SettingsSidebarItem(
                             icon: "lock.shield",
@@ -438,20 +418,16 @@ struct SettingsContentColumn: View {
             DatabaseSettingsView()
         case .files:
             LocalFilesSettingsView()
-        case .cloud:
-            CloudSettingsView()
 
-        // SERVER
-        case .server:
-            ServerSettingsView()
-        case .bridge:
-            BridgeSettingsView()
-        case .gateway:
-            GatewaySettingsView()
+        // iOS
+        case .iOS:
+            iOSSettingsView()
 
         // SYSTEM
         case .helpers:
             HelperAppsSettingsView()
+        case .server:
+            ServerSettingsView()
         case .permissions:
             PermissionsSettingsView()
         case .debugInfo:
