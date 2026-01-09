@@ -39,5 +39,14 @@
 	<string>1</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>TalkieLive needs access to your microphone to capture and transcribe your voice recordings.</string>
+	<key>MachServices</key>
+	<dict>
+		<key>jdi.talkie.live.xpc</key>
+		<true/>
+		<key>jdi.talkie.live.xpc.dev</key>
+		<true/>
+		<key>jdi.talkie.live.xpc.staging</key>
+		<true/>
+	</dict>
 </dict>
 </plist>

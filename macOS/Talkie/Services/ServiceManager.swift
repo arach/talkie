@@ -716,6 +716,12 @@ public final class LiveServiceState: NSObject, TalkieLiveStateObserverProtocol {
             exportedObject: self
         )
 
+        // Auto-launch TalkieLive if XPC connection fails
+        xpcManager?.autoLaunchHandler = {
+            logger.info("[Live] Auto-launching TalkieLive...")
+            ServiceManager.shared.launchLive()
+        }
+
         xpcManager?.$connectionInfo
             .map(\.isConnected)
             .sink { [weak self] connected in

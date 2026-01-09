@@ -5,6 +5,15 @@ import { log } from "../log";
 
 const CLAUDE_PROJECTS_DIR = `${process.env.HOME}/.claude/projects`;
 
+// In-memory cache for metadata to avoid redundant file reads during refresh
+// Cleared at the start of each full refresh
+const metadataCache = new Map<string, { sessionId?: string; cwd?: string; title?: string } | null>();
+
+/** Clear metadata cache (call at start of refresh) */
+export function clearMetadataCache(): void {
+  metadataCache.clear();
+}
+
 export interface ClaudeSession {
   id: string;              // Actual Claude session UUID
   folderName: string;      // Encoded path (e.g., "-Users-arach-dev-talkie")
@@ -162,17 +171,22 @@ function isUUID(str: string): boolean {
 
 /**
  * Extract session metadata from JSONL files in a project directory
- * Checks multiple files since the main UUID.jsonl may not have sessionId
+ * Uses cache to avoid redundant file reads during refresh cycle
  */
 async function extractSessionMetadata(
   projectDir: string,
   transcriptPath: string
 ): Promise<{ sessionId?: string; cwd?: string; title?: string } | null> {
+  // Check cache first
+  const cacheKey = transcriptPath;
+  if (metadataCache.has(cacheKey)) {
+    return metadataCache.get(cacheKey)!;
+  }
+
   try {
     // First check if the transcript filename is a UUID
     const filename = transcriptPath.split('/').pop()?.replace('.jsonl', '') || '';
     if (isUUID(filename)) {
-      log.debug(`[metadata] Filename is UUID: ${filename}`);
       // Try to find cwd from another file in the same directory
       const files = await readdir(projectDir);
       for (const file of files) {
@@ -184,14 +198,17 @@ async function extractSessionMetadata(
           if (firstLine) {
             const entry = JSON.parse(firstLine);
             if (entry.cwd) {
-              log.debug(`[metadata] Found cwd from ${file}: ${entry.cwd}`);
-              return { sessionId: filename, cwd: entry.cwd };
+              const result = { sessionId: filename, cwd: entry.cwd };
+              metadataCache.set(cacheKey, result);
+              return result;
             }
           }
         }
       }
       // No cwd found, just return the UUID
-      return { sessionId: filename, cwd: undefined };
+      const result = { sessionId: filename, cwd: undefined };
+      metadataCache.set(cacheKey, result);
+      return result;
     }
 
     // Otherwise try to extract from the file content
@@ -199,7 +216,7 @@ async function extractSessionMetadata(
     const text = await file.text();
     const firstLine = text.split("\n")[0];
     if (!firstLine) {
-      log.debug(`[metadata] No first line in ${transcriptPath}`);
+      metadataCache.set(cacheKey, null);
       return null;
     }
 
@@ -207,15 +224,10 @@ async function extractSessionMetadata(
     const result = {
       sessionId: entry.sessionId,
       cwd: entry.cwd,
-      title: entry.title || entry.sessionTitle || entry.name, // Check for title fields
+      title: entry.title || entry.sessionTitle || entry.name,
     };
 
-    if (result.sessionId) {
-      log.debug(`[metadata] ${transcriptPath.split('/').pop()}: sessionId=${result.sessionId}, cwd=${result.cwd}, title=${result.title || 'none'}`);
-    } else {
-      log.debug(`[metadata] ${transcriptPath.split('/').pop()}: no sessionId found, keys: ${Object.keys(entry).join(', ')}`);
-    }
-
+    metadataCache.set(cacheKey, result);
     return result;
   } catch (e) {
     log.debug(`[metadata] Error parsing ${transcriptPath}: ${e}`);
@@ -246,6 +258,63 @@ export async function getProjectDirs(): Promise<string[]> {
 /**
  * Discover all Claude sessions from ~/.claude/projects/
  */
+/**
+ * Quick discovery - folder names and mtimes only, no file parsing
+ * Returns in <100ms for instant UI response
+ */
+export async function discoverPathsQuick(): Promise<PathEntry[]> {
+  const paths: PathEntry[] = [];
+  const claudeRunning = await isClaudeRunning();
+  const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+
+  try {
+    const projectFolders = await readdir(CLAUDE_PROJECTS_DIR);
+
+    for (const folder of projectFolders) {
+      const projectDir = join(CLAUDE_PROJECTS_DIR, folder);
+
+      try {
+        const dirStats = await stat(projectDir);
+        if (!dirStats.isDirectory()) continue;
+
+        // Just get most recent file mtime - no parsing
+        const files = await readdir(projectDir);
+        const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"));
+        if (jsonlFiles.length === 0) continue;
+
+        let latestMtime = new Date(0);
+        for (const file of jsonlFiles) {
+          const fileStat = await stat(join(projectDir, file));
+          if (fileStat.mtime > latestMtime) {
+            latestMtime = fileStat.mtime;
+          }
+        }
+
+        const pathStr = folderToPath(folder);
+        const isLive = claudeRunning && latestMtime > thirtyMinutesAgo;
+
+        paths.push({
+          path: pathStr,
+          name: getDisplayName(pathStr),
+          folderName: folder,
+          sessions: [], // Empty - will be filled by full mode
+          lastSeen: latestMtime.toISOString(),
+          isLive,
+        });
+      } catch {
+        continue;
+      }
+    }
+  } catch (err) {
+    log.error(`Quick discovery failed: ${err}`);
+  }
+
+  // Sort by lastSeen descending
+  paths.sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime());
+
+  return paths;
+}
+
 export async function discoverSessions(): Promise<ClaudeSession[]> {
   const sessions: ClaudeSession[] = [];
   const claudeRunning = await isClaudeRunning();
@@ -681,4 +750,56 @@ export async function getSession(
 
   log.debug(`[getSession] Session ${sessionId} not found anywhere`);
   return null;
+}
+
+/**
+ * Parse a single session file and return a ClaudeSession
+ * Used for incremental cache updates
+ */
+export async function parseSessionFile(
+  transcriptPath: string
+): Promise<ClaudeSession | null> {
+  try {
+    const fileStat = await stat(transcriptPath);
+
+    // Extract folder name from path
+    // Path format: ~/.claude/projects/<folder>/<filename>.jsonl
+    const parts = transcriptPath.split("/");
+    const folder = parts[parts.length - 2];
+    const filename = parts[parts.length - 1].replace(".jsonl", "");
+    const projectDir = parts.slice(0, -1).join("/");
+
+    // Get session ID
+    let sessionId: string;
+    if (isUUID(filename)) {
+      sessionId = filename;
+    } else {
+      const metadata = await extractSessionMetadata(projectDir, transcriptPath);
+      sessionId = metadata?.sessionId || filename;
+    }
+
+    // Get metadata
+    const metadata = await extractSessionMetadata(projectDir, transcriptPath);
+    const projectPath = metadata?.cwd || folderToPath(folder);
+
+    // Count messages and check if live
+    const messageCount = await countMessages(transcriptPath);
+    const claudeRunning = await isClaudeRunning();
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+    const isLive = claudeRunning && fileStat.mtime > thirtyMinutesAgo;
+
+    return {
+      id: sessionId,
+      folderName: folder,
+      project: getDisplayName(projectPath),
+      projectPath,
+      isLive,
+      lastSeen: fileStat.mtime.toISOString(),
+      messageCount,
+      transcriptPath,
+    };
+  } catch (err) {
+    log.warn(`[parseSessionFile] Failed to parse ${transcriptPath}: ${err}`);
+    return null;
+  }
 }

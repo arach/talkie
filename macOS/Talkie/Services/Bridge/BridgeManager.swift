@@ -473,6 +473,46 @@ final class BridgeManager {
         }
     }
 
+    /// Remove a paired device
+    func removeDevice(_ deviceId: String) async {
+        do {
+            let url = URL(string: "http://localhost:\(port)/devices/\(deviceId)")!
+            var request = URLRequest(url: url)
+            request.httpMethod = "DELETE"
+
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                throw BridgeError.requestFailed
+            }
+
+            log.info("Removed device: \(deviceId)")
+            await refreshDevices()
+        } catch {
+            log.error("Failed to remove device: \(error)")
+        }
+    }
+
+    /// Remove all paired devices
+    func removeAllDevices() async {
+        do {
+            let url = URL(string: "http://localhost:\(port)/devices")!
+            var request = URLRequest(url: url)
+            request.httpMethod = "DELETE"
+
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                throw BridgeError.requestFailed
+            }
+
+            log.info("Removed all devices")
+            await refreshDevices()
+        } catch {
+            log.error("Failed to remove all devices: \(error)")
+        }
+    }
+
     // MARK: - Private
 
     private func checkTailscaleStatus() async {

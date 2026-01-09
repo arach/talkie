@@ -42,6 +42,7 @@ export interface PathsResponse {
   paths: PathInfo[];
   meta: {
     pathCount: number;
+    totalPaths: number;
     sessionCount: number;
     fromCache: boolean;
     cacheAgeMs: number;
@@ -63,6 +64,7 @@ export interface SessionsResponse {
   sessions: SessionInfo[];
   meta: {
     count: number;
+    total: number;
     fromCache: boolean;
     cacheAgeMs: number;
     syncedAt: string | null;
@@ -88,20 +90,28 @@ export interface SessionMessagesResponse {
 
 /**
  * GET /paths
- * List all paths with their sessions (path-centric view)
+ * List paths with their sessions
+ * @param forceRefresh - Force cache refresh
+ * @param limit - Max paths to return (default 15 for fast initial load)
+ * @param sessionsPerPath - Max sessions per path (default 5)
  */
-export async function pathsRoute(forceRefresh: boolean = false): Promise<PathsResponse> {
-  const paths = await sessionCache.getPaths(forceRefresh);
-  const status = sessionCache.getStatus();
+export async function pathsRoute(
+  forceRefresh: boolean = false,
+  limit: number = 15,
+  sessionsPerPath: number = 5
+): Promise<PathsResponse> {
+  const allPaths = await sessionCache.getPaths(forceRefresh);
+  const paths = allPaths.slice(0, limit);
+  const status = await sessionCache.getStatus();
 
-  const totalSessions = paths.reduce((sum, p) => sum + p.sessions.length, 0);
+  const totalSessions = paths.reduce((sum, p) => sum + Math.min(p.sessions.length, sessionsPerPath), 0);
 
   const response: PathsResponse = {
     paths: paths.map((p) => ({
       path: p.path,
       name: p.name,
       folderName: p.folderName,
-      sessions: p.sessions.map((s) => ({
+      sessions: p.sessions.slice(0, sessionsPerPath).map((s) => ({
         id: s.id,
         lastSeen: s.lastSeen,
         messageCount: s.messageCount,
@@ -114,6 +124,7 @@ export async function pathsRoute(forceRefresh: boolean = false): Promise<PathsRe
     })),
     meta: {
       pathCount: paths.length,
+      totalPaths: allPaths.length, // Total available
       sessionCount: totalSessions,
       fromCache: !forceRefresh && status.state === "polling",
       cacheAgeMs: status.cacheAgeMs,
@@ -136,11 +147,17 @@ export async function pathsRoute(forceRefresh: boolean = false): Promise<PathsRe
 
 /**
  * GET /sessions
- * List all sessions (flat view - legacy)
+ * List sessions (flat view)
+ * @param forceRefresh - Force cache refresh
+ * @param limit - Max sessions to return (default 50 for fast initial load)
  */
-export async function sessionsRoute(forceRefresh: boolean = false): Promise<SessionsResponse> {
-  const sessions = await sessionCache.getSessions(forceRefresh);
-  const status = sessionCache.getStatus();
+export async function sessionsRoute(
+  forceRefresh: boolean = false,
+  limit: number = 50
+): Promise<SessionsResponse> {
+  const allSessions = await sessionCache.getSessions(forceRefresh);
+  const sessions = allSessions.slice(0, limit);
+  const status = await sessionCache.getStatus();
 
   const response: SessionsResponse = {
     sessions: sessions.map((s) => ({
@@ -154,6 +171,7 @@ export async function sessionsRoute(forceRefresh: boolean = false): Promise<Sess
     })),
     meta: {
       count: sessions.length,
+      total: allSessions.length, // Total available
       fromCache: !forceRefresh && status.state === "polling",
       cacheAgeMs: status.cacheAgeMs,
       syncedAt: status.lastRefresh
@@ -163,7 +181,7 @@ export async function sessionsRoute(forceRefresh: boolean = false): Promise<Sess
   };
 
   log.info(
-    `Sessions: ${sessions.length} sessions (cache: ${status.state}, age: ${status.cacheAgeMs}ms)`
+    `Sessions: ${sessions.length}/${allSessions.length} (cache: ${status.state}, age: ${status.cacheAgeMs}ms)`
   );
 
   return response;

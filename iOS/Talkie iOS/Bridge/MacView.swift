@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct MacView: View {
-    @State private var bridgeManager = BridgeManager.shared
+    private var bridgeManager = BridgeManager.shared
     @State private var isRefreshing = false
     @State private var selectedSession: ClaudeSession?
     @State private var showingQRScanner = false

@@ -45,6 +45,24 @@ let allMigrations: [Migration] = [
         return runs.count
     },
 
+    // 003: Backfill lastModified on memos that have it nil.
+    // Without this, memos with nil lastModified trigger sync every launch
+    // because the predicate includes "lastModified == nil".
+    Migration(
+        id: "003_memo_last_modified",
+        description: "Backfill lastModified on memos"
+    ) { context in
+        let request = VoiceMemo.fetchRequest()
+        request.predicate = NSPredicate(format: "lastModified == nil")
+
+        let memos = try context.fetch(request)
+        for memo in memos {
+            // Use createdAt if available, otherwise use now
+            memo.lastModified = memo.createdAt ?? Date()
+        }
+        return memos.count
+    },
+
     // Add new migrations here...
 
 ]

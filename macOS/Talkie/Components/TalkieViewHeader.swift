@@ -11,7 +11,6 @@ import TalkieKit
 
 #if DEBUG
 import DebugKit
-#endif
 
 /// Reusable header for main content views (Memos, Claude, Live, etc.)
 struct TalkieViewHeader<DebugContent: View>: View {
@@ -19,7 +18,6 @@ struct TalkieViewHeader<DebugContent: View>: View {
     let debugInfo: () -> [String: String]
     let debugContent: DebugContent
 
-    #if DEBUG
     init(
         subtitle: String,
         debugInfo: @escaping () -> [String: String] = { [:] },
@@ -39,13 +37,6 @@ struct TalkieViewHeader<DebugContent: View>: View {
         self.debugInfo = debugInfo
         self.debugContent = debugContent()
     }
-    #else
-    init(subtitle: String) {
-        self.subtitle = subtitle
-        self.debugInfo = { [:] }
-        self.debugContent = EmptyView() as! DebugContent
-    }
-    #endif
 
     var body: some View {
         ZStack {
@@ -72,7 +63,6 @@ struct TalkieViewHeader<DebugContent: View>: View {
             )
 
             // Debug button overlay (right side)
-            #if DEBUG
             HStack {
                 Spacer()
                 TalkieDebugToolbar {
@@ -84,13 +74,11 @@ struct TalkieViewHeader<DebugContent: View>: View {
                 }
                 .offset(x: -8, y: 0)
             }
-            #endif
         }
     }
 }
 
 // Convenience init for headers without custom debug content
-#if DEBUG
 extension TalkieViewHeader where DebugContent == EmptyView {
     init(
         subtitle: String,
@@ -101,7 +89,6 @@ extension TalkieViewHeader where DebugContent == EmptyView {
         self.debugContent = EmptyView()
     }
 }
-#endif
 
 #Preview {
     VStack(spacing: 20) {
@@ -116,3 +103,40 @@ extension TalkieViewHeader where DebugContent == EmptyView {
     }
     .frame(width: 800)
 }
+
+#else
+// Release build: simple non-generic version without debug features
+struct TalkieViewHeader: View {
+    let subtitle: String
+
+    init(
+        subtitle: String,
+        debugInfo: (() -> [String: String])? = nil
+    ) {
+        self.subtitle = subtitle
+    }
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Text("TALKIE")
+                .font(.system(size: 18, weight: .black, design: .default))
+                .tracking(-0.5)
+                .foregroundColor(Theme.current.foreground)
+
+            Text(subtitle)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .tracking(0.8)
+                .foregroundColor(Theme.current.foregroundSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 52)
+        .background(Theme.current.background)
+        .overlay(
+            Rectangle()
+                .fill(Theme.current.foregroundSecondary.opacity(0.1))
+                .frame(height: 1),
+            alignment: .bottom
+        )
+    }
+}
+#endif

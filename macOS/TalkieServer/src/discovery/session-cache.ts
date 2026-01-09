@@ -1,164 +1,211 @@
 /**
- * Engagement-Aware Session Cache with Incremental Updates
+ * File-Based Session Cache
  *
- * Polls for session updates while user is actively engaged.
- * Uses `find -newer` to efficiently detect changed files.
- * Goes idle after 5 minutes of no requests to conserve resources.
+ * Principle: The cache is NEVER in the critical path of serving requests.
+ *
+ * - On startup: load existing cache from disk (instant)
+ * - Background worker updates cache periodically
+ * - Requests always read from cache - never wait on any cache operation
  */
 
 import {
   discoverSessions,
   discoverPaths,
+  discoverPathsQuick,
   getSession as getSessionDirect,
+  parseSessionFile,
+  clearMetadataCache,
   type ClaudeSession,
   type PathEntry,
 } from "./sessions";
 import { log } from "../log";
 import { spawn } from "bun";
 import { homedir } from "os";
-import { join } from "path";
+import { join, dirname } from "path";
+import { mkdir } from "fs/promises";
 
-const POLL_INTERVAL_MS = 60_000; // Poll every 60 seconds while engaged
-const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // Go idle after 5 minutes
+// Cache location
+const CACHE_DIR = join(homedir(), ".talkie", "cache");
+const PATHS_FILE = join(CACHE_DIR, "paths.json");
+const SESSIONS_FILE = join(CACHE_DIR, "sessions.json");
+const META_FILE = join(CACHE_DIR, "meta.json");
+const TIMESTAMP_FILE = join(CACHE_DIR, ".last-build");
+
+// Timing
+const POLL_INTERVAL_MS = 60_000; // Check for changes every 60 seconds
 const CLAUDE_PROJECTS_DIR = join(homedir(), ".claude", "projects");
-const TIMESTAMP_FILE = "/tmp/talkie-cache-check";
 
-type CacheState = "idle" | "polling";
+interface CacheMeta {
+  lastBuild: string;
+  sessionCount: number;
+  pathCount: number;
+}
 
-class EngagementAwareCache {
-  private state: CacheState = "idle";
-  private cache: ClaudeSession[] = [];
-  private pathsCache: PathEntry[] = [];
-  private lastRefresh = 0;
-  private lastRequest = 0;
+/**
+ * Background cache builder - completely separate from request handling
+ */
+class CacheBuilder {
+  private building = false;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
 
   /**
-   * Get all sessions. Fast path returns from cache.
-   * @param forceRefresh - If true, bypasses cache entirely (deep sync)
+   * Ensure cache directory exists
    */
-  async getSessions(forceRefresh = false): Promise<ClaudeSession[]> {
-    this.touch();
-
-    if (forceRefresh) {
-      log.info("Deep sync: forcing full rescan");
-      await this.fullRefresh();
-      return this.cache;
-    }
-
-    // If cache is empty (cold start), do initial scan
-    if (this.cache.length === 0) {
-      await this.fullRefresh();
-    }
-
-    return this.cache;
+  async ensureDir(): Promise<void> {
+    await mkdir(CACHE_DIR, { recursive: true });
   }
 
   /**
-   * Get all paths with their sessions (path-centric view)
-   * @param forceRefresh - If true, bypasses cache entirely (deep sync)
+   * Load existing cache from disk (for serving)
+   * Returns true if cache exists
    */
-  async getPaths(forceRefresh = false): Promise<PathEntry[]> {
-    this.touch();
-
-    if (forceRefresh) {
-      log.info("Deep sync: forcing full rescan (paths)");
-      await this.fullRefresh();
-      return this.pathsCache;
-    }
-
-    // If cache is empty (cold start), do initial scan
-    if (this.pathsCache.length === 0) {
-      await this.fullRefresh();
-    }
-
-    return this.pathsCache;
-  }
-
-  /**
-   * Get a single session by ID
-   * Tries cache first, then falls back to direct lookup
-   * @param forceRefresh - If true, bypasses cache entirely
-   */
-  async getSession(
-    id: string,
-    forceRefresh = false
-  ): Promise<ClaudeSession | null> {
-    if (forceRefresh) {
-      // For single session deep refresh, just fetch that one directly
-      return getSessionDirect(id);
-    }
-
-    const sessions = await this.getSessions();
-
-    // Try exact match first
-    let session = sessions.find((s) => s.id === id);
-    if (session) return session;
-
-    // Try matching by folder name (in case ID format differs)
-    session = sessions.find((s) => s.folderName === id);
-    if (session) {
-      log.debug(`Session found by folderName fallback: ${id}`);
-      return session;
-    }
-
-    // Last resort: try direct lookup (bypasses cache)
-    log.debug(`Session not in cache, trying direct lookup: ${id}`);
-    const directSession = await getSessionDirect(id);
-    if (directSession) {
-      log.info(`Session found via direct lookup: ${id}`);
-    }
-    return directSession;
-  }
-
-  /**
-   * Record a request (keeps polling alive)
-   */
-  private touch(): void {
-    this.lastRequest = Date.now();
-
-    if (this.state === "idle") {
-      this.startPolling();
-    }
-  }
-
-  /**
-   * Full cache refresh - walks everything
-   */
-  private async fullRefresh(): Promise<void> {
+  async loadFromDisk(): Promise<boolean> {
     try {
-      const start = Date.now();
-      // Refresh both caches in parallel
+      const exists = await Bun.file(PATHS_FILE).exists();
+      if (!exists) {
+        log.info("Cache: no existing cache on disk");
+        return false;
+      }
+
+      const meta = await Bun.file(META_FILE).json() as CacheMeta;
+      log.info(`Cache: loaded from disk (${meta.pathCount} paths, ${meta.sessionCount} sessions, built ${meta.lastBuild})`);
+      return true;
+    } catch (err) {
+      log.warn(`Cache: failed to load from disk: ${err}`);
+      return false;
+    }
+  }
+
+  /**
+   * Quick build - folder names only, top 10 by mtime
+   * Used for cold start when no cache exists
+   */
+  async quickBuild(): Promise<void> {
+    const start = Date.now();
+    try {
+      const paths = await discoverPathsQuick();
+      // Take top 10 by lastSeen
+      const topPaths = paths.slice(0, 10);
+
+      await this.saveCache(topPaths, []);
+      log.info(`Cache: quick build done (${topPaths.length} paths in ${Date.now() - start}ms)`);
+    } catch (err) {
+      log.error(`Cache: quick build failed: ${err}`);
+    }
+  }
+
+  /**
+   * Full build - scans everything
+   * Called on cold start or when forced
+   */
+  async fullBuild(): Promise<void> {
+    if (this.building) {
+      log.debug("Cache: build already in progress, skipping");
+      return;
+    }
+
+    this.building = true;
+    const start = Date.now();
+
+    try {
+      clearMetadataCache();
       const [sessions, paths] = await Promise.all([
         discoverSessions(),
         discoverPaths(),
       ]);
-      this.cache = sessions;
-      this.pathsCache = paths;
-      this.lastRefresh = Date.now();
 
-      const totalSessions = paths.reduce((sum, p) => sum + p.sessions.length, 0);
-      log.debug(
-        `Cache refresh: ${paths.length} paths, ${totalSessions} sessions in ${Date.now() - start}ms`
-      );
+      await this.saveCache(paths, sessions);
+      await this.touchTimestamp();
+
+      const elapsed = Date.now() - start;
+      log.info(`Cache: full build done (${paths.length} paths, ${sessions.length} sessions in ${elapsed}ms)`);
     } catch (err) {
-      log.error(`Session refresh failed: ${err}`);
+      log.error(`Cache: full build failed: ${err}`);
+    } finally {
+      this.building = false;
     }
   }
 
   /**
-   * Check for changes using `find -newer` (efficient shell command)
-   * Returns true if any .jsonl files were modified since last check
+   * Incremental build - only re-parse changed files
    */
-  private async hasChanges(): Promise<boolean> {
+  async incrementalBuild(): Promise<void> {
+    if (this.building) return;
+
+    const changedFiles = await this.getChangedFiles();
+    if (changedFiles.length === 0) return;
+
+    this.building = true;
+    const start = Date.now();
+
     try {
-      // First check - no timestamp file exists, need full refresh
-      const timestampExists = await Bun.file(TIMESTAMP_FILE).exists();
-      if (!timestampExists) {
-        return true;
+      // Load current cache
+      const paths = await this.loadPaths();
+      const sessions = await this.loadSessions();
+
+      // Parse only changed files
+      for (const filePath of changedFiles) {
+        try {
+          const session = await parseSessionFile(filePath);
+          if (!session) continue;
+
+          // Update sessions array
+          const sessionIdx = sessions.findIndex((s) => s.id === session.id);
+          if (sessionIdx >= 0) {
+            sessions[sessionIdx] = session;
+          } else {
+            sessions.push(session);
+          }
+
+          // Update paths array
+          const pathEntry = paths.find((p) => p.folderName === session.folderName);
+          if (pathEntry) {
+            const pathSessionIdx = pathEntry.sessions.findIndex((s) => s.id === session.id);
+            if (pathSessionIdx >= 0) {
+              pathEntry.sessions[pathSessionIdx] = session;
+            } else {
+              pathEntry.sessions.push(session);
+            }
+            // Update path lastSeen
+            if (new Date(session.lastSeen) > new Date(pathEntry.lastSeen)) {
+              pathEntry.lastSeen = session.lastSeen;
+            }
+          }
+        } catch (err) {
+          log.warn(`Cache: failed to parse ${filePath}: ${err}`);
+        }
       }
 
-      // Use find -newer to check for modified files
+      // Re-sort sessions by lastSeen
+      sessions.sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime());
+
+      // Re-sort paths by lastSeen
+      paths.sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime());
+
+      await this.saveCache(paths, sessions);
+      await this.touchTimestamp();
+
+      log.info(`Cache: incremental build done (${changedFiles.length} files in ${Date.now() - start}ms)`);
+    } catch (err) {
+      log.error(`Cache: incremental build failed: ${err}`);
+    } finally {
+      this.building = false;
+    }
+  }
+
+  /**
+   * Get list of files changed since last build
+   */
+  private async getChangedFiles(): Promise<string[]> {
+    try {
+      const timestampExists = await Bun.file(TIMESTAMP_FILE).exists();
+      if (!timestampExists) {
+        // No timestamp means we need a full build
+        log.debug("Cache: no timestamp file, triggering full build");
+        this.fullBuild(); // fire and forget
+        return [];
+      }
+
       const proc = spawn({
         cmd: [
           "find", CLAUDE_PROJECTS_DIR,
@@ -171,22 +218,66 @@ class EngagementAwareCache {
       });
 
       const output = await new Response(proc.stdout).text();
-      const changedFiles = output.trim().split("\n").filter(Boolean);
+      const files = output.trim().split("\n").filter(Boolean);
 
-      if (changedFiles.length > 0) {
-        log.debug(`Found ${changedFiles.length} changed files`);
-        return true;
+      if (files.length > 0) {
+        log.debug(`Cache: ${files.length} changed files detected`);
       }
 
-      return false;
+      return files;
     } catch (err) {
-      log.warn(`Change detection failed: ${err}`);
-      return true; // Assume changes on error
+      log.warn(`Cache: change detection failed: ${err}`);
+      return [];
     }
   }
 
   /**
-   * Update timestamp file after successful refresh
+   * Load paths from cache file
+   */
+  private async loadPaths(): Promise<PathEntry[]> {
+    try {
+      const exists = await Bun.file(PATHS_FILE).exists();
+      if (!exists) return [];
+      return await Bun.file(PATHS_FILE).json() as PathEntry[];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Load sessions from cache file
+   */
+  private async loadSessions(): Promise<ClaudeSession[]> {
+    try {
+      const exists = await Bun.file(SESSIONS_FILE).exists();
+      if (!exists) return [];
+      return await Bun.file(SESSIONS_FILE).json() as ClaudeSession[];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Save cache to disk
+   */
+  private async saveCache(paths: PathEntry[], sessions: ClaudeSession[]): Promise<void> {
+    await this.ensureDir();
+
+    const meta: CacheMeta = {
+      lastBuild: new Date().toISOString(),
+      pathCount: paths.length,
+      sessionCount: sessions.length,
+    };
+
+    await Promise.all([
+      Bun.write(PATHS_FILE, JSON.stringify(paths)),
+      Bun.write(SESSIONS_FILE, JSON.stringify(sessions)),
+      Bun.write(META_FILE, JSON.stringify(meta)),
+    ]);
+  }
+
+  /**
+   * Update timestamp file after successful build
    */
   private async touchTimestamp(): Promise<void> {
     try {
@@ -197,87 +288,186 @@ class EngagementAwareCache {
   }
 
   /**
-   * Incremental refresh - only refresh if files changed
+   * Start periodic refresh
    */
-  private async incrementalRefresh(): Promise<void> {
-    const hasChanges = await this.hasChanges();
+  startPolling(): void {
+    if (this.pollTimer) return;
 
-    if (hasChanges) {
-      await this.fullRefresh();
-      await this.touchTimestamp();
-    }
-    // Silent when no changes - no logging spam
-  }
-
-  /**
-   * Start polling for updates
-   * Note: Does NOT do initial refresh - callers handle that with await
-   */
-  private startPolling(): void {
-    if (this.state === "polling") return;
-
-    this.state = "polling";
-    log.info("Engagement: active, starting session polling");
-
-    // Poll periodically (incremental) - first poll after interval
-    // Initial data load is handled by callers with proper await
-    this.pollTimer = setInterval(async () => {
-      // Check for idle timeout
-      if (Date.now() - this.lastRequest > IDLE_TIMEOUT_MS) {
-        this.stopPolling();
-        return;
-      }
-
-      await this.incrementalRefresh();
+    log.info("Cache: polling started");
+    this.pollTimer = setInterval(() => {
+      this.incrementalBuild();
     }, POLL_INTERVAL_MS);
   }
 
   /**
-   * Stop polling and clear cache
+   * Stop polling
    */
-  private stopPolling(): void {
-    if (this.state === "idle") return;
-
-    this.state = "idle";
-    log.info("Engagement: idle, stopping session polling");
-
+  stopPolling(): void {
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
+      log.info("Cache: polling stopped");
     }
-
-    // Clear caches to free memory
-    this.cache = [];
-    this.pathsCache = [];
-    this.lastRefresh = 0;
   }
 
   /**
-   * Get cache metadata for debugging/UI
+   * Get build status
    */
-  getStatus(): {
-    state: CacheState;
+  getStatus(): { building: boolean; polling: boolean } {
+    return {
+      building: this.building,
+      polling: this.pollTimer !== null,
+    };
+  }
+}
+
+/**
+ * Cache reader - serves requests from cache files
+ * Never waits on cache builder
+ */
+class CacheReader {
+  /**
+   * Get paths - reads from cache file
+   */
+  async getPaths(): Promise<PathEntry[]> {
+    try {
+      const exists = await Bun.file(PATHS_FILE).exists();
+      if (!exists) return [];
+      return await Bun.file(PATHS_FILE).json() as PathEntry[];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Get sessions - reads from cache file
+   */
+  async getSessions(): Promise<ClaudeSession[]> {
+    try {
+      const exists = await Bun.file(SESSIONS_FILE).exists();
+      if (!exists) return [];
+      return await Bun.file(SESSIONS_FILE).json() as ClaudeSession[];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Get cache metadata
+   */
+  async getMeta(): Promise<CacheMeta | null> {
+    try {
+      const exists = await Bun.file(META_FILE).exists();
+      if (!exists) return null;
+      return await Bun.file(META_FILE).json() as CacheMeta;
+    } catch {
+      return null;
+    }
+  }
+}
+
+// Singletons
+const builder = new CacheBuilder();
+const reader = new CacheReader();
+
+/**
+ * Session cache - public API
+ * Combines builder and reader with simple interface
+ */
+export const sessionCache = {
+  /**
+   * Initialize cache on server startup
+   */
+  async warmup(): Promise<void> {
+    await builder.ensureDir();
+
+    const hasCache = await builder.loadFromDisk();
+
+    if (hasCache) {
+      // Cache exists - serve immediately, refresh in background
+      builder.incrementalBuild(); // fire and forget
+    } else {
+      // Cold start - quick build, then full in background
+      await builder.quickBuild();
+      builder.fullBuild(); // fire and forget
+    }
+
+    builder.startPolling();
+  },
+
+  /**
+   * Get paths - always returns immediately from cache
+   * @param forceRefresh - if true, schedules a rebuild (but still returns cached data)
+   */
+  async getPaths(forceRefresh = false): Promise<PathEntry[]> {
+    if (forceRefresh) {
+      builder.fullBuild(); // fire and forget
+    }
+    return reader.getPaths();
+  },
+
+  /**
+   * Get sessions - always returns immediately from cache
+   * @param forceRefresh - if true, schedules a rebuild (but still returns cached data)
+   */
+  async getSessions(forceRefresh = false): Promise<ClaudeSession[]> {
+    if (forceRefresh) {
+      builder.fullBuild(); // fire and forget
+    }
+    return reader.getSessions();
+  },
+
+  /**
+   * Get single session by ID
+   */
+  async getSession(id: string, forceRefresh = false): Promise<ClaudeSession | null> {
+    if (forceRefresh) {
+      // For single session, go direct
+      return getSessionDirect(id);
+    }
+
+    const sessions = await reader.getSessions();
+
+    // Try exact match
+    let session = sessions.find((s) => s.id === id);
+    if (session) return session;
+
+    // Try folderName match
+    session = sessions.find((s) => s.folderName === id);
+    if (session) return session;
+
+    // Fallback to direct lookup
+    return getSessionDirect(id);
+  },
+
+  /**
+   * Get cache status
+   */
+  async getStatus(): Promise<{
+    state: string;
     sessionCount: number;
     pathCount: number;
     lastRefresh: number;
     cacheAgeMs: number;
-  } {
+    isRefreshing: boolean;
+  }> {
+    const meta = await reader.getMeta();
+    const builderStatus = builder.getStatus();
+
     return {
-      state: this.state,
-      sessionCount: this.cache.length,
-      pathCount: this.pathsCache.length,
-      lastRefresh: this.lastRefresh,
-      cacheAgeMs: this.lastRefresh ? Date.now() - this.lastRefresh : -1,
+      state: builderStatus.polling ? "polling" : "idle",
+      sessionCount: meta?.sessionCount ?? 0,
+      pathCount: meta?.pathCount ?? 0,
+      lastRefresh: meta ? new Date(meta.lastBuild).getTime() : 0,
+      cacheAgeMs: meta ? Date.now() - new Date(meta.lastBuild).getTime() : -1,
+      isRefreshing: builderStatus.building,
     };
-  }
+  },
 
   /**
-   * Clean shutdown
+   * Shutdown - stop polling
    */
   shutdown(): void {
-    this.stopPolling();
-  }
-}
-
-// Singleton export
-export const sessionCache = new EngagementAwareCache();
+    builder.stopPolling();
+  },
+};

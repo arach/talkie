@@ -64,6 +64,18 @@ export interface PairRejectResponse {
 
 // ===== Handlers =====
 
+// Auto-approve setting (can be disabled via --require-approval flag)
+let autoApproveEnabled = true;
+
+export function setAutoApprove(enabled: boolean): void {
+  autoApproveEnabled = enabled;
+  log.info(`Pairing auto-approve: ${enabled ? "enabled" : "disabled"}`);
+}
+
+export function isAutoApproveEnabled(): boolean {
+  return autoApproveEnabled;
+}
+
 /**
  * POST /pair
  * iOS device requests pairing
@@ -82,14 +94,18 @@ export async function pairRoute(body: PairRequest): Promise<PairResponse> {
   // Add to pending pairings
   addPendingPairing(body.deviceId, body.name, body.publicKey);
 
-  // Auto-approve for now (TODO: proper approval UI on Mac)
-  const device = await approvePairing(body.deviceId);
-  if (device) {
-    log.info(`Auto-approved device: ${device.name}`);
-    return {
-      status: "approved",
-      message: "Device paired successfully",
-    };
+  // Auto-approve if enabled
+  if (autoApproveEnabled) {
+    const device = await approvePairing(body.deviceId);
+    if (device) {
+      log.info(`Auto-approved device: ${device.name}`);
+      return {
+        status: "approved",
+        message: "Device paired successfully",
+      };
+    }
+  } else {
+    log.info(`Pairing pending approval for: ${body.name}`);
   }
 
   return {

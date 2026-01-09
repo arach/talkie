@@ -45,8 +45,10 @@ struct VoiceMemoListView: View {
     @EnvironmentObject var deepLinkManager: DeepLinkManager
     @ObservedObject var themeManager = ThemeManager.shared
     @ObservedObject var iCloudStatus = iCloudStatusManager.shared
-    @State private var bridgeManager = BridgeManager.shared
+    private var bridgeManager = BridgeManager.shared
     @State private var showingMacView = false
+    @State private var macButtonVisible = false
+    @State private var justPaired = false
 
     @FetchRequest(
         sortDescriptors: [
@@ -395,18 +397,63 @@ struct VoiceMemoListView: View {
 
                                 Spacer()
 
-                                // Mac button (right) - only show when paired
-                                if bridgeManager.isPaired {
-                                    BottomCircleButton(
-                                        icon: "desktopcomputer",
-                                        isActive: bridgeManager.status == .connected
-                                    ) {
-                                        showingMacView = true
+                                // Mac button (right) - animates in when paired
+                                ZStack {
+                                    if macButtonVisible {
+                                        BottomCircleButton(
+                                            icon: "desktopcomputer",
+                                            isActive: bridgeManager.status == .connected
+                                        ) {
+                                            showingMacView = true
+                                        }
+                                        .transition(.asymmetric(
+                                            insertion: .scale.combined(with: .opacity),
+                                            removal: .opacity
+                                        ))
+                                        .onAppear {
+                                            if justPaired {
+                                                // Celebration haptic for newly paired
+                                                let generator = UINotificationFeedbackGenerator()
+                                                generator.notificationOccurred(.success)
+                                                justPaired = false
+                                            }
+                                        }
+                                    } else {
+                                        // Invisible placeholder to keep record button centered
+                                        Color.clear
+                                            .frame(width: 44, height: 44)
                                     }
-                                } else {
-                                    // Invisible placeholder to keep record button centered
-                                    Color.clear
-                                        .frame(width: 44, height: 44)
+                                }
+                                .frame(width: 44, height: 44)
+                                .onAppear {
+                                    // Check if we just completed pairing (from another view)
+                                    if bridgeManager.justCompletedPairing {
+                                        bridgeManager.justCompletedPairing = false
+                                        justPaired = true
+                                        // Slight delay so the view has time to appear first
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                            withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) {
+                                                macButtonVisible = true
+                                            }
+                                        }
+                                    } else {
+                                        // Initialize visibility without animation
+                                        macButtonVisible = bridgeManager.isPaired
+                                    }
+                                }
+                                .onChange(of: bridgeManager.isPaired) { wasPaired, isPaired in
+                                    if isPaired && !wasPaired {
+                                        // Just paired while on this view - animate in
+                                        justPaired = true
+                                        withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) {
+                                            macButtonVisible = true
+                                        }
+                                    } else if !isPaired && wasPaired {
+                                        // Unpaired - fade out
+                                        withAnimation(.easeOut(duration: 0.2)) {
+                                            macButtonVisible = false
+                                        }
+                                    }
                                 }
                             }
                             .padding(.horizontal, Spacing.md)

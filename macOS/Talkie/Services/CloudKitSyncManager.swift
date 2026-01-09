@@ -886,12 +886,19 @@ class CloudKitSyncManager {
                 let cdMemos = try context.fetch(fetchRequest)
                 if cdMemos.isEmpty {
                     if fullSync {
-                        log.info("🌉 [Bridge 1] Full sync: no memos in CoreData")
+                        log.debug("🌉 [Bridge 1] Full sync: no memos in CoreData")
                     }
                     return []
                 }
-                let syncType = fullSync ? "FULL sync" : "incremental sync"
-                log.info("🌉 [Bridge 1] \(syncType): \(cdMemos.count) memo(s)")
+
+                // Only log at INFO if there are a meaningful number of memos to sync
+                // Debug mode gets per-memo details, INFO just gets summary
+                let syncType = fullSync ? "FULL sync" : "incremental"
+                if cdMemos.count > 10 {
+                    log.debug("🌉 [Bridge 1] \(syncType): checking \(cdMemos.count) memo(s)")
+                } else {
+                    log.info("🌉 [Bridge 1] \(syncType): \(cdMemos.count) memo(s)")
+                }
 
                 // Convert all memos to MemoModel while still on context queue
                 var models: [MemoModel] = []
@@ -930,22 +937,22 @@ class CloudKitSyncManager {
                         if let existing = existingMemo {
                             // Skip soft-deleted memos - respect local deletion
                             if existing.memo.deletedAt != nil {
-                                log.info("⏭️ [Bridge 1] Skipping soft-deleted memo: '\(memoModel.title ?? "Untitled")'")
+                                log.debug("⏭️ [Bridge 1] Skipping soft-deleted memo: '\(memoModel.title ?? "Untitled")'")
                                 return (0, 0, 0)
                             }
 
                             // Compare timestamps - Core Data wins (source of truth from phone)
                             if memoModel.lastModified > existing.memo.lastModified {
-                                log.info("🌉 [Bridge 1] Updating memo: '\(memoModel.title ?? "Untitled")'")
+                                log.debug("🌉 [Bridge 1] Updating memo: '\(memoModel.title ?? "Untitled")'")
                                 try await repository.saveMemo(memoModel)
                                 return (0, 1, 0)
                             } else {
-                                log.info("⏭️ [Bridge 1] Skipping memo (GRDB is newer): '\(memoModel.title ?? "Untitled")'")
+                                // Already synced - skip silently (most common case)
                                 return (0, 0, 0)
                             }
                         } else {
                             // New memo - create in GRDB
-                            log.info("🌉 [Bridge 1] Creating new memo in GRDB: '\(memoModel.title ?? "Untitled")'")
+                            log.debug("🌉 [Bridge 1] Creating new memo in GRDB: '\(memoModel.title ?? "Untitled")'")
                             try await repository.saveMemo(memoModel)
                             return (1, 0, 0)
                         }
@@ -982,7 +989,7 @@ class CloudKitSyncManager {
         // Convert sort order (Core Data uses Int32, GRDB uses Int)
         let sortOrder = Int(cdMemo.sortOrder)
 
-        log.info("🔄 [Bridge 1] Converting memo: '\(cdMemo.title ?? "Untitled")' (id: \(id))")
+        log.debug("🔄 [Bridge 1] Converting memo: '\(cdMemo.title ?? "Untitled")' (id: \(id))")
 
         return MemoModel(
             id: id,

@@ -17,9 +17,12 @@ import { spawn } from "bun";
 // ===== Types =====
 
 export interface MessageBody {
-  message: string;
+  message?: string;
   projectDir?: string;
   sessionId?: string;  // For legacy /inject route
+  // Audio message fields
+  audio?: string;      // Base64 encoded audio
+  format?: string;     // "m4a", "wav", etc.
 }
 
 export interface MessageResponse {
@@ -36,6 +39,7 @@ export interface MessageResponse {
 // ===== Config =====
 
 const TALKIE_SERVER_PORT = 8766;
+const TALKIE_SERVER_HOST = "127.0.0.1";  // Use IPv4 explicitly to avoid IPv6 resolution issues
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 500;
 const FETCH_TIMEOUT_MS = 30000;
@@ -65,7 +69,7 @@ async function isTalkieAvailable(): Promise<boolean> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
     const start = Date.now();
-    const response = await fetch(`http://localhost:${TALKIE_SERVER_PORT}/health`, {
+    const response = await fetch(`http://${TALKIE_SERVER_HOST}:${TALKIE_SERVER_PORT}/health`, {
       signal: controller.signal,
     });
     clearTimeout(timeout);
@@ -256,7 +260,62 @@ export async function sendMessageRoute(
     return badRequest("sessionId is required");
   }
 
-  const messageText = body.message;
+  // Handle audio messages - forward to Swift Talkie server (has Parakeet transcription)
+  if (body.audio) {
+    log.info(`Audio message received: ${body.audio.length} chars base64, format: ${body.format}`);
+
+    const session = await getSession(resolvedSessionId);
+    const projectPath = body.projectDir || session?.projectPath;
+
+    try {
+      const payload = {
+        sessionId: resolvedSessionId,
+        projectPath,
+        audio: body.audio,
+        format: body.format || "m4a",
+      };
+
+      const response = await fetchWithRetry(`http://${TALKIE_SERVER_HOST}:${TALKIE_SERVER_PORT}/message`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({})) as { error?: string };
+        log.error(`Talkie audio error: ${response.status}: ${JSON.stringify(errorBody)}`);
+        return Response.json({
+          success: false,
+          error: errorBody.error || `Talkie returned ${response.status}`,
+          mode: "ui",
+          modeReason: "audio via Talkie",
+          screenLocked: false,
+        });
+      }
+
+      const result = await response.json() as Record<string, unknown>;
+      log.info(`Audio transcribed and sent: ${JSON.stringify(result)}`);
+
+      return Response.json({
+        ...result,
+        success: true,
+        mode: "ui",
+        modeReason: "audio via Talkie/Parakeet",
+        screenLocked: false,
+      });
+    } catch (error) {
+      log.error(`Could not send audio to Talkie: ${error}`);
+      return Response.json({
+        success: false,
+        error: `Could not connect to Talkie for transcription: ${error}`,
+        mode: "ui",
+        modeReason: "Talkie unavailable",
+        screenLocked: false,
+      });
+    }
+  }
+
+  const messageText = body.message || "";
   const session = await getSession(resolvedSessionId);
   const projectPath = body.projectDir || session?.projectPath;
 
@@ -301,7 +360,7 @@ export async function sendMessageRoute(
     const jsonPayload = JSON.stringify(payload);
     log.info(`Sending to TalkieServer: ${jsonPayload.length} bytes`);
 
-    const response = await fetchWithRetry(`http://localhost:${TALKIE_SERVER_PORT}/message`, {
+    const response = await fetchWithRetry(`http://${TALKIE_SERVER_HOST}:${TALKIE_SERVER_PORT}/message`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: jsonPayload,
@@ -343,8 +402,8 @@ export async function sendMessageRoute(
   } catch (error) {
     log.error(`Could not connect to TalkieServer: ${error}`);
     return serviceUnavailable(
-      `Could not connect to TalkieServer: ${error}`,
-      "Is Talkie running with Bridge enabled?"
+      `Could not connect to Talkie Bridge (port 8766): ${error}`,
+      `Troubleshooting:\n1. Is Talkie running? Check for Talkie icon in menu bar\n2. Is Bridge enabled? Settings → iOS Bridge → Enable\n3. If Talkie was just restarted, wait a few seconds\n4. Try: Restart Talkie from menu bar`
     );
   }
 }

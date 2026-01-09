@@ -97,7 +97,7 @@ enum ConnectionRowStatus: Equatable {
 
 struct ConnectionCenterView: View {
     @ObservedObject private var iCloudStatus = iCloudStatusManager.shared
-    @State private var bridgeManager = BridgeManager.shared
+    private var bridgeManager = BridgeManager.shared
     @AppStorage(SyncSettingsKey.iCloudEnabled) private var iCloudEnabled = true
     @Environment(\.dismiss) private var dismiss
 

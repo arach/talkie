@@ -748,6 +748,7 @@ struct SettingsPageView<Content: View>: View {
         icon: String,
         title: String,
         subtitle: String,
+        debugInfo: (() -> [String: String])? = nil,  // Accept but ignore in release
         @ViewBuilder content: () -> Content
     ) {
         self.icon = icon

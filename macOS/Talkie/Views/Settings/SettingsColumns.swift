@@ -198,8 +198,8 @@ struct SettingsSidebarColumn: View {
                     // APPEARANCE
                     SettingsSidebarSection(title: "APPEARANCE", isActive: selectedSection == .appearance) {
                         SettingsSidebarItem(
-                            icon: "moon.stars",
-                            title: "THEME & COLORS",
+                            icon: "paintbrush",
+                            title: "APPEARANCE",
                             isSelected: selectedSection == .appearance
                         ) {
                             selectedSection = .appearance

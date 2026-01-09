@@ -72,7 +72,9 @@ struct iOSSettingsView: View {
                     PairedDevicesSection(
                         devices: bridgeManager.pairedDevices,
                         serverRunning: bridgeManager.bridgeStatus == .running,
-                        onShowQR: { showingQRSheet = true }
+                        onShowQR: { showingQRSheet = true },
+                        onRemoveDevice: { id in Task { await bridgeManager.removeDevice(id) } },
+                        onRemoveAll: { Task { await bridgeManager.removeAllDevices() } }
                     )
                 }
 
@@ -400,6 +402,7 @@ private struct SyncDetailsView: View {
     let onShowHistory: () -> Void
     @State private var syncManager = CloudKitSyncManager.shared
     @State private var showingSyncHistory = false
+    @State private var selectedEvent: SyncEvent? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -412,7 +415,10 @@ private struct SyncDetailsView: View {
                 Spacer()
 
                 // Nice button for full sync history
-                Button(action: { showingSyncHistory = true }) {
+                Button(action: {
+                    selectedEvent = nil
+                    showingSyncHistory = true
+                }) {
                     HStack(spacing: 4) {
                         Image(systemName: "clock.arrow.circlepath")
                             .font(.system(size: 9))
@@ -433,7 +439,10 @@ private struct SyncDetailsView: View {
             if !recentEvents.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(recentEvents) { event in
-                        SyncActivityRow(event: event, onTap: { showingSyncHistory = true })
+                        SyncActivityRow(event: event, onTap: {
+                            selectedEvent = event
+                            showingSyncHistory = true
+                        })
                         if event.id != recentEvents.last?.id {
                             Divider()
                                 .background(Theme.current.divider.opacity(0.5))
@@ -461,7 +470,7 @@ private struct SyncDetailsView: View {
         .background(Theme.current.surface1.opacity(0.5))
         .cornerRadius(6)
         .sheet(isPresented: $showingSyncHistory) {
-            SyncHistorySheet()
+            SyncHistorySheet(initialEvent: selectedEvent)
         }
     }
 }
@@ -760,6 +769,11 @@ private struct PairedDevicesSection: View {
     let devices: [BridgeManager.PairedDevice]
     let serverRunning: Bool
     let onShowQR: () -> Void
+    let onRemoveDevice: (String) -> Void
+    let onRemoveAll: () -> Void
+
+    @State private var deviceToRemove: BridgeManager.PairedDevice?
+    @State private var showRemoveAllConfirm = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -778,6 +792,15 @@ private struct PairedDevicesSection: View {
                 }
 
                 Spacer()
+
+                if devices.count > 1 {
+                    Button(action: { showRemoveAllConfirm = true }) {
+                        Text("Remove All")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(.red.opacity(0.8))
+                    }
+                    .buttonStyle(.plain)
+                }
 
                 if serverRunning {
                     Button(action: onShowQR) {
@@ -824,33 +847,85 @@ private struct PairedDevicesSection: View {
                 .cornerRadius(8)
             } else {
                 ForEach(devices) { device in
-                    HStack(spacing: 12) {
-                        Image(systemName: "iphone")
-                            .font(.system(size: 20))
-                            .foregroundColor(.green)
-                            .frame(width: 36, height: 36)
-                            .background(Color.green.opacity(0.15))
-                            .cornerRadius(8)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(device.name)
-                                .font(Theme.current.fontSMMedium)
-                                .foregroundColor(Theme.current.foreground)
-                            Text("Paired \(formatDate(device.pairedAt))")
-                                .font(Theme.current.fontXS)
-                                .foregroundColor(Theme.current.foregroundSecondary)
-                        }
-
-                        Spacer()
-
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(Theme.current.fontSM)
-                            .foregroundColor(.green)
-                    }
-                    .padding(10)
-                    .background(Theme.current.surface1)
-                    .cornerRadius(8)
+                    PairedDeviceRow(
+                        device: device,
+                        onRemove: { deviceToRemove = device }
+                    )
                 }
+            }
+        }
+        .alert("Remove Device?", isPresented: .init(
+            get: { deviceToRemove != nil },
+            set: { if !$0 { deviceToRemove = nil } }
+        )) {
+            Button("Cancel", role: .cancel) { deviceToRemove = nil }
+            Button("Remove", role: .destructive) {
+                if let device = deviceToRemove {
+                    onRemoveDevice(device.id)
+                }
+                deviceToRemove = nil
+            }
+        } message: {
+            if let device = deviceToRemove {
+                Text("Remove \"\(device.name)\" from paired devices? They will need to scan the QR code again to reconnect.")
+            }
+        }
+        .alert("Remove All Devices?", isPresented: $showRemoveAllConfirm) {
+            Button("Cancel", role: .cancel) { }
+            Button("Remove All", role: .destructive) {
+                onRemoveAll()
+            }
+        } message: {
+            Text("Remove all \(devices.count) paired devices? They will need to scan the QR code again to reconnect.")
+        }
+    }
+}
+
+private struct PairedDeviceRow: View {
+    let device: BridgeManager.PairedDevice
+    let onRemove: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "iphone")
+                .font(.system(size: 20))
+                .foregroundColor(.green)
+                .frame(width: 36, height: 36)
+                .background(Color.green.opacity(0.15))
+                .cornerRadius(8)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(device.name)
+                    .font(Theme.current.fontSMMedium)
+                    .foregroundColor(Theme.current.foreground)
+                Text("Paired \(formatDate(device.pairedAt))")
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(Theme.current.foregroundSecondary)
+            }
+
+            Spacer()
+
+            if isHovering {
+                Button(action: onRemove) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(Theme.current.fontSM)
+                        .foregroundColor(.red.opacity(0.7))
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity.combined(with: .scale))
+            } else {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(Theme.current.fontSM)
+                    .foregroundColor(.green)
+            }
+        }
+        .padding(10)
+        .background(Theme.current.surface1)
+        .cornerRadius(8)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovering = hovering
             }
         }
     }
@@ -1025,12 +1100,541 @@ private struct QRCodeSheet: View {
 // MARK: - Sync History Sheet
 
 private struct SyncHistorySheet: View {
-    @Environment(\.dismiss) private var dismiss
+    var initialEvent: SyncEvent? = nil
+    @Environment(\.dismiss) private var dismissSheet
+    @State private var selectedEvent: SyncEvent? = nil
+    @State private var syncManager = CloudKitSyncManager.shared
 
     var body: some View {
-        SyncHistoryView()
-            .environment(CloudKitSyncManager.shared)
-            .frame(minWidth: 500, minHeight: 400)
+        Group {
+            if let event = selectedEvent {
+                SyncEventDetailViewEmbedded(
+                    event: event,
+                    onBack: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedEvent = nil
+                        }
+                    },
+                    onDone: { dismissSheet() }
+                )
+            } else {
+                SyncHistoryViewWithNavigation(onSelectEvent: { event in
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedEvent = event
+                    }
+                })
+                .environment(CloudKitSyncManager.shared)
+            }
+        }
+        .onAppear {
+            if let initial = initialEvent {
+                selectedEvent = initial
+            }
+        }
+    }
+}
+
+// MARK: - Sync Event Detail View (Embedded)
+
+private struct SyncEventDetailViewEmbedded: View {
+    let event: SyncEvent
+    let onBack: () -> Void
+    let onDone: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Button(action: onBack) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 12, weight: .medium))
+                        Text("Back")
+                            .font(.system(size: 13))
+                    }
+                    .foregroundColor(.blue)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                Button("Done", action: onDone)
+                    .buttonStyle(.borderedProminent)
+            }
+            .padding()
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Event summary card
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 12) {
+                            Image(systemName: event.status.icon)
+                                .font(.system(size: 24))
+                                .foregroundColor(event.status.color)
+                                .frame(width: 40, height: 40)
+                                .background(event.status.color.opacity(0.15))
+                                .cornerRadius(10)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(formatDateTime(event.timestamp))
+                                    .font(.system(size: 16, weight: .semibold))
+
+                                HStack(spacing: 8) {
+                                    Text(event.status.rawValue.capitalized)
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(event.status.color)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 2)
+                                        .background(event.status.color.opacity(0.15))
+                                        .cornerRadius(4)
+
+                                    if let duration = event.duration {
+                                        Text(String(format: "%.1fs", duration))
+                                            .font(.system(size: 12))
+                                            .foregroundColor(Theme.current.foregroundSecondary)
+                                    }
+                                }
+                            }
+
+                            Spacer()
+                        }
+
+                        if let error = event.errorMessage {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.red)
+                                Text(error)
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.red)
+                            }
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.red.opacity(0.1))
+                            .cornerRadius(6)
+                        }
+                    }
+                    .padding(16)
+                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+                    .cornerRadius(10)
+
+                    // Records changed section
+                    if !event.details.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("Records Changed")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(Theme.current.foregroundSecondary)
+
+                                Spacer()
+
+                                Text("\(event.details.count) item\(event.details.count == 1 ? "" : "s")")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(Theme.current.foregroundSecondary)
+                            }
+
+                            // Group by change type
+                            let added = event.details.filter { $0.changeType == .added }
+                            let modified = event.details.filter { $0.changeType == .modified }
+                            let deleted = event.details.filter { $0.changeType == .deleted }
+
+                            if !added.isEmpty {
+                                EmbeddedChangeGroupSection(title: "Added", icon: "plus.circle.fill", color: .green, records: added)
+                            }
+
+                            if !modified.isEmpty {
+                                EmbeddedChangeGroupSection(title: "Modified", icon: "pencil.circle.fill", color: .blue, records: modified)
+                            }
+
+                            if !deleted.isEmpty {
+                                EmbeddedChangeGroupSection(title: "Deleted", icon: "minus.circle.fill", color: .red, records: deleted)
+                            }
+                        }
+                    } else {
+                        VStack(spacing: 12) {
+                            Image(systemName: "tray")
+                                .font(.system(size: 32))
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                            Text("No record details available")
+                                .font(.system(size: 13))
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 40)
+                    }
+                }
+                .padding(16)
+            }
+        }
+        .frame(minWidth: 400, idealWidth: 500, maxWidth: 700)
+        .frame(minHeight: 350, idealHeight: 450, maxHeight: 600)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private func formatDateTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - Embedded Change Group Section
+
+private struct EmbeddedChangeGroupSection: View {
+    let title: String
+    let icon: String
+    let color: Color
+    let records: [SyncRecordDetail]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 11))
+                    .foregroundColor(color)
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(color)
+                Text("(\(records.count))")
+                    .font(.system(size: 10))
+                    .foregroundColor(Theme.current.foregroundSecondary)
+            }
+
+            VStack(spacing: 0) {
+                ForEach(records) { record in
+                    HStack(spacing: 10) {
+                        Text(record.recordType)
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(recordTypeColor(record.recordType))
+                            .cornerRadius(4)
+
+                        Text(record.title.isEmpty ? "Untitled" : record.title)
+                            .font(.system(size: 12))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+
+                        Spacer()
+
+                        if let modDate = record.modificationDate {
+                            Text(formatShortDate(modDate))
+                                .font(.system(size: 10))
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+
+                    if record.id != records.last?.id {
+                        Divider()
+                            .padding(.leading, 10)
+                    }
+                }
+            }
+            .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+            .cornerRadius(6)
+        }
+    }
+
+    private func recordTypeColor(_ type: String) -> Color {
+        switch type {
+        case "VoiceMemo": return .blue
+        case "Workflow": return .purple
+        case "WorkflowStep": return .indigo
+        case "TranscriptionSegment": return .teal
+        default: return .gray
+        }
+    }
+
+    private func formatShortDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - Sync History View With Navigation
+
+private struct SyncHistoryViewWithNavigation: View {
+    var onSelectEvent: (SyncEvent) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @Environment(CloudKitSyncManager.self) private var syncManager
+
+    @State private var pendingDeletions: [MemoModel] = []
+    @State private var selectedDeletions: Set<UUID> = []
+    @State private var isLoadingDeletions = false
+
+    private let viewModel = MemosViewModel()
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Sync Manager")
+                        .font(.system(size: 16, weight: .semibold))
+
+                    if let lastSync = syncManager.lastSyncDate {
+                        Text("Last synced \(formatRelativeTime(lastSync))")
+                            .font(.system(size: 11))
+                            .foregroundColor(Theme.current.foregroundSecondary)
+                    }
+                }
+
+                Spacer()
+
+                // Sync Now button
+                if syncManager.isSyncing {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                            .frame(width: 14, height: 14)
+                        Text("Syncing...")
+                            .font(.system(size: 11))
+                            .foregroundColor(Theme.current.foregroundSecondary)
+                    }
+                } else {
+                    Button {
+                        syncManager.syncNow()
+                    } label: {
+                        Label("Sync Now", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                // Copy history button
+                Button {
+                    copyHistoryToClipboard()
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                }
+                .buttonStyle(.bordered)
+                .help("Copy sync history")
+
+                Button("Done") {
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding()
+
+            Divider()
+
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    // Pending Deletions Section
+                    if !pendingDeletions.isEmpty {
+                        PendingDeletionsSection(
+                            deletions: pendingDeletions,
+                            selectedDeletions: $selectedDeletions,
+                            onApprove: approveDeletions,
+                            onRestore: restoreDeletions
+                        )
+
+                        Divider()
+                            .padding(.vertical, 8)
+                    }
+
+                    // Sync History Section
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Sync History")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(Theme.current.foregroundSecondary)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 8)
+
+                        if syncManager.syncHistory.isEmpty {
+                            VStack(spacing: 12) {
+                                Image(systemName: "clock.arrow.circlepath")
+                                    .font(.system(size: 48))
+                                    .foregroundColor(Theme.current.foregroundSecondary)
+                                Text("No sync history yet")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(Theme.current.foregroundSecondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 40)
+                        } else {
+                            ForEach(syncManager.syncHistory) { event in
+                                NavigableSyncEventRow(event: event, onSelect: onSelectEvent)
+                                Divider()
+                            }
+                        }
+                    }
+
+                    // Dev Mode Troubleshooting Section (DEBUG builds only)
+                    #if DEBUG
+                    Divider()
+                        .padding(.vertical, 8)
+
+                    DevModeSyncSection(
+                        syncManager: syncManager,
+                        onForceBridge: {
+                            syncManager.forceSyncToGRDB()
+                        }
+                    )
+                    #endif
+                }
+            }
+        }
+        .frame(minWidth: 400, idealWidth: 500, maxWidth: 700)
+        .frame(minHeight: 350, idealHeight: 450, maxHeight: 600)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .task {
+            await loadPendingDeletions()
+        }
+    }
+
+    private func loadPendingDeletions() async {
+        isLoadingDeletions = true
+        pendingDeletions = await viewModel.fetchPendingDeletions()
+        isLoadingDeletions = false
+    }
+
+    private func approveDeletions() {
+        let idsToDelete = selectedDeletions.isEmpty
+            ? Set(pendingDeletions.map(\.id))
+            : selectedDeletions
+
+        Task {
+            await viewModel.permanentlyDeleteMemos(idsToDelete)
+            await loadPendingDeletions()
+            selectedDeletions.removeAll()
+        }
+    }
+
+    private func restoreDeletions() {
+        let idsToRestore = selectedDeletions.isEmpty
+            ? Set(pendingDeletions.map(\.id))
+            : selectedDeletions
+
+        Task {
+            await viewModel.restoreMemos(idsToRestore)
+            await loadPendingDeletions()
+            selectedDeletions.removeAll()
+        }
+    }
+
+    private func formatRelativeTime(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    private func copyHistoryToClipboard() {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .medium
+        dateFormatter.timeStyle = .medium
+
+        var text = "Sync History\n"
+        text += "============\n\n"
+
+        for event in syncManager.syncHistory {
+            let status = event.status.rawValue.capitalized
+            let time = dateFormatter.string(from: event.timestamp)
+            let duration = event.duration.map { String(format: "%.1fs", $0) } ?? "-"
+
+            text += "[\(status)] \(time)\n"
+            text += "  Items: \(event.itemCount), Duration: \(duration)\n"
+
+            if let error = event.errorMessage {
+                text += "  Error: \(error)\n"
+            }
+
+            if !event.details.isEmpty {
+                for detail in event.details {
+                    text += "    • [\(detail.changeType.rawValue)] \(detail.recordType): \(detail.title)\n"
+                }
+            }
+            text += "\n"
+        }
+
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+}
+
+// MARK: - Navigable Sync Event Row
+
+private struct NavigableSyncEventRow: View {
+    let event: SyncEvent
+    let onSelect: (SyncEvent) -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: { onSelect(event) }) {
+            HStack(spacing: 12) {
+                // Status icon
+                Image(systemName: event.status.icon)
+                    .font(.system(size: 14))
+                    .foregroundColor(event.status.color)
+                    .frame(width: 20)
+
+                // Timestamp
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(formatTime(event.timestamp))
+                        .font(.system(size: 12, weight: .medium))
+                    Text(formatDate(event.timestamp))
+                        .font(.system(size: 10))
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                }
+                .frame(width: 80, alignment: .leading)
+
+                // Summary
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text("\(event.itemCount) item\(event.itemCount == 1 ? "" : "s")")
+                            .font(.system(size: 12))
+
+                        if let duration = event.duration {
+                            Text("•")
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                            Text(String(format: "%.1fs", duration))
+                                .font(.system(size: 11))
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                        }
+                    }
+
+                    if let error = event.errorMessage {
+                        Text(error)
+                            .font(.system(size: 11))
+                            .foregroundColor(.red)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer()
+
+                // Chevron
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(Theme.current.foregroundSecondary.opacity(isHovering ? 0.8 : 0.4))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(isHovering ? Color(nsColor: .controlBackgroundColor).opacity(0.7) : Color(nsColor: .controlBackgroundColor).opacity(0.5))
+        .onHover { hovering in isHovering = hovering }
+    }
+
+    private func formatTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter.string(from: date)
     }
 }
 

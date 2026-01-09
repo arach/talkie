@@ -8,10 +8,11 @@
 import SwiftUI
 
 struct BridgeSettingsView: View {
-    @State private var bridgeManager = BridgeManager.shared
+    private var bridgeManager = BridgeManager.shared
     @State private var showingQRScanner = false
     @State private var showUnpairConfirmation = false
     @State private var isReconnecting = false
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ZStack {
@@ -23,11 +24,6 @@ struct BridgeSettingsView: View {
                     // Connection Status Card
                     connectionStatusCard
 
-                    // When connecting, show step sequence
-                    if bridgeManager.status == .connecting {
-                        connectionStepsView
-                    }
-
                     // Actions (when paired and not actively connecting)
                     if bridgeManager.isPaired && bridgeManager.status != .connecting {
                         actionsSection
@@ -36,6 +32,7 @@ struct BridgeSettingsView: View {
                     // Connection Info (when connected)
                     if bridgeManager.status == .connected {
                         connectionInfoSection
+                        doneButton
                     }
 
                     // Troubleshooting (when disconnected or error)
@@ -121,14 +118,16 @@ struct BridgeSettingsView: View {
             }
 
         case .connecting:
-            // Connecting - pulsing antenna
+            // Connecting - centered spinner
             ZStack {
                 Circle()
                     .fill(Color.brandAccent.opacity(0.1))
                     .frame(width: 80, height: 80)
 
                 BrailleSpinner(size: 32, color: .brandAccent)
+                    .frame(width: 32, height: 32)
             }
+            .frame(width: 80, height: 80)
 
         case .disconnected:
             ZStack {
@@ -189,45 +188,6 @@ struct BridgeSettingsView: View {
 
     private var totalSessionCount: Int {
         bridgeManager.projectPaths.reduce(0) { $0 + $1.sessions.count }
-    }
-
-    // MARK: - Connection Steps View
-
-    private var connectionStepsView: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("ESTABLISHING CONNECTION")
-                .font(.techLabel)
-                .tracking(2)
-                .foregroundColor(.textTertiary)
-
-            VStack(spacing: 0) {
-                ConnectionStepRow(
-                    step: 1,
-                    label: "Resolving hostname",
-                    status: .complete
-                )
-                Divider().background(Color.borderPrimary)
-                ConnectionStepRow(
-                    step: 2,
-                    label: "Connecting to Mac",
-                    status: bridgeManager.retryCount == 0 ? .inProgress : .complete
-                )
-                Divider().background(Color.borderPrimary)
-                ConnectionStepRow(
-                    step: 3,
-                    label: "Authenticating",
-                    status: bridgeManager.retryCount > 0 ? .inProgress : .pending
-                )
-                Divider().background(Color.borderPrimary)
-                ConnectionStepRow(
-                    step: 4,
-                    label: "Loading sessions",
-                    status: .pending
-                )
-            }
-            .background(Color.surfaceSecondary)
-            .cornerRadius(CornerRadius.sm)
-        }
     }
 
     // MARK: - Actions Section
@@ -330,6 +290,25 @@ struct BridgeSettingsView: View {
         }
     }
 
+    // MARK: - Done Button
+
+    private var doneButton: some View {
+        Button(action: { dismiss() }) {
+            HStack(spacing: Spacing.xs) {
+                Text("Done")
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, Spacing.md)
+            .background(Color.success)
+            .cornerRadius(CornerRadius.sm)
+        }
+        .padding(.top, Spacing.md)
+    }
+
     // MARK: - Pair Section
 
     private var pairSection: some View {
@@ -403,71 +382,6 @@ private struct TroubleshootingRow: View {
         }
         .padding(.horizontal, Spacing.md)
         .padding(.vertical, Spacing.sm)
-    }
-}
-
-// MARK: - Connection Step Row
-
-private enum StepStatus {
-    case pending
-    case inProgress
-    case complete
-}
-
-private struct ConnectionStepRow: View {
-    let step: Int
-    let label: String
-    let status: StepStatus
-
-    var body: some View {
-        HStack(spacing: Spacing.sm) {
-            // Step indicator
-            ZStack {
-                Circle()
-                    .fill(stepBackground)
-                    .frame(width: 24, height: 24)
-
-                switch status {
-                case .complete:
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.white)
-                case .inProgress:
-                    BrailleSpinner(size: 12, color: .white)
-                case .pending:
-                    Text("\(step)")
-                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.textTertiary)
-                }
-            }
-
-            Text(label)
-                .font(.system(size: 13))
-                .foregroundColor(status == .pending ? .textTertiary : .textPrimary)
-
-            Spacer()
-
-            // Status text
-            if status == .complete {
-                Text("DONE")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.success)
-            } else if status == .inProgress {
-                Text("...")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.brandAccent)
-            }
-        }
-        .padding(.horizontal, Spacing.md)
-        .padding(.vertical, Spacing.sm)
-    }
-
-    private var stepBackground: Color {
-        switch status {
-        case .complete: return .success
-        case .inProgress: return .brandAccent
-        case .pending: return Color.textTertiary.opacity(0.2)
-        }
     }
 }
 

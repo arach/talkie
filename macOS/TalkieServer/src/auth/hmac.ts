@@ -66,8 +66,16 @@ export async function verifyRequest(req: Request): Promise<AuthResult> {
   // 5. Recompute signature (includes nonce)
   const url = new URL(req.url);
   const pathWithQuery = url.pathname + url.search;
-  const bodyBytes = await req.clone().arrayBuffer();
+  const bodyClone = req.clone();
+  const bodyBytes = await bodyClone.arrayBuffer();
   const bodyHash = await sha256Hex(bodyBytes);
+
+  // Debug: log POST body (truncated for large payloads)
+  if (req.method === "POST") {
+    const bodyText = new TextDecoder().decode(bodyBytes);
+    const truncated = bodyText.length > 200 ? bodyText.slice(0, 200) + "..." : bodyText;
+    log.info(`POST body: ${truncated}`);
+  }
 
   const message = `${req.method}\n${pathWithQuery}\n${timestamp}\n${nonce}\n${bodyHash}`;
   const expectedSig = await hmacSha256Hex(authKey, message);

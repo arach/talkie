@@ -793,7 +793,7 @@ struct SyncSection: View {
 
 struct ConnectionsSection: View {
     @ObservedObject var cloudStatusManager = iCloudStatusManager.shared
-    @State private var bridgeManager = BridgeManager.shared
+    private var bridgeManager = BridgeManager.shared
 
     private var connectionSummary: String {
         var connected: [String] = ["Local"]
@@ -863,7 +863,7 @@ struct ConnectionsSection: View {
 // MARK: - Bridge Status Badge
 
 struct BridgeStatusBadge: View {
-    @State private var bridgeManager = BridgeManager.shared
+    private var bridgeManager = BridgeManager.shared
 
     var body: some View {
         HStack(spacing: 4) {

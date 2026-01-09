@@ -205,8 +205,16 @@ final class StartupCoordinator {
             signposter.emitEvent("Power State")
             PowerStateManager.shared.setup()
 
+            // Auto-start Bridge for iOS communication (port 8766)
+            // This enables iOS → Mac voice messages without manual intervention
+            signposter.emitEvent("Bridge")
+            let bridgeStart = CFAbsoluteTimeGetCurrent()
+            await BridgeManager.shared.startBridge()
+            let bridgeElapsed = (CFAbsoluteTimeGetCurrent() - bridgeStart) * 1000
+            logger.info("⏱️ Bridge auto-start: \(String(format: "%.0f", bridgeElapsed))ms")
+
             let elapsed = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
-            logger.info("⏱️ Startup[4]: Background \(String(format: "%.0f", elapsed))ms (helpers, XPC, sync, power)")
+            logger.info("⏱️ Startup[4]: Background \(String(format: "%.0f", elapsed))ms (helpers, XPC, sync, power, bridge)")
             signposter.endInterval("Phase 4: Background", state)
         }
     }

@@ -1201,12 +1201,12 @@ class SettingsManager {
         }
 
         cachedTokens = CachedThemeTokens(
-            fontXS: font(10, lightFonts ? .regular : .regular),
-            fontXSMedium: font(10, lightFonts ? .medium : .medium),
-            fontXSBold: font(10, lightFonts ? .semibold : .semibold),
-            fontSM: font(11, lightFonts ? .regular : .regular),
-            fontSMMedium: font(11, lightFonts ? .medium : .medium),
-            fontSMBold: font(11, lightFonts ? .semibold : .semibold),
+            fontXS: font(10, lightFonts ? .light : .regular),
+            fontXSMedium: font(10, lightFonts ? .regular : .medium),
+            fontXSBold: font(10, lightFonts ? .medium : .medium),  // Thinner for crisper section headers
+            fontSM: font(11, lightFonts ? .light : .regular),
+            fontSMMedium: font(11, lightFonts ? .regular : .medium),
+            fontSMBold: font(11, lightFonts ? .medium : .medium),  // Thinner for crisper labels
             fontBody: font(13, lightFonts ? .regular : .regular),
             fontBodyMedium: font(13, lightFonts ? .medium : .medium),
             fontBodyBold: font(13, lightFonts ? .semibold : .semibold),

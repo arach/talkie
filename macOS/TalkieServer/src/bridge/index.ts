@@ -41,6 +41,12 @@ import {
   matchDeleteRoute,
 } from "./routes/match";
 import {
+  devicesListRoute,
+  deviceRemoveRoute,
+  devicesRevokeAllRoute,
+} from "./routes/devices";
+import { statsRoute } from "./routes/stats";
+import {
   listWindows,
   getWindow,
   getWindowScreenshot,
@@ -59,14 +65,24 @@ export const bridge = new Elysia({ name: "bridge" })
   .get("/health", ({ hostname }) => healthRoute(hostname))
 
   // ===== Sessions =====
-  .get("/paths", ({ query }) => pathsRoute(query.refresh === "deep"), {
+  .get("/paths", ({ query }) => pathsRoute(
+    query.refresh === "deep",
+    query.limit ? parseInt(query.limit, 10) : 15,
+    query.sessionsPerPath ? parseInt(query.sessionsPerPath, 10) : 5
+  ), {
     query: t.Object({
       refresh: t.Optional(t.String()),
+      limit: t.Optional(t.String()),
+      sessionsPerPath: t.Optional(t.String()),
     }),
   })
-  .get("/sessions", ({ query }) => sessionsRoute(query.refresh === "deep"), {
+  .get("/sessions", ({ query }) => sessionsRoute(
+    query.refresh === "deep",
+    query.limit ? parseInt(query.limit, 10) : 50
+  ), {
     query: t.Object({
       refresh: t.Optional(t.String()),
+      limit: t.Optional(t.String()),
     }),
   })
   .get("/sessions/:id", ({ params, query }) =>
@@ -115,14 +131,13 @@ export const bridge = new Elysia({ name: "bridge" })
       index: t.String(),
     }),
   })
-  .post("/sessions/:id/message", ({ params, body }) =>
-    sendMessageRoute(params.id, body), {
+  .post("/sessions/:id/message", async ({ params, request }) => {
+    // Parse body manually to avoid Elysia consuming the stream
+    const body = await request.json();
+    return sendMessageRoute(params.id, body);
+  }, {
     params: t.Object({
       id: t.String(),
-    }),
-    body: t.Object({
-      message: t.String(),
-      projectDir: t.Optional(t.String()),
     }),
   })
 
@@ -205,4 +220,16 @@ export const bridge = new Elysia({ name: "bridge" })
     params: t.Object({
       id: t.String(),
     }),
-  });
+  })
+
+  // ===== Devices =====
+  .get("/devices", () => devicesListRoute())
+  .delete("/devices/:id", ({ params }) => deviceRemoveRoute(params.id), {
+    params: t.Object({
+      id: t.String(),
+    }),
+  })
+  .delete("/devices", () => devicesRevokeAllRoute())
+
+  // ===== Stats =====
+  .get("/stats", () => statsRoute());

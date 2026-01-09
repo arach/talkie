@@ -31,6 +31,7 @@ import { getTailscaleState, getStateMessage } from "./tailscale/status";
 import { getDevices, pruneExpiredDevices } from "./devices/registry";
 import { getOrCreateKeyPair } from "./crypto/store";
 import { verifyRequest, authErrorResponse, isExemptPath } from "./auth/hmac";
+import { setAutoApprove } from "./bridge/routes/pair";
 import { log, clearLog } from "./log";
 import { PID_FILE, ensureDirectories } from "./paths";
 
@@ -38,12 +39,13 @@ import { PID_FILE, ensureDirectories } from "./paths";
 
 const args = process.argv.slice(2);
 const LOCAL_MODE = args.includes("--local") || args.includes("-l");
+const REQUIRE_APPROVAL = args.includes("--require-approval");
 const UNIX_SOCKET = args.includes("--unix")
   ? "/tmp/talkie-server.sock"
   : undefined;
 
-// Port configuration
-const DEFAULT_PORT = LOCAL_MODE ? 8767 : 8765;
+// Port configuration (8765 for both local and production - macOS app expects this)
+const DEFAULT_PORT = 8765;
 const portArgIndex = args.findIndex((a) => a === "--port" || a === "-p");
 const PORT =
   portArgIndex !== -1 && args[portArgIndex + 1]
@@ -68,6 +70,23 @@ const app = new Elysia()
     port: serverConfig.port,
   }))
 
+  // Log full request details (dev only)
+  .onRequest(async ({ request }) => {
+    if (!LOCAL_MODE) return;
+
+    const url = new URL(request.url);
+    const params = Object.fromEntries(url.searchParams);
+    const hasParams = Object.keys(params).length > 0;
+
+    if (request.method === "POST" || request.method === "PUT" || request.method === "PATCH") {
+      const cloned = request.clone();
+      const bodyText = await cloned.text();
+      log.info(`→ ${request.method} ${url.pathname}${hasParams ? ` params=${JSON.stringify(params)}` : ''} body=${bodyText.slice(0, 500)}${bodyText.length > 500 ? '...' : ''}`);
+    } else if (hasParams) {
+      log.info(`→ ${request.method} ${url.pathname} params=${JSON.stringify(params)}`);
+    }
+  })
+
   // Strip trailing slashes
   .onRequest(({ request }) => {
     const url = new URL(request.url);
@@ -77,20 +96,33 @@ const app = new Elysia()
     }
   })
 
-  // Request logging
-  .onBeforeHandle(({ request }) => {
-    const url = new URL(request.url);
-    log.request(request.method, url.pathname);
+  // Request timing
+  .derive(() => ({
+    requestStart: Date.now(),
+  }))
+  .onBeforeHandle(({ store }) => {
+    // @ts-ignore - store timing
+    store.requestStart = Date.now();
   })
-  .onAfterHandle(({ request, response, set }) => {
+  .onAfterHandle(({ request, response, set, store }) => {
     const url = new URL(request.url);
     const status = set.status || 200;
-    log.info(`${request.method} ${url.pathname} → ${status}`);
+    // @ts-ignore - store timing
+    const elapsed = Date.now() - (store.requestStart || Date.now());
+    const timeStr = elapsed > 1000 ? `⚠️ ${elapsed}ms` : `${elapsed}ms`;
 
-    // Log full response JSON for debugging (set TALKIE_DEBUG=1 to enable)
-    const debugEnabled = LOCAL_MODE || process.env.TALKIE_DEBUG === "1";
-    if (debugEnabled && response && typeof response === "object" && !(response instanceof Response)) {
-      log.debug(`Response: ${JSON.stringify(response)}`);
+    if (LOCAL_MODE) {
+      // Dev: full request → response logging
+      if (response && typeof response === "object" && !(response instanceof Response)) {
+        const payload = JSON.stringify(response);
+        const truncated = payload.length > 1000 ? payload.slice(0, 1000) + `... (${payload.length} bytes)` : payload;
+        log.info(`← ${request.method} ${url.pathname} ${status} (${timeStr}) ${truncated}`);
+      } else {
+        log.info(`← ${request.method} ${url.pathname} ${status} (${timeStr})`);
+      }
+    } else {
+      // Prod: just method, path, status, timing
+      log.info(`${request.method} ${url.pathname} → ${status} (${timeStr})`);
     }
   })
 
@@ -123,12 +155,6 @@ const app = new Elysia()
   // ===== Debug Routes =====
   .get("/debug/cache", () => sessionCache.getStatus())
 
-  // ===== Devices (shared) =====
-  .get("/devices", async () => {
-    const devices = await getDevices();
-    return { devices };
-  })
-
   // ===== Mount Modules =====
   .use(bridge)
   .use(gateway);
@@ -139,6 +165,11 @@ async function main() {
   await ensureDirectories();
   await clearLog();
   log.info("TalkieServer starting...");
+
+  // Configure pairing approval mode
+  if (REQUIRE_APPROVAL) {
+    setAutoApprove(false);
+  }
 
   if (LOCAL_MODE) {
     log.info("Running in LOCAL mode (Tailscale check skipped)");
@@ -203,6 +234,9 @@ async function main() {
 
   log.info(LOCAL_MODE ? "Auth: DISABLED (local mode)" : "Auth: HMAC enabled");
   log.info("Modules loaded: bridge, gateway");
+
+  // Initialize session cache (loads from disk if exists, builds quick if not)
+  await sessionCache.warmup();
 }
 
 main().catch((err) => {
