@@ -64,10 +64,9 @@ struct RecordingView: View {
             if !hasAppeared {
                 hasAppeared = true
                 defaultTitle = "Recording \(formatDate(Date()))"
-                // Auto-start recording with minimal delay for UI readiness
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    recorder.startRecording()
-                }
+                // Start recording immediately - no delay needed
+                // (watchOS version and push-to-talk both work without delay)
+                recorder.startRecording()
             }
         }
     }

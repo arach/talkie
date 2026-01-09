@@ -20,6 +20,21 @@ struct PersistenceController {
     /// True when persistent stores have finished loading
     static var isReady: Bool = false
 
+    /// Load persistence controller asynchronously (non-blocking)
+    /// Use this instead of `shared` during app startup to avoid blocking the main thread
+    static func loadAsync() async -> PersistenceController {
+        await withCheckedContinuation { continuation in
+            // Dispatch to background to avoid blocking main thread during init
+            DispatchQueue.global(qos: .userInitiated).async {
+                let controller = PersistenceController()
+                // Resume on main actor once ready
+                DispatchQueue.main.async {
+                    continuation.resume(returning: controller)
+                }
+            }
+        }
+    }
+
     /// Unique identifier for this device
     static var deviceId: String {
         #if os(iOS)
