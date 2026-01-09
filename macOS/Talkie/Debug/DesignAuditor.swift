@@ -783,9 +783,11 @@ class DesignAuditor {
             try summary.write(to: runDirectory.appendingPathComponent("summary.txt"), atomically: true, encoding: .utf8)
 
             // Index in AuditStore for fast retrieval
+            #if DEBUG
             Task {
                 await AuditStore.shared.indexRun(report, runNumber: actualRunNumber)
             }
+            #endif
 
             print("✅ Saved audit to: run-\(String(format: "%03d", actualRunNumber))")
         } catch {
