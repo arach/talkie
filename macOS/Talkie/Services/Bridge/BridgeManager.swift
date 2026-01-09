@@ -113,9 +113,10 @@ final class BridgeManager {
         // We need: .../macOS/TalkieServer
         let thisFile = URL(fileURLWithPath: #filePath)
         let macOSDir = thisFile
-            .deletingLastPathComponent() // Bridge/
-            .deletingLastPathComponent() // Services/
-            .deletingLastPathComponent() // Talkie/
+            .deletingLastPathComponent() // BridgeManager.swift → Bridge/
+            .deletingLastPathComponent() // Bridge/ → Services/
+            .deletingLastPathComponent() // Services/ → Talkie/
+            .deletingLastPathComponent() // Talkie/ → macOS/
         return macOSDir.appendingPathComponent("TalkieServer").path
     }
     // Runtime data location (App Support)
