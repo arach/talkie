@@ -57,9 +57,14 @@ class CloudKitSyncManager {
     @ObservationIgnored private var debounceTimer: Timer?
     @ObservationIgnored private let debounceInterval: TimeInterval = 3.0 // Coalesce rapid notifications
 
-    // Sync interval from settings (default 10 minutes)
+    // Sync interval from settings (default 10 minutes, DEBUG: 60 minutes)
     private var syncInterval: TimeInterval {
-        SettingsManager.shared.syncIntervalSeconds
+        #if DEBUG
+        // Dev override: sync once per hour to reduce noise
+        return 60 * 60  // 1 hour
+        #else
+        return SettingsManager.shared.syncIntervalSeconds
+        #endif
     }
 
     // Background activity scheduler - wakes app even when terminated

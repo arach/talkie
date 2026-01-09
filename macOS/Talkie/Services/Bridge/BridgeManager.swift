@@ -106,6 +106,7 @@ final class BridgeManager {
 
     private var bridgeProcess: Process?
     private var refreshTimer: Timer?
+    private var isStartingBridge = false  // Prevents concurrent start attempts
 
     // Source code location (derived from this file's compile-time path - works with git worktrees)
     private static var bridgeSourcePath: String {
@@ -202,7 +203,15 @@ final class BridgeManager {
     }
 
     func startBridge() async {
+        // Prevent concurrent start attempts (race condition guard)
+        guard !isStartingBridge else {
+            log.debug("Bridge start already in progress, skipping")
+            return
+        }
         guard bridgeStatus != .running && bridgeStatus != .starting else { return }
+
+        isStartingBridge = true
+        defer { isStartingBridge = false }
 
         // Find bun runtime
         guard let bunPath = findBunPath() else {
