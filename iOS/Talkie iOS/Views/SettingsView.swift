@@ -116,9 +116,9 @@ struct SettingsView: View {
                         // Connections
                         ConnectionsSection()
 
-                        // Mac Availability
+                        // iCloud Memo Processing
                         VStack(alignment: .leading, spacing: Spacing.sm) {
-                            Text("MAC AVAILABILITY")
+                            Text("ICLOUD MEMO PROCESSING")
                                 .font(.techLabel)
                                 .tracking(2)
                                 .foregroundColor(.textTertiary)
@@ -126,9 +126,9 @@ struct SettingsView: View {
 
                             NavigationLink(destination: MacAvailabilityCoachView()) {
                                 HStack {
-                                    Image(systemName: "bolt.fill")
+                                    Image(systemName: "icloud")
                                         .foregroundColor(.active)
-                                    Text("Power & Availability")
+                                    Text("Mac Sync Status")
                                     Spacer()
                                     MacAvailabilityBadge()
                                     Image(systemName: "chevron.right")

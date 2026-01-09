@@ -2,8 +2,9 @@
 //  MacAvailabilityCoachView.swift
 //  Talkie iOS
 //
-//  Coaches users on understanding Mac power states and optimizing
-//  their Mac settings for remote memo availability.
+//  Shows Mac sync status for async memo processing via iCloud.
+//  This is NOT about direct Mac connection - it shows whether
+//  memos will be processed when synced via iCloud.
 //
 
 import SwiftUI
@@ -19,6 +20,9 @@ struct MacAvailabilityCoachView: View {
 
             ScrollView {
                 VStack(spacing: Spacing.lg) {
+                    // Explanation header
+                    iCloudSyncExplanation
+
                     // Current Mac Status
                     macStatusSection
 
@@ -33,11 +37,35 @@ struct MacAvailabilityCoachView: View {
                 .padding(.top, Spacing.md)
             }
         }
-        .navigationTitle("Mac Availability")
+        .navigationTitle("Mac Sync Status")
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await observer.refresh()
         }
+    }
+
+    // MARK: - iCloud Sync Explanation
+
+    private var iCloudSyncExplanation: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: "icloud")
+                    .foregroundColor(.active)
+                Text("Memos sync via iCloud")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.textPrimary)
+            }
+
+            Text("Your Mac processes memos in the background when they sync via iCloud. This shows whether your Mac is available to process new memos.")
+                .font(.system(size: 12))
+                .foregroundColor(.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.surfaceSecondary.opacity(0.5))
+        .cornerRadius(CornerRadius.sm)
+        .padding(.horizontal, Spacing.md)
     }
 
     // MARK: - Current Mac Status Section
