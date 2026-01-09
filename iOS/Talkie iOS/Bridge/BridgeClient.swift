@@ -132,7 +132,7 @@ actor BridgeClient {
     }
 
     func sendMessage(sessionId: String, text: String) async throws -> MessageResponse {
-        let body = MessageRequest(text: text)
+        let body = MessageRequest(message: text)
         let data = try await post("/sessions/\(sessionId)/message", body: body)
         return try JSONDecoder().decode(MessageResponse.self, from: data)
     }
@@ -155,8 +155,8 @@ actor BridgeClient {
     /// Useful when auto-submit doesn't work
     /// Sends empty message which triggers just pressing Enter
     func forceEnter(sessionId: String) async throws -> MessageResponse {
-        // Send empty text - server will just press Enter without inserting anything
-        let body = MessageRequest(text: "")
+        // Send empty message - server will just press Enter without inserting anything
+        let body = MessageRequest(message: "")
         let data = try await post("/sessions/\(sessionId)/message", body: body)
         return try JSONDecoder().decode(MessageResponse.self, from: data)
     }
@@ -414,7 +414,7 @@ struct PairResponse: Codable {
 }
 
 struct MessageRequest: Codable {
-    let text: String
+    let message: String
 }
 
 
