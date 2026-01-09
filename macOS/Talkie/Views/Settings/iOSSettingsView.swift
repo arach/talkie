@@ -248,6 +248,7 @@ private struct iCloudSyncSection: View {
     @Binding var enabled: Bool
     @State private var syncStatus = SyncStatusManager.shared
     @State private var talkieData = TalkieData.shared
+    @State private var showingSyncHistory = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -296,8 +297,15 @@ private struct iCloudSyncSection: View {
 
             // Sync details when enabled
             if enabled {
-                SyncDetailsView(syncStatus: syncStatus, inventory: talkieData.inventory)
+                SyncDetailsView(
+                    syncStatus: syncStatus,
+                    inventory: talkieData.inventory,
+                    onShowHistory: { showingSyncHistory = true }
+                )
             }
+        }
+        .sheet(isPresented: $showingSyncHistory) {
+            SyncHistorySheet()
         }
     }
 
@@ -369,49 +377,77 @@ private struct iCloudSyncSection: View {
 private struct SyncDetailsView: View {
     let syncStatus: SyncStatusManager
     let inventory: DataInventory?
+    let onShowHistory: () -> Void
     @State private var syncManager = CloudKitSyncManager.shared
+    @State private var copied = false
 
     var body: some View {
-        VStack(spacing: 8) {
-            // Record counts
-            HStack(spacing: 16) {
-                SyncStatItem(
-                    label: "Local",
-                    value: "\(inventory?.local ?? 0)",
-                    icon: "internaldrive"
-                )
-                SyncStatItem(
-                    label: "iCloud",
-                    value: "\(inventory?.coreData ?? 0)",
-                    icon: "icloud"
-                )
-                if let missing = inventory?.missingFromLocal.count, missing > 0 {
-                    SyncStatItem(
-                        label: "Pending",
-                        value: "\(missing)",
-                        icon: "arrow.down.circle",
-                        highlight: true
-                    )
+        VStack(alignment: .leading, spacing: 6) {
+            // Summary line: "246 memos • Last sync 9:02 PM"
+            HStack(spacing: 0) {
+                // Memo count
+                HStack(spacing: 4) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 9))
+                    Text("\(inventory?.local ?? 0) memos")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .foregroundColor(Theme.current.foregroundSecondary)
+
+                // Separator
+                Text(" • ")
+                    .font(.system(size: 10))
+                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.5))
+
+                // Last sync
+                if let lastSync = syncStatus.lastSyncDate {
+                    Text("Last sync \(formatTime(lastSync))")
+                        .font(.system(size: 10))
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                } else {
+                    Text("Never synced")
+                        .font(.system(size: 10))
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(0.7))
                 }
 
                 Spacer()
 
-                // Last sync time
-                if let lastSync = syncStatus.lastSyncDate {
-                    VStack(alignment: .trailing, spacing: 1) {
-                        Text("LAST SYNC")
-                            .font(.system(size: 8, weight: .medium))
-                            .foregroundColor(Theme.current.foregroundSecondary.opacity(0.7))
-                        Text(formatTime(lastSync))
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(Theme.current.foregroundSecondary)
+                // Actions: Copy + View History
+                HStack(spacing: 8) {
+                    if !syncManager.syncHistory.isEmpty {
+                        Button(action: copyLog) {
+                            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                                .font(.system(size: 9))
+                                .foregroundColor(copied ? .green : Theme.current.foregroundSecondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Copy sync log")
                     }
+
+                    Button(action: onShowHistory) {
+                        HStack(spacing: 3) {
+                            Text("History")
+                                .font(.system(size: 9, weight: .medium))
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 7, weight: .semibold))
+                        }
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
 
-            // Mini sync log
+            // Mini log (5 recent events)
             if !syncManager.syncHistory.isEmpty {
-                SyncMiniLog(events: Array(syncManager.syncHistory.prefix(5)))
+                VStack(alignment: .leading, spacing: 1) {
+                    ForEach(Array(syncManager.syncHistory.prefix(5))) { event in
+                        SyncMiniLogEntry(event: event)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(Theme.current.background.opacity(0.5))
+                .cornerRadius(4)
             }
         }
         .padding(10)
@@ -424,76 +460,49 @@ private struct SyncDetailsView: View {
         formatter.dateFormat = "h:mm a"
         return formatter.string(from: date)
     }
-}
-
-// MARK: - Sync Mini Log
-
-private struct SyncMiniLog: View {
-    let events: [SyncEvent]
-    @State private var copied = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            // Header with copy button
-            HStack {
-                Text("RECENT ACTIVITY")
-                    .font(.system(size: 8, weight: .medium))
-                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.7))
-
-                Spacer()
-
-                Button(action: copyLog) {
-                    HStack(spacing: 3) {
-                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                            .font(.system(size: 8))
-                        Text(copied ? "Copied" : "Copy")
-                            .font(.system(size: 8, weight: .medium))
-                    }
-                    .foregroundColor(copied ? .green : Theme.current.foregroundSecondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(3)
-                }
-                .buttonStyle(.plain)
-            }
-
-            // Log entries
-            VStack(alignment: .leading, spacing: 2) {
-                ForEach(events) { event in
-                    SyncMiniLogEntry(event: event)
-                }
-            }
-            .padding(6)
-            .background(Theme.current.background.opacity(0.5))
-            .cornerRadius(4)
-        }
-    }
 
     private func copyLog() {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "HH:mm:ss"
 
         var lines: [String] = []
-        for event in events {
+        for event in syncManager.syncHistory.prefix(5) {
             let time = dateFormatter.string(from: event.timestamp)
-            let status = event.status.rawValue.uppercased()
-            let items = event.itemCount > 0 ? " (\(event.itemCount) items)" : ""
-            let duration = event.duration.map { String(format: " %.1fs", $0) } ?? ""
-            let error = event.errorMessage.map { " - \($0)" } ?? ""
-            lines.append("[\(time)] \(status)\(items)\(duration)\(error)")
+            let desc = describeEvent(event)
+            let duration = event.duration.map { String(format: " (%.1fs)", $0) } ?? ""
+            lines.append("[\(time)] \(desc)\(duration)")
         }
 
-        let logText = lines.joined(separator: "\n")
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(logText, forType: .string)
+        NSPasteboard.general.setString(lines.joined(separator: "\n"), forType: .string)
 
         copied = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            copied = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copied = false }
+    }
+
+    private func describeEvent(_ event: SyncEvent) -> String {
+        if let error = event.errorMessage, !error.isEmpty {
+            return "Failed: \(error)"
         }
+
+        // Analyze details for richer description
+        let added = event.details.filter { $0.changeType == .added }.count
+        let modified = event.details.filter { $0.changeType == .modified }.count
+        let deleted = event.details.filter { $0.changeType == .deleted }.count
+
+        if added == 0 && modified == 0 && deleted == 0 {
+            return event.itemCount > 0 ? "Synced \(event.itemCount) items" : "No changes"
+        }
+
+        var parts: [String] = []
+        if added > 0 { parts.append("+\(added)") }
+        if modified > 0 { parts.append("~\(modified)") }
+        if deleted > 0 { parts.append("-\(deleted)") }
+        return "Synced: \(parts.joined(separator: " "))"
     }
 }
+
+// MARK: - Sync Mini Log Entry
 
 private struct SyncMiniLogEntry: View {
     let event: SyncEvent
@@ -503,69 +512,63 @@ private struct SyncMiniLogEntry: View {
             // Timestamp
             Text(formatTime(event.timestamp))
                 .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.7))
-                .frame(width: 50, alignment: .leading)
+                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.5))
 
             // Status icon
             Image(systemName: event.status.icon)
-                .font(.system(size: 8))
+                .font(.system(size: 7))
                 .foregroundColor(event.status.color)
 
-            // Status + item count
-            Text(statusText)
+            // Description
+            Text(eventDescription)
                 .font(.system(size: 9))
                 .foregroundColor(Theme.current.foregroundSecondary)
                 .lineLimit(1)
 
             Spacer()
 
-            // Duration
-            if let duration = event.duration {
+            // Duration (if notable)
+            if let duration = event.duration, duration > 1.0 {
                 Text(String(format: "%.1fs", duration))
                     .font(.system(size: 8, design: .monospaced))
-                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.6))
+                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.4))
             }
         }
     }
 
-    private var statusText: String {
-        var text = event.status.rawValue.capitalized
-        if event.itemCount > 0 {
-            text += " (\(event.itemCount))"
-        }
+    private var eventDescription: String {
+        // Check for errors first
         if let error = event.errorMessage, !error.isEmpty {
-            text += " - " + error.prefix(30) + (error.count > 30 ? "…" : "")
+            let truncated = error.prefix(40)
+            return "Failed: \(truncated)\(error.count > 40 ? "…" : "")"
         }
-        return text
+
+        // Analyze details for meaningful description
+        let added = event.details.filter { $0.changeType == .added }.count
+        let modified = event.details.filter { $0.changeType == .modified }.count
+        let deleted = event.details.filter { $0.changeType == .deleted }.count
+
+        // If we have detailed breakdown
+        if added > 0 || modified > 0 || deleted > 0 {
+            var parts: [String] = []
+            if added > 0 { parts.append("\(added) added") }
+            if modified > 0 { parts.append("\(modified) updated") }
+            if deleted > 0 { parts.append("\(deleted) removed") }
+            return parts.joined(separator: ", ")
+        }
+
+        // Fall back to item count
+        if event.itemCount > 0 {
+            return "Synced \(event.itemCount) \(event.itemCount == 1 ? "memo" : "memos")"
+        }
+
+        return "No changes"
     }
 
     private func formatTime(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss"
+        formatter.dateFormat = "HH:mm"
         return formatter.string(from: date)
-    }
-}
-
-private struct SyncStatItem: View {
-    let label: String
-    let value: String
-    let icon: String
-    var highlight: Bool = false
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 9))
-                .foregroundColor(highlight ? .orange : Theme.current.foregroundSecondary)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(value)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(highlight ? .orange : Theme.current.foreground)
-                Text(label)
-                    .font(.system(size: 8))
-                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.7))
-            }
-        }
     }
 }
 
@@ -1032,6 +1035,18 @@ private struct QRCodeSheet: View {
         }
 
         return NSImage(cgImage: cgImage, size: NSSize(width: 200, height: 200))
+    }
+}
+
+// MARK: - Sync History Sheet
+
+private struct SyncHistorySheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        SyncHistoryView()
+            .environment(CloudKitSyncManager.shared)
+            .frame(minWidth: 500, minHeight: 400)
     }
 }
 
