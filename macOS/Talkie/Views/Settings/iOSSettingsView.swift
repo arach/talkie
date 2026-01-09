@@ -378,44 +378,60 @@ private struct SyncDetailsView: View {
     let syncStatus: SyncStatusManager
     let inventory: DataInventory?
     let onShowHistory: () -> Void
+    @State private var syncManager = CloudKitSyncManager.shared
 
     var body: some View {
-        // Single compact line: "246 memos • Last sync 9:02 PM [History >]"
-        HStack(spacing: 0) {
-            HStack(spacing: 4) {
-                Image(systemName: "doc.text")
-                    .font(.system(size: 9))
-                Text("\(inventory?.local ?? 0) memos")
-                    .font(.system(size: 10, weight: .medium))
-            }
-            .foregroundColor(Theme.current.foregroundSecondary)
-
-            Text(" • ")
-                .font(.system(size: 10))
-                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.5))
-
-            if let lastSync = syncStatus.lastSyncDate {
-                Text("Last sync \(formatTime(lastSync))")
-                    .font(.system(size: 10))
-                    .foregroundColor(Theme.current.foregroundSecondary)
-            } else {
-                Text("Never synced")
-                    .font(.system(size: 10))
-                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.7))
-            }
-
-            Spacer()
-
-            Button(action: onShowHistory) {
-                HStack(spacing: 3) {
-                    Text("History")
-                        .font(.system(size: 9, weight: .medium))
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 7, weight: .semibold))
+        VStack(alignment: .leading, spacing: 6) {
+            // Summary line: "246 memos • Last sync 9:02 PM [History >]"
+            HStack(spacing: 0) {
+                HStack(spacing: 4) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 9))
+                    Text("\(inventory?.local ?? 0) memos")
+                        .font(.system(size: 10, weight: .medium))
                 }
                 .foregroundColor(Theme.current.foregroundSecondary)
+
+                Text(" • ")
+                    .font(.system(size: 10))
+                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.5))
+
+                if let lastSync = syncStatus.lastSyncDate {
+                    Text("Last sync \(formatTime(lastSync))")
+                        .font(.system(size: 10))
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                } else {
+                    Text("Never synced")
+                        .font(.system(size: 10))
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(0.7))
+                }
+
+                Spacer()
+
+                Button(action: onShowHistory) {
+                    HStack(spacing: 3) {
+                        Text("History")
+                            .font(.system(size: 9, weight: .medium))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 7, weight: .semibold))
+                    }
+                    .foregroundColor(Theme.current.foregroundSecondary)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+
+            // Recent activity (now filtered to meaningful changes only)
+            let recentEvents = Array(syncManager.syncHistory.prefix(5))
+            if !recentEvents.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(recentEvents) { event in
+                        SyncActivityRow(event: event)
+                    }
+                }
+                .padding(8)
+                .background(Theme.current.background.opacity(0.5))
+                .cornerRadius(4)
+            }
         }
         .padding(10)
         .background(Theme.current.surface1.opacity(0.5))
@@ -425,6 +441,82 @@ private struct SyncDetailsView: View {
     private func formatTime(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - Sync Activity Row
+
+private struct SyncActivityRow: View {
+    let event: SyncEvent
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(formatTime(event.timestamp))
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.5))
+
+            Image(systemName: changeIcon)
+                .font(.system(size: 7))
+                .foregroundColor(changeColor)
+
+            Text(description)
+                .font(.system(size: 9))
+                .foregroundColor(Theme.current.foregroundSecondary)
+                .lineLimit(1)
+
+            Spacer()
+        }
+    }
+
+    private var changeIcon: String {
+        if event.status == .failed { return "xmark.circle.fill" }
+        let added = event.details.filter { $0.changeType == .added }.count
+        let deleted = event.details.filter { $0.changeType == .deleted }.count
+        if deleted > 0 { return "minus.circle" }
+        if added > 0 { return "plus.circle" }
+        return "pencil.circle"
+    }
+
+    private var changeColor: Color {
+        if event.status == .failed { return .red }
+        let added = event.details.filter { $0.changeType == .added }.count
+        let deleted = event.details.filter { $0.changeType == .deleted }.count
+        if deleted > 0 { return .red }
+        if added > 0 { return .green }
+        return .blue
+    }
+
+    private var description: String {
+        if let error = event.errorMessage, !error.isEmpty {
+            return "Failed: \(error.prefix(30))"
+        }
+
+        // Single item - show title
+        if event.details.count == 1, let detail = event.details.first {
+            let title = detail.title.isEmpty ? "Untitled" : String(detail.title.prefix(25))
+            switch detail.changeType {
+            case .added: return "New: \(title)"
+            case .modified: return "Updated: \(title)"
+            case .deleted: return "Deleted: \(title)"
+            }
+        }
+
+        // Multiple items
+        let added = event.details.filter { $0.changeType == .added }.count
+        let modified = event.details.filter { $0.changeType == .modified }.count
+        let deleted = event.details.filter { $0.changeType == .deleted }.count
+
+        var parts: [String] = []
+        if added > 0 { parts.append("\(added) new") }
+        if modified > 0 { parts.append("\(modified) updated") }
+        if deleted > 0 { parts.append("\(deleted) deleted") }
+        return parts.joined(separator: ", ")
+    }
+
+    private func formatTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
         return formatter.string(from: date)
     }
 }

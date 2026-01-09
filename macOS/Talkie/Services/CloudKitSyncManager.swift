@@ -414,16 +414,19 @@ class CloudKitSyncManager {
                 self.isSyncing = false
                 SyncStatusManager.shared.setSynced(changes: result.changeCount)
 
-                // Add to sync history
-                let event = SyncEvent(
-                    timestamp: startTime,
-                    status: .success,
-                    itemCount: result.changeCount,
-                    duration: duration,
-                    errorMessage: nil,
-                    details: result.details
-                )
-                self.addSyncEvent(event)
+                // Only log meaningful user actions (memos), not CloudKit housekeeping
+                let meaningfulDetails = self.filterMeaningfulChanges(result.details)
+                if !meaningfulDetails.isEmpty {
+                    let event = SyncEvent(
+                        timestamp: startTime,
+                        status: .success,
+                        itemCount: meaningfulDetails.count,
+                        duration: duration,
+                        errorMessage: nil,
+                        details: meaningfulDetails
+                    )
+                    self.addSyncEvent(event)
+                }
             }
 
             NotificationCenter.default.post(
@@ -683,6 +686,33 @@ class CloudKitSyncManager {
                 }
             }
         }
+    }
+
+    /// Filter sync details to only meaningful user actions
+    /// Excludes: internal record types (WorkflowRun, TranscriptVersion), bulk reconciliation
+    private func filterMeaningfulChanges(_ details: [SyncRecordDetail]) -> [SyncRecordDetail] {
+        // Only keep VoiceMemo changes - these are user-facing
+        let memoChanges = details.filter { $0.recordType == "VoiceMemo" }
+
+        // If many memos changed at once with same timestamp, it's likely a token reset
+        // or full reconciliation - not individual user actions
+        if memoChanges.count > 10 {
+            // Check if modification dates are clustered (within 1 minute = bulk sync)
+            let dates = memoChanges.compactMap { $0.modificationDate }
+            if !dates.isEmpty {
+                let minDate = dates.min()!
+                let maxDate = dates.max()!
+                let spread = maxDate.timeIntervalSince(minDate)
+
+                // All changes within 60 seconds = bulk sync, not user activity
+                if spread < 60 {
+                    log.debug("Skipping bulk sync of \(memoChanges.count) memos (likely token reset)")
+                    return []
+                }
+            }
+        }
+
+        return memoChanges
     }
 
     private func addSyncEvent(_ event: SyncEvent) {
