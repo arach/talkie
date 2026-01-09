@@ -63,7 +63,7 @@ struct BridgeSettingsView: View {
                 bridgeManager.unpair()
             }
         } message: {
-            Text("This will remove all pairing data. You'll need to scan the QR code again to reconnect.")
+            Text("This will remove the pairing. Scan the QR code again to reconnect.")
         }
     }
 
@@ -292,7 +292,7 @@ struct BridgeSettingsView: View {
                 // Unpair
                 SettingsActionRow(
                     icon: "xmark.circle",
-                    title: "Unpair Mac",
+                    title: "Unpair from Mac",
                     color: .recording
                 ) {
                     showUnpairConfirmation = true
