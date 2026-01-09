@@ -230,20 +230,20 @@ struct DebugToolbarOverlay<Content: View>: View {
                 }
             }) {
                 Image(systemName: "ant.fill")
-                    .font(.system(size: 14))
-                    .foregroundColor(showToolbar ? .active : .textTertiary)
+                    .font(.system(size: 14, weight: showToolbar ? .semibold : .regular))
+                    .foregroundColor(showToolbar ? .white : .textTertiary)
                     .rotationEffect(.degrees(showToolbar ? 180 : 0))
-                    .animation(.spring(response: 0.18, dampingFraction: 0.75), value: showToolbar)
                     .frame(width: 32, height: 32)
                     .background(
                         Circle()
-                            .fill(Color.surfaceSecondary)
-                            .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
+                            .fill(showToolbar ? Color.textPrimary : Color.surfaceSecondary)
                     )
                     .overlay(
                         Circle()
-                            .strokeBorder(Color.textTertiary.opacity(0.2), lineWidth: 1)
+                            .strokeBorder(showToolbar ? Color.clear : Color.textTertiary.opacity(0.2), lineWidth: 1)
                     )
+                    .scaleEffect(showToolbar ? 1.05 : 1.0)
+                    .animation(.spring(response: 0.18, dampingFraction: 0.75), value: showToolbar)
             }
         }
         .padding(.trailing, 16)
