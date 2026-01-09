@@ -378,77 +378,44 @@ private struct SyncDetailsView: View {
     let syncStatus: SyncStatusManager
     let inventory: DataInventory?
     let onShowHistory: () -> Void
-    @State private var syncManager = CloudKitSyncManager.shared
-    @State private var copied = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // Summary line: "246 memos • Last sync 9:02 PM"
-            HStack(spacing: 0) {
-                // Memo count
-                HStack(spacing: 4) {
-                    Image(systemName: "doc.text")
-                        .font(.system(size: 9))
-                    Text("\(inventory?.local ?? 0) memos")
-                        .font(.system(size: 10, weight: .medium))
+        // Single compact line: "246 memos • Last sync 9:02 PM [History >]"
+        HStack(spacing: 0) {
+            HStack(spacing: 4) {
+                Image(systemName: "doc.text")
+                    .font(.system(size: 9))
+                Text("\(inventory?.local ?? 0) memos")
+                    .font(.system(size: 10, weight: .medium))
+            }
+            .foregroundColor(Theme.current.foregroundSecondary)
+
+            Text(" • ")
+                .font(.system(size: 10))
+                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.5))
+
+            if let lastSync = syncStatus.lastSyncDate {
+                Text("Last sync \(formatTime(lastSync))")
+                    .font(.system(size: 10))
+                    .foregroundColor(Theme.current.foregroundSecondary)
+            } else {
+                Text("Never synced")
+                    .font(.system(size: 10))
+                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.7))
+            }
+
+            Spacer()
+
+            Button(action: onShowHistory) {
+                HStack(spacing: 3) {
+                    Text("History")
+                        .font(.system(size: 9, weight: .medium))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 7, weight: .semibold))
                 }
                 .foregroundColor(Theme.current.foregroundSecondary)
-
-                // Separator
-                Text(" • ")
-                    .font(.system(size: 10))
-                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.5))
-
-                // Last sync
-                if let lastSync = syncStatus.lastSyncDate {
-                    Text("Last sync \(formatTime(lastSync))")
-                        .font(.system(size: 10))
-                        .foregroundColor(Theme.current.foregroundSecondary)
-                } else {
-                    Text("Never synced")
-                        .font(.system(size: 10))
-                        .foregroundColor(Theme.current.foregroundSecondary.opacity(0.7))
-                }
-
-                Spacer()
-
-                // Actions: Copy + View History
-                HStack(spacing: 8) {
-                    if !syncManager.syncHistory.isEmpty {
-                        Button(action: copyLog) {
-                            Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                                .font(.system(size: 9))
-                                .foregroundColor(copied ? .green : Theme.current.foregroundSecondary)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Copy sync log")
-                    }
-
-                    Button(action: onShowHistory) {
-                        HStack(spacing: 3) {
-                            Text("History")
-                                .font(.system(size: 9, weight: .medium))
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 7, weight: .semibold))
-                        }
-                        .foregroundColor(Theme.current.foregroundSecondary)
-                    }
-                    .buttonStyle(.plain)
-                }
             }
-
-            // Mini log (5 recent events)
-            if !syncManager.syncHistory.isEmpty {
-                VStack(alignment: .leading, spacing: 1) {
-                    ForEach(Array(syncManager.syncHistory.prefix(5))) { event in
-                        SyncMiniLogEntry(event: event)
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .background(Theme.current.background.opacity(0.5))
-                .cornerRadius(4)
-            }
+            .buttonStyle(.plain)
         }
         .padding(10)
         .background(Theme.current.surface1.opacity(0.5))
@@ -458,116 +425,6 @@ private struct SyncDetailsView: View {
     private func formatTime(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
-        return formatter.string(from: date)
-    }
-
-    private func copyLog() {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "HH:mm:ss"
-
-        var lines: [String] = []
-        for event in syncManager.syncHistory.prefix(5) {
-            let time = dateFormatter.string(from: event.timestamp)
-            let desc = describeEvent(event)
-            let duration = event.duration.map { String(format: " (%.1fs)", $0) } ?? ""
-            lines.append("[\(time)] \(desc)\(duration)")
-        }
-
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(lines.joined(separator: "\n"), forType: .string)
-
-        copied = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copied = false }
-    }
-
-    private func describeEvent(_ event: SyncEvent) -> String {
-        if let error = event.errorMessage, !error.isEmpty {
-            return "Failed: \(error)"
-        }
-
-        // Analyze details for richer description
-        let added = event.details.filter { $0.changeType == .added }.count
-        let modified = event.details.filter { $0.changeType == .modified }.count
-        let deleted = event.details.filter { $0.changeType == .deleted }.count
-
-        if added == 0 && modified == 0 && deleted == 0 {
-            return event.itemCount > 0 ? "Synced \(event.itemCount) items" : "No changes"
-        }
-
-        var parts: [String] = []
-        if added > 0 { parts.append("+\(added)") }
-        if modified > 0 { parts.append("~\(modified)") }
-        if deleted > 0 { parts.append("-\(deleted)") }
-        return "Synced: \(parts.joined(separator: " "))"
-    }
-}
-
-// MARK: - Sync Mini Log Entry
-
-private struct SyncMiniLogEntry: View {
-    let event: SyncEvent
-
-    var body: some View {
-        HStack(spacing: 6) {
-            // Timestamp
-            Text(formatTime(event.timestamp))
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.5))
-
-            // Status icon
-            Image(systemName: event.status.icon)
-                .font(.system(size: 7))
-                .foregroundColor(event.status.color)
-
-            // Description
-            Text(eventDescription)
-                .font(.system(size: 9))
-                .foregroundColor(Theme.current.foregroundSecondary)
-                .lineLimit(1)
-
-            Spacer()
-
-            // Duration (if notable)
-            if let duration = event.duration, duration > 1.0 {
-                Text(String(format: "%.1fs", duration))
-                    .font(.system(size: 8, design: .monospaced))
-                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.4))
-            }
-        }
-    }
-
-    private var eventDescription: String {
-        // Check for errors first
-        if let error = event.errorMessage, !error.isEmpty {
-            let truncated = error.prefix(40)
-            return "Failed: \(truncated)\(error.count > 40 ? "…" : "")"
-        }
-
-        // Analyze details for meaningful description
-        let added = event.details.filter { $0.changeType == .added }.count
-        let modified = event.details.filter { $0.changeType == .modified }.count
-        let deleted = event.details.filter { $0.changeType == .deleted }.count
-
-        // If we have detailed breakdown
-        if added > 0 || modified > 0 || deleted > 0 {
-            var parts: [String] = []
-            if added > 0 { parts.append("\(added) added") }
-            if modified > 0 { parts.append("\(modified) updated") }
-            if deleted > 0 { parts.append("\(deleted) removed") }
-            return parts.joined(separator: ", ")
-        }
-
-        // Fall back to item count
-        if event.itemCount > 0 {
-            return "Synced \(event.itemCount) \(event.itemCount == 1 ? "memo" : "memos")"
-        }
-
-        return "No changes"
-    }
-
-    private func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
         return formatter.string(from: date)
     }
 }
