@@ -461,18 +461,30 @@ struct VoiceMemoListView: View {
                             .padding(.bottom, 10)
                         }
                         .frame(maxWidth: .infinity)
-                        .background(
-                            themeManager.colors.cardBackground.opacity(0.95)
-                        )
-                        .background(
-                            // Top edge highlight
-                            VStack {
-                                Rectangle()
-                                    .fill(themeManager.colors.tableBorder)
-                                    .frame(height: 0.5)
-                                Spacer()
+                        .background {
+                            if #available(iOS 26.0, *) {
+                                // Liquid Glass background for iOS 26+
+                                RoundedRectangle(cornerRadius: CornerRadius.lg)
+                                    .fill(.clear)
+                                    .glassEffect(.regular.interactive())
+                                    .padding(.horizontal, Spacing.sm)
+                                    .padding(.top, Spacing.xs)
+                            } else {
+                                // Fallback solid background for older iOS
+                                themeManager.colors.cardBackground.opacity(0.95)
                             }
-                        )
+                        }
+                        .background {
+                            // Top edge highlight (only for non-glass)
+                            if #unavailable(iOS 26.0) {
+                                VStack {
+                                    Rectangle()
+                                        .fill(themeManager.colors.tableBorder)
+                                        .frame(height: 0.5)
+                                    Spacer()
+                                }
+                            }
+                        }
                     }
                     .animation(.easeInOut(duration: 0.2), value: isPushToTalkActive)
                 }
@@ -1205,23 +1217,34 @@ struct BottomCircleButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            // Circle background with icon - subtle green tint when active
-            Circle()
-                .fill(isActive ? Color.success.opacity(0.08) : Color.surfaceSecondary)
-                .frame(width: 44, height: 44)
-                .overlay(
-                    Circle()
-                        .strokeBorder(isActive ? Color.success.opacity(0.3) : Color.borderPrimary, lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-                .overlay {
-                    Image(systemName: icon)
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(isActive ? .textPrimary : .textSecondary)
-                }
+        if #available(iOS 26.0, *) {
+            // Liquid Glass button for iOS 26+
+            Button(action: action) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(isActive ? .textPrimary : .textSecondary)
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.glass)
+        } else {
+            // Fallback solid button for older iOS
+            Button(action: action) {
+                Circle()
+                    .fill(isActive ? Color.success.opacity(0.08) : Color.surfaceSecondary)
+                    .frame(width: 44, height: 44)
+                    .overlay(
+                        Circle()
+                            .strokeBorder(isActive ? Color.success.opacity(0.3) : Color.borderPrimary, lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                    .overlay {
+                        Image(systemName: icon)
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(isActive ? .textPrimary : .textSecondary)
+                    }
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
     }
 }
 
