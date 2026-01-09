@@ -699,10 +699,8 @@ struct VoiceMemoListView: View {
             defaults.set(false, forKey: "shouldStartRecording")
             defaults.synchronize()
 
-            // Trigger recording with slight delay to ensure UI is ready
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                showingRecordingView = true
-            }
+            // Trigger recording immediately - no delay needed
+            showingRecordingView = true
         }
     }
 

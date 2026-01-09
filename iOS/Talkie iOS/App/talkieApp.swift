@@ -13,15 +13,13 @@ struct talkieApp: App {
     // Wire up AppDelegate for push notification handling
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
-    let persistenceController = PersistenceController.shared
+    // Async-loaded persistence controller (non-blocking startup)
+    @State private var persistenceController: PersistenceController?
     @ObservedObject private var deepLinkManager = DeepLinkManager.shared
 
     // First launch detection
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @State private var showOnboarding = false
-
-    // Splash screen - shown until main view is ready
-    @State private var isLoading = true
 
     // MARK: - Boot Metrics
     private static let bootStart = Date()
@@ -38,7 +36,7 @@ struct talkieApp: App {
         let initStart = Date()
         registerBackgroundTasks()
 
-        // Initialize ConnectionManager and register sync providers
+        // Initialize ConnectionManager and register sync providers (async, non-blocking)
         Task {
             let manager = ConnectionManager.shared
             manager.register(LocalSyncProvider())
@@ -53,12 +51,10 @@ struct talkieApp: App {
     var body: some Scene {
         WindowGroup {
             ZStack {
-                if isLoading {
-                    SplashView()
-                        .transition(.opacity)
-                } else {
+                if let controller = persistenceController {
+                    // Database ready - show main content
                     VoiceMemoListView()
-                        .environment(\.managedObjectContext, persistenceController.container.viewContext)
+                        .environment(\.managedObjectContext, controller.container.viewContext)
                         .environmentObject(deepLinkManager)
                         .onOpenURL { url in
                             deepLinkManager.handle(url: url)
@@ -82,20 +78,27 @@ struct talkieApp: App {
                             )
                         }
                         .transition(.opacity)
+                } else {
+                    // Database loading - show splash (instant, no blocking)
+                    SplashView()
+                        .transition(.opacity)
                 }
             }
-            .animation(.easeInOut(duration: 0.3), value: isLoading)
-            .onAppear {
-                // Log boot time once
+            .animation(.easeInOut(duration: 0.3), value: persistenceController != nil)
+            .task {
+                // Load database asynchronously - UI shows immediately while this runs
+                let loadStart = Date()
+                let controller = await PersistenceController.loadAsync()
+                let loadDuration = Date().timeIntervalSince(loadStart)
+                AppLogger.app.info("📱 Database loaded in \(String(format: "%.0f", loadDuration * 1000))ms (async, non-blocking)")
+
+                persistenceController = controller
+
+                // Log total boot time
                 if !bootLogged {
                     bootLogged = true
                     let bootDuration = Date().timeIntervalSince(Self.bootStart)
                     AppLogger.app.info("📱 BOOT COMPLETE in \(String(format: "%.2f", bootDuration))s")
-                }
-
-                // Transition immediately - no artificial delay
-                withAnimation {
-                    isLoading = false
                 }
             }
         }
