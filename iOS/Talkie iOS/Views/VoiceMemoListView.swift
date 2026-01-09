@@ -296,7 +296,7 @@ struct VoiceMemoListView: View {
                                         .tracking(2)
                                         .foregroundColor(.textTertiary)
 
-                                    // Live waveform - particles style, compact
+                                    // Live waveform - particles style, compact, sharp
                                     LiveWaveformView(
                                         levels: pushToTalkRecorder.audioLevels,
                                         height: 48,
@@ -304,8 +304,8 @@ struct VoiceMemoListView: View {
                                         style: .particles
                                     )
                                     .padding(.horizontal, Spacing.xs)
-                                    .background(Color.surfacePrimary.opacity(0.3))
-                                    .cornerRadius(CornerRadius.sm)
+                                    .background(Color.surfacePrimary.opacity(0.15))
+                                    .cornerRadius(4)
                                     .padding(.horizontal, Spacing.md)
 
                                     // Duration + release label inline
@@ -325,6 +325,15 @@ struct VoiceMemoListView: View {
                                 }
                                 .padding(.top, Spacing.sm)
                                 .padding(.bottom, Spacing.xs)
+                                .padding(.horizontal, Spacing.sm)
+                                .background {
+                                    // Sharp-edged expansion area
+                                    if #available(iOS 26.0, *) {
+                                        Rectangle()
+                                            .fill(.clear)
+                                            .glassEffect(.regular)
+                                    }
+                                }
                                 .transition(.opacity.combined(with: .move(edge: .bottom)))
                             }
 
