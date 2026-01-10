@@ -1,116 +1,92 @@
 "use client"
 import React from 'react'
 import Link from 'next/link'
-import { ArrowLeft, ArrowRight, Lightbulb, Shield, Cpu, Network, Eye } from 'lucide-react'
-import Container from '../Container'
+import { ArrowRight, Shield, Cpu, Eye, Network } from 'lucide-react'
+import DocsLayout from './DocsLayout'
 
-const Section = ({ title, children }) => (
-  <section className="mb-12">
-    <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-4">{title}</h2>
-    <div className="text-zinc-600 dark:text-zinc-400 space-y-4">{children}</div>
-  </section>
-)
-
-const Placeholder = ({ children }) => (
-  <div className="p-6 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900/50">
-    <p className="text-sm text-zinc-500 dark:text-zinc-500 italic">{children}</p>
-  </div>
-)
+// Sections for the right-side table of contents
+const sections = [
+  { id: 'philosophy', title: 'Philosophy', level: 2 },
+  { id: 'local-first', title: 'Local-First Design', level: 2 },
+  { id: 'multi-process', title: 'Multi-Process Architecture', level: 2 },
+  { id: 'communication', title: 'How Components Communicate', level: 2 },
+  { id: 'xpc', title: 'XPC', level: 3 },
+  { id: 'http', title: 'HTTP', level: 3 },
+  { id: 'next-steps', title: 'Continue Reading', level: 2 },
+]
 
 const FeatureCard = ({ icon: Icon, title, description, color }) => (
-  <div className="p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+  <div className="p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 not-prose">
     <Icon className={`w-6 h-6 ${color} mb-3`} />
-    <h3 className="font-bold text-zinc-900 dark:text-white mb-2">{title}</h3>
+    <h4 className="font-bold text-zinc-900 dark:text-white mb-2">{title}</h4>
     <p className="text-sm text-zinc-600 dark:text-zinc-400">{description}</p>
   </div>
 )
 
 export default function OverviewPage() {
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
-      {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800">
-        <Container className="h-14 flex items-center justify-between">
-          <Link
-            href="/docs"
-            className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-black dark:hover:text-white transition-colors group"
-          >
-            <ArrowLeft className="w-3 h-3 transition-transform group-hover:-translate-x-0.5" />
-            DOCS
-          </Link>
+    <DocsLayout
+      title="Overview"
+      description="Talkie is a voice-first productivity suite for macOS. Built with privacy at its core, it processes everything locally while maintaining a seamless experience across devices."
+      badge="Introduction"
+      badgeColor="purple"
+      sections={sections}
+    >
+      {/* Philosophy */}
+      <h2 id="philosophy">Philosophy</h2>
+      <p>
+        Talkie is designed around three core principles that guide every architectural decision.
+        These aren't just marketing—they fundamentally shape how the app works.
+      </p>
 
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="h-3 w-px bg-zinc-300 dark:bg-zinc-700"></div>
-            <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-900 dark:text-white">OVERVIEW</span>
-          </div>
-        </Container>
-      </nav>
+      <div className="grid md:grid-cols-3 gap-4 my-6 not-prose">
+        <FeatureCard
+          icon={Shield}
+          title="Local-First"
+          description="Your voice data never leaves your devices. All transcription happens on your Mac."
+          color="text-emerald-500"
+        />
+        <FeatureCard
+          icon={Cpu}
+          title="Privacy by Design"
+          description="No cloud processing required. No accounts needed. Your data is yours."
+          color="text-blue-500"
+        />
+        <FeatureCard
+          icon={Eye}
+          title="Transparent"
+          description="See exactly what's happening. No black boxes or hidden processes."
+          color="text-violet-500"
+        />
+      </div>
 
-      <main className="pt-24 pb-32 px-6">
-        <Container>
-          <div className="max-w-3xl">
-            {/* Header */}
-            <div className="mb-12">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-violet-200 dark:border-violet-500/30 bg-violet-50 dark:bg-violet-500/10 mb-6">
-                <Lightbulb className="w-4 h-4 text-violet-600 dark:text-violet-400" />
-                <span className="text-xs font-medium text-violet-700 dark:text-violet-400">Introduction</span>
-              </div>
+      {/* Local-First Design */}
+      <h2 id="local-first">Local-First Design</h2>
+      <p>
+        "Local-first" means your data lives on your device first, always. The cloud is optional,
+        not required. This has real implications:
+      </p>
+      <ul>
+        <li><strong>Works offline</strong> — Record, transcribe, and create memos without internet</li>
+        <li><strong>Instant startup</strong> — No waiting for cloud connections or sync</li>
+        <li><strong>You own your data</strong> — It's in readable formats on your disk</li>
+        <li><strong>No accounts required</strong> — Start using Talkie immediately</li>
+      </ul>
+      <p>
+        When you do enable sync (like iCloud), it's additive. The app works perfectly without it,
+        and sync just keeps your devices in harmony.
+      </p>
 
-              <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-zinc-900 dark:text-white mb-6">
-                Overview
-              </h1>
+      {/* Multi-Process Architecture */}
+      <h2 id="multi-process">Multi-Process Architecture</h2>
+      <p>
+        Unlike most apps that run as a single process, Talkie splits responsibilities across
+        multiple specialized processes. This design provides reliability, security, and performance
+        benefits.
+      </p>
 
-              <p className="text-lg text-zinc-600 dark:text-zinc-400">
-                Talkie is a voice-first productivity suite for macOS. Built with privacy at its core,
-                it processes everything locally while maintaining a seamless experience across devices.
-              </p>
-            </div>
-
-            {/* Philosophy */}
-            <Section title="Philosophy">
-              <p>
-                Talkie is designed around three core principles that guide every architectural decision.
-              </p>
-
-              <div className="grid md:grid-cols-3 gap-4 mt-6">
-                <FeatureCard
-                  icon={Shield}
-                  title="Local-First"
-                  description="Your voice data never leaves your devices. All transcription happens on your Mac."
-                  color="text-emerald-500"
-                />
-                <FeatureCard
-                  icon={Cpu}
-                  title="Privacy by Design"
-                  description="No cloud processing required. No accounts needed. Your data is yours."
-                  color="text-blue-500"
-                />
-                <FeatureCard
-                  icon={Eye}
-                  title="Transparent"
-                  description="See exactly what's happening. No black boxes or hidden processes."
-                  color="text-violet-500"
-                />
-              </div>
-            </Section>
-
-            {/* Local-First Design */}
-            <Section title="Local-First Design">
-              <Placeholder>
-                Coming soon: Detailed explanation of local-first principles in Talkie.
-                How data stays on device, offline-first capabilities, and sync strategies.
-              </Placeholder>
-            </Section>
-
-            {/* Multi-Process Architecture */}
-            <Section title="Multi-Process Architecture">
-              <p>
-                Talkie splits responsibilities across multiple processes for reliability and performance.
-                If one component has an issue, the others keep running.
-              </p>
-
-              <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 mt-6">
-                <pre className="text-xs md:text-sm font-mono text-zinc-600 dark:text-zinc-400 overflow-x-auto">
+      <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6 my-6 not-prose overflow-x-auto">
+        <pre className="text-xs md:text-sm font-mono text-zinc-400">
 {`┌─────────────────────────────────────────────────────────────┐
 │                    Talkie (Mac App)                         │
 │              UI • Workflows • Data • Orchestration          │
@@ -122,69 +98,71 @@ export default function OverviewPage() {
         │    (Swift)     │ │   (Swift)   │ │   (TypeScript)   │
         │  Ears & Hands  │ │ Local Brain │ │   iOS Bridge     │
         └────────────────┘ └─────────────┘ └──────────────────┘`}
-                </pre>
-              </div>
+        </pre>
+      </div>
 
-              <Placeholder>
-                Coming soon: Detailed breakdown of each process, when they start,
-                and how they communicate.
-              </Placeholder>
-            </Section>
+      <p>
+        <strong>Why multiple processes?</strong>
+      </p>
+      <ul>
+        <li><strong>Fault isolation</strong> — If one component crashes, others keep running</li>
+        <li><strong>Security boundaries</strong> — Each process has only the permissions it needs</li>
+        <li><strong>Resource management</strong> — Heavy transcription work doesn't block the UI</li>
+        <li><strong>Independent updates</strong> — Components can evolve separately</li>
+      </ul>
 
-            {/* Communication Patterns */}
-            <Section title="How Components Communicate">
-              <div className="space-y-4">
-                <div className="p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-                  <div className="flex items-center gap-3 mb-2">
-                    <Network className="w-5 h-5 text-blue-500" />
-                    <h3 className="font-bold text-zinc-900 dark:text-white">XPC (Inter-Process Communication)</h3>
-                  </div>
-                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                    Talkie communicates with TalkieLive and TalkieEngine via XPC,
-                    Apple's secure inter-process communication mechanism.
-                  </p>
-                </div>
+      {/* Communication */}
+      <h2 id="communication">How Components Communicate</h2>
+      <p>
+        The processes talk to each other using two main methods, each chosen for specific reasons.
+      </p>
 
-                <div className="p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-                  <div className="flex items-center gap-3 mb-2">
-                    <Network className="w-5 h-5 text-emerald-500" />
-                    <h3 className="font-bold text-zinc-900 dark:text-white">HTTP (Local Server)</h3>
-                  </div>
-                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                    TalkieServer exposes HTTP endpoints for iOS connectivity.
-                    Communication happens over Tailscale's encrypted tunnel.
-                  </p>
-                </div>
-              </div>
+      <h3 id="xpc">XPC (Inter-Process Communication)</h3>
+      <div className="p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 my-4 not-prose">
+        <div className="flex items-center gap-3 mb-2">
+          <Network className="w-5 h-5 text-blue-500" />
+          <span className="font-bold text-zinc-900 dark:text-white">Talkie ↔ TalkieLive ↔ TalkieEngine</span>
+        </div>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          XPC is Apple's secure inter-process communication mechanism. It provides automatic
+          process lifecycle management, type-safe messaging, and sandboxing support.
+          All native macOS components use XPC.
+        </p>
+      </div>
 
-              <Placeholder>
-                Coming soon: Message flow diagrams, security considerations,
-                and error handling patterns.
-              </Placeholder>
-            </Section>
+      <h3 id="http">HTTP (Local Server)</h3>
+      <div className="p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 my-4 not-prose">
+        <div className="flex items-center gap-3 mb-2">
+          <Network className="w-5 h-5 text-emerald-500" />
+          <span className="font-bold text-zinc-900 dark:text-white">TalkieServer ↔ iPhone</span>
+        </div>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          TalkieServer exposes HTTP endpoints that the iPhone app connects to.
+          All traffic flows over Tailscale's encrypted WireGuard tunnel.
+          This enables cross-device sync without any cloud intermediary.
+        </p>
+      </div>
 
-            {/* Next Steps */}
-            <section className="pt-8 border-t border-zinc-200 dark:border-zinc-800">
-              <h2 className="text-xl font-bold text-zinc-900 dark:text-white mb-4">Continue Reading</h2>
+      {/* Next Steps */}
+      <h2 id="next-steps">Continue Reading</h2>
+      <p>
+        Ready to go deeper? The architecture docs explain each component in detail.
+      </p>
 
-              <Link
-                href="/docs/architecture"
-                className="group flex items-center justify-between p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-violet-300 dark:hover:border-violet-500/50 transition-colors"
-              >
-                <div>
-                  <h3 className="font-bold text-zinc-900 dark:text-white group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
-                    Architecture Deep Dive
-                  </h3>
-                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                    Detailed look at each component and how they work together
-                  </p>
-                </div>
-                <ArrowRight className="w-5 h-5 text-zinc-400 group-hover:text-violet-500 group-hover:translate-x-1 transition-all" />
-              </Link>
-            </section>
-          </div>
-        </Container>
-      </main>
-    </div>
+      <Link
+        href="/docs/architecture"
+        className="group flex items-center justify-between p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-violet-300 dark:hover:border-violet-500/50 transition-colors not-prose"
+      >
+        <div>
+          <span className="font-bold text-zinc-900 dark:text-white group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
+            Architecture Deep Dive
+          </span>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
+            Detailed look at each component and how they work together
+          </p>
+        </div>
+        <ArrowRight className="w-5 h-5 text-zinc-400 group-hover:text-violet-500 group-hover:translate-x-1 transition-all" />
+      </Link>
+    </DocsLayout>
   )
 }
