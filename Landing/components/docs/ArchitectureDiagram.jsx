@@ -1,6 +1,6 @@
 "use client"
 import React from 'react'
-import { Monitor, Mic, Cpu, Server, Smartphone, Watch } from 'lucide-react'
+import { Monitor, Mic, Cpu, Server, Smartphone, Watch, Cloud } from 'lucide-react'
 
 // Process box component
 const ProcessBox = ({
@@ -18,6 +18,7 @@ const ProcessBox = ({
     blue: 'border-blue-300 dark:border-blue-500/40 bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-500/10 dark:to-blue-500/5',
     amber: 'border-amber-300 dark:border-amber-500/40 bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-500/10 dark:to-amber-500/5',
     zinc: 'border-zinc-300 dark:border-zinc-600 bg-gradient-to-br from-zinc-50 to-zinc-100/50 dark:from-zinc-800/50 dark:to-zinc-800/30',
+    sky: 'border-sky-300 dark:border-sky-500/40 bg-gradient-to-br from-sky-50 to-sky-100/50 dark:from-sky-500/10 dark:to-sky-500/5',
   }
 
   const iconColors = {
@@ -26,37 +27,39 @@ const ProcessBox = ({
     blue: 'text-blue-600 dark:text-blue-400',
     amber: 'text-amber-600 dark:text-amber-400',
     zinc: 'text-zinc-600 dark:text-zinc-400',
+    sky: 'text-sky-600 dark:text-sky-400',
   }
 
   const isLarge = size === 'large'
+  const isSmall = size === 'small'
 
   return (
     <div className={`
       relative rounded-xl border-2 ${colors[color]}
-      ${isLarge ? 'px-6 py-4' : 'px-4 py-3'}
+      ${isLarge ? 'px-6 py-4' : isSmall ? 'px-3 py-2' : 'px-4 py-3'}
       shadow-sm bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm
       ${className}
     `}>
       <div className="flex items-center gap-3">
         <div className={`
           flex-shrink-0 rounded-lg
-          ${isLarge ? 'w-11 h-11' : 'w-9 h-9'}
+          ${isLarge ? 'w-11 h-11' : isSmall ? 'w-7 h-7' : 'w-9 h-9'}
           flex items-center justify-center
           bg-white dark:bg-zinc-900 shadow-sm border border-zinc-200 dark:border-zinc-700
         `}>
-          <Icon className={`${isLarge ? 'w-5 h-5' : 'w-4 h-4'} ${iconColors[color]}`} />
+          <Icon className={`${isLarge ? 'w-5 h-5' : isSmall ? 'w-3.5 h-3.5' : 'w-4 h-4'} ${iconColors[color]}`} />
         </div>
         <div>
-          <div className={`font-bold text-zinc-900 dark:text-white ${isLarge ? 'text-base' : 'text-sm'}`}>
+          <div className={`font-bold text-zinc-900 dark:text-white ${isLarge ? 'text-base' : isSmall ? 'text-xs' : 'text-sm'}`}>
             {name}
           </div>
-          <div className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400">
+          <div className={`font-mono text-zinc-500 dark:text-zinc-400 ${isSmall ? 'text-[8px]' : 'text-[10px]'}`}>
             {subtitle}
           </div>
         </div>
       </div>
       {description && (
-        <div className={`mt-2 text-[11px] text-zinc-600 dark:text-zinc-400`}>
+        <div className={`mt-2 text-zinc-600 dark:text-zinc-400 ${isSmall ? 'text-[9px]' : 'text-[11px]'}`}>
           {description}
         </div>
       )}
@@ -64,54 +67,60 @@ const ProcessBox = ({
   )
 }
 
-// Curved arrow path with label
-const CurvedArrow = ({ d, label, labelPos, color = 'zinc' }) => {
-  const colors = {
-    zinc: 'stroke-zinc-400 dark:stroke-zinc-600',
-    emerald: 'stroke-emerald-400 dark:stroke-emerald-500',
-    blue: 'stroke-blue-400 dark:stroke-blue-500',
-    amber: 'stroke-amber-400 dark:stroke-amber-500',
-  }
-
-  return (
-    <g>
-      {/* Main path */}
-      <path
-        d={d}
-        fill="none"
-        className={colors[color]}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        markerEnd="url(#arrowhead)"
-      />
-      {/* Label */}
-      <text
-        x={labelPos.x}
-        y={labelPos.y}
-        textAnchor="middle"
-        className="fill-zinc-500 dark:fill-zinc-400 text-[10px] font-mono"
-      >
-        {label}
-      </text>
-    </g>
-  )
-}
-
 // Main Architecture Diagram with SVG curves
 export default function ArchitectureDiagram() {
   return (
     <div className="my-8 p-4 md:p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-x-auto">
-      <div className="relative min-w-[580px] h-[420px]">
+      <div className="relative min-w-[620px] h-[440px]">
         {/* SVG layer for curved connections */}
         <svg
           className="absolute inset-0 w-full h-full pointer-events-none"
-          viewBox="0 0 580 420"
+          viewBox="0 0 620 440"
           preserveAspectRatio="xMidYMid meet"
         >
-          {/* Arrow marker definition */}
+          {/* Arrow marker definitions - color matched */}
           <defs>
             <marker
-              id="arrowhead"
+              id="arrow-emerald"
+              markerWidth="8"
+              markerHeight="6"
+              refX="7"
+              refY="3"
+              orient="auto"
+            >
+              <polygon
+                points="0 0, 8 3, 0 6"
+                className="fill-emerald-400 dark:fill-emerald-500"
+              />
+            </marker>
+            <marker
+              id="arrow-blue"
+              markerWidth="8"
+              markerHeight="6"
+              refX="7"
+              refY="3"
+              orient="auto"
+            >
+              <polygon
+                points="0 0, 8 3, 0 6"
+                className="fill-blue-400 dark:fill-blue-500"
+              />
+            </marker>
+            <marker
+              id="arrow-amber"
+              markerWidth="8"
+              markerHeight="6"
+              refX="7"
+              refY="3"
+              orient="auto"
+            >
+              <polygon
+                points="0 0, 8 3, 0 6"
+                className="fill-amber-400 dark:fill-amber-500"
+              />
+            </marker>
+            <marker
+              id="arrow-zinc"
               markerWidth="8"
               markerHeight="6"
               refX="7"
@@ -124,7 +133,7 @@ export default function ArchitectureDiagram() {
               />
             </marker>
             <marker
-              id="arrowhead-amber"
+              id="arrow-sky"
               markerWidth="8"
               markerHeight="6"
               refX="7"
@@ -133,75 +142,107 @@ export default function ArchitectureDiagram() {
             >
               <polygon
                 points="0 0, 8 3, 0 6"
-                className="fill-amber-400 dark:fill-amber-500"
+                className="fill-sky-400 dark:fill-sky-500"
               />
             </marker>
           </defs>
 
-          {/* Curved path: Talkie → TalkieLive (left curve) */}
+          {/* Curved path: Talkie → TalkieLive
+              From bottom of Talkie (310, 95) curving left to top-center of TalkieLive (95, 175) */}
           <path
-            d="M 200 95 C 200 130, 120 130, 120 175"
+            d="M 240 95 C 240 135, 95 135, 95 175"
             fill="none"
-            className="stroke-emerald-400/70 dark:stroke-emerald-500/70"
+            className="stroke-emerald-400 dark:stroke-emerald-500"
             strokeWidth="2"
             strokeLinecap="round"
-            markerEnd="url(#arrowhead)"
+            markerEnd="url(#arrow-emerald)"
           />
-          <text x="140" y="140" textAnchor="middle" className="fill-zinc-500 dark:fill-zinc-400 text-[10px] font-mono">
+          <text x="150" y="128" textAnchor="middle" className="fill-emerald-600 dark:fill-emerald-400 text-[10px] font-mono font-medium">
             XPC
           </text>
 
-          {/* Curved path: Talkie → TalkieEngine (center, slight curve) */}
+          {/* Curved path: Talkie → TalkieEngine
+              From bottom of Talkie (310, 95) straight down to top-center of TalkieEngine (310, 175) */}
           <path
-            d="M 290 95 C 290 120, 290 150, 290 175"
+            d="M 310 95 Q 310 135, 310 175"
             fill="none"
-            className="stroke-blue-400/70 dark:stroke-blue-500/70"
+            className="stroke-blue-400 dark:stroke-blue-500"
             strokeWidth="2"
             strokeLinecap="round"
-            markerEnd="url(#arrowhead)"
+            markerEnd="url(#arrow-blue)"
           />
-          <text x="308" y="140" textAnchor="middle" className="fill-zinc-500 dark:fill-zinc-400 text-[10px] font-mono">
+          <text x="328" y="140" textAnchor="middle" className="fill-blue-600 dark:fill-blue-400 text-[10px] font-mono font-medium">
             XPC
           </text>
 
-          {/* Curved path: Talkie → TalkieServer (right curve) */}
+          {/* Curved path: Talkie → TalkieServer
+              From bottom of Talkie (310, 95) curving right to top-center of TalkieServer (525, 175) */}
           <path
-            d="M 380 95 C 380 130, 460 130, 460 175"
+            d="M 380 95 C 380 135, 525 135, 525 175"
             fill="none"
-            className="stroke-amber-400/70 dark:stroke-amber-500/70"
+            className="stroke-amber-400 dark:stroke-amber-500"
             strokeWidth="2"
             strokeLinecap="round"
-            markerEnd="url(#arrowhead)"
+            markerEnd="url(#arrow-amber)"
           />
-          <text x="440" y="140" textAnchor="middle" className="fill-zinc-500 dark:fill-zinc-400 text-[10px] font-mono">
+          <text x="470" y="128" textAnchor="middle" className="fill-amber-600 dark:fill-amber-400 text-[10px] font-mono font-medium">
             HTTP
           </text>
 
-          {/* Curved path: TalkieServer → iPhone (S-curve down-right) */}
+          {/* Curved path: TalkieServer → iPhone
+              From bottom of TalkieServer curving down to top-center of iPhone */}
           <path
-            d="M 460 270 C 460 300, 420 320, 420 350"
+            d="M 525 270 C 525 310, 440 310, 440 345"
             fill="none"
-            className="stroke-zinc-400/70 dark:stroke-zinc-500/70"
+            className="stroke-zinc-400 dark:stroke-zinc-500"
             strokeWidth="2"
             strokeLinecap="round"
-            markerEnd="url(#arrowhead)"
+            markerEnd="url(#arrow-zinc)"
           />
-          <text x="455" y="310" textAnchor="middle" className="fill-zinc-500 dark:fill-zinc-400 text-[10px] font-mono">
+          <text x="500" y="305" textAnchor="middle" className="fill-zinc-500 dark:fill-zinc-400 text-[10px] font-mono font-medium">
             Tailscale
           </text>
 
-          {/* Curved path: iPhone → Watch (small connector) */}
+          {/* Curved path: Talkie → iCloud (right side)
+              From right edge of Talkie curving to left edge of iCloud */}
           <path
-            d="M 450 380 C 470 380, 480 380, 500 380"
+            d="M 400 50 C 480 50, 480 50, 560 50"
             fill="none"
-            className="stroke-zinc-300/70 dark:stroke-zinc-600/70"
+            className="stroke-sky-400 dark:stroke-sky-500"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeDasharray="6 3"
+            markerEnd="url(#arrow-sky)"
+          />
+
+          {/* Curved path: iPhone → iCloud
+              From top of iPhone curving up to bottom of iCloud */}
+          <path
+            d="M 470 345 C 520 320, 570 280, 570 100"
+            fill="none"
+            className="stroke-sky-400 dark:stroke-sky-500"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeDasharray="6 3"
+            markerEnd="url(#arrow-sky)"
+          />
+          <text x="555" y="220" textAnchor="middle" className="fill-sky-600 dark:fill-sky-400 text-[10px] font-mono font-medium">
+            CloudKit
+          </text>
+
+          {/* iPhone → Watch (subordinate connection) */}
+          <path
+            d="M 480 390 L 520 390"
+            fill="none"
+            className="stroke-zinc-300 dark:stroke-zinc-600"
             strokeWidth="1.5"
             strokeLinecap="round"
-            strokeDasharray="4 2"
+            strokeDasharray="3 2"
           />
         </svg>
 
         {/* Process boxes positioned absolutely */}
+
         {/* Main Talkie app - centered at top */}
         <div className="absolute left-1/2 -translate-x-1/2 top-0">
           <ProcessBox
@@ -214,8 +255,19 @@ export default function ArchitectureDiagram() {
           />
         </div>
 
+        {/* iCloud - top right */}
+        <div className="absolute right-[20px] top-[20px]">
+          <ProcessBox
+            icon={Cloud}
+            name="iCloud"
+            subtitle="CloudKit"
+            color="sky"
+            size="small"
+          />
+        </div>
+
         {/* Helper processes row */}
-        <div className="absolute top-[180px] left-[30px]">
+        <div className="absolute top-[180px] left-[20px]">
           <ProcessBox
             icon={Mic}
             name="TalkieLive"
@@ -235,7 +287,7 @@ export default function ArchitectureDiagram() {
           />
         </div>
 
-        <div className="absolute top-[180px] right-[30px]">
+        <div className="absolute top-[180px] right-[20px]">
           <ProcessBox
             icon={Server}
             name="TalkieServer"
@@ -245,25 +297,28 @@ export default function ArchitectureDiagram() {
           />
         </div>
 
-        {/* Mobile devices */}
-        <div className="absolute bottom-[10px] right-[120px]">
-          <ProcessBox
-            icon={Smartphone}
-            name="iPhone"
-            subtitle="iOS"
-            description="Voice Capture"
-            color="zinc"
-          />
-        </div>
-
-        <div className="absolute bottom-[10px] right-[10px]">
-          <ProcessBox
-            icon={Watch}
-            name="Watch"
-            subtitle="watchOS"
-            description="Quick Capture"
-            color="zinc"
-          />
+        {/* Mobile section - iPhone with Watch as subordinate */}
+        <div className="absolute bottom-[20px] right-[80px]">
+          <div className="flex items-end gap-3">
+            {/* iPhone - primary */}
+            <ProcessBox
+              icon={Smartphone}
+              name="iPhone"
+              subtitle="iOS"
+              description="Voice Capture"
+              color="zinc"
+            />
+            {/* Watch - subordinate, smaller */}
+            <div className="pb-1">
+              <ProcessBox
+                icon={Watch}
+                name="Watch"
+                subtitle="watchOS"
+                color="zinc"
+                size="small"
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -274,11 +329,11 @@ export default function ArchitectureDiagram() {
 export function SimpleArchitectureDiagram() {
   return (
     <div className="my-8 p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-x-auto">
-      <div className="relative min-w-[500px] h-[100px]">
+      <div className="relative min-w-[520px] h-[100px]">
         {/* SVG for curved connections */}
         <svg
           className="absolute inset-0 w-full h-full pointer-events-none"
-          viewBox="0 0 500 100"
+          viewBox="0 0 520 100"
           preserveAspectRatio="xMidYMid meet"
         >
           <defs>
@@ -297,24 +352,26 @@ export function SimpleArchitectureDiagram() {
             </marker>
             {/* Gradient for the flow */}
             <linearGradient id="flowGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" className="[stop-color:rgb(139,92,246)]" stopOpacity="0.6" />
-              <stop offset="50%" className="[stop-color:rgb(16,185,129)]" stopOpacity="0.6" />
-              <stop offset="100%" className="[stop-color:rgb(113,113,122)]" stopOpacity="0.6" />
+              <stop offset="0%" className="[stop-color:rgb(139,92,246)]" stopOpacity="0.7" />
+              <stop offset="40%" className="[stop-color:rgb(16,185,129)]" stopOpacity="0.7" />
+              <stop offset="70%" className="[stop-color:rgb(245,158,11)]" stopOpacity="0.7" />
+              <stop offset="100%" className="[stop-color:rgb(113,113,122)]" stopOpacity="0.7" />
             </linearGradient>
           </defs>
 
-          {/* Flowing curve from Talkie through helpers to iPhone */}
+          {/* Flowing S-curve from Talkie through helpers to iPhone */}
           <path
-            d="M 70 50 C 100 50, 110 50, 140 50
-               L 160 50
-               C 190 50, 200 30, 220 30
-               C 240 30, 250 50, 280 50
-               C 310 50, 320 70, 340 70
-               C 360 70, 370 50, 400 50
-               L 430 50"
+            d="M 75 50
+               C 95 50, 105 50, 125 50
+               Q 145 50, 160 35
+               Q 175 20, 195 30
+               Q 215 40, 230 50
+               Q 245 60, 265 60
+               Q 285 60, 305 50
+               C 340 35, 370 50, 420 50"
             fill="none"
             stroke="url(#flowGradient)"
-            strokeWidth="2"
+            strokeWidth="2.5"
             strokeLinecap="round"
             markerEnd="url(#arrow-simple)"
           />
@@ -329,7 +386,7 @@ export function SimpleArchitectureDiagram() {
         </div>
 
         {/* Helper cluster */}
-        <div className="absolute left-[140px] top-1/2 -translate-y-1/2 flex gap-2">
+        <div className="absolute left-[130px] top-1/2 -translate-y-1/2 flex gap-2">
           <div className="flex flex-col items-center">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-500/20 dark:to-emerald-500/10 border-2 border-emerald-300 dark:border-emerald-500/40 flex items-center justify-center shadow-sm">
               <Mic className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
@@ -351,18 +408,25 @@ export function SimpleArchitectureDiagram() {
         </div>
 
         {/* Mobile devices */}
-        <div className="absolute right-[60px] top-1/2 -translate-y-1/2 flex gap-2">
+        <div className="absolute right-[30px] top-1/2 -translate-y-1/2 flex items-end gap-1.5">
           <div className="flex flex-col items-center">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-zinc-100 to-zinc-50 dark:from-zinc-700 dark:to-zinc-800 border-2 border-zinc-300 dark:border-zinc-600 flex items-center justify-center shadow-sm">
               <Smartphone className="w-4 h-4 text-zinc-600 dark:text-zinc-400" />
             </div>
             <span className="mt-1 text-[9px] font-medium text-zinc-600 dark:text-zinc-400">iPhone</span>
           </div>
-          <div className="flex flex-col items-center">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-zinc-100 to-zinc-50 dark:from-zinc-700 dark:to-zinc-800 border-2 border-zinc-300 dark:border-zinc-600 flex items-center justify-center shadow-sm">
-              <Watch className="w-4 h-4 text-zinc-600 dark:text-zinc-400" />
+          <div className="flex flex-col items-center mb-0.5">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-zinc-100 to-zinc-50 dark:from-zinc-700 dark:to-zinc-800 border border-zinc-300 dark:border-zinc-600 flex items-center justify-center shadow-sm">
+              <Watch className="w-3 h-3 text-zinc-500 dark:text-zinc-500" />
             </div>
-            <span className="mt-1 text-[9px] font-medium text-zinc-600 dark:text-zinc-400">Watch</span>
+          </div>
+        </div>
+
+        {/* iCloud indicator */}
+        <div className="absolute right-0 top-0">
+          <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-sky-50 dark:bg-sky-500/10 border border-sky-200 dark:border-sky-500/30">
+            <Cloud className="w-3 h-3 text-sky-500" />
+            <span className="text-[8px] font-medium text-sky-600 dark:text-sky-400">iCloud</span>
           </div>
         </div>
       </div>
