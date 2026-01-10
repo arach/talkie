@@ -450,15 +450,31 @@ export function SimpleArchitectureDiagram() {
           <span className="text-[10px] text-zinc-500 dark:text-zinc-400">Orchestrator</span>
         </div>
 
-        {/* Connection lines */}
-        <div className="flex items-center gap-1">
-          <div className="w-16 h-0.5 bg-emerald-300 dark:bg-emerald-500/50"></div>
-          <div className="w-16 h-0.5 bg-blue-300 dark:bg-blue-500/50"></div>
-          <div className="w-16 h-0.5 bg-amber-300 dark:bg-amber-500/50"></div>
-        </div>
+        {/* Connection lines with small arrows */}
+        <svg className="w-64 h-8" viewBox="0 0 256 32">
+          <defs>
+            <marker id="arr-emerald" markerWidth="4" markerHeight="4" refX="2" refY="2" orient="auto">
+              <polygon points="0 0, 4 2, 0 4" className="fill-emerald-400 dark:fill-emerald-500" />
+            </marker>
+            <marker id="arr-blue" markerWidth="4" markerHeight="4" refX="2" refY="2" orient="auto">
+              <polygon points="0 0, 4 2, 0 4" className="fill-blue-400 dark:fill-blue-500" />
+            </marker>
+            <marker id="arr-amber" markerWidth="4" markerHeight="4" refX="2" refY="2" orient="auto">
+              <polygon points="0 0, 4 2, 0 4" className="fill-amber-400 dark:fill-amber-500" />
+            </marker>
+            <marker id="arr-sky" markerWidth="4" markerHeight="4" refX="2" refY="2" orient="auto">
+              <polygon points="0 0, 4 2, 0 4" className="fill-sky-400 dark:fill-sky-500" />
+            </marker>
+          </defs>
+          {/* Lines from center down to each process */}
+          <line x1="128" y1="0" x2="32" y2="28" className="stroke-emerald-400 dark:stroke-emerald-500" strokeWidth="2" markerEnd="url(#arr-emerald)" />
+          <line x1="128" y1="0" x2="96" y2="28" className="stroke-blue-400 dark:stroke-blue-500" strokeWidth="2" markerEnd="url(#arr-blue)" />
+          <line x1="128" y1="0" x2="160" y2="28" className="stroke-amber-400 dark:stroke-amber-500" strokeWidth="2" markerEnd="url(#arr-amber)" />
+          <line x1="128" y1="0" x2="224" y2="28" className="stroke-sky-400 dark:stroke-sky-500" strokeWidth="2" markerEnd="url(#arr-sky)" />
+        </svg>
 
         {/* Helper processes with protocol labels inline */}
-        <div className="flex items-start justify-center gap-8">
+        <div className="flex items-start justify-center gap-6">
           {/* TalkieLive */}
           <div className="flex flex-col items-center">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-500/20 dark:to-emerald-500/10 border-2 border-emerald-300 dark:border-emerald-500/40 flex items-center justify-center shadow-sm">
@@ -487,6 +503,16 @@ export function SimpleArchitectureDiagram() {
             <span className="mt-1.5 text-xs font-semibold text-zinc-900 dark:text-white">TalkieServer</span>
             <span className="text-[10px] text-zinc-500 dark:text-zinc-400">iOS Bridge</span>
             <span className="mt-2 px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-[10px] font-mono text-zinc-400 dark:text-zinc-500">HTTP</span>
+          </div>
+
+          {/* iCloud */}
+          <div className="flex flex-col items-center">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-sky-100 to-sky-50 dark:from-sky-500/20 dark:to-sky-500/10 border-2 border-sky-300 dark:border-sky-500/40 flex items-center justify-center shadow-sm">
+              <Cloud className="w-5 h-5 text-sky-600 dark:text-sky-400" />
+            </div>
+            <span className="mt-1.5 text-xs font-semibold text-zinc-900 dark:text-white">iCloud</span>
+            <span className="text-[10px] text-zinc-500 dark:text-zinc-400">Memo Sync</span>
+            <span className="mt-2 px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-[10px] font-mono text-zinc-400 dark:text-zinc-500">CloudKit</span>
           </div>
         </div>
       </div>
