@@ -2,7 +2,7 @@
 import React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ArrowLeft, Book, Lightbulb, Boxes, Database, Workflow, Code2, Puzzle, Server, Globe, ChevronRight, Menu, X } from 'lucide-react'
+import { ArrowLeft, Book, Lightbulb, Boxes, Database, Workflow, Code2, Puzzle, Server, Globe, ChevronRight, Menu, X, Route } from 'lucide-react'
 import Container from '../Container'
 
 // Navigation structure for all docs
@@ -12,6 +12,7 @@ const docsNav = [
     items: [
       { title: 'Overview', href: '/docs/overview', icon: Lightbulb, description: 'Philosophy & principles' },
       { title: 'Architecture', href: '/docs/architecture', icon: Boxes, description: 'How it all fits together' },
+      { title: 'Lifecycle', href: '/docs/lifecycle', icon: Route, description: 'Voice to action flow' },
       { title: 'Your Data', href: '/docs/data', icon: Database, description: 'Storage & exports' },
     ]
   },

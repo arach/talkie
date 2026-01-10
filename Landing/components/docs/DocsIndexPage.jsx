@@ -1,7 +1,7 @@
 "use client"
 import React from 'react'
 import Link from 'next/link'
-import { ArrowLeft, ArrowRight, Server, Globe, Book, Lightbulb, Boxes, Database, Workflow, Code2, Puzzle } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Server, Globe, Book, Lightbulb, Boxes, Database, Workflow, Code2, Puzzle, Route } from 'lucide-react'
 import Container from '../Container'
 
 const DocCard = ({ href, icon: Icon, title, description, color }) => (
@@ -83,6 +83,14 @@ export default function DocsIndexPage() {
                 title="Architecture"
                 description="Multi-process design explained. How Talkie, TalkieLive, TalkieEngine, and TalkieServer work together."
                 color="bg-purple-100 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400"
+              />
+
+              <DocCard
+                href="/docs/lifecycle"
+                icon={Route}
+                title="Lifecycle"
+                description="The journey from voice to action. Understand each phase and where you can plug in custom logic."
+                color="bg-violet-100 dark:bg-violet-500/20 text-violet-600 dark:text-violet-400"
               />
 
               <DocCard
