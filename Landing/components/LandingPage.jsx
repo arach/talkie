@@ -21,6 +21,7 @@ import {
   Wand2,
   Book,
   Terminal,
+  Layers,
 } from 'lucide-react'
 import Container from './Container'
 import HeroBadge from './HeroBadge'
