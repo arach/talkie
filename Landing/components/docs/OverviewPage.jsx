@@ -8,6 +8,7 @@ import { SimpleArchitectureDiagram } from './ArchitectureDiagram'
 // Sections for the right-side table of contents
 const sections = [
   { id: 'philosophy', title: 'Philosophy', level: 2 },
+  { id: 'design-principles', title: 'Design Principles', level: 2 },
   { id: 'local-first', title: 'Local-First Design', level: 2 },
   { id: 'multi-process', title: 'Multi-Process Architecture', level: 2 },
   { id: 'communication', title: 'How Components Communicate', level: 2 },
@@ -59,6 +60,75 @@ export default function OverviewPage() {
           description="See exactly what's happening. No black boxes or hidden processes."
           color="text-violet-500"
         />
+      </div>
+
+      {/* Design Principles */}
+      <h2 id="design-principles">Design Principles</h2>
+      <p>
+        We treat every user as a potential developer. These principles guide how we build Talkie,
+        giving you visibility and control over everything—with smart defaults so you don't have to think about it.
+      </p>
+
+      <div className="my-6 space-y-4 not-prose">
+        <div className="flex gap-4 p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400 font-bold text-sm">1</div>
+          <div>
+            <h4 className="font-bold text-zinc-900 dark:text-white">Everything is a file</h4>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
+              Your data lives in readable formats on disk. SQLite databases, JSON exports, audio files—all accessible and portable.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-4 p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400 font-bold text-sm">2</div>
+          <div>
+            <h4 className="font-bold text-zinc-900 dark:text-white">Small, focused data stores</h4>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
+              Instead of one monolithic database, each component owns its data. Memos in one place, live dictations in another. Clear boundaries, easy to reason about.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-4 p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400 font-bold text-sm">3</div>
+          <div>
+            <h4 className="font-bold text-zinc-900 dark:text-white">Data stores exposed by default</h4>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
+              We don't hide your data in opaque containers. Browse your recordings, query your databases, export anything. Your data, your access.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-4 p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400 font-bold text-sm">4</div>
+          <div>
+            <h4 className="font-bold text-zinc-900 dark:text-white">Well-defined lifecycles</h4>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
+              Every recording flows through clear phases: capture → transcription → routing → storage. Each phase has hooks where you can plug in custom logic.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-4 p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400 font-bold text-sm">5</div>
+          <div>
+            <h4 className="font-bold text-zinc-900 dark:text-white">Protect the critical path</h4>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
+              Recording and transcription are sacred. Nothing should block them—not sync, not workflows, not UI rendering. The happy path is always fast.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-4 p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400 font-bold text-sm">6</div>
+          <div>
+            <h4 className="font-bold text-zinc-900 dark:text-white">Smart defaults, full control</h4>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
+              Talkie works great out of the box. But when you want to customize—workflows, shortcuts, data locations, export formats—everything is configurable.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Local-First Design */}
