@@ -18,7 +18,7 @@ enum ListFocusRegion: Equatable {
 }
 
 /// Keyboard navigation state and handler for list views
-@Observable
+@MainActor @Observable
 final class ListKeyboardNavigator<ItemID: Hashable> {
     // MARK: - State
 

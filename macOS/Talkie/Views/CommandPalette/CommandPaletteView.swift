@@ -169,7 +169,8 @@ struct CommandPaletteView: View {
         let command = filteredCommands[selectedIndex]
         isPresented = false
         // Small delay to let the palette dismiss before executing
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(100))
             command.action()
         }
     }
