@@ -158,40 +158,6 @@ export default function DocsIndexPage() {
               />
             </div>
           </div>
-
-          {/* Architecture Overview */}
-          <div className="mt-20 pt-12 border-t border-zinc-200 dark:border-zinc-800">
-            <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-6">
-              How It Works
-            </h2>
-
-            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 md:p-8">
-              <pre className="text-xs md:text-sm font-mono text-zinc-600 dark:text-zinc-400 overflow-x-auto">
-{`┌─────────────────────────────────────────────────────────────┐
-│                    Talkie (Mac App)                         │
-│              UI • Workflows • Data • Orchestration          │
-└────────────────┬────────────────┬────────────────┬──────────┘
-                 │ XPC            │ XPC            │ HTTP
-                 ▼                ▼                ▼
-        ┌────────────────┐ ┌─────────────┐ ┌──────────────────┐
-        │  TalkieLive    │ │ TalkieEngine│ │  TalkieServer    │
-        │    (Swift)     │ │   (Swift)   │ │   (TypeScript)   │
-        │  Ears & Hands  │ │ Local Brain │ │   iOS Bridge     │
-        └────────────────┘ └─────────────┘ └────────┬─────────┘
-                                                    │ Tailscale
-                                                    ▼
-                                           ┌──────────────────┐
-                                           │  Talkie (iPhone) │
-                                           │   Voice Capture  │
-                                           └──────────────────┘`}
-              </pre>
-            </div>
-
-            <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400 max-w-2xl">
-              TalkieServer is a local TypeScript service that bridges your Mac and iPhone over Tailscale.
-              Your voice recordings sync directly between devices — no cloud servers involved.
-            </p>
-          </div>
         </Container>
       </main>
     </div>
