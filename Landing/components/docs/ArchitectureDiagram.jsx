@@ -94,10 +94,10 @@ export default function ArchitectureDiagram() {
     talkie: { x: 40, y: 20, size: 'large' },
     talkieLive: { x: 40, y: 140, size: 'normal' },
     talkieEngine: { x: 40, y: 240, size: 'normal' },
-    talkieServer: { x: 300, y: 28, size: 'normal' },
-    iPhone: { x: 520, y: 28, size: 'normal' },
-    watch: { x: 545, y: 140, size: 'small' },
-    iCloud: { x: 325, y: 255, size: 'small' },
+    talkieServer: { x: 300, y: 20, size: 'normal' },
+    iPhone: { x: 520, y: 20, size: 'normal' },
+    watch: { x: 545, y: 130, size: 'small' },
+    iCloud: { x: 300, y: 240, size: 'normal' },  // Same size as TalkieServer
   }
 
   const getNode = (id) => {
@@ -177,61 +177,61 @@ export default function ArchitectureDiagram() {
           viewBox={`0 0 ${layout.width} ${layout.height}`}
           preserveAspectRatio="xMidYMid meet"
         >
-          {/* Arrow marker definitions */}
+          {/* Arrow marker definitions - smaller arrows */}
           <defs>
             <marker
               id="arrow-emerald"
-              markerWidth="8"
-              markerHeight="6"
-              refX="8"
-              refY="3"
+              markerWidth="6"
+              markerHeight="4"
+              refX="6"
+              refY="2"
               orient="auto"
               markerUnits="userSpaceOnUse"
             >
               <polygon
-                points="0 0, 8 3, 0 6"
+                points="0 0, 6 2, 0 4"
                 className="fill-emerald-400 dark:fill-emerald-500"
               />
             </marker>
             <marker
               id="arrow-amber"
-              markerWidth="8"
-              markerHeight="6"
-              refX="8"
-              refY="3"
+              markerWidth="6"
+              markerHeight="4"
+              refX="6"
+              refY="2"
               orient="auto"
               markerUnits="userSpaceOnUse"
             >
               <polygon
-                points="0 0, 8 3, 0 6"
+                points="0 0, 6 2, 0 4"
                 className="fill-amber-400 dark:fill-amber-500"
               />
             </marker>
             <marker
               id="arrow-zinc"
-              markerWidth="8"
-              markerHeight="6"
-              refX="8"
-              refY="3"
+              markerWidth="6"
+              markerHeight="4"
+              refX="6"
+              refY="2"
               orient="auto"
               markerUnits="userSpaceOnUse"
             >
               <polygon
-                points="0 0, 8 3, 0 6"
+                points="0 0, 6 2, 0 4"
                 className="fill-zinc-400 dark:fill-zinc-500"
               />
             </marker>
             <marker
               id="arrow-sky"
-              markerWidth="8"
-              markerHeight="6"
-              refX="8"
-              refY="3"
+              markerWidth="6"
+              markerHeight="4"
+              refX="6"
+              refY="2"
               orient="auto"
               markerUnits="userSpaceOnUse"
             >
               <polygon
-                points="0 0, 8 3, 0 6"
+                points="0 0, 6 2, 0 4"
                 className="fill-sky-400 dark:fill-sky-500"
               />
             </marker>
@@ -405,8 +405,8 @@ export default function ArchitectureDiagram() {
             icon={Cloud}
             name="iCloud"
             subtitle="CloudKit"
+            description="Memo Sync"
             color="sky"
-            size="small"
           />
         </div>
 
