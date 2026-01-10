@@ -23,6 +23,10 @@ struct DictationListView: View {
     @State private var lastClickedID: Dictation.ID?
     @State private var filterMode: DictationFilterMode = .all
 
+    // Keyboard navigation
+    @State private var keyboardNav = ListKeyboardNavigator<Dictation.ID>()
+    @FocusState private var isSearchFocused: Bool
+
     // Onboarding state
     @AppStorage("hasDismissedDictationOnboarding") private var hasDismissedOnboarding = false
     @State private var showOnboarding = false
@@ -83,6 +87,59 @@ struct DictationListView: View {
         .onReceive(NotificationCenter.default.publisher(for: .init("FilterDictationsPending"))) { _ in
             filterMode = .pending
         }
+        .onAppear {
+            setupKeyboardNavigation()
+        }
+        .onDisappear {
+            keyboardNav.deactivate()
+        }
+        .onChange(of: filteredDictations) { _, newDictations in
+            keyboardNav.itemCount = newDictations.count
+        }
+    }
+
+    // MARK: - Keyboard Navigation Setup
+
+    private func setupKeyboardNavigation() {
+        keyboardNav.itemCount = filteredDictations.count
+
+        keyboardNav.itemAtIndex = { index in
+            guard index < filteredDictations.count else { return filteredDictations.first!.id }
+            return filteredDictations[index].id
+        }
+
+        keyboardNav.onSelect = { ids, isRange in
+            if isRange {
+                selectedDictationIDs = ids
+            } else {
+                selectedDictationIDs = ids
+            }
+            if let firstID = ids.first {
+                lastClickedID = firstID
+            }
+        }
+
+        keyboardNav.onActivate = { id in
+            // Activate = select single item (could open detail in future)
+            selectedDictationIDs = [id]
+        }
+
+        keyboardNav.allItemIDs = {
+            Set(filteredDictations.map { $0.id })
+        }
+
+        keyboardNav.onFocusRegionChange = { region in
+            switch region {
+            case .search:
+                isSearchFocused = true
+            case .list:
+                isSearchFocused = false
+            default:
+                break
+            }
+        }
+
+        keyboardNav.activate()
     }
 
     private var mainContent: some View {
@@ -141,19 +198,22 @@ struct DictationListView: View {
             if filteredDictations.isEmpty {
                 emptyState
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(filteredDictations) { dictation in
-                            DictationRowEnhanced(
-                                dictation: dictation,
-                                isSelected: selectedDictationIDs.contains(dictation.id),
-                                isMultiSelected: selectedDictationIDs.count > 1,
-                                onSelect: { event in
-                                    handleSelection(dictation: dictation, event: event)
-                                }
-                            )
-                            .id(dictation.id)
-                            .contextMenu {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(Array(filteredDictations.enumerated()), id: \.element.id) { index, dictation in
+                                DictationRowEnhanced(
+                                    dictation: dictation,
+                                    isSelected: selectedDictationIDs.contains(dictation.id),
+                                    isMultiSelected: selectedDictationIDs.count > 1,
+                                    isFocused: keyboardNav.focusedIndex == index,
+                                    onSelect: { event in
+                                        keyboardNav.syncFocusToIndex(index)
+                                        handleSelection(dictation: dictation, event: event)
+                                    }
+                                )
+                                .id(dictation.id)
+                                .contextMenu {
                                 Button {
                                     NSPasteboard.general.clearContents()
                                     NSPasteboard.general.setString(dictation.text, forType: .string)
@@ -219,6 +279,16 @@ struct DictationListView: View {
                         }
                     }
                 }
+                .onAppear {
+                        // Wire up scroll callback for keyboard navigation
+                        keyboardNav.onScrollTo = { index in
+                            guard index < filteredDictations.count else { return }
+                            withAnimation(.easeOut(duration: 0.15)) {
+                                proxy.scrollTo(filteredDictations[index].id, anchor: .center)
+                            }
+                        }
+                    }
+                }
             }
 
             // Footer
@@ -263,6 +333,11 @@ struct DictationListView: View {
                     TextField("Search dictations...", text: $searchText)
                         .textFieldStyle(.plain)
                         .font(.system(size: 13))
+                        .focused($isSearchFocused)
+                        .onSubmit {
+                            // Move focus to list when pressing Enter in search
+                            keyboardNav.focusList()
+                        }
 
                     if !searchText.isEmpty {
                         Button {
@@ -556,6 +631,7 @@ struct DictationRowEnhanced: View {
     let dictation: Dictation
     let isSelected: Bool
     let isMultiSelected: Bool
+    var isFocused: Bool = false
     let onSelect: (NSEvent?) -> Void
 
     @State private var isHovering = false
@@ -640,6 +716,13 @@ struct DictationRowEnhanced: View {
                 .frame(height: 1),
             alignment: .bottom
         )
+        .overlay(
+            // Keyboard focus ring
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(Color.accentColor, lineWidth: isFocused ? 2 : 0)
+                .padding(2)
+        )
+        .animation(.easeOut(duration: 0.1), value: isFocused)
         .onHover { hovering in
             isHovering = hovering
         }

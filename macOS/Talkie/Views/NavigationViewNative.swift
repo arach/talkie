@@ -531,8 +531,29 @@ extension View {
             .onReceive(NotificationCenter.default.publisher(for: .init("NavigateToLiveRecent"))) { _ in
                 selectedSection.wrappedValue = .liveRecent
             }
-            .onReceive(NotificationCenter.default.publisher(for: .navigateToSettings)) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: .navigateToSettings)) { notification in
                 selectedSection.wrappedValue = .settings
+                // Handle specific settings section navigation
+                if let sectionName = notification.object as? String {
+                    switch sectionName {
+                    case "dictionary":
+                        settingsSection.wrappedValue = .dictionary
+                    case "apiKeys":
+                        settingsSection.wrappedValue = .aiProviders
+                    case "appearance":
+                        settingsSection.wrappedValue = .appearance
+                    case "dictationCapture":
+                        settingsSection.wrappedValue = .dictationCapture
+                    default:
+                        break
+                    }
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .navigateToSection)) { notification in
+                // Generic section navigation from command palette
+                if let section = notification.object as? NavigationSection {
+                    selectedSection.wrappedValue = section
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .navigateToLiveSettings)) { _ in
                 // Redirect Live Settings to main Settings → Dictation section

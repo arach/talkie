@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C3E870C668D14E9B9613B975 /* ListKeyboardNavigator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A904F327B883424E93755A88 /* ListKeyboardNavigator.swift */; };
+		B23DB92274004BED98D2A84B /* KeyboardShortcutsHelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F094FFBA2B9840C5AF475F0D /* KeyboardShortcutsHelpView.swift */; };
+		3BECE058FAA045CF82CF55CF /* PaletteCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E1283DB6E7146E19B6453BB /* PaletteCommand.swift */; };
+		C075161D2D6B4D97914F1856 /* CommandPaletteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 172520C4E77D4FFD97CDA87E /* CommandPaletteView.swift */; };
 		FDFFED42BDF045DFBAACD3AA /* iOSSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53EE24E8602B4ADE8A6E8A34 /* iOSSettingsView.swift */; };
 		012B648254964EDE8571757F /* ServerSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F411D2C997054CBD9F29D481 /* ServerSettingsView.swift */; };
 		D146CAB9F60C47FD8F53342F /* CoreDataSyncGateway.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DCA5ABA3708420084D58E14 /* CoreDataSyncGateway.swift */; };
@@ -288,6 +292,10 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A904F327B883424E93755A88 /* ListKeyboardNavigator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListKeyboardNavigator.swift; sourceTree = "<group>"; };
+		F094FFBA2B9840C5AF475F0D /* KeyboardShortcutsHelpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutsHelpView.swift; sourceTree = "<group>"; };
+		0E1283DB6E7146E19B6453BB /* PaletteCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaletteCommand.swift; sourceTree = "<group>"; };
+		172520C4E77D4FFD97CDA87E /* CommandPaletteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandPaletteView.swift; sourceTree = "<group>"; };
 		53EE24E8602B4ADE8A6E8A34 /* iOSSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSSettingsView.swift; sourceTree = "<group>"; };
 		F411D2C997054CBD9F29D481 /* ServerSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerSettingsView.swift; sourceTree = "<group>"; };
 		1DCA5ABA3708420084D58E14 /* CoreDataSyncGateway.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataSyncGateway.swift; sourceTree = "<group>"; };
@@ -583,6 +591,23 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		4053FC57EA9A470D8A60EDD9 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				A904F327B883424E93755A88 /* ListKeyboardNavigator.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		74BFDBA1C73D4B5A8D305C34 /* CommandPalette */ = {
+			isa = PBXGroup;
+			children = (
+				0E1283DB6E7146E19B6453BB /* PaletteCommand.swift */,
+				172520C4E77D4FFD97CDA87E /* CommandPaletteView.swift */,
+			);
+			path = CommandPalette;
+			sourceTree = "<group>";
+		};
 		B5DD782E95EC432C8A66157B /* Sync */ = {
 			isa = PBXGroup;
 			children = (
@@ -712,6 +737,9 @@
 		5CC7B1BEDA8719A80E0BFD4C /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				4053FC57EA9A470D8A60EDD9 /* Components */,
+				F094FFBA2B9840C5AF475F0D /* KeyboardShortcutsHelpView.swift */,
+				74BFDBA1C73D4B5A8D305C34 /* CommandPalette */,
 				BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */,
 				1BA6AEF4344D9DC8138E2AE3 /* DictationStatsView.swift */,
 				37B249E75E681770AEA53425 /* MemoRowView.swift */,
@@ -1333,6 +1361,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C3E870C668D14E9B9613B975 /* ListKeyboardNavigator.swift in Sources */,
+				B23DB92274004BED98D2A84B /* KeyboardShortcutsHelpView.swift in Sources */,
+				3BECE058FAA045CF82CF55CF /* PaletteCommand.swift in Sources */,
+				C075161D2D6B4D97914F1856 /* CommandPaletteView.swift in Sources */,
 				FDFFED42BDF045DFBAACD3AA /* iOSSettingsView.swift in Sources */,
 				012B648254964EDE8571757F /* ServerSettingsView.swift in Sources */,
 				D146CAB9F60C47FD8F53342F /* CoreDataSyncGateway.swift in Sources */,

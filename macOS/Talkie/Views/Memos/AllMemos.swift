@@ -26,6 +26,10 @@ struct AllMemos: View {
     // For keyboard/click selection
     @State private var lastClickedID: UUID?
 
+    // Keyboard navigation
+    @State private var keyboardNav = ListKeyboardNavigator<UUID>()
+    @FocusState private var isSearchFocused: Bool
+
     // Column widths (resizable)
     @State private var durationColumnWidth: CGFloat = 70
     @State private var dateColumnWidth: CGFloat = 90
@@ -166,6 +170,59 @@ struct AllMemos: View {
         .alert(isPresented: $showDeleteConfirmation) {
             deleteConfirmationAlert
         }
+        .onAppear {
+            setupKeyboardNavigation()
+        }
+        .onDisappear {
+            keyboardNav.deactivate()
+        }
+        .onChange(of: viewModel.memos) { _, newMemos in
+            keyboardNav.itemCount = newMemos.count
+        }
+    }
+
+    // MARK: - Keyboard Navigation Setup
+
+    private func setupKeyboardNavigation() {
+        keyboardNav.itemCount = viewModel.memos.count
+
+        keyboardNav.itemAtIndex = { index in
+            guard index < viewModel.memos.count else { return viewModel.memos.first!.id }
+            return viewModel.memos[index].id
+        }
+
+        keyboardNav.onSelect = { ids, isRange in
+            selectedMemoIDs = ids
+            if let firstID = ids.first {
+                lastClickedID = firstID
+            }
+        }
+
+        keyboardNav.onActivate = { id in
+            selectedMemoIDs = [id]
+            selectMemo(id: id)
+            // In compact mode, show inspector
+            if isCompactMode {
+                showInspectorSheet = true
+            }
+        }
+
+        keyboardNav.allItemIDs = {
+            Set(viewModel.memos.map { $0.id })
+        }
+
+        keyboardNav.onFocusRegionChange = { region in
+            switch region {
+            case .search:
+                isSearchFocused = true
+            case .list:
+                isSearchFocused = false
+            default:
+                break
+            }
+        }
+
+        keyboardNav.activate()
     }
 
     // MARK: - List Pane
@@ -244,6 +301,11 @@ struct AllMemos: View {
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
                     .frame(minWidth: 80, maxWidth: 140)
+                    .focused($isSearchFocused)
+                    .onSubmit {
+                        // Move focus to list when pressing Enter in search
+                        keyboardNav.focusList()
+                    }
 
                 if !searchText.isEmpty {
                     TalkieButtonSync("ClearSearch") {
@@ -369,11 +431,13 @@ struct AllMemos: View {
                 if usePreviewMode {
                     // Preview mode: card-style layout with spacing
                     LazyVStack(spacing: 8) {
-                        ForEach(viewModel.memos) { memo in
+                        ForEach(Array(viewModel.memos.enumerated()), id: \.element.id) { index, memo in
                             MemoRowPreview(
                                 memo: memo,
                                 isSelected: selectedMemoIDs.contains(memo.id),
+                                isFocused: keyboardNav.focusedIndex == index,
                                 onSelect: { event in
+                                    keyboardNav.syncFocusToIndex(index)
                                     handleSelection(memo: memo, event: event)
                                 }
                             )
@@ -397,7 +461,9 @@ struct AllMemos: View {
                                     memo: memo,
                                     isSelected: selectedMemoIDs.contains(memo.id),
                                     isMultiSelected: isMultiSelectMode,
+                                    isFocused: keyboardNav.focusedIndex == index,
                                     onSelect: { event in
+                                        keyboardNav.syncFocusToIndex(index)
                                         handleSelection(memo: memo, event: event)
                                     },
                                     durationWidth: durationColumnWidth,
@@ -428,6 +494,15 @@ struct AllMemos: View {
                         } header: {
                             tableHeader
                         }
+                    }
+                }
+            }
+            .onAppear {
+                // Wire up scroll callback for keyboard navigation
+                keyboardNav.onScrollTo = { index in
+                    guard index < viewModel.memos.count else { return }
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        proxy.scrollTo(viewModel.memos[index].id, anchor: .center)
                     }
                 }
             }
@@ -990,6 +1065,7 @@ struct AllMemos: View {
 struct MemoRowPreview: View {
     let memo: MemoModel
     let isSelected: Bool
+    var isFocused: Bool = false
     let onSelect: (NSEvent?) -> Void
 
     @State private var isHovering = false
@@ -1096,8 +1172,15 @@ struct MemoRowPreview: View {
         )
         .shadow(color: .black.opacity(isHovering ? 0.15 : 0.1), radius: isHovering ? 8 : 4, y: isHovering ? 4 : 2)
         .scaleEffect(isHovering ? 1.01 : 1.0)
+        .overlay(
+            // Keyboard focus ring
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
+                .stroke(Color.accentColor, lineWidth: isFocused ? 2 : 0)
+                .padding(2)
+        )
         .animation(.easeOut(duration: 0.08), value: isHovering)
         .animation(.easeOut(duration: 0.05), value: isSelected)
+        .animation(.easeOut(duration: 0.1), value: isFocused)
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
         .buttonStyle(.plain)
@@ -1118,6 +1201,7 @@ struct MemoRowEnhanced: View {
     let memo: MemoModel
     let isSelected: Bool
     let isMultiSelected: Bool
+    var isFocused: Bool = false
     let onSelect: (NSEvent?) -> Void
     var durationWidth: CGFloat = 70
     var dateWidth: CGFloat = 90
@@ -1186,6 +1270,13 @@ struct MemoRowEnhanced: View {
                 .frame(height: 0.5),
             alignment: .bottom
         )
+        .overlay(
+            // Keyboard focus ring
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(Color.accentColor, lineWidth: isFocused ? 2 : 0)
+                .padding(2)
+        )
+        .animation(.easeOut(duration: 0.1), value: isFocused)
     }
 
     // Source icon - color-coded rounded square with subtle glass

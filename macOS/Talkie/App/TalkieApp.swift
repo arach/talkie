@@ -130,6 +130,10 @@ struct TalkieApp: App {
     @FocusedValue(\.settingsNavigation) var settingsNavigation
     @FocusedValue(\.liveNavigation) var liveNavigation
 
+    // Command palette and keyboard help state
+    @State private var showCommandPalette = false
+    @State private var showKeyboardHelp = false
+
     var body: some Scene {
         // Log time to first body access (once)
         if !StartupTimer.bodyAccessed {
@@ -160,6 +164,21 @@ struct TalkieApp: App {
                         .environment(SettingsManager.shared)
                         .environment(LiveSettings.shared)
                 }
+                // Keyboard shortcuts help
+                .sheet(isPresented: $showKeyboardHelp) {
+                    KeyboardShortcutsHelpView()
+                }
+                // Command palette overlay
+                .overlay {
+                    CommandPaletteOverlay(isPresented: $showCommandPalette)
+                }
+                // Listen for command palette trigger from anywhere
+                .onReceive(NotificationCenter.default.publisher(for: .showCommandPalette)) { _ in
+                    showCommandPalette = true
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .showKeyboardHelp)) { _ in
+                    showKeyboardHelp = true
+                }
         }
         .handlesExternalEvents(matching: [])  // IMPORTANT: Empty set = never create new window for URLs
         .windowStyle(.hiddenTitleBar)
@@ -173,6 +192,13 @@ struct TalkieApp: App {
                     sidebarToggle?.toggle()
                 }
                 .keyboardShortcut("s", modifiers: [.command, .control])
+
+                Divider()
+
+                Button("Command Palette") {
+                    showCommandPalette = true
+                }
+                .keyboardShortcut("k", modifiers: [.command, .option])
             }
 
             // Replace default Settings menu item with inline navigation
@@ -183,8 +209,15 @@ struct TalkieApp: App {
                 .keyboardShortcut(",", modifiers: .command)
             }
 
-            // Performance Monitor (Debug)
+            // Help menu additions
             CommandGroup(after: .help) {
+                Button("Keyboard Shortcuts") {
+                    showKeyboardHelp = true
+                }
+                .keyboardShortcut("/", modifiers: .shift)  // ? key
+
+                Divider()
+
                 Button("Performance Monitor…") {
                     showPerformanceMonitor()
                 }
