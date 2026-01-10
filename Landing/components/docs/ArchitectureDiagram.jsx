@@ -69,13 +69,19 @@ const ProcessBox = ({
 
 // Main Architecture Diagram with SVG curves
 export default function ArchitectureDiagram() {
+  // Box positions (centers) - calculated for 620px width viewBox
+  // TalkieLive: left-[20px], ~150px wide → center at 95px
+  // TalkieEngine: centered → center at 310px
+  // TalkieServer: right-[20px] → center at 525px
+  // iPhone: positioned between TalkieServer and center → ~400px
+
   return (
     <div className="my-8 p-4 md:p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-x-auto">
-      <div className="relative min-w-[620px] h-[440px]">
+      <div className="relative min-w-[620px] h-[420px]">
         {/* SVG layer for curved connections */}
         <svg
           className="absolute inset-0 w-full h-full pointer-events-none"
-          viewBox="0 0 620 440"
+          viewBox="0 0 620 420"
           preserveAspectRatio="xMidYMid meet"
         >
           {/* Arrow marker definitions - color matched */}
@@ -147,66 +153,90 @@ export default function ArchitectureDiagram() {
             </marker>
           </defs>
 
-          {/* Curved path: Talkie → TalkieLive
-              From bottom of Talkie (310, 95) curving left to top-center of TalkieLive (95, 175) */}
+          {/* === XPC connections from Talkie to helpers === */}
+
+          {/* Talkie → TalkieLive (left curve)
+              Start: bottom-left area of Talkie
+              End: top-center of TalkieLive (x=95) */}
           <path
-            d="M 240 95 C 240 135, 95 135, 95 175"
+            d="M 220 95
+               C 220 130, 95 130, 95 170"
             fill="none"
             className="stroke-emerald-400 dark:stroke-emerald-500"
             strokeWidth="2"
             strokeLinecap="round"
             markerEnd="url(#arrow-emerald)"
           />
-          <text x="150" y="128" textAnchor="middle" className="fill-emerald-600 dark:fill-emerald-400 text-[10px] font-mono font-medium">
+          <text x="140" y="118" textAnchor="middle" className="fill-emerald-600 dark:fill-emerald-400 text-[10px] font-mono font-medium">
             XPC
           </text>
 
-          {/* Curved path: Talkie → TalkieEngine
-              From bottom of Talkie (310, 95) straight down to top-center of TalkieEngine (310, 175) */}
+          {/* Talkie → TalkieEngine (center, slight curve)
+              Start: bottom-center of Talkie
+              End: top-center of TalkieEngine (x=310) */}
           <path
-            d="M 310 95 Q 310 135, 310 175"
+            d="M 310 95
+               C 310 130, 310 130, 310 170"
             fill="none"
             className="stroke-blue-400 dark:stroke-blue-500"
             strokeWidth="2"
             strokeLinecap="round"
             markerEnd="url(#arrow-blue)"
           />
-          <text x="328" y="140" textAnchor="middle" className="fill-blue-600 dark:fill-blue-400 text-[10px] font-mono font-medium">
+          <text x="328" y="135" textAnchor="start" className="fill-blue-600 dark:fill-blue-400 text-[10px] font-mono font-medium">
             XPC
           </text>
 
-          {/* Curved path: Talkie → TalkieServer
-              From bottom of Talkie (310, 95) curving right to top-center of TalkieServer (525, 175) */}
+          {/* Talkie → TalkieServer (right curve)
+              Start: bottom-right area of Talkie
+              End: top-center of TalkieServer (x=525) */}
           <path
-            d="M 380 95 C 380 135, 525 135, 525 175"
+            d="M 400 95
+               C 400 130, 525 130, 525 170"
             fill="none"
             className="stroke-amber-400 dark:stroke-amber-500"
             strokeWidth="2"
             strokeLinecap="round"
             markerEnd="url(#arrow-amber)"
           />
-          <text x="470" y="128" textAnchor="middle" className="fill-amber-600 dark:fill-amber-400 text-[10px] font-mono font-medium">
+          <text x="480" y="118" textAnchor="middle" className="fill-amber-600 dark:fill-amber-400 text-[10px] font-mono font-medium">
             HTTP
           </text>
 
-          {/* Curved path: TalkieServer → iPhone
-              From bottom of TalkieServer curving down to top-center of iPhone */}
+          {/* === TalkieLive ↔ TalkieEngine (heavy communication) === */}
+          {/* This is the bulk of transcription traffic */}
           <path
-            d="M 525 270 C 525 310, 440 310, 440 345"
+            d="M 170 210 L 235 210"
+            fill="none"
+            className="stroke-emerald-400/60 dark:stroke-emerald-500/60"
+            strokeWidth="3"
+            strokeLinecap="round"
+            markerEnd="url(#arrow-emerald)"
+          />
+          <text x="203" y="228" textAnchor="middle" className="fill-emerald-600/80 dark:fill-emerald-400/80 text-[9px] font-mono">
+            audio
+          </text>
+
+          {/* === TalkieServer → iPhone === */}
+          <path
+            d="M 525 265
+               C 525 300, 400 300, 400 335"
             fill="none"
             className="stroke-zinc-400 dark:stroke-zinc-500"
             strokeWidth="2"
             strokeLinecap="round"
             markerEnd="url(#arrow-zinc)"
           />
-          <text x="500" y="305" textAnchor="middle" className="fill-zinc-500 dark:fill-zinc-400 text-[10px] font-mono font-medium">
+          <text x="480" y="295" textAnchor="middle" className="fill-zinc-500 dark:fill-zinc-400 text-[10px] font-mono font-medium">
             Tailscale
           </text>
 
-          {/* Curved path: Talkie → iCloud (right side)
-              From right edge of Talkie curving to left edge of iCloud */}
+          {/* === iCloud sync connections === */}
+
+          {/* Talkie → iCloud */}
           <path
-            d="M 400 50 C 480 50, 480 50, 560 50"
+            d="M 420 45
+               C 470 45, 520 35, 555 35"
             fill="none"
             className="stroke-sky-400 dark:stroke-sky-500"
             strokeWidth="2"
@@ -215,10 +245,10 @@ export default function ArchitectureDiagram() {
             markerEnd="url(#arrow-sky)"
           />
 
-          {/* Curved path: iPhone → iCloud
-              From top of iPhone curving up to bottom of iCloud */}
+          {/* iPhone → iCloud */}
           <path
-            d="M 470 345 C 520 320, 570 280, 570 100"
+            d="M 430 335
+               C 500 310, 560 200, 570 80"
             fill="none"
             className="stroke-sky-400 dark:stroke-sky-500"
             strokeWidth="2"
@@ -226,13 +256,13 @@ export default function ArchitectureDiagram() {
             strokeDasharray="6 3"
             markerEnd="url(#arrow-sky)"
           />
-          <text x="555" y="220" textAnchor="middle" className="fill-sky-600 dark:fill-sky-400 text-[10px] font-mono font-medium">
+          <text x="530" y="200" textAnchor="middle" className="fill-sky-600 dark:fill-sky-400 text-[10px] font-mono font-medium">
             CloudKit
           </text>
 
-          {/* iPhone → Watch (subordinate connection) */}
+          {/* iPhone → Watch (subordinate) */}
           <path
-            d="M 480 390 L 520 390"
+            d="M 440 375 L 475 375"
             fill="none"
             className="stroke-zinc-300 dark:stroke-zinc-600"
             strokeWidth="1.5"
@@ -256,7 +286,7 @@ export default function ArchitectureDiagram() {
         </div>
 
         {/* iCloud - top right */}
-        <div className="absolute right-[20px] top-[20px]">
+        <div className="absolute right-[20px] top-[10px]">
           <ProcessBox
             icon={Cloud}
             name="iCloud"
@@ -266,8 +296,8 @@ export default function ArchitectureDiagram() {
           />
         </div>
 
-        {/* Helper processes row */}
-        <div className="absolute top-[180px] left-[20px]">
+        {/* Helper processes row - all at top-[175px] */}
+        <div className="absolute top-[175px] left-[20px]">
           <ProcessBox
             icon={Mic}
             name="TalkieLive"
@@ -277,7 +307,7 @@ export default function ArchitectureDiagram() {
           />
         </div>
 
-        <div className="absolute top-[180px] left-1/2 -translate-x-1/2">
+        <div className="absolute top-[175px] left-1/2 -translate-x-1/2">
           <ProcessBox
             icon={Cpu}
             name="TalkieEngine"
@@ -287,7 +317,7 @@ export default function ArchitectureDiagram() {
           />
         </div>
 
-        <div className="absolute top-[180px] right-[20px]">
+        <div className="absolute top-[175px] right-[20px]">
           <ProcessBox
             icon={Server}
             name="TalkieServer"
@@ -297,8 +327,8 @@ export default function ArchitectureDiagram() {
           />
         </div>
 
-        {/* Mobile section - iPhone with Watch as subordinate */}
-        <div className="absolute bottom-[20px] right-[80px]">
+        {/* Mobile section - iPhone positioned between Talkie center and TalkieServer */}
+        <div className="absolute bottom-[30px] left-1/2 translate-x-[20px]">
           <div className="flex items-end gap-3">
             {/* iPhone - primary */}
             <ProcessBox
