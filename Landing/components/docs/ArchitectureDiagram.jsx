@@ -457,7 +457,7 @@ export function SimpleArchitectureDiagram() {
           <div className="w-16 h-0.5 bg-amber-300 dark:bg-amber-500/50"></div>
         </div>
 
-        {/* Helper processes */}
+        {/* Helper processes with protocol labels inline */}
         <div className="flex items-start justify-center gap-8">
           {/* TalkieLive */}
           <div className="flex flex-col items-center">
@@ -466,6 +466,7 @@ export function SimpleArchitectureDiagram() {
             </div>
             <span className="mt-1.5 text-xs font-semibold text-zinc-900 dark:text-white">TalkieLive</span>
             <span className="text-[10px] text-zinc-500 dark:text-zinc-400">Ears & Hands</span>
+            <span className="mt-2 px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-[10px] font-mono text-zinc-400 dark:text-zinc-500">XPC</span>
           </div>
 
           {/* TalkieEngine */}
@@ -475,6 +476,7 @@ export function SimpleArchitectureDiagram() {
             </div>
             <span className="mt-1.5 text-xs font-semibold text-zinc-900 dark:text-white">TalkieEngine</span>
             <span className="text-[10px] text-zinc-500 dark:text-zinc-400">Local Brain</span>
+            <span className="mt-2 px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-[10px] font-mono text-zinc-400 dark:text-zinc-500">XPC</span>
           </div>
 
           {/* TalkieServer */}
@@ -484,14 +486,8 @@ export function SimpleArchitectureDiagram() {
             </div>
             <span className="mt-1.5 text-xs font-semibold text-zinc-900 dark:text-white">TalkieServer</span>
             <span className="text-[10px] text-zinc-500 dark:text-zinc-400">iOS Bridge</span>
+            <span className="mt-2 px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-[10px] font-mono text-zinc-400 dark:text-zinc-500">HTTP</span>
           </div>
-        </div>
-
-        {/* Protocol labels */}
-        <div className="flex items-center justify-center gap-6 text-[10px] font-mono text-zinc-400 dark:text-zinc-500">
-          <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800">XPC</span>
-          <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800">XPC</span>
-          <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800">HTTP</span>
         </div>
       </div>
     </div>
