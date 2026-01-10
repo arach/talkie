@@ -68,256 +68,232 @@ const ProcessBox = ({
 }
 
 // Main Architecture Diagram with SVG curves
+// Layout (three rows, balanced):
+//   Row 1: Talkie (left) ──HTTP──► TalkieServer (right)
+//   Row 2: TalkieLive → TalkieEngine (left)    iCloud (center)    iPhone (right)
+//   Row 3: (empty left)                                           Watch (right)
+// Connections:
+//   - Talkie → TalkieLive (XPC, vertical)
+//   - Talkie → TalkieEngine (XPC, diagonal)
+//   - TalkieLive → TalkieEngine (audio, horizontal)
+//   - TalkieServer → iPhone (Tailscale, vertical)
+//   - Talkie → iCloud (CloudKit, dashed)
+//   - iPhone → iCloud (CloudKit, dashed)
+//   - iPhone → Watch (dashed)
 export default function ArchitectureDiagram() {
-  // Box positions (centers) - calculated for 620px width viewBox
-  // TalkieLive: left-[20px], ~150px wide → center at 95px
-  // TalkieEngine: centered → center at 310px
-  // TalkieServer: right-[20px] → center at 525px
-  // iPhone: positioned between TalkieServer and center → ~400px
-
   return (
     <div className="my-8 p-4 md:p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-x-auto">
-      <div className="relative min-w-[620px] h-[420px]">
+      <div className="relative min-w-[700px] h-[400px]">
         {/* SVG layer for curved connections */}
         <svg
           className="absolute inset-0 w-full h-full pointer-events-none"
-          viewBox="0 0 620 420"
+          viewBox="0 0 700 400"
           preserveAspectRatio="xMidYMid meet"
         >
-          {/* Arrow marker definitions - color matched */}
+          {/* Arrow marker definitions - refX=0 so line connects to back-center of triangle */}
           <defs>
             <marker
               id="arrow-emerald"
-              markerWidth="8"
-              markerHeight="6"
-              refX="7"
-              refY="3"
+              markerWidth="10"
+              markerHeight="8"
+              refX="0"
+              refY="4"
               orient="auto"
+              markerUnits="strokeWidth"
             >
               <polygon
-                points="0 0, 8 3, 0 6"
+                points="0 0, 10 4, 0 8"
                 className="fill-emerald-400 dark:fill-emerald-500"
               />
             </marker>
             <marker
               id="arrow-blue"
-              markerWidth="8"
-              markerHeight="6"
-              refX="7"
-              refY="3"
+              markerWidth="10"
+              markerHeight="8"
+              refX="0"
+              refY="4"
               orient="auto"
+              markerUnits="strokeWidth"
             >
               <polygon
-                points="0 0, 8 3, 0 6"
+                points="0 0, 10 4, 0 8"
                 className="fill-blue-400 dark:fill-blue-500"
               />
             </marker>
             <marker
               id="arrow-amber"
-              markerWidth="8"
-              markerHeight="6"
-              refX="7"
-              refY="3"
+              markerWidth="10"
+              markerHeight="8"
+              refX="0"
+              refY="4"
               orient="auto"
+              markerUnits="strokeWidth"
             >
               <polygon
-                points="0 0, 8 3, 0 6"
+                points="0 0, 10 4, 0 8"
                 className="fill-amber-400 dark:fill-amber-500"
               />
             </marker>
             <marker
               id="arrow-zinc"
-              markerWidth="8"
-              markerHeight="6"
-              refX="7"
-              refY="3"
+              markerWidth="10"
+              markerHeight="8"
+              refX="0"
+              refY="4"
               orient="auto"
+              markerUnits="strokeWidth"
             >
               <polygon
-                points="0 0, 8 3, 0 6"
+                points="0 0, 10 4, 0 8"
                 className="fill-zinc-400 dark:fill-zinc-500"
               />
             </marker>
             <marker
               id="arrow-sky"
-              markerWidth="8"
-              markerHeight="6"
-              refX="7"
-              refY="3"
+              markerWidth="10"
+              markerHeight="8"
+              refX="0"
+              refY="4"
               orient="auto"
+              markerUnits="strokeWidth"
             >
               <polygon
-                points="0 0, 8 3, 0 6"
+                points="0 0, 10 4, 0 8"
                 className="fill-sky-400 dark:fill-sky-500"
               />
             </marker>
           </defs>
 
-          {/* === XPC connections from Talkie to helpers === */}
-
-          {/* Talkie → TalkieLive (left curve)
-              Start: bottom-left area of Talkie
-              End: top-center of TalkieLive (x=95) */}
+          {/* === Talkie → TalkieLive (XPC) === */}
+          {/* Straight down from Talkie to TalkieLive */}
           <path
-            d="M 220 95
-               C 220 130, 95 130, 95 170"
+            d="M 100 95 L 100 145"
             fill="none"
             className="stroke-emerald-400 dark:stroke-emerald-500"
             strokeWidth="2"
-            strokeLinecap="round"
             markerEnd="url(#arrow-emerald)"
           />
-          <text x="140" y="118" textAnchor="middle" className="fill-emerald-600 dark:fill-emerald-400 text-[10px] font-mono font-medium">
+          <text x="112" y="123" className="fill-emerald-600 dark:fill-emerald-400 text-[10px] font-mono">
             XPC
           </text>
 
-          {/* Talkie → TalkieEngine (center, slight curve)
-              Start: bottom-center of Talkie
-              End: top-center of TalkieEngine (x=310) */}
+          {/* === TalkieLive → TalkieEngine (audio) === */}
+          {/* Horizontal from Live to Engine */}
           <path
-            d="M 310 95
-               C 310 130, 310 130, 310 170"
+            d="M 175 190 L 223 190"
             fill="none"
-            className="stroke-blue-400 dark:stroke-blue-500"
-            strokeWidth="2"
-            strokeLinecap="round"
-            markerEnd="url(#arrow-blue)"
-          />
-          <text x="328" y="135" textAnchor="start" className="fill-blue-600 dark:fill-blue-400 text-[10px] font-mono font-medium">
-            XPC
-          </text>
-
-          {/* Talkie → TalkieServer (right curve)
-              Start: bottom-right area of Talkie
-              End: top-center of TalkieServer (x=525) */}
-          <path
-            d="M 400 95
-               C 400 130, 525 130, 525 170"
-            fill="none"
-            className="stroke-amber-400 dark:stroke-amber-500"
-            strokeWidth="2"
-            strokeLinecap="round"
-            markerEnd="url(#arrow-amber)"
-          />
-          <text x="480" y="118" textAnchor="middle" className="fill-amber-600 dark:fill-amber-400 text-[10px] font-mono font-medium">
-            HTTP
-          </text>
-
-          {/* === TalkieLive ↔ TalkieEngine (heavy communication) === */}
-          {/* This is the bulk of transcription traffic */}
-          <path
-            d="M 170 210 L 235 210"
-            fill="none"
-            className="stroke-emerald-400/60 dark:stroke-emerald-500/60"
+            className="stroke-emerald-400 dark:stroke-emerald-500"
             strokeWidth="3"
-            strokeLinecap="round"
             markerEnd="url(#arrow-emerald)"
           />
-          <text x="203" y="228" textAnchor="middle" className="fill-emerald-600/80 dark:fill-emerald-400/80 text-[9px] font-mono">
+          <text x="199" y="180" textAnchor="middle" className="fill-emerald-600 dark:fill-emerald-400 text-[9px] font-mono">
             audio
           </text>
 
-          {/* === TalkieServer → iPhone === */}
+          {/* === Talkie → TalkieEngine (XPC) === */}
+          {/* Right from Talkie, curve down to Engine */}
           <path
-            d="M 525 265
-               C 525 300, 400 300, 400 335"
+            d="M 225 55 L 285 55 Q 305 55 305 75 L 305 145"
+            fill="none"
+            className="stroke-blue-400 dark:stroke-blue-500"
+            strokeWidth="2"
+            markerEnd="url(#arrow-blue)"
+          />
+          <text x="255" y="45" className="fill-blue-600 dark:fill-blue-400 text-[10px] font-mono">
+            XPC
+          </text>
+
+          {/* === Talkie → TalkieServer (HTTP) === */}
+          {/* Horizontal from Talkie to Server */}
+          <path
+            d="M 225 40 L 503 40"
+            fill="none"
+            className="stroke-amber-400 dark:stroke-amber-500"
+            strokeWidth="2"
+            markerEnd="url(#arrow-amber)"
+          />
+          <text x="365" y="30" textAnchor="middle" className="fill-amber-600 dark:fill-amber-400 text-[10px] font-mono">
+            HTTP
+          </text>
+
+          {/* === TalkieServer → iPhone (Tailscale) === */}
+          {/* Vertical down from Server to iPhone */}
+          <path
+            d="M 580 95 L 580 145"
             fill="none"
             className="stroke-zinc-400 dark:stroke-zinc-500"
             strokeWidth="2"
-            strokeLinecap="round"
             markerEnd="url(#arrow-zinc)"
           />
-          <text x="480" y="295" textAnchor="middle" className="fill-zinc-500 dark:fill-zinc-400 text-[10px] font-mono font-medium">
+          <text x="592" y="123" className="fill-zinc-500 dark:fill-zinc-400 text-[10px] font-mono">
             Tailscale
           </text>
 
-          {/* === iCloud sync connections === */}
-
-          {/* Talkie → iCloud */}
+          {/* === iPhone → Watch === */}
+          {/* Horizontal line to Watch (beside iPhone) */}
           <path
-            d="M 420 45
-               C 470 45, 520 35, 555 35"
-            fill="none"
-            className="stroke-sky-400 dark:stroke-sky-500"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeDasharray="6 3"
-            markerEnd="url(#arrow-sky)"
-          />
-
-          {/* iPhone → iCloud */}
-          <path
-            d="M 430 335
-               C 500 310, 560 200, 570 80"
-            fill="none"
-            className="stroke-sky-400 dark:stroke-sky-500"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeDasharray="6 3"
-            markerEnd="url(#arrow-sky)"
-          />
-          <text x="530" y="200" textAnchor="middle" className="fill-sky-600 dark:fill-sky-400 text-[10px] font-mono font-medium">
-            CloudKit
-          </text>
-
-          {/* iPhone → Watch (subordinate) */}
-          <path
-            d="M 440 375 L 475 375"
+            d="M 660 190 L 660 270"
             fill="none"
             className="stroke-zinc-300 dark:stroke-zinc-600"
             strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeDasharray="3 2"
+            strokeDasharray="4 2"
+          />
+
+          {/* === Talkie → iCloud (CloudKit sync) === */}
+          {/* Down from Talkie right side to iCloud */}
+          <path
+            d="M 200 95 L 200 310 Q 200 330 220 330 L 310 330"
+            fill="none"
+            className="stroke-sky-400 dark:stroke-sky-500"
+            strokeWidth="2"
+            strokeDasharray="6 3"
+            markerEnd="url(#arrow-sky)"
+          />
+          <text x="260" y="348" textAnchor="middle" className="fill-sky-600 dark:fill-sky-400 text-[9px] font-mono">
+            CloudKit
+          </text>
+
+          {/* === iPhone → iCloud (CloudKit sync) === */}
+          {/* Down from iPhone to iCloud */}
+          <path
+            d="M 560 225 L 560 330 L 430 330"
+            fill="none"
+            className="stroke-sky-400 dark:stroke-sky-500"
+            strokeWidth="2"
+            strokeDasharray="6 3"
+            markerEnd="url(#arrow-sky)"
           />
         </svg>
 
         {/* Process boxes positioned absolutely */}
+        {/*
+          Box dimensions (measured):
+          - Large: ~210px wide x 85px tall
+          - Normal: ~145px wide x 68px tall
+          - Small: ~95px wide x 42px tall
 
-        {/* Main Talkie app - centered at top */}
-        <div className="absolute left-1/2 -translate-x-1/2 top-0">
+          Layout grid:
+          - Row 1 top: 15px (Talkie, TalkieServer)
+          - Row 2 top: 155px (TalkieLive, TalkieEngine, iCloud, iPhone)
+          - Row 3 top: 280px (Watch)
+        */}
+
+        {/* === ROW 1: Main Apps === */}
+
+        {/* Talkie - top left, prominent */}
+        <div className="absolute left-[25px] top-[15px]">
           <ProcessBox
             icon={Monitor}
             name="Talkie"
             subtitle="Swift/SwiftUI"
-            description="UI • Workflows • Data • Orchestration"
+            description="UI, Workflows, Data, Orchestration"
             color="violet"
             size="large"
           />
         </div>
 
-        {/* iCloud - top right */}
-        <div className="absolute right-[20px] top-[10px]">
-          <ProcessBox
-            icon={Cloud}
-            name="iCloud"
-            subtitle="CloudKit"
-            color="sky"
-            size="small"
-          />
-        </div>
-
-        {/* Helper processes row - all at top-[175px] */}
-        <div className="absolute top-[175px] left-[20px]">
-          <ProcessBox
-            icon={Mic}
-            name="TalkieLive"
-            subtitle="Swift"
-            description="Ears & Hands"
-            color="emerald"
-          />
-        </div>
-
-        <div className="absolute top-[175px] left-1/2 -translate-x-1/2">
-          <ProcessBox
-            icon={Cpu}
-            name="TalkieEngine"
-            subtitle="Swift"
-            description="Local Brain"
-            color="blue"
-          />
-        </div>
-
-        <div className="absolute top-[175px] right-[20px]">
+        {/* TalkieServer - top right */}
+        <div className="absolute left-[515px] top-[15px]">
           <ProcessBox
             icon={Server}
             name="TalkieServer"
@@ -327,28 +303,63 @@ export default function ArchitectureDiagram() {
           />
         </div>
 
-        {/* Mobile section - iPhone positioned between Talkie center and TalkieServer */}
-        <div className="absolute bottom-[30px] left-1/2 translate-x-[20px]">
-          <div className="flex items-end gap-3">
-            {/* iPhone - primary */}
-            <ProcessBox
-              icon={Smartphone}
-              name="iPhone"
-              subtitle="iOS"
-              description="Voice Capture"
-              color="zinc"
-            />
-            {/* Watch - subordinate, smaller */}
-            <div className="pb-1">
-              <ProcessBox
-                icon={Watch}
-                name="Watch"
-                subtitle="watchOS"
-                color="zinc"
-                size="small"
-              />
-            </div>
-          </div>
+        {/* === ROW 2: Helpers & Mobile === */}
+
+        {/* TalkieLive - below Talkie */}
+        <div className="absolute left-[25px] top-[155px]">
+          <ProcessBox
+            icon={Mic}
+            name="TalkieLive"
+            subtitle="Swift"
+            description="Ears & Hands"
+            color="emerald"
+          />
+        </div>
+
+        {/* TalkieEngine - right of TalkieLive */}
+        <div className="absolute left-[235px] top-[155px]">
+          <ProcessBox
+            icon={Cpu}
+            name="TalkieEngine"
+            subtitle="Swift"
+            description="Local Brain"
+            color="blue"
+          />
+        </div>
+
+        {/* iCloud - bottom center, sync hub between Talkie and iPhone */}
+        <div className="absolute left-[320px] top-[310px]">
+          <ProcessBox
+            icon={Cloud}
+            name="iCloud"
+            subtitle="CloudKit"
+            color="sky"
+            size="small"
+          />
+        </div>
+
+        {/* iPhone - below TalkieServer */}
+        <div className="absolute left-[515px] top-[155px]">
+          <ProcessBox
+            icon={Smartphone}
+            name="iPhone"
+            subtitle="iOS"
+            description="Voice Capture"
+            color="zinc"
+          />
+        </div>
+
+        {/* === ROW 3: Watch === */}
+
+        {/* Watch - below iPhone */}
+        <div className="absolute left-[610px] top-[275px]">
+          <ProcessBox
+            icon={Watch}
+            name="Watch"
+            subtitle="watchOS"
+            color="zinc"
+            size="small"
+          />
         </div>
       </div>
     </div>
