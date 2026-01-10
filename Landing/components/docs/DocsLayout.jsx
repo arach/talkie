@@ -232,7 +232,7 @@ export default function DocsLayout({
           )}
 
           {title && (
-            <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-zinc-900 dark:text-white mb-4">
+            <h1 className="text-3xl md:text-4xl font-display font-semibold tracking-tight text-zinc-900 dark:text-white mb-4">
               {title}
             </h1>
           )}
@@ -245,15 +245,16 @@ export default function DocsLayout({
 
           {/* Page content */}
           <div className="prose prose-zinc dark:prose-invert max-w-none
-            prose-headings:scroll-mt-20
-            prose-h2:text-2xl prose-h2:font-bold prose-h2:mt-12 prose-h2:mb-4
-            prose-h3:text-xl prose-h3:font-semibold prose-h3:mt-8 prose-h3:mb-3
+            prose-headings:scroll-mt-20 prose-headings:font-display
+            prose-h2:text-2xl prose-h2:font-semibold prose-h2:mt-12 prose-h2:mb-4 prose-h2:tracking-tight
+            prose-h3:text-xl prose-h3:font-medium prose-h3:mt-8 prose-h3:mb-3
             prose-p:text-zinc-600 dark:prose-p:text-zinc-400 prose-p:leading-relaxed
             prose-a:text-emerald-600 dark:prose-a:text-emerald-400 prose-a:no-underline hover:prose-a:underline
+            prose-strong:font-semibold prose-strong:text-zinc-800 dark:prose-strong:text-zinc-200
             prose-code:bg-zinc-100 dark:prose-code:bg-zinc-800 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:font-normal prose-code:before:content-none prose-code:after:content-none
             prose-pre:bg-zinc-900 dark:prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-800
             prose-ul:text-zinc-600 dark:prose-ul:text-zinc-400
-            prose-li:marker:text-zinc-400
+            prose-li:marker:text-zinc-400 prose-li:leading-relaxed
           ">
             {children}
           </div>

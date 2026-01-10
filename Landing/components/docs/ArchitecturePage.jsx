@@ -3,6 +3,7 @@ import React from 'react'
 import Link from 'next/link'
 import { ArrowRight, ArrowLeft, Monitor, Mic, Cpu, Server, MessageSquare } from 'lucide-react'
 import DocsLayout from './DocsLayout'
+import ArchitectureDiagram from './ArchitectureDiagram'
 
 const sections = [
   { id: 'system-overview', title: 'System Overview', level: 2 },
@@ -53,27 +54,7 @@ export default function ArchitecturePage() {
         Talkie's architecture separates concerns across multiple processes. This isn't complexity for complexity's sake—it provides real benefits: fault isolation, security boundaries, and the ability to evolve components independently.
       </p>
 
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6 my-6 not-prose overflow-x-auto">
-        <pre className="text-xs md:text-sm font-mono text-zinc-400">
-{`┌─────────────────────────────────────────────────────────────┐
-│                    Talkie (Swift)                           │
-│              UI • Workflows • Data • Orchestration          │
-└────────────────┬────────────────┬────────────────┬──────────┘
-                 │ XPC            │ XPC            │ HTTP
-                 ▼                ▼                ▼
-        ┌────────────────┐ ┌─────────────┐ ┌──────────────────┐
-        │  TalkieLive    │ │ TalkieEngine│ │  TalkieServer    │
-        │    (Swift)     │ │   (Swift)   │ │   (TypeScript)   │
-        │  Ears & Hands  │ │ Local Brain │ │   iOS Bridge     │
-        └────────────────┘ └─────────────┘ └────────┬─────────┘
-                                                    │ Tailscale
-                                                    ▼
-                                           ┌──────────────────┐
-                                           │  Talkie (iPhone) │
-                                           │   Voice Capture  │
-                                           └──────────────────┘`}
-        </pre>
-      </div>
+      <ArchitectureDiagram />
 
       <p>
         The main Talkie app is the orchestrator—it manages the UI, workflows, and data. The helper processes (TalkieLive, TalkieEngine, TalkieServer) handle specific tasks that benefit from isolation.

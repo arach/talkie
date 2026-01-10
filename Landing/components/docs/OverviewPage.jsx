@@ -3,6 +3,7 @@ import React from 'react'
 import Link from 'next/link'
 import { ArrowRight, Shield, Cpu, Eye, Network } from 'lucide-react'
 import DocsLayout from './DocsLayout'
+import { SimpleArchitectureDiagram } from './ArchitectureDiagram'
 
 // Sections for the right-side table of contents
 const sections = [
@@ -85,21 +86,7 @@ export default function OverviewPage() {
         benefits.
       </p>
 
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6 my-6 not-prose overflow-x-auto">
-        <pre className="text-xs md:text-sm font-mono text-zinc-400">
-{`┌─────────────────────────────────────────────────────────────┐
-│                    Talkie (Mac App)                         │
-│              UI • Workflows • Data • Orchestration          │
-└────────────────┬────────────────┬────────────────┬──────────┘
-                 │ XPC            │ XPC            │ HTTP
-                 ▼                ▼                ▼
-        ┌────────────────┐ ┌─────────────┐ ┌──────────────────┐
-        │  TalkieLive    │ │ TalkieEngine│ │  TalkieServer    │
-        │    (Swift)     │ │   (Swift)   │ │   (TypeScript)   │
-        │  Ears & Hands  │ │ Local Brain │ │   iOS Bridge     │
-        └────────────────┘ └─────────────┘ └──────────────────┘`}
-        </pre>
-      </div>
+      <SimpleArchitectureDiagram />
 
       <p>
         <strong>Why multiple processes?</strong>
