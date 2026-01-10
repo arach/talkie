@@ -95,6 +95,46 @@ final class BridgeManager {
         var `protocol`: String
     }
 
+    /// Status of all prerequisites needed to run TalkieServer
+    struct PrerequisiteStatus {
+        var bunInstalled: Bool
+        var bunPath: String?
+        var serverSourceExists: Bool
+        var dependenciesInstalled: Bool
+        var tailscaleInstalled: Bool
+        var tailscaleRunning: Bool
+
+        var isReady: Bool {
+            bunInstalled && serverSourceExists && dependenciesInstalled
+        }
+
+        var needsDependencyInstall: Bool {
+            bunInstalled && serverSourceExists && !dependenciesInstalled
+        }
+
+        var missingItems: [String] {
+            var items: [String] = []
+            if !bunInstalled { items.append("Bun runtime") }
+            if !serverSourceExists { items.append("TalkieServer source") }
+            if !dependenciesInstalled { items.append("Server dependencies") }
+            if !tailscaleInstalled { items.append("Tailscale") }
+            return items
+        }
+    }
+
+    /// Result of dependency installation
+    enum InstallResult {
+        case success
+        case bunNotFound
+        case installFailed(String)
+    }
+
+    // MARK: - Documentation URLs
+
+    static let docsBaseURL = "https://talkie.ing/docs"
+    static let bridgeSetupURL = "\(docsBaseURL)/bridge-setup"
+    static let tailscaleSetupURL = "\(docsBaseURL)/tailscale"
+
     // MARK: - Properties
 
     private(set) var bridgeStatus: BridgeStatus = .stopped
@@ -103,6 +143,8 @@ final class BridgeManager {
     private(set) var pendingPairings: [PendingPairing] = []
     private(set) var qrData: QRData?
     private(set) var errorMessage: String?
+    private(set) var prerequisiteStatus: PrerequisiteStatus?
+    private(set) var isInstallingDependencies = false
 
     private var bridgeProcess: Process?
     private var refreshTimer: Timer?
@@ -210,6 +252,124 @@ final class BridgeManager {
             await refreshDevices()
             await refreshPendingPairings()
             await fetchQRData()
+            await updatePrerequisiteStatus()
+        }
+    }
+
+    /// Check all prerequisites and return their status
+    func checkPrerequisites() async -> PrerequisiteStatus {
+        let bunPath = findBunPath()
+        let bunInstalled = bunPath != nil
+
+        let sourcePath = Self.bridgeSourcePath
+        let serverSourceExists = FileManager.default.fileExists(atPath: "\(sourcePath)/src/server.ts")
+
+        let nodeModulesPath = "\(sourcePath)/node_modules"
+        let dependenciesInstalled = FileManager.default.fileExists(atPath: nodeModulesPath)
+
+        let tailscaleInstalled = findTailscalePath() != nil
+
+        // Check if Tailscale is actually running
+        var tailscaleRunning = false
+        if tailscaleInstalled {
+            switch tailscaleStatus {
+            case .ready, .noPeers:
+                tailscaleRunning = true
+            default:
+                tailscaleRunning = false
+            }
+        }
+
+        let status = PrerequisiteStatus(
+            bunInstalled: bunInstalled,
+            bunPath: bunPath,
+            serverSourceExists: serverSourceExists,
+            dependenciesInstalled: dependenciesInstalled,
+            tailscaleInstalled: tailscaleInstalled,
+            tailscaleRunning: tailscaleRunning
+        )
+
+        // Update the stored status
+        await MainActor.run {
+            self.prerequisiteStatus = status
+        }
+
+        return status
+    }
+
+    /// Update the prerequisite status (called from checkStatus)
+    private func updatePrerequisiteStatus() async {
+        _ = await checkPrerequisites()
+    }
+
+    /// Install TalkieServer dependencies (runs `bun install`)
+    /// Returns the result of the installation
+    func installDependencies() async -> InstallResult {
+        guard !isInstallingDependencies else {
+            return .installFailed("Installation already in progress")
+        }
+
+        guard let bunPath = findBunPath() else {
+            log.error("Cannot install dependencies: Bun not found")
+            return .bunNotFound
+        }
+
+        await MainActor.run {
+            self.isInstallingDependencies = true
+        }
+
+        defer {
+            Task { @MainActor in
+                self.isInstallingDependencies = false
+            }
+        }
+
+        let sourcePath = Self.bridgeSourcePath
+
+        log.info("Installing TalkieServer dependencies at \(sourcePath)...")
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: bunPath)
+        process.arguments = ["install"]
+        process.currentDirectoryURL = URL(fileURLWithPath: sourcePath)
+
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+
+            if process.terminationStatus == 0 {
+                log.info("Dependencies installed successfully")
+                // Update prerequisite status
+                _ = await checkPrerequisites()
+                return .success
+            } else {
+                let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+                let errorOutput = String(data: errorData, encoding: .utf8) ?? "Unknown error"
+                log.error("Dependency installation failed: \(errorOutput)")
+                return .installFailed(errorOutput)
+            }
+        } catch {
+            log.error("Failed to run bun install: \(error)")
+            return .installFailed(error.localizedDescription)
+        }
+    }
+
+    /// Open the bridge setup documentation in the default browser
+    func openBridgeSetupDocs() {
+        if let url = URL(string: Self.bridgeSetupURL) {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    /// Open the Tailscale setup documentation in the default browser
+    func openTailscaleSetupDocs() {
+        if let url = URL(string: Self.tailscaleSetupURL) {
+            NSWorkspace.shared.open(url)
         }
     }
 
@@ -256,6 +416,26 @@ final class BridgeManager {
             bridgeStatus = .error
             errorMessage = msg
             return
+        }
+
+        // Check if dependencies are installed, auto-install if not
+        let nodeModulesPath = "\(sourcePath)/node_modules"
+        if !FileManager.default.fileExists(atPath: nodeModulesPath) {
+            log.info("Dependencies not installed, running bun install...")
+
+            let installResult = await installDependencies()
+            switch installResult {
+            case .success:
+                log.info("Dependencies installed, continuing with bridge start")
+            case .bunNotFound:
+                bridgeStatus = .error
+                errorMessage = "Bun not found. Cannot install dependencies."
+                return
+            case .installFailed(let error):
+                bridgeStatus = .error
+                errorMessage = "Failed to install dependencies: \(error)"
+                return
+            }
         }
 
         do {

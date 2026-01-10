@@ -1,0 +1,294 @@
+"use client"
+import React from 'react'
+import Link from 'next/link'
+import { ArrowLeft, ArrowRight, Server, Package, Terminal, CheckCircle2, AlertCircle, ExternalLink } from 'lucide-react'
+import Container from '../Container'
+
+const CodeBlock = ({ children, title }) => (
+  <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+    {title && (
+      <div className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700">
+        <span className="text-xs font-mono text-zinc-500">{title}</span>
+      </div>
+    )}
+    <pre className="p-4 bg-zinc-50 dark:bg-zinc-900 overflow-x-auto">
+      <code className="text-sm font-mono text-zinc-800 dark:text-zinc-200">{children}</code>
+    </pre>
+  </div>
+)
+
+const Step = ({ number, title, children }) => (
+  <div className="flex gap-4 md:gap-6">
+    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
+      <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{number}</span>
+    </div>
+    <div className="flex-1 pb-8">
+      <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-3">{title}</h3>
+      <div className="text-zinc-600 dark:text-zinc-400 space-y-4">{children}</div>
+    </div>
+  </div>
+)
+
+const InfoBox = ({ type = 'info', children }) => {
+  const styles = {
+    info: 'bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30 text-blue-800 dark:text-blue-300',
+    warning: 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30 text-amber-800 dark:text-amber-300',
+  }
+  const Icon = type === 'warning' ? AlertCircle : CheckCircle2
+
+  return (
+    <div className={`flex gap-3 p-4 rounded-lg border ${styles[type]}`}>
+      <Icon className="w-5 h-5 flex-shrink-0 mt-0.5" />
+      <div className="text-sm">{children}</div>
+    </div>
+  )
+}
+
+export default function BridgeSetupPage() {
+  return (
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
+      {/* Navigation */}
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800">
+        <Container className="h-14 flex items-center justify-between">
+          <Link
+            href="/docs"
+            className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-black dark:hover:text-white transition-colors group"
+          >
+            <ArrowLeft className="w-3 h-3 transition-transform group-hover:-translate-x-0.5" />
+            DOCS
+          </Link>
+
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="h-3 w-px bg-zinc-300 dark:bg-zinc-700"></div>
+            <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-900 dark:text-white">BRIDGE SETUP</span>
+          </div>
+        </Container>
+      </nav>
+
+      <main className="pt-24 pb-32 px-6">
+        <Container>
+          <div className="max-w-3xl">
+            {/* Header */}
+            <div className="mb-12">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 mb-6">
+                <Server className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">Setup Guide</span>
+              </div>
+
+              <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-zinc-900 dark:text-white mb-6">
+                TalkieServer Setup
+              </h1>
+
+              <p className="text-lg text-zinc-600 dark:text-zinc-400">
+                TalkieServer is a lightweight local service that enables communication between your Mac and iPhone.
+                It runs on your Mac and handles secure pairing and data sync.
+              </p>
+            </div>
+
+            {/* What is TalkieServer */}
+            <section className="mb-12">
+              <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-4">What is TalkieServer?</h2>
+
+              <div className="prose prose-zinc dark:prose-invert max-w-none">
+                <p className="text-zinc-600 dark:text-zinc-400">
+                  TalkieServer is a TypeScript service that runs locally on your Mac. It acts as a bridge between the Talkie Mac app and the Talkie iPhone app, enabling:
+                </p>
+
+                <ul className="mt-4 space-y-2 text-zinc-600 dark:text-zinc-400">
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
+                    <span><strong className="text-zinc-900 dark:text-white">Device Pairing</strong> — Securely connect your iPhone to your Mac</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
+                    <span><strong className="text-zinc-900 dark:text-white">Voice Sync</strong> — Transfer voice recordings from iPhone to Mac</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
+                    <span><strong className="text-zinc-900 dark:text-white">Local Processing</strong> — All data stays on your network, never touches external servers</span>
+                  </li>
+                </ul>
+              </div>
+            </section>
+
+            {/* Prerequisites */}
+            <section className="mb-12">
+              <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-4">Prerequisites</h2>
+
+              <div className="space-y-4">
+                <div className="p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+                  <div className="flex items-center gap-3 mb-2">
+                    <Package className="w-5 h-5 text-orange-500" />
+                    <h3 className="font-bold text-zinc-900 dark:text-white">Bun Runtime</h3>
+                  </div>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-3">
+                    Bun is a fast JavaScript runtime that TalkieServer uses. It's similar to Node.js but significantly faster.
+                  </p>
+                  <a
+                    href="https://bun.sh"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:underline"
+                  >
+                    Install Bun <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+
+                <InfoBox type="info">
+                  Talkie will prompt you to install Bun if it's not detected. You can also install it manually by running:
+                  <code className="block mt-2 px-2 py-1 bg-blue-100 dark:bg-blue-900/50 rounded font-mono text-xs">
+                    curl -fsSL https://bun.sh/install | bash
+                  </code>
+                </InfoBox>
+              </div>
+            </section>
+
+            {/* What Gets Installed */}
+            <section className="mb-12">
+              <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-4">What Gets Installed</h2>
+
+              <p className="text-zinc-600 dark:text-zinc-400 mb-6">
+                When you enable iPhone connectivity, Talkie installs the following dependencies locally:
+              </p>
+
+              <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-zinc-100 dark:bg-zinc-800">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-medium text-zinc-900 dark:text-white">Package</th>
+                      <th className="px-4 py-3 text-left font-medium text-zinc-900 dark:text-white">Purpose</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                    <tr className="bg-white dark:bg-zinc-900">
+                      <td className="px-4 py-3 font-mono text-zinc-800 dark:text-zinc-200">elysia</td>
+                      <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">Fast HTTP server framework</td>
+                    </tr>
+                    <tr className="bg-white dark:bg-zinc-900">
+                      <td className="px-4 py-3 font-mono text-zinc-800 dark:text-zinc-200">@elysiajs/cors</td>
+                      <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">Cross-origin request handling</td>
+                    </tr>
+                    <tr className="bg-white dark:bg-zinc-900">
+                      <td className="px-4 py-3 font-mono text-zinc-800 dark:text-zinc-200">tweetnacl</td>
+                      <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">Cryptographic operations for secure pairing</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <InfoBox type="info">
+                <p>
+                  All packages are installed locally in the TalkieServer directory within the app. They don't affect your system or other projects.
+                </p>
+              </InfoBox>
+            </section>
+
+            {/* Installation Steps */}
+            <section className="mb-12">
+              <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-6">Installation Steps</h2>
+
+              <div className="space-y-2">
+                <Step number="1" title="Open Talkie Settings">
+                  <p>Click the Talkie menu bar icon and select Settings, or press <code className="px-1.5 py-0.5 bg-zinc-200 dark:bg-zinc-800 rounded text-sm font-mono">⌘,</code></p>
+                </Step>
+
+                <Step number="2" title="Navigate to iPhone Sync">
+                  <p>Select the "iPhone" tab in the settings sidebar.</p>
+                </Step>
+
+                <Step number="3" title="Enable TalkieServer">
+                  <p>
+                    Click "Enable iPhone Sync". Talkie will check for prerequisites and prompt you to install any missing dependencies.
+                  </p>
+                  <InfoBox type="warning">
+                    If Bun is not installed, you'll be prompted to install it first. This requires an internet connection.
+                  </InfoBox>
+                </Step>
+
+                <Step number="4" title="Install Dependencies">
+                  <p>
+                    When prompted, click "Install Dependencies" to run <code className="px-1.5 py-0.5 bg-zinc-200 dark:bg-zinc-800 rounded text-sm font-mono">bun install</code>. This downloads the required packages (typically takes a few seconds).
+                  </p>
+                </Step>
+
+                <Step number="5" title="Start the Server">
+                  <p>
+                    Once dependencies are installed, TalkieServer will start automatically. You'll see a green status indicator when it's running.
+                  </p>
+                </Step>
+              </div>
+            </section>
+
+            {/* Manual Installation */}
+            <section className="mb-12">
+              <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-4">Manual Installation</h2>
+
+              <p className="text-zinc-600 dark:text-zinc-400 mb-6">
+                If you prefer to install dependencies manually (or need to troubleshoot), you can run:
+              </p>
+
+              <CodeBlock title="Terminal">
+{`# Navigate to TalkieServer directory
+cd ~/dev/talkie/macOS/TalkieServer
+
+# Install dependencies
+bun install
+
+# (Optional) Start server manually
+bun run src/server.ts`}
+              </CodeBlock>
+            </section>
+
+            {/* Troubleshooting */}
+            <section className="mb-12">
+              <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-4">Troubleshooting</h2>
+
+              <div className="space-y-4">
+                <div className="p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+                  <h3 className="font-bold text-zinc-900 dark:text-white mb-2">"Bun not found"</h3>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                    Install Bun from <a href="https://bun.sh" className="text-emerald-600 dark:text-emerald-400 hover:underline">bun.sh</a>, then restart Talkie.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+                  <h3 className="font-bold text-zinc-900 dark:text-white mb-2">"Cannot find package 'elysia'"</h3>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                    Dependencies are missing. Click "Install Dependencies" in settings, or run <code className="px-1 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded font-mono text-xs">bun install</code> manually in the TalkieServer directory.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+                  <h3 className="font-bold text-zinc-900 dark:text-white mb-2">"Port 8765 already in use"</h3>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                    Another process is using the port. Restart Talkie — it will automatically clean up stray processes.
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {/* Next Steps */}
+            <section className="pt-8 border-t border-zinc-200 dark:border-zinc-800">
+              <h2 className="text-xl font-bold text-zinc-900 dark:text-white mb-4">Next Steps</h2>
+
+              <Link
+                href="/docs/tailscale"
+                className="group flex items-center justify-between p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-blue-300 dark:hover:border-blue-500/50 transition-colors"
+              >
+                <div>
+                  <h3 className="font-bold text-zinc-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                    Configure Tailscale
+                  </h3>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                    Set up secure networking between your Mac and iPhone
+                  </p>
+                </div>
+                <ArrowRight className="w-5 h-5 text-zinc-400 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
+              </Link>
+            </section>
+          </div>
+        </Container>
+      </main>
+    </div>
+  )
+}

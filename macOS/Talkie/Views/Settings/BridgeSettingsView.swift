@@ -13,6 +13,7 @@ struct BridgeSettingsView: View {
     @State private var bridgeManager = BridgeManager.shared
     @State private var showingQRSheet = false
     @State private var isRefreshing = false
+    @State private var showingInstallConfirmation = false
 
     var body: some View {
         SettingsPageContainer {
@@ -43,6 +44,19 @@ struct BridgeSettingsView: View {
             }
         } content: {
             VStack(alignment: .leading, spacing: 16) {
+                // Prerequisites Check (show if something is missing)
+                if let prereqs = bridgeManager.prerequisiteStatus, !prereqs.isReady {
+                    PrerequisiteStatusSection(
+                        status: prereqs,
+                        isInstalling: bridgeManager.isInstallingDependencies,
+                        onInstallDependencies: { showingInstallConfirmation = true },
+                        onOpenBridgeDocs: { bridgeManager.openBridgeSetupDocs() },
+                        onOpenTailscaleDocs: { bridgeManager.openTailscaleSetupDocs() }
+                    )
+
+                    Divider()
+                }
+
                 // Tailscale Status
                 TailscaleStatusSection(status: bridgeManager.tailscaleStatus)
 
@@ -105,6 +119,19 @@ struct BridgeSettingsView: View {
         .sheet(isPresented: $showingQRSheet) {
             QRCodeSheet(qrData: bridgeManager.qrData)
         }
+        .alert("Install Dependencies", isPresented: $showingInstallConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Install") {
+                Task {
+                    let result = await bridgeManager.installDependencies()
+                    if case .success = result {
+                        // Dependencies installed, status will update automatically
+                    }
+                }
+            }
+        } message: {
+            Text("This will run 'bun install' to download the required packages for TalkieServer:\n\n• elysia (HTTP server)\n• @elysiajs/cors (cross-origin handling)\n• tweetnacl (encryption)\n\nThese packages are installed locally and don't affect your system.")
+        }
         .onAppear {
             bridgeManager.checkStatus()
         }
@@ -115,6 +142,156 @@ struct BridgeSettingsView: View {
         bridgeManager.checkStatus()
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
             isRefreshing = false
+        }
+    }
+}
+
+// MARK: - Prerequisite Status Section
+
+private struct PrerequisiteStatusSection: View {
+    let status: BridgeManager.PrerequisiteStatus
+    let isInstalling: Bool
+    let onInstallDependencies: () -> Void
+    let onOpenBridgeDocs: () -> Void
+    let onOpenTailscaleDocs: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(.orange)
+                Text("SETUP REQUIRED")
+                    .font(Theme.current.fontXSMedium)
+                    .foregroundColor(.orange)
+            }
+
+            // Status card
+            VStack(alignment: .leading, spacing: 12) {
+                // Missing items list
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(status.missingItems, id: \.self) { item in
+                        HStack(spacing: 8) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(.red)
+                            Text(item)
+                                .font(Theme.current.fontSM)
+                                .foregroundColor(Theme.current.foreground)
+                        }
+                    }
+                }
+
+                // Action buttons based on what's missing
+                VStack(alignment: .leading, spacing: 8) {
+                    // Bun not installed
+                    if !status.bunInstalled {
+                        HStack(spacing: 8) {
+                            Button(action: openBunInstall) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "arrow.down.circle")
+                                        .font(Theme.current.fontXS)
+                                    Text("INSTALL BUN")
+                                        .font(Theme.current.fontXSMedium)
+                                }
+                                .foregroundColor(.blue)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color.blue.opacity(0.1))
+                                .cornerRadius(6)
+                            }
+                            .buttonStyle(.plain)
+
+                            Button(action: onOpenBridgeDocs) {
+                                Text("Learn more")
+                                    .font(Theme.current.fontXS)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    // Dependencies not installed (but Bun is available)
+                    if status.needsDependencyInstall {
+                        HStack(spacing: 8) {
+                            Button(action: onInstallDependencies) {
+                                HStack(spacing: 4) {
+                                    if isInstalling {
+                                        ProgressView()
+                                            .controlSize(.mini)
+                                    } else {
+                                        Image(systemName: "square.and.arrow.down")
+                                            .font(Theme.current.fontXS)
+                                    }
+                                    Text(isInstalling ? "INSTALLING..." : "INSTALL DEPENDENCIES")
+                                        .font(Theme.current.fontXSMedium)
+                                }
+                                .foregroundColor(.green)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color.green.opacity(0.1))
+                                .cornerRadius(6)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(isInstalling)
+
+                            Button(action: onOpenBridgeDocs) {
+                                Text("What gets installed?")
+                                    .font(Theme.current.fontXS)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    // Tailscale not installed
+                    if !status.tailscaleInstalled {
+                        HStack(spacing: 8) {
+                            Button(action: openTailscaleDownload) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "arrow.down.circle")
+                                        .font(Theme.current.fontXS)
+                                    Text("INSTALL TAILSCALE")
+                                        .font(Theme.current.fontXSMedium)
+                                }
+                                .foregroundColor(.blue)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color.blue.opacity(0.1))
+                                .cornerRadius(6)
+                            }
+                            .buttonStyle(.plain)
+
+                            Button(action: onOpenTailscaleDocs) {
+                                Text("Setup guide")
+                                    .font(Theme.current.fontXS)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            .padding(12)
+            .background(Color.orange.opacity(0.05))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.orange.opacity(0.2), lineWidth: 1)
+            )
+        }
+    }
+
+    private func openBunInstall() {
+        if let url = URL(string: "https://bun.sh") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    private func openTailscaleDownload() {
+        if let url = URL(string: "https://tailscale.com/download/mac") {
+            NSWorkspace.shared.open(url)
         }
     }
 }
