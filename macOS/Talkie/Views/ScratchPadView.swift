@@ -879,6 +879,27 @@ struct ScratchPadView: View {
             }
         }
 
+        // Voice capture via Talkie's audio pipeline
+        server.onCaptureStart = {
+            do {
+                try EphemeralTranscriber.shared.startCapture()
+                log.info("Started voice capture via extension API")
+            } catch {
+                log.error("Failed to start capture via extension API: \(error)")
+            }
+        }
+
+        server.onCaptureStop = {
+            do {
+                let text = try await EphemeralTranscriber.shared.stopAndTranscribe()
+                log.info("Captured via extension API: \(text.prefix(50))...")
+                return text
+            } catch {
+                log.error("Failed to transcribe via extension API: \(error)")
+                return nil
+            }
+        }
+
         log.info("Draft Extension API server configured on port 7847")
     }
 

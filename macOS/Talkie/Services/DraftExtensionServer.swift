@@ -89,6 +89,14 @@ struct DraftIncomingMessage: Codable {
     let destination: String?
     let name: String?
     let capabilities: [String]?
+    let action: String?  // For capture: "start" or "stop"
+}
+
+/// Transcription result message (sent after capture completes)
+struct DraftTranscriptionMessage: Codable {
+    let type = "draft:transcription"
+    let text: String
+    let append: Bool  // Whether to append to existing content
 }
 
 struct DraftConstraints: Codable {
@@ -131,6 +139,8 @@ final class DraftExtensionServer {
     var onReject: (() -> Void)?
     var onUpdate: ((String) -> Void)?
     var onSave: ((String) -> Void)?  // "memo" or "clipboard"
+    var onCaptureStart: (() -> Void)?
+    var onCaptureStop: (() async -> String?)?  // Returns transcribed text
 
     var isRunning: Bool {
         listener?.state == .ready
@@ -244,6 +254,12 @@ final class DraftExtensionServer {
             content: content
         )
 
+        broadcast(message)
+    }
+
+    /// Broadcast transcription result from voice capture
+    func broadcastTranscription(text: String, append: Bool = true) {
+        let message = DraftTranscriptionMessage(text: text, append: append)
         broadcast(message)
     }
 
@@ -371,6 +387,17 @@ final class DraftExtensionServer {
         case "draft:save":
             if let destination = message.destination {
                 onSave?(destination)
+            }
+
+        case "draft:capture":
+            if message.action == "start" {
+                onCaptureStart?()
+            } else if message.action == "stop" {
+                Task {
+                    if let text = await onCaptureStop?() {
+                        broadcastTranscription(text: text, append: true)
+                    }
+                }
             }
 
         default:

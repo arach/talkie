@@ -462,8 +462,7 @@
     let currentContent = ''
     let isReviewing = false
     let isLocalEdit = false  // Track if we're editing locally
-    let recognition = null   // Web Speech API
-    let isRecording = false
+    let isRecording = false  // Voice capture state
 
     // DOM Elements
     const statusDot = document.getElementById('statusDot')
@@ -520,11 +519,26 @@
         console.error('Talkie error:', error)
       })
 
+      // Handle transcription results from Talkie
+      talkie.on('transcription', (result) => {
+        if (result.append && result.text) {
+          const separator = currentContent && !currentContent.endsWith(' ') ? ' ' : ''
+          const newContent = currentContent + separator + result.text.trim()
+          currentContent = newContent
+          tweetContent.innerText = newContent
+          tweetContent.classList.remove('empty')
+          updateCharCount(newContent)
+        }
+
+        // Stop recording state
+        isRecording = false
+        micBtn.classList.remove('recording')
+        voiceStatus.textContent = ''
+        voiceStatus.classList.remove('recording')
+      })
+
       // Set up contenteditable input sync
       setupInputSync()
-
-      // Set up Web Speech API
-      setupVoiceCapture()
     }
 
     // Sync local edits back to Talkie
@@ -555,91 +569,23 @@
       })
     }
 
-    // Web Speech API for ephemeral voice capture
-    function setupVoiceCapture() {
-      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-        micBtn.style.display = 'none'
-        console.log('Web Speech API not supported')
+    // Toggle voice capture via Talkie
+    function toggleVoiceCapture() {
+      if (!talkie || !talkie.isConnected()) {
+        voiceStatus.textContent = 'Not connected'
+        setTimeout(() => voiceStatus.textContent = '', 2000)
         return
       }
 
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-      recognition = new SpeechRecognition()
-      recognition.continuous = true
-      recognition.interimResults = true
-      recognition.lang = 'en-US'
-
-      let finalTranscript = ''
-      let interimTranscript = ''
-
-      recognition.onstart = () => {
+      if (isRecording) {
+        talkie.stopCapture()
+        voiceStatus.textContent = 'Transcribing...'
+      } else {
+        talkie.startCapture()
         isRecording = true
         micBtn.classList.add('recording')
         voiceStatus.textContent = 'Listening...'
         voiceStatus.classList.add('recording')
-        finalTranscript = ''
-      }
-
-      recognition.onend = () => {
-        isRecording = false
-        micBtn.classList.remove('recording')
-        voiceStatus.textContent = ''
-        voiceStatus.classList.remove('recording')
-      }
-
-      recognition.onresult = (event) => {
-        interimTranscript = ''
-
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript
-          if (event.results[i].isFinal) {
-            finalTranscript += transcript
-          } else {
-            interimTranscript += transcript
-          }
-        }
-
-        // Show interim results in status
-        if (interimTranscript) {
-          voiceStatus.textContent = interimTranscript.substring(0, 30) + '...'
-        }
-
-        // Append final transcript to content
-        if (finalTranscript) {
-          const existingContent = currentContent
-          const separator = existingContent && !existingContent.endsWith(' ') ? ' ' : ''
-          const newContent = existingContent + separator + finalTranscript.trim()
-
-          currentContent = newContent
-          tweetContent.innerText = newContent
-          tweetContent.classList.remove('empty')
-          updateCharCount(newContent)
-
-          // Sync to Talkie
-          if (talkie && talkie.isConnected()) {
-            talkie.update(newContent)
-          }
-
-          finalTranscript = ''
-        }
-      }
-
-      recognition.onerror = (event) => {
-        console.error('Speech recognition error:', event.error)
-        isRecording = false
-        micBtn.classList.remove('recording')
-        voiceStatus.textContent = event.error === 'not-allowed' ? 'Mic access denied' : ''
-        voiceStatus.classList.remove('recording')
-      }
-    }
-
-    function toggleVoiceCapture() {
-      if (!recognition) return
-
-      if (isRecording) {
-        recognition.stop()
-      } else {
-        recognition.start()
       }
     }
 

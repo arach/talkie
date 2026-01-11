@@ -116,6 +116,13 @@ class TalkieLink {
         this.emit('error', new Error(message.error))
         break
 
+      case 'draft:transcription':
+        this.emit('transcription', {
+          text: message.text,
+          append: message.append
+        })
+        break
+
       default:
         console.warn('TalkieLink: Unknown message type', message.type)
     }
@@ -226,6 +233,28 @@ class TalkieLink {
    */
   saveToMemo() {
     this.save('memo')
+  }
+
+  /**
+   * Start voice capture via Talkie's audio pipeline
+   * Listen for 'transcription' event for results
+   */
+  startCapture() {
+    this.send({
+      type: 'draft:capture',
+      action: 'start'
+    })
+  }
+
+  /**
+   * Stop voice capture and trigger transcription
+   * Results come via 'transcription' event
+   */
+  stopCapture() {
+    this.send({
+      type: 'draft:capture',
+      action: 'stop'
+    })
   }
 
   /**
