@@ -121,6 +121,64 @@
       font-style: italic;
     }
 
+    .tweet-content:focus {
+      outline: none;
+    }
+
+    .tweet-content[contenteditable]:empty:before {
+      content: attr(placeholder);
+      color: #71767b;
+      font-style: italic;
+    }
+
+    /* Voice Capture */
+    .voice-capture {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .mic-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #2f3336;
+      border: none;
+      color: #71767b;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      padding: 0;
+    }
+
+    .mic-btn:hover {
+      background: #3a3f42;
+      color: #e7e9ea;
+    }
+
+    .mic-btn.recording {
+      background: #f4212e;
+      color: white;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.05); opacity: 0.8; }
+    }
+
+    .voice-status {
+      font-size: 12px;
+      color: #71767b;
+    }
+
+    .voice-status.recording {
+      color: #f4212e;
+    }
+
     .char-count {
       display: flex;
       align-items: center;
@@ -339,8 +397,18 @@
           <div class="username">@you</div>
         </div>
       </div>
-      <div class="tweet-content empty" id="tweetContent">
-        Start dictating in Talkie Drafts...
+      <div class="tweet-content empty" id="tweetContent" contenteditable="true"
+           placeholder="Start typing or dictating...">
+      </div>
+
+      <!-- Ephemeral voice capture -->
+      <div class="voice-capture" id="voiceCapture">
+        <button class="mic-btn" id="micBtn" onclick="toggleVoiceCapture()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+          </svg>
+        </button>
+        <span class="voice-status" id="voiceStatus"></span>
       </div>
       <div class="char-count">
         <svg class="char-ring" viewBox="0 0 24 24">
@@ -393,6 +461,9 @@
     let talkie = null
     let currentContent = ''
     let isReviewing = false
+    let isLocalEdit = false  // Track if we're editing locally
+    let recognition = null   // Web Speech API
+    let isRecording = false
 
     // DOM Elements
     const statusDot = document.getElementById('statusDot')
@@ -405,6 +476,8 @@
     const diffContent = document.getElementById('diffContent')
     const diffInstruction = document.getElementById('diffInstruction')
     const reviewActions = document.getElementById('reviewActions')
+    const micBtn = document.getElementById('micBtn')
+    const voiceStatus = document.getElementById('voiceStatus')
 
     // Initialize connection
     function init() {
@@ -446,18 +519,149 @@
       talkie.on('error', (error) => {
         console.error('Talkie error:', error)
       })
+
+      // Set up contenteditable input sync
+      setupInputSync()
+
+      // Set up Web Speech API
+      setupVoiceCapture()
+    }
+
+    // Sync local edits back to Talkie
+    function setupInputSync() {
+      let debounceTimer = null
+
+      tweetContent.addEventListener('input', () => {
+        isLocalEdit = true
+        const content = tweetContent.innerText
+        currentContent = content
+        updateCharCount(content)
+
+        // Debounce updates to Talkie
+        clearTimeout(debounceTimer)
+        debounceTimer = setTimeout(() => {
+          if (talkie && talkie.isConnected()) {
+            talkie.update(content)
+          }
+          isLocalEdit = false
+        }, 150)
+      })
+
+      // Handle paste - strip formatting
+      tweetContent.addEventListener('paste', (e) => {
+        e.preventDefault()
+        const text = e.clipboardData.getData('text/plain')
+        document.execCommand('insertText', false, text)
+      })
+    }
+
+    // Web Speech API for ephemeral voice capture
+    function setupVoiceCapture() {
+      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        micBtn.style.display = 'none'
+        console.log('Web Speech API not supported')
+        return
+      }
+
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+      recognition = new SpeechRecognition()
+      recognition.continuous = true
+      recognition.interimResults = true
+      recognition.lang = 'en-US'
+
+      let finalTranscript = ''
+      let interimTranscript = ''
+
+      recognition.onstart = () => {
+        isRecording = true
+        micBtn.classList.add('recording')
+        voiceStatus.textContent = 'Listening...'
+        voiceStatus.classList.add('recording')
+        finalTranscript = ''
+      }
+
+      recognition.onend = () => {
+        isRecording = false
+        micBtn.classList.remove('recording')
+        voiceStatus.textContent = ''
+        voiceStatus.classList.remove('recording')
+      }
+
+      recognition.onresult = (event) => {
+        interimTranscript = ''
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript
+          } else {
+            interimTranscript += transcript
+          }
+        }
+
+        // Show interim results in status
+        if (interimTranscript) {
+          voiceStatus.textContent = interimTranscript.substring(0, 30) + '...'
+        }
+
+        // Append final transcript to content
+        if (finalTranscript) {
+          const existingContent = currentContent
+          const separator = existingContent && !existingContent.endsWith(' ') ? ' ' : ''
+          const newContent = existingContent + separator + finalTranscript.trim()
+
+          currentContent = newContent
+          tweetContent.innerText = newContent
+          tweetContent.classList.remove('empty')
+          updateCharCount(newContent)
+
+          // Sync to Talkie
+          if (talkie && talkie.isConnected()) {
+            talkie.update(newContent)
+          }
+
+          finalTranscript = ''
+        }
+      }
+
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error)
+        isRecording = false
+        micBtn.classList.remove('recording')
+        voiceStatus.textContent = event.error === 'not-allowed' ? 'Mic access denied' : ''
+        voiceStatus.classList.remove('recording')
+      }
+    }
+
+    function toggleVoiceCapture() {
+      if (!recognition) return
+
+      if (isRecording) {
+        recognition.stop()
+      } else {
+        recognition.start()
+      }
     }
 
     function updateTweetDisplay(content) {
-      const chars = content.length
+      // Skip if user is currently editing locally
+      if (isLocalEdit) return
+
+      currentContent = content
 
       if (!content) {
-        tweetContent.textContent = 'Start dictating in Talkie Drafts...'
+        tweetContent.innerText = ''
         tweetContent.classList.add('empty')
       } else {
-        tweetContent.textContent = content
+        tweetContent.innerText = content
         tweetContent.classList.remove('empty')
       }
+
+      updateCharCount(content)
+    }
+
+    function updateCharCount(content) {
+      const chars = content.length
 
       // Update character count
       charCount.textContent = `${chars}/${MAX_CHARS}`
