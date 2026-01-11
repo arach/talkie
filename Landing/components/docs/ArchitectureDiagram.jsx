@@ -81,43 +81,78 @@ const ProcessBox = ({
 //   - iPhone → iCloud (CloudKit, dashed)
 //   - iPhone → Watch (dashed)
 export default function ArchitectureDiagram() {
-  const layout = { width: 700, height: 400 }
-  const arrowGap = 6
-  const curveOffset = 50
+  // === LAYOUT CONFIG ===
+  const layout = { width: 700, height: 340 }
+
   const nodeSizes = {
-    large: { width: 210, height: 85 },
+    large:  { width: 210, height: 85 },
     normal: { width: 145, height: 68 },
-    small: { width: 95, height: 42 },
+    small:  { width: 95,  height: 42 },
   }
 
-  const nodeLayout = {
-    talkie: { x: 40, y: 20, size: 'large' },
-    talkieLive: { x: 40, y: 140, size: 'normal' },
-    talkieEngine: { x: 40, y: 240, size: 'normal' },
-    talkieServer: { x: 300, y: 20, size: 'normal' },
-    iPhone: { x: 520, y: 20, size: 'normal' },
-    watch: { x: 545, y: 130, size: 'small' },
-    iCloud: { x: 300, y: 240, size: 'normal' },  // Same size as TalkieServer
+  // Box positions - adjust these to move boxes
+  const nodes = {
+    talkie:       { x: 25,  y: 15,  size: 'large' },
+    talkieLive:   { x: 25,  y: 125, size: 'normal' },
+    talkieEngine: { x: 25,  y: 220, size: 'normal' },
+    talkieServer: { x: 280, y: 15,  size: 'normal' },
+    iCloud:       { x: 280, y: 220, size: 'normal' },
+    iPhone:       { x: 520, y: 15,  size: 'normal' },
+    watch:        { x: 548, y: 115, size: 'small' },
   }
 
+  // === CONNECTOR STYLES ===
+  const connectorStyles = {
+    xpc:      { color: 'emerald', stroke: 2, label: 'XPC' },
+    http:     { color: 'amber',   stroke: 2, label: 'HTTP' },
+    tailscale:{ color: 'zinc',    stroke: 2, label: 'Tailscale' },
+    cloudkit: { color: 'sky',     stroke: 2, label: 'CloudKit', dashed: true },
+    audio:    { color: 'emerald', stroke: 3, label: 'audio' },
+    peer:     { color: 'zinc',    stroke: 1.5, dashed: true },
+  }
+
+  // === CONNECTORS ===
+  const connectors = [
+    { from: 'talkie',       to: 'talkieLive',   fromAnchor: 'bottom', toAnchor: 'top',    style: 'xpc' },
+    { from: 'talkieLive',   to: 'talkieEngine', fromAnchor: 'bottom', toAnchor: 'top',    style: 'audio' },
+    { from: 'talkie',       to: 'talkieServer', fromAnchor: 'right',  toAnchor: 'left',   style: 'http' },
+    { from: 'talkieServer', to: 'iPhone',       fromAnchor: 'right',  toAnchor: 'left',   style: 'tailscale' },
+    { from: 'iPhone',       to: 'watch',        fromAnchor: 'bottom', toAnchor: 'top',    style: 'peer' },
+    { from: 'talkie',       to: 'iCloud',       fromAnchor: 'bottomRight', toAnchor: 'left', style: 'cloudkit', curve: 'down' },
+    { from: 'iPhone',       to: 'iCloud',       fromAnchor: 'bottomLeft',  toAnchor: 'right', style: 'cloudkit', curve: 'down' },
+  ]
+
+  // === HELPER FUNCTIONS ===
   const getNode = (id) => {
-    const layout = nodeLayout[id]
-    const size = nodeSizes[layout.size]
-    return { ...layout, ...size }
+    const node = nodes[id]
+    const size = nodeSizes[node.size]
+    return { ...node, ...size }
   }
 
-  const anchor = {
-    left: (node, gap = arrowGap) => ({ x: node.x - gap, y: node.y + node.height / 2 }),
-    right: (node, gap = arrowGap) => ({ x: node.x + node.width + gap, y: node.y + node.height / 2 }),
-    top: (node, gap = arrowGap) => ({ x: node.x + node.width / 2, y: node.y - gap }),
-    bottom: (node, gap = arrowGap) => ({ x: node.x + node.width / 2, y: node.y + node.height + gap }),
+  const gap = 8
+  const anchor = (node, position) => {
+    const n = typeof node === 'string' ? getNode(node) : node
+    switch (position) {
+      case 'left':        return { x: n.x - gap, y: n.y + n.height / 2 }
+      case 'right':       return { x: n.x + n.width + gap, y: n.y + n.height / 2 }
+      case 'top':         return { x: n.x + n.width / 2, y: n.y - gap }
+      case 'bottom':      return { x: n.x + n.width / 2, y: n.y + n.height + gap }
+      case 'bottomRight': return { x: n.x + n.width + gap, y: n.y + n.height - 15 }
+      case 'bottomLeft':  return { x: n.x - gap, y: n.y + n.height - 15 }
+      default:            return { x: n.x + n.width / 2, y: n.y + n.height / 2 }
+    }
   }
 
-  const midPoint = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 })
-  const curvePath = (from, to, c1, c2) => (
-    `M ${from.x} ${from.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${to.x} ${to.y}`
-  )
+  const straightPath = (from, to) => `M ${from.x} ${from.y} L ${to.x} ${to.y}`
+  const curvedPath = (from, to, direction = 'down') => {
+    const cp = 50
+    if (direction === 'down') {
+      return `M ${from.x} ${from.y} C ${from.x + cp} ${from.y + 50}, ${to.x - cp} ${to.y - 30}, ${to.x} ${to.y}`
+    }
+    return straightPath(from, to)
+  }
 
+  // Resolve all nodes
   const talkie = getNode('talkie')
   const talkieLive = getNode('talkieLive')
   const talkieEngine = getNode('talkieEngine')
@@ -126,47 +161,39 @@ export default function ArchitectureDiagram() {
   const watch = getNode('watch')
   const iCloud = getNode('iCloud')
 
+  // Helper for midpoint
+  const midPoint = (p1, p2) => ({ x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 })
+
+  // Compute connector endpoints
   const talkieToLive = {
-    start: anchor.bottom(talkie),
-    end: anchor.top(talkieLive),
+    start: anchor('talkie', 'bottom'),
+    end: anchor('talkieLive', 'top')
   }
   const liveToEngine = {
-    start: anchor.bottom(talkieLive),
-    end: anchor.top(talkieEngine),
+    start: anchor('talkieLive', 'bottom'),
+    end: anchor('talkieEngine', 'top')
   }
   const talkieToServer = {
-    start: anchor.right(talkie),
-    end: anchor.left(talkieServer),
+    start: anchor('talkie', 'right'),
+    end: anchor('talkieServer', 'left')
   }
   const serverToPhone = {
-    start: anchor.right(talkieServer),
-    end: anchor.left(iPhone),
+    start: anchor('talkieServer', 'right'),
+    end: anchor('iPhone', 'left')
   }
   const phoneToWatch = {
-    start: anchor.bottom(iPhone),
-    end: anchor.top(watch),
-  }
-  const talkieToCloud = {
-    start: { x: talkie.x + talkie.width + arrowGap, y: talkie.y + talkie.height - 12 },
-    end: { x: iCloud.x - arrowGap, y: iCloud.y + iCloud.height / 2 },
-  }
-  const phoneToCloud = {
-    start: { x: iPhone.x - arrowGap, y: iPhone.y + iPhone.height - 12 },
-    end: { x: iCloud.x + iCloud.width + arrowGap, y: iCloud.y + iCloud.height / 2 },
+    start: anchor('iPhone', 'bottom'),
+    end: anchor('watch', 'top')
   }
 
-  const talkieToCloudCurve = curvePath(
-    talkieToCloud.start,
-    talkieToCloud.end,
-    { x: talkieToCloud.start.x + curveOffset, y: talkieToCloud.start.y + 60 },
-    { x: talkieToCloud.end.x - curveOffset, y: talkieToCloud.end.y - 40 }
-  )
-  const phoneToCloudCurve = curvePath(
-    phoneToCloud.start,
-    phoneToCloud.end,
-    { x: phoneToCloud.start.x - curveOffset, y: phoneToCloud.start.y + 60 },
-    { x: phoneToCloud.end.x + curveOffset, y: phoneToCloud.end.y - 40 }
-  )
+  // Curved paths for CloudKit
+  const talkieCloudStart = anchor('talkie', 'bottomRight')
+  const talkieCloudEnd = anchor('iCloud', 'left')
+  const talkieToCloudCurve = curvedPath(talkieCloudStart, talkieCloudEnd, 'down')
+
+  const phoneCloudStart = anchor('iPhone', 'bottomLeft')
+  const phoneCloudEnd = anchor('iCloud', 'right')
+  const phoneToCloudCurve = curvedPath(phoneCloudStart, phoneCloudEnd, 'down')
 
   return (
     <div className="my-8 p-4 md:p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-x-auto">

@@ -58,6 +58,16 @@ extension NSScreen {
 
         return name
     }
+
+    /// Check if this screen is an iPad connected via Sidecar
+    /// Sidecar displays may include "iPad" in their localizedName (e.g. "Arach's iPad")
+    /// or be named "Sidecar Display (AirPlay)" depending on connection method
+    var isSidecar: Bool {
+        guard isValid else { return false }
+        let name = localizedName
+        return name.localizedCaseInsensitiveContains("iPad") ||
+               name.localizedCaseInsensitiveContains("Sidecar")
+    }
 }
 
 // MARK: - Floating Pill Controller

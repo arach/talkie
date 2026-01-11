@@ -294,7 +294,10 @@ struct ListViewDebugContent: View {
             // 5. Audio Testing
             AudioPaddingTestDebugContent()
 
-            // 5. Data Management
+            // 6. LaunchAgent Management
+            LaunchAgentDebugContent()
+
+            // 7. Data Management
             DebugSection(title: "DATA") {
                 VStack(spacing: 4) {
                     DebugActionButton(icon: "arrow.triangle.2.circlepath", label: "Show Migration") {
@@ -303,7 +306,7 @@ struct ListViewDebugContent: View {
                 }
             }
 
-            // 6. Danger zone (platform-wide destructive utils)
+            // 8. Danger zone (platform-wide destructive utils)
             DebugSection(title: "RESET") {
                 VStack(spacing: 4) {
                     DebugActionButton(icon: "arrow.counterclockwise", label: "Onboarding", destructive: true) {
@@ -953,6 +956,241 @@ struct EngineProcessesDebugContent: View {
 
             isRestarting = false
             SystemEventManager.shared.logSync(.system, "Clean Slate Complete", detail: "\(currentEnv.displayName) helpers restarted")
+        }
+    }
+}
+
+// MARK: - LaunchAgent Management
+
+struct LaunchAgentDebugContent: View {
+    @State private var isLoaded = false
+    @State private var isChecking = true
+    @State private var lastError: String?
+
+    private var currentEnv: TalkieEnvironment {
+        TalkieEnvironment.current
+    }
+
+    private var plistName: String {
+        switch currentEnv {
+        case .production: return "jdi.talkie.live.xpc.plist"
+        case .staging: return "jdi.talkie.live.xpc.staging.plist"
+        case .dev: return "jdi.talkie.live.xpc.dev.plist"
+        }
+    }
+
+    private var launchAgentLabel: String {
+        switch currentEnv {
+        case .production: return "jdi.talkie.live.xpc"
+        case .staging: return "jdi.talkie.live.xpc.staging"
+        case .dev: return "jdi.talkie.live.xpc.dev"
+        }
+    }
+
+    private var plistPath: String {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return "\(home)/Library/LaunchAgents/\(plistName)"
+    }
+
+    var body: some View {
+        DebugSection(title: "LAUNCHAGENT") {
+            VStack(spacing: 4) {
+                // Status row
+                HStack {
+                    Text(plistName)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+
+                    Spacer()
+
+                    if isChecking {
+                        ProgressView()
+                            .scaleEffect(0.5)
+                    } else {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(isLoaded ? Color.green : Color.gray)
+                                .frame(width: 8, height: 8)
+                            Text(isLoaded ? "Loaded" : "Unloaded")
+                                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                .foregroundColor(isLoaded ? .green : Theme.current.foregroundSecondary)
+                        }
+                    }
+
+                    Button(action: checkStatus) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 10))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+
+                // Error display
+                if let error = lastError {
+                    Text(error)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.red)
+                        .padding(.horizontal, 6)
+                        .padding(.bottom, 4)
+                }
+
+                // Action buttons
+                HStack(spacing: 8) {
+                    Button(action: loadAgent) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 9))
+                            Text("Load")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(isLoaded ? Color.gray : Color.green)
+                        .cornerRadius(CornerRadius.xs)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isLoaded || isChecking)
+
+                    Button(action: unloadAgent) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "stop.fill")
+                                .font(.system(size: 9))
+                            Text("Unload")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(!isLoaded ? Color.gray : Color.orange)
+                        .cornerRadius(CornerRadius.xs)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!isLoaded || isChecking)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+
+                // Info text
+                Text("LaunchAgent auto-starts TalkieLive on login.\nUnload to prevent restart loops during Xcode debugging.")
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(Theme.current.foregroundSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 6)
+                    .padding(.top, 2)
+            }
+        }
+        .onAppear {
+            checkStatus()
+        }
+    }
+
+    private func checkStatus() {
+        isChecking = true
+        lastError = nil
+
+        Task.detached(priority: .userInitiated) {
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+            task.arguments = ["list", launchAgentLabel]
+
+            let pipe = Pipe()
+            task.standardOutput = pipe
+            task.standardError = FileHandle.nullDevice
+
+            do {
+                try task.run()
+                task.waitUntilExit()
+
+                let loaded = task.terminationStatus == 0
+
+                await MainActor.run {
+                    self.isLoaded = loaded
+                    self.isChecking = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.lastError = error.localizedDescription
+                    self.isChecking = false
+                }
+            }
+        }
+    }
+
+    private func loadAgent() {
+        isChecking = true
+        lastError = nil
+
+        Task.detached(priority: .userInitiated) {
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+            task.arguments = ["load", plistPath]
+
+            let errorPipe = Pipe()
+            task.standardOutput = FileHandle.nullDevice
+            task.standardError = errorPipe
+
+            do {
+                try task.run()
+                task.waitUntilExit()
+
+                let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+                let errorOutput = String(data: errorData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                await MainActor.run {
+                    if task.terminationStatus == 0 {
+                        SystemEventManager.shared.logSync(.system, "LaunchAgent loaded", detail: plistName)
+                    } else {
+                        self.lastError = errorOutput ?? "Load failed"
+                    }
+                    self.checkStatus()
+                }
+            } catch {
+                await MainActor.run {
+                    self.lastError = error.localizedDescription
+                    self.isChecking = false
+                }
+            }
+        }
+    }
+
+    private func unloadAgent() {
+        isChecking = true
+        lastError = nil
+
+        Task.detached(priority: .userInitiated) {
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+            task.arguments = ["unload", plistPath]
+
+            let errorPipe = Pipe()
+            task.standardOutput = FileHandle.nullDevice
+            task.standardError = errorPipe
+
+            do {
+                try task.run()
+                task.waitUntilExit()
+
+                let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+                let errorOutput = String(data: errorData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                await MainActor.run {
+                    if task.terminationStatus == 0 {
+                        SystemEventManager.shared.logSync(.system, "LaunchAgent unloaded", detail: plistName)
+                    } else {
+                        self.lastError = errorOutput ?? "Unload failed"
+                    }
+                    self.checkStatus()
+                }
+            } catch {
+                await MainActor.run {
+                    self.lastError = error.localizedDescription
+                    self.isChecking = false
+                }
+            }
         }
     }
 }

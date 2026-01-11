@@ -45,18 +45,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         // Configure unified logger first
         TalkieLogger.configure(source: .talkieLive)
 
-        // Fratricide prevention: if another instance is already running, quit
-        if let bundleID = Bundle.main.bundleIdentifier {
-            let runningApps = NSWorkspace.shared.runningApplications.filter {
-                $0.bundleIdentifier == bundleID && $0.processIdentifier != ProcessInfo.processInfo.processIdentifier
-            }
-            if !runningApps.isEmpty {
-                log.warning("Another TalkieLive (\(bundleID)) is already running - exiting to prevent fratricide", critical: true)
-                NSApp.terminate(nil)
-                return
-            }
-        }
-
         // Essential sync init (settings needed for appearance)
         BootSequence.shared.initEssentials()
 
@@ -280,6 +268,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 if hasNotch {
                     self?.notchOverlay.updateState(state)
                 }
+
+                // Update Sidecar overlay (shows on iPad displays)
+                SidecarOverlayController.shared.updateState(state)
             }
             .store(in: &cancellables)
 
@@ -303,6 +294,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         notchOverlay.onCancel = { [weak self] in
             self?.liveController.cancelListening()
         }
+
+        // Wire up Sidecar overlay controls (for iPad displays)
+        let sidecarController = SidecarOverlayController.shared
+        sidecarController.onStart = { [weak self] in
+            Task {
+                await self?.liveController.toggleListening()
+            }
+        }
+        sidecarController.onStop = { [weak self] in
+            Task {
+                await self?.liveController.toggleListening()
+            }
+        }
+        sidecarController.onCancel = { [weak self] in
+            self?.liveController.cancelListening()
+        }
+        sidecarController.onScratchpad = { [weak self] in
+            self?.liveController.setInterstitialIntent()
+        }
+        sidecarController.liveController = liveController
     }
 
     // MARK: - Floating Pill
