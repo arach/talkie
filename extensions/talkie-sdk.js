@@ -18,12 +18,12 @@ class TalkieSDK {
   static VERSION = '2.0'
 
   constructor(options = {}) {
-    this.port = options.port || 7847
+    this.port = options.port || 8765
     this.host = options.host || 'localhost'
     this.autoReconnect = options.autoReconnect !== false
     this.reconnectInterval = options.reconnectInterval || 2000
     this.name = options.name || 'Talkie Extension'
-    this.capabilities = options.capabilities || ['transcribe', 'llm', 'diff']
+    this.capabilities = options.capabilities || ['transcribe', 'llm', 'diff', 'storage']
     this.token = options.token || null
 
     this.ws = null
@@ -46,7 +46,7 @@ class TalkieSDK {
   // MARK: - Connection
 
   connect() {
-    const url = `ws://${this.host}:${this.port}`
+    const url = `ws://${this.host}:${this.port}/extensions`
 
     try {
       this.ws = new WebSocket(url)

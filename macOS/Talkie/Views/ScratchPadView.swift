@@ -47,7 +47,7 @@ struct ScratchPadView: View {
         .background(Theme.current.background)
         .onAppear {
             initializeLLMSettings()
-            setupExtensionCallbacks()
+            // Extension callbacks now handled by TalkieServer (port 8765)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 isTextFieldFocused = true
             }
@@ -92,55 +92,37 @@ struct ScratchPadView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Badge showing extension server status with token copy
+    /// Badge showing extension API info (via TalkieServer on port 8765)
     @ViewBuilder
     private var extensionLinkBadge: some View {
-        let server = ExtensionServer.shared
-        let connectedCount = server.connectedCount
-
         Menu {
-            if server.isRunning {
-                Text("Extension API running on port 7847")
-                    .font(.caption)
+            Text("Extension API via TalkieServer")
+                .font(.caption)
+            Text("ws://localhost:8765/extensions")
+                .font(.caption)
+                .foregroundColor(.secondary)
 
-                Divider()
+            Divider()
 
-                Button {
-                    let token = server.authToken
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(token, forType: .string)
-                } label: {
-                    Label("Copy Auth Token", systemImage: "doc.on.doc")
-                }
+            Button {
+                fetchAndCopyExtensionToken()
+            } label: {
+                Label("Copy Auth Token", systemImage: "doc.on.doc")
+            }
 
-                Button {
-                    let url = "file:///Users/arach/dev/talkie/draft-renderers/tweet-composer.html?token=\(server.authToken)"
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(url, forType: .string)
-                } label: {
-                    Label("Copy Tweet Composer URL", systemImage: "link")
-                }
-
-                if connectedCount > 0 {
-                    Divider()
-                    Text("\(connectedCount) renderer(s) connected")
-                        .font(.caption)
-                    ForEach(server.connectedExtensionNames, id: \.self) { name in
-                        Text("• \(name)")
-                            .font(.caption)
-                    }
-                }
-            } else {
-                Text("Extension API not running")
-                    .font(.caption)
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString("http://localhost:8765/extensions/status", forType: .string)
+            } label: {
+                Label("Copy Status URL", systemImage: "link")
             }
         } label: {
             HStack(spacing: 4) {
-                Circle()
-                    .fill(connectedCount > 0 ? Color.green : (server.isRunning ? Color.orange : Color.red))
-                    .frame(width: 6, height: 6)
+                Image(systemName: "cable.connector")
+                    .font(.system(size: 10))
+                    .foregroundColor(Theme.current.foregroundMuted)
 
-                Text(connectedCount > 0 ? "\(connectedCount) ext" : "API")
+                Text("API")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(Theme.current.foregroundMuted)
             }
@@ -151,6 +133,23 @@ struct ScratchPadView: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
+    }
+
+    /// Fetch auth token from TalkieServer and copy to clipboard
+    private func fetchAndCopyExtensionToken() {
+        Task {
+            do {
+                let url = URL(string: "http://localhost:8765/extensions/token")!
+                let (data, _) = try await URLSession.shared.data(from: url)
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let token = json["token"] as? String {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(token, forType: .string)
+                }
+            } catch {
+                log.error("Failed to fetch extension token: \(error)")
+            }
+        }
     }
 
     // MARK: - Editor Card
@@ -890,64 +889,9 @@ struct ScratchPadView: View {
         }
     }
 
-    /// Wire up legacy v1 callbacks for draft:* messages from extensions
-    /// Note: ExtensionServer starts at app launch - this just connects Drafts-specific handlers
-    private func setupExtensionCallbacks() {
-        let server = ExtensionServer.shared
-
-        // Handle incoming legacy draft:* commands from connected extensions
-        server.onLegacyUpdate = { [weak editorState] content in
-            editorState?.text = content
-        }
-
-        server.onLegacyRefine = { [weak editorState] instruction, constraints in
-            guard let state = editorState else { return }
-
-            // If constraints provided, modify system prompt temporarily
-            if let constraints = constraints {
-                var modifiedPrompt = state.systemPrompt
-                if let maxLength = constraints.maxLength {
-                    modifiedPrompt += "\n\nIMPORTANT: Keep your response under \(maxLength) characters."
-                }
-                if let style = constraints.style {
-                    modifiedPrompt += "\n\nStyle: \(style)"
-                }
-                if let format = constraints.format {
-                    modifiedPrompt += "\n\nFormat: \(format)"
-                }
-                let originalPrompt = state.systemPrompt
-                state.systemPrompt = modifiedPrompt
-                await state.requestRevision(instruction: instruction)
-                state.systemPrompt = originalPrompt
-            } else {
-                await state.requestRevision(instruction: instruction)
-            }
-        }
-
-        server.onLegacyAccept = { [weak editorState] in
-            editorState?.acceptRevision()
-        }
-
-        server.onLegacyReject = { [weak editorState] in
-            editorState?.rejectRevision()
-        }
-
-        server.onLegacySave = { [weak editorState] destination in
-            guard let state = editorState else { return }
-            if destination == "clipboard" {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(state.text, forType: .string)
-                log.info("Draft copied to clipboard via extension API")
-            } else if destination == "memo" {
-                // TODO: Implement save to memo
-                log.info("Save to memo requested via extension API")
-            }
-        }
-
-        log.info("Extension callbacks configured for Drafts view")
-    }
-
     // MARK: - Dictation (Talkie → Engine via EphemeralTranscriber)
+    // Note: Extension callbacks (draft:*) are now handled by TalkieServer
+    // See macOS/TalkieServer/src/extensions/handlers.ts
 
     private func handleDictationPillTap() {
         switch dictationPillState {

@@ -118,6 +118,9 @@ export function isExemptPath(path: string, method: string): boolean {
   if (path.match(/^\/pair\/[^/]+\/reject$/) && method === "POST") return true;
   if (path === "/devices" && method === "GET") return true;
 
+  // Extensions module has its own token-based auth at WebSocket layer
+  if (path.startsWith("/extensions")) return true;
+
   return false;
 }
 
