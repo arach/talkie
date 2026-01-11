@@ -90,6 +90,15 @@ struct DraftIncomingMessage: Codable {
     let name: String?
     let capabilities: [String]?
     let action: String?  // For capture: "start" or "stop"
+    let token: String?   // Auth token for renderer:connect
+    let version: String? // Protocol version for renderer:connect
+}
+
+/// Authentication required message
+struct DraftAuthRequiredMessage: Codable {
+    let type = "auth:required"
+    let version: String
+    let timeout: Int  // Seconds until disconnect
 }
 
 /// Transcription result message (sent after capture completes)
@@ -108,12 +117,15 @@ struct DraftConstraints: Codable {
 // MARK: - Connected Renderer
 
 /// Represents a connected renderer client
-final class ConnectedRenderer: @unchecked Sendable {
+/// Thread-safe via MainActor isolation (all access is on main thread)
+@MainActor
+final class ConnectedRenderer {
     let id: UUID
     let connection: NWConnection
     var name: String?
     var capabilities: [String] = []
     let connectedAt: Date
+    var isAuthenticated: Bool = false
 
     init(connection: NWConnection) {
         self.id = UUID()
@@ -132,6 +144,15 @@ final class DraftExtensionServer {
     private var listener: NWListener?
     private let port: UInt16 = 7847
     private var connectedRenderers: [UUID: ConnectedRenderer] = [:]
+
+    /// Authentication token - renderers must send this in renderer:connect
+    private(set) var authToken: String = ""
+
+    /// Time allowed for authentication before disconnect (seconds)
+    private let authTimeout: TimeInterval = 10
+
+    /// Protocol version for compatibility checking
+    static let protocolVersion = "1.0"
 
     /// Callback for incoming commands from renderers
     var onRefine: ((String, DraftConstraints?) async -> Void)?
@@ -163,6 +184,10 @@ final class DraftExtensionServer {
             log.debug("DraftExtensionServer already running")
             return
         }
+
+        // Generate new auth token on each start
+        authToken = generateAuthToken()
+        log.info("DraftExtensionServer auth token: \(authToken)")
 
         do {
             // Create WebSocket parameters
@@ -263,6 +288,12 @@ final class DraftExtensionServer {
         broadcast(message)
     }
 
+    /// Broadcast an error to all connected renderers
+    func broadcastError(_ error: String) {
+        let message = DraftErrorMessage(error: error)
+        broadcast(message)
+    }
+
     // MARK: - Private
 
     private func handleStateUpdate(_ state: NWListener.State) {
@@ -283,15 +314,17 @@ final class DraftExtensionServer {
         let renderer = ConnectedRenderer(connection: connection)
         connectedRenderers[renderer.id] = renderer
 
-        log.info("Renderer connected: \(renderer.id)")
+        log.info("Renderer connected: \(renderer.id), awaiting authentication")
 
         connection.stateUpdateHandler = { [weak self, rendererId = renderer.id] state in
             Task { @MainActor in
                 guard let self else { return }
                 switch state {
                 case .ready:
-                    log.info("Renderer \(rendererId) ready")
+                    log.info("Renderer \(rendererId) ready, sending auth challenge")
+                    self.sendAuthChallenge(to: renderer)
                     self.receiveMessages(from: renderer)
+                    self.scheduleAuthTimeout(for: renderer)
                 case .failed(let error):
                     log.error("Renderer \(rendererId) failed: \(error)")
                     self.disconnectRenderer(rendererId)
@@ -305,6 +338,29 @@ final class DraftExtensionServer {
         }
 
         connection.start(queue: .main)
+    }
+
+    private func sendAuthChallenge(to renderer: ConnectedRenderer) {
+        let message = DraftAuthRequiredMessage(
+            version: Self.protocolVersion,
+            timeout: Int(authTimeout)
+        )
+        guard let data = try? JSONEncoder().encode(message) else { return }
+        send(data: data, to: renderer)
+    }
+
+    private func scheduleAuthTimeout(for renderer: ConnectedRenderer) {
+        let rendererId = renderer.id
+        Task {
+            try? await Task.sleep(for: .seconds(authTimeout))
+            // Check if still connected and not authenticated
+            if let r = connectedRenderers[rendererId], !r.isAuthenticated {
+                log.warning("Renderer \(rendererId) failed to authenticate, disconnecting")
+                sendError(to: r, error: "Authentication timeout")
+                r.connection.cancel()
+                disconnectRenderer(rendererId)
+            }
+        }
     }
 
     private func disconnectRenderer(_ id: UUID) {
@@ -360,11 +416,32 @@ final class DraftExtensionServer {
 
         log.debug("Received \(message.type) from \(renderer.name ?? renderer.id.uuidString)")
 
+        // Require authentication for all messages except renderer:connect
+        if message.type != "renderer:connect" && !renderer.isAuthenticated {
+            log.warning("Rejecting message from unauthenticated renderer \(renderer.id)")
+            sendError(to: renderer, error: "Not authenticated")
+            return
+        }
+
         switch message.type {
         case "renderer:connect":
+            // Validate auth token
+            guard let token = message.token, token == authToken else {
+                log.warning("Renderer \(renderer.id) failed authentication")
+                sendError(to: renderer, error: "Authentication failed: invalid token")
+                renderer.connection.cancel()
+                return
+            }
+
+            // Validate protocol version (optional but logged)
+            if let version = message.version, version != Self.protocolVersion {
+                log.warning("Renderer \(renderer.id) using protocol version \(version), expected \(Self.protocolVersion)")
+            }
+
+            renderer.isAuthenticated = true
             renderer.name = message.name
             renderer.capabilities = message.capabilities ?? []
-            log.info("Renderer identified: \(renderer.name ?? "unnamed") with capabilities: \(renderer.capabilities)")
+            log.info("Renderer authenticated: \(renderer.name ?? "unnamed") with capabilities: \(renderer.capabilities)")
 
         case "draft:update":
             if let content = message.content {
@@ -412,7 +489,8 @@ final class DraftExtensionServer {
             return
         }
 
-        for renderer in connectedRenderers.values {
+        // Only broadcast to authenticated renderers
+        for renderer in connectedRenderers.values where renderer.isAuthenticated {
             send(data: data, to: renderer)
         }
     }
@@ -440,5 +518,15 @@ final class DraftExtensionServer {
         let message = DraftErrorMessage(error: error)
         guard let data = try? JSONEncoder().encode(message) else { return }
         send(data: data, to: renderer)
+    }
+
+    /// Generate a cryptographically secure auth token
+    private func generateAuthToken() -> String {
+        var bytes = [UInt8](repeating: 0, count: 32)
+        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        return Data(bytes).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
     }
 }

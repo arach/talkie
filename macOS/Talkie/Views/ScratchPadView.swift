@@ -62,10 +62,16 @@ struct ScratchPadView: View {
 
     private var headerView: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            Text("DRAFTS")
-                .font(.system(size: 10, weight: .bold))
-                .tracking(1.5)
-                .foregroundColor(Theme.current.foregroundMuted)
+            HStack {
+                Text("DRAFTS")
+                    .font(.system(size: 10, weight: .bold))
+                    .tracking(1.5)
+                    .foregroundColor(Theme.current.foregroundMuted)
+
+                Spacer()
+
+                extensionLinkBadge
+            }
 
             HStack(alignment: .firstTextBaseline, spacing: Spacing.md) {
                 Text("Quick Edit")
@@ -84,6 +90,67 @@ struct ScratchPadView: View {
                 .foregroundColor(Theme.current.foregroundSecondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Badge showing extension server status with token copy
+    @ViewBuilder
+    private var extensionLinkBadge: some View {
+        let server = DraftExtensionServer.shared
+        let connectedCount = server.connectedCount
+
+        Menu {
+            if server.isRunning {
+                Text("Extension API running on port 7847")
+                    .font(.caption)
+
+                Divider()
+
+                Button {
+                    let token = server.authToken
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(token, forType: .string)
+                } label: {
+                    Label("Copy Auth Token", systemImage: "doc.on.doc")
+                }
+
+                Button {
+                    let url = "file:///Users/arach/dev/talkie/draft-renderers/tweet-composer.html?token=\(server.authToken)"
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(url, forType: .string)
+                } label: {
+                    Label("Copy Tweet Composer URL", systemImage: "link")
+                }
+
+                if connectedCount > 0 {
+                    Divider()
+                    Text("\(connectedCount) renderer(s) connected")
+                        .font(.caption)
+                    ForEach(server.connectedRendererNames, id: \.self) { name in
+                        Text("• \(name)")
+                            .font(.caption)
+                    }
+                }
+            } else {
+                Text("Extension API not running")
+                    .font(.caption)
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(connectedCount > 0 ? Color.green : (server.isRunning ? Color.orange : Color.red))
+                    .frame(width: 6, height: 6)
+
+                Text(connectedCount > 0 ? "\(connectedCount) ext" : "API")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(Theme.current.foregroundMuted)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Theme.current.backgroundSecondary.opacity(0.5))
+            .cornerRadius(4)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
     }
 
     // MARK: - Editor Card
@@ -886,6 +953,7 @@ struct ScratchPadView: View {
                 log.info("Started voice capture via extension API")
             } catch {
                 log.error("Failed to start capture via extension API: \(error)")
+                DraftExtensionServer.shared.broadcastError("Failed to start capture: \(error.localizedDescription)")
             }
         }
 
@@ -896,6 +964,7 @@ struct ScratchPadView: View {
                 return text
             } catch {
                 log.error("Failed to transcribe via extension API: \(error)")
+                DraftExtensionServer.shared.broadcastError("Transcription failed: \(error.localizedDescription)")
                 return nil
             }
         }

@@ -294,6 +294,9 @@ final class VoiceEditorState {
             log.error("Revision failed: \(error)")
             self.error = error.localizedDescription
             textBeforeRevision = ""
+
+            // Broadcast error to connected renderers
+            broadcastError(error.localizedDescription)
         }
 
         isProcessing = false
@@ -347,5 +350,10 @@ final class VoiceEditorState {
     /// Broadcast that a revision was resolved (accepted or rejected)
     private func broadcastResolved(accepted: Bool) {
         DraftExtensionServer.shared.broadcastResolved(accepted: accepted, content: text)
+    }
+
+    /// Broadcast an error to connected renderers
+    private func broadcastError(_ message: String) {
+        DraftExtensionServer.shared.broadcastError(message)
     }
 }

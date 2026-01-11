@@ -12,6 +12,8 @@
  * @version 1.0.0
  */
 class TalkieLink {
+  static VERSION = '1.0'
+
   constructor(options = {}) {
     this.port = options.port || 7847
     this.host = options.host || 'localhost'
@@ -19,11 +21,13 @@ class TalkieLink {
     this.reconnectInterval = options.reconnectInterval || 2000
     this.name = options.name || 'Custom Renderer'
     this.capabilities = options.capabilities || []
+    this.token = options.token || null  // Auth token from Talkie
 
     this.ws = null
     this.listeners = {}
     this.reconnectTimer = null
     this.connected = false
+    this.authenticated = false
 
     this.connect()
   }
@@ -39,15 +43,9 @@ class TalkieLink {
 
       this.ws.onopen = () => {
         this.connected = true
+        this.authenticated = false
         this.clearReconnectTimer()
-
-        // Announce ourselves
-        this.send({
-          type: 'renderer:connect',
-          name: this.name,
-          capabilities: this.capabilities
-        })
-
+        // Don't announce yet - wait for auth:required challenge
         this.emit('connected')
       }
 
@@ -85,6 +83,29 @@ class TalkieLink {
    */
   handleMessage(message) {
     switch (message.type) {
+      case 'auth:required':
+        // Server is requesting authentication
+        this.serverVersion = message.version
+        this.authTimeout = message.timeout
+
+        if (!this.token) {
+          console.error('TalkieLink: No auth token provided. Get token from Talkie app.')
+          this.emit('error', new Error('Authentication required but no token provided'))
+          return
+        }
+
+        // Send authentication with renderer info
+        this.send({
+          type: 'renderer:connect',
+          name: this.name,
+          capabilities: this.capabilities,
+          token: this.token,
+          version: TalkieLink.VERSION
+        })
+        this.authenticated = true
+        this.emit('authenticated')
+        break
+
       case 'draft:state':
         this.emit('state', {
           content: message.content,

@@ -480,12 +480,27 @@
 
     // Initialize connection
     function init() {
+      // Get auth token from URL params (e.g., ?token=xxx)
+      const params = new URLSearchParams(window.location.search)
+      const token = params.get('token')
+
+      if (!token) {
+        statusText.textContent = 'No auth token - add ?token=xxx to URL'
+        console.error('TalkieLink: No auth token provided. Get token from Talkie Drafts UI.')
+        return
+      }
+
       talkie = new TalkieLink({
         name: 'Tweet Composer',
-        capabilities: ['preview', 'diff', 'constraints']
+        capabilities: ['preview', 'diff', 'constraints'],
+        token: token
       })
 
       talkie.on('connected', () => {
+        statusText.textContent = 'Connected - authenticating...'
+      })
+
+      talkie.on('authenticated', () => {
         statusDot.classList.add('connected')
         statusText.textContent = 'Connected to Talkie'
       })
