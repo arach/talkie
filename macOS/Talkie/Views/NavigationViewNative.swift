@@ -22,7 +22,7 @@ import UniformTypeIdentifiers
 
 enum NavigationSection: Hashable {
     case home           // Main Talkie home/dashboard
-    case scratchPad     // Quick text editing with voice dictation and AI polish
+    case drafts         // Quick text editing with voice dictation and AI polish (was scratchPad)
     case allMemos       // All Memos view (GRDB-based with pagination and filters)
     case liveDashboard  // Live home/insights view
     case liveRecent     // Live utterance list
@@ -91,7 +91,7 @@ struct TalkieNavigationViewNative: View {
     private func sectionName(for section: NavigationSection) -> String {
         switch section {
         case .home: return "Home"
-        case .scratchPad: return "ScratchPad"
+        case .drafts: return "Drafts"
         case .allMemos: return "AllMemos"
         case .liveDashboard: return "LiveDashboard"
         case .liveRecent: return "LiveRecent"
@@ -220,7 +220,7 @@ struct TalkieNavigationViewNative: View {
 
     private var usesTwoColumns: Bool {
         switch selectedSection {
-        case .home, .scratchPad, .models, .allowedCommands, .aiResults, .allMemos,
+        case .home, .drafts, .models, .allowedCommands, .aiResults, .allMemos,
              .liveDashboard, .liveRecent, .systemConsole, .pendingActions:
             return true
         #if DEBUG
@@ -361,6 +361,7 @@ struct TalkieNavigationViewNative: View {
             SidebarRow(section: .home, selectedSection: $selectedSection, title: "Home", icon: "house")
             SidebarRow(section: .allMemos, selectedSection: $selectedSection, title: "Memos", icon: "square.stack")
             SidebarRow(section: .liveRecent, selectedSection: $selectedSection, title: "Dictations", icon: "waveform.badge.mic")
+            SidebarRow(section: .drafts, selectedSection: $selectedSection, title: "Drafts", icon: "doc.text")
 
             // Activity
             Section(settings.uiAllCaps ? "ACTIVITY" : "Activity") {
@@ -372,8 +373,6 @@ struct TalkieNavigationViewNative: View {
             // Tools
             Section(settings.uiAllCaps ? "TOOLS" : "Tools") {
                 SidebarRow(section: .liveDashboard, selectedSection: $selectedSection, title: "Stats", icon: "waveform.path.ecg")
-
-                SidebarRow(section: .scratchPad, selectedSection: $selectedSection, title: "Scratch Pad", icon: "note.text")
 
                 SidebarRow(section: .workflows, selectedSection: $selectedSection, title: "Workflows", icon: "wand.and.stars")
 
@@ -434,9 +433,9 @@ struct TalkieNavigationViewNative: View {
                 // Two-column sections
                 case .home:
                     UnifiedDashboard()
-                case .scratchPad:
+                case .drafts:
                     ScratchPadView()
-                        .wrapInTalkieSection("ScratchPad")
+                        .wrapInTalkieSection("Drafts")
                 case .models:
                     ModelsContentView()
                         .wrapInTalkieSection("Models")
@@ -674,6 +673,7 @@ struct SidebarLabel: View {
         let fillableMappings: [String: String] = [
             "house": "house.fill",
             "note.text": "doc.text.fill",
+            "doc.text": "doc.text.fill",
             "square.stack": "square.stack.fill",
             "gear": "gearshape.fill",
             "brain": "brain.fill",
