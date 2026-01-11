@@ -47,9 +47,14 @@ struct ScratchPadView: View {
         .background(Theme.current.background)
         .onAppear {
             initializeLLMSettings()
+            setupDraftExtensionServer()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 isTextFieldFocused = true
             }
+        }
+        .onDisappear {
+            // Keep server running for background connections
+            // DraftExtensionServer.shared.stop()
         }
     }
 
@@ -57,10 +62,16 @@ struct ScratchPadView: View {
 
     private var headerView: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            Text("SCRATCH PAD")
-                .font(.system(size: 10, weight: .bold))
-                .tracking(1.5)
-                .foregroundColor(Theme.current.foregroundMuted)
+            HStack {
+                Text("DRAFTS")
+                    .font(.system(size: 10, weight: .bold))
+                    .tracking(1.5)
+                    .foregroundColor(Theme.current.foregroundMuted)
+
+                Spacer()
+
+                extensionLinkBadge
+            }
 
             HStack(alignment: .firstTextBaseline, spacing: Spacing.md) {
                 Text("Quick Edit")
@@ -79,6 +90,67 @@ struct ScratchPadView: View {
                 .foregroundColor(Theme.current.foregroundSecondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Badge showing extension server status with token copy
+    @ViewBuilder
+    private var extensionLinkBadge: some View {
+        let server = DraftExtensionServer.shared
+        let connectedCount = server.connectedCount
+
+        Menu {
+            if server.isRunning {
+                Text("Extension API running on port 7847")
+                    .font(.caption)
+
+                Divider()
+
+                Button {
+                    let token = server.authToken
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(token, forType: .string)
+                } label: {
+                    Label("Copy Auth Token", systemImage: "doc.on.doc")
+                }
+
+                Button {
+                    let url = "file:///Users/arach/dev/talkie/draft-renderers/tweet-composer.html?token=\(server.authToken)"
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(url, forType: .string)
+                } label: {
+                    Label("Copy Tweet Composer URL", systemImage: "link")
+                }
+
+                if connectedCount > 0 {
+                    Divider()
+                    Text("\(connectedCount) renderer(s) connected")
+                        .font(.caption)
+                    ForEach(server.connectedRendererNames, id: \.self) { name in
+                        Text("• \(name)")
+                            .font(.caption)
+                    }
+                }
+            } else {
+                Text("Extension API not running")
+                    .font(.caption)
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(connectedCount > 0 ? Color.green : (server.isRunning ? Color.orange : Color.red))
+                    .frame(width: 6, height: 6)
+
+                Text(connectedCount > 0 ? "\(connectedCount) ext" : "API")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(Theme.current.foregroundMuted)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Theme.current.backgroundSecondary.opacity(0.5))
+            .cornerRadius(4)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
     }
 
     // MARK: - Editor Card
@@ -526,31 +598,8 @@ struct ScratchPadView: View {
         }
     }
 
-    /// Models to show in the quick picker - curated list of the most useful options
-    private static let recommendedModels: Set<String> = [
-        // OpenAI - flagship + budget
-        "gpt-5-2",
-        "gpt-5-2-pro",
-        "gpt-4o",
-        "gpt-4o-mini",
-        // Anthropic
-        "claude-sonnet-4-20250514",
-        "claude-3-5-sonnet-20241022",
-        "claude-3-haiku-20240307",
-        // Google
-        "gemini-2.0-flash",
-        "gemini-2.0-flash-lite",
-        "gemini-1.5-flash",
-        // Groq (fast)
-        "llama-3.3-70b-versatile",
-        "llama-3.1-8b-instant"
-    ]
-
     private func filteredModels(for providerId: String) -> [LLMModel] {
-        LLMProviderRegistry.shared.allModels
-            .filter { $0.provider == providerId }
-            .filter { Self.recommendedModels.contains($0.id) }
-            .sorted { $0.displayName < $1.displayName }
+        LLMProviderRegistry.shared.recommendedModels(for: providerId)
     }
 
     private var modelPicker: some View {
@@ -839,6 +888,88 @@ struct ScratchPadView: View {
                 editorState.modelId = resolved.modelId
             }
         }
+    }
+
+    /// Start the Draft Extension API server and wire up command handlers
+    private func setupDraftExtensionServer() {
+        let server = DraftExtensionServer.shared
+
+        // Start the WebSocket server
+        server.start()
+
+        // Handle incoming commands from connected renderers
+        server.onUpdate = { [weak editorState] content in
+            editorState?.text = content
+        }
+
+        server.onRefine = { [weak editorState] instruction, constraints in
+            guard let state = editorState else { return }
+
+            // If constraints provided, modify system prompt temporarily
+            if let constraints = constraints {
+                var modifiedPrompt = state.systemPrompt
+                if let maxLength = constraints.maxLength {
+                    modifiedPrompt += "\n\nIMPORTANT: Keep your response under \(maxLength) characters."
+                }
+                if let style = constraints.style {
+                    modifiedPrompt += "\n\nStyle: \(style)"
+                }
+                if let format = constraints.format {
+                    modifiedPrompt += "\n\nFormat: \(format)"
+                }
+                let originalPrompt = state.systemPrompt
+                state.systemPrompt = modifiedPrompt
+                await state.requestRevision(instruction: instruction)
+                state.systemPrompt = originalPrompt
+            } else {
+                await state.requestRevision(instruction: instruction)
+            }
+        }
+
+        server.onAccept = { [weak editorState] in
+            editorState?.acceptRevision()
+        }
+
+        server.onReject = { [weak editorState] in
+            editorState?.rejectRevision()
+        }
+
+        server.onSave = { [weak editorState] destination in
+            guard let state = editorState else { return }
+            if destination == "clipboard" {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(state.text, forType: .string)
+                log.info("Draft copied to clipboard via extension API")
+            } else if destination == "memo" {
+                // TODO: Implement save to memo
+                log.info("Save to memo requested via extension API")
+            }
+        }
+
+        // Voice capture via Talkie's audio pipeline
+        server.onCaptureStart = {
+            do {
+                try EphemeralTranscriber.shared.startCapture()
+                log.info("Started voice capture via extension API")
+            } catch {
+                log.error("Failed to start capture via extension API: \(error)")
+                DraftExtensionServer.shared.broadcastError("Failed to start capture: \(error.localizedDescription)")
+            }
+        }
+
+        server.onCaptureStop = {
+            do {
+                let text = try await EphemeralTranscriber.shared.stopAndTranscribe()
+                log.info("Captured via extension API: \(text.prefix(50))...")
+                return text
+            } catch {
+                log.error("Failed to transcribe via extension API: \(error)")
+                DraftExtensionServer.shared.broadcastError("Transcription failed: \(error.localizedDescription)")
+                return nil
+            }
+        }
+
+        log.info("Draft Extension API server configured on port 7847")
     }
 
     // MARK: - Dictation (Talkie → Engine via EphemeralTranscriber)

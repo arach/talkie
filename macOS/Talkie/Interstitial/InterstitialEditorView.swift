@@ -587,7 +587,7 @@ struct InterstitialEditorView: View {
 
     private var availableModels: [LLMModel] {
         guard let providerId = manager.llmProviderId else { return [] }
-        return LLMProviderRegistry.shared.allModels.filter { $0.provider == providerId }
+        return LLMProviderRegistry.shared.recommendedModels(for: providerId)
     }
 
     // MARK: - Content Area

@@ -421,7 +421,7 @@ struct DictationOutputSettingsView: View {
                         .fill(Color.cyan)
                         .frame(width: 3, height: 14)
 
-                    Text("SCRATCHPAD")
+                    Text("DRAFTS")
                         .font(Theme.current.fontXSBold)
                         .foregroundColor(Theme.current.foregroundSecondary)
 
@@ -438,7 +438,7 @@ struct DictationOutputSettingsView: View {
                     StyledToggle(
                         label: "Auto-open with selection",
                         isOn: $live.autoScratchpadOnSelection,
-                        help: "When text is selected, open in Scratchpad to edit or transform it"
+                        help: "When text is selected, open in Drafts to edit or transform it"
                     )
 
                     if live.autoScratchpadOnSelection {

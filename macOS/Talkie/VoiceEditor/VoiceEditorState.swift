@@ -57,13 +57,20 @@ struct Revision: Identifiable {
 /// - AI revision requests (via LLM)
 /// - Diff preview (accept/reject workflow)
 /// - Revision history for undo/restore
+/// - Broadcasting to Draft Extension API for custom renderers
 @MainActor
 @Observable
 final class VoiceEditorState {
 
     // MARK: - Text State
 
-    var text: String = ""
+    var text: String = "" {
+        didSet {
+            if text != oldValue {
+                broadcastState()
+            }
+        }
+    }
     var selectedRange: NSRange? = nil
 
     // MARK: - Mode
@@ -157,6 +164,9 @@ final class VoiceEditorState {
         textBeforeRevision = ""
         currentInstruction = nil
         selectedRange = nil
+
+        // Broadcast to connected renderers
+        broadcastResolved(accepted: true)
     }
 
     /// Reject the proposed revision and revert
@@ -166,6 +176,9 @@ final class VoiceEditorState {
         textBeforeRevision = ""
         currentInstruction = nil
         log.info("Rejected revision, reverted to previous text")
+
+        // Broadcast to connected renderers
+        broadcastResolved(accepted: false)
     }
 
     // MARK: - History Actions
@@ -274,10 +287,16 @@ final class VoiceEditorState {
             mode = .reviewing
             log.info("Revision complete via \(resolved.provider.name)/\(resolved.modelId)")
 
+            // Broadcast revision to connected renderers
+            broadcastRevision(before: textBeforeRevision, after: text, instruction: instruction)
+
         } catch {
             log.error("Revision failed: \(error)")
             self.error = error.localizedDescription
             textBeforeRevision = ""
+
+            // Broadcast error to connected renderers
+            broadcastError(error.localizedDescription)
         }
 
         isProcessing = false
@@ -295,5 +314,46 @@ final class VoiceEditorState {
         textBeforeRevision = ""
         currentInstruction = nil
         clearHistory()
+    }
+
+    // MARK: - Draft Extension API Broadcasting
+
+    /// Broadcast current state to connected renderers
+    private func broadcastState() {
+        let modeString = mode == .editing ? "editing" : "reviewing"
+        DraftExtensionServer.shared.broadcastState(content: text, mode: modeString)
+    }
+
+    /// Broadcast a completed revision with diff to connected renderers
+    private func broadcastRevision(before: String, after: String, instruction: String) {
+        let diff = DiffEngine.diff(original: before, proposed: after)
+
+        // Convert diff operations to tuples for the server
+        let diffOps: [(type: String, text: String)] = diff.operations.map { op in
+            switch op {
+            case .equal(let text): return ("equal", text)
+            case .insert(let text): return ("insert", text)
+            case .delete(let text): return ("delete", text)
+            }
+        }
+
+        DraftExtensionServer.shared.broadcastRevision(
+            before: before,
+            after: after,
+            diff: diffOps,
+            instruction: instruction,
+            provider: lastUsedProvider ?? "unknown",
+            model: lastUsedModel ?? "unknown"
+        )
+    }
+
+    /// Broadcast that a revision was resolved (accepted or rejected)
+    private func broadcastResolved(accepted: Bool) {
+        DraftExtensionServer.shared.broadcastResolved(accepted: accepted, content: text)
+    }
+
+    /// Broadcast an error to connected renderers
+    private func broadcastError(_ message: String) {
+        DraftExtensionServer.shared.broadcastError(message)
     }
 }

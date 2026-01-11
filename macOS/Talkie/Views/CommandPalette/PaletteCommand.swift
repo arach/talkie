@@ -112,12 +112,12 @@ struct CommandRegistry {
         })
 
         cmds.append(PaletteCommand(
-            title: "Go to Scratch Pad",
+            title: "Go to Drafts",
             subtitle: "Navigation",
-            icon: "note.text",
-            keywords: ["text", "editor", "notes"]
+            icon: "doc.text",
+            keywords: ["text", "editor", "notes", "drafts"]
         ) {
-            NotificationCenter.default.post(name: .navigateToSection, object: NavigationSection.scratchPad)
+            NotificationCenter.default.post(name: .navigateToSection, object: NavigationSection.drafts)
         })
 
         cmds.append(PaletteCommand(

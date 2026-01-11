@@ -1,5 +1,5 @@
 "use client"
-import React from 'react'
+import React, { useState, useCallback } from 'react'
 import * as LucideIcons from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -34,10 +34,13 @@ export interface Connector {
   curve?: 'natural' | 'step'
 }
 
+export type LabelAlign = 'left' | 'right' | 'center'
+
 export interface ConnectorStyle {
   color: DiagramColor
   strokeWidth: number
   label?: string
+  labelAlign?: LabelAlign  // For vertical: 'right' = right of line, 'left' = left of line. Default: 'right'
   dashed?: boolean
 }
 
@@ -47,6 +50,7 @@ export interface DiagramLayout {
 }
 
 export interface ArcDiagramData {
+  id?: string
   layout: DiagramLayout
   nodes: Record<string, NodePosition>
   nodeData: Record<string, NodeData>
@@ -131,7 +135,7 @@ function Node({ node, data }: NodeProps) {
 
 function getAnchorPoint(node: NodePosition, anchor: AnchorPosition): { x: number; y: number } {
   const size = NODE_SIZES[node.size]
-  const gap = 8
+  const gap = 6
 
   const anchors: Record<AnchorPosition, { x: number; y: number }> = {
     left:        { x: node.x - gap,              y: node.y + size.height / 2 },
@@ -147,13 +151,19 @@ function getAnchorPoint(node: NodePosition, anchor: AnchorPosition): { x: number
   return anchors[anchor]
 }
 
+// Calculate angle between two points for arrow rotation
+function getAngle(from: { x: number; y: number }, to: { x: number; y: number }): number {
+  return Math.atan2(to.y - from.y, to.x - from.x) * (180 / Math.PI)
+}
+
 interface ConnectorProps {
   connector: Connector
+  connectorIndex: number
   nodes: Record<string, NodePosition>
   styles: Record<string, ConnectorStyle>
 }
 
-function ConnectorPath({ connector, nodes, styles }: ConnectorProps) {
+function ConnectorPath({ connector, connectorIndex, nodes, styles }: ConnectorProps) {
   const fromNode = nodes[connector.from]
   const toNode = nodes[connector.to]
   if (!fromNode || !toNode) return null
@@ -162,52 +172,151 @@ function ConnectorPath({ connector, nodes, styles }: ConnectorProps) {
   const from = getAnchorPoint(fromNode, connector.fromAnchor)
   const to = getAnchorPoint(toNode, connector.toAnchor)
   const color = COLORS[style.color]?.stroke || COLORS.zinc.stroke
+  const gradientId = `connector-gradient-${connectorIndex}`
 
+  // Calculate path
   let path: string
+  const isVertical = Math.abs(to.y - from.y) > Math.abs(to.x - from.x)
+  const labelAlign = style.labelAlign || (isVertical ? 'right' : 'center')
+
+  // Label positioning
+  let labelPos: { x: number; y: number }
+  let labelOffset = { x: 0, y: 0 }
+  let textAnchor: 'start' | 'middle' | 'end' = 'middle'
+
   if (connector.curve === 'natural') {
-    const cp = 50
-    path = `M ${from.x} ${from.y} C ${from.x + cp} ${from.y + 40}, ${to.x - cp} ${to.y - 30}, ${to.x} ${to.y}`
+    // Curved path for diagonal connections
+    const dx = to.x - from.x
+    const dy = to.y - from.y
+    const cp1x = from.x + dx * 0.4
+    const cp1y = from.y + dy * 0.1
+    const cp2x = to.x - dx * 0.4
+    const cp2y = to.y - dy * 0.1
+    path = `M ${from.x} ${from.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${to.x} ${to.y}`
+    labelPos = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 }
+    labelOffset = { x: 0, y: -8 }
   } else {
     path = `M ${from.x} ${from.y} L ${to.x} ${to.y}`
+    labelPos = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 }
+
+    if (isVertical) {
+      // Vertical connector - position label to left or right of line
+      if (labelAlign === 'right') {
+        labelOffset = { x: 8, y: 4 }
+        textAnchor = 'start'  // Left-aligned text on right side
+      } else if (labelAlign === 'left') {
+        labelOffset = { x: -8, y: 4 }
+        textAnchor = 'end'    // Right-aligned text on left side
+      } else {
+        labelOffset = { x: 0, y: -8 }
+        textAnchor = 'middle'
+      }
+    } else {
+      // Horizontal connector - label above, centered
+      labelOffset = { x: 0, y: -8 }
+      textAnchor = 'middle'
+    }
   }
 
-  const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 }
-  const markerId = `arc-arrow-${connector.from}-${connector.to}`
+  // Calculate arrow angle at endpoint
+  const angle = getAngle(from, to)
+  const arrowSize = 8
 
   return (
     <g>
+      {/* Gradient definition - fades at both ends */}
       <defs>
-        <marker
-          id={markerId}
-          markerWidth="6"
-          markerHeight="4"
-          refX="6"
-          refY="2"
-          orient="auto"
+        <linearGradient
+          id={gradientId}
+          x1={from.x}
+          y1={from.y}
+          x2={to.x}
+          y2={to.y}
+          gradientUnits="userSpaceOnUse"
         >
-          <polygon points="0 0, 6 2, 0 4" fill={color} />
-        </marker>
+          <stop offset="0%" stopColor={color} stopOpacity={0.3} />
+          <stop offset="15%" stopColor={color} stopOpacity={1} />
+          <stop offset="85%" stopColor={color} stopOpacity={1} />
+          <stop offset="100%" stopColor={color} stopOpacity={0.5} />
+        </linearGradient>
       </defs>
+
+      {/* Main path with gradient */}
       <path
         d={path}
         fill="none"
-        stroke={color}
+        stroke={`url(#${gradientId})`}
         strokeWidth={style.strokeWidth}
         strokeDasharray={style.dashed ? '6 3' : undefined}
-        markerEnd={`url(#${markerId})`}
       />
+
+      {/* Arrow head - triangle at end point */}
+      <g transform={`translate(${to.x}, ${to.y}) rotate(${angle})`}>
+        <polygon
+          points={`0,0 ${-arrowSize},-${arrowSize/2.5} ${-arrowSize},${arrowSize/2.5}`}
+          fill={color}
+        />
+      </g>
+
+      {/* Label */}
       {style.label && (
         <text
-          x={mid.x}
-          y={mid.y - 8}
-          textAnchor="middle"
+          x={labelPos.x + labelOffset.x}
+          y={labelPos.y + labelOffset.y}
+          textAnchor={textAnchor}
           fill={color}
           className="text-[10px] font-mono"
+          style={{ fontFamily: 'ui-monospace, monospace' }}
         >
           {style.label}
         </text>
       )}
     </g>
+  )
+}
+
+// ============================================
+// Zoom Controls
+// ============================================
+
+const ZOOM_LEVELS = [0.5, 0.75, 1, 1.25, 1.5, 2]
+
+interface ZoomControlsProps {
+  zoom: number
+  onZoomIn: () => void
+  onZoomOut: () => void
+  onReset: () => void
+}
+
+function ZoomControls({ zoom, onZoomIn, onZoomOut, onReset }: ZoomControlsProps) {
+  const { ZoomIn, ZoomOut } = LucideIcons
+
+  return (
+    <div className="absolute bottom-3 right-3 flex items-center bg-zinc-900/90 backdrop-blur-sm rounded-md border border-zinc-700 z-10">
+      <button
+        onClick={onZoomOut}
+        disabled={zoom <= ZOOM_LEVELS[0]}
+        className="p-1 hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors rounded-l-md"
+        title="Zoom out"
+      >
+        <ZoomOut className="w-3 h-3 text-zinc-400" />
+      </button>
+      <button
+        onClick={onReset}
+        className="px-1.5 py-1 text-[9px] font-mono text-zinc-400 hover:bg-zinc-700 transition-colors min-w-[36px] border-x border-zinc-700"
+        title="Reset zoom"
+      >
+        {Math.round(zoom * 100)}%
+      </button>
+      <button
+        onClick={onZoomIn}
+        disabled={zoom >= ZOOM_LEVELS[ZOOM_LEVELS.length - 1]}
+        className="p-1 hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors rounded-r-md"
+        title="Zoom in"
+      >
+        <ZoomIn className="w-3 h-3 text-zinc-400" />
+      </button>
+    </div>
   )
 }
 
@@ -218,21 +327,92 @@ function ConnectorPath({ connector, nodes, styles }: ConnectorProps) {
 interface ArcDiagramProps {
   data: ArcDiagramData
   className?: string
+  interactive?: boolean  // Enable zoom/pan controls
 }
 
-export default function ArcDiagram({ data, className = '' }: ArcDiagramProps) {
-  const { layout, nodes, nodeData, connectors, connectorStyles } = data
+export default function ArcDiagram({ data, className = '', interactive = true }: ArcDiagramProps) {
+  const { id, layout, nodes, nodeData, connectors, connectorStyles } = data
+
+  // Zoom & pan state
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [isPanning, setIsPanning] = useState(false)
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 })
+
+  const handleZoomIn = useCallback(() => {
+    setZoom(z => {
+      const idx = ZOOM_LEVELS.findIndex(l => l >= z)
+      return ZOOM_LEVELS[Math.min(idx + 1, ZOOM_LEVELS.length - 1)]
+    })
+  }, [])
+
+  const handleZoomOut = useCallback(() => {
+    setZoom(z => {
+      const idx = ZOOM_LEVELS.findIndex(l => l >= z)
+      return ZOOM_LEVELS[Math.max(idx - 1, 0)]
+    })
+  }, [])
+
+  const handleReset = useCallback(() => {
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+  }, [])
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (!interactive) return
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault()
+      if (e.deltaY < 0) handleZoomIn()
+      else handleZoomOut()
+    }
+  }, [interactive, handleZoomIn, handleZoomOut])
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!interactive) return
+    setIsPanning(true)
+    setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y })
+  }, [interactive, pan])
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isPanning) return
+    setPan({
+      x: e.clientX - panStart.x,
+      y: e.clientY - panStart.y,
+    })
+  }, [isPanning, panStart])
+
+  const handleMouseUp = useCallback(() => {
+    setIsPanning(false)
+  }, [])
 
   return (
-    <div className={`rounded-2xl bg-zinc-950 border border-zinc-800 overflow-x-auto ${className}`}>
+    <div
+      className={`rounded-2xl bg-zinc-950 border border-zinc-800 overflow-hidden relative ${className}`}
+      onWheel={handleWheel}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+      style={{ cursor: interactive ? (isPanning ? 'grabbing' : 'grab') : 'default' }}
+    >
       <div
-        className="relative"
-        style={{ width: layout.width, height: layout.height, minWidth: layout.width }}
+        className="relative transition-transform duration-150 ease-out"
+        style={{
+          width: layout.width,
+          height: layout.height,
+          minWidth: layout.width,
+          transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`,
+          transformOrigin: 'top left',
+        }}
       >
-        {/* Grid background */}
+        {/* Grid background - extends beyond content for pan */}
         <div
-          className="absolute inset-0 opacity-[0.08]"
+          className="absolute opacity-[0.08]"
           style={{
+            top: -2000,
+            left: -2000,
+            width: layout.width + 4000,
+            height: layout.height + 4000,
             backgroundImage: 'radial-gradient(circle, #71717a 1px, transparent 1px)',
             backgroundSize: '24px 24px',
           }}
@@ -247,6 +427,7 @@ export default function ArcDiagram({ data, className = '' }: ArcDiagramProps) {
             <ConnectorPath
               key={i}
               connector={conn}
+              connectorIndex={i}
               nodes={nodes}
               styles={connectorStyles}
             />
@@ -254,10 +435,29 @@ export default function ArcDiagram({ data, className = '' }: ArcDiagramProps) {
         </svg>
 
         {/* Nodes */}
-        {Object.entries(nodes).map(([id, node]) => (
-          <Node key={id} node={node} data={nodeData[id]} />
+        {Object.entries(nodes).map(([nodeId, node]) => (
+          <Node key={nodeId} node={node} data={nodeData[nodeId]} />
         ))}
       </div>
+
+      {/* Viewer chrome - fixed position regardless of zoom/pan */}
+
+      {/* Diagram ID - bottom left */}
+      {id && (
+        <div className="absolute bottom-3 left-3 font-mono text-[9px] text-zinc-600 tracking-wider z-10">
+          {id}
+        </div>
+      )}
+
+      {/* Zoom controls - bottom right */}
+      {interactive && (
+        <ZoomControls
+          zoom={zoom}
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
+          onReset={handleReset}
+        />
+      )}
     </div>
   )
 }

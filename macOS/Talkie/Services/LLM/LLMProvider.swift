@@ -154,6 +154,35 @@ class LLMProviderRegistry {
     var selectedProviderId: String?
     var selectedModelId: String?
 
+    /// Curated list of recommended models to show in pickers
+    /// These are the most useful models across providers - keeps UI clean
+    static let recommendedModels: Set<String> = [
+        // OpenAI - flagship + budget
+        "gpt-4o",
+        "gpt-4o-mini",
+        "o1",
+        "o1-mini",
+        // Anthropic
+        "claude-sonnet-4-20250514",
+        "claude-3-5-sonnet-20241022",
+        "claude-3-haiku-20240307",
+        // Google
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite",
+        "gemini-1.5-flash",
+        // Groq (fast)
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+    ]
+
+    /// Get recommended models for a specific provider
+    func recommendedModels(for providerId: String) -> [LLMModel] {
+        allModels
+            .filter { $0.provider == providerId }
+            .filter { Self.recommendedModels.contains($0.id) }
+            .sorted { $0.displayName < $1.displayName }
+    }
+
     private init() {
         // Register providers synchronously so they're available immediately
         registerProvidersSync()
