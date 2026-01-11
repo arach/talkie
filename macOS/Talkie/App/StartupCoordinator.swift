@@ -213,6 +213,9 @@ final class StartupCoordinator {
             let bridgeElapsed = (CFAbsoluteTimeGetCurrent() - bridgeStart) * 1000
             logger.info("⏱️ Bridge auto-start: \(String(format: "%.0f", bridgeElapsed))ms")
 
+            // Extension Server is now handled by TalkieServer (port 8765, /extensions WebSocket)
+            // See macOS/TalkieServer/src/extensions/
+
             let elapsed = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
             logger.info("⏱️ Startup[4]: Background \(String(format: "%.0f", elapsed))ms (helpers, XPC, sync, power, bridge)")
             signposter.endInterval("Phase 4: Background", state)

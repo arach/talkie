@@ -27,6 +27,7 @@ import { Elysia } from "elysia";
 
 import { bridge, sessionCache } from "./bridge";
 import { gateway } from "./gateway";
+import { extensions } from "./extensions";
 import { getTailscaleState, getStateMessage } from "./tailscale/status";
 import { getDevices, pruneExpiredDevices } from "./devices/registry";
 import { getOrCreateKeyPair } from "./crypto/store";
@@ -157,7 +158,8 @@ const app = new Elysia()
 
   // ===== Mount Modules =====
   .use(bridge)
-  .use(gateway);
+  .use(gateway)
+  .use(extensions);
 
 // ===== Main =====
 
@@ -233,7 +235,8 @@ async function main() {
   }
 
   log.info(LOCAL_MODE ? "Auth: DISABLED (local mode)" : "Auth: HMAC enabled");
-  log.info("Modules loaded: bridge, gateway");
+  log.info("Modules loaded: bridge, gateway, extensions");
+  log.info(`Extensions WebSocket: ws://localhost:${PORT}/extensions`);
 
   // Initialize session cache (loads from disk if exists, builds quick if not)
   await sessionCache.warmup();

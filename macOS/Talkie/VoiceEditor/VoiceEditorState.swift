@@ -316,44 +316,23 @@ final class VoiceEditorState {
         clearHistory()
     }
 
-    // MARK: - Draft Extension API Broadcasting
+    // MARK: - Extension API Broadcasting (Legacy v1 format)
+    // Note: Extension server moved to TalkieServer (port 8765)
+    // These methods are kept as no-ops for call site compatibility
 
-    /// Broadcast current state to connected renderers
     private func broadcastState() {
-        let modeString = mode == .editing ? "editing" : "reviewing"
-        DraftExtensionServer.shared.broadcastState(content: text, mode: modeString)
+        // No-op: Extensions now connect to TalkieServer
     }
 
-    /// Broadcast a completed revision with diff to connected renderers
     private func broadcastRevision(before: String, after: String, instruction: String) {
-        let diff = DiffEngine.diff(original: before, proposed: after)
-
-        // Convert diff operations to tuples for the server
-        let diffOps: [(type: String, text: String)] = diff.operations.map { op in
-            switch op {
-            case .equal(let text): return ("equal", text)
-            case .insert(let text): return ("insert", text)
-            case .delete(let text): return ("delete", text)
-            }
-        }
-
-        DraftExtensionServer.shared.broadcastRevision(
-            before: before,
-            after: after,
-            diff: diffOps,
-            instruction: instruction,
-            provider: lastUsedProvider ?? "unknown",
-            model: lastUsedModel ?? "unknown"
-        )
+        // No-op: Extensions now connect to TalkieServer
     }
 
-    /// Broadcast that a revision was resolved (accepted or rejected)
     private func broadcastResolved(accepted: Bool) {
-        DraftExtensionServer.shared.broadcastResolved(accepted: accepted, content: text)
+        // No-op: Extensions now connect to TalkieServer
     }
 
-    /// Broadcast an error to connected renderers
     private func broadcastError(_ message: String) {
-        DraftExtensionServer.shared.broadcastError(message)
+        // No-op: Extensions now connect to TalkieServer
     }
 }
