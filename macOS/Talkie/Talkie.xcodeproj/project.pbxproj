@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B2130EB252C84007A2FB75DD /* ExtensionServiceAdapters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40BBE974CA3F4B739DE12F80 /* ExtensionServiceAdapters.swift */; };
+		180FB71A6BAC456BBFDAE48D /* ExtensionServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 245F838108C84B9DAEE46208 /* ExtensionServer.swift */; };
 		19E1BC0E5ACD4F26AA713834 /* KeyboardShortcutsHelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 936A4FBFDBAD4ACE9E3CD2E5 /* KeyboardShortcutsHelpView.swift */; };
 		2DA578E95E794DFCA3A2A921 /* ListKeyboardNavigator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81418011A6FA468A9D633321 /* ListKeyboardNavigator.swift */; };
 		75C4F0509C1B479E81B39986 /* PaletteCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 261356C5975C4E22910EB6D7 /* PaletteCommand.swift */; };
@@ -291,6 +293,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		40BBE974CA3F4B739DE12F80 /* ExtensionServiceAdapters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionServiceAdapters.swift; sourceTree = "<group>"; };
+		245F838108C84B9DAEE46208 /* ExtensionServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionServer.swift; sourceTree = "<group>"; };
 		936A4FBFDBAD4ACE9E3CD2E5 /* KeyboardShortcutsHelpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutsHelpView.swift; sourceTree = "<group>"; };
 		81418011A6FA468A9D633321 /* ListKeyboardNavigator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListKeyboardNavigator.swift; sourceTree = "<group>"; };
 		261356C5975C4E22910EB6D7 /* PaletteCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaletteCommand.swift; sourceTree = "<group>"; };
@@ -589,6 +593,15 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		A6C4A50165F6430B8B7502DB /* Extensions */ = {
+			isa = PBXGroup;
+			children = (
+				40BBE974CA3F4B739DE12F80 /* ExtensionServiceAdapters.swift */,
+				245F838108C84B9DAEE46208 /* ExtensionServer.swift */,
+			);
+			path = Extensions;
+			sourceTree = "<group>";
+		};
 		C8E07D23D41B474FA9DA0C18 /* Components */ = {
 			isa = PBXGroup;
 			children = (
@@ -1191,6 +1204,7 @@
 		FDD3B1848425C2C039CA5F59 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				A6C4A50165F6430B8B7502DB /* Extensions */,
 				0FB8506C987F4C018F4C0085 /* DraftExtensionServer.swift */,
 				75BB8C84F67500324AE2084A /* APIKeyStore.swift */,
 				6F7C961509F087E2FA5C4C24 /* AppEnvironment.swift */,
@@ -1356,6 +1370,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B2130EB252C84007A2FB75DD /* ExtensionServiceAdapters.swift in Sources */,
+				180FB71A6BAC456BBFDAE48D /* ExtensionServer.swift in Sources */,
 				19E1BC0E5ACD4F26AA713834 /* KeyboardShortcutsHelpView.swift in Sources */,
 				2DA578E95E794DFCA3A2A921 /* ListKeyboardNavigator.swift in Sources */,
 				75C4F0509C1B479E81B39986 /* PaletteCommand.swift in Sources */,

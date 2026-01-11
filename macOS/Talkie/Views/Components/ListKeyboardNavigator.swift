@@ -56,7 +56,7 @@ final class ListKeyboardNavigator<ItemID: Hashable> {
 
     // MARK: - Private
 
-    private var keyMonitor: Any?
+    nonisolated(unsafe) private var keyMonitor: Any?
     private var rangeStartIndex: Int?
 
     // MARK: - Lifecycle
@@ -74,7 +74,10 @@ final class ListKeyboardNavigator<ItemID: Hashable> {
     }
 
     deinit {
-        removeKeyMonitor()
+        // Inline cleanup since we can't call MainActor-isolated methods from deinit
+        if let monitor = keyMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
     }
 
     // MARK: - Key Monitor

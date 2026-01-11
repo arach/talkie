@@ -316,15 +316,15 @@ final class VoiceEditorState {
         clearHistory()
     }
 
-    // MARK: - Draft Extension API Broadcasting
+    // MARK: - Extension API Broadcasting (Legacy v1 format)
 
-    /// Broadcast current state to connected renderers
+    /// Broadcast current state to connected extensions
     private func broadcastState() {
         let modeString = mode == .editing ? "editing" : "reviewing"
-        DraftExtensionServer.shared.broadcastState(content: text, mode: modeString)
+        ExtensionServer.shared.broadcastLegacyState(content: text, mode: modeString)
     }
 
-    /// Broadcast a completed revision with diff to connected renderers
+    /// Broadcast a completed revision with diff to connected extensions
     private func broadcastRevision(before: String, after: String, instruction: String) {
         let diff = DiffEngine.diff(original: before, proposed: after)
 
@@ -337,7 +337,7 @@ final class VoiceEditorState {
             }
         }
 
-        DraftExtensionServer.shared.broadcastRevision(
+        ExtensionServer.shared.broadcastLegacyRevision(
             before: before,
             after: after,
             diff: diffOps,
@@ -349,11 +349,11 @@ final class VoiceEditorState {
 
     /// Broadcast that a revision was resolved (accepted or rejected)
     private func broadcastResolved(accepted: Bool) {
-        DraftExtensionServer.shared.broadcastResolved(accepted: accepted, content: text)
+        ExtensionServer.shared.broadcastLegacyResolved(accepted: accepted, content: text)
     }
 
-    /// Broadcast an error to connected renderers
+    /// Broadcast an error to connected extensions
     private func broadcastError(_ message: String) {
-        DraftExtensionServer.shared.broadcastError(message)
+        ExtensionServer.shared.broadcastError(message)
     }
 }

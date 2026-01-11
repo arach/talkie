@@ -213,8 +213,18 @@ final class StartupCoordinator {
             let bridgeElapsed = (CFAbsoluteTimeGetCurrent() - bridgeStart) * 1000
             logger.info("⏱️ Bridge auto-start: \(String(format: "%.0f", bridgeElapsed))ms")
 
+            // Extension Server (port 7847)
+            // Enables external apps to use Talkie's transcription, LLM, and diff services
+            signposter.emitEvent("Extension Server")
+            let extStart = CFAbsoluteTimeGetCurrent()
+            ExtensionServer.shared.transcriptionService = EphemeralTranscriberAdapter.shared
+            ExtensionServer.shared.llmService = LLMProviderAdapter.shared
+            ExtensionServer.shared.start()
+            let extElapsed = (CFAbsoluteTimeGetCurrent() - extStart) * 1000
+            logger.info("⏱️ Extension server: \(String(format: "%.0f", extElapsed))ms")
+
             let elapsed = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
-            logger.info("⏱️ Startup[4]: Background \(String(format: "%.0f", elapsed))ms (helpers, XPC, sync, power, bridge)")
+            logger.info("⏱️ Startup[4]: Background \(String(format: "%.0f", elapsed))ms (helpers, XPC, sync, power, bridge, extensions)")
             signposter.endInterval("Phase 4: Background", state)
         }
     }

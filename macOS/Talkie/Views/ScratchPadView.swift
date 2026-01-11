@@ -47,14 +47,14 @@ struct ScratchPadView: View {
         .background(Theme.current.background)
         .onAppear {
             initializeLLMSettings()
-            setupDraftExtensionServer()
+            setupExtensionCallbacks()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 isTextFieldFocused = true
             }
         }
         .onDisappear {
             // Keep server running for background connections
-            // DraftExtensionServer.shared.stop()
+            // ExtensionServer stays running at app level
         }
     }
 
@@ -95,7 +95,7 @@ struct ScratchPadView: View {
     /// Badge showing extension server status with token copy
     @ViewBuilder
     private var extensionLinkBadge: some View {
-        let server = DraftExtensionServer.shared
+        let server = ExtensionServer.shared
         let connectedCount = server.connectedCount
 
         Menu {
@@ -125,7 +125,7 @@ struct ScratchPadView: View {
                     Divider()
                     Text("\(connectedCount) renderer(s) connected")
                         .font(.caption)
-                    ForEach(server.connectedRendererNames, id: \.self) { name in
+                    ForEach(server.connectedExtensionNames, id: \.self) { name in
                         Text("• \(name)")
                             .font(.caption)
                     }
@@ -890,19 +890,17 @@ struct ScratchPadView: View {
         }
     }
 
-    /// Start the Draft Extension API server and wire up command handlers
-    private func setupDraftExtensionServer() {
-        let server = DraftExtensionServer.shared
+    /// Wire up legacy v1 callbacks for draft:* messages from extensions
+    /// Note: ExtensionServer starts at app launch - this just connects Drafts-specific handlers
+    private func setupExtensionCallbacks() {
+        let server = ExtensionServer.shared
 
-        // Start the WebSocket server
-        server.start()
-
-        // Handle incoming commands from connected renderers
-        server.onUpdate = { [weak editorState] content in
+        // Handle incoming legacy draft:* commands from connected extensions
+        server.onLegacyUpdate = { [weak editorState] content in
             editorState?.text = content
         }
 
-        server.onRefine = { [weak editorState] instruction, constraints in
+        server.onLegacyRefine = { [weak editorState] instruction, constraints in
             guard let state = editorState else { return }
 
             // If constraints provided, modify system prompt temporarily
@@ -926,15 +924,15 @@ struct ScratchPadView: View {
             }
         }
 
-        server.onAccept = { [weak editorState] in
+        server.onLegacyAccept = { [weak editorState] in
             editorState?.acceptRevision()
         }
 
-        server.onReject = { [weak editorState] in
+        server.onLegacyReject = { [weak editorState] in
             editorState?.rejectRevision()
         }
 
-        server.onSave = { [weak editorState] destination in
+        server.onLegacySave = { [weak editorState] destination in
             guard let state = editorState else { return }
             if destination == "clipboard" {
                 NSPasteboard.general.clearContents()
@@ -946,30 +944,7 @@ struct ScratchPadView: View {
             }
         }
 
-        // Voice capture via Talkie's audio pipeline
-        server.onCaptureStart = {
-            do {
-                try EphemeralTranscriber.shared.startCapture()
-                log.info("Started voice capture via extension API")
-            } catch {
-                log.error("Failed to start capture via extension API: \(error)")
-                DraftExtensionServer.shared.broadcastError("Failed to start capture: \(error.localizedDescription)")
-            }
-        }
-
-        server.onCaptureStop = {
-            do {
-                let text = try await EphemeralTranscriber.shared.stopAndTranscribe()
-                log.info("Captured via extension API: \(text.prefix(50))...")
-                return text
-            } catch {
-                log.error("Failed to transcribe via extension API: \(error)")
-                DraftExtensionServer.shared.broadcastError("Transcription failed: \(error.localizedDescription)")
-                return nil
-            }
-        }
-
-        log.info("Draft Extension API server configured on port 7847")
+        log.info("Extension callbacks configured for Drafts view")
     }
 
     // MARK: - Dictation (Talkie → Engine via EphemeralTranscriber)
