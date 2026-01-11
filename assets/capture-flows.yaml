@@ -1,0 +1,105 @@
+# Talkie Capture Flows
+# Agent-driven screenshot sequences for marketing and documentation
+#
+# Usage: vif capture talkie (coming soon)
+# For now: agent reads this and executes the flows
+
+app: Talkie
+scheme: talkie-dev
+output_dir: ./captures
+
+flows:
+  # Core app views - the main experience
+  core-views:
+    active: true
+    description: "Main navigation views showcasing the app structure"
+    delay: 0.5  # seconds between navigate and capture
+    captures:
+      - route: memos
+        output: 01-memos-list.png
+        description: "Voice memos library with filters"
+
+      - route: dictations
+        output: 02-dictations.png
+        description: "Live dictation history"
+
+      - route: workflows
+        output: 03-workflows.png
+        description: "AI workflow automation"
+
+      - route: home
+        output: 04-home-dashboard.png
+        description: "Home dashboard overview"
+
+  # Workflow deep-dive - showing the AI automation
+  workflow-showcase:
+    active: true
+    description: "Detailed workflow views"
+    delay: 0.5
+    captures:
+      - route: workflows
+        output: workflows-01-list.png
+        description: "Workflow library"
+
+      # TODO: Add route for selecting a specific workflow
+      # - route: workflows/hey-talkie
+      #   output: workflows-02-editor.png
+      #   description: "Workflow editor with steps"
+
+  # Settings and customization
+  settings-tour:
+    active: false  # Disabled for now - settings route needs work
+    description: "Settings and preferences"
+    delay: 0.5
+    captures:
+      - route: settings
+        output: settings-01-appearance.png
+        description: "Appearance settings"
+
+      - route: settings?tab=dictation
+        output: settings-02-dictation.png
+        description: "Dictation settings"
+
+      - route: settings?tab=ai
+        output: settings-03-ai.png
+        description: "AI provider settings"
+
+  # Tools and utilities
+  tools-showcase:
+    active: false  # Enable when ready
+    description: "Power user tools"
+    delay: 0.5
+    captures:
+      - route: scratchpad
+        output: tools-01-scratchpad.png
+        description: "Quick voice-to-text scratch pad"
+
+      - route: models
+        output: tools-02-models.png
+        description: "Local AI model management"
+
+      - route: stats
+        output: tools-03-stats.png
+        description: "Dictation statistics"
+
+# Video storyboard (for vif render)
+# Combines captures into a promo video
+video:
+  active: false
+  output: talkie-demo.mp4
+  audio:
+    file: background-music.mp3
+    volume: 0.5
+    fadeOut: 2
+  sequence:
+    - source: 01-memos-list.png
+      duration: 3
+    - source: 02-dictations.png
+      duration: 2
+      transition: crossfade
+    - source: 03-workflows.png
+      duration: 3
+      transition: crossfade
+    - source: 04-home-dashboard.png
+      duration: 2
+      transition: crossfade

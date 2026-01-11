@@ -74,7 +74,10 @@ final class ListKeyboardNavigator<ItemID: Hashable> {
     }
 
     deinit {
-        removeKeyMonitor()
+        // Clean up on main actor since this class is @MainActor
+        MainActor.assumeIsolated {
+            removeKeyMonitor()
+        }
     }
 
     // MARK: - Key Monitor

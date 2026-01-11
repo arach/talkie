@@ -48,6 +48,33 @@ final class SystemRoutes: RouteGroup {
             NotificationCenter.default.post(name: .navigateLive, object: nil)
         },
 
+        Route(
+            path: "memos",
+            description: "Navigate to memos view",
+            isInternal: false
+        ) { _, _ in
+            NSLog("[SystemRoutes] Navigate to memos")
+            NotificationCenter.default.post(name: .navigateToSection, object: NavigationSection.allMemos)
+        },
+
+        Route(
+            path: "dictations",
+            description: "Navigate to dictations view",
+            isInternal: false
+        ) { _, _ in
+            NSLog("[SystemRoutes] Navigate to dictations")
+            NotificationCenter.default.post(name: .navigateToSection, object: NavigationSection.liveRecent)
+        },
+
+        Route(
+            path: "workflows",
+            description: "Navigate to workflows view",
+            isInternal: false
+        ) { _, _ in
+            NSLog("[SystemRoutes] Navigate to workflows")
+            NotificationCenter.default.post(name: .navigateToSection, object: NavigationSection.workflows)
+        },
+
         // MARK: - Window Management
 
         Route(
