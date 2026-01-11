@@ -466,7 +466,7 @@ export default function ArchitectureDiagram() {
 // Simpler diagram for overview page - shows Talkie as orchestrator
 export function SimpleArchitectureDiagram() {
   return (
-    <div className="my-8 p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
+    <div className="my-8 p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 relative">
       <div className="flex flex-col items-center gap-6">
         {/* Talkie - the orchestrator */}
         <div className="flex flex-col items-center">
@@ -516,6 +516,10 @@ export function SimpleArchitectureDiagram() {
             <span className="mt-2 px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-[10px] font-mono text-zinc-400 dark:text-zinc-500">HTTP</span>
           </div>
         </div>
+      </div>
+      {/* Diagram ID */}
+      <div className="absolute bottom-2 left-3 font-mono text-[9px] text-zinc-400 dark:text-zinc-600 tracking-wider">
+        SYS.OVERVIEW.001
       </div>
     </div>
   )

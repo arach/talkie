@@ -3,7 +3,8 @@ import React from 'react'
 import Link from 'next/link'
 import { ArrowRight, ArrowLeft, Monitor, Mic, Cpu, Server, MessageSquare } from 'lucide-react'
 import DocsLayout from './DocsLayout'
-import ArchitectureDiagram from './ArchitectureDiagram'
+import ArcDiagram from './ArcDiagram'
+import architectureDiagram from './diagrams/architecture.diagram'
 
 const sections = [
   { id: 'system-overview', title: 'System Overview', level: 2 },
@@ -54,7 +55,7 @@ export default function ArchitecturePage() {
         Talkie's architecture separates concerns across multiple processes. This isn't complexity for complexity's sake—it provides real benefits: fault isolation, security boundaries, and the ability to evolve components independently.
       </p>
 
-      <ArchitectureDiagram />
+      <ArcDiagram data={architectureDiagram} className="my-8" />
 
       <p>
         The main Talkie app is the orchestrator—it manages the UI, workflows, and data. The helper processes (TalkieLive, TalkieEngine, TalkieServer) handle specific tasks that benefit from isolation.
