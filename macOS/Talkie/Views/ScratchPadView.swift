@@ -47,9 +47,14 @@ struct ScratchPadView: View {
         .background(Theme.current.background)
         .onAppear {
             initializeLLMSettings()
+            setupDraftExtensionServer()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 isTextFieldFocused = true
             }
+        }
+        .onDisappear {
+            // Keep server running for background connections
+            // DraftExtensionServer.shared.stop()
         }
     }
 
@@ -816,6 +821,65 @@ struct ScratchPadView: View {
                 editorState.modelId = resolved.modelId
             }
         }
+    }
+
+    /// Start the Draft Extension API server and wire up command handlers
+    private func setupDraftExtensionServer() {
+        let server = DraftExtensionServer.shared
+
+        // Start the WebSocket server
+        server.start()
+
+        // Handle incoming commands from connected renderers
+        server.onUpdate = { [weak editorState] content in
+            editorState?.text = content
+        }
+
+        server.onRefine = { [weak editorState] instruction, constraints in
+            guard let state = editorState else { return }
+
+            // If constraints provided, modify system prompt temporarily
+            if let constraints = constraints {
+                var modifiedPrompt = state.systemPrompt
+                if let maxLength = constraints.maxLength {
+                    modifiedPrompt += "\n\nIMPORTANT: Keep your response under \(maxLength) characters."
+                }
+                if let style = constraints.style {
+                    modifiedPrompt += "\n\nStyle: \(style)"
+                }
+                if let format = constraints.format {
+                    modifiedPrompt += "\n\nFormat: \(format)"
+                }
+                let originalPrompt = state.systemPrompt
+                state.systemPrompt = modifiedPrompt
+                await state.requestRevision(instruction: instruction)
+                state.systemPrompt = originalPrompt
+            } else {
+                await state.requestRevision(instruction: instruction)
+            }
+        }
+
+        server.onAccept = { [weak editorState] in
+            editorState?.acceptRevision()
+        }
+
+        server.onReject = { [weak editorState] in
+            editorState?.rejectRevision()
+        }
+
+        server.onSave = { [weak editorState] destination in
+            guard let state = editorState else { return }
+            if destination == "clipboard" {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(state.text, forType: .string)
+                log.info("Draft copied to clipboard via extension API")
+            } else if destination == "memo" {
+                // TODO: Implement save to memo
+                log.info("Save to memo requested via extension API")
+            }
+        }
+
+        log.info("Draft Extension API server configured on port 7847")
     }
 
     // MARK: - Dictation (Talkie → Engine via EphemeralTranscriber)

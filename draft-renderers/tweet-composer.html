@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tweet Composer - Talkie Draft Renderer</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #15202b;
+      color: #e7e9ea;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #38444d;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      font-size: 18px;
+    }
+
+    .logo svg {
+      width: 24px;
+      height: 24px;
+      fill: #1d9bf0;
+    }
+
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #71767b;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #f4212e;
+    }
+
+    .status-dot.connected {
+      background: #00ba7c;
+    }
+
+    /* Tweet Preview */
+    .tweet-card {
+      background: #1e2732;
+      border: 1px solid #38444d;
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .tweet-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 20px;
+    }
+
+    .user-info {
+      flex: 1;
+    }
+
+    .display-name {
+      font-weight: 700;
+      font-size: 15px;
+    }
+
+    .username {
+      color: #71767b;
+      font-size: 14px;
+    }
+
+    .tweet-content {
+      font-size: 17px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      min-height: 60px;
+    }
+
+    .tweet-content.empty {
+      color: #71767b;
+      font-style: italic;
+    }
+
+    .char-count {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #38444d;
+    }
+
+    .char-count .count {
+      font-size: 14px;
+      color: #71767b;
+    }
+
+    .char-count .count.warning {
+      color: #ffd400;
+    }
+
+    .char-count .count.over {
+      color: #f4212e;
+      font-weight: 600;
+    }
+
+    .char-ring {
+      width: 24px;
+      height: 24px;
+    }
+
+    .char-ring circle {
+      fill: none;
+      stroke-width: 2;
+    }
+
+    .char-ring .bg {
+      stroke: #38444d;
+    }
+
+    .char-ring .progress {
+      stroke: #1d9bf0;
+      stroke-linecap: round;
+      transform: rotate(-90deg);
+      transform-origin: center;
+      transition: stroke-dashoffset 0.2s, stroke 0.2s;
+    }
+
+    .char-ring .progress.warning {
+      stroke: #ffd400;
+    }
+
+    .char-ring .progress.over {
+      stroke: #f4212e;
+    }
+
+    /* Diff View */
+    .diff-view {
+      background: #1e2732;
+      border: 1px solid #38444d;
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    .diff-view.visible {
+      display: block;
+    }
+
+    .diff-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: #71767b;
+    }
+
+    .diff-content {
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    .diff-insert {
+      background: rgba(0, 186, 124, 0.2);
+      color: #00ba7c;
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+
+    .diff-delete {
+      background: rgba(244, 33, 46, 0.2);
+      color: #f4212e;
+      text-decoration: line-through;
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+
+    /* Actions */
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    button {
+      background: #1d9bf0;
+      color: white;
+      border: none;
+      border-radius: 9999px;
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: #1a8cd8;
+    }
+
+    button:disabled {
+      background: #38444d;
+      cursor: not-allowed;
+    }
+
+    button.secondary {
+      background: transparent;
+      border: 1px solid #536471;
+      color: #e7e9ea;
+    }
+
+    button.secondary:hover {
+      background: rgba(239, 243, 244, 0.1);
+    }
+
+    button.accept {
+      background: #00ba7c;
+    }
+
+    button.accept:hover {
+      background: #00a06d;
+    }
+
+    button.reject {
+      background: transparent;
+      border: 1px solid #f4212e;
+      color: #f4212e;
+    }
+
+    button.reject:hover {
+      background: rgba(244, 33, 46, 0.1);
+    }
+
+    .review-actions {
+      display: none;
+      gap: 8px;
+    }
+
+    .review-actions.visible {
+      display: flex;
+    }
+
+    /* Thread */
+    .thread-indicator {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 12px;
+      background: rgba(29, 155, 240, 0.1);
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 14px;
+      color: #1d9bf0;
+    }
+
+    .thread-indicator.visible {
+      display: flex;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding-top: 20px;
+      border-top: 1px solid #38444d;
+      color: #71767b;
+      font-size: 12px;
+    }
+
+    footer a {
+      color: #1d9bf0;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">
+        <svg viewBox="0 0 24 24">
+          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+        </svg>
+        Tweet Composer
+      </div>
+      <div class="connection-status">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Connecting...</span>
+      </div>
+    </header>
+
+    <div class="tweet-card">
+      <div class="tweet-header">
+        <div class="avatar">Y</div>
+        <div class="user-info">
+          <div class="display-name">You</div>
+          <div class="username">@you</div>
+        </div>
+      </div>
+      <div class="tweet-content empty" id="tweetContent">
+        Start dictating in Talkie Drafts...
+      </div>
+      <div class="char-count">
+        <svg class="char-ring" viewBox="0 0 24 24">
+          <circle class="bg" cx="12" cy="12" r="10"/>
+          <circle class="progress" id="charRing" cx="12" cy="12" r="10"
+                  stroke-dasharray="62.83" stroke-dashoffset="62.83"/>
+        </svg>
+        <span class="count" id="charCount">0/280</span>
+      </div>
+    </div>
+
+    <div class="thread-indicator" id="threadIndicator">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+      </svg>
+      <span>This tweet is over 280 characters. Consider splitting into a thread.</span>
+    </div>
+
+    <div class="diff-view" id="diffView">
+      <div class="diff-header">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+        </svg>
+        <span id="diffInstruction">Revision</span>
+      </div>
+      <div class="diff-content" id="diffContent"></div>
+    </div>
+
+    <div class="actions">
+      <button onclick="refine('make it punchier')" id="btnPunchier">Punchier</button>
+      <button onclick="refine('make it shorter', { maxLength: 280 })" id="btnShorter">Shorter</button>
+      <button onclick="refine('add relevant hashtags')" id="btnHashtags">Add Hashtags</button>
+      <button onclick="splitThread()" class="secondary" id="btnThread">Split Thread</button>
+      <button onclick="copyToClipboard()" class="secondary">Copy</button>
+    </div>
+
+    <div class="review-actions" id="reviewActions">
+      <button onclick="accept()" class="accept">Accept Changes</button>
+      <button onclick="reject()" class="reject">Reject</button>
+    </div>
+
+    <footer>
+      Powered by <a href="#">Talkie Draft Extension API</a>
+    </footer>
+  </div>
+
+  <script src="draft-link.js"></script>
+  <script>
+    const MAX_CHARS = 280
+    let talkie = null
+    let currentContent = ''
+    let isReviewing = false
+
+    // DOM Elements
+    const statusDot = document.getElementById('statusDot')
+    const statusText = document.getElementById('statusText')
+    const tweetContent = document.getElementById('tweetContent')
+    const charCount = document.getElementById('charCount')
+    const charRing = document.getElementById('charRing')
+    const threadIndicator = document.getElementById('threadIndicator')
+    const diffView = document.getElementById('diffView')
+    const diffContent = document.getElementById('diffContent')
+    const diffInstruction = document.getElementById('diffInstruction')
+    const reviewActions = document.getElementById('reviewActions')
+
+    // Initialize connection
+    function init() {
+      talkie = new TalkieLink({
+        name: 'Tweet Composer',
+        capabilities: ['preview', 'diff', 'constraints']
+      })
+
+      talkie.on('connected', () => {
+        statusDot.classList.add('connected')
+        statusText.textContent = 'Connected to Talkie'
+      })
+
+      talkie.on('disconnected', () => {
+        statusDot.classList.remove('connected')
+        statusText.textContent = 'Disconnected - Reconnecting...'
+      })
+
+      talkie.on('state', (draft) => {
+        currentContent = draft.content
+        updateTweetDisplay(draft.content)
+
+        if (draft.mode === 'editing') {
+          hideDiffView()
+        }
+      })
+
+      talkie.on('revision', (rev) => {
+        isReviewing = true
+        showDiffView(rev)
+      })
+
+      talkie.on('resolved', (result) => {
+        isReviewing = false
+        hideDiffView()
+        updateTweetDisplay(result.content)
+      })
+
+      talkie.on('error', (error) => {
+        console.error('Talkie error:', error)
+      })
+    }
+
+    function updateTweetDisplay(content) {
+      const chars = content.length
+
+      if (!content) {
+        tweetContent.textContent = 'Start dictating in Talkie Drafts...'
+        tweetContent.classList.add('empty')
+      } else {
+        tweetContent.textContent = content
+        tweetContent.classList.remove('empty')
+      }
+
+      // Update character count
+      charCount.textContent = `${chars}/${MAX_CHARS}`
+      charCount.classList.remove('warning', 'over')
+      charRing.classList.remove('warning', 'over')
+
+      if (chars > MAX_CHARS) {
+        charCount.classList.add('over')
+        charRing.classList.add('over')
+        threadIndicator.classList.add('visible')
+      } else if (chars > MAX_CHARS * 0.9) {
+        charCount.classList.add('warning')
+        charRing.classList.add('warning')
+        threadIndicator.classList.remove('visible')
+      } else {
+        threadIndicator.classList.remove('visible')
+      }
+
+      // Update ring progress
+      const progress = Math.min(chars / MAX_CHARS, 1)
+      const circumference = 62.83 // 2 * PI * 10
+      const offset = circumference * (1 - progress)
+      charRing.style.strokeDashoffset = offset
+    }
+
+    function showDiffView(revision) {
+      diffInstruction.textContent = revision.instruction
+      diffContent.innerHTML = renderDiff(revision.diff)
+      diffView.classList.add('visible')
+      reviewActions.classList.add('visible')
+    }
+
+    function hideDiffView() {
+      diffView.classList.remove('visible')
+      reviewActions.classList.remove('visible')
+    }
+
+    function renderDiff(ops) {
+      return ops.map(op => {
+        if (op.type === 'equal') return escapeHtml(op.text)
+        if (op.type === 'insert') return `<span class="diff-insert">${escapeHtml(op.text)}</span>`
+        if (op.type === 'delete') return `<span class="diff-delete">${escapeHtml(op.text)}</span>`
+        return ''
+      }).join('')
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div')
+      div.textContent = text
+      return div.innerHTML
+    }
+
+    // Actions
+    function refine(instruction, constraints = null) {
+      if (talkie && talkie.isConnected()) {
+        talkie.refine(instruction, constraints)
+      }
+    }
+
+    function accept() {
+      if (talkie && talkie.isConnected()) {
+        talkie.accept()
+      }
+    }
+
+    function reject() {
+      if (talkie && talkie.isConnected()) {
+        talkie.reject()
+      }
+    }
+
+    function splitThread() {
+      refine('Split this into a Twitter thread. Each tweet should be under 280 characters. Number them like 1/, 2/, etc.')
+    }
+
+    function copyToClipboard() {
+      if (talkie && talkie.isConnected()) {
+        talkie.copyToClipboard()
+      }
+      // Also copy locally as backup
+      navigator.clipboard.writeText(currentContent).then(() => {
+        const btn = document.querySelector('button.secondary:last-of-type')
+        const original = btn.textContent
+        btn.textContent = 'Copied!'
+        setTimeout(() => btn.textContent = original, 1500)
+      })
+    }
+
+    // Initialize on load
+    init()
+  </script>
+</body>
+</html>
