@@ -1,0 +1,307 @@
+//
+//  talkieApp.swift
+//  talkie
+//
+//  Created by Arach Tchoupani on 2025-11-23.
+//
+
+import SwiftUI
+import BackgroundTasks
+import CoreData
+import ClerkKit
+import TalkieMobileKit
+
+@main
+struct talkieApp: App {
+    // Wire up AppDelegate for push notification handling
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
+    // Async-loaded persistence controller (non-blocking startup)
+    @State private var persistenceController: PersistenceController?
+    @State private var mainInterfaceVisible = false
+    @ObservedObject private var deepLinkManager = DeepLinkManager.shared
+    @State private var appSettings = TalkieAppSettings.shared
+
+    // First launch detection
+    @State private var showOnboarding = false
+    private static let isScreenshotMode = ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT")
+    @State private var screenshotSplashVisible: Bool = {
+        // Show splash overlay unless --screenshotSkipSplash is passed
+        return isScreenshotMode && !ProcessInfo.processInfo.arguments.contains("--screenshotSkipSplash")
+    }()
+
+    // MARK: - Boot Metrics
+    private static let bootStart = Date()
+    @State private var bootLogged = false
+
+    // MARK: - Background Task Identifiers
+    static let refreshTaskIdentifier = TalkieMobileRuntimeIdentifiers.refreshTaskIdentifier
+    static let syncTaskIdentifier = TalkieMobileRuntimeIdentifiers.syncTaskIdentifier
+
+    // Notification for triggering onboarding from Settings
+    static let showOnboardingNotification = Notification.Name("showOnboarding")
+
+    init() {
+        let initStart = Date()
+        registerBackgroundTasks()
+        _ = TalkieAppSettings.shared
+        _ = TalkieAppConfigurationStore.shared.synchronizePinnedWorkflowMirror()
+
+        // Configure Clerk authentication (auto-restores existing sessions)
+        #if DEBUG
+        Clerk.configure(publishableKey: "pk_test_c3VwcmVtZS1zdGFsbGlvbi05LmNsZXJrLmFjY291bnRzLmRldiQ")
+        #else
+        Clerk.configure(publishableKey: "pk_live_Y2xlcmsudXNldGFsa2llLmNvbSQ")
+        #endif
+
+        // Initialize ConnectionManager and register sync providers (async, non-blocking)
+        Task {
+            let manager = ConnectionManager.shared
+            manager.register(LocalSyncProvider())
+            manager.register(iCloudSyncProvider())
+            await manager.checkAllConnections()
+        }
+
+        let initDuration = Date().timeIntervalSince(initStart)
+        AppLogger.app.info("📱 App.init: \(String(format: "%.0f", initDuration * 1000))ms")
+    }
+
+    var body: some Scene {
+        WindowGroup {
+            @Bindable var appSettings = appSettings
+            ZStack {
+                if let controller = persistenceController, mainInterfaceVisible {
+                    // Database ready - show main content
+                    HomeView()
+                        .environment(Clerk.shared)
+                        .environment(\.managedObjectContext, controller.container.viewContext)
+                        .environmentObject(deepLinkManager)
+                        .onAppear {
+                            if !appSettings.hasSeenOnboarding && !Self.isScreenshotMode {
+                                showOnboarding = true
+                            }
+                        }
+                        .onReceive(NotificationCenter.default.publisher(for: Self.showOnboardingNotification)) { _ in
+                            showOnboarding = true
+                        }
+                        .fullScreenCover(isPresented: $showOnboarding) {
+                            OnboardingView(
+                                hasSeenOnboarding: $appSettings.hasSeenOnboarding,
+                                onStartRecording: {
+                                    deepLinkManager.pendingAction = .record
+                                }
+                            )
+                        }
+                        .transition(.opacity)
+                } else {
+                    // Hold splash until the main interface is actually ready to appear.
+                    SplashView()
+                        .transition(.opacity)
+                }
+
+            }
+            .animation(Self.isScreenshotMode ? nil : .easeInOut(duration: 0.3), value: persistenceController != nil)
+            .overlay {
+                // Screenshot splash — sits on top of everything, auto-dismisses
+                if screenshotSplashVisible {
+                    SplashView()
+                        .ignoresSafeArea()
+                        .task {
+                            try? await Task.sleep(for: .seconds(5))
+                            screenshotSplashVisible = false
+                        }
+                }
+            }
+            .onOpenURL { url in
+                AppLogger.app.info("📱 onOpenURL received: \(url.absoluteString)")
+                deepLinkManager.handle(url: url)
+            }
+            .onAppear {
+                // Check for launch URL from environment (set by build script)
+                if let launchURL = ProcessInfo.processInfo.environment["TALKIE_OPEN_URL"],
+                   let url = URL(string: launchURL) {
+                    AppLogger.app.info("📱 Launch URL from environment: \(launchURL)")
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        deepLinkManager.handle(url: url)
+                    }
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSUbiquitousKeyValueStore.didChangeExternallyNotification)) { _ in
+                appSettings.refreshPinnedWorkflowMirror()
+            }
+            .task {
+                // Load database (ClerkKit auto-restores auth sessions on configure)
+                let loadStart = Date()
+                let controller = await PersistenceController.loadAsync()
+                let loadDuration = Date().timeIntervalSince(loadStart)
+                AppLogger.app.info("📱 Database loaded in \(String(format: "%.0f", loadDuration * 1000))ms (async, non-blocking)")
+
+                // Seed demo data for screenshots
+                if Self.isScreenshotMode {
+                    Self.seedScreenshotData(context: controller.container.viewContext)
+                }
+
+                await MainActor.run { persistenceController = controller }
+
+                if !mainInterfaceVisible {
+                    try? await Task.sleep(for: .milliseconds(180))
+                    await MainActor.run {
+                        withAnimation(Self.isScreenshotMode ? nil : .easeInOut(duration: 0.2)) {
+                            mainInterfaceVisible = true
+                        }
+                    }
+                }
+
+                // Log total boot time
+                if !bootLogged {
+                    bootLogged = true
+                    let bootDuration = Date().timeIntervalSince(Self.bootStart)
+                    AppLogger.app.info("📱 BOOT COMPLETE in \(String(format: "%.2f", bootDuration))s")
+                }
+            }
+        }
+    }
+
+    // MARK: - Screenshot Demo Data
+
+    private static func seedScreenshotData(context: NSManagedObjectContext) {
+        // Only seed if no memos exist yet
+        let request = VoiceMemo.fetchRequest()
+        let count = (try? context.count(for: request)) ?? 0
+        guard count == 0 else { return }
+
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let demoFile = docs.appendingPathComponent("demo-screenshot.m4a")
+
+        let titles = [
+            ("Meeting notes — product roadmap Q1", "We discussed the new onboarding flow, API rate limits, and the timeline for the v3 launch. Sarah will own the design spec, target is end of March."),
+            ("Idea: offline-first sync architecture", "What if we treat the local database as the source of truth and let CloudKit be a sync layer? GRDB for speed, Core Data just for the bridge. Need to prototype the conflict resolution."),
+            ("Quick thought on keyboard shortcuts", "The dictation keyboard needs a long-press gesture to switch between voice and text mode. Should feel like a walkie-talkie — press and hold to talk, release to send."),
+        ]
+
+        for (i, (title, transcript)) in titles.enumerated() {
+            let memo = VoiceMemo(context: context)
+            memo.id = UUID()
+            memo.title = title
+            memo.createdAt = Date().addingTimeInterval(-Double((i + 1) * 7200))
+            memo.duration = 14.86
+            memo.transcription = transcript
+            memo.sortOrder = Int32(-memo.createdAt!.timeIntervalSince1970)
+
+            // Point to demo audio file if it exists, otherwise use a placeholder path
+            if FileManager.default.fileExists(atPath: demoFile.path) {
+                memo.fileURL = demoFile.lastPathComponent
+            } else {
+                memo.fileURL = "demo-screenshot.m4a"
+            }
+        }
+
+        try? context.save()
+        AppLogger.app.info("📸 Seeded \(titles.count) demo memos for screenshots")
+    }
+
+    // MARK: - Background Task Registration
+
+    private func registerBackgroundTasks() {
+        // Register app refresh task
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.refreshTaskIdentifier, using: nil) { task in
+            self.handleAppRefresh(task: task as! BGAppRefreshTask)
+        }
+
+        // Register sync processing task
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.syncTaskIdentifier, using: nil) { task in
+            self.handleSync(task: task as! BGProcessingTask)
+        }
+    }
+
+    // MARK: - Background Task Handlers
+
+    private func handleAppRefresh(task: BGAppRefreshTask) {
+        // Schedule the next refresh
+        scheduleAppRefresh()
+
+        // Create a task for the refresh work
+        let refreshTask = Task {
+            // Perform lightweight refresh work here
+            // e.g., check for updates, sync small amounts of data
+            do {
+                // Trigger iCloud sync
+                if let controller = persistenceController {
+                    try controller.container.viewContext.save()
+                }
+            } catch {
+                AppLogger.app.error("Background refresh failed: \(error.localizedDescription)")
+            }
+        }
+
+        // Handle task expiration
+        task.expirationHandler = {
+            refreshTask.cancel()
+        }
+
+        // Mark task complete when done
+        Task {
+            await refreshTask.value
+            task.setTaskCompleted(success: true)
+        }
+    }
+
+    private func handleSync(task: BGProcessingTask) {
+        // Schedule the next sync
+        scheduleSync()
+
+        // Create a task for iCloud sync work
+        let syncTask = Task {
+            do {
+                guard let controller = persistenceController else { return }
+                let context = controller.container.newBackgroundContext()
+                try await context.perform {
+                    // Trigger Core Data to sync with iCloud
+                    if context.hasChanges {
+                        try context.save()
+                    }
+                }
+                AppLogger.app.info("Background iCloud sync completed")
+            } catch {
+                AppLogger.app.error("Background sync failed: \(error.localizedDescription)")
+            }
+        }
+
+        // Handle task expiration
+        task.expirationHandler = {
+            syncTask.cancel()
+        }
+
+        // Mark task complete when done
+        Task {
+            await syncTask.value
+            task.setTaskCompleted(success: true)
+        }
+    }
+
+    // MARK: - Schedule Background Tasks
+
+    func scheduleAppRefresh() {
+        let request = BGAppRefreshTaskRequest(identifier: Self.refreshTaskIdentifier)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 60 * 60) // 1 hour (reduced from 15 min)
+
+        do {
+            try BGTaskScheduler.shared.submit(request)
+        } catch {
+            AppLogger.app.error("Could not schedule app refresh: \(error.localizedDescription)")
+        }
+    }
+
+    func scheduleSync() {
+        let request = BGProcessingTaskRequest(identifier: Self.syncTaskIdentifier)
+        request.requiresNetworkConnectivity = true
+        request.requiresExternalPower = true // Only sync when charging
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 4 * 60 * 60) // 4 hours (reduced from 1 hour)
+
+        do {
+            try BGTaskScheduler.shared.submit(request)
+        } catch {
+            AppLogger.app.error("Could not schedule sync: \(error.localizedDescription)")
+        }
+    }
+}

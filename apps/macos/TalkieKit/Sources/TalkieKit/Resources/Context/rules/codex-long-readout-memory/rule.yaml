@@ -1,0 +1,17 @@
+id: codex-long-readout-memory
+kind: route
+name: Codex Long Readout Memory
+enabled: true
+priority: 300
+when:
+  event: selection.readout
+  apps: [Codex]
+  sources: [selection]
+match:
+  type: regex
+  pattern: "(?ims)(?=^.{700,}$)(?=.*^(?:#{1,6}\\s*)?(?:\\*\\*)?(?:decisions?|next steps?|action items?|follow[- ]ups?|todos?|blockers?|risks?|open questions?|findings?|recommendations?)(?:\\*\\*)?\\s*:?\\s*$).*"
+produce:
+  runWorkflow: summarize-selection
+  vars:
+    profile: codex-readout-memory
+    persist: "true"

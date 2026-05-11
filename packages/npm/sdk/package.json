@@ -1,0 +1,28 @@
+{
+  "name": "@talkie/client",
+  "version": "0.1.1",
+  "description": "TypeScript SDK for connecting to Talkie services over WebSocket JSON-RPC",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target bun && bun run typecheck",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "os": ["darwin"],
+  "files": ["dist", "src"],
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/bun": "latest"
+  }
+}

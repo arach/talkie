@@ -1,0 +1,39 @@
+{
+  "name": "@talkie/companion",
+  "version": "0.1.0",
+  "description": "SSH-side companion entrypoints for Talkie terminal pairing and launch flows",
+  "type": "module",
+  "bin": {
+    "talkie-companion": "./src/index.js"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "start": "node src/index.js",
+    "check": "node src/index.js doctor --json"
+  },
+  "keywords": [
+    "talkie",
+    "ssh",
+    "terminal",
+    "companion",
+    "tmux"
+  ],
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arach/talkie",
+    "directory": "packages/npm/companion"
+  },
+  "homepage": "https://usetalkie.com",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@opentui/core": "^0.1.91",
+    "@opentui/react": "^0.1.91",
+    "commander": "^13.0.0",
+    "react": "^19.2.4"
+  }
+}

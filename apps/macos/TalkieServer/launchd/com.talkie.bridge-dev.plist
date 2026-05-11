@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.talkie.bridge-dev</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/zsh</string>
+        <string>-lc</string>
+        <string>cd "${TALKIE_BRIDGE_DIR:-$HOME/dev/talkie/apps/macos/TalkieServer}" &amp;&amp; exec /opt/homebrew/bin/bun run src/server.ts --local --port 8767</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>KeepAlive</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/talkie-bridge-dev.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/talkie-bridge-dev.error.log</string>
+</dict>
+</plist>

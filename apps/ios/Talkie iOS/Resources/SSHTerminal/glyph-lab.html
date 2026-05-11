@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  >
+  <title>Talkie Glyph Lab</title>
+  <link rel="stylesheet" href="./xterm.css">
+  <style>
+    @font-face {
+      font-family: "Talkie Terminal";
+      src: url("./JetBrainsMonoNerdFontMono-Regular.ttf") format("truetype");
+      font-display: block;
+    }
+
+    :root {
+      color-scheme: dark;
+      --bg: #0f1115;
+      --panel: #141822;
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #d8dde7;
+      --muted: #8d95a7;
+      --font: "Talkie Terminal", Menlo, Monaco, "SF Mono", "SFMono-Regular", ui-monospace, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+    }
+
+    body {
+      padding: 24px;
+    }
+
+    h1,
+    h2,
+    p {
+      margin: 0;
+    }
+
+    .page {
+      display: grid;
+      gap: 16px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .intro {
+      display: grid;
+      gap: 6px;
+    }
+
+    .intro p {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      overflow: hidden;
+      min-height: 620px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      display: grid;
+      gap: 4px;
+    }
+
+    .panel-header p {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .plain {
+      margin: 0;
+      padding: 18px;
+      white-space: pre-wrap;
+      font-family: var(--font);
+      font-size: 13px;
+      line-height: 1;
+      flex: 1;
+      overflow: auto;
+    }
+
+    .xterm-host {
+      flex: 1;
+      min-height: 0;
+      padding: 12px;
+    }
+
+    .xterm {
+      height: 100%;
+      padding-inline: 4px;
+    }
+
+    .xterm-viewport {
+      background: transparent !important;
+    }
+
+    @media (max-width: 1100px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .panel {
+        min-height: 480px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="intro">
+      <h1>Talkie Glyph Lab</h1>
+      <p>
+        Same font, same sample text, three render paths: plain DOM text, xterm with
+        <code>customGlyphs: false</code>, and xterm with <code>customGlyphs: true</code>.
+      </p>
+    </section>
+
+    <section class="grid">
+      <article class="panel">
+        <header class="panel-header">
+          <h2>Plain DOM</h2>
+          <p>This tells us whether WebKit can render the font and glyphs outside xterm.</p>
+        </header>
+        <pre id="plain" class="plain"></pre>
+      </article>
+
+      <article class="panel">
+        <header class="panel-header">
+          <h2>xterm Canvas Off</h2>
+          <p>Bundled font only. No xterm glyph substitution or overlap rescaling.</p>
+        </header>
+        <div id="xterm-off" class="xterm-host"></div>
+      </article>
+
+      <article class="panel">
+        <header class="panel-header">
+          <h2>xterm Canvas On</h2>
+          <p>Current app-like settings. This should reveal whether xterm’s helpers are the problem.</p>
+        </header>
+        <div id="xterm-on" class="xterm-host"></div>
+      </article>
+    </section>
+  </main>
+
+  <script src="./xterm.js"></script>
+  <script>
+    (async () => {
+      const fontFamily = '"Talkie Terminal", Menlo, Monaco, "SF Mono", "SFMono-Regular", ui-monospace, monospace';
+      const textEncoder = new TextEncoder();
+      const claudeDividerGlyphCount = 39;
+      const claudeDividerSequence = 'q'.repeat(claudeDividerGlyphCount);
+      const replaceBytes = (input, replacements) => {
+        let bytes = input;
+
+        for (const [pattern, replacement] of replacements) {
+          const output = [];
+          for (let index = 0; index < bytes.length;) {
+            let matched = true;
+            for (let offset = 0; offset < pattern.length; offset += 1) {
+              if (index + offset >= bytes.length || bytes[index + offset] !== pattern[offset]) {
+                matched = false;
+                break;
+              }
+            }
+
+            if (matched) {
+              output.push(...replacement);
+              index += pattern.length;
+              continue;
+            }
+
+            output.push(bytes[index]);
+            index += 1;
+          }
+
+          bytes = Uint8Array.from(output);
+        }
+
+        return bytes;
+      };
+      const applyClaudeCardRawFixes = (input) => replaceBytes(input, [
+        [
+          textEncoder.encode('❯\u00A0\x1b[7m \x1b[0m'),
+          textEncoder.encode('> |')
+        ],
+        [
+          textEncoder.encode('❯ \x1b[7m \x1b[0m'),
+          textEncoder.encode('> |')
+        ],
+        [
+          textEncoder.encode(`_\x1b(0${claudeDividerSequence}\x1b(B\x1b(B\x1b[m\x1b[38;5;174m_\x1b[39m\x1b[K`),
+          textEncoder.encode(` \x1b(0${claudeDividerSequence}\x1b(B\x1b(B\x1b[m\x1b[39m\x1b[K`)
+        ],
+        [
+          textEncoder.encode('_ \x1b[38;5;231m'),
+          textEncoder.encode('> \x1b[38;5;231m')
+        ],
+        [
+          textEncoder.encode('_\x1b[39m\x1b[1X\x1b[C'),
+          textEncoder.encode('* \x1b[39m\x1b[1X\x1b[C')
+        ],
+        [
+          textEncoder.encode('__\x1b[7m \x1b(B\x1b[m\x1b[K\x1b[38;5;244m\x1b(0'),
+          textEncoder.encode('> |\x1b[K\x1b[38;5;244m\x1b(0')
+        ],
+        [
+          textEncoder.encode('❯ '),
+          textEncoder.encode('> ')
+        ],
+        [
+          textEncoder.encode('❯\u00A0'),
+          textEncoder.encode('> ')
+        ],
+        [
+          textEncoder.encode('⏺'),
+          textEncoder.encode('*')
+        ]
+      ]);
+      const decSpecialGraphicsMap = new Map([
+        [0x60, '◆'],
+        [0x61, '▒'],
+        [0x66, '°'],
+        [0x67, '±'],
+        [0x68, '␤'],
+        [0x69, '␋'],
+        [0x6A, '┘'],
+        [0x6B, '┐'],
+        [0x6C, '┌'],
+        [0x6D, '└'],
+        [0x6E, '┼'],
+        [0x6F, '⎺'],
+        [0x70, '⎻'],
+        [0x71, '─'],
+        [0x72, '⎼'],
+        [0x73, '⎽'],
+        [0x74, '├'],
+        [0x75, '┤'],
+        [0x76, '┴'],
+        [0x77, '┬'],
+        [0x78, '│'],
+        [0x79, '≤'],
+        [0x7A, '≥'],
+        [0x7B, 'π'],
+        [0x7C, '≠'],
+        [0x7D, '£'],
+        [0x7E, '·']
+      ]);
+      const decSpecialGraphicsTranslator = (() => {
+        let escapeState = 0;
+        let decGraphicsEnabled = false;
+
+        const flushEscapeBuffer = (output, byte) => {
+          output.push(0x1B);
+          if (escapeState >= 2) {
+            output.push(0x28);
+          }
+          if (typeof byte === 'number') {
+            output.push(byte);
+          }
+          escapeState = 0;
+        };
+
+        return {
+          reset() {
+            escapeState = 0;
+            decGraphicsEnabled = false;
+          },
+
+          transform(input) {
+            const output = [];
+
+            for (const byte of input) {
+              if (escapeState === 0) {
+                if (byte === 0x1B) {
+                  escapeState = 1;
+                  continue;
+                }
+
+                if (decGraphicsEnabled && decSpecialGraphicsMap.has(byte)) {
+                  output.push(...textEncoder.encode(decSpecialGraphicsMap.get(byte)));
+                  continue;
+                }
+
+                output.push(byte);
+                continue;
+              }
+
+              if (escapeState === 1) {
+                if (byte === 0x28) {
+                  escapeState = 2;
+                  continue;
+                }
+
+                flushEscapeBuffer(output, byte);
+                continue;
+              }
+
+              if (byte === 0x30) {
+                decGraphicsEnabled = true;
+                escapeState = 0;
+                continue;
+              }
+
+              if (byte === 0x42) {
+                decGraphicsEnabled = false;
+                escapeState = 0;
+                continue;
+              }
+
+              flushEscapeBuffer(output, byte);
+            }
+
+            return Uint8Array.from(output);
+          }
+        };
+      })();
+      const defaultSample = [
+        'Renderer fixture unavailable.',
+        '',
+        '⌘ art@Arts-Mac-mini ~/dev/ext',
+        '› '
+      ].join('\r\n');
+
+      if (document.fonts?.load) {
+        const glyphSample = '│─┌┐└┘╭╮╰╯░▒▓▐▛███▜▌';
+        try {
+          await Promise.all([
+            document.fonts.load(`13px ${fontFamily}`, glyphSample),
+            document.fonts.ready
+          ]);
+        } catch {
+          // Ignore; the point is to observe rendering either way.
+        }
+      }
+
+      const plainPanel = document.getElementById('plain');
+      const terminals = [];
+
+      const decodeBase64Bytes = (encoded = '') => {
+        const binary = window.atob(encoded);
+        const bytes = new Uint8Array(binary.length);
+
+        for (let index = 0; index < binary.length; index += 1) {
+          bytes[index] = binary.charCodeAt(index);
+        }
+
+        return bytes;
+      };
+
+      const normalizeTerminalBytes = (input) => {
+        const normalized = [];
+
+        for (let index = 0; index < input.length; index += 1) {
+          let byte = input[index];
+
+          if (byte === 0xC2 && index + 1 < input.length) {
+            const next = input[index + 1];
+            if (next >= 0x80 && next <= 0x9F) {
+              byte = next;
+              index += 1;
+            }
+          }
+
+          switch (byte) {
+            case 0x90:
+              normalized.push(0x1B, 0x50);
+              break;
+            case 0x9B:
+              normalized.push(0x1B, 0x5B);
+              break;
+            case 0x9C:
+              normalized.push(0x1B, 0x5C);
+              break;
+            case 0x9D:
+              normalized.push(0x1B, 0x5D);
+              break;
+            default:
+              normalized.push(byte);
+              break;
+          }
+        }
+
+        const rawFixed = applyClaudeCardRawFixes(Uint8Array.from(normalized));
+        const decTranslated = decSpecialGraphicsTranslator.transform(rawFixed);
+        return replaceBytes(decTranslated, [
+          [
+            textEncoder.encode('_\x1b[48;5;16m_____\x1b[49m_'),
+            textEncoder.encode('▐▛███▜▌')
+          ],
+          [
+            textEncoder.encode('__\x1b[48;5;16m_____\x1b[49m__'),
+            textEncoder.encode('▝▜█████▛▘')
+          ],
+          [
+            textEncoder.encode('__\x1b[39m\x1b[1X\x1b[38;5;174m\x1b[C__'),
+            textEncoder.encode('▘▘ ▝▝')
+          ]
+        ]);
+      };
+
+      const renderPlainText = (text) => {
+        plainPanel.textContent = text;
+      };
+
+      const makeTerminal = (elementId, options) => {
+        const terminal = new Terminal({
+          allowTransparency: false,
+          cursorBlink: false,
+          cursorStyle: 'bar',
+          cursorInactiveStyle: 'bar',
+          cursorWidth: 2,
+          fontFamily,
+          fontSize: 13,
+          fontWeight: '400',
+          fontWeightBold: '600',
+          lineHeight: 1,
+          letterSpacing: 0,
+          scrollback: 100,
+          theme: {
+            background: '#141822',
+            foreground: '#d8dde7',
+            cursor: '#f5f7fb',
+            cursorAccent: '#0f1115'
+          },
+          ...options
+        });
+
+        terminal.open(document.getElementById(elementId));
+        terminals.push(terminal);
+      };
+
+      const settleViewportAtTop = (terminal) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            terminal.refresh(0, terminal.rows - 1);
+            terminal.scrollToTop();
+          });
+        });
+      };
+
+      const renderText = (text) => {
+        renderPlainText(text);
+        for (const terminal of terminals) {
+          terminal.reset();
+          terminal.clear();
+          decSpecialGraphicsTranslator.reset();
+          terminal.write(text);
+          terminal.refresh(0, terminal.rows - 1);
+          settleViewportAtTop(terminal);
+        }
+      };
+
+      const writeChunkToTerminal = (terminal, chunk) => (
+        new Promise((resolve) => {
+          terminal.write(chunk, resolve);
+        })
+      );
+
+      const replayChunks = async (records = []) => {
+        decSpecialGraphicsTranslator.reset();
+        const normalizedChunks = records
+          .map((record) => normalizeTerminalBytes(decodeBase64Bytes(record?.data || '')))
+          .filter((chunk) => chunk.length > 0);
+
+        const mergedLength = normalizedChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+        const merged = new Uint8Array(mergedLength);
+        let offset = 0;
+
+        for (const chunk of normalizedChunks) {
+          merged.set(chunk, offset);
+          offset += chunk.length;
+        }
+
+        const decodedText = new TextDecoder('utf-8', { fatal: false }).decode(merged);
+        renderPlainText(decodedText);
+
+        for (const terminal of terminals) {
+          terminal.reset();
+          terminal.clear();
+          decSpecialGraphicsTranslator.reset();
+          for (const chunk of normalizedChunks) {
+            await writeChunkToTerminal(terminal, chunk);
+          }
+          terminal.refresh(0, terminal.rows - 1);
+          settleViewportAtTop(terminal);
+        }
+      };
+
+      const renderBytes = (encoded = '') => {
+        decSpecialGraphicsTranslator.reset();
+        const bytes = normalizeTerminalBytes(decodeBase64Bytes(encoded));
+        const decodedText = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+        renderPlainText(decodedText);
+
+        for (const terminal of terminals) {
+          terminal.reset();
+          terminal.clear();
+          decSpecialGraphicsTranslator.reset();
+          terminal.write(bytes);
+          terminal.refresh(0, terminal.rows - 1);
+          settleViewportAtTop(terminal);
+        }
+      };
+
+      makeTerminal('xterm-off', {
+        customGlyphs: false,
+        rescaleOverlappingGlyphs: false
+      });
+
+      makeTerminal('xterm-on', {
+        customGlyphs: true,
+        rescaleOverlappingGlyphs: true
+      });
+
+      const loadFixtureText = async () => {
+        try {
+          const response = await fetch('./renderer-fixture.txt');
+          if (!response.ok) {
+            throw new Error(`fixture request failed: ${response.status}`);
+          }
+          const text = await response.text();
+          renderText(text);
+        } catch {
+          renderText(defaultSample);
+        }
+      };
+
+      await loadFixtureText();
+
+      window.talkieGlyphLab = {
+        setText(text) {
+          renderText(text || '');
+        },
+
+        setBytes(encoded) {
+          renderBytes(encoded || '');
+        },
+
+        setChunkRecords(records) {
+          void replayChunks(Array.isArray(records) ? records : []);
+        },
+
+        refit() {
+          for (const terminal of terminals) {
+            terminal.refresh(0, terminal.rows - 1);
+          }
+        }
+      };
+    })();
+  </script>
+</body>
+</html>

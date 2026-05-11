@@ -1,0 +1,12 @@
+name = "talkie-reporter"
+main = "src/index.ts"
+compatibility_date = "2024-01-25"
+
+# R2 bucket for storing reports
+# Create with: wrangler r2 bucket create talkie-reports
+[[r2_buckets]]
+binding = "REPORTS"
+bucket_name = "talkie-reports"
+
+# API_KEY is set via: npx wrangler secret put API_KEY
+# This keeps the key out of version control

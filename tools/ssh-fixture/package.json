@@ -1,0 +1,11 @@
+{
+  "name": "talkie-ssh-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node ./server.mjs"
+  },
+  "dependencies": {
+    "ssh2": "^1.16.0"
+  }
+}

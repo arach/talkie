@@ -1,0 +1,898 @@
+{
+  "name": "Finance Terms (Campaign Finance)",
+  "description": "Campaign finance terms from moneyinpolitics.wtf (MIT license).",
+  "version": "1.0.0",
+  "generatedAt": "2026-01-04T15:50:00.675435Z",
+  "sources": [
+    {
+      "name": "moneyinpolitics.wtf",
+      "url": "https://moneyinpolitics.wtf/",
+      "license": "MIT",
+      "notes": "Campaign finance glossary maintained by palewire/moneyinpolitics.wtf."
+    }
+  ],
+  "entries": [
+    {
+      "trigger": "24-hour report",
+      "replacement": "24-hour report",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a disclosure report that must be filed within 24 hours of a contribution or expenditure; required by the Federal Election Commission and other state and local election authorities for transactions greater than a certain amount that are issued in a specified time window prior to an election; those amounts and time windows vary by jurisdiction",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/24-hour-filing.yaml"
+    },
+    {
+      "trigger": "501(c)(3)",
+      "replacement": "501(c)(3)",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a shorthand reference for charities that claim freedom from U.S. taxes under Section 501(c)(3) of the Internal Revenue Code; cannot participate in political campaigns, but some limited lobbying activity is allowed; donors identities can be shielded from public scrutiny",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/501c3.yaml"
+    },
+    {
+      "trigger": "501(c)(4)",
+      "replacement": "501(c)(4)",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a shorthand reference for groups that claim freedom from U.S. taxes under Section 501(c)(4) of the Internal Revenue Code; also known as social welfare organizations or a political advocacy organization; political activity cannot be the primary purpose the group, but some participation is allowed; sometimes used to shield the identity of donors from public scrutiny",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/501c4.yaml"
+    },
+    {
+      "trigger": "501(c)(5)",
+      "replacement": "501(c)(5)",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a shorthand reference for labor unions and agricultural groups that claim freedom from U.S. taxes under Section 501(c)(5) of the Internal Revenue Code; often funded by member dues; may engage in political activity, but not as their primary purpose; donors identities can be shielded from public scrutiny",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/501c5.yaml"
+    },
+    {
+      "trigger": "501(c)(6)",
+      "replacement": "501(c)(6)",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a shorthand reference for business associations that claim freedom from U.S. taxes under Section 501(c)(6) of the Internal Revenue Code; may engage in political activity, but not as their primary purpose; donors identities can be shielded from public scrutiny",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/501c6.yaml"
+    },
+    {
+      "trigger": "527 organization",
+      "replacement": "527 organization",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a political committee that discloses information about its finances predominantly to the Internal Revenue Service; donors can contribute an unlimited amount of money; typically not required to disclose its donors to state or federal election regulators; political activity is often detected when the organization's name appears in the content of political advertising; the name comes from section 527 of the tax code",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/527-organization.yaml"
+    },
+    {
+      "trigger": "affiliated",
+      "replacement": "affiliated",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "committees formally controlled by the same person, party or organization; treated as a single entity and counted together when applying legal limits on contributions and expenditures",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/affiliated.yaml"
+    },
+    {
+      "trigger": "amendment",
+      "replacement": "amendment",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a change to a previous disclosure report submitted via a subsequent filing",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/amendment.yaml"
+    },
+    {
+      "trigger": "back reference transaction id",
+      "replacement": "back reference transaction id",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "an identifer that links one itemized transaction to another transaction; can be used for a variety of purposes, including grouping multiple purchases with a single credit card payment; can also be used to record an excessive contribution that is split into multiple transactions",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/back-reference-transaction-id.yaml"
+    },
+    {
+      "trigger": "BCRA",
+      "replacement": "BCRA",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "acronym for the Bipartisan Campaign Reform Act, a 2002 federal law that placed limits on certain kinds of campaign fundraising and spending; much of the act's restrictions were invalidated by subsequent Supreme Court decisions, including Citizens United v. FEC; sometimes referred to as McCain-Feingold, a reference to the bill's champions in Congress",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/bcra.yaml"
+    },
+    {
+      "trigger": "behested payment",
+      "replacement": "behested payment",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a donation solicited by a political official for a cause other than their campaign; often done to raise funds for governmental and charitable causes; required to be reported in some jurisdictions, such as California",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/behested-payment.yaml"
+    },
+    {
+      "trigger": "Buckley v. Valeo",
+      "replacement": "Buckley v. Valeo",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a 1976 Supreme Court decision that reformed an array of campaign finance restrictions passed by Congress during the Watergate era; upheld limits on contributions from individuals, on the grounds that they could corrupt the behavior of candidates, but struck down caps on expenditures by candidates and campaigns, on the grounds that they do not prevent corruption and limit speech that is protected by the First Amendment",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/buckley-v-valeo.yaml"
+    },
+    {
+      "trigger": "bundle",
+      "replacement": "bundle",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "to gather contributions from a pool of donors and funnel them to a candidate or committee; practiced by professional lobbyists and other individuals who aim to supply a campaign with funds above and beyond the limits on what they can donate personally; in some cases the activity must be publicly disclosed",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/bundle.yaml"
+    },
+    {
+      "trigger": "bundler",
+      "replacement": "bundler",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a person who gathers campaign contributions from a pool of donors and funnels them to a candidate or committee",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/bundler.yaml"
+    },
+    {
+      "trigger": "campaign",
+      "replacement": "campaign",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "an organized group pursuing a political goal; examples include a candidate's campaign for office or a political party's campaign to win a majority; commonly used as shorthand for the committee directly linked to funding a candidate's campaign",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/campaign.yaml"
+    },
+    {
+      "trigger": "candidate committee",
+      "replacement": "candidate committee",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a political committee directly controlled by a candidate for office",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/candidate-committee.yaml"
+    },
+    {
+      "trigger": "candidate-controlled",
+      "replacement": "candidate-controlled",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a descriptor for a political committee that is directly managed by a candidate for office; typically subject to stricter campaign-finance regulations than other types of commmittees, such as independent expenditure committees and super PACs",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/candidate-control.yaml"
+    },
+    {
+      "trigger": "cash on hand",
+      "replacement": "cash on hand",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "money in a campaign's bank account that's available to spend as of a certain date; typically reported on disclosure forms filed with campaign-finance regulators",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/cash-on-hand.yaml"
+    },
+    {
+      "trigger": "Citizens United",
+      "replacement": "Citizens United",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "shorthand for Citizens United v. FEC, a 2010 Supreme Court decision that overturned an array of campaign finance restrictions; it allowed corporations, political committees and social welfare organizations to spend unlimited amounts on independent expenditures",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/citizens-united.yaml"
+    },
+    {
+      "trigger": "committee",
+      "replacement": "committee",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "an umbrella term for any group that raises and spends money for the primary purpose of influencing elections; examples include candidate committees, party committees, corporate political action committees, super PACs, 527 organizations and other groups",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/committee.yaml"
+    },
+    {
+      "trigger": "committee ID",
+      "replacement": "committee ID",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "the unique identifier for a political committee; at the federal level it is usually a nine-character alphanumeric code that is retained across election cycles",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/committee-id.yaml"
+    },
+    {
+      "trigger": "conduit",
+      "replacement": "conduit",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a person or entity that acts as a pass-through for money or services; when not properly disclosed, it can obscure the true source of the contribution; a key part of straw donor schemes to evade campaign finance laws",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/conduit.yaml"
+    },
+    {
+      "trigger": "contribution",
+      "replacement": "contribution",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "funds, property or other resources given to a campaign",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/contribution.yaml"
+    },
+    {
+      "trigger": "coordinated party expenditure",
+      "replacement": "coordinated party expenditure",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "spending by a national, state or local party committee done with the direct cooperation of a candidate; often limited by campaign-finance regulations, including spending caps",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/coordinated-party-expenditure.yaml"
+    },
+    {
+      "trigger": "coordination",
+      "replacement": "coordination",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "political spending done in cooperation, consultation or concert with a campaign, its committees, its party or its agents; formally defined in FEC regulations by a three-prong test; coordinated spending at the federal level is capped by campaign-finance regulations; uncoordinated spending is often free of spending limits",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/coordination.yaml"
+    },
+    {
+      "trigger": "cycle",
+      "replacement": "cycle",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "the period of time that leads up to and includes an election; commonly used to summarize financial activity for election contests; House of Representatives cycles are two years; Senate cycles are six years; presidential cycles are four years",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/cycle.yaml"
+    },
+    {
+      "trigger": "dark money",
+      "replacement": "dark money",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "funds that come from a source that cannot be determined by examining public disclosure forms",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/dark-money.yaml"
+    },
+    {
+      "trigger": "DCCC",
+      "replacement": "DCCC",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "acronym for the Democratic Congressional Campaign Committee, a fundraising group that supports Democrats seeking office in the House of Representatives; defined as a national party committee under federal rules",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/dccc.yaml"
+    },
+    {
+      "trigger": "democracy voucher",
+      "replacement": "democracy voucher",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "coupon distributed by voters to their preferred candidates; redeemable for public funding to spend on campaign activity; can require that recipients accept spending limits; only available in jurisdictions where the law allows",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/democracy-voucher.yaml"
+    },
+    {
+      "trigger": "disclosure",
+      "replacement": "disclosure",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a form filed with a campaign-finance regulator that documents financial activity to influence an election or political issue",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/disclosure.yaml"
+    },
+    {
+      "trigger": "DNC",
+      "replacement": "DNC",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "acronym for the Democratic National Committee, a party committee that guides the operations of the Democratic party at the national level, leads the selection process for the party's presidential nominee and operates a fundraising account that supports candidates for office",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/dnc.yaml"
+    },
+    {
+      "trigger": "draft committee",
+      "replacement": "draft committee",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a committee created solely to encourage a candidate to run for office; typically not affiliated with the potential candidate; allowed to use the candidate's name in its title as long as its clear that it is not an official candidate committee",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/draft-committee.yaml"
+    },
+    {
+      "trigger": "DSCC",
+      "replacement": "DSCC",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "acronym for the Democratic Senatorial Campaign Committee, a fundraising group that supports Democratic candidates seeking office in the Senate; qualifies as a national party committee under federal rules; can spend money both in coordination with and independent of candidates",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/dscc.yaml"
+    },
+    {
+      "trigger": "earmarked contribution",
+      "replacement": "earmarked contribution",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a contribution that is routed to a campaign through an intermediary or conduit; the technique is commonly used by large fundraising platforms that appeal to small donors; conduit committees must report all such donations of any amount",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/earmarked-contribution.yaml"
+    },
+    {
+      "trigger": "electioneering communication",
+      "replacement": "electioneering communication",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "legal term for advertisements broadcast close to an election that refer to a candidate for office; the specifics of what ads qualify, as well as any disclosure requirements, can vary depending on whether the contest is at the federal, state or local level",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/electioneering-communication.yaml"
+    },
+    {
+      "trigger": "excessive contribution",
+      "replacement": "excessive contribution",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a donation that exceeds a legal limit, such as the caps on how much a single donor can contribute to a committee in a given election cycle; the money can be refunded, reallocated for use in another election, or, in the case of married couples spending with a joint account, reattributed to another person",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/excessive-contribution.yaml"
+    },
+    {
+      "trigger": "expenditure",
+      "replacement": "expenditure",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "something paid out or used on behalf of a campaign",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/expenditure.yaml"
+    },
+    {
+      "trigger": "exploratory committee",
+      "replacement": "exploratory committee",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a type of political committee that allows a candidate to raise money for a potential run for office; while not required under federal law, exploratory committees are often used by candidates to gauge support",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/exploratory-committee.yaml"
+    },
+    {
+      "trigger": "FEC",
+      "replacement": "FEC",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "acronym for Federal Election Commission, the government agency that enforces federal campaign-finance laws and collects disclosure statements in presidential races and congressional contests",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/fec.yaml"
+    },
+    {
+      "trigger": "filer",
+      "replacement": "filer",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a person, organization or other entity that submits a document disclosing political activity to a campaign-finance regulator",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/filer.yaml"
+    },
+    {
+      "trigger": "filing",
+      "replacement": "filing",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a form or other document disclosing financial activity to a campaign-finance regulator",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/filing.yaml"
+    },
+    {
+      "trigger": "gray money",
+      "replacement": "gray money",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "funds that come from a unknown source because the contributor disclosed to the public is an intermediary that is not required to reveal its donors",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/gray-money.yaml"
+    },
+    {
+      "trigger": "hard dollars",
+      "replacement": "hard dollars",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "funds donated directly to a campaign committee that are publicly disclosed and subject to contribution limits; used by candidates and parties to pay for operating expenses like staff salaries, travel and events",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/hard-dollars.yaml"
+    },
+    {
+      "trigger": "Hatch Act",
+      "replacement": "Hatch Act",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "shorthand reference to a federal law that prohibits some government employees from hosting fundraisers, soliciting contributions, using government resources to support a campaign and other partisan activities; officially named \"An Act to Prevent Pernicious Political Activities,\" it passed Congress in 1939; nicknamed for Senator Carl Hatch of New Mexico, the act's sponsor",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/hatch-act.yaml"
+    },
+    {
+      "trigger": "hybrid ad",
+      "replacement": "hybrid ad",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a political advertisement paid for jointly by a national party committee and a candidate's campaign committee; can benefit from the cheaper rates that candidates receive, if the ad spends equal time promoting the party and the candidate",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/hybrid-ad.yaml"
+    },
+    {
+      "trigger": "hybrid PAC",
+      "replacement": "hybrid PAC",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a political group allowed to operate both as a traditional federal political action committee, which can give money directly to candidates, and as a super PAC, which can raise and spend unlimited amounts of money to influence elections as long as it doesn't coordinate with a candidate or political party",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/hybrid-pac.yaml"
+    },
+    {
+      "trigger": "IE",
+      "replacement": "IE",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "acronym for independent expendenture, the legal term for political spending that seeks to influence voters but is not coordinated with a candidate; typically used as a shorthand reference to the committees that make such expenditures",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/ie.yaml"
+    },
+    {
+      "trigger": "in-kind",
+      "replacement": "in-kind",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "non-monetary; not related to money",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/in-kind.yaml"
+    },
+    {
+      "trigger": "in-kind contribution",
+      "replacement": "in-kind contribution",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "something of value, other than money, provided to a political committee",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/in-kind-contribution.yaml"
+    },
+    {
+      "trigger": "in-kind expenditure",
+      "replacement": "in-kind expenditure",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "something of value, other than money, given out by a political committee; examples include sharing an email list of supporters",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/in-kind-expenditure.yaml"
+    },
+    {
+      "trigger": "inaugural committee",
+      "replacement": "inaugural committee",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a committee formed to raise funds for a recently elected politician's swearing-in ceremony and related events; typically subject to similar disclosure requirements as other political committees",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/inaugeral-committee.yaml"
+    },
+    {
+      "trigger": "independent expenditure",
+      "replacement": "independent expenditure",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "political spending that seeks to influence voters but is not controlled by or coordinated with a candidate; typically made by groups incorporated separately from candidate committees, such as social welfare organizations and super PACs",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/independent-expenditure.yaml"
+    },
+    {
+      "trigger": "itemization",
+      "replacement": "itemization",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a contribution, expenditure, loan or other transaction listed out in detail on a campaign filing, typically with the name, date and amount and other metadata linked to the event",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/itemization.yaml"
+    },
+    {
+      "trigger": "itemize",
+      "replacement": "itemize",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "to list out a contribution, expenditure, loan or other transaction in detail on a campaign filing, typically with the name, date and amount and other metadata linked to the event",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/itemize.yaml"
+    },
+    {
+      "trigger": "Johnson Amendment",
+      "replacement": "Johnson Amendment",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "shorthand reference to a 1954 legal change that prohibited political activity by tax-exempt organizations governed under Section 501(c)(3) of the Internal Revenue Code, including churches and charities; named after Lyndon Johnson, then a senator from Texas, who championed the tax bill",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/johnson-amendment.yaml"
+    },
+    {
+      "trigger": "joint fundraising committee",
+      "replacement": "joint fundraising committee",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a form of political committee that allows multiple recipients, both candidates and political party committees, to raise money together; typically used to make fundraising more efficient by having donors give a single contribution that is distributed among the recipients",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/joint-fundraising-committee.yaml"
+    },
+    {
+      "trigger": "legal defense fund",
+      "replacement": "legal defense fund",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a committee that raises funds to pay for a political figure's defense in legal investigations and court proceedings; contribution limits and disclosure requirements vary by jurisidiction",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/legal-defense-fund.yaml"
+    },
+    {
+      "trigger": "Levine Act",
+      "replacement": "Levine Act",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "shorthand reference to a California law that prohibits public officials from soliciting contributions from people with business pending before the government; covers elected and appointed officials who oversee prescribed set of licensing, permitting and contracting matters; rules have been periodically amended since the regulations were enacted in 1982; named for Assemblyman Mel Levine, who sponsored the original bill, an amendment to the Political Reform Act of 1974",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/levine-act.yaml"
+    },
+    {
+      "trigger": "LLC",
+      "replacement": "LLC",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "acronym for limited liability company, a formal structure for incorporating a business; they can sometimes act as campaign subcontractors, shielding the ultimate recipient of spending from public disclosure",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/llc.yaml"
+    },
+    {
+      "trigger": "loan",
+      "replacement": "loan",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a sum of money borrowed from another entity for use in a campaign; typically loans must be disclosed in campaign-finance disclosures as another type of contribution; in many cases, politicians will loan personal funds to their candidate committees",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/loan.yaml"
+    },
+    {
+      "trigger": "look-back period",
+      "replacement": "look-back period",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "The past time frame covered by a campaign finance regulation or report; varies by rule and jurisdiction",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/look-back-period.yaml"
+    },
+    {
+      "trigger": "matching funds",
+      "replacement": "matching funds",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "public funding from the government that provides campaigns with the same amount of money they are able to raise from private sources, effectively doubling donations; often requires accepting spending limits; typically limited to candidates that meet certain criteria, such as raising a minimum amount of money from a minimum number of donors; only available in jurisdictions where the law allows",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/matching-funds.yaml"
+    },
+    {
+      "trigger": "McCain-Feingold",
+      "replacement": "McCain-Feingold",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "shorthand reference to the Bipartisan Campaign Reform Act, a 2002 federal law that placed limits on certain kinds of fundraising and spending, which was championed by Republican Senator John McCain of Arizona and Democratic Senator Russ Feingold of Wisconsin; much of the act's restrictions were invalidated by subsequent Supreme Court decisions, including Citizens United v. FEC; sometimes referred to using the acronym BCRA",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/mccain-feingold.yaml"
+    },
+    {
+      "trigger": "megadonor",
+      "replacement": "megadonor",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "informal term for a wealthy individual who makes six or seven-figure contributions to super PACs that can raise unlimited money to spend on influencing elections",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/megadonor.yaml"
+    },
+    {
+      "trigger": "memo",
+      "replacement": "memo",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "supplementary information included with an itemized transaction; used to explain reimbursements and other complex or unusual occurrences; Federal Election Commission forms typically include a coded value and a text description; in some cases, as when the FEC's coded entry is 'X', the itemized records should not be included in aggregated totals",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/memo.yaml"
+    },
+    {
+      "trigger": "multicandidate committee",
+      "replacement": "multicandidate committee",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "an umbrella term for a variety of fundraising committees that send money to more than candidate; under federal law, they have different contribution limits than single-candidate committees",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/multicandidate-committee.yaml"
+    },
+    {
+      "trigger": "MUR",
+      "replacement": "MUR",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "acronym for Matter Under Review, the term used by the Federal Election Commission to describe enforcement cases that investigate possible violations of federal election law",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/mur.yaml"
+    },
+    {
+      "trigger": "non-monetary",
+      "replacement": "non-monetary",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "not related to money",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/non-monetary.yaml"
+    },
+    {
+      "trigger": "NRCC",
+      "replacement": "NRCC",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "acronym for the National Republican Congressional Committee, a fundraising group that supports Republican candidates seeking office in the House of Representatives; a national party committee under federal rules",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/nrcc.yaml"
+    },
+    {
+      "trigger": "NRSC",
+      "replacement": "NRSC",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "acronym for the National Republican Senatorial Committee, a fundraising group that supports Republican candidates seeking office in the Senate; operates as a national party committee under federal rules",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/nrsc.yaml"
+    },
+    {
+      "trigger": "outside group",
+      "replacement": "outside group",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a political group that lacks a formal affiliation with a political party or campaign committee; typically used as an umbrella term that covers super PACs and other independent expenditure committees",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/outside-group.yaml"
+    },
+    {
+      "trigger": "PAC",
+      "replacement": "PAC",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "acronym for Political Action Committee; commonly used to refer to groups that operate separately from candidate campaigns",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/pac.yaml"
+    },
+    {
+      "trigger": "party committee",
+      "replacement": "party committee",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a form of committee that raises and spends money on behalf of a political party; found at the national, state and local levels; includes congressional campaign committees, such as the DCCC and NRCC, and Senate campaign committees, such as the DSCC and NRSC; often subject to different regulations than other types of political committees",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/party-committee.yaml"
+    },
+    {
+      "trigger": "political advocacy organization",
+      "replacement": "political advocacy organization",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a nonprofit group that claims freedom from U.S. taxes under Section 501(c)(4) of the Internal Revenue Code; political activity cannot be the primary purpose the group, but some participation is allowed; sometimes used to shield the identity of donors from public scrutiny",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/political-advocacy-organization.yaml"
+    },
+    {
+      "trigger": "Presidential Transition Act",
+      "replacement": "Presidential Transition Act",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a federal law that governs the hand off of power from one presidential administration to the next, including how the logistics are funded; in exchange for federal funds to assist in the operation, the incoming president must agree to fundraising limits and disclosure requirements on any private money they raise; fundraising regulations are administered by the General Services Administration, rather than the Federal Election Commission; the act was passed in 1963 and has been amended several times",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/presidential-transition-act.yaml"
+    },
+    {
+      "trigger": "public communications",
+      "replacement": "public communications",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "legal term used for political messages distributed via television, newspapers, mailings, outdoor advertisements and other mass media; subject to stricter limits than other forms of political speech under the federal regulations enforced by the Federal Election Commission",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/public-communications.yaml"
+    },
+    {
+      "trigger": "public funding",
+      "replacement": "public funding",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "taxpayer dollars provided directly to a campaign by the government; only provided in limited circumstances and in jurisdictions where the law allows; sometimes the money is provided as matching funds; oftentimes the receipt of public funds requires the candidate to agree to spending limits; participation in is typically optional, and often waived by candidates able to raise more money from private sources",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/public-funding.yaml"
+    },
+    {
+      "trigger": "quid pro quo",
+      "replacement": "quid pro quo",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "Latin phrase that translates to \"something for something\"; used to describe corruption cases where a candidate performs an official act in direct exchange for a donation",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/quid-pro-quo.yaml"
+    },
+    {
+      "trigger": "red-boxing",
+      "replacement": "red-boxing",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "an umbrella term for any web design technique used by a candidate committee to highlight text, images and video they prefer voters to see; often, but not always, the materials are surrounded by a red box; accused of being used to direct the activity of super PACs and independent expenditure committees that are legally prohibited from coordinating with campaigns; the practice is not illegal, but it can be controversial",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/red-boxing.yaml"
+    },
+    {
+      "trigger": "reporting threshold",
+      "replacement": "reporting threshold",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a dollar value that, when surpassed, triggers the legal requirement that a committee disclose or itemize a contribution or expenditure; cutoffs can vary by jurisdiction, type of committee and type of activity",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/reporting-threshold.yaml"
+    },
+    {
+      "trigger": "RNC",
+      "replacement": "RNC",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "acronym for the Republican National Committee, a party committee that guides the operations of the Republican party at the national level, leads the selection process for the party's presidential nominee and operates a fundraising account that supports candidates for office",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/rnc.yaml"
+    },
+    {
+      "trigger": "shill candidate",
+      "replacement": "shill candidate",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a person who is paid to run a losing election campaign; typically part of a scheme to siphon off votes from a political opponent",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/shill-candidate.yaml"
+    },
+    {
+      "trigger": "slate card",
+      "replacement": "slate card",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a flat or folded piece of paper that promotes a group of allied candidates; often delivered to voters by mail or by door-knocking advocates",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/slate-card.yaml"
+    },
+    {
+      "trigger": "small donor committee",
+      "replacement": "small donor committee",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "type of political committee that caps contributions at a lower level than candidates committees and other types of fundraising vehicles; often limited to $50 or $100 dollars per contributor; allowed in some state and local jurisdictions but not at the federal level; popular with labor groups that can route small donations from a large number of members",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/small-donor-committee.yaml"
+    },
+    {
+      "trigger": "small donors",
+      "replacement": "small donors",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "informal term for campaign contributors who give a relatively small amount of money; while there is no official numerical definition, the term is often used to describe people who give too little to require that their identity be revealed on disclosure forms; at the federal level, the reporting threshold is $200 in aggregate to a single committee",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/small-donors.yaml"
+    },
+    {
+      "trigger": "smurfing",
+      "replacement": "smurfing",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "routing small campaign contributions through a large number of straw donors to circumvent legal limits and disguise the true source of the money; donors may be unaware that contributions are being made in their name",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/smurfing.yaml"
+    },
+    {
+      "trigger": "social welfare organization",
+      "replacement": "social welfare organization",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a nonprofit group that claims freedom from U.S. taxes under Section 501(c)(4) of the Internal Revenue Code; political activity cannot be the primary purpose the group, but some participation is allowed; sometimes used to shield the identity of donors from public scrutiny",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/social-welfare-organization.yaml"
+    },
+    {
+      "trigger": "soft money",
+      "replacement": "soft money",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "funds indirectly routed to campaigns in a manner that evades contribution limits; used to refer to the past practice of passing unlimited donations through political parties, which was outlawed by the Bipartisan Campaign Reform Act of 2002",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/soft-money.yaml"
+    },
+    {
+      "trigger": "statement of organization",
+      "replacement": "statement of organization",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a disclosure form filed with a campaign-finance regulator that registers a new political committee or updates information for an existing one; typically includes the name of the committee as well as the name and address of its treasurer, among other things",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/statement-of-organization.yaml"
+    },
+    {
+      "trigger": "straw donor",
+      "replacement": "straw donor",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a person who breaks the law by donating someone else's money to a political committee or candidate",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/straw-donor.yaml"
+    },
+    {
+      "trigger": "super PAC",
+      "replacement": "super PAC",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a political committee that can raise and spend unlimited amounts of money to influence elections as long as it doesn't coordinate with a candidate or political party; made possible after a series of court rulings removed limits on how much corporations and individuals could give to independent political committees",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/super-pac.yaml"
+    },
+    {
+      "trigger": "transfer",
+      "replacement": "transfer",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "to move money from one committee to another, typically related, committee",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/transfer.yaml"
+    },
+    {
+      "trigger": "treasurer",
+      "replacement": "treasurer",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "the person responsible for filing a committee's disclosure documents; reponsible for ensuring that the committee complies with campaign finance regulations; most political committees are required to name a treasurer, typically in a statement of organization filing",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/treasurer.yaml"
+    },
+    {
+      "trigger": "true source",
+      "replacement": "true source",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "the origin of funds used to make a contribution, which can sometimes be obscured by routing money through straw donors or conduits",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/true-source.yaml"
+    },
+    {
+      "trigger": "ultimate payee",
+      "replacement": "ultimate payee",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "the final recipient of an expenditure after it has passed through one or more intermediaries; can be concealed by routing money to subcontrators through limited liability companies and other conduits that are not required to itemize their spending",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/ultimate-payee.yaml"
+    },
+    {
+      "trigger": "unitemized",
+      "replacement": "unitemized",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "a type of transaction, such as a campaign donation, that is not detailed on a campaign filing, meaning that the identity of the party is withheld; typically occurs when the amount of money linked to the transaction falls below disclosure limits",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/unitemized.yaml"
+    },
+    {
+      "trigger": "victory fund",
+      "replacement": "victory fund",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "commonly used to refer to a joint fundraising committee; often included in the organization's name",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/victory-fund.yaml"
+    },
+    {
+      "trigger": "vote buying",
+      "replacement": "vote buying",
+      "matchType": "fuzzy",
+      "category": "Finance",
+      "definition": "offering money or other gifts to a person in exchange for their vote; illegal under federal law, which prohibits any expenditure made to induce someone to either vote or to withhold a vote",
+      "source": "moneyinpolitics.wtf",
+      "sourceUrl": "https://github.com/palewire/moneyinpolitics.wtf/blob/main/_data/dictionary/vote-buying.yaml"
+    }
+  ]
+}

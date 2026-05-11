@@ -1,0 +1,1038 @@
+//
+//  DebugToolbar.swift
+//  Talkie iOS
+//
+//  Debug toolbar overlay - available on all screens in DEBUG builds
+//  Uses Option 4: shared chrome with pluggable context-specific content
+//
+
+import SwiftUI
+import CoreData
+
+#if DEBUG
+
+/// Debug button for use in navigation toolbar - shows sheet with debug panel
+/// Usage: ToolbarItem(placement: .topBarTrailing) { DebugToolbarButton { YourContent() } }
+struct DebugToolbarButton<Content: View>: View {
+    @State private var showSheet = false
+    @State private var showingLogs = false
+    @State private var showCopiedFeedback = false
+    let contextContent: () -> Content
+    let debugInfo: () -> [String: String]
+
+    init(
+        @ViewBuilder content: @escaping () -> Content,
+        debugInfo: @escaping () -> [String: String] = { [:] }
+    ) {
+        self.contextContent = content
+        self.debugInfo = debugInfo
+    }
+
+    var body: some View {
+        Button(action: { showSheet = true }) {
+            Image(systemName: "ant.fill")
+                .font(.system(size: 14))
+                .foregroundColor(.textTertiary)
+                .frame(width: 32, height: 32)
+        }
+        .sheet(isPresented: $showSheet) {
+            NavigationView {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        contextContent()
+
+                        let info = debugInfo()
+                        if !info.isEmpty {
+                            DebugSection(title: "STATE") {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    ForEach(Array(info.keys.sorted()), id: \.self) { key in
+                                        DebugInfoRow(label: key, value: info[key] ?? "-")
+                                    }
+                                }
+                            }
+                        }
+
+                        DebugSection(title: "BUILD") {
+                            VStack(alignment: .leading, spacing: 2) {
+                                DebugInfoRow(label: "Branch", value: BuildInfo.gitBranch)
+                                DebugInfoRow(label: "Commit", value: BuildInfo.gitCommit)
+                                DebugInfoRow(label: "Built", value: BuildInfo.buildDate)
+                            }
+                        }
+
+                        DebugSection(title: "SYSTEM") {
+                            VStack(spacing: 4) {
+                                DebugActionButton(icon: "doc.text.magnifyingglass", label: "View Logs") {
+                                    showingLogs = true
+                                }
+                                DebugActionButton(
+                                    icon: showCopiedFeedback ? "checkmark" : "doc.on.clipboard",
+                                    label: showCopiedFeedback ? "Copied!" : "Copy Debug Info"
+                                ) {
+                                    copyDebugInfo()
+                                }
+                            }
+                        }
+                    }
+                    .padding()
+                }
+                .background(Color.surfacePrimary)
+                .navigationTitle("Debug")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("Done") { showSheet = false }
+                    }
+                }
+            }
+            .sheet(isPresented: $showingLogs) {
+                DebugLogsView()
+            }
+        }
+    }
+
+    private func copyDebugInfo() {
+        let info = debugInfo()
+        var lines: [String] = []
+
+        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+        lines.append("Talkie iOS \(appVersion) (\(buildNumber))")
+        lines.append("iOS \(UIDevice.current.systemVersion)")
+        lines.append("Branch: \(BuildInfo.gitBranch) (\(BuildInfo.gitCommit))")
+        lines.append("")
+
+        if !info.isEmpty {
+            lines.append("State:")
+            for key in info.keys.sorted() {
+                lines.append("  \(key): \(info[key] ?? "-")")
+            }
+        }
+
+        UIPasteboard.general.string = lines.joined(separator: "\n")
+
+        withAnimation {
+            showCopiedFeedback = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation {
+                showCopiedFeedback = false
+            }
+        }
+    }
+}
+
+/// Reusable debug toolbar with shared chrome and context-specific content
+/// Usage: DebugToolbarOverlay { YourContextActions() }
+struct DebugToolbarOverlay<Content: View>: View {
+    @State private var showToolbar = false
+    @State private var showingLogs = false
+    @State private var showCopiedFeedback = false
+    let contextContent: () -> Content
+    let debugInfo: () -> [String: String]
+
+    init(
+        @ViewBuilder content: @escaping () -> Content,
+        debugInfo: @escaping () -> [String: String] = { [:] }
+    ) {
+        self.contextContent = content
+        self.debugInfo = debugInfo
+    }
+
+    /// Convenience init with no context content (system-only)
+    init() where Content == EmptyView {
+        self.contextContent = { EmptyView() }
+        self.debugInfo = { [:] }
+    }
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            // Expanded panel
+            if showToolbar {
+                VStack(alignment: .leading, spacing: 0) {
+                    // Header (shared chrome)
+                    HStack {
+                        Text("DEV")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .tracking(2)
+                            .foregroundColor(.textPrimary)
+
+                        Spacer()
+
+                        Button(action: {
+                            withAnimation(.easeOut(duration: 0.12)) {
+                                showToolbar = false
+                            }
+                        }) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.textTertiary)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.surfaceSecondary.opacity(0.5))
+
+                    Divider()
+                        .background(Color.borderPrimary)
+
+                    // Content area
+                    VStack(alignment: .leading, spacing: 10) {
+                        // Context-specific content (passed in by each view)
+                        contextContent()
+
+                        // Context state (if any)
+                        let info = debugInfo()
+                        if !info.isEmpty {
+                            DebugSection(title: "STATE") {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    ForEach(Array(info.keys.sorted()), id: \.self) { key in
+                                        DebugInfoRow(label: key, value: info[key] ?? "-")
+                                    }
+                                }
+                            }
+                        }
+
+                        // System-level actions (always shown)
+                        DebugSection(title: "SYSTEM") {
+                            VStack(spacing: 4) {
+                                DebugActionButton(icon: "doc.text.magnifyingglass", label: "View Logs") {
+                                    showingLogs = true
+                                }
+                                DebugActionButton(
+                                    icon: showCopiedFeedback ? "checkmark" : "doc.on.clipboard",
+                                    label: showCopiedFeedback ? "Copied!" : "Copy Debug Info"
+                                ) {
+                                    copyDebugInfo()
+                                }
+                            }
+                        }
+                    }
+                    .padding(10)
+                    .padding(.bottom, 6)
+                }
+                .frame(width: 180)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.surfacePrimary.opacity(0.98))
+                        .shadow(color: .black.opacity(0.25), radius: 12, x: 0, y: 4)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(Color.borderPrimary.opacity(0.5), lineWidth: 0.5)
+                )
+                .transition(.scale(scale: 0.9, anchor: .topTrailing).combined(with: .opacity))
+            }
+
+            // Toggle button (always visible - shared chrome)
+            Button(action: {
+                withAnimation(.spring(response: 0.18, dampingFraction: 0.75)) {
+                    showToolbar.toggle()
+                }
+            }) {
+                Image(systemName: "ant.fill")
+                    .font(.system(size: 14, weight: showToolbar ? .semibold : .regular))
+                    .foregroundColor(showToolbar ? .white : .textTertiary)
+                    .rotationEffect(.degrees(showToolbar ? 180 : 0))
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Circle()
+                            .fill(showToolbar ? Color.textPrimary : Color.surfaceSecondary)
+                    )
+                    .overlay(
+                        Circle()
+                            .strokeBorder(showToolbar ? Color.clear : Color.textTertiary.opacity(0.2), lineWidth: 1)
+                    )
+                    .scaleEffect(showToolbar ? 1.05 : 1.0)
+                    .animation(.spring(response: 0.18, dampingFraction: 0.75), value: showToolbar)
+            }
+        }
+        .padding(.trailing, 16)
+        .padding(.top, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        .sheet(isPresented: $showingLogs) {
+            DebugLogsView()
+        }
+    }
+
+    private func copyDebugInfo() {
+        let info = debugInfo()
+        var lines: [String] = []
+
+        // App info
+        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+        lines.append("Talkie iOS \(appVersion) (\(buildNumber))")
+        lines.append("iOS \(UIDevice.current.systemVersion)")
+        lines.append("Device: \(UIDevice.current.model)")
+        lines.append("")
+
+        // Context state
+        if !info.isEmpty {
+            lines.append("State:")
+            for key in info.keys.sorted() {
+                lines.append("  \(key): \(info[key] ?? "-")")
+            }
+            lines.append("")
+        }
+
+        // Recent logs (last 5)
+        let recentLogs = Array(LogStore.shared.entries.prefix(5))
+        if !recentLogs.isEmpty {
+            lines.append("Recent Logs:")
+            for log in recentLogs {
+                lines.append("  [\(log.formattedTime)] \(log.level.rawValue) \(log.category): \(log.message)")
+            }
+        }
+
+        UIPasteboard.general.string = lines.joined(separator: "\n")
+
+        // Show feedback
+        withAnimation {
+            showCopiedFeedback = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation {
+                showCopiedFeedback = false
+            }
+        }
+    }
+}
+
+// MARK: - Debug Logs View
+
+/// Full-screen logs viewer
+struct DebugLogsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var logStore = LogStore.shared
+    @State private var filterLevel: LogEntry.LogLevel? = nil
+
+    var filteredEntries: [LogEntry] {
+        if let level = filterLevel {
+            return logStore.entries.filter { $0.level == level }
+        }
+        return logStore.entries
+    }
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                // Filter bar
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        FilterChip(label: "ALL", isSelected: filterLevel == nil) {
+                            filterLevel = nil
+                        }
+                        FilterChip(label: "DEBUG", isSelected: filterLevel == .debug) {
+                            filterLevel = .debug
+                        }
+                        FilterChip(label: "INFO", isSelected: filterLevel == .info) {
+                            filterLevel = .info
+                        }
+                        FilterChip(label: "WARN", isSelected: filterLevel == .warning) {
+                            filterLevel = .warning
+                        }
+                        FilterChip(label: "ERROR", isSelected: filterLevel == .error) {
+                            filterLevel = .error
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.surfaceSecondary)
+
+                // Log entries
+                if filteredEntries.isEmpty {
+                    VStack(spacing: 8) {
+                        Spacer()
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 32, weight: .light))
+                            .foregroundColor(.textTertiary)
+                        Text("No logs")
+                            .font(.bodySmall)
+                            .foregroundColor(.textTertiary)
+                        Spacer()
+                    }
+                } else {
+                    List(filteredEntries) { entry in
+                        LogEntryRow(entry: entry)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
+                            .listRowBackground(Color.surfacePrimary)
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .background(Color.surfacePrimary)
+            .navigationTitle("Logs")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Close") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        logStore.clear()
+                    }) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 14))
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct FilterChip: View {
+    let label: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .tracking(1)
+                .foregroundColor(isSelected ? .white : .textSecondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(isSelected ? Color.active : Color.surfacePrimary)
+                .cornerRadius(4)
+        }
+    }
+}
+
+struct LogEntryRow: View {
+    let entry: LogEntry
+    @State private var isExpanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            // Header with metadata
+            HStack(spacing: 6) {
+                Text(entry.formattedTime)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(.textTertiary)
+
+                Text(entry.level.rawValue)
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundColor(entry.level.color)
+
+                Text(entry.category)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(.textSecondary)
+
+                Spacer()
+
+                // Expand button if detail exists
+                if entry.detail != nil {
+                    Button(action: { isExpanded.toggle() }) {
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(.textTertiary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            // Message
+            Text(entry.message)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.textPrimary)
+                .lineLimit(isExpanded ? nil : 3)
+
+            // Expanded detail (JSON response, etc.)
+            if isExpanded, let detail = entry.detail {
+                ScrollView {
+                    Text(detail)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.textSecondary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 200)
+                .padding(8)
+                .background(Color.black.opacity(0.2))
+                .cornerRadius(6)
+            }
+        }
+    }
+}
+
+// MARK: - Reusable Debug Components
+
+/// Section header for debug toolbar content
+struct DebugSection<Content: View>: View {
+    let title: String
+    let content: () -> Content
+
+    init(title: String, @ViewBuilder content: @escaping () -> Content) {
+        self.title = title
+        self.content = content
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .tracking(1)
+                .foregroundColor(.textTertiary)
+
+            content()
+        }
+    }
+}
+
+/// Tappable debug action button
+struct DebugActionButton: View {
+    let icon: String
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.active)
+                    .frame(width: 14)
+
+                Text(label)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(.textPrimary)
+
+                Spacer()
+            }
+            .padding(.vertical, 4)
+            .padding(.horizontal, 6)
+            .background(Color.surfaceSecondary.opacity(0.5))
+            .cornerRadius(4)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Context-Specific Content
+
+/// Debug content for the main memo list view
+struct ListViewDebugContent: View {
+    @ObservedObject var iCloudStatus = iCloudStatusManager.shared
+    @State private var showingStatusPicker = false
+
+    var body: some View {
+        DebugSection(title: "iCLOUD") {
+            VStack(spacing: 4) {
+                // Current status indicator
+                HStack(spacing: 6) {
+                    Image(systemName: iCloudStatus.status.icon)
+                        .font(.system(size: 10))
+                        .foregroundColor(iCloudStatus.status.isAvailable ? .green : .orange)
+
+                    Text(statusLabel)
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(.textSecondary)
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    if iCloudStatus.isSimulating {
+                        Text("SIM")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .foregroundColor(.orange)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 2)
+                            .background(Color.orange.opacity(0.2))
+                            .cornerRadius(3)
+                    }
+                }
+
+                // Simulate button
+                DebugActionButton(
+                    icon: "icloud.slash",
+                    label: iCloudStatus.isSimulating ? "Stop Simulation" : "Simulate Status"
+                ) {
+                    if iCloudStatus.isSimulating {
+                        iCloudStatus.simulate(nil)
+                    } else {
+                        showingStatusPicker = true
+                    }
+                }
+
+                // Reset dismissal if banner was dismissed
+                if iCloudStatus.isDismissed {
+                    DebugActionButton(icon: "arrow.counterclockwise", label: "Reset Banner") {
+                        iCloudStatus.resetDismissal()
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showingStatusPicker) {
+            iCloudStatusPickerSheet()
+        }
+    }
+
+    private var statusLabel: String {
+        switch iCloudStatus.status {
+        case .available: return "Available"
+        case .noAccount: return "No Account"
+        case .restricted: return "Restricted"
+        case .temporarilyUnavailable: return "Temp Unavail"
+        case .couldNotDetermine: return "Unknown"
+        case .checking: return "Checking..."
+        case .error: return "Error"
+        }
+    }
+}
+
+/// Sheet for picking iCloud status to simulate
+struct iCloudStatusPickerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var iCloudStatus = iCloudStatusManager.shared
+
+    var body: some View {
+        NavigationView {
+            List {
+                Section {
+                    ForEach(iCloudStatusManager.allStatuses, id: \.title) { status in
+                        Button(action: {
+                            iCloudStatus.simulate(status)
+                            dismiss()
+                        }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: status.icon)
+                                    .font(.system(size: 16))
+                                    .foregroundColor(status.isAvailable ? .green : .orange)
+                                    .frame(width: 24)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(status.title)
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(.textPrimary)
+
+                                    Text(status.message)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.textTertiary)
+                                        .lineLimit(2)
+                                }
+
+                                Spacer()
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                } header: {
+                    Text("SELECT STATUS TO SIMULATE")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .tracking(1)
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle("Simulate iCloud")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Debug content for the memo detail view
+struct DetailViewDebugContent: View {
+    let memo: VoiceMemo
+    let onTriggerToast: () -> Void
+    let onTriggerReminderToast: () -> Void
+    @State private var showingDataInspector = false
+
+    var body: some View {
+        VStack(spacing: 10) {
+            DebugSection(title: "INSPECT") {
+                DebugActionButton(icon: "tablecells", label: "VoiceMemo") {
+                    showingDataInspector = true
+                }
+            }
+
+            DebugSection(title: "TOASTS") {
+                VStack(spacing: 4) {
+                    DebugActionButton(icon: "desktopcomputer", label: "Mac Workflow") {
+                        onTriggerToast()
+                    }
+                    DebugActionButton(icon: "bell.fill", label: "Reminder") {
+                        onTriggerReminderToast()
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showingDataInspector) {
+            ManagedObjectInspector(object: memo)
+        }
+    }
+}
+
+// MARK: - Data Inspector
+
+/// Generic data inspector for any NSManagedObject
+struct ManagedObjectInspector: View {
+    @ObservedObject var object: NSManagedObject
+    @Environment(\.dismiss) private var dismiss
+    @State private var showCopied = false
+    @State private var expandedRelationship: String? = nil
+
+    private var entityName: String {
+        object.entity.name ?? "Unknown"
+    }
+
+    private var attributes: [(name: String, value: String, type: String)] {
+        let entity = object.entity
+        return entity.attributesByName
+            .sorted { $0.key < $1.key }
+            .map { (name, attr) in
+                let value = formatValue(object.value(forKey: name), type: attr.attributeType)
+                return (name: name, value: value, type: attr.attributeTypeName)
+            }
+    }
+
+    private var relationships: [(name: String, count: Int, objects: [NSManagedObject])] {
+        let entity = object.entity
+        return entity.relationshipsByName
+            .sorted { $0.key < $1.key }
+            .compactMap { (name, rel) in
+                if rel.isToMany {
+                    if let set = object.value(forKey: name) as? NSSet {
+                        let objects = set.allObjects as? [NSManagedObject] ?? []
+                        return (name: name, count: objects.count, objects: objects)
+                    }
+                    return (name: name, count: 0, objects: [])
+                } else {
+                    if let related = object.value(forKey: name) as? NSManagedObject {
+                        return (name: name, count: 1, objects: [related])
+                    }
+                    return (name: name, count: 0, objects: [])
+                }
+            }
+    }
+
+    var body: some View {
+        NavigationView {
+            List {
+                // Entity info
+                Section {
+                    InspectorRow(label: "Entity", value: entityName)
+                    InspectorRow(label: "Object ID", value: object.objectID.uriRepresentation().lastPathComponent)
+                } header: {
+                    sectionHeader("OBJECT")
+                }
+
+                // Attributes
+                Section {
+                    ForEach(attributes, id: \.name) { attr in
+                        InspectorRow(
+                            label: attr.name,
+                            value: attr.value,
+                            typeHint: attr.type
+                        )
+                    }
+                } header: {
+                    sectionHeader("ATTRIBUTES (\(attributes.count))")
+                }
+
+                // Relationships
+                if !relationships.isEmpty {
+                    Section {
+                        ForEach(relationships, id: \.name) { rel in
+                            RelationshipRow(
+                                name: rel.name,
+                                count: rel.count,
+                                objects: rel.objects,
+                                isExpanded: expandedRelationship == rel.name,
+                                onToggle: {
+                                    withAnimation {
+                                        if expandedRelationship == rel.name {
+                                            expandedRelationship = nil
+                                        } else {
+                                            expandedRelationship = rel.name
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    } header: {
+                        sectionHeader("RELATIONSHIPS (\(relationships.count))")
+                    }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .background(Color.surfacePrimary)
+            .navigationTitle(entityName)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Close") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: copyAllData) {
+                        HStack(spacing: 4) {
+                            Image(systemName: showCopied ? "checkmark" : "doc.on.clipboard")
+                            if showCopied {
+                                Text("Copied")
+                                    .font(.system(size: 12))
+                            }
+                        }
+                        .font(.system(size: 14))
+                    }
+                }
+            }
+        }
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            .tracking(1)
+    }
+
+    private func formatValue(_ value: Any?, type: NSAttributeType) -> String {
+        guard let value = value else { return "nil" }
+
+        switch type {
+        case .dateAttributeType:
+            if let date = value as? Date {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+                return formatter.string(from: date)
+            }
+        case .binaryDataAttributeType:
+            if let data = value as? Data {
+                return "\(data.count) bytes"
+            }
+        case .UUIDAttributeType:
+            if let uuid = value as? UUID {
+                return uuid.uuidString
+            }
+        case .booleanAttributeType:
+            if let bool = value as? Bool {
+                return bool ? "true" : "false"
+            }
+        case .doubleAttributeType, .floatAttributeType:
+            if let num = value as? Double {
+                return String(format: "%.2f", num)
+            }
+        default:
+            break
+        }
+
+        return String(describing: value)
+    }
+
+    private func copyAllData() {
+        var lines: [String] = []
+        lines.append("=== \(entityName.uppercased()) ===")
+        lines.append("Object ID: \(object.objectID.uriRepresentation().lastPathComponent)")
+        lines.append("")
+        lines.append("ATTRIBUTES")
+        for attr in attributes {
+            lines.append("  \(attr.name): \(attr.value)")
+        }
+        lines.append("")
+        lines.append("RELATIONSHIPS")
+        for rel in relationships {
+            lines.append("  \(rel.name): \(rel.count) object(s)")
+        }
+
+        UIPasteboard.general.string = lines.joined(separator: "\n")
+
+        withAnimation {
+            showCopied = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation {
+                showCopied = false
+            }
+        }
+    }
+}
+
+extension NSAttributeDescription {
+    var attributeTypeName: String {
+        switch attributeType {
+        case .undefinedAttributeType: return "undefined"
+        case .integer16AttributeType: return "Int16"
+        case .integer32AttributeType: return "Int32"
+        case .integer64AttributeType: return "Int64"
+        case .decimalAttributeType: return "Decimal"
+        case .doubleAttributeType: return "Double"
+        case .floatAttributeType: return "Float"
+        case .stringAttributeType: return "String"
+        case .booleanAttributeType: return "Bool"
+        case .dateAttributeType: return "Date"
+        case .binaryDataAttributeType: return "Data"
+        case .UUIDAttributeType: return "UUID"
+        case .URIAttributeType: return "URI"
+        case .transformableAttributeType: return "Transformable"
+        case .objectIDAttributeType: return "ObjectID"
+        case .compositeAttributeType: return "Composite"
+        @unknown default: return "unknown"
+        }
+    }
+}
+
+struct InspectorRow: View {
+    let label: String
+    let value: String
+    var typeHint: String? = nil
+
+    private var isLongValue: Bool {
+        value != "nil" && value.count > 60
+    }
+
+    var body: some View {
+        if isLongValue {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(label)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundColor(.textSecondary)
+                    if let type = typeHint {
+                        Text(type)
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(.textTertiary)
+                    }
+                }
+
+                Text(value)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.textPrimary)
+                    .textSelection(.enabled)
+            }
+            .padding(.vertical, 2)
+        } else {
+            HStack(alignment: .top) {
+                HStack(spacing: 4) {
+                    Text(label)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundColor(.textSecondary)
+                    if let type = typeHint {
+                        Text(type)
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(.textTertiary)
+                    }
+                }
+
+                Spacer()
+
+                Text(value)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(value == "nil" ? .textTertiary : .textPrimary)
+                    .multilineTextAlignment(.trailing)
+                    .textSelection(.enabled)
+            }
+            .padding(.vertical, 2)
+        }
+    }
+}
+
+struct RelationshipRow: View {
+    let name: String
+    let count: Int
+    let objects: [NSManagedObject]
+    let isExpanded: Bool
+    let onToggle: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: onToggle) {
+                HStack {
+                    Text(name)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundColor(.textSecondary)
+
+                    Spacer()
+
+                    Text("\(count)")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(count == 0 ? .textTertiary : .textPrimary)
+
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 10))
+                        .foregroundColor(.textTertiary)
+                }
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded && !objects.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(objects, id: \.objectID) { obj in
+                        RelatedObjectRow(object: obj)
+                    }
+                }
+                .padding(.top, 8)
+                .padding(.leading, 12)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+struct RelatedObjectRow: View {
+    let object: NSManagedObject
+    @State private var showingInspector = false
+
+    private var displayName: String {
+        let entity = object.entity
+        let attributeNames = Set(entity.attributesByName.keys)
+
+        // Try common name attributes (only if they exist on this entity)
+        if attributeNames.contains("title"),
+           let title = object.value(forKey: "title") as? String,
+           !title.isEmpty {
+            return title
+        }
+        if attributeNames.contains("name"),
+           let name = object.value(forKey: "name") as? String,
+           !name.isEmpty {
+            return name
+        }
+        if attributeNames.contains("id"),
+           let id = object.value(forKey: "id") as? UUID {
+            return id.uuidString.prefix(8).description
+        }
+        // Fallback to object ID
+        return object.objectID.uriRepresentation().lastPathComponent
+    }
+
+    var body: some View {
+        Button(action: { showingInspector = true }) {
+            HStack {
+                Text(object.entity.name ?? "?")
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(.active)
+
+                Text(displayName)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.textPrimary)
+                    .lineLimit(1)
+
+                Spacer()
+
+                Image(systemName: "arrow.right.circle")
+                    .font(.system(size: 10))
+                    .foregroundColor(.textTertiary)
+            }
+            .padding(.vertical, 4)
+            .padding(.horizontal, 8)
+            .background(Color.surfaceSecondary.opacity(0.5))
+            .cornerRadius(4)
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showingInspector) {
+            ManagedObjectInspector(object: object)
+        }
+    }
+}
+#endif

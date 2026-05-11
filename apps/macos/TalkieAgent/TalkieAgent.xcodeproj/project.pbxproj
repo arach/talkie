@@ -1,0 +1,798 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		53GRDB0012EE70000004EEAF4 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 53GRDB0022EE70000004EEAF4 /* GRDB */; };
+		E3D8B2A1F7C5409B6A1E8D23 /* DebugKit in Frameworks */ = {isa = PBXBuildFile; productRef = A1F7C5E3D8B2409B6A1E8D24 /* DebugKit */; };
+		E4A9C672D1B24D7AA9F25C11 /* TalkieEngineCore in Frameworks */ = {isa = PBXBuildFile; productRef = E4A9C672D1B24D7AA9F25C12 /* TalkieEngineCore */; };
+		F8D3B2A1E7C5409B6A2E9D31 /* TalkieKit in Frameworks */ = {isa = PBXBuildFile; productRef = D9F3A5E1C8B74026A2D8E9F2 /* TalkieKit */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		539FB5CD2EE6785D004EEAF4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 539FB5B12EE6785C004EEAF4 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 539FB5B82EE6785C004EEAF4;
+			remoteInfo = TalkieAgent;
+		};
+		539FB5D72EE6785D004EEAF4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 539FB5B12EE6785C004EEAF4 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 539FB5B82EE6785C004EEAF4;
+			remoteInfo = TalkieAgent;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		084FDC674076926357ED425D /* Signing.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = Signing.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
+		539FB5B92EE6785C004EEAF4 /* TalkieAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TalkieAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		539FB5CC2EE6785D004EEAF4 /* TalkieAgentTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TalkieAgentTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		539FB5D62EE6785D004EEAF4 /* TalkieAgentUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TalkieAgentUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		539FB5BB2EE6785C004EEAF4 /* TalkieAgent */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			path = TalkieAgent;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		539FB5B62EE6785C004EEAF4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E3D8B2A1F7C5409B6A1E8D23 /* DebugKit in Frameworks */,
+				E4A9C672D1B24D7AA9F25C11 /* TalkieEngineCore in Frameworks */,
+				F8D3B2A1E7C5409B6A2E9D31 /* TalkieKit in Frameworks */,
+				53GRDB0012EE70000004EEAF4 /* GRDB in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		539FB5C92EE6785D004EEAF4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		539FB5D32EE6785D004EEAF4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		36203AE2C9E864F13282C30F /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				084FDC674076926357ED425D /* Signing.xcconfig */,
+			);
+			name = Config;
+			path = ../../../Config;
+			sourceTree = "<group>";
+		};
+		539FB5B02EE6785C004EEAF4 = {
+			isa = PBXGroup;
+			children = (
+				539FB5BB2EE6785C004EEAF4 /* TalkieAgent */,
+				539FB5BA2EE6785C004EEAF4 /* Products */,
+				36203AE2C9E864F13282C30F /* Config */,
+			);
+			sourceTree = "<group>";
+		};
+		539FB5BA2EE6785C004EEAF4 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				539FB5B92EE6785C004EEAF4 /* TalkieAgent.app */,
+				539FB5CC2EE6785D004EEAF4 /* TalkieAgentTests.xctest */,
+				539FB5D62EE6785D004EEAF4 /* TalkieAgentUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		539FB5B82EE6785C004EEAF4 /* TalkieAgent */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 539FB5E02EE6785D004EEAF4 /* Build configuration list for PBXNativeTarget "TalkieAgent" */;
+			buildPhases = (
+				539FB5B52EE6785C004EEAF4 /* Sources */,
+				539FB5B62EE6785C004EEAF4 /* Frameworks */,
+				539FB5B72EE6785C004EEAF4 /* Resources */,
+				53LSREG0012EE80000004EEAF4 /* Register URL Scheme */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				539FB5BB2EE6785C004EEAF4 /* TalkieAgent */,
+			);
+			name = TalkieAgent;
+			packageProductDependencies = (
+				A1F7C5E3D8B2409B6A1E8D24 /* DebugKit */,
+				E4A9C672D1B24D7AA9F25C12 /* TalkieEngineCore */,
+				D9F3A5E1C8B74026A2D8E9F2 /* TalkieKit */,
+			);
+			productName = TalkieAgent;
+			productReference = 539FB5B92EE6785C004EEAF4 /* TalkieAgent.app */;
+			productType = "com.apple.product-type.application";
+		};
+		539FB5CB2EE6785D004EEAF4 /* TalkieAgentTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 539FB5E32EE6785D004EEAF4 /* Build configuration list for PBXNativeTarget "TalkieAgentTests" */;
+			buildPhases = (
+				539FB5C82EE6785D004EEAF4 /* Sources */,
+				539FB5C92EE6785D004EEAF4 /* Frameworks */,
+				539FB5CA2EE6785D004EEAF4 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				539FB5CE2EE6785D004EEAF4 /* PBXTargetDependency */,
+			);
+			name = TalkieAgentTests;
+			productName = TalkieAgentTests;
+			productReference = 539FB5CC2EE6785D004EEAF4 /* TalkieAgentTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		539FB5D52EE6785D004EEAF4 /* TalkieAgentUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 539FB5E62EE6785D004EEAF4 /* Build configuration list for PBXNativeTarget "TalkieAgentUITests" */;
+			buildPhases = (
+				539FB5D22EE6785D004EEAF4 /* Sources */,
+				539FB5D32EE6785D004EEAF4 /* Frameworks */,
+				539FB5D42EE6785D004EEAF4 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				539FB5D82EE6785D004EEAF4 /* PBXTargetDependency */,
+			);
+			name = TalkieAgentUITests;
+			productName = TalkieAgentUITests;
+			productReference = 539FB5D62EE6785D004EEAF4 /* TalkieAgentUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		539FB5B12EE6785C004EEAF4 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1640;
+				LastUpgradeCheck = 1640;
+				TargetAttributes = {
+					539FB5B82EE6785C004EEAF4 = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					539FB5CB2EE6785D004EEAF4 = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 539FB5B82EE6785C004EEAF4;
+					};
+					539FB5D52EE6785D004EEAF4 = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 539FB5B82EE6785C004EEAF4;
+					};
+				};
+			};
+			buildConfigurationList = 539FB5B42EE6785C004EEAF4 /* Build configuration list for PBXProject "TalkieAgent" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 539FB5B02EE6785C004EEAF4;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				53GRDB0032EE70000004EEAF4 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
+				B7E9A4D2C1F630E58A3B7C16 /* XCLocalSwiftPackageReference "DebugKit" */,
+				E4A9C672D1B24D7AA9F25C13 /* XCLocalSwiftPackageReference "TalkieEngineCore" */,
+				C8F3A5D1E9B74026A2D8E9F1 /* XCLocalSwiftPackageReference "TalkieKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 539FB5BA2EE6785C004EEAF4 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				539FB5B82EE6785C004EEAF4 /* TalkieAgent */,
+				539FB5CB2EE6785D004EEAF4 /* TalkieAgentTests */,
+				539FB5D52EE6785D004EEAF4 /* TalkieAgentUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		539FB5B72EE6785C004EEAF4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		539FB5CA2EE6785D004EEAF4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		539FB5D42EE6785D004EEAF4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		53LSREG0012EE80000004EEAF4 /* Register URL Scheme */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Register URL Scheme";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Register this app with Launch Services to claim its URL scheme\n# This ensures the freshly built app handles talkieagent:// URLs\nLSREGISTER=\"/System/Library/Frameworks/CoreServices.framework/Versions/Current/Frameworks/LaunchServices.framework/Versions/Current/Support/lsregister\"\nif [ -x \"$LSREGISTER\" ]; then\n    \"$LSREGISTER\" -f \"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app\"\n    echo \"Registered ${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app with Launch Services\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		539FB5B52EE6785C004EEAF4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		539FB5C82EE6785D004EEAF4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		539FB5D22EE6785D004EEAF4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		539FB5CE2EE6785D004EEAF4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 539FB5B82EE6785C004EEAF4 /* TalkieAgent */;
+			targetProxy = 539FB5CD2EE6785D004EEAF4 /* PBXContainerItemProxy */;
+		};
+		539FB5D82EE6785D004EEAF4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 539FB5B82EE6785C004EEAF4 /* TalkieAgent */;
+			targetProxy = 539FB5D72EE6785D004EEAF4 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		539FB5DE2EE6785D004EEAF4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 084FDC674076926357ED425D /* Signing.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		539FB5DF2EE6785D004EEAF4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 084FDC674076926357ED425D /* Signing.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		539FB5E12EE6785D004EEAF4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 084FDC674076926357ED425D /* Signing.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_ENTITLEMENTS = TalkieAgent/TalkieAgent.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TalkieAgent/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Talkie Agent Dev";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "TalkieAgent needs to send keystrokes to automatically paste transcriptions into your active app.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "TalkieAgent needs microphone access to continuously transcribe your speech in real-time.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_BUNDLE_ID_DEBUG)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				URL_SCHEME = "talkieagent-dev";
+			};
+			name = Debug;
+		};
+		539FB5E22EE6785D004EEAF4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 084FDC674076926357ED425D /* Signing.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_ENTITLEMENTS = TalkieAgent/TalkieAgent.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TalkieAgent/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Talkie Agent";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "TalkieAgent needs to send keystrokes to automatically paste transcriptions into your active app.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "TalkieAgent needs microphone access to continuously transcribe your speech in real-time.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				URL_SCHEME = talkieagent;
+			};
+			name = Release;
+		};
+		539FB5E42EE6785D004EEAF4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 084FDC674076926357ED425D /* Signing.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_TESTS_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TalkieAgent.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/TalkieAgent";
+			};
+			name = Debug;
+		};
+		539FB5E52EE6785D004EEAF4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 084FDC674076926357ED425D /* Signing.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_TESTS_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TalkieAgent.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/TalkieAgent";
+			};
+			name = Release;
+		};
+		539FB5E72EE6785D004EEAF4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 084FDC674076926357ED425D /* Signing.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_UITESTS_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = TalkieAgent;
+			};
+			name = Debug;
+		};
+		539FB5E82EE6785D004EEAF4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 084FDC674076926357ED425D /* Signing.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_UITESTS_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = TalkieAgent;
+			};
+			name = Release;
+		};
+		53ADD0FF2EF62A20000F74FF /* Staging */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 084FDC674076926357ED425D /* Signing.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Staging;
+		};
+		53ADD1002EF62A20000F74FF /* Staging */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 084FDC674076926357ED425D /* Signing.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_ENTITLEMENTS = TalkieAgent/TalkieAgent.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TalkieAgent/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Talkie Agent Staging";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "TalkieAgent needs to send keystrokes to automatically paste transcriptions into your active app.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "TalkieAgent needs microphone access to continuously transcribe your speech in real-time.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_BUNDLE_ID_STAGING)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				URL_SCHEME = "talkieagent-staging";
+			};
+			name = Staging;
+		};
+		53ADD1012EF62A20000F74FF /* Staging */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 084FDC674076926357ED425D /* Signing.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_TESTS_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TalkieAgent.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/TalkieAgent";
+			};
+			name = Staging;
+		};
+		53ADD1022EF62A20000F74FF /* Staging */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 084FDC674076926357ED425D /* Signing.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_UITESTS_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = TalkieAgent;
+			};
+			name = Staging;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		539FB5B42EE6785C004EEAF4 /* Build configuration list for PBXProject "TalkieAgent" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				539FB5DE2EE6785D004EEAF4 /* Debug */,
+				539FB5DF2EE6785D004EEAF4 /* Release */,
+				53ADD0FF2EF62A20000F74FF /* Staging */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		539FB5E02EE6785D004EEAF4 /* Build configuration list for PBXNativeTarget "TalkieAgent" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				539FB5E12EE6785D004EEAF4 /* Debug */,
+				539FB5E22EE6785D004EEAF4 /* Release */,
+				53ADD1002EF62A20000F74FF /* Staging */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		539FB5E32EE6785D004EEAF4 /* Build configuration list for PBXNativeTarget "TalkieAgentTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				539FB5E42EE6785D004EEAF4 /* Debug */,
+				539FB5E52EE6785D004EEAF4 /* Release */,
+				53ADD1012EF62A20000F74FF /* Staging */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		539FB5E62EE6785D004EEAF4 /* Build configuration list for PBXNativeTarget "TalkieAgentUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				539FB5E72EE6785D004EEAF4 /* Debug */,
+				539FB5E82EE6785D004EEAF4 /* Release */,
+				53ADD1022EF62A20000F74FF /* Staging */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		B7E9A4D2C1F630E58A3B7C16 /* XCLocalSwiftPackageReference "DebugKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../../packages/swift/DebugKit;
+		};
+		C8F3A5D1E9B74026A2D8E9F1 /* XCLocalSwiftPackageReference "TalkieKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../TalkieKit;
+		};
+		E4A9C672D1B24D7AA9F25C13 /* XCLocalSwiftPackageReference "TalkieEngineCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../TalkieEngineCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		53GRDB0032EE70000004EEAF4 /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 7.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		53GRDB0022EE70000004EEAF4 /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 53GRDB0032EE70000004EEAF4 /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			productName = GRDB;
+		};
+		A1F7C5E3D8B2409B6A1E8D24 /* DebugKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DebugKit;
+		};
+		D9F3A5E1C8B74026A2D8E9F2 /* TalkieKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = TalkieKit;
+		};
+		E4A9C672D1B24D7AA9F25C12 /* TalkieEngineCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = TalkieEngineCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 539FB5B12EE6785C004EEAF4 /* Project object */;
+}

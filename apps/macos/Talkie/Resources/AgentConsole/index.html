@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  >
+  <title>Talkie Console</title>
+  <link rel="stylesheet" href="./xterm.css">
+  <style>
+    :root {
+      color-scheme: dark;
+      --background: #0f1115;
+      --foreground: #d8dde7;
+      --border: rgba(255, 255, 255, 0.08);
+      --terminal-font-family: "Geist Mono", "GeistMono-Regular", "SF Mono", "Monaspace Neon", "JetBrains Mono", "IBM Plex Mono", Menlo, Monaco, ui-monospace, monospace;
+      --terminal-font-size: 13px;
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      color: var(--foreground);
+      font-family: var(--terminal-font-family);
+      font-size: var(--terminal-font-size);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      box-sizing: border-box;
+    }
+
+    #terminal-shell {
+      width: 100%;
+      height: 100%;
+      box-sizing: border-box;
+      padding: 0;
+      background: var(--background);
+    }
+
+    #terminal {
+      width: 100%;
+      height: 100%;
+      box-sizing: border-box;
+      background: transparent;
+    }
+
+    .xterm {
+      height: 100%;
+      background: transparent;
+    }
+
+    .xterm-viewport {
+      background-color: transparent !important;
+      scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+    }
+
+    .xterm-screen {
+      background: transparent;
+    }
+
+    .xterm-screen canvas {
+      image-rendering: auto;
+    }
+  </style>
+</head>
+<body>
+  <div id="terminal-shell">
+    <div id="terminal"></div>
+  </div>
+
+  <script src="./xterm.js"></script>
+  <script>
+    (() => {
+      const MINIMUM_COLS = 2;
+      const MINIMUM_ROWS = 1;
+      const bridge = window.webkit && window.webkit.messageHandlers
+        ? window.webkit.messageHandlers.talkieTerminal
+        : null;
+      const terminalElement = document.getElementById('terminal');
+      let fitFrame = null;
+      let lastMeasuredWidth = 0;
+      let lastMeasuredHeight = 0;
+      let bootTimers = [];
+      let pendingOutputChunks = [];
+      let writeFlushScheduled = false;
+      let cursorModeFrame = null;
+      let terminalCursorSuppressed = false;
+
+      const terminal = new Terminal({
+        allowTransparency: false,
+        cursorBlink: true,
+        cursorStyle: 'block',
+        fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--terminal-font-family').trim(),
+        fontSize: 13,
+        fontWeight: '300',
+        fontWeightBold: '500',
+        lineHeight: 1.12,
+        letterSpacing: 0,
+        scrollback: 5000,
+        macOptionIsMeta: true,
+        macOptionClickForcesSelection: true,
+        convertEol: false,
+        theme: {
+          background: getComputedStyle(document.documentElement).getPropertyValue('--background').trim(),
+          foreground: getComputedStyle(document.documentElement).getPropertyValue('--foreground').trim()
+        }
+      });
+
+      terminal.open(terminalElement);
+
+      const postMessage = (type, payload = {}) => {
+        if (!bridge) {
+          return;
+        }
+
+        bridge.postMessage({ type, ...payload });
+      };
+
+      const proposeDimensions = () => {
+        if (!terminal.element || !terminal.element.parentElement) {
+          return null;
+        }
+
+        const core = terminal._core;
+        const dimensions = core?._renderService?.dimensions;
+        if (!dimensions || dimensions.css.cell.width === 0 || dimensions.css.cell.height === 0) {
+          return null;
+        }
+
+        const parentStyle = window.getComputedStyle(terminal.element.parentElement);
+        const parentHeight = parseInt(parentStyle.getPropertyValue('height'), 10);
+        const parentWidth = Math.max(0, parseInt(parentStyle.getPropertyValue('width'), 10));
+
+        const elementStyle = window.getComputedStyle(terminal.element);
+        const paddingTop = parseInt(elementStyle.getPropertyValue('padding-top'), 10) || 0;
+        const paddingBottom = parseInt(elementStyle.getPropertyValue('padding-bottom'), 10) || 0;
+        const paddingLeft = parseInt(elementStyle.getPropertyValue('padding-left'), 10) || 0;
+        const paddingRight = parseInt(elementStyle.getPropertyValue('padding-right'), 10) || 0;
+
+        const availableHeight = parentHeight - paddingTop - paddingBottom;
+        const availableWidth = parentWidth - paddingLeft - paddingRight;
+
+        return {
+          cols: Math.max(MINIMUM_COLS, Math.floor(availableWidth / dimensions.css.cell.width)),
+          rows: Math.max(MINIMUM_ROWS, Math.floor(availableHeight / dimensions.css.cell.height)),
+        };
+      };
+
+      const fit = () => {
+        fitFrame = null;
+
+        const nextWidth = terminalElement.clientWidth;
+        const nextHeight = terminalElement.clientHeight;
+
+        if (nextWidth === lastMeasuredWidth && nextHeight === lastMeasuredHeight) {
+          return;
+        }
+
+        lastMeasuredWidth = nextWidth;
+        lastMeasuredHeight = nextHeight;
+        const proposed = proposeDimensions();
+        if (!proposed || Number.isNaN(proposed.cols) || Number.isNaN(proposed.rows)) {
+          return;
+        }
+
+        const core = terminal._core;
+        if (terminal.cols !== proposed.cols || terminal.rows !== proposed.rows) {
+          core?._renderService?.clear?.();
+          terminal.resize(proposed.cols, proposed.rows);
+        }
+        postMessage('resize', { cols: terminal.cols, rows: terminal.rows });
+      };
+
+      const scheduleFit = () => {
+        if (fitFrame !== null) {
+          return;
+        }
+
+        fitFrame = window.requestAnimationFrame(fit);
+      };
+
+      const syncTerminalCursorVisibility = () => {
+        terminal.write(terminalCursorSuppressed ? '\x1b[?25l' : '\x1b[?25h');
+      };
+
+      const updateCursorPresentation = () => {
+        cursorModeFrame = null;
+
+        const buffer = terminal.buffer.active;
+        const viewportY = buffer.viewportY;
+        const nearbyLines = [];
+        const startRow = Math.max(0, viewportY - 20);
+        const endRow = viewportY + terminal.rows;
+
+        for (let row = startRow; row <= endRow; row += 1) {
+          const line = buffer.getLine(row);
+          if (!line) {
+            continue;
+          }
+
+          nearbyLines.push(line.translateToString(true));
+        }
+
+        const isClaudeFullscreen =
+          nearbyLines.some((line) => line.includes('? for shortcuts')) ||
+          (
+            nearbyLines.some((line) => line.includes('Claude Code')) &&
+            nearbyLines.some((line) => line.includes('Claude Pro') || line.includes('Opus') || line.includes('Sonnet'))
+          );
+
+        if (terminalCursorSuppressed !== isClaudeFullscreen) {
+          terminalCursorSuppressed = isClaudeFullscreen;
+          syncTerminalCursorVisibility();
+        }
+      };
+
+      const scheduleCursorPresentationUpdate = () => {
+        if (cursorModeFrame !== null) {
+          return;
+        }
+
+        cursorModeFrame = window.requestAnimationFrame(updateCursorPresentation);
+      };
+
+      terminal.onData((text) => {
+        postMessage('input', { text });
+      });
+
+      terminal.onResize(({ cols, rows }) => {
+        postMessage('resize', { cols, rows });
+      });
+
+      terminal.onRender(() => {
+        scheduleCursorPresentationUpdate();
+      });
+
+      terminal.onScroll(() => {
+        scheduleCursorPresentationUpdate();
+      });
+
+      window.addEventListener('resize', scheduleFit);
+      new ResizeObserver(scheduleFit).observe(terminalElement);
+
+      const clearBootTimers = () => {
+        for (const timer of bootTimers) {
+          window.clearTimeout(timer);
+        }
+        bootTimers = [];
+      };
+
+      const decodeBase64Bytes = (encoded = '') => {
+        const binary = window.atob(encoded);
+        const bytes = new Uint8Array(binary.length);
+
+        for (let index = 0; index < binary.length; index += 1) {
+          bytes[index] = binary.charCodeAt(index);
+        }
+
+        return bytes;
+      };
+
+      const clearPendingOutput = () => {
+        pendingOutputChunks = [];
+        writeFlushScheduled = false;
+      };
+
+      const flushPendingOutput = () => {
+        writeFlushScheduled = false;
+
+        if (pendingOutputChunks.length === 0) {
+          return;
+        }
+
+        if (pendingOutputChunks.length === 1) {
+          terminal.write(pendingOutputChunks[0]);
+          pendingOutputChunks = [];
+          return;
+        }
+
+        const totalLength = pendingOutputChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+        const merged = new Uint8Array(totalLength);
+        let offset = 0;
+
+        for (const chunk of pendingOutputChunks) {
+          merged.set(chunk, offset);
+          offset += chunk.length;
+        }
+
+        pendingOutputChunks = [];
+        terminal.write(merged);
+      };
+
+      const scheduleOutputFlush = () => {
+        if (writeFlushScheduled) {
+          return;
+        }
+
+        writeFlushScheduled = true;
+        window.requestAnimationFrame(flushPendingOutput);
+      };
+
+      const scheduleBootWrite = (delay, callback) => {
+        const timer = window.setTimeout(callback, delay);
+        bootTimers.push(timer);
+      };
+
+      const bootAnsi = {
+        reset: '\x1b[0m',
+        dim: '\x1b[38;5;244m',
+        muted: '\x1b[38;5;241m',
+        bright: '\x1b[97m',
+        accent: '\x1b[94m',
+      };
+
+      const writeBootLine = (text = '') => {
+        terminal.writeln(text);
+      };
+
+      const startBoot = (boot = {}) => {
+        clearBootTimers();
+        clearPendingOutput();
+        terminal.reset();
+        terminal.clear();
+        terminal.options.cursorBlink = false;
+        terminal.write('\x1b[?25l');
+
+        const title = boot.title || 'Talkie Agent';
+        const harness = boot.harness || 'OpenCode';
+        const model = boot.model || 'default';
+        const workspace = boot.workspace || 'workspace';
+        const steps = Array.isArray(boot.steps) ? boot.steps : [];
+
+        const ascii = [
+          '  ______      ____   __ __   _          ',
+          ' /_  __/___ _/ / /__/ //_/  (_)__       ',
+          '  / / / __ `/ / //_/ ,<    / / _ \\\\   ',
+          ' /_/  \\\\__,_/_/\\\\__/_/|_|  /_/\\\\___/ ',
+        ];
+
+        const lines = [
+          `${bootAnsi.dim}:: talkie managed console ::${bootAnsi.reset}`,
+          `${bootAnsi.dim}context   ${bootAnsi.bright}${title}${bootAnsi.reset}`,
+          `${bootAnsi.dim}harness   ${bootAnsi.bright}${harness}${bootAnsi.reset}`,
+          `${bootAnsi.dim}model     ${bootAnsi.bright}${model}${bootAnsi.reset}`,
+          `${bootAnsi.dim}session   ${workspace}${bootAnsi.reset}`,
+          '',
+          ...ascii.map((line) => `${bootAnsi.muted}${line}${bootAnsi.reset}`),
+          '',
+          `${bootAnsi.dim}booting interactive console...${bootAnsi.reset}`,
+          '',
+          ...steps.map((step) => `${bootAnsi.accent}>${bootAnsi.reset} ${bootAnsi.bright}${step}${bootAnsi.reset}`),
+          '',
+          `${bootAnsi.dim}waiting for live session handoff${bootAnsi.reset}`,
+        ];
+
+        let delay = 30;
+        for (const line of lines) {
+          scheduleBootWrite(delay, () => writeBootLine(line));
+          delay += line === '' ? 45 : 70;
+        }
+      };
+
+      window.talkieTerminal = {
+        writeBytes(encoded) {
+          clearBootTimers();
+          terminal.options.cursorBlink = true;
+          terminal.write('\x1b[?25h');
+          const bytes = decodeBase64Bytes(encoded || '');
+          if (bytes.length > 0) {
+            pendingOutputChunks.push(bytes);
+            scheduleOutputFlush();
+          }
+          scheduleCursorPresentationUpdate();
+        },
+
+        resetBytes(encoded) {
+          clearBootTimers();
+          clearPendingOutput();
+          terminal.reset();
+          terminal.clear();
+          terminal.options.cursorBlink = true;
+          terminal.write('\x1b[?25h');
+          const bytes = decodeBase64Bytes(encoded || '');
+          if (bytes.length > 0) {
+            terminal.write(bytes);
+          }
+          scheduleCursorPresentationUpdate();
+        },
+
+        clear() {
+          clearBootTimers();
+          clearPendingOutput();
+          terminal.reset();
+          terminal.clear();
+          terminal.options.cursorBlink = true;
+          terminal.write('\x1b[?25h');
+          scheduleCursorPresentationUpdate();
+        },
+
+        setTheme(theme) {
+          terminal.options.theme = {
+            ...terminal.options.theme,
+            ...theme
+          };
+        },
+
+        startBoot(boot) {
+          startBoot(boot);
+          scheduleCursorPresentationUpdate();
+        }
+      };
+
+      scheduleFit();
+      terminal.focus();
+      postMessage('ready');
+    })();
+  </script>
+</body>
+</html>

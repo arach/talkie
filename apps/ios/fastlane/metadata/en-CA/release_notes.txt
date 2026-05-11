@@ -1,0 +1,3 @@
+- New punctuation overlay on the Talkie keyboard, long press the PUNC key for quick access to common punctuation and symbols
+- Improved memo detail layout with cleaner metadata display
+- Bug fixes and stability improvements

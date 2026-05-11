@@ -1,0 +1,17 @@
+{
+  "name": "Transcribe",
+  "description": "On-device transcription using Apple Speech (no download required)",
+  "icon": "waveform.and.mic",
+  "color": "blue",
+  "maintainer": "talkie",
+  "steps": [
+    {
+      "type": "transcribe",
+      "outputKey": "transcript",
+      "qualityTier": "fast",
+      "fallbackStrategy": "none",
+      "overwriteExisting": false,
+      "saveAsVersion": true
+    }
+  ]
+}

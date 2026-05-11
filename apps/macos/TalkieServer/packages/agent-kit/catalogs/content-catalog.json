@@ -1,0 +1,180 @@
+{
+  "version": 1,
+  "description": "Inventory for AgentKit content that is bundled into Talkie and used by the embedded agent console and generated workspaces.",
+  "collections": [
+    {
+      "id": "catalogs",
+      "path": "catalogs",
+      "kind": "catalog",
+      "bundleToApp": true,
+      "description": "Machine-readable inventories for bundled AgentKit content."
+    },
+    {
+      "id": "docs",
+      "path": "docs",
+      "kind": "knowledge-base",
+      "bundleToApp": true,
+      "description": "Durable knowledge-base material and workspace document templates."
+    },
+    {
+      "id": "prompts",
+      "path": "prompts",
+      "kind": "prompt",
+      "bundleToApp": true,
+      "description": "Behavior-shaping prompt content for embedded agent profiles."
+    },
+    {
+      "id": "runtime",
+      "path": "runtime",
+      "kind": "runtime",
+      "bundleToApp": true,
+      "description": "Shared TypeScript runtime used by generated workspace tools."
+    }
+  ],
+  "assets": [
+    {
+      "id": "catalogs.readme",
+      "collection": "catalogs",
+      "path": "catalogs/README.md",
+      "title": "Catalogs Overview",
+      "consumers": ["developers"],
+      "description": "Explains the role of AgentKit catalogs."
+    },
+    {
+      "id": "catalogs.content-catalog",
+      "collection": "catalogs",
+      "path": "catalogs/content-catalog.json",
+      "title": "AgentKit Content Catalog",
+      "consumers": ["sync-script", "validation-script", "developers"],
+      "description": "The inventory of all bundled AgentKit assets."
+    },
+    {
+      "id": "catalogs.workflow-step-catalog",
+      "collection": "catalogs",
+      "path": "catalogs/workflow-step-catalog.json",
+      "title": "Workflow Step Catalog",
+      "consumers": ["workspace-generator", "agents"],
+      "description": "Machine-readable workflow step vocabulary exposed to generated workspaces."
+    },
+    {
+      "id": "docs.readme",
+      "collection": "docs",
+      "path": "docs/README.md",
+      "title": "Knowledge Base Overview",
+      "consumers": ["developers", "agents"],
+      "description": "Explains the knowledge-base role of the docs directory."
+    },
+    {
+      "id": "docs.agents",
+      "collection": "docs",
+      "path": "docs/agents.md",
+      "title": "Workspace AGENTS Template",
+      "consumers": ["workspace-generator", "agents"],
+      "description": "Managed workspace contract template."
+    },
+    {
+      "id": "docs.workflow-authoring",
+      "collection": "docs",
+      "path": "docs/workflow-authoring.md",
+      "title": "Workflow Authoring Guide",
+      "consumers": ["workspace-generator", "agents"],
+      "description": "The flat Talkie workflow authoring format."
+    },
+    {
+      "id": "docs.workflow-capabilities",
+      "collection": "docs",
+      "path": "docs/workflow-capabilities.md",
+      "title": "Workflow Capabilities Guide",
+      "consumers": ["workspace-generator", "agents"],
+      "description": "Supported workflow capabilities and patterns."
+    },
+    {
+      "id": "docs.workflow-guide",
+      "collection": "docs",
+      "path": "docs/workflow-guide.md",
+      "title": "Workflow Guide",
+      "consumers": ["workspace-generator", "agents"],
+      "description": "Workflow storage, runtime configuration, and run-history guidance."
+    },
+    {
+      "id": "docs.workflow-templates-readme",
+      "collection": "docs",
+      "path": "docs/workflow-templates-readme.md",
+      "title": "Workflow Templates Guide",
+      "consumers": ["workspace-generator", "agents"],
+      "description": "How to use copied workflow templates inside a generated workspace."
+    },
+    {
+      "id": "docs.workspace-readme",
+      "collection": "docs",
+      "path": "docs/workspace-readme.md",
+      "title": "Workspace Readme Template",
+      "consumers": ["workspace-generator", "agents"],
+      "description": "Landing page template for generated agent workspaces."
+    },
+    {
+      "id": "prompts.readme",
+      "collection": "prompts",
+      "path": "prompts/README.md",
+      "title": "Prompts Overview",
+      "consumers": ["developers"],
+      "description": "Explains prompt roles and authoring rules."
+    },
+    {
+      "id": "prompts.talkie-agent.bootstrap",
+      "collection": "prompts",
+      "path": "prompts/talkie-agent/bootstrap.md",
+      "title": "Talkie Agent Bootstrap Prompt",
+      "consumers": ["console-profile"],
+      "description": "Optional startup guidance for the Talkie agent profile."
+    },
+    {
+      "id": "prompts.talkie-agent.examples",
+      "collection": "prompts",
+      "path": "prompts/talkie-agent/examples.md",
+      "title": "Talkie Agent Examples",
+      "consumers": ["console-profile"],
+      "description": "Few-shot examples for the Talkie agent profile."
+    },
+    {
+      "id": "prompts.talkie-agent.notes",
+      "collection": "prompts",
+      "path": "prompts/talkie-agent/notes.md",
+      "title": "Talkie Agent Notes",
+      "consumers": ["console-profile"],
+      "description": "Stable supplementary context for the Talkie agent profile."
+    },
+    {
+      "id": "prompts.talkie-agent.prompt",
+      "collection": "prompts",
+      "path": "prompts/talkie-agent/prompt.md",
+      "title": "Talkie Agent Prompt",
+      "consumers": ["console-profile"],
+      "description": "Default task framing for the Talkie agent profile."
+    },
+    {
+      "id": "prompts.talkie-agent.system",
+      "collection": "prompts",
+      "path": "prompts/talkie-agent/system.md",
+      "title": "Talkie Agent System Prompt",
+      "consumers": ["console-profile"],
+      "description": "Primary operating instructions for the Talkie agent profile."
+    },
+    {
+      "id": "runtime.readme",
+      "collection": "runtime",
+      "path": "runtime/README.md",
+      "title": "Runtime Overview",
+      "consumers": ["developers"],
+      "description": "Explains the runtime boundary between shell wrappers and shared TypeScript logic."
+    },
+    {
+      "id": "runtime.agent-tools",
+      "collection": "runtime",
+      "path": "runtime/agent-tools.ts",
+      "title": "Agent Tools Runtime",
+      "consumers": ["workspace-tools"],
+      "description": "Shared TypeScript runtime for generated workspace memo and workflow tools."
+    }
+  ]
+}

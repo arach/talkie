@@ -1,0 +1,714 @@
+//
+//  ScreenshotCaptureService.swift
+//  Talkie
+//
+//  Captures screenshots during memo recording.
+//  Supports fullscreen, region (drag), and window (click) capture modes.
+//
+
+import Foundation
+import AppKit
+import ImageIO
+import TalkieKit
+import UniformTypeIdentifiers
+
+enum ScreenshotCapturePreset: String, CaseIterable, Codable {
+    case agent
+    case balanced
+    case archive
+
+    var label: String {
+        switch self {
+        case .agent: return "Agent"
+        case .balanced: return "Balanced"
+        case .archive: return "Archive"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .agent: return "Smallest files. Downscales aggressively for AI workflows."
+        case .balanced: return "Readable captures with moderate storage use."
+        case .archive: return "Full-size lossless captures for human review."
+        }
+    }
+
+    var maxPixelLength: CGFloat? {
+        switch self {
+        case .agent: return 1280
+        case .balanced: return 2200
+        case .archive: return nil
+        }
+    }
+
+    var sizeSummary: String {
+        switch self {
+        case .agent: return "Max edge 1280 px"
+        case .balanced: return "Max edge 2200 px"
+        case .archive: return "Full size PNG"
+        }
+    }
+}
+
+enum CaptureMode: String {
+    case region      // User drags to select rectangle
+    case fullscreen  // Entire display under cursor
+    case window      // User clicks a window
+}
+
+/// Result of a screenshot capture, including image data and contextual metadata.
+struct CaptureResult {
+    let data: Data
+    let image: CGImage
+    let width: Int
+    let height: Int
+    let windowTitle: String?
+    let appName: String?
+    let displayName: String?
+}
+
+@MainActor
+final class ScreenshotCaptureService {
+    static let shared = ScreenshotCaptureService()
+    private let log = Log(.system)
+    private var lastPermissionCheckAt: Date = .distantPast
+    private var lastPermissionCheckResult = false
+    private let permissionCacheInterval: TimeInterval = 30
+    private let captureHotPathLoggingEnabled = ProcessInfo.processInfo.environment["CAPTURE_PERF"] == "1"
+    private var didPrewarmPipeline = false
+    private var capturePreset: ScreenshotCapturePreset { SettingsManager.shared.screenshotCapturePreset }
+    private init() {}
+
+    // MARK: - Public API
+
+    /// Capture a screenshot and save it to storage.
+    ///
+    /// - Parameters:
+    ///   - mode: Capture mode (region, fullscreen, window)
+    ///   - recordingId: The recording this screenshot belongs to
+    ///   - recordingStartTime: When the recording started (for calculating timestamp offset)
+    /// - Returns: Screenshot metadata, or nil if capture was cancelled or failed
+    func capture(
+        mode: CaptureMode,
+        recordingId: UUID,
+        recordingStartTime: Date
+    ) async -> RecordingScreenshot? {
+        let timestampMs = Int(Date().timeIntervalSince(recordingStartTime) * 1000)
+
+        // Check permission first
+        CapturePerformanceMonitor.shared.mark("permission.check.begin")
+        guard await hasScreenRecordingPermission() else {
+            CapturePerformanceMonitor.shared.mark("permission.check.denied")
+            showPermissionAlert()
+            return nil
+        }
+        CapturePerformanceMonitor.shared.mark("permission.check.complete")
+
+        let image: CGImage
+        var windowTitle: String?
+        var appName: String?
+        var displayName: String?
+
+        switch mode {
+        case .fullscreen:
+            guard let result = await captureFullscreen() else {
+                if captureHotPathLoggingEnabled {
+                    log.info("Screenshot capture cancelled or failed")
+                }
+                CapturePerformanceMonitor.shared.mark("capture.cancelled")
+                return nil
+            }
+            image = result.image
+            displayName = result.displayName
+        case .region:
+            guard let result = await captureRegion() else {
+                if captureHotPathLoggingEnabled {
+                    log.info("Screenshot capture cancelled or failed")
+                }
+                CapturePerformanceMonitor.shared.mark("capture.cancelled")
+                return nil
+            }
+            image = result
+        case .window:
+            guard let result = await captureWindow() else {
+                if captureHotPathLoggingEnabled {
+                    log.info("Screenshot capture cancelled or failed")
+                }
+                CapturePerformanceMonitor.shared.mark("capture.cancelled")
+                return nil
+            }
+            image = result.image
+            windowTitle = result.windowTitle
+            appName = result.appName
+        }
+        CapturePerformanceMonitor.shared.mark("capture.image.complete")
+
+        // Show floating preview
+        CapturePerformanceMonitor.shared.mark("preview.show.begin")
+        ScreenshotPreviewPanel.shared.show(image: image)
+        CapturePerformanceMonitor.shared.mark("preview.show.complete")
+
+        let storedImage = await processedImageForStorage(image)
+
+        // Convert to PNG data
+        CapturePerformanceMonitor.shared.mark("encode.begin")
+        guard let data = await encodePNG(storedImage) else {
+            CapturePerformanceMonitor.shared.mark("encode.failed")
+            log.error("Failed to encode screenshot as PNG")
+            return nil
+        }
+        CapturePerformanceMonitor.shared.mark("encode.complete")
+
+        // Save to permanent storage
+        CapturePerformanceMonitor.shared.mark("storage.save.begin")
+        guard let savedURL = ScreenshotStorage.save(
+            data,
+            recordingId: recordingId,
+            timestampMs: timestampMs,
+            captureMode: mode.rawValue,
+            width: storedImage.width,
+            height: storedImage.height,
+            windowTitle: windowTitle,
+            appName: appName,
+            displayName: displayName
+        ) else {
+            CapturePerformanceMonitor.shared.mark("storage.save.failed")
+            return nil
+        }
+        CapturePerformanceMonitor.shared.mark("storage.save.complete")
+
+        let filename = savedURL.lastPathComponent
+        if captureHotPathLoggingEnabled {
+            log.info("Screenshot captured: \(filename) (\(storedImage.width)x\(storedImage.height)) mode=\(mode.rawValue) preset=\(capturePreset.rawValue)")
+        }
+
+        return RecordingScreenshot(
+            filename: filename,
+            timestampMs: timestampMs,
+            captureMode: mode.rawValue,
+            width: storedImage.width,
+            height: storedImage.height,
+            windowTitle: windowTitle,
+            appName: appName,
+            displayName: displayName
+        )
+    }
+
+    /// Capture a standalone screenshot (not tied to a recording).
+    /// Returns CaptureResult with PNG data, dimensions, and contextual metadata, or nil if cancelled/failed.
+    func captureStandalone(mode: CaptureMode) async -> CaptureResult? {
+        CapturePerformanceMonitor.shared.mark("permission.check.begin")
+        guard await hasScreenRecordingPermission() else {
+            CapturePerformanceMonitor.shared.mark("permission.check.denied")
+            showPermissionAlert()
+            return nil
+        }
+        CapturePerformanceMonitor.shared.mark("permission.check.complete")
+
+        let image: CGImage
+        var windowTitle: String?
+        var appName: String?
+        var displayName: String?
+
+        switch mode {
+        case .fullscreen:
+            guard let result = await captureFullscreen() else {
+                if captureHotPathLoggingEnabled {
+                    log.info("Standalone screenshot capture cancelled or failed")
+                }
+                CapturePerformanceMonitor.shared.mark("capture.cancelled")
+                return nil
+            }
+            image = result.image
+            displayName = result.displayName
+        case .region:
+            guard let result = await captureRegion() else {
+                if captureHotPathLoggingEnabled {
+                    log.info("Standalone screenshot capture cancelled or failed")
+                }
+                CapturePerformanceMonitor.shared.mark("capture.cancelled")
+                return nil
+            }
+            image = result
+        case .window:
+            guard let result = await captureWindow() else {
+                if captureHotPathLoggingEnabled {
+                    log.info("Standalone screenshot capture cancelled or failed")
+                }
+                CapturePerformanceMonitor.shared.mark("capture.cancelled")
+                return nil
+            }
+            image = result.image
+            windowTitle = result.windowTitle
+            appName = result.appName
+        }
+        CapturePerformanceMonitor.shared.mark("capture.image.complete")
+
+        CapturePerformanceMonitor.shared.mark("encode.begin")
+        let storedImage = await processedImageForStorage(image)
+
+        guard let data = await encodePNG(storedImage) else {
+            CapturePerformanceMonitor.shared.mark("encode.failed")
+            log.error("Failed to encode standalone screenshot as PNG")
+            return nil
+        }
+        CapturePerformanceMonitor.shared.mark("encode.complete")
+
+        if captureHotPathLoggingEnabled {
+            log.info("Standalone screenshot captured: \(storedImage.width)x\(storedImage.height) mode=\(mode.rawValue) preset=\(capturePreset.rawValue)")
+        }
+        return CaptureResult(
+            data: data,
+            image: image,
+            width: storedImage.width,
+            height: storedImage.height,
+            windowTitle: windowTitle,
+            appName: appName,
+            displayName: displayName
+        )
+    }
+
+    /// Warm screenshot + PNG encode path once so first hotkey hit avoids cold-start stalls.
+    func prewarmPipelineIfNeeded() {
+        guard !didPrewarmPipeline else { return }
+        didPrewarmPipeline = true
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(for: .milliseconds(1200))
+            guard await self.hasScreenRecordingPermission() else { return }
+            guard let screen = NSScreen.main ?? NSScreen.screens.first,
+                  let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
+                return
+            }
+
+            _ = await Task.detached(priority: .utility) {
+                guard let image = CGDisplayCreateImage(displayID) else { return nil as Data? }
+                return Self.pngData(from: image)
+            }.value
+            if self.captureHotPathLoggingEnabled {
+                self.log.debug("Screenshot pipeline prewarmed")
+            }
+        }
+    }
+
+    // MARK: - Fullscreen Capture
+
+    /// Capture the entire display under the mouse cursor.
+    private func captureFullscreen() async -> (image: CGImage, displayName: String?)? {
+        let mouse = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) })
+            ?? NSScreen.main
+            ?? NSScreen.screens.first
+        guard let screen else {
+            log.error("Fullscreen capture failed: no screen available")
+            return nil
+        }
+
+        guard let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
+            log.error("Fullscreen capture failed: missing display ID")
+            return nil
+        }
+
+        CapturePerformanceMonitor.shared.mark("capture.fullscreen.read.begin")
+        let image = await Task.detached(priority: .userInitiated) {
+            CGDisplayCreateImage(displayID)
+        }.value
+        guard let image else {
+            CapturePerformanceMonitor.shared.mark("capture.fullscreen.read.failed")
+            log.error("Fullscreen capture failed: unable to create display image")
+            return nil
+        }
+        CapturePerformanceMonitor.shared.mark("capture.fullscreen.read.complete")
+
+        return (image: image, displayName: screen.localizedName)
+    }
+
+    // MARK: - Region Capture
+
+    /// Show overlay for region selection, then crop the full display capture.
+    private func captureRegion() async -> CGImage? {
+        let overlay = ScreenCaptureOverlay()
+        CapturePerformanceMonitor.shared.mark("overlay.region.begin")
+        guard let selectedRect = await overlay.selectRegion() else {
+            CapturePerformanceMonitor.shared.mark("overlay.region.cancelled")
+            return nil
+        }
+        CapturePerformanceMonitor.shared.mark("overlay.region.selected")
+
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        let captureRect = CGRect(
+            x: selectedRect.origin.x,
+            y: primaryHeight - selectedRect.origin.y - selectedRect.height,
+            width: selectedRect.width,
+            height: selectedRect.height
+        )
+
+        CapturePerformanceMonitor.shared.mark("capture.region.read.begin")
+        let image = await Task.detached(priority: .userInitiated) {
+            CGWindowListCreateImage(
+                captureRect,
+                .optionOnScreenOnly,
+                kCGNullWindowID,
+                [.bestResolution]
+            )
+        }.value
+        guard let image else {
+            CapturePerformanceMonitor.shared.mark("capture.region.read.failed")
+            log.error("Region capture failed: unable to capture selected rect")
+            return nil
+        }
+        CapturePerformanceMonitor.shared.mark("capture.region.read.complete")
+
+        return image
+    }
+
+    // MARK: - Window Capture
+
+    /// Show overlay for window selection, then capture that window.
+    private func captureWindow() async -> (image: CGImage, windowTitle: String?, appName: String?)? {
+        let overlay = ScreenCaptureOverlay()
+        CapturePerformanceMonitor.shared.mark("overlay.window.begin")
+        guard let windowID = await overlay.selectWindow() else {
+            CapturePerformanceMonitor.shared.mark("overlay.window.cancelled")
+            return nil
+        }
+        CapturePerformanceMonitor.shared.mark("overlay.window.selected")
+
+        // Query window metadata while the window is still around
+        let meta = windowMetadata(for: windowID)
+
+        CapturePerformanceMonitor.shared.mark("capture.window.read.begin")
+        let image = await Task.detached(priority: .userInitiated) {
+            CGWindowListCreateImage(
+                .null,
+                .optionIncludingWindow,
+                windowID,
+                [.bestResolution, .boundsIgnoreFraming]
+            )
+        }.value
+        guard let image else {
+            CapturePerformanceMonitor.shared.mark("capture.window.read.failed")
+            log.error("Window capture failed: unable to capture window \(windowID)")
+            return nil
+        }
+        CapturePerformanceMonitor.shared.mark("capture.window.read.complete")
+
+        return (image: image, windowTitle: meta.title, appName: meta.appName)
+    }
+
+    // MARK: - Permission
+
+    private func hasScreenRecordingPermission() async -> Bool {
+        // Fast path: CoreGraphics preflight is synchronous and much cheaper than fetching shareable content.
+        let now = Date()
+        if now.timeIntervalSince(lastPermissionCheckAt) < permissionCacheInterval {
+            return lastPermissionCheckResult
+        }
+
+        let hasPermission = CGPreflightScreenCaptureAccess()
+        lastPermissionCheckAt = now
+        lastPermissionCheckResult = hasPermission
+        return hasPermission
+    }
+
+    private func showPermissionAlert() {
+        let alert = NSAlert()
+        alert.messageText = "Screen Recording Permission Required"
+        alert.informativeText = "Talkie needs Screen Recording permission to capture screenshots. Please enable it in System Settings > Privacy & Security > Screen Recording."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Cancel")
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+                NSWorkspace.shared.open(url)
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    /// Query window title and app name from a CGWindowID.
+    private func windowMetadata(for windowID: CGWindowID) -> (title: String?, appName: String?) {
+        guard let infoList = CGWindowListCreateDescriptionFromArray([windowID] as CFArray) as? [[String: Any]],
+              let info = infoList.first else {
+            return (nil, nil)
+        }
+        let title = info[kCGWindowName as String] as? String
+        let appName = info[kCGWindowOwnerName as String] as? String
+        return (title, appName)
+    }
+
+    /// Encode a CGImage as PNG off-main to avoid UI hitches during direct hotkey captures.
+    private func encodePNG(_ image: CGImage) async -> Data? {
+        await Task.detached(priority: .userInitiated) {
+            Self.pngData(from: image)
+        }.value
+    }
+
+    private func processedImageForStorage(_ image: CGImage) async -> CGImage {
+        guard let maxPixelLength = capturePreset.maxPixelLength else {
+            return image
+        }
+        let longestEdge = max(image.width, image.height)
+        guard CGFloat(longestEdge) > maxPixelLength else {
+            return image
+        }
+        return await Task.detached(priority: .userInitiated) {
+            Self.downscaledImage(from: image, maxPixelLength: maxPixelLength) ?? image
+        }.value
+    }
+
+    nonisolated private static func pngData(from image: CGImage) -> Data? {
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            data,
+            UTType.png.identifier as CFString,
+            1,
+            nil
+        ) else {
+            return nil
+        }
+        CGImageDestinationAddImage(destination, image, nil)
+        guard CGImageDestinationFinalize(destination) else {
+            return nil
+        }
+        return data as Data
+    }
+
+    nonisolated private static func downscaledImage(from image: CGImage, maxPixelLength: CGFloat) -> CGImage? {
+        let width = CGFloat(image.width)
+        let height = CGFloat(image.height)
+        let longestEdge = max(width, height)
+        guard longestEdge > maxPixelLength, longestEdge > 0 else {
+            return image
+        }
+
+        let scale = maxPixelLength / longestEdge
+        let targetWidth = max(Int((width * scale).rounded(.toNearestOrEven)), 1)
+        let targetHeight = max(Int((height * scale).rounded(.toNearestOrEven)), 1)
+
+        let alphaInfo: CGImageAlphaInfo = image.alphaInfo == .none ? .noneSkipLast : .premultipliedLast
+        guard let context = CGContext(
+            data: nil,
+            width: targetWidth,
+            height: targetHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: alphaInfo.rawValue
+        ) else {
+            return nil
+        }
+
+        context.interpolationQuality = .high
+        context.draw(image, in: CGRect(x: 0, y: 0, width: targetWidth, height: targetHeight))
+        return context.makeImage()
+    }
+}
+
+@MainActor
+final class CapturePerformanceMonitor {
+    static let shared = CapturePerformanceMonitor()
+
+    private struct Mark {
+        let name: String
+        let atNs: UInt64
+    }
+
+    private struct Session {
+        let id: UInt64
+        let trigger: String
+        var mode: String
+        let startedAtNs: UInt64
+        var marks: [Mark]
+        var frameIntervalsNs: [UInt64]
+        var droppedFrameEstimate: Int
+        var hitchCount: Int
+        var maxFrameIntervalNs: UInt64
+        var lastTickNs: UInt64?
+        var timer: DispatchSourceTimer?
+    }
+
+    private let log = Log(.ui)
+    private let isEnabled: Bool = {
+        let env = ProcessInfo.processInfo.environment["CAPTURE_PERF"]
+        if env == "0" { return false }
+        if env == "1" { return true }
+        return UserDefaults.standard.bool(forKey: "capturePerfEnabled")
+    }()
+    private let expectedFrameIntervalNs: UInt64 = 16_666_667
+    private let hitchThresholdNs: UInt64 = 33_333_334
+    private let maxFrameSamples = 720
+
+    private var activeSession: Session?
+    private var nextSessionId: UInt64 = 0
+
+    private init() {}
+
+    func beginSession(trigger: String, mode: String) {
+        guard isEnabled else { return }
+
+        if let inFlight = activeSession {
+            finish(session: inFlight, outcome: "interrupted")
+            activeSession = nil
+        }
+
+        nextSessionId &+= 1
+        let now = DispatchTime.now().uptimeNanoseconds
+
+        var session = Session(
+            id: nextSessionId,
+            trigger: trigger,
+            mode: mode,
+            startedAtNs: now,
+            marks: [Mark(name: "session.begin", atNs: now)],
+            frameIntervalsNs: [],
+            droppedFrameEstimate: 0,
+            hitchCount: 0,
+            maxFrameIntervalNs: 0,
+            lastTickNs: nil,
+            timer: nil
+        )
+
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(
+            deadline: .now() + .milliseconds(16),
+            repeating: .milliseconds(16),
+            leeway: .milliseconds(2)
+        )
+        timer.setEventHandler { [weak self] in
+            self?.recordFrameSample()
+        }
+        session.timer = timer
+        activeSession = session
+        timer.resume()
+    }
+
+    func updateMode(_ mode: String) {
+        guard isEnabled, var session = activeSession else { return }
+        session.mode = mode
+        activeSession = session
+    }
+
+    func mark(_ name: String) {
+        guard isEnabled, var session = activeSession else { return }
+        session.marks.append(Mark(name: name, atNs: DispatchTime.now().uptimeNanoseconds))
+        activeSession = session
+    }
+
+    func endSession(outcome: String) {
+        guard isEnabled, let session = activeSession else { return }
+        finish(session: session, outcome: outcome)
+        activeSession = nil
+    }
+
+    private func recordFrameSample() {
+        guard isEnabled, var session = activeSession else { return }
+        let now = DispatchTime.now().uptimeNanoseconds
+
+        defer {
+            session.lastTickNs = now
+            activeSession = session
+        }
+
+        guard let lastTickNs = session.lastTickNs else { return }
+        let deltaNs = now &- lastTickNs
+        if deltaNs == 0 { return }
+
+        if session.frameIntervalsNs.count < maxFrameSamples {
+            session.frameIntervalsNs.append(deltaNs)
+        }
+
+        if deltaNs > session.maxFrameIntervalNs {
+            session.maxFrameIntervalNs = deltaNs
+        }
+        if deltaNs > hitchThresholdNs {
+            session.hitchCount += 1
+        }
+
+        let expectedFrames = Int(deltaNs / expectedFrameIntervalNs)
+        if expectedFrames > 1 {
+            session.droppedFrameEstimate += expectedFrames - 1
+        }
+    }
+
+    private func finish(session: Session, outcome: String) {
+        var completed = session
+        completed.timer?.setEventHandler {}
+        completed.timer?.cancel()
+        completed.timer = nil
+
+        let endedAtNs = DispatchTime.now().uptimeNanoseconds
+        let totalNs = endedAtNs &- completed.startedAtNs
+        let totalMs = toMilliseconds(totalNs)
+        let fpsText = fpsString(from: completed.frameIntervalsNs)
+        let p95Ms = percentile(completed.frameIntervalsNs, p: 0.95).map(toMilliseconds)
+        let p99Ms = percentile(completed.frameIntervalsNs, p: 0.99).map(toMilliseconds)
+        let maxMs = toMilliseconds(completed.maxFrameIntervalNs)
+        let phaseSummary = phaseSummaryText(marks: completed.marks, endNs: endedAtNs)
+
+        let p95Text = p95Ms.map(formatOneDecimal) ?? "n/a"
+        let p99Text = p99Ms.map(formatOneDecimal) ?? "n/a"
+        let maxText = formatOneDecimal(maxMs)
+        let droppedRatioText = droppedRatioText(
+            dropped: completed.droppedFrameEstimate,
+            totalNs: totalNs
+        )
+
+        log.info(
+            "CapturePerf session=\(completed.id) trigger=\(completed.trigger) mode=\(completed.mode) " +
+            "outcome=\(outcome) totalMs=\(formatOneDecimal(totalMs)) fps=\(fpsText) " +
+            "dropped~=\(completed.droppedFrameEstimate) (\(droppedRatioText)) hitches=\(completed.hitchCount) " +
+            "p95Ms=\(p95Text) p99Ms=\(p99Text) maxMs=\(maxText) samples=\(completed.frameIntervalsNs.count) " +
+            "phases=[\(phaseSummary)]"
+        )
+    }
+
+    private func phaseSummaryText(marks: [Mark], endNs: UInt64) -> String {
+        guard !marks.isEmpty else { return "none" }
+
+        var parts: [String] = []
+        parts.reserveCapacity(marks.count)
+
+        for index in marks.indices {
+            let current = marks[index]
+            let nextNs = index + 1 < marks.count ? marks[index + 1].atNs : endNs
+            let durationMs = toMilliseconds(nextNs &- current.atNs)
+            parts.append("\(current.name)=\(formatOneDecimal(durationMs))ms")
+        }
+
+        return parts.joined(separator: ", ")
+    }
+
+    private func percentile(_ values: [UInt64], p: Double) -> UInt64? {
+        guard !values.isEmpty else { return nil }
+        let sorted = values.sorted()
+        let index = Int((Double(sorted.count - 1) * p).rounded(.toNearestOrAwayFromZero))
+        return sorted[min(max(index, 0), sorted.count - 1)]
+    }
+
+    private func fpsString(from frameIntervalsNs: [UInt64]) -> String {
+        guard !frameIntervalsNs.isEmpty else { return "n/a" }
+        let totalNs = frameIntervalsNs.reduce(0, +)
+        guard totalNs > 0 else { return "n/a" }
+        let fps = Double(frameIntervalsNs.count) * 1_000_000_000 / Double(totalNs)
+        return formatOneDecimal(fps)
+    }
+
+    private func droppedRatioText(dropped: Int, totalNs: UInt64) -> String {
+        let expectedFrames = Double(totalNs) / Double(expectedFrameIntervalNs)
+        guard expectedFrames > 0 else { return "n/a" }
+        let ratio = (Double(dropped) / expectedFrames) * 100
+        return "\(formatOneDecimal(ratio))%"
+    }
+
+    private func toMilliseconds(_ nanoseconds: UInt64) -> Double {
+        Double(nanoseconds) / 1_000_000
+    }
+
+    private func formatOneDecimal(_ value: Double) -> String {
+        value.formatted(.number.precision(.fractionLength(1)))
+    }
+}

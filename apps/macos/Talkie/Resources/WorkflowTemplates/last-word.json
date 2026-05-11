@@ -1,0 +1,32 @@
+{
+  "name": "Last Word",
+  "description": "Grab the final sentence from a memo and say it out loud.",
+  "icon": "speaker.wave.2.bubble.left.fill",
+  "color": "purple",
+  "maintainer": "talkie",
+  "steps": [
+    {
+      "type": "shell",
+      "outputKey": "last_sentence",
+      "executable": "/usr/bin/python3",
+      "arguments": [
+        "-c",
+        "import re, sys; text = sys.stdin.read().strip(); parts = [p.strip() for p in re.split(r'(?<=[.!?])\\s+', text) if p.strip()]; print(parts[-1] if parts else text)"
+      ],
+      "stdin": "{{TRANSCRIPT}}",
+      "timeout": 5,
+      "captureStderr": false
+    },
+    {
+      "type": "speak",
+      "outputKey": "spoken",
+      "text": "{{last_sentence}}",
+      "provider": "system",
+      "rate": 0.46,
+      "pitch": 1.0,
+      "playImmediately": true,
+      "saveToFile": false,
+      "useCache": true
+    }
+  ]
+}

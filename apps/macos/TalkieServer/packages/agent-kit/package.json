@@ -1,0 +1,10 @@
+{
+  "name": "@talkie/agent-kit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "validate": "bun run scripts/validate-content.ts",
+    "sync": "bun run scripts/validate-content.ts && bun run scripts/sync-to-app.ts"
+  }
+}

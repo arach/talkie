@@ -1,0 +1,34 @@
+name: TalkieWatch
+options:
+  bundleIdPrefix: com.example.talkie
+  deploymentTarget:
+    watchOS: "10.0"
+  developmentLanguage: en
+
+configFiles:
+  Debug: ../../../Config/Signing.xcconfig
+  Release: ../../../Config/Signing.xcconfig
+
+settings:
+  base:
+    DEVELOPMENT_TEAM: $(TALKIE_DEVELOPMENT_TEAM)
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+
+targets:
+  TalkieWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - App
+      - Views
+      - Assets.xcassets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(TALKIE_WATCH_APP_BUNDLE_ID)
+        MARKETING_VERSION: "2.4.0"
+        CURRENT_PROJECT_VERSION: "1"
+        INFOPLIST_FILE: Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        WK_COMPANION_APP_BUNDLE_IDENTIFIER: $(TALKIE_IOS_APP_BUNDLE_ID)

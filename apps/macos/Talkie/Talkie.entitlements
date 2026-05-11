@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- UNSANDBOXED: Power user app needs full capabilities -->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+
+	<!-- Application identifier required for CloudKit in release builds -->
+	<key>com.apple.application-identifier</key>
+	<string>$(AppIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+
+	<!-- CloudKit for data sync across devices -->
+	<key>com.apple.developer.icloud-container-identifiers</key>
+	<array>
+		<string>$(TALKIE_CLOUDKIT_CONTAINER)</string>
+	</array>
+	<key>com.apple.developer.icloud-services</key>
+	<array>
+		<string>CloudKit</string>
+	</array>
+	<!-- Debug builds use Development CloudKit environment by default -->
+	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
+	<string>$(TeamIdentifierPrefix)$(TALKIE_APP_IDENTIFIER)</string>
+
+	<!-- Allow sending Apple Events for workflows and automation -->
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
+
+	<!-- Allow network access for API calls and services -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+
+	<!-- Microphone access for voice memo recording -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+
+	<!-- Camera access for face video bubble -->
+	<key>com.apple.security.device.camera</key>
+	<true/>
+</dict>
+</plist>

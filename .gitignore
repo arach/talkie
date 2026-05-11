@@ -1,0 +1,179 @@
+# Xcode
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/*.xcworkspace
+*.xcworkspace/*
+!*.xcworkspace/contents.xcworkspacedata
+!TalkieSuite.xcworkspace/xcshareddata/
+TalkieSuite.xcworkspace/xcshareddata/*
+!TalkieSuite.xcworkspace/xcshareddata/xcschemes/
+TalkieSuite.xcworkspace/xcshareddata/xcschemes/*
+!TalkieSuite.xcworkspace/xcshareddata/xcschemes/Talkie\ for\ Mac.xcscheme
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.moved-aside
+DerivedData
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+*.bak
+*.bak[0-9]
+*.bak[0-9][0-9]
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# CocoaPods
+Pods/
+Podfile.lock
+
+# Carthage
+Carthage/Build/
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+fastlane/api_key.json
+apps/ios/fastlane/report.xml
+apps/ios/fastlane/Preview.html
+apps/ios/fastlane/screenshots/**/*.png
+apps/ios/fastlane/test_output
+apps/ios/fastlane/api_key.json
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.deriveddata
+
+# Node.js (for Backend)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+dist/
+build/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+!**/.env.example
+apps/ios/.iphone-device-id.local
+Config/Signing.local.xcconfig
+Config/*.local.xcconfig
+Config/signing.env
+
+# Codex
+.codex/
+.codex-build/
+output/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
+.claude/settings.local.json
+packaging/macos/staging/
+packaging/macos/packages/
+packaging/macos/*.pkg
+packaging/macos/*-intel/
+packaging/macos/*.dmg
+build-intel/
+
+# Archived code
+_archive/
+
+# Releases (built artifacts)
+releases/
+*.pbxproj.backup*
+*.pbxproj.working-*
+*.pbxproj.pre-*
+.vlmrc
+.deriveddata
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+uv.lock
+.pytest_cache/
+apps/ios/Talkie iOS/BuildInfo.generated.swift
+
+# Icon development artifacts
+_temp_icons/
+icon-workbench/
+icon-fix/
+ios-icon-output/
+ios-icon-output-chrome/
+*.appiconset.backup/
+scripts/generate_liquid_icon.py
+
+# Rust build artifacts
+**/target/
+
+# Large installer resources
+packaging/macos/resources/*.zip
+
+# App Store submission assets
+App Store Submissions/
+*.p12
+apps/ios/.asc/
+.asc/artifacts/
+fastlane/metadata/review_information/
+apps/ios/fastlane/metadata/review_information/
+
+# Local dev tools
+.devmux.json
+tools/*.app/
+
+# Planning docs (local only)
+docs/feature-ideas-*.md
+docs/feature-research-*.md
+
+# Claude Code local (user-specific memory, not project skills)
+.claude/memory/
+.settings-backup/
+
+# Bootstrap projects (local experiments)
+.vox-bootstrap/
+.lattices.json
+# OpenScout local state
+.openscout/project.json
+
+# ASC CLI local state
+.asc/
+
+# Open-source cleanup: generated/private artifacts
+apps/macos/Logs/
+packaging/macos/*.zip
+packaging/macos/*.profraw
+packaging/macos/exportOptions-*.plist
+tmp/
+/WFKit
+
+# usetalkie.com website capture artifacts
+assets/capture-flows.yaml
+assets/run-captures.sh
+assets/captures/
+assets/scripts/
+assets/website-screenshots/

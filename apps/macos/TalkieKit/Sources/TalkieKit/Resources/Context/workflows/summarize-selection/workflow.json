@@ -1,0 +1,7 @@
+{
+  "id": "summarize-selection",
+  "mode": "summary",
+  "systemPromptFile": "system.md",
+  "defaultProfile": "codex-readout-summary",
+  "timeoutMs": 7000
+}

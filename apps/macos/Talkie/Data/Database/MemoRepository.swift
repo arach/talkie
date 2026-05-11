@@ -1,0 +1,115 @@
+//
+//  MemoRepository.swift
+//  Talkie
+//
+//  Repository protocol for accessing voice memos
+//  Abstraction layer for storage (currently GRDB, can swap later)
+//
+
+import Foundation
+
+// MARK: - Sort Options
+
+
+
+// MARK: - Repository Protocol
+
+protocol MemoRepository: Actor {
+    /// Fetch memos with pagination and sorting
+    /// This is where the SQLite magic happens - LIMIT/OFFSET at query level
+    func fetchMemos(
+        sortBy: MemoModel.SortField,
+        ascending: Bool,
+        limit: Int,
+        offset: Int,
+        searchQuery: String?,
+        filters: Set<MemoFilter>
+    ) async throws -> [MemoModel]
+
+    /// Count total memos (for pagination UI)
+    func countMemos(searchQuery: String?, filters: Set<MemoFilter>) async throws -> Int
+
+    /// Fetch single memo by ID with relationships
+    func fetchMemo(id: UUID) async throws -> MemoWithRelationships?
+
+    /// Save or update memo
+    func saveMemo(_ memo: MemoModel) async throws
+
+    /// Delete memo (hard delete)
+    func deleteMemo(id: UUID) async throws
+
+    // MARK: - Soft Delete
+
+    /// Soft delete a memo (set deletedAt timestamp)
+    func softDeleteMemo(id: UUID) async throws
+
+    /// Soft delete multiple memos
+    func softDeleteMemos(ids: Set<UUID>) async throws
+
+    /// Fetch memos pending deletion
+    func fetchPendingDeletions() async throws -> [MemoModel]
+
+    /// Count memos pending deletion
+    func countPendingDeletions() async throws -> Int
+
+    /// Restore a soft-deleted memo
+    func restoreMemo(id: UUID) async throws
+
+    /// Hard delete (permanent) - use after user confirms
+    func hardDeleteMemo(id: UUID) async throws
+
+    /// Fetch transcript versions for a memo
+    func fetchTranscriptVersions(for memoId: UUID) async throws -> [TranscriptVersionModel]
+
+    /// Fetch workflow runs for a memo
+    func fetchWorkflowRuns(for memoId: UUID) async throws -> [WorkflowRunModel]
+
+    /// Save transcript version
+    func saveTranscriptVersion(_ version: TranscriptVersionModel) async throws
+
+    /// Save workflow run
+    func saveWorkflowRun(_ run: WorkflowRunModel) async throws
+
+    /// Delete workflow run
+    func deleteWorkflowRun(id: UUID) async throws
+
+    // MARK: - Aggregations (for dashboard stats)
+
+    /// Count memos created today
+    func countMemosToday() async throws -> Int
+
+    /// Count memos created this week
+    func countMemosThisWeek() async throws -> Int
+
+    /// Heatmap data: date string (yyyy-MM-dd) → count for last N days
+    func fetchHeatmapData(days: Int) async throws -> [String: Int]
+
+    /// Total duration of all memos in seconds
+    func totalDuration() async throws -> Double
+
+    /// Fetch memos that have transcription
+    /// - Parameter limit: Maximum number of memos to return (default 100)
+    func fetchTranscribedMemos(limit: Int) async throws -> [MemoModel]
+
+    /// Fetch memos that need transcription (no transcription or empty, not currently transcribing)
+    /// - Parameter limit: Maximum number of memos to return (default 100)
+    func fetchUntranscribedMemos(limit: Int) async throws -> [MemoModel]
+}
+
+// MARK: - Memo with Relationships
+
+struct MemoWithRelationships {
+    let memo: MemoModel
+    let transcriptVersions: [TranscriptVersionModel]
+    let workflowRuns: [WorkflowRunModel]
+
+    /// Computed: workflow count (cached for performance)
+    var workflowCount: Int {
+        workflowRuns.count
+    }
+
+    /// Latest transcript version
+    var latestTranscript: TranscriptVersionModel? {
+        transcriptVersions.sorted { $0.version > $1.version }.first
+    }
+}

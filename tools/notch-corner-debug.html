@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Notch Edge + External Curve Lab</title>
+  <style>
+    :root {
+      --bg: #07090b;
+      --panel: #11141a;
+      --border: #2b313a;
+      --text: #e8eef6;
+      --muted: #9aa4b3;
+      --top: #ccb800;
+      --notch: #00d8ff;
+      --shape: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 18px;
+      background: radial-gradient(920px 460px at 14% -8%, #162234 0%, var(--bg) 58%);
+      color: var(--text);
+      font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .layout {
+      max-width: 1320px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 16px;
+    }
+    .card {
+      background: color-mix(in oklab, var(--panel) 92%, black);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 16px;
+      letter-spacing: 0.02em;
+    }
+    p {
+      margin: 0 0 12px;
+      color: var(--muted);
+    }
+    .row { margin-bottom: 12px; }
+    .row label {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      color: var(--muted);
+    }
+    input[type="range"] {
+      width: 100%;
+      accent-color: #3da9fc;
+    }
+    .toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    canvas {
+      width: 100%;
+      height: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #000;
+      display: block;
+    }
+    .code {
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px dashed #46536a;
+      border-radius: 8px;
+      background: #0a1118;
+      color: #d5dfef;
+      white-space: pre-wrap;
+    }
+    .hint {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <div class="card">
+      <h1>Notch + Signed X-Anchor Join</h1>
+      <p>Right notch edge context. The shape is closed and filled on the left side of the right notch edge.</p>
+
+      <div class="row">
+        <label><span>Notch Width</span><strong id="notchWidthValue"></strong></label>
+        <input id="notchWidth" type="range" min="80" max="360" step="1" value="210" />
+      </div>
+
+      <div class="row">
+        <label><span>Notch Height</span><strong id="notchHeightValue"></strong></label>
+        <input id="notchHeight" type="range" min="18" max="90" step="1" value="34" />
+      </div>
+
+      <div class="row">
+        <label><span>Corner Drop (t)</span><strong id="cornerSizeValue"></strong></label>
+        <input id="cornerSize" type="range" min="10" max="110" step="1" value="56" />
+      </div>
+
+      <div class="row">
+        <label><span>Anchor X Offset</span><strong id="extrudeXValue"></strong></label>
+        <input id="extrudeX" type="range" min="-140" max="140" step="1" value="56" />
+      </div>
+
+      <div class="row">
+        <label><span>Shape Depth</span><strong id="shapeDepthValue"></strong></label>
+        <input id="shapeDepth" type="range" min="40" max="260" step="1" value="130" />
+      </div>
+
+      <div class="row">
+        <label><span>Center X Offset</span><strong id="offsetValue"></strong></label>
+        <input id="centerOffset" type="range" min="-220" max="220" step="1" value="0" />
+      </div>
+
+      <label class="toggle"><input id="showHandles" type="checkbox" checked /> Show control handles</label>
+      <label class="toggle"><input id="showLabels" type="checkbox" checked /> Show labels</label>
+
+      <div id="swiftSnippet" class="code"></div>
+      <div class="hint">Anchor point moves on X only. Curvature sign follows X: <code>+</code> external, <code>-</code> internal.</div>
+    </div>
+
+    <div class="card">
+      <canvas id="canvas" width="980" height="620"></canvas>
+      <div class="hint">Yellow = top screen edge, cyan dashed = notch cutout, white = connected filled path.</div>
+    </div>
+  </div>
+
+  <script>
+    const ui = {
+      notchWidth: document.getElementById("notchWidth"),
+      notchHeight: document.getElementById("notchHeight"),
+      cornerSize: document.getElementById("cornerSize"),
+      extrudeX: document.getElementById("extrudeX"),
+      shapeDepth: document.getElementById("shapeDepth"),
+      centerOffset: document.getElementById("centerOffset"),
+      showHandles: document.getElementById("showHandles"),
+      showLabels: document.getElementById("showLabels"),
+      notchWidthValue: document.getElementById("notchWidthValue"),
+      notchHeightValue: document.getElementById("notchHeightValue"),
+      cornerSizeValue: document.getElementById("cornerSizeValue"),
+      extrudeXValue: document.getElementById("extrudeXValue"),
+      shapeDepthValue: document.getElementById("shapeDepthValue"),
+      offsetValue: document.getElementById("offsetValue"),
+      swiftSnippet: document.getElementById("swiftSnippet"),
+      canvas: document.getElementById("canvas")
+    };
+
+    function drawText(ctx, text, x, y, color) {
+      ctx.fillStyle = color;
+      ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
+      ctx.fillText(text, x, y);
+    }
+
+    function dot(ctx, x, y, color) {
+      ctx.beginPath();
+      ctx.fillStyle = color;
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function draw() {
+      const notchWidth = Number(ui.notchWidth.value);
+      const notchHeight = Number(ui.notchHeight.value);
+      const t = Number(ui.cornerSize.value);
+      const ex = Number(ui.extrudeX.value);
+      const shapeDepth = Number(ui.shapeDepth.value);
+      const centerOffset = Number(ui.centerOffset.value);
+      const showHandles = ui.showHandles.checked;
+      const showLabels = ui.showLabels.checked;
+
+      ui.notchWidthValue.textContent = String(notchWidth);
+      ui.notchHeightValue.textContent = String(notchHeight);
+      ui.cornerSizeValue.textContent = String(t);
+      ui.extrudeXValue.textContent = String(ex);
+      ui.shapeDepthValue.textContent = String(shapeDepth);
+      ui.offsetValue.textContent = String(centerOffset);
+
+      const ctx = ui.canvas.getContext("2d");
+      const w = ui.canvas.width;
+      const h = ui.canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, w, h);
+
+      const topY = 210;
+      const centerX = (w / 2) + centerOffset;
+      const notchX = centerX - (notchWidth / 2);
+      const rightEdgeX = notchX + notchWidth;
+      const shapeLeft = Math.max(64, rightEdgeX - (notchWidth + 120));
+
+      const shoulder = { x: rightEdgeX + ex, y: topY };        // top anchor y fixed
+      const cornerEnd = { x: rightEdgeX, y: topY + t };        // right-edge anchor y fixed by t
+      const cornerCenter = { x: rightEdgeX + ex, y: topY + t };
+      const rx = Math.max(1, Math.abs(ex));
+      const isExternal = ex >= 0;
+
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(255,255,255,0.15)";
+      ctx.strokeRect(24, 24, w - 48, h - 48);
+
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--top");
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(64, topY);
+      ctx.lineTo(w - 64, topY);
+      ctx.stroke();
+
+      ctx.setLineDash([6, 4]);
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--notch");
+      ctx.lineWidth = 1.6;
+      ctx.strokeRect(notchX, topY, notchWidth, notchHeight);
+      ctx.setLineDash([]);
+
+      ctx.strokeStyle = "rgba(0,216,255,0.95)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(rightEdgeX, topY);
+      ctx.lineTo(rightEdgeX, topY + notchHeight);
+      ctx.stroke();
+
+      // Filled closed path: top segment -> extrude -> quarter-turn ellipse -> right side -> bottom -> left wall -> close
+      ctx.fillStyle = "rgba(255,255,255,0.08)";
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--shape");
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(shapeLeft, topY);
+      ctx.lineTo(shoulder.x, shoulder.y);
+      if (isExternal) {
+        // Right-edge external: quarter turn from top -> left side.
+        ctx.ellipse(cornerCenter.x, cornerCenter.y, rx, t, 0, -Math.PI / 2, -Math.PI, true);
+      } else {
+        // Right-edge internal: quarter turn from top -> right side.
+        ctx.ellipse(cornerCenter.x, cornerCenter.y, rx, t, 0, -Math.PI / 2, 0, true);
+      }
+      ctx.lineTo(rightEdgeX, topY + shapeDepth);
+      ctx.lineTo(shapeLeft, topY + shapeDepth);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      if (showHandles) {
+        ctx.setLineDash([5, 4]);
+        ctx.strokeStyle = "rgba(255,149,0,0.9)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(shoulder.x, shoulder.y);
+        ctx.lineTo(cornerCenter.x, cornerCenter.y);
+        ctx.lineTo(cornerEnd.x, cornerEnd.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        dot(ctx, shoulder.x, shoulder.y, "#ffffff");
+        dot(ctx, cornerEnd.x, cornerEnd.y, "#ffffff");
+        dot(ctx, cornerCenter.x, cornerCenter.y, "#ff9500");
+      }
+
+      if (showLabels) {
+        drawText(ctx, "top screen edge", 70, topY - 8, "#ccb800");
+        drawText(ctx, "notch cutout", notchX + 6, topY + notchHeight + 14, "#00d8ff");
+        drawText(ctx, "right notch edge", rightEdgeX + 8, topY + notchHeight / 2, "#00d8ff");
+        drawText(ctx, isExternal ? "external curvature" : "internal curvature", rightEdgeX + 10, topY + 24, "#ffffff");
+        drawText(ctx, "x-anchor shoulder", shoulder.x - 72, shoulder.y - 10, "#ffffff");
+        drawText(ctx, "filled shape (left interior)", shapeLeft + 8, topY + shapeDepth + 14, "#ffffff");
+      }
+
+      ui.swiftSnippet.textContent =
+`let topY: CGFloat = ${topY}
+let rightEdgeX: CGFloat = ${rightEdgeX}
+let t: CGFloat = ${t}
+let extrudeX: CGFloat = ${ex}
+
+let shoulder = CGPoint(x: rightEdgeX + extrudeX, y: topY)
+let cornerEnd = CGPoint(x: rightEdgeX, y: topY + t)
+let center = CGPoint(x: rightEdgeX + extrudeX, y: topY + t)
+
+path.move(to: CGPoint(x: shapeLeft, y: topY))
+path.addLine(to: shoulder)
+// sign(extrudeX): + external, - internal
+path.addLine(to: CGPoint(x: rightEdgeX, y: topY + ${shapeDepth}))
+path.addLine(to: CGPoint(x: shapeLeft, y: topY + ${shapeDepth}))
+path.closeSubpath()`;
+    }
+
+    [
+      ui.notchWidth,
+      ui.notchHeight,
+      ui.cornerSize,
+      ui.extrudeX,
+      ui.shapeDepth,
+      ui.centerOffset,
+      ui.showHandles,
+      ui.showLabels
+    ].forEach((node) => {
+      node.addEventListener("input", draw);
+    });
+
+    draw();
+  </script>
+</body>
+</html>

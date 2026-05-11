@@ -1,0 +1,29 @@
+{
+  "name": "Speak Summary",
+  "description": "Summarize your voice memo and read it back using remote TTS.",
+  "icon": "speaker.wave.2",
+  "color": "teal",
+  "maintainer": "talkie",
+  "steps": [
+    {
+      "type": "llm",
+      "outputKey": "summary",
+      "costTier": "budget",
+      "prompt": "Summarize this voice memo in 2-3 sentences. Be concise and capture the key points.\n\nTranscript:\n{{TRANSCRIPT}}",
+      "systemPrompt": "You are a helpful assistant that creates concise, natural-sounding summaries perfect for text-to-speech.",
+      "temperature": 0.7,
+      "maxTokens": 256
+    },
+    {
+      "type": "speak",
+      "outputKey": "audio",
+      "text": "{{summary}}",
+      "provider": "openai",
+      "voice": "alloy",
+      "rate": 0.5,
+      "pitch": 1.0,
+      "playImmediately": true,
+      "saveToFile": false
+    }
+  ]
+}

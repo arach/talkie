@@ -1,0 +1,24 @@
+project("./Talkie-iOS.xcodeproj")
+
+scheme("TalkieUITests")
+
+devices([
+  "iPhone 17 Pro Max",
+  "iPhone 17 Pro",
+  "iPad Air 13-inch (M3)",
+])
+
+languages(["en-US"])
+
+output_directory("./fastlane/screenshots")
+
+clear_previous_screenshots(true)
+
+override_status_bar(true)
+
+# Prevent xcodebuild from cloning simulators (faster, uses already-booted sim)
+xcargs("-parallel-testing-enabled NO")
+
+# Only run screenshot tests (all methods in the class)
+testplan(nil)
+only_testing(["TalkieUITests/TalkieUITestsScreenshots"])

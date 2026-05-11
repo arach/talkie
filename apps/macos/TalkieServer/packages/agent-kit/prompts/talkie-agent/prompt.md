@@ -1,0 +1,1 @@
+Inspect the workspace, summarize the relevant rule, config, memo, and workflow surfaces, and if the user is describing a workflow they want, turn that request into a real workflow file in Live Config/workflow-user.

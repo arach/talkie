@@ -1,0 +1,8 @@
+{
+  "input": "image.png",
+  "threshold": 101,
+  "threshold_offset": 0,
+  "closing_size": 3,
+  "sdf_size": 1024,
+  "sdf_max_abs": 498.3229432141165
+}

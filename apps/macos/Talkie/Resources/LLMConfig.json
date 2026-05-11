@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 2,
+  "providers": {
+    "gemini": {
+      "id": "gemini",
+      "name": "Google Gemini",
+      "defaultModel": "gemini-2.0-flash",
+      "models": [
+        {
+          "id": "gemini-2.0-flash-lite",
+          "displayName": "Gemini 2.0 Flash Lite",
+          "description": "Budget Gemini model for quick tasks",
+          "recommended": true,
+          "workflowCostTier": "budget"
+        },
+        {
+          "id": "gemini-2.0-flash",
+          "displayName": "Gemini 2.0 Flash",
+          "description": "Fast, efficient model for most tasks",
+          "recommended": true,
+          "workflowCostTier": "balanced"
+        },
+        {
+          "id": "gemini-2.5-pro-latest",
+          "displayName": "Gemini 2.5 Pro",
+          "description": "Most capable Gemini model",
+          "recommended": true,
+          "workflowCostTier": "capable"
+        },
+        {
+          "id": "gemini-1.5-flash-latest",
+          "displayName": "Gemini 1.5 Flash",
+          "description": "Previous generation flash model",
+          "recommended": false,
+          "workflowCostTier": "budget"
+        },
+        {
+          "id": "gemini-1.5-pro-latest",
+          "displayName": "Gemini 1.5 Pro",
+          "description": "Previous generation pro model",
+          "recommended": false,
+          "workflowCostTier": "capable"
+        }
+      ]
+    },
+    "anthropic": {
+      "id": "anthropic",
+      "name": "Anthropic",
+      "defaultModel": "claude-sonnet-4-6",
+      "models": [
+        {
+          "id": "claude-sonnet-4-6",
+          "displayName": "Claude Sonnet 4.6",
+          "description": "Latest balanced Claude model for writing, coding, and analysis",
+          "recommended": true,
+          "workflowCostTier": "balanced"
+        },
+        {
+          "id": "claude-opus-4-6",
+          "displayName": "Claude Opus 4.6",
+          "description": "Highest-capability Claude model for complex reasoning and agents",
+          "recommended": true,
+          "workflowCostTier": "capable"
+        },
+        {
+          "id": "claude-haiku-4-5-20251001",
+          "displayName": "Claude Haiku 4.5",
+          "description": "Fastest current Claude model for high-volume and real-time tasks",
+          "recommended": true,
+          "workflowCostTier": "budget"
+        },
+        {
+          "id": "claude-sonnet-4-5-20250929",
+          "displayName": "Claude Sonnet 4.5",
+          "description": "Previous Sonnet release with strong coding and agent performance",
+          "recommended": true,
+          "workflowCostTier": "balanced"
+        }
+      ]
+    },
+    "openai": {
+      "id": "openai",
+      "name": "OpenAI",
+      "defaultModel": "gpt-5.4-mini",
+      "models": [
+        {
+          "id": "gpt-5.4",
+          "displayName": "GPT-5.4",
+          "description": "Best intelligence at scale for agentic and professional workflows (1M context)",
+          "recommended": true,
+          "workflowCostTier": "capable"
+        },
+        {
+          "id": "gpt-5.4-mini",
+          "displayName": "GPT-5.4 Mini",
+          "description": "Strong mini model for coding, computer use, and subagents (400K context)",
+          "recommended": true,
+          "workflowCostTier": "balanced"
+        },
+        {
+          "id": "gpt-5.4-nano",
+          "displayName": "GPT-5.4 Nano",
+          "description": "Cheapest GPT-5.4-class model for simple high-volume tasks (400K context)",
+          "recommended": true,
+          "workflowCostTier": "budget"
+        },
+        {
+          "id": "o4-mini",
+          "displayName": "o4-mini",
+          "description": "Fast reasoning model for complex analytical tasks (200K context)",
+          "recommended": true,
+          "workflowCostTier": "balanced"
+        },
+        {
+          "id": "o3",
+          "displayName": "o3",
+          "description": "Advanced reasoning model for deep analysis (200K context)",
+          "recommended": false,
+          "workflowCostTier": "capable"
+        },
+        {
+          "id": "gpt-4.1",
+          "displayName": "GPT-4.1",
+          "description": "Previous generation flagship with 1M context window",
+          "recommended": false,
+          "workflowCostTier": "balanced"
+        },
+        {
+          "id": "gpt-4.1-mini",
+          "displayName": "GPT-4.1 Mini",
+          "description": "Fast and affordable previous generation model (1M context)",
+          "recommended": false,
+          "workflowCostTier": "budget"
+        },
+        {
+          "id": "gpt-4.1-nano",
+          "displayName": "GPT-4.1 Nano",
+          "description": "Ultra-lightweight model for simple tasks (1M context)",
+          "recommended": false,
+          "workflowCostTier": "budget"
+        }
+      ]
+    },
+    "groq": {
+      "id": "groq",
+      "name": "Groq",
+      "defaultModel": "llama-3.1-8b-instant",
+      "models": [
+        {
+          "id": "llama-3.3-70b-versatile",
+          "displayName": "Llama 3.3 70B",
+          "description": "Most capable Groq-hosted Llama model",
+          "recommended": true,
+          "workflowCostTier": "capable"
+        },
+        {
+          "id": "llama-3.1-8b-instant",
+          "displayName": "Llama 3.1 8B (Instant)",
+          "description": "Ultra-fast inference",
+          "recommended": true,
+          "workflowCostTier": "budget"
+        },
+        {
+          "id": "mixtral-8x7b-32768",
+          "displayName": "Mixtral 8x7B",
+          "description": "Mixture-of-experts model",
+          "recommended": false,
+          "workflowCostTier": "balanced"
+        },
+        {
+          "id": "gemma2-9b-it",
+          "displayName": "Gemma 2 9B",
+          "description": "Compact instruction-tuned model",
+          "recommended": false,
+          "workflowCostTier": "budget"
+        }
+      ]
+    }
+  },
+  "preferredProviderOrder": ["gemini", "anthropic", "openai", "groq"]
+}

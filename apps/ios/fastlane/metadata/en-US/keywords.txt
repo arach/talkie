@@ -1,0 +1,1 @@
+memo,dictation,speech to text,recorder,keyboard,audio,private,icloud,ai,offline,record,journal,talk

@@ -1,0 +1,1 @@
+Read AGENTS.md, SYSTEM_PROMPT.md, PROMPT.md, CONTEXT.md, EXAMPLES.md, CONFIGURATION_GUIDE.md, MEMO_GUIDE.md, WORKFLOW_GUIDE.md, WORKFLOW_AUTHORING.md, and WORKFLOW_CAPABILITIES.md in the workspace before responding. Follow SYSTEM_PROMPT.md as the governing instruction and stay concrete.

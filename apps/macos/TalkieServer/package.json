@@ -1,0 +1,34 @@
+{
+  "name": "talkie-server",
+  "version": "0.1.0",
+  "description": "Unified TypeScript server for Talkie (Bridge + Gateway modules)",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "bin": {
+    "bridge": "./bin/bridge"
+  },
+  "scripts": {
+    "start": "bun run src/server.ts",
+    "start:local": "bun run src/server.ts --local",
+    "dev": "bun --watch run src/server.ts --local",
+    "bridge": "./bin/bridge",
+    "smoke:local-security": "bash scripts/smoke-local-security.sh",
+    "agent-kit:validate": "bun run packages/agent-kit/scripts/validate-content.ts",
+    "agent-kit:sync": "bun run packages/agent-kit/scripts/validate-content.ts && bun run packages/agent-kit/scripts/sync-to-app.ts",
+    "postinstall": "./bin/bridge install && ./bin/bridge start",
+    "setup": "./bin/bridge install && ./bin/bridge start"
+  },
+  "dependencies": {
+    "@talkie/workflow-core": "workspace:*",
+    "@anthropic-ai/claude-code": "^2.0.76",
+    "@anthropic-ai/sdk": "^0.71.2",
+    "@elysiajs/cors": "^1.4.1",
+    "elysia": "^1.4.21"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

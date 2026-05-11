@@ -1,0 +1,134 @@
+//
+//  LLMModelsSettingsView.swift
+//  Talkie
+//
+//  AI/LLM model library for workflows
+//  (Renamed from ModelLibrarySettings.swift)
+//
+
+import SwiftUI
+import os
+
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "LLMModelsSettings")
+
+// MARK: - LLM Models Settings View
+
+struct LLMModelsSettingsView: View {
+    @ObservedObject var settingsManager = SettingsManager.shared
+
+    let models: [(model: AIModel, installed: Bool)] = [
+        (.geminiFlash, true),
+        (.geminiPro, false)
+    ]
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.lg) {
+                // Header
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    Text("AI & LLM Models")
+                        .font(Theme.current.fontTitle)
+                        .fontWeight(.semibold)
+                        .foregroundColor(Theme.current.foreground)
+
+                    Text("Manage AI models for workflow steps. These models are used for AI actions like summarization, extraction, and transformation.")
+                        .font(Theme.current.fontSM)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                }
+
+                // Models
+                VStack(spacing: Spacing.md) {
+                    ForEach(models, id: \.model.rawValue) { item in
+                        LLMModelCard(model: item.model, installed: item.installed)
+                    }
+                }
+
+                Spacer()
+            }
+            .padding(Spacing.lg)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.current.background)
+    }
+}
+
+// MARK: - LLM Model Card
+
+struct LLMModelCard: View {
+    let model: AIModel
+    let installed: Bool
+    private let settings = SettingsManager.shared
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Spacing.md) {
+            // Icon
+            Image(systemName: "sparkles")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundColor(installed ? Color.accentColor : Theme.current.foregroundSecondary)
+                .frame(width: 32, height: 32)
+                .background(Theme.current.backgroundSecondary)
+                .cornerRadius(CornerRadius.sm)
+
+            // Info
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                HStack(spacing: Spacing.xs) {
+                    Text(model.displayName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Theme.current.foreground)
+
+                    Text(model.badge)
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(model == .geminiPro ? Color.purple : Color.accentColor)
+                        .cornerRadius(3)
+                }
+
+                Text(model.description)
+                    .font(Theme.current.fontSM)
+                    .foregroundColor(Theme.current.foregroundSecondary)
+
+                Text("ID: \(model.rawValue)")
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(Theme.current.foregroundMuted)
+            }
+
+            Spacer()
+
+            // Status/Action
+            if installed {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(SemanticColor.success)
+                    Text("INSTALLED")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(SemanticColor.success)
+                }
+            } else {
+                Button(action: {
+                    // TODO: Implement download
+                    logger.info("Download model: \(model.rawValue)")
+                }) {
+                    Text("DOWNLOAD")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.accentColor)
+                        .cornerRadius(4)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(Spacing.md)
+        .background(Theme.current.backgroundSecondary)
+        .cornerRadius(CornerRadius.sm)
+    }
+}
+
+#Preview {
+    LLMModelsSettingsView()
+        .frame(width: 700, height: 600)
+}

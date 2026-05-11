@@ -1,0 +1,14 @@
+{
+  "manifest_version": 1,
+  "name": "Milestones",
+  "version": "1.0.0",
+  "description": "Celebrates your voice capture achievements with milestone notifications.",
+  "author": "Talkie",
+  "permissions": ["storage", "notifications", "state"],
+  "background": {
+    "script": "background.js"
+  },
+  "icons": {
+    "32": "icon.png"
+  }
+}

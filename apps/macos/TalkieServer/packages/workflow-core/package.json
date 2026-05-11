@@ -1,0 +1,12 @@
+{
+  "name": "@talkie/workflow-core",
+  "version": "0.1.0",
+  "description": "Portable Talkie workflow normalization and runtime core",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

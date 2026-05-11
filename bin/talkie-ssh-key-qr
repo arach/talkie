@@ -1,0 +1,195 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec /usr/bin/swift - "$@" <<'SWIFT'
+import AppKit
+import CoreImage
+import CoreImage.CIFilterBuiltins
+import Foundation
+
+struct Payload: Encodable {
+    let `protocol`: String
+    let label: String?
+    let privateKey: String
+}
+
+enum CLIError: LocalizedError {
+    case usage
+    case missingValue(String)
+    case invalidArguments(String)
+    case emptyKey(URL)
+    case invalidKey(URL)
+    case qrGenerationFailed
+    case pngEncodingFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .usage:
+            """
+            Usage: talkie-ssh-key-qr <private-key-path> [--label <label>] [--output <png-path>] [--no-open]
+            """
+        case .missingValue(let flag):
+            "Missing value for \(flag)."
+        case .invalidArguments(let message):
+            message
+        case .emptyKey(let url):
+            "The key file at \(url.path) is empty."
+        case .invalidKey(let url):
+            "The file at \(url.path) does not look like a private key."
+        case .qrGenerationFailed:
+            "The QR code image could not be generated."
+        case .pngEncodingFailed:
+            "The QR code image could not be encoded as PNG."
+        }
+    }
+}
+
+struct Configuration {
+    let keyURL: URL
+    let label: String?
+    let outputURL: URL
+    let shouldOpen: Bool
+}
+
+func parseConfiguration(arguments: [String]) throws -> Configuration {
+    guard !arguments.isEmpty else {
+        throw CLIError.usage
+    }
+
+    var keyPath: String?
+    var label: String?
+    var outputPath: String?
+    var shouldOpen = true
+
+    var index = 0
+    while index < arguments.count {
+        let argument = arguments[index]
+
+        switch argument {
+        case "--label":
+            index += 1
+            guard index < arguments.count else { throw CLIError.missingValue("--label") }
+            label = arguments[index]
+        case "--output":
+            index += 1
+            guard index < arguments.count else { throw CLIError.missingValue("--output") }
+            outputPath = arguments[index]
+        case "--no-open":
+            shouldOpen = false
+        case "--help", "-h":
+            throw CLIError.usage
+        default:
+            if keyPath == nil {
+                keyPath = argument
+            } else {
+                throw CLIError.invalidArguments("Unexpected argument: \(argument)")
+            }
+        }
+
+        index += 1
+    }
+
+    guard let keyPath else {
+        throw CLIError.usage
+    }
+
+    let keyURL = URL(fileURLWithPath: keyPath, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
+        .standardizedFileURL
+
+    let resolvedLabel = label?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        ? label?.trimmingCharacters(in: .whitespacesAndNewlines)
+        : keyURL.lastPathComponent
+
+    let outputURL: URL
+    if let outputPath {
+        outputURL = URL(fileURLWithPath: outputPath, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
+            .standardizedFileURL
+    } else {
+        let baseName = keyURL.deletingPathExtension().lastPathComponent
+        outputURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appending(path: "\(baseName)-talkie-ssh-key.png")
+    }
+
+    return Configuration(
+        keyURL: keyURL,
+        label: resolvedLabel,
+        outputURL: outputURL,
+        shouldOpen: shouldOpen
+    )
+}
+
+func loadPrivateKey(from url: URL) throws -> String {
+    let key = try String(contentsOf: url, encoding: .utf8)
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+
+    guard !key.isEmpty else {
+        throw CLIError.emptyKey(url)
+    }
+
+    guard key.localizedCaseInsensitiveContains("BEGIN"),
+          key.localizedCaseInsensitiveContains("PRIVATE KEY") else {
+        throw CLIError.invalidKey(url)
+    }
+
+    return key
+}
+
+func generatePNGData(from payload: String) throws -> Data {
+    let context = CIContext()
+    let filter = CIFilter.qrCodeGenerator()
+    filter.message = Data(payload.utf8)
+    filter.correctionLevel = "M"
+
+    let transformed = filter.outputImage?
+        .transformed(by: CGAffineTransform(scaleX: 14, y: 14))
+
+    guard let transformed,
+          let cgImage = context.createCGImage(transformed, from: transformed.extent) else {
+        throw CLIError.qrGenerationFailed
+    }
+
+    let rep = NSBitmapImageRep(cgImage: cgImage)
+    guard let pngData = rep.representation(using: NSBitmapImageRep.FileType.png, properties: [:]) else {
+        throw CLIError.pngEncodingFailed
+    }
+
+    return pngData
+}
+
+do {
+    let configuration = try parseConfiguration(arguments: Array(CommandLine.arguments.dropFirst()))
+    let privateKey = try loadPrivateKey(from: configuration.keyURL)
+
+    let payload = Payload(
+        protocol: "talkie-ssh-key-v1",
+        label: configuration.label,
+        privateKey: privateKey
+    )
+
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    let payloadData = try encoder.encode(payload)
+    guard let payloadString = String(data: payloadData, encoding: .utf8) else {
+        throw CLIError.invalidArguments("The SSH key payload could not be encoded as UTF-8.")
+    }
+
+    let pngData = try generatePNGData(from: payloadString)
+
+    try FileManager.default.createDirectory(
+        at: configuration.outputURL.deletingLastPathComponent(),
+        withIntermediateDirectories: true
+    )
+    try pngData.write(to: configuration.outputURL, options: .atomic)
+
+    FileHandle.standardOutput.write(Data("Wrote QR code to \(configuration.outputURL.path)\n".utf8))
+    FileHandle.standardOutput.write(Data("Scan it from Talkie > SSH Terminal > Private Key > Scan QR\n".utf8))
+
+    if configuration.shouldOpen {
+        NSWorkspace.shared.open(configuration.outputURL)
+    }
+} catch {
+    let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+    FileHandle.standardError.write(Data("talkie-ssh-key-qr: \(message)\n".utf8))
+    exit(1)
+}
+SWIFT

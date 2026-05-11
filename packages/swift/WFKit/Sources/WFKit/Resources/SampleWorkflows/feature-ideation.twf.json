@@ -1,0 +1,96 @@
+{
+  "slug": "feature-ideation",
+  "name": "Feature Ideation",
+  "description": "Brainstorm features → categorize by effort/impact → save to backlog",
+  "icon": "lightbulb.max",
+  "color": "yellow",
+  "isEnabled": true,
+  "isPinned": false,
+  "autoRun": false,
+  "steps": [
+    {
+      "id": "extract-features",
+      "type": "LLM Generation",
+      "config": {
+        "llm": {
+          "costTier": "balanced",
+          "prompt": "Analyze this feature brainstorm:\n\n{{TRANSCRIPT}}\n\nExtract distinct feature ideas and evaluate each. Return JSON:\n{\n  \"project\": \"project name if mentioned, else 'General'\",\n  \"features\": [\n    {\n      \"title\": \"short feature title\",\n      \"description\": \"1-2 sentence description\",\n      \"impact\": \"high|medium|low\",\n      \"effort\": \"high|medium|low\",\n      \"category\": \"ux|performance|integration|infrastructure|polish\",\n      \"dependencies\": [\"other features or prerequisites if any\"]\n    }\n  ],\n  \"quickWins\": [\"features that are high impact + low effort\"],\n  \"bigBets\": [\"features that are high impact + high effort\"],\n  \"contextNotes\": \"any important context or constraints mentioned\"\n}",
+          "systemPrompt": "You help product thinking. Be honest about effort estimates - developers tend to underestimate. Look for hidden dependencies.",
+          "temperature": 0.4,
+          "maxTokens": 2048
+        }
+      }
+    },
+    {
+      "id": "parse-json",
+      "type": "Transform Data",
+      "config": {
+        "transform": {
+          "operation": "Extract JSON",
+          "parameters": {
+            "fallback": "{\"project\": \"General\", \"features\": [], \"quickWins\": [], \"bigBets\": []}"
+          }
+        }
+      }
+    },
+    {
+      "id": "format-backlog",
+      "type": "LLM Generation",
+      "config": {
+        "llm": {
+          "costTier": "budget",
+          "prompt": "Format this as a markdown backlog entry:\n\nProject: {{parse-json.project}}\nFeatures: {{parse-json.features}}\nQuick Wins: {{parse-json.quickWins}}\nBig Bets: {{parse-json.bigBets}}\nContext: {{parse-json.contextNotes}}\n\nFormat as:\n## Quick Wins (do these first)\n- [ ] Feature (impact/effort) - description\n\n## Backlog\nGroup by category. Each item:\n- [ ] **Feature Title** `impact`/`effort`\n  Description. Dependencies if any.\n\n## Big Bets (need planning)\n- Feature → why it's worth it\n\n## Notes\nAny context or constraints.\n\nUse checkboxes for actionable items.",
+          "temperature": 0.3,
+          "maxTokens": 2048
+        }
+      }
+    },
+    {
+      "id": "save-backlog",
+      "type": "Save to File",
+      "config": {
+        "saveFile": {
+          "filename": "{{DATE}}-{{parse-json.project}}-ideas.md",
+          "directory": "@Obsidian/Projects/Backlog",
+          "content": "---\ncreated: {{DATE}}\nproject: \"{{parse-json.project}}\"\ntype: feature-ideation\n---\n\n# Feature Ideas: {{parse-json.project}}\n\n{{format-backlog}}\n\n---\n\n## Raw Brainstorm\n\n> {{TRANSCRIPT}}",
+          "appendIfExists": false
+        }
+      }
+    },
+    {
+      "id": "check-quick-wins",
+      "type": "Conditional Branch",
+      "config": {
+        "conditional": {
+          "condition": "{{parse-json.quickWins.length}} > 0",
+          "thenSteps": ["create-quick-win-reminder"],
+          "elseSteps": []
+        }
+      }
+    },
+    {
+      "id": "create-quick-win-reminder",
+      "type": "Create Reminder",
+      "config": {
+        "appleReminders": {
+          "listName": "Inbox",
+          "title": "Quick win: {{parse-json.quickWins[0]}}",
+          "notes": "From {{parse-json.project}} ideation session.\n\nSee: @Obsidian/Projects/Backlog/{{DATE}}-{{parse-json.project}}-ideas.md",
+          "dueDate": "{{NOW+1d}}",
+          "priority": 5
+        }
+      }
+    },
+    {
+      "id": "notify",
+      "type": "Send Notification",
+      "config": {
+        "notification": {
+          "title": "Ideas captured",
+          "body": "{{parse-json.features.length}} features for {{parse-json.project}}",
+          "sound": true
+        }
+      }
+    }
+  ]
+}

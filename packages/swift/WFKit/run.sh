@@ -1,0 +1,8 @@
+#!/bin/bash
+
+# Kill any existing Workflow instances
+pkill -f "Workflow" 2>/dev/null
+sleep 0.5
+
+# Run (no build)
+swift run Workflow

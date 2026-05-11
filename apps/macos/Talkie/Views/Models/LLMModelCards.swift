@@ -1,0 +1,497 @@
+//
+//  LLMModelCards.swift
+//  Talkie macOS
+//
+//  Extracted from ModelsContentView.swift
+//
+
+import SwiftUI
+import os
+
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
+
+// MARK: - Provider Card
+
+struct ProviderCard<Content: View>: View {
+    let name: String
+    let status: String
+    let isConfigured: Bool
+    let icon: String
+    let models: [String]
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(Theme.current.fontTitle)
+                    .foregroundColor(isConfigured ? .blue : .secondary)
+                    .frame(width: 24)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name)
+                        .font(Theme.current.fontBody)
+
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(isConfigured ? Color.green : Color.orange)
+                            .frame(width: 6, height: 6)
+
+                        Text(status.uppercased())
+                            .font(Theme.current.fontXSBold)
+                            .foregroundColor(isConfigured ? .green : .orange)
+                    }
+                }
+
+                Spacer()
+            }
+
+            // Models list
+            if !models.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(models, id: \.self) { model in
+                        HStack(spacing: 6) {
+                            Text("•")
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                            Text(model)
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                        }
+                    }
+                }
+            }
+
+            // Custom content
+            content()
+        }
+        .padding(16)
+        .background(Theme.current.surface1)
+        .cornerRadius(CornerRadius.sm)
+    }
+}
+
+// MARK: - Model Row
+
+struct ModelRow: View {
+    let model: LLMModel
+    let isDownloading: Bool
+    let downloadProgress: Double
+    let onDownload: () -> Void
+    let onDelete: () -> Void
+    private let settings = SettingsManager.shared
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Model info
+            VStack(alignment: .leading, spacing: 4) {
+                Text(model.displayName)
+                    .font(Theme.current.fontSM)
+
+                HStack(spacing: 8) {
+                    Text(model.size)
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+
+                    if let sizeGB = model.sizeInGB {
+                        Text("~\(String(format: "%.1f", sizeGB))GB")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundSecondary)
+                    }
+
+                    if model.isInstalled {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(Theme.current.fontXS)
+                            Text("INSTALLED")
+                                .font(Theme.current.fontXSBold)
+                        }
+                        .foregroundColor(.green)
+                    }
+                }
+            }
+
+            Spacer()
+
+            // Actions
+            if isDownloading {
+                VStack(spacing: 4) {
+                    ProgressView(value: downloadProgress)
+                        .frame(width: 80)
+                    Text("\(Int(downloadProgress * 100))%")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                }
+            } else if model.isInstalled {
+                Button(action: onDelete) {
+                    Text("DELETE")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(.red)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.red.opacity(0.1))
+                        .cornerRadius(CornerRadius.xs)
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button(action: onDownload) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(Theme.current.fontXS)
+                        Text("DOWNLOAD")
+                            .font(Theme.current.fontXSBold)
+                    }
+                    .foregroundColor(settings.resolvedAccentColor)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(settings.resolvedAccentColor.opacity(0.1))
+                    .cornerRadius(CornerRadius.xs)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(12)
+        .background(SettingsManager.shared.surfaceInput)
+        .cornerRadius(CornerRadius.xs)
+    }
+}
+
+// MARK: - Button Style
+
+struct ActionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(Theme.current.fontXSBold)
+            .foregroundColor(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(SettingsManager.shared.resolvedAccentColor)
+            .cornerRadius(CornerRadius.xs)
+            .opacity(configuration.isPressed ? 0.7 : 1.0)
+    }
+}
+
+#Preview {
+    ModelsContentView()
+        .frame(width: 800, height: 600)
+}
+
+// MARK: - Compact Provider Card (Spec Sheet Style)
+
+struct CompactProviderCard: View {
+    let name: String
+    let isConfigured: Bool
+    let icon: String
+    let modelCount: Int
+    let highlights: [String]
+    let isConfiguring: Bool
+    let apiKeyBinding: Binding<String>
+    let onConfigure: () -> Void
+    let onCancel: () -> Void
+    let onSave: () -> Void
+
+    private let settings = SettingsManager.shared
+    @State private var isHovered = false
+
+    private var providerCode: String {
+        switch name {
+        case "OpenAI": return "OAI-4"
+        case "Anthropic": return "ANT-C"
+        case "Gemini": return "GEM-1"
+        case "Groq": return "GRQ-L"
+        default: return "PRV-X"
+        }
+    }
+
+    private var logoName: String {
+        switch name {
+        case "OpenAI": return "ProviderLogos/OpenAI"
+        case "Anthropic": return "ProviderLogos/Anthropic"
+        case "Gemini": return "ProviderLogos/Google"
+        case "Groq": return "ProviderLogos/Groq"
+        default: return ""
+        }
+    }
+
+    private var contextSize: String {
+        switch name {
+        case "OpenAI": return "128K"
+        case "Anthropic": return "200K"
+        case "Gemini": return "2M"
+        case "Groq": return "128K"
+        default: return "—"
+        }
+    }
+
+    private var latency: String {
+        switch name {
+        case "OpenAI": return "~1.2s"
+        case "Anthropic": return "~1.5s"
+        case "Gemini": return "~0.8s"
+        case "Groq": return "~0.1s"
+        default: return "—"
+        }
+    }
+
+    private var modelCountStr: String {
+        "\(modelCount)"
+    }
+
+    private var modelsURL: URL? {
+        switch name {
+        case "OpenAI": return URL(string: "https://platform.openai.com/docs/models")
+        case "Anthropic": return URL(string: "https://docs.anthropic.com/en/docs/about-claude/models")
+        case "Gemini": return URL(string: "https://ai.google.dev/gemini-api/docs/models/gemini")
+        case "Groq": return URL(string: "https://console.groq.com/docs/models")
+        default: return nil
+        }
+    }
+
+    private var apiDocsURL: URL? {
+        switch name {
+        case "OpenAI": return URL(string: "https://platform.openai.com/docs/api-reference")
+        case "Anthropic": return URL(string: "https://docs.anthropic.com/en/api/getting-started")
+        case "Gemini": return URL(string: "https://ai.google.dev/gemini-api/docs")
+        case "Groq": return URL(string: "https://console.groq.com/docs/quickstart")
+        default: return nil
+        }
+    }
+
+    @ViewBuilder
+    private var buttonBackground: some View {
+        if isConfigured {
+            Color.green.opacity(0.08)
+        } else {
+            LinearGradient(
+                colors: [Color.primary.opacity(0.06), Color.primary.opacity(0.08)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            // Back side - Configuration
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("CONFIGURE")
+                        .font(settings.monoSM)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                    Spacer()
+                    Button(action: onCancel) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(Theme.current.foregroundSecondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                SecureField("API Key", text: apiKeyBinding)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 10, design: .monospaced))
+                    .padding(6)
+                    .background(Color.primary.opacity(0.05))
+                    .cornerRadius(CornerRadius.xs)
+
+                Spacer()
+
+                Button(action: onSave) {
+                    Text("SAVE")
+                        .font(settings.monoSM)
+                        .foregroundColor(Theme.current.foreground)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background(Color.primary.opacity(settings.specDividerOpacity))
+                        .cornerRadius(CornerRadius.xs)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(12)
+            .frame(height: 140)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(settings.cardBackgroundHover)
+            .cornerRadius(CornerRadius.sm)
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .stroke(settings.resolvedAccentColor.opacity(0.4), lineWidth: 1)
+            )
+            .opacity(isConfiguring ? 1 : 0)
+            .rotation3DEffect(.degrees(isConfiguring ? 0 : -180), axis: (x: 0, y: 1, z: 0))
+            .zIndex(isConfiguring ? 1 : 0)
+
+            // Front side - Provider card
+            VStack(alignment: .leading, spacing: 0) {
+                // Header
+                HStack(spacing: 0) {
+                    Text(providerCode)
+                        .font(settings.monoXS)
+                        .foregroundColor(settings.specLabelColor)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(Color.primary.opacity(0.03))
+                        .cornerRadius(2)
+
+                    Spacer()
+
+                    if isConfigured {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(settings.statusActive)
+                                .frame(width: 6, height: 6)
+                                .shadow(color: settings.statusActive.opacity(0.5), radius: 3)
+                            Text("ACTIVE")
+                                .font(settings.monoXS)
+                                .foregroundColor(settings.statusActive)
+                        }
+                    } else {
+                        Text("SETUP")
+                            .font(settings.monoXS)
+                            .foregroundColor(settings.statusWarning)
+                    }
+                }
+                .padding(.top, 10)
+                .padding(.bottom, 6)
+
+                // Logo + Name
+                HStack(spacing: 8) {
+                    if !logoName.isEmpty {
+                        Image(logoName)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 18, height: 18)
+                            .foregroundColor(isConfigured ? .primary : .secondary)
+                    }
+
+                    Text(name.uppercased())
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(settings.specValueColor)
+                }
+                .padding(.bottom, 4)
+
+                // Links row
+                HStack(spacing: 12) {
+                    if let url = modelsURL {
+                        Button(action: { NSWorkspace.shared.open(url) }) {
+                            HStack(spacing: 3) {
+                                Text("Models")
+                                    .font(settings.monoXS)
+                                Image(systemName: "arrow.up.right")
+                                    .font(.system(size: 7))
+                            }
+                            .foregroundColor(.secondary.opacity(0.7))
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    if let url = apiDocsURL {
+                        Button(action: { NSWorkspace.shared.open(url) }) {
+                            HStack(spacing: 3) {
+                                Text("API")
+                                    .font(settings.monoXS)
+                                Image(systemName: "arrow.up.right")
+                                    .font(.system(size: 7))
+                            }
+                            .foregroundColor(.secondary.opacity(0.7))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.bottom, 8)
+
+                // Divider
+                Rectangle()
+                    .fill(Color.primary.opacity(settings.specDividerOpacity))
+                    .frame(height: 1)
+                    .padding(.horizontal, -12)
+                    .padding(.bottom, 8)
+
+                // Specs grid
+                HStack(spacing: 0) {
+                    specCell(label: "CTX", value: contextSize)
+                    Spacer()
+                    Rectangle()
+                        .fill(Color.primary.opacity(settings.specDividerOpacity))
+                        .frame(width: 1, height: 24)
+                    Spacer()
+                    specCell(label: "TTFT", value: latency)
+                    Spacer()
+                    Rectangle()
+                        .fill(Color.primary.opacity(settings.specDividerOpacity))
+                        .frame(width: 1, height: 24)
+                    Spacer()
+                    specCell(label: "MDLS", value: modelCountStr)
+                }
+                .padding(.bottom, 10)
+
+                Spacer()
+
+                // Action
+                Button(action: onConfigure) {
+                    HStack(spacing: 6) {
+                        Image(systemName: isConfigured ? "checkmark.seal.fill" : "key.fill")
+                            .font(.system(size: 9))
+                        Text(isConfigured ? "CONFIGURED" : "CONFIGURE")
+                            .font(settings.monoSM)
+                    }
+                    .foregroundColor(isConfigured ? settings.statusActive.opacity(0.7) : settings.specValueColor)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 7)
+                    .background(buttonBackground)
+                    .cornerRadius(CornerRadius.xs)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CornerRadius.xs)
+                            .stroke(isConfigured ? settings.cardBorderReady : settings.cardBorderDefault, lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(12)
+            .frame(height: 170)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                ZStack {
+                    settings.cardBackgroundDark
+                    settings.cardBackground
+                    LinearGradient(
+                        colors: [Color.primary.opacity(0.03), Color.clear],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                }
+            )
+            .cornerRadius(CornerRadius.sm)
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .stroke(
+                        isHovered ? Theme.current.foreground.opacity(0.2) :
+                        isConfigured ? settings.cardBorderActive : settings.cardBorderDefault,
+                        lineWidth: isHovered ? 1.5 : 1
+                    )
+            )
+            .shadow(color: Theme.current.foreground.opacity(isHovered ? 0.06 : 0), radius: 8, x: 0, y: 0)
+            .shadow(color: .black.opacity(isHovered ? 0.15 : 0.08), radius: isHovered ? 8 : 6, y: 2)
+            .opacity(isConfiguring ? 0 : 1)
+            .rotation3DEffect(.degrees(isConfiguring ? 180 : 0), axis: (x: 0, y: 1, z: 0))
+            .zIndex(isConfiguring ? 0 : 1)
+        }
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
+        .animation(.spring(response: 0.6, dampingFraction: 0.8), value: isConfiguring)
+    }
+
+    private func specCell(label: String, value: String) -> some View {
+        VStack(alignment: .center, spacing: 2) {
+            Text(label)
+                .font(settings.monoXS)
+                .foregroundColor(settings.specLabelColor)
+            Text(value)
+                .font(settings.monoBody)
+                .foregroundColor(settings.specValueColor)
+        }
+        .frame(minWidth: 35)
+    }
+}

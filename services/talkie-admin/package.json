@@ -1,0 +1,16 @@
+{
+  "name": "talkie-admin",
+  "private": true,
+  "scripts": {
+    "build": "nitro build",
+    "dev": "nitro dev --port 8788",
+    "preview": "node .output/server/index.mjs"
+  },
+  "dependencies": {
+    "@vercel/blob": "^2.0.1"
+  },
+  "devDependencies": {
+    "h3": "^1.15.5",
+    "nitropack": "^2.13.1"
+  }
+}

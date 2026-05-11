@@ -1,0 +1,15 @@
+{
+  "manifest_version": 1,
+  "name": "Calendar",
+  "version": "1.0.0",
+  "description": "Monthly calendar widget showing activity by day.",
+  "author": "Talkie",
+  "permissions": ["state"],
+  "background": {
+    "script": "background.js"
+  },
+  "widget": {
+    "html": "widget.html",
+    "size": "half"
+  }
+}

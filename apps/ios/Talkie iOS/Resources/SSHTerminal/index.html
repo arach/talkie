@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  >
+  <title>Talkie Console</title>
+  <link rel="stylesheet" href="./xterm.css">
+  <style>
+    @font-face {
+      font-family: "Talkie Terminal";
+      src: url("./JetBrainsMonoNerdFontMono-Regular.ttf") format("truetype");
+      font-display: block;
+    }
+
+    :root {
+      color-scheme: dark;
+      --background: #0f1115;
+      --foreground: #d8dde7;
+      --border: rgba(255, 255, 255, 0.08);
+      --terminal-font-family: "Talkie Terminal", Menlo, Monaco, "SF Mono", "SFMono-Regular", ui-monospace, monospace;
+      --terminal-font-size: 13px;
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      color: var(--foreground);
+      font-family: var(--terminal-font-family);
+      font-size: var(--terminal-font-size);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      box-sizing: border-box;
+    }
+
+    #terminal-shell {
+      width: 100%;
+      height: 100%;
+      box-sizing: border-box;
+      padding: 0;
+      background: var(--background);
+      overflow: hidden;
+    }
+
+    #terminal {
+      width: 100%;
+      height: 100%;
+      box-sizing: border-box;
+      background: transparent;
+      overflow: hidden;
+    }
+
+    .xterm {
+      height: 100%;
+      background: transparent;
+      overflow: hidden;
+      box-sizing: border-box;
+      padding-inline: 4px;
+    }
+
+    .xterm-viewport {
+      background-color: transparent !important;
+      scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+    }
+
+    .xterm-screen {
+      background: transparent;
+      overflow: hidden;
+    }
+
+    .xterm-screen canvas {
+      image-rendering: auto;
+    }
+  </style>
+</head>
+<body>
+  <div id="terminal-shell">
+    <div id="terminal"></div>
+  </div>
+
+  <script src="./xterm.js"></script>
+  <script>
+    (async () => {
+      const MINIMUM_COLS = 2;
+      const MINIMUM_ROWS = 1;
+      const bridge = window.webkit && window.webkit.messageHandlers
+        ? window.webkit.messageHandlers.talkieTerminal
+        : null;
+      const terminalElement = document.getElementById('terminal');
+      const terminalFontFamily = getComputedStyle(document.documentElement).getPropertyValue('--terminal-font-family').trim();
+      let fitFrame = null;
+      let lastMeasuredWidth = 0;
+      let lastMeasuredHeight = 0;
+      let bootTimers = [];
+      let pendingOutputChunks = [];
+      let writeFlushScheduled = false;
+      let cursorModeFrame = null;
+      let terminalCursorSuppressed = false;
+      const textEncoder = new TextEncoder();
+      const claudeDividerGlyphCount = 39;
+      const claudeDividerSequence = 'q'.repeat(claudeDividerGlyphCount);
+      const replaceBytes = (input, replacements) => {
+        let bytes = input;
+
+        for (const [pattern, replacement] of replacements) {
+          const output = [];
+          for (let index = 0; index < bytes.length;) {
+            let matched = true;
+            for (let offset = 0; offset < pattern.length; offset += 1) {
+              if (index + offset >= bytes.length || bytes[index + offset] !== pattern[offset]) {
+                matched = false;
+                break;
+              }
+            }
+
+            if (matched) {
+              output.push(...replacement);
+              index += pattern.length;
+              continue;
+            }
+
+            output.push(bytes[index]);
+            index += 1;
+          }
+
+          bytes = Uint8Array.from(output);
+        }
+
+        return bytes;
+      };
+      const applyClaudeCardRawFixes = (input) => replaceBytes(input, [
+        [
+          textEncoder.encode('❯\u00A0\x1b[7m \x1b[0m'),
+          textEncoder.encode('> |')
+        ],
+        [
+          textEncoder.encode('❯ \x1b[7m \x1b[0m'),
+          textEncoder.encode('> |')
+        ],
+        [
+          textEncoder.encode(`_\x1b(0${claudeDividerSequence}\x1b(B\x1b(B\x1b[m\x1b[38;5;174m_\x1b[39m\x1b[K`),
+          textEncoder.encode(` \x1b(0${claudeDividerSequence}\x1b(B\x1b(B\x1b[m\x1b[39m\x1b[K`)
+        ],
+        [
+          textEncoder.encode('_ \x1b[38;5;231m'),
+          textEncoder.encode('> \x1b[38;5;231m')
+        ],
+        [
+          textEncoder.encode('_\x1b[39m\x1b[1X\x1b[C'),
+          textEncoder.encode('* \x1b[39m\x1b[1X\x1b[C')
+        ],
+        [
+          textEncoder.encode('__\x1b[7m \x1b(B\x1b[m\x1b[K\x1b[38;5;244m\x1b(0'),
+          textEncoder.encode('> |\x1b[K\x1b[38;5;244m\x1b(0')
+        ],
+        [
+          textEncoder.encode('❯ '),
+          textEncoder.encode('> ')
+        ],
+        [
+          textEncoder.encode('❯\u00A0'),
+          textEncoder.encode('> ')
+        ],
+        [
+          textEncoder.encode('⏺'),
+          textEncoder.encode('*')
+        ]
+      ]);
+      const decSpecialGraphicsMap = new Map([
+        [0x60, '◆'],
+        [0x61, '▒'],
+        [0x66, '°'],
+        [0x67, '±'],
+        [0x68, '␤'],
+        [0x69, '␋'],
+        [0x6A, '┘'],
+        [0x6B, '┐'],
+        [0x6C, '┌'],
+        [0x6D, '└'],
+        [0x6E, '┼'],
+        [0x6F, '⎺'],
+        [0x70, '⎻'],
+        [0x71, '─'],
+        [0x72, '⎼'],
+        [0x73, '⎽'],
+        [0x74, '├'],
+        [0x75, '┤'],
+        [0x76, '┴'],
+        [0x77, '┬'],
+        [0x78, '│'],
+        [0x79, '≤'],
+        [0x7A, '≥'],
+        [0x7B, 'π'],
+        [0x7C, '≠'],
+        [0x7D, '£'],
+        [0x7E, '·']
+      ]);
+      const decSpecialGraphicsTranslator = (() => {
+        let escapeState = 0;
+        let decGraphicsEnabled = false;
+
+        const flushEscapeBuffer = (output, byte) => {
+          output.push(0x1B);
+          if (escapeState >= 2) {
+            output.push(0x28);
+          }
+          if (typeof byte === 'number') {
+            output.push(byte);
+          }
+          escapeState = 0;
+        };
+
+        return {
+          reset() {
+            escapeState = 0;
+            decGraphicsEnabled = false;
+          },
+
+          transform(input) {
+            const output = [];
+
+            for (const byte of input) {
+              if (escapeState === 0) {
+                if (byte === 0x1B) {
+                  escapeState = 1;
+                  continue;
+                }
+
+                if (decGraphicsEnabled && decSpecialGraphicsMap.has(byte)) {
+                  output.push(...textEncoder.encode(decSpecialGraphicsMap.get(byte)));
+                  continue;
+                }
+
+                output.push(byte);
+                continue;
+              }
+
+              if (escapeState === 1) {
+                if (byte === 0x28) {
+                  escapeState = 2;
+                  continue;
+                }
+
+                flushEscapeBuffer(output, byte);
+                continue;
+              }
+
+              if (byte === 0x30) {
+                decGraphicsEnabled = true;
+                escapeState = 0;
+                continue;
+              }
+
+              if (byte === 0x42) {
+                decGraphicsEnabled = false;
+                escapeState = 0;
+                continue;
+              }
+
+              flushEscapeBuffer(output, byte);
+            }
+
+            return Uint8Array.from(output);
+          }
+        };
+      })();
+
+      const wait = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+      const ensureTerminalFontReady = async () => {
+        if (!document.fonts?.load) {
+          return;
+        }
+
+        const glyphSample = '│─┌┐└┘█▛▜▙▟╭╮╰╯';
+        try {
+          await Promise.race([
+            Promise.all([
+              document.fonts.load(`13px "${terminalFontFamily}"`, glyphSample),
+              document.fonts.ready
+            ]),
+            wait(1800)
+          ]);
+        } catch {
+          // Fall back to whatever the system can render if the custom font load fails.
+        }
+      };
+
+      await ensureTerminalFontReady();
+
+      const terminal = new Terminal({
+        allowTransparency: false,
+        cursorBlink: false,
+        cursorStyle: 'bar',
+        cursorInactiveStyle: 'bar',
+        cursorWidth: 2,
+        customGlyphs: true,
+        rescaleOverlappingGlyphs: true,
+        fontFamily: terminalFontFamily,
+        fontSize: 13,
+        fontWeight: '400',
+        fontWeightBold: '600',
+        lineHeight: 1,
+        letterSpacing: 0,
+        scrollback: 5000,
+        macOptionIsMeta: true,
+        macOptionClickForcesSelection: true,
+        convertEol: false,
+        theme: {
+          background: getComputedStyle(document.documentElement).getPropertyValue('--background').trim(),
+          foreground: getComputedStyle(document.documentElement).getPropertyValue('--foreground').trim(),
+          cursor: '#f5f7fb',
+          cursorAccent: '#0f1115'
+        }
+      });
+
+      terminal.open(terminalElement);
+      if (terminal.textarea) {
+        terminal.textarea.readOnly = true;
+        terminal.textarea.setAttribute('inputmode', 'none');
+        terminal.textarea.style.caretColor = 'transparent';
+        terminal.textarea.style.color = 'transparent';
+        terminal.textarea.style.background = 'transparent';
+      }
+
+      const postMessage = (type, payload = {}) => {
+        if (!bridge) {
+          return;
+        }
+
+        bridge.postMessage({ type, ...payload });
+      };
+
+      const proposeDimensions = () => {
+        if (!terminal.element || !terminal.element.parentElement) {
+          return null;
+        }
+
+        const core = terminal._core;
+        const dimensions = core?._renderService?.dimensions;
+        if (!dimensions || dimensions.css.cell.width === 0 || dimensions.css.cell.height === 0) {
+          return null;
+        }
+
+        const elementStyle = window.getComputedStyle(terminal.element);
+        const paddingTop = parseInt(elementStyle.getPropertyValue('padding-top'), 10) || 0;
+        const paddingBottom = parseInt(elementStyle.getPropertyValue('padding-bottom'), 10) || 0;
+        const paddingLeft = parseInt(elementStyle.getPropertyValue('padding-left'), 10) || 0;
+        const paddingRight = parseInt(elementStyle.getPropertyValue('padding-right'), 10) || 0;
+
+        const availableHeight = terminal.element.clientHeight - paddingTop - paddingBottom;
+        const availableWidth = terminal.element.clientWidth - paddingLeft - paddingRight;
+
+        return {
+          cols: Math.max(MINIMUM_COLS, Math.floor(availableWidth / dimensions.css.cell.width)),
+          rows: Math.max(MINIMUM_ROWS, Math.floor(availableHeight / dimensions.css.cell.height)),
+        };
+      };
+
+      const fit = () => {
+        fitFrame = null;
+
+        const nextWidth = terminalElement.clientWidth;
+        const nextHeight = terminalElement.clientHeight;
+
+        if (nextWidth === lastMeasuredWidth && nextHeight === lastMeasuredHeight) {
+          return;
+        }
+
+        lastMeasuredWidth = nextWidth;
+        lastMeasuredHeight = nextHeight;
+        const proposed = proposeDimensions();
+        if (!proposed || Number.isNaN(proposed.cols) || Number.isNaN(proposed.rows)) {
+          return;
+        }
+
+        const core = terminal._core;
+        if (terminal.cols !== proposed.cols || terminal.rows !== proposed.rows) {
+          core?._renderService?.clear?.();
+          terminal.resize(proposed.cols, proposed.rows);
+        }
+        postMessage('resize', {
+          cols: terminal.cols,
+          rows: terminal.rows,
+          pixelWidth: nextWidth,
+          pixelHeight: nextHeight,
+        });
+      };
+
+      const scheduleFit = () => {
+        if (fitFrame !== null) {
+          return;
+        }
+
+        fitFrame = window.requestAnimationFrame(fit);
+      };
+
+      const forceFit = () => {
+        lastMeasuredWidth = 0;
+        lastMeasuredHeight = 0;
+        scheduleFit();
+      };
+
+      const syncTerminalCursorVisibility = () => {
+        terminal.write(terminalCursorSuppressed ? '\x1b[?25l' : '\x1b[?25h');
+      };
+
+      const updateCursorPresentation = () => {
+        cursorModeFrame = null;
+
+        const buffer = terminal.buffer.active;
+        const viewportY = buffer.viewportY;
+        const nearbyLines = [];
+        const startRow = Math.max(0, viewportY - 20);
+        const endRow = viewportY + terminal.rows;
+
+        for (let row = startRow; row <= endRow; row += 1) {
+          const line = buffer.getLine(row);
+          if (!line) {
+            continue;
+          }
+
+          nearbyLines.push(line.translateToString(true));
+        }
+
+        const isClaudeFullscreen =
+          nearbyLines.some((line) => line.includes('for shortcuts')) ||
+          (
+            nearbyLines.some((line) => line.includes('Claude Code')) &&
+            nearbyLines.some((line) => line.includes('Sonnet'))
+          );
+        const targetCursorWidth = isClaudeFullscreen ? 0 : 2;
+
+        if (terminalCursorSuppressed !== isClaudeFullscreen) {
+          terminalCursorSuppressed = isClaudeFullscreen;
+          syncTerminalCursorVisibility();
+        }
+
+        if (terminal.options.cursorWidth !== targetCursorWidth) {
+          terminal.options.cursorWidth = targetCursorWidth;
+          terminal.refresh(0, terminal.rows - 1);
+        }
+      };
+
+      const scheduleCursorPresentationUpdate = () => {
+        if (cursorModeFrame !== null) {
+          return;
+        }
+
+        cursorModeFrame = window.requestAnimationFrame(updateCursorPresentation);
+      };
+
+      const hardRefit = () => {
+        terminal.clearTextureAtlas();
+        terminal._core?._renderService?.clear?.();
+        forceFit();
+        terminal.refresh(0, terminal.rows - 1);
+        scheduleCursorPresentationUpdate();
+
+        window.requestAnimationFrame(() => {
+          forceFit();
+          terminal.refresh(0, terminal.rows - 1);
+          scheduleCursorPresentationUpdate();
+        });
+
+        window.setTimeout(() => {
+          forceFit();
+          terminal.refresh(0, terminal.rows - 1);
+          scheduleCursorPresentationUpdate();
+        }, 80);
+
+        window.setTimeout(() => {
+          forceFit();
+          terminal.refresh(0, terminal.rows - 1);
+          scheduleCursorPresentationUpdate();
+        }, 220);
+      };
+
+      terminal.onData((text) => {
+        postMessage('input', { text });
+      });
+
+      terminal.onResize(({ cols, rows }) => {
+        postMessage('resize', {
+          cols,
+          rows,
+          pixelWidth: terminalElement.clientWidth,
+          pixelHeight: terminalElement.clientHeight,
+        });
+      });
+
+      terminal.onRender(() => {
+        scheduleCursorPresentationUpdate();
+      });
+
+      window.addEventListener('resize', scheduleFit);
+      window.addEventListener('focus', forceFit);
+      window.addEventListener('pageshow', forceFit);
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+          forceFit();
+        }
+      });
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', forceFit);
+      }
+      new ResizeObserver(scheduleFit).observe(terminalElement);
+
+      const clearBootTimers = () => {
+        for (const timer of bootTimers) {
+          window.clearTimeout(timer);
+        }
+        bootTimers = [];
+      };
+
+      const decodeBase64Bytes = (encoded = '') => {
+        const binary = window.atob(encoded);
+        const bytes = new Uint8Array(binary.length);
+
+        for (let index = 0; index < binary.length; index += 1) {
+          bytes[index] = binary.charCodeAt(index);
+        }
+
+        return bytes;
+      };
+
+      const normalizeTerminalBytes = (input) => {
+        const normalized = [];
+
+        for (let index = 0; index < input.length; index += 1) {
+          let byte = input[index];
+
+          // Some writers emit C1 control codes as UTF-8 bytes (`0xC2 0x9B`)
+          // instead of the raw 8-bit control byte. Normalize both forms.
+          if (byte === 0xC2 && index + 1 < input.length) {
+            const next = input[index + 1];
+            if (next >= 0x80 && next <= 0x9F) {
+              byte = next;
+              index += 1;
+            }
+          }
+
+          switch (byte) {
+            case 0x90:
+              normalized.push(0x1B, 0x50);
+              break;
+            case 0x9B:
+              normalized.push(0x1B, 0x5B);
+              break;
+            case 0x9C:
+              normalized.push(0x1B, 0x5C);
+              break;
+            case 0x9D:
+              normalized.push(0x1B, 0x5D);
+              break;
+            default:
+              normalized.push(byte);
+              break;
+          }
+        }
+
+        const rawFixed = applyClaudeCardRawFixes(Uint8Array.from(normalized));
+        const decTranslated = decSpecialGraphicsTranslator.transform(rawFixed);
+        return replaceBytes(decTranslated, [
+          [
+            textEncoder.encode('_\x1b[48;5;16m_____\x1b[49m_'),
+            textEncoder.encode('▐▛███▜▌')
+          ],
+          [
+            textEncoder.encode('__\x1b[48;5;16m_____\x1b[49m__'),
+            textEncoder.encode('▝▜█████▛▘')
+          ],
+          [
+            textEncoder.encode('__\x1b[39m\x1b[1X\x1b[38;5;174m\x1b[C__'),
+            textEncoder.encode('▘▘ ▝▝')
+          ]
+        ]);
+      };
+
+      const decodeOutputBytes = (encoded = '') => normalizeTerminalBytes(decodeBase64Bytes(encoded));
+
+      const clearPendingOutput = () => {
+        pendingOutputChunks = [];
+        writeFlushScheduled = false;
+      };
+
+      const flushPendingOutput = () => {
+        writeFlushScheduled = false;
+
+        if (pendingOutputChunks.length === 0) {
+          return;
+        }
+
+        if (pendingOutputChunks.length === 1) {
+          terminal.write(pendingOutputChunks[0]);
+          pendingOutputChunks = [];
+          return;
+        }
+
+        const totalLength = pendingOutputChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+        const merged = new Uint8Array(totalLength);
+        let offset = 0;
+
+        for (const chunk of pendingOutputChunks) {
+          merged.set(chunk, offset);
+          offset += chunk.length;
+        }
+
+        pendingOutputChunks = [];
+        terminal.write(merged);
+      };
+
+      const scheduleOutputFlush = () => {
+        if (writeFlushScheduled) {
+          return;
+        }
+
+        writeFlushScheduled = true;
+        window.requestAnimationFrame(flushPendingOutput);
+      };
+
+      const scheduleBootWrite = (delay, callback) => {
+        const timer = window.setTimeout(callback, delay);
+        bootTimers.push(timer);
+      };
+
+      const bootAnsi = {
+        reset: '\x1b[0m',
+        dim: '\x1b[38;5;244m',
+        muted: '\x1b[38;5;241m',
+        bright: '\x1b[97m',
+        accent: '\x1b[94m',
+      };
+
+      const writeBootLine = (text = '') => {
+        terminal.writeln(text);
+      };
+
+      const startBoot = (boot = {}) => {
+        clearBootTimers();
+        clearPendingOutput();
+        terminal.reset();
+        terminal.clear();
+        decSpecialGraphicsTranslator.reset();
+        terminal.options.cursorBlink = false;
+        terminal.write('\x1b[?25l');
+
+        const title = boot.title || 'Talkie Agent';
+        const harness = boot.harness || 'OpenCode';
+        const model = boot.model || 'default';
+        const workspace = boot.workspace || 'workspace';
+        const steps = Array.isArray(boot.steps) ? boot.steps : [];
+
+        const ascii = [
+          '  ______      ____   __ __   _          ',
+          ' /_  __/___ _/ / /__/ //_/  (_)__       ',
+          '  / / / __ `/ / //_/ ,<    / / _ \\\\   ',
+          ' /_/  \\\\__,_/_/\\\\__/_/|_|  /_/\\\\___/ ',
+        ];
+
+        const lines = [
+          `${bootAnsi.dim}:: talkie managed console ::${bootAnsi.reset}`,
+          `${bootAnsi.dim}context   ${bootAnsi.bright}${title}${bootAnsi.reset}`,
+          `${bootAnsi.dim}harness   ${bootAnsi.bright}${harness}${bootAnsi.reset}`,
+          `${bootAnsi.dim}model     ${bootAnsi.bright}${model}${bootAnsi.reset}`,
+          `${bootAnsi.dim}session   ${workspace}${bootAnsi.reset}`,
+          '',
+          ...ascii.map((line) => `${bootAnsi.muted}${line}${bootAnsi.reset}`),
+          '',
+          `${bootAnsi.dim}booting interactive console...${bootAnsi.reset}`,
+          '',
+          ...steps.map((step) => `${bootAnsi.accent}>${bootAnsi.reset} ${bootAnsi.bright}${step}${bootAnsi.reset}`),
+          '',
+          `${bootAnsi.dim}waiting for live session handoff${bootAnsi.reset}`,
+        ];
+
+        let delay = 30;
+        for (const line of lines) {
+          scheduleBootWrite(delay, () => writeBootLine(line));
+          delay += line === '' ? 45 : 70;
+        }
+      };
+
+      window.talkieTerminal = {
+        writeBytes(encoded) {
+          clearBootTimers();
+          syncTerminalCursorVisibility();
+          const bytes = decodeOutputBytes(encoded || '');
+          if (bytes.length > 0) {
+            pendingOutputChunks.push(bytes);
+            scheduleOutputFlush();
+          }
+          forceFit();
+          scheduleCursorPresentationUpdate();
+        },
+
+        resetBytes(encoded) {
+          clearBootTimers();
+          clearPendingOutput();
+          terminal.reset();
+          terminal.clear();
+          decSpecialGraphicsTranslator.reset();
+          syncTerminalCursorVisibility();
+          const bytes = decodeOutputBytes(encoded || '');
+          if (bytes.length > 0) {
+            terminal.write(bytes);
+          }
+          forceFit();
+          scheduleCursorPresentationUpdate();
+        },
+
+        clear() {
+          clearBootTimers();
+          clearPendingOutput();
+          terminal.reset();
+          terminal.clear();
+          decSpecialGraphicsTranslator.reset();
+          syncTerminalCursorVisibility();
+          forceFit();
+          scheduleCursorPresentationUpdate();
+        },
+
+        focus() {
+          terminal.focus();
+          terminal.refresh(0, terminal.rows - 1);
+          forceFit();
+          scheduleCursorPresentationUpdate();
+        },
+
+        blur() {
+          terminal.blur();
+          terminal.refresh(0, terminal.rows - 1);
+        },
+
+        refit() {
+          forceFit();
+          terminal.refresh(0, terminal.rows - 1);
+          scheduleCursorPresentationUpdate();
+        },
+
+        hardRefit() {
+          hardRefit();
+        },
+
+        setTheme(theme) {
+          terminal.options.theme = {
+            ...terminal.options.theme,
+            ...theme
+          };
+        },
+
+        startBoot(boot) {
+          startBoot(boot);
+        }
+      };
+
+      scheduleFit();
+      hardRefit();
+      postMessage('ready');
+    })();
+  </script>
+</body>
+</html>

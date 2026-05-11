@@ -1,0 +1,33 @@
+{
+  "name": "@talkie/app",
+  "version": "0.4.7",
+  "description": "Install Talkie for macOS — voice-first productivity suite",
+  "bin": {
+    "talkie": "./talkie.js"
+  },
+  "files": [
+    "talkie.js"
+  ],
+  "keywords": [
+    "talkie",
+    "macos",
+    "voice",
+    "productivity",
+    "dictation",
+    "transcription"
+  ],
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arach/talkie",
+    "directory": "packages/npm/app"
+  },
+  "homepage": "https://usetalkie.com",
+  "os": [
+    "darwin"
+  ],
+  "dependencies": {
+    "@talkie/cli": "^0.4.5",
+    "@talkie/client": "^0.1.1"
+  }
+}

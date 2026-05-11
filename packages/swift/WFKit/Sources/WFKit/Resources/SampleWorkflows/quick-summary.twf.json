@@ -1,0 +1,21 @@
+{
+  "slug": "quick-summary",
+  "name": "Quick Summary",
+  "description": "Generate a concise executive summary",
+  "icon": "list.bullet.clipboard",
+  "color": "blue",
+  "isEnabled": true,
+  "isPinned": false,
+  "autoRun": false,
+  "steps": [
+    {
+      "id": "summarize",
+      "type": "LLM Generation",
+      "config": {
+        "prompt": "You are an expert executive assistant. Summarize the following voice memo transcript into a concise paragraph, highlighting the main purpose and outcome. Use a professional tone.\n\nTranscript:\n{{TRANSCRIPT}}",
+        "temperature": 0.7,
+        "maxTokens": 1024
+      }
+    }
+  ]
+}

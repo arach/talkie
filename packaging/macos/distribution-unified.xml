@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+    <title>Talkie for Mac</title>
+
+    <!-- Custom branding - light and dark mode backgrounds -->
+    <background file="background.png" alignment="bottomleft" scaling="proportional"/>
+    <background-darkAqua file="background-dark.png" alignment="bottomleft" scaling="proportional"/>
+
+    <!-- Content pages -->
+    <welcome file="welcome.html"/>
+    <license file="license.html"/>
+    <conclusion file="conclusion.html"/>
+
+    <options customize="never" require-scripts="false" hostArchitectures="arm64,x86_64"/>
+
+    <choices-outline>
+        <line choice="default"/>
+    </choices-outline>
+
+    <!-- Single app bundle with embedded helper apps -->
+    <choice id="default"
+            title="Talkie for Mac"
+            description="Voice-first productivity suite for macOS."
+            visible="false">
+        <pkg-ref id="jdi.talkie.unified"/>
+    </choice>
+
+    <pkg-ref id="jdi.talkie.unified" version="1.9.0" installKBytes="50000">TalkieUnified.pkg</pkg-ref>
+
+</installer-gui-script>

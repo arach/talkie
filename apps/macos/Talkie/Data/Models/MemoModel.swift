@@ -1,0 +1,476 @@
+//
+//  MemoModel.swift
+//  Talkie
+//
+//  Pure Swift data model for voice memos
+//  Decoupled from Core Data and CloudKit
+//
+
+import Foundation
+import SwiftUI
+import GRDB
+import TalkieKit
+
+// MARK: - Voice Memo Model
+
+struct MemoModel: Identifiable, Codable, Hashable {
+    // MARK: - Core Properties
+
+    let id: UUID
+    var createdAt: Date
+    var lastModified: Date
+    var title: String?
+    var duration: Double
+    var sortOrder: Int
+
+    // MARK: - Content
+
+    /// Current transcript (computed from latest version)
+    var transcription: String?
+    var notes: String?
+    var summary: String?
+    var tasks: String?
+    var reminders: String?
+
+    // MARK: - Audio
+
+    /// Relative path to audio file (stored separately)
+    var audioFilePath: String?
+    /// Binary waveform data for visualization
+    var waveformData: Data?
+
+    // MARK: - Processing State
+
+    var isTranscribing: Bool
+    var isProcessingSummary: Bool
+    var isProcessingTasks: Bool
+    var isProcessingReminders: Bool
+    var autoProcessed: Bool
+
+    // MARK: - Provenance
+
+    /// Device identifier (e.g., "mac-MacBook Pro", "live-auto")
+    var originDeviceId: String?
+    var macReceivedAt: Date?
+
+    // MARK: - Sync
+
+    var cloudSyncedAt: Date?
+
+    // MARK: - Soft Delete
+
+    /// When set, memo is pending deletion (soft delete)
+    /// User must approve in Cloud Manager to permanently delete
+    var deletedAt: Date?
+
+    // MARK: - Workflows
+
+    /// JSON array of pending workflow IDs
+    var pendingWorkflowIds: String?
+
+    // MARK: - Interstitial Session
+
+    /// JSON blob containing full revision history for interstitial sessions
+    /// Contains original text, all revisions (instructions, before/after, accepted/rejected), and metadata
+    var revisionHistoryJSON: String?
+
+    // MARK: - Initializer
+
+    init(
+        id: UUID = UUID(),
+        createdAt: Date = Date(),
+        lastModified: Date = Date(),
+        title: String? = nil,
+        duration: Double = 0,
+        sortOrder: Int = 0,
+        transcription: String? = nil,
+        notes: String? = nil,
+        summary: String? = nil,
+        tasks: String? = nil,
+        reminders: String? = nil,
+        audioFilePath: String? = nil,
+        waveformData: Data? = nil,
+        isTranscribing: Bool = false,
+        isProcessingSummary: Bool = false,
+        isProcessingTasks: Bool = false,
+        isProcessingReminders: Bool = false,
+        autoProcessed: Bool = false,
+        originDeviceId: String? = nil,
+        macReceivedAt: Date? = nil,
+        cloudSyncedAt: Date? = nil,
+        deletedAt: Date? = nil,
+        pendingWorkflowIds: String? = nil,
+        revisionHistoryJSON: String? = nil
+    ) {
+        self.id = id
+        self.createdAt = createdAt
+        self.lastModified = lastModified
+        self.title = title
+        self.duration = duration
+        self.sortOrder = sortOrder
+        self.transcription = transcription
+        self.notes = notes
+        self.summary = summary
+        self.tasks = tasks
+        self.reminders = reminders
+        self.audioFilePath = audioFilePath
+        self.waveformData = waveformData
+        self.isTranscribing = isTranscribing
+        self.isProcessingSummary = isProcessingSummary
+        self.isProcessingTasks = isProcessingTasks
+        self.isProcessingReminders = isProcessingReminders
+        self.autoProcessed = autoProcessed
+        self.originDeviceId = originDeviceId
+        self.macReceivedAt = macReceivedAt
+        self.cloudSyncedAt = cloudSyncedAt
+        self.deletedAt = deletedAt
+        self.pendingWorkflowIds = pendingWorkflowIds
+        self.revisionHistoryJSON = revisionHistoryJSON
+    }
+}
+
+// MARK: - GRDB Record
+
+extension MemoModel: FetchableRecord, PersistableRecord {
+    static let databaseTableName = "voice_memos"
+
+    enum Columns {
+        static let id = Column(CodingKeys.id)
+        static let createdAt = Column(CodingKeys.createdAt)
+        static let lastModified = Column(CodingKeys.lastModified)
+        static let title = Column(CodingKeys.title)
+        static let duration = Column(CodingKeys.duration)
+        static let sortOrder = Column(CodingKeys.sortOrder)
+        static let transcription = Column(CodingKeys.transcription)
+        static let notes = Column(CodingKeys.notes)
+        static let summary = Column(CodingKeys.summary)
+        static let tasks = Column(CodingKeys.tasks)
+        static let reminders = Column(CodingKeys.reminders)
+        static let audioFilePath = Column(CodingKeys.audioFilePath)
+        static let waveformData = Column(CodingKeys.waveformData)
+        static let isTranscribing = Column(CodingKeys.isTranscribing)
+        static let isProcessingSummary = Column(CodingKeys.isProcessingSummary)
+        static let isProcessingTasks = Column(CodingKeys.isProcessingTasks)
+        static let isProcessingReminders = Column(CodingKeys.isProcessingReminders)
+        static let autoProcessed = Column(CodingKeys.autoProcessed)
+        static let originDeviceId = Column(CodingKeys.originDeviceId)
+        static let macReceivedAt = Column(CodingKeys.macReceivedAt)
+        static let cloudSyncedAt = Column(CodingKeys.cloudSyncedAt)
+        static let deletedAt = Column(CodingKeys.deletedAt)
+        static let pendingWorkflowIds = Column(CodingKeys.pendingWorkflowIds)
+        static let revisionHistoryJSON = Column(CodingKeys.revisionHistoryJSON)
+    }
+
+    /// Associations
+    static let transcriptVersions = hasMany(TranscriptVersionModel.self)
+    static let workflowRuns = hasMany(WorkflowRunModel.self)
+}
+
+// MARK: - Computed Properties
+
+extension MemoModel {
+    private var hasTranscriptText: Bool {
+        guard let transcription else { return false }
+        return !transcription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var derivedTranscriptionStatus: RecordingTranscriptionStatus {
+        if isTranscribing {
+            return .pending
+        }
+
+        if hasAudio && !hasTranscriptText {
+            return .failed
+        }
+
+        return .success
+    }
+
+    var derivedTranscriptionError: String? {
+        guard derivedTranscriptionStatus == .failed else { return nil }
+        return "Transcript missing, but audio is still available. Retry transcription from this Mac."
+    }
+
+    /// Memo source (iPhone, Mac, Live, etc.)
+    var source: MemoModel.Source {
+        MemoModel.Source.from(originDeviceId: originDeviceId)
+    }
+
+    /// Display title (falls back to timestamp if no title)
+    var displayTitle: String {
+        if let title = title, !title.isEmpty {
+            return title
+        }
+        return TalkieDate.displayDateTime(createdAt)
+    }
+
+    /// Word count from transcription
+    var wordCount: Int {
+        guard let transcript = transcription, !transcript.isEmpty else { return 0 }
+        return transcript.components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .count
+    }
+
+    /// Preview snippet of transcript (first ~80 chars, cleaned up)
+    var transcriptPreview: String? {
+        guard let transcript = transcription, !transcript.isEmpty else { return nil }
+        // Clean up whitespace and get first portion
+        let cleaned = transcript
+            .components(separatedBy: .newlines)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleaned.count <= 80 {
+            return cleaned
+        }
+        // Truncate at word boundary
+        let truncated = String(cleaned.prefix(80))
+        if let lastSpace = truncated.lastIndex(of: " ") {
+            return String(truncated[..<lastSpace]) + "..."
+        }
+        return truncated + "..."
+    }
+
+    /// Has audio file
+    var hasAudio: Bool {
+        audioFilePath != nil
+    }
+
+    /// Current transcript (alias for transcription, for compatibility with VoiceMemo API)
+    var currentTranscript: String? {
+        transcription
+    }
+
+    /// Load audio data from file (lazy, for playback)
+    var audioData: Data? {
+        guard let path = audioFilePath else { return nil }
+        let url = AudioStorage.url(for: path)
+        return try? Data(contentsOf: url)
+    }
+
+    /// Is processing any AI action
+    var isProcessing: Bool {
+        isTranscribing || isProcessingSummary || isProcessingTasks || isProcessingReminders
+    }
+
+    /// Is pending deletion (soft deleted)
+    var isPendingDeletion: Bool {
+        deletedAt != nil
+    }
+
+    /// Whether this memo originated from an interstitial session with revision history
+    var hasRevisionHistory: Bool {
+        revisionHistoryJSON != nil && !revisionHistoryJSON!.isEmpty
+    }
+
+    /// Parsed revision history (if this memo came from an interstitial session)
+    var revisionHistory: RevisionHistory? {
+        guard let json = revisionHistoryJSON else { return nil }
+        return RevisionHistory.fromJSON(json)
+    }
+}
+
+// MARK: - Sendable Conformance
+
+extension MemoModel: Sendable {}
+
+// MARK: - Core Data Bridge
+
+extension MemoModel {
+    /// Create MemoModel from VoiceMemo (Core Data) for workflow execution
+    /// This allows Core Data callers to use LocalRepository-based workflows
+    init(from voiceMemo: VoiceMemo) {
+        self.init(
+            id: voiceMemo.id ?? UUID(),
+            createdAt: voiceMemo.createdAt ?? Date(),
+            lastModified: voiceMemo.lastModified ?? Date(),
+            title: voiceMemo.title,
+            duration: voiceMemo.duration,
+            sortOrder: Int(voiceMemo.sortOrder),
+            transcription: voiceMemo.currentTranscript,
+            notes: voiceMemo.notes,
+            summary: voiceMemo.summary,
+            tasks: voiceMemo.tasks,
+            reminders: voiceMemo.reminders,
+            audioFilePath: voiceMemo.fileURL,
+            waveformData: voiceMemo.waveformData,
+            isTranscribing: voiceMemo.isTranscribing,
+            isProcessingSummary: voiceMemo.isProcessingSummary,
+            isProcessingTasks: voiceMemo.isProcessingTasks,
+            isProcessingReminders: voiceMemo.isProcessingReminders,
+            autoProcessed: voiceMemo.autoProcessed,
+            originDeviceId: voiceMemo.originDeviceId,
+            macReceivedAt: voiceMemo.macReceivedAt,
+            cloudSyncedAt: voiceMemo.cloudSyncedAt,
+            deletedAt: nil,
+            pendingWorkflowIds: voiceMemo.pendingWorkflowIds
+        )
+    }
+}
+
+
+// MARK: - Revision History (for interstitial sessions)
+
+/// A persisted record of a revision in an interstitial session
+/// Captures the full context of LLM-assisted editing
+public struct RevisionRecord: Codable, Identifiable, Sendable {
+    public let id: UUID
+    public let timestamp: Date
+    public let instruction: String      // The prompt/command that triggered this revision
+    public let textBefore: String       // Text before this revision
+    public let textAfter: String        // Text after this revision
+    public let changeCount: Int         // Number of changes in the diff
+    public let wasAccepted: Bool        // Whether user accepted or rejected this revision
+
+    public init(
+        id: UUID = UUID(),
+        timestamp: Date = Date(),
+        instruction: String,
+        textBefore: String,
+        textAfter: String,
+        changeCount: Int,
+        wasAccepted: Bool = true
+    ) {
+        self.id = id
+        self.timestamp = timestamp
+        self.instruction = instruction
+        self.textBefore = textBefore
+        self.textAfter = textAfter
+        self.changeCount = changeCount
+        self.wasAccepted = wasAccepted
+    }
+}
+
+/// Wrapper for the complete revision history blob
+public struct RevisionHistory: Codable, Sendable {
+    public let originalText: String          // Original transcription before any edits
+    public let revisions: [RevisionRecord]   // All revisions in chronological order
+    public let savedAt: Date                 // When this session was saved
+
+    public init(originalText: String, revisions: [RevisionRecord], savedAt: Date = Date()) {
+        self.originalText = originalText
+        self.revisions = revisions
+        self.savedAt = savedAt
+    }
+
+    /// Encode to JSON string for database storage
+    public func toJSON() -> String? {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(self) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    /// Decode from JSON string
+    public static func fromJSON(_ json: String) -> RevisionHistory? {
+        guard let data = json.data(using: .utf8) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try? decoder.decode(RevisionHistory.self, from: data)
+    }
+}
+
+// MARK: - Nested Types
+
+extension MemoModel {
+    enum Source: Equatable, Hashable {
+        case iPhone(deviceName: String?)
+        case watch(deviceName: String?)
+        case mac(deviceName: String?)
+        case live  // TalkieAgent always-on recording
+        case unknown
+
+        /// Parse from originDeviceId string
+        static func from(originDeviceId: String?) -> MemoModel.Source {
+            guard let id = originDeviceId, !id.isEmpty else {
+                return .unknown
+            }
+
+            // Check prefixes
+            if id.hasPrefix("watch-") {
+                let name = String(id.dropFirst(6))
+                return .watch(deviceName: name.isEmpty ? nil : name)
+            }
+            if id.hasPrefix("mac-") {
+                let name = String(id.dropFirst(4))
+                return .mac(deviceName: name.isEmpty ? nil : name)
+            }
+            if id.hasPrefix("live-") {
+                return .live
+            }
+
+            // No prefix = iPhone (legacy format)
+            return .iPhone(deviceName: nil)
+        }
+
+        /// SF Symbol icon
+        var icon: String {
+            switch self {
+            case .iPhone: return "iphone"
+            case .watch: return "applewatch"
+            case .mac: return "desktopcomputer"
+            case .live: return "waveform.circle.fill"
+            case .unknown: return "questionmark.circle"
+            }
+        }
+
+        /// Display name
+        var displayName: String {
+            switch self {
+            case .iPhone: return "iPhone"
+            case .watch: return "Watch"
+            case .mac(let name):
+                if let name = name, !name.isEmpty {
+                    // Shorten "Arach's MacBook Pro" to just "MacBook Pro"
+                    let shortened = name
+                        .replacingOccurrences(of: "'s ", with: " ")
+                        .components(separatedBy: " ")
+                        .suffix(2)
+                        .joined(separator: " ")
+                    return shortened.isEmpty ? "Mac" : shortened
+                }
+                return "Mac"
+            case .live: return "Agent"
+            case .unknown: return "Unknown"
+            }
+        }
+
+        /// Badge color
+        var color: Color {
+            switch self {
+            case .iPhone: return .blue
+            case .watch: return .orange
+            case .mac: return .purple
+            case .live: return .cyan
+            case .unknown: return .secondary
+            }
+        }
+    }
+}
+
+// MARK: - Source Conformances
+extension MemoModel.Source: Sendable {}
+
+// MARK: - MemoSource Interop
+extension MemoModel.Source {
+    /// Convert to legacy MemoSource type for compatibility with existing UI components
+    var asMemoSource: MemoSource {
+        switch self {
+        case .iPhone(let name): return .iPhone(deviceName: name)
+        case .watch(let name): return .watch(deviceName: name)
+        case .mac(let name): return .mac(deviceName: name)
+        case .live: return .live
+        case .unknown: return .unknown
+        }
+    }
+}
+
+
+extension MemoModel {
+    enum SortField {
+        case timestamp    // Sort by createdAt
+        case title        // Sort by title
+        case duration     // Sort by duration
+        case workflows    // Sort by workflow count (computed)
+    }
+}

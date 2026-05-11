@@ -1,0 +1,10 @@
+{
+  "buildCommand": "",
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api" },
+    { "source": "/health", "destination": "/api" },
+    { "source": "/install", "destination": "/api" },
+    { "source": "/download", "destination": "/api" },
+    { "source": "/", "destination": "/api" }
+  ]
+}

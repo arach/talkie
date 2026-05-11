@@ -1,0 +1,676 @@
+//
+//  ActivityLogViews.swift
+//  Talkie macOS
+//
+//  Extracted from NavigationView.swift
+//
+
+import SwiftUI
+import TalkieKit
+
+private let log = Log(.ui)
+
+// MARK: - Activity Run Row Model (for native Table)
+
+struct ActivityRunRow: Identifiable {
+    let id: UUID
+    let runId: UUID
+    let timestamp: Date
+    let workflowName: String
+    let memoTitle: String
+    let isSuccess: Bool
+    let durationMs: Int?
+    let run: WorkflowRunModel
+
+    init(from run: WorkflowRunModel, memoTitle: String = "Unknown") {
+        self.id = run.id
+        self.runId = run.id
+        self.timestamp = run.runDate
+        self.workflowName = run.workflowName
+        self.memoTitle = memoTitle
+        self.isSuccess = run.status == .completed
+        self.run = run
+
+        if let durationMs = run.durationMs {
+            self.durationMs = durationMs
+        } else if let json = run.stepOutputsJSON,
+                  let data = json.data(using: .utf8),
+                  let steps = try? JSONDecoder().decode([WorkflowExecutor.StepExecution].self, from: data),
+                  !steps.isEmpty {
+            let totalChars = steps.reduce(0) { $0 + $1.output.count }
+            self.durationMs = max(100, totalChars * 2)
+        } else {
+            self.durationMs = nil
+        }
+    }
+}
+
+// MARK: - Activity Log Full View (with Native Table)
+
+struct ActivityLogFullView: View {
+    private let settings = SettingsManager.shared
+    private let repository = LocalRepository()
+
+    // State for workflow runs
+    @State private var allRuns: [WorkflowRunModel] = []
+    @State private var memoTitles: [UUID: String] = [:]
+    @State private var isLoading = true
+
+    // Selection & Inspector state
+    @State private var selectedRunId: UUID?
+    @State private var showInspector: Bool = false
+
+    // Sorting state for Table
+    @State private var sortOrder = [KeyPathComparator(\ActivityRunRow.timestamp, order: .reverse)]
+
+    // Inspector panel width (resizable)
+    @State private var inspectorWidth: CGFloat = 380
+
+    // Convert workflow runs to row models
+    private var tableRows: [ActivityRunRow] {
+        return allRuns.compactMap { run in
+            let title = memoTitles[run.memoId] ?? "Unknown"
+            return ActivityRunRow(from: run, memoTitle: title)
+        }.sorted(using: sortOrder)
+    }
+
+    private var selectedRun: WorkflowRunModel? {
+        guard let selectedId = selectedRunId else { return nil }
+        return allRuns.first { $0.id == selectedId }
+    }
+
+    var body: some View {
+        HSplitView {
+            // Left side: Table
+            VStack(spacing: 0) {
+                // Header
+                PageHeaderBar {
+                    TalkieText("Actions", style: .pageTitle)
+                    Spacer()
+                }
+
+                Divider()
+
+                if isLoading {
+                    VStack(spacing: Spacing.lg) {
+                        Spacer()
+                        BrailleSpinner()
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if allRuns.isEmpty {
+                    VStack(spacing: Spacing.lg) {
+                        Spacer()
+                        Image(systemName: "wand.and.rays")
+                            .font(.system(size: 40, weight: .light))
+                            .foregroundColor(Theme.current.foregroundMuted)
+
+                        Text("NO ACTIVITY YET")
+                            .font(Theme.current.fontXSBold)
+                            .foregroundColor(Theme.current.foregroundSecondary)
+
+                        Text("Run workflows on your memos")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundMuted)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    // Native SwiftUI Table with resizable columns
+                    Table(tableRows, selection: $selectedRunId, sortOrder: $sortOrder) {
+                        TableColumn("Timestamp", value: \.timestamp) { row in
+                            Text(formatTimestamp(row.timestamp))
+                                .font(Theme.current.fontSM)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                        }
+                        .width(min: 100, ideal: 150, max: 200)
+
+                        TableColumn("Workflow", value: \.workflowName) { row in
+                            Text(row.workflowName)
+                                .font(Theme.current.fontBodyBold)
+                                .foregroundColor(Theme.current.foreground)
+                                .lineLimit(1)
+                        }
+                        .width(min: 80, ideal: 140, max: 250)
+
+                        TableColumn("Memo", value: \.memoTitle) { row in
+                            Text(row.memoTitle)
+                                .font(Theme.current.fontSM)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                                .lineLimit(1)
+                        }
+                        .width(min: 80, ideal: 180, max: 300)
+
+                        TableColumn("Status") { row in
+                            HStack(spacing: Spacing.xs) {
+                                Circle()
+                                    .fill(row.run.isFailed ? SemanticColor.error : SemanticColor.success)
+                                    .frame(width: 6, height: 6)
+
+                                if row.run.isFailed {
+                                    Text("Failed")
+                                        .font(.monoSmall)
+                                        .foregroundColor(SemanticColor.error)
+                                } else if let ms = row.durationMs {
+                                    Text(formatDurationMs(ms))
+                                        .font(.monoSmall)
+                                        .foregroundColor(Theme.current.foregroundSecondary)
+                                } else {
+                                    Text("Done")
+                                        .font(.monoSmall)
+                                        .foregroundColor(Theme.current.foregroundMuted)
+                                }
+                            }
+                        }
+                        .width(min: 60, ideal: 90, max: 120)
+                    }
+                    .tableStyle(.inset(alternatesRowBackgrounds: true))
+                }
+            }
+            .frame(minWidth: 300, idealWidth: 450)
+            .background(Theme.current.surfaceInput)
+
+            // Right side: Inspector (always visible)
+            VStack(spacing: 0) {
+                if let run = selectedRun {
+                    // Show inspector content
+                    ActivityInspectorPanel(
+                        run: run,
+                        onClose: { selectedRunId = nil },
+                        onDelete: {
+                            deleteRun(run)
+                            selectedRunId = nil
+                        },
+                        onRetry: {
+                            try await retryRun(run)
+                        }
+                    )
+                } else {
+                    // Empty state
+                    VStack(spacing: Spacing.lg) {
+                        Spacer()
+
+                        Image(systemName: "square.stack.3d.up")
+                            .font(.system(size: 40, weight: .light))
+                            .foregroundColor(Theme.current.foregroundMuted)
+
+                        Text("SELECT AN ACTION")
+                            .font(Theme.current.fontXSBold)
+                            .foregroundColor(Theme.current.foregroundSecondary)
+
+                        Text("Click a row to see details")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundMuted)
+
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Theme.current.surface1)
+                }
+            }
+            .frame(minWidth: 240, idealWidth: 320, maxWidth: 450)
+        }
+        .onKeyPress(.escape) {
+            if selectedRunId != nil {
+                selectedRunId = nil
+                return .handled
+            }
+            return .ignored
+        }
+        .onChange(of: selectedRunId) { _, newValue in
+            // Track row selection/deselection
+            if newValue != nil, let run = selectedRun {
+                let id = talkieSignposter.makeSignpostID()
+                talkieSignposter.emitEvent("ActionRowClick", id: id, "AIResults.\(run.workflowName)")
+            }
+        }
+        .task {
+            await loadWorkflowRuns()
+        }
+    }
+
+    private func loadWorkflowRuns() async {
+        isLoading = true
+        do {
+            let runs = try await repository.allWorkflowRuns()
+
+            // Fetch memo titles for all unique memoIds
+            var titles: [UUID: String] = [:]
+            let uniqueMemoIds = Array(Set(runs.map(\.memoId)))
+
+            for memoId in uniqueMemoIds {
+                do {
+                    if let memo = try await repository.fetchMemo(id: memoId) {
+                        titles[memoId] = memo.memo.displayTitle
+                    }
+                } catch {
+                    log.debug("Failed to fetch memo title for \(memoId.uuidString.prefix(8))")
+                }
+            }
+
+            await MainActor.run {
+                self.allRuns = runs
+                self.memoTitles = titles
+                self.isLoading = false
+            }
+        } catch {
+            log.error("Failed to load workflow runs: \(error)")
+            await MainActor.run {
+                self.isLoading = false
+            }
+        }
+    }
+
+    private func formatTimestamp(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, hh:mm a"
+        return formatter.string(from: date)
+    }
+
+    private func formatDurationMs(_ ms: Int) -> String {
+        if ms >= 1000 {
+            let seconds = Double(ms) / 1000.0
+            return String(format: "%.2fs", seconds)
+        } else {
+            return "\(ms)ms"
+        }
+    }
+
+    private func deleteRun(_ run: WorkflowRunModel) {
+        Task {
+            do {
+                try await repository.deleteWorkflowRun(id: run.id)
+                log.info("Deleted workflow run: \(run.id.uuidString.prefix(8))")
+
+                // Reload the runs
+                await loadWorkflowRuns()
+            } catch {
+                log.error("Failed to delete workflow run: \(error)")
+            }
+        }
+    }
+
+    private func retryRun(_ run: WorkflowRunModel) async throws {
+        _ = try await WorkflowExecutor.shared.retryWorkflowRun(run)
+        await loadWorkflowRuns()
+
+        if let newestRun = allRuns
+            .filter({ $0.memoId == run.memoId && $0.workflowId == run.workflowId })
+            .max(by: { $0.runDate < $1.runDate }) {
+            selectedRunId = newestRun.id
+        }
+    }
+}
+
+// MARK: - Activity Inspector Panel
+
+struct ActivityInspectorPanel: View {
+    let run: WorkflowRunModel
+    let onClose: () -> Void
+    let onDelete: () -> Void
+    let onRetry: () async throws -> Void
+    private let settings = SettingsManager.shared
+
+    @State private var isRetrying = false
+    @State private var retryErrorMessage: String?
+
+    private var workflowName: String { run.workflowName }
+    private var workflowIcon: String { run.workflowIcon ?? "wand.and.stars" }
+    private var modelId: String? { run.modelId }
+    private var runDate: Date { run.runDate }
+    private var memoTitle: String { "Unknown Memo" }  // Will be passed from parent
+
+    private var stepExecutions: [WorkflowExecutor.StepExecution] {
+        guard let json = run.stepOutputsJSON,
+              let data = json.data(using: .utf8),
+              let steps = try? JSONDecoder().decode([WorkflowExecutor.StepExecution].self, from: data)
+        else { return [] }
+        return steps
+    }
+
+    private var failureMessage: String? {
+        guard run.isFailed,
+              let message = run.errorMessage?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !message.isEmpty else {
+            return nil
+        }
+        return message
+    }
+
+    private var technicalErrorDetails: String? {
+        guard let details = run.errorStack?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !details.isEmpty,
+              details != failureMessage else {
+            return nil
+        }
+        return details
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Inspector Header
+            HStack(spacing: Spacing.sm) {
+                Image(systemName: workflowIcon)
+                    .font(Theme.current.fontBody)
+                    .foregroundColor(TalkieTheme.accent)
+                    .frame(width: 24, height: 24)
+                    .background(Theme.current.surfaceInfo)
+                    .cornerRadius(CornerRadius.xs)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(workflowName)
+                        .font(Theme.current.fontBodyMedium)
+                        .lineLimit(1)
+
+                    HStack(spacing: Spacing.xs) {
+                        Text(formatFullDate(runDate))
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundSecondary)
+
+                        Text(run.id.uuidString.prefix(8).uppercased())
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .foregroundColor(Theme.current.foregroundMuted)
+                    }
+                }
+
+                Spacer()
+
+                Button(action: onClose) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                }
+                .buttonStyle(.plain)
+                .help("Close inspector")
+            }
+            .padding(Spacing.md)
+            .background(Theme.current.surface1)
+
+            Divider()
+
+            // Memo reference
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: "waveform")
+                    .font(Theme.current.fontXS)
+                Text("From: \(memoTitle)")
+                    .font(Theme.current.fontXS)
+                    .lineLimit(1)
+
+                Spacer()
+
+                if let model = modelId {
+                    Text(model)
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                        .padding(.horizontal, Spacing.xs)
+                        .padding(.vertical, 2)
+                        .background(Theme.current.surfaceAlternate)
+                        .cornerRadius(3)
+                }
+            }
+            .foregroundColor(Theme.current.foregroundSecondary)
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.sm)
+            .background(Theme.current.surface2)
+
+            Divider()
+
+            // Step-by-step content
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    if let failureMessage {
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            Text("FAILED")
+                                .font(Theme.current.fontXSBold)
+                                .foregroundColor(SemanticColor.error)
+
+                            Text(failureMessage)
+                                .font(Theme.current.fontSM)
+                                .foregroundColor(Theme.current.foreground)
+                                .textSelection(.enabled)
+                                .lineSpacing(2)
+
+                            if let technicalErrorDetails {
+                                DisclosureGroup("Technical details") {
+                                    Text(technicalErrorDetails)
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundColor(Theme.current.foregroundSecondary)
+                                        .textSelection(.enabled)
+                                        .padding(.top, Spacing.xs)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(Theme.current.foregroundSecondary)
+                            }
+                        }
+                        .padding(Spacing.sm)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(SemanticColor.error.opacity(0.08))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: CornerRadius.xs)
+                                .strokeBorder(SemanticColor.error.opacity(0.25), lineWidth: 1)
+                        )
+                        .clipShape(.rect(cornerRadius: CornerRadius.xs))
+                    }
+
+                    if stepExecutions.isEmpty {
+                        // Fallback to simple output
+                        if let output = run.output, !output.isEmpty {
+                            VStack(alignment: .leading, spacing: Spacing.xs) {
+                                Text("OUTPUT")
+                                    .font(Theme.current.fontXSBold)
+                                    .foregroundColor(Theme.current.foregroundSecondary)
+
+                                Text(output)
+                                    .font(Theme.current.fontSM)
+                                    .foregroundColor(Theme.current.foreground)
+                                    .textSelection(.enabled)
+                                    .lineSpacing(2)
+                                    .padding(Spacing.sm)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Theme.current.surface1)
+                                    .cornerRadius(CornerRadius.xs)
+                            }
+                        }
+                    } else {
+                        ForEach(Array(stepExecutions.enumerated()), id: \.offset) { index, step in
+                            InspectorStepCard(step: step, isLast: index == stepExecutions.count - 1)
+                        }
+                    }
+                }
+                .padding(12)
+            }
+
+            Divider()
+
+            // Actions at bottom
+            HStack {
+                if run.isFailed {
+                    TalkieButtonSync("RetryRun.\(workflowName)", section: "AIResults") {
+                        guard !isRetrying else { return }
+                        isRetrying = true
+                        retryErrorMessage = nil
+                        Task {
+                            defer { isRetrying = false }
+                            do {
+                                try await onRetry()
+                            } catch {
+                                retryErrorMessage = error.localizedDescription
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: Spacing.xxs) {
+                            Image(systemName: isRetrying ? "hourglass" : "arrow.clockwise")
+                                .font(Theme.current.fontXS)
+                            Text(isRetrying ? "Retrying…" : "Retry Run")
+                                .font(Theme.current.fontXSMedium)
+                        }
+                        .foregroundColor(isRetrying ? Theme.current.foregroundSecondary : TalkieTheme.accent)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isRetrying)
+                    .help("Retry this workflow run")
+                }
+
+                Spacer()
+
+                TalkieButtonSync("DeleteRun.\(workflowName)", section: "AIResults") {
+                    onDelete()
+                } label: {
+                    HStack(spacing: Spacing.xxs) {
+                        Image(systemName: "trash")
+                            .font(Theme.current.fontXS)
+                        Text("Delete Run")
+                            .font(Theme.current.fontXSMedium)
+                    }
+                    .foregroundColor(SemanticColor.error.opacity(0.7))
+                }
+                .buttonStyle(.plain)
+                .help("Delete this run")
+            }
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.sm)
+            .background(Theme.current.surface2)
+        }
+        .background(Theme.current.surfaceInput)
+        .alert("Retry failed", isPresented: .constant(retryErrorMessage != nil), presenting: retryErrorMessage) { _ in
+            Button("OK") { retryErrorMessage = nil }
+        } message: { message in
+            Text(message)
+        }
+    }
+
+    private func formatFullDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - Inspector Step Card (Compact)
+
+struct InspectorStepCard: View {
+    let step: WorkflowExecutor.StepExecution
+    let isLast: Bool
+
+    @State private var showInput = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(spacing: Spacing.xs) {
+                Text("\(step.stepNumber)")
+                    .font(Theme.current.fontXSBold)
+                    .foregroundColor(.white)
+                    .frame(width: 16, height: 16)
+                    .background(TalkieTheme.accent)
+                    .cornerRadius(3)
+
+                Image(systemName: step.stepIcon)
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(Theme.current.foregroundSecondary)
+
+                Text(step.stepType.uppercased())
+                    .font(Theme.current.fontXSBold)
+                    .foregroundColor(Theme.current.foreground)
+
+                Spacer()
+
+                Button(action: { withAnimation { showInput.toggle() } }) {
+                    Image(systemName: showInput ? "chevron.up" : "chevron.down")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            if showInput {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("INPUT")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(Theme.current.foregroundMuted)
+
+                    Text(step.input)
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                        .lineSpacing(1)
+                        .lineLimit(6)
+                        .padding(Spacing.sm)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Theme.current.surfaceAlternate)
+                        .cornerRadius(CornerRadius.xs)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: Spacing.xxs) {
+                    Text("OUTPUT")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(Theme.current.foregroundMuted)
+
+                    Text("→ {{\(step.outputKey)}}")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(TalkieTheme.accent.opacity(0.7))
+                }
+
+                Text(step.output)
+                    .font(Theme.current.fontSM)
+                    .foregroundColor(Theme.current.foreground)
+                    .textSelection(.enabled)
+                    .lineSpacing(2)
+                    .padding(Spacing.sm)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.current.surface1)
+                    .cornerRadius(CornerRadius.xs)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CornerRadius.xs)
+                            .strokeBorder(isLast ? SemanticColor.success.opacity(0.3) : Color.clear, lineWidth: 1)
+                    )
+            }
+        }
+        .padding(Spacing.sm)
+        .background(Theme.current.surface2)
+        .cornerRadius(CornerRadius.xs)
+    }
+}
+
+// MARK: - Inspector Resize Handle
+
+struct InspectorResizeHandle: View {
+    @Binding var width: CGFloat
+    private let settings = SettingsManager.shared
+
+    @State private var isHovering = false
+    @State private var isDragging = false
+
+    private let minWidth: CGFloat = 280
+    private let maxWidth: CGFloat = 600
+
+    var body: some View {
+        Rectangle()
+            .fill(isDragging ? Theme.current.surfaceInfo : (isHovering ? Theme.current.surfaceHover : Theme.current.divider))
+            .frame(width: isDragging ? 3 : 1)
+            .contentShape(Rectangle().inset(by: -4))
+            .onHover { hovering in
+                isHovering = hovering
+                if hovering {
+                    NSCursor.resizeLeftRight.push()
+                } else if !isDragging {
+                    NSCursor.pop()
+                }
+            }
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        isDragging = true
+                        // Dragging left increases width, dragging right decreases
+                        let newWidth = width - value.translation.width
+                        width = min(maxWidth, max(minWidth, newWidth))
+                    }
+                    .onEnded { _ in
+                        isDragging = false
+                        NSCursor.pop()
+                    }
+            )
+    }
+}
+

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>jdi.talkie.agent.xpc.dev</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/zsh</string>
+        <string>-lc</string>
+        <string>exec "$(find "$HOME/Library/Developer/Xcode/DerivedData" -path "*/Build/Products/Debug/TalkieAgent.app/Contents/MacOS/TalkieAgent" -print -quit)"</string>
+    </array>
+    <key>MachServices</key>
+    <dict>
+        <key>jdi.talkie.agent.xpc.dev</key>
+        <true/>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>LimitLoadToSessionType</key>
+    <string>Aqua</string>
+    <key>StandardOutPath</key>
+    <string>/tmp/jdi.talkie.agent.xpc.dev.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/jdi.talkie.agent.xpc.dev.stderr.log</string>
+</dict>
+</plist>

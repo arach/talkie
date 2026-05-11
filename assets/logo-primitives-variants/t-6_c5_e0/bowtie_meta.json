@@ -1,0 +1,14 @@
+{
+  "input": "apps/macos/Talkie/Assets.xcassets/AppIcon.appiconset/icon_1024x1024.png",
+  "threshold": 34.0052551388496,
+  "mask_mode": "bg",
+  "bg_color": [
+    212,
+    212,
+    212
+  ],
+  "threshold_offset": -6.0,
+  "closing_size": 5,
+  "sdf_size": null,
+  "sdf_max_abs": null
+}

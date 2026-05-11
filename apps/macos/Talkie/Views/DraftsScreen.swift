@@ -1,0 +1,1317 @@
+//
+//  DraftsScreen.swift
+//  Talkie
+//
+//  Quick text editing with voice dictation and AI-assisted revision
+//  Flow: Talkie → TalkieEngine (direct, no TalkieAgent)
+//
+
+import SwiftUI
+import TalkieKit
+
+private let log = Log(.ui)
+
+struct DraftsScreen: View {
+    @Environment(SettingsManager.self) private var settings
+    @State private var editorState = VoiceEditorState()
+    @FocusState private var isTextFieldFocused: Bool
+
+    // Dictation state (uses EphemeralTranscriber → TalkieEngine directly)
+    @State private var dictationPillState: DictationPillState = .idle
+    @State private var dictationDuration: TimeInterval = 0
+    @State private var dictationTimerRef: Task<Void, Never>?
+
+    // Voice prompt state (for LLM instructions)
+    @State private var isRecordingInstruction: Bool = false
+    @State private var isTranscribingInstruction: Bool = false
+    @State private var isPulsing: Bool = false
+
+    // Pending command feedback (shows immediately when instruction captured)
+    @State private var pendingInstruction: String?
+    @State private var showPromptDetails: Bool = false
+
+    // History popover
+    @State private var showHistory = false
+
+    // Source recording (when opened from a dictation/memo)
+    @State private var sourceRecordingId: UUID?
+
+    // App preset picker for actions
+    @State private var selectedAppPreset: String = ""
+
+    /// Available actions based on current preset
+    private var availableActions: [SmartAction] {
+        SmartAction.combinedActionsForDrafts(appPreset: selectedAppPreset.isEmpty ? nil : selectedAppPreset)
+    }
+
+    private var dictationOwnsCapture: Bool {
+        dictationPillState == .recording || dictationPillState == .transcribing
+    }
+
+    private var instructionOwnsCapture: Bool {
+        isRecordingInstruction || isTranscribingInstruction
+    }
+
+    private var dictationPillDisabled: Bool {
+        !dictationOwnsCapture && instructionOwnsCapture
+    }
+
+    private var voicePromptDisabled: Bool {
+        if isRecordingInstruction {
+            return false
+        }
+        if isTranscribingInstruction {
+            return true
+        }
+        return editorState.isProcessing || editorState.text.isEmpty || dictationOwnsCapture
+    }
+
+    /// Available app presets (derived from user's actions)
+    private var appPresets: [String] {
+        SmartAction.availableAppPresets
+    }
+
+    var body: some View {
+        TalkiePage("Compose", style: .fixed) {
+            notesHeader
+        } content: {
+            // Editor card (always visible — new note or editing existing)
+            editorCard
+
+            // Only show quick actions when not reviewing
+            if !editorState.isReviewing {
+                quickActionsSection
+            }
+        }
+        .onAppear {
+            initializeLLMSettings()
+            consumeNavigationParams()
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                isTextFieldFocused = true
+            }
+        }
+        .onChange(of: NavigationState.shared.params["initialText"] as? String) { _, newValue in
+            if newValue != nil {
+                consumeNavigationParams()
+            }
+        }
+    }
+
+    // MARK: - Header
+
+    /// Compact header for TalkiePage (44pt height)
+    private var notesHeader: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.md) {
+            TalkieText("Compose", style: .pageTitle)
+
+            if !editorState.text.isEmpty {
+                Text("\(editorState.text.split(separator: " ").count) words")
+                    .font(Theme.current.fontSM)
+                    .foregroundColor(Theme.current.foregroundMuted)
+            }
+
+            if let sourceId = sourceRecordingId {
+                Button {
+                    NavigationState.shared.navigateToMemo(sourceId)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "link")
+                            .font(.system(size: 10, weight: .medium))
+                        Text("Source")
+                            .font(Theme.current.fontXSMedium)
+                    }
+                    .foregroundColor(Color.accentColor.opacity(0.8))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(Color.accentColor.opacity(0.1))
+                    )
+                }
+                .buttonStyle(.plain)
+                .help("Go to source recording")
+            }
+
+            Spacer()
+
+            // New Note button (when editing an existing note)
+            if editorState.currentNoteId != nil {
+                Button(action: startNewNote) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 11, weight: .medium))
+                        Text("New Note")
+                            .font(Theme.current.fontXSMedium)
+                    }
+                    .foregroundColor(Theme.current.foreground)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .fill(Theme.current.surface2)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
+            if FeatureFlags.shared.showExtensionAPI {
+                extensionLinkBadge
+            }
+        }
+    }
+
+    private func consumeNavigationParams() {
+        guard let initialText = NavigationState.shared.params["initialText"] as? String,
+              !initialText.isEmpty else { return }
+
+        editorState.reset()
+        editorState.text = initialText
+        sourceRecordingId = NavigationState.shared.params["sourceRecordingId"] as? UUID
+        NavigationState.shared.params.removeValue(forKey: "initialText")
+        NavigationState.shared.params.removeValue(forKey: "sourceRecordingId")
+        log.info("Compose opened with \(initialText.count) chars\(sourceRecordingId != nil ? " from recording \(sourceRecordingId!.uuidString.prefix(8))" : "")")
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            isTextFieldFocused = true
+        }
+    }
+
+    private func startNewNote() {
+        editorState.reset()
+        sourceRecordingId = nil
+        isTextFieldFocused = true
+    }
+
+    /// Badge showing extension API info (via TalkieServer on port 8765)
+    @ViewBuilder
+    private var extensionLinkBadge: some View {
+        Menu {
+            Text("Extension API via TalkieServer")
+                .font(.caption)
+            Text("ws://localhost:8765/extensions")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            Divider()
+
+            Button {
+                fetchAndCopyExtensionToken()
+            } label: {
+                Label("Copy Auth Token", systemImage: "doc.on.doc")
+            }
+
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString("http://localhost:8765/extensions/status", forType: .string)
+            } label: {
+                Label("Copy Status URL", systemImage: "link")
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "cable.connector")
+                    .font(.system(size: 10))
+                    .foregroundColor(Theme.current.foregroundMuted)
+
+                Text("API")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(Theme.current.foregroundMuted)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Theme.current.backgroundSecondary.opacity(0.5))
+            .cornerRadius(4)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+
+    /// Fetch auth token from TalkieServer and copy to clipboard
+    private func fetchAndCopyExtensionToken() {
+        Task {
+            do {
+                let url = URL(string: "http://localhost:8765/extensions/token")!
+                let (data, _) = try await URLSession.shared.data(from: url)
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let token = json["token"] as? String {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(token, forType: .string)
+                }
+            } catch {
+                log.error("Failed to fetch extension token: \(error)")
+            }
+        }
+    }
+
+    // MARK: - Editor Card
+
+    private var editorCard: some View {
+        VStack(spacing: 0) {
+            // Header bar (always visible)
+            modelSelectorBar
+
+            Divider()
+                .background(Theme.current.divider)
+
+            // Content area: editing or reviewing
+            Group {
+                switch editorState.mode {
+                case .editing:
+                    editingContent
+                case .reviewing:
+                    if let diff = editorState.currentDiff {
+                        reviewingContent(diff: diff)
+                    } else {
+                        editingContent
+                    }
+                }
+            }
+
+            // Command feedback bar (shows when processing a voice command)
+            if pendingInstruction != nil || editorState.isProcessing {
+                commandFeedbackBar
+            }
+
+            Divider()
+                .background(Theme.current.divider)
+
+            // Action bar (always visible, with voice prompt)
+            actionBar
+        }
+        .background(
+            RoundedRectangle(cornerRadius: CornerRadius.md)
+                .fill(Theme.current.surface1)
+                .overlay(
+                    RoundedRectangle(cornerRadius: CornerRadius.md)
+                        .strokeBorder(Theme.current.divider, lineWidth: 1)
+                )
+        )
+    }
+
+    // MARK: - Editing Content (normal text editor)
+
+    private var editingContent: some View {
+        ZStack(alignment: .bottom) {
+            TalkieTextEditor(
+                text: $editorState.text,
+                selectedRange: $editorState.selectedRange,
+                font: NSFont.systemFont(ofSize: 13 * settings.contentFontSize.scale),
+                textColor: NSColor(Theme.current.foreground),
+                insertionPointColor: NSColor(Theme.current.accent)
+            )
+            .padding(Spacing.md)
+            .padding(.bottom, 50)
+            .frame(minHeight: 200, maxHeight: .infinity)
+
+            // Selection indicator
+            if editorState.isTransformingSelection {
+                selectionIndicator
+            }
+
+            // Floating dictation pill
+            DictationPill(
+                state: $dictationPillState,
+                duration: $dictationDuration,
+                onTap: handleDictationPillTap
+            )
+            .disabled(dictationPillDisabled)
+            .padding(.bottom, Spacing.sm)
+        }
+    }
+
+    /// Shows when text is selected (commands will apply to selection only)
+    private var selectionIndicator: some View {
+        VStack {
+            HStack {
+                Spacer()
+                HStack(spacing: 4) {
+                    Image(systemName: "text.cursor")
+                        .font(.system(size: 10))
+                    Text("Selection")
+                        .font(Theme.current.fontXSBold)
+                }
+                .foregroundColor(settings.resolvedAccentColor)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(settings.resolvedAccentColor.opacity(0.15))
+                )
+            }
+            .padding(.horizontal, Spacing.md)
+            .padding(.top, Spacing.sm)
+            Spacer()
+        }
+    }
+
+    // MARK: - Reviewing Content (side-by-side diff overlay)
+
+    private func reviewingContent(diff: TextDiff) -> some View {
+        VStack(spacing: 0) {
+            // Side-by-side diff panes
+            HStack(spacing: 0) {
+                // Original (left)
+                diffPane(
+                    title: "ORIGINAL",
+                    indicatorColor: SemanticColor.error,
+                    content: diff.attributedOriginal(
+                        baseColor: Theme.current.foreground,
+                        deleteColor: SemanticColor.error
+                    )
+                )
+
+                // Divider
+                Rectangle()
+                    .fill(Theme.current.divider)
+                    .frame(width: 1)
+
+                // Proposed (right)
+                diffPane(
+                    title: "PROPOSED",
+                    indicatorColor: SemanticColor.success,
+                    content: diff.attributedProposed(
+                        baseColor: Theme.current.foreground,
+                        insertColor: SemanticColor.success
+                    )
+                )
+            }
+            .frame(minHeight: 200, maxHeight: 400)
+
+            // Voice instruction feedback (what you said)
+            if let voiceInstruction = editorState.currentInstruction {
+                HStack(spacing: Spacing.xs) {
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(settings.resolvedAccentColor)
+
+                    Text("You said:")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(Theme.current.foregroundMuted)
+
+                    Text(voiceInstruction)
+                        .font(Theme.current.fontSM)
+                        .foregroundColor(Theme.current.foreground)
+                        .lineLimit(2)
+
+                    Spacer()
+                }
+                .padding(.horizontal, Spacing.md)
+                .padding(.vertical, Spacing.sm)
+                .background(settings.resolvedAccentColor.opacity(0.1))
+            }
+
+            // Accept/Reject buttons
+            HStack(spacing: Spacing.md) {
+                // Change count
+                Text("\(diff.changeCount) change\(diff.changeCount == 1 ? "" : "s")")
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(Theme.current.foregroundMuted)
+
+                Spacer()
+
+                // Reject
+                Button(action: { editorState.rejectRevision() }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9, weight: .semibold))
+                        Text("REJECT")
+                            .font(Theme.current.fontXSBold)
+                    }
+                    .foregroundColor(SemanticColor.error)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .stroke(SemanticColor.error, lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.escape, modifiers: [])
+
+                // Accept
+                Button(action: { editorState.acceptRevision() }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 9, weight: .semibold))
+                        Text("ACCEPT")
+                            .font(Theme.current.fontXSBold)
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(SemanticColor.success)
+                    )
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.return, modifiers: .command)
+            }
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.sm)
+        }
+    }
+
+    private func diffPane(title: String, indicatorColor: Color, content: AttributedString) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Pane header
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(indicatorColor)
+                    .frame(width: 6, height: 6)
+                Text(title)
+                    .font(Theme.current.fontXSBold)
+                    .foregroundColor(Theme.current.foregroundMuted)
+                Spacer()
+            }
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, Spacing.xs + 2)
+            .background(Theme.current.backgroundSecondary)
+
+            // Pane content
+            ScrollView {
+                Text(content)
+                    .font(Theme.current.contentFontBody)
+                    .lineSpacing(4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(Spacing.sm)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Command Feedback Bar
+
+    /// Shows immediate feedback when a voice command is being processed
+    private var commandFeedbackBar: some View {
+        VStack(spacing: 0) {
+            Divider()
+                .background(Theme.current.divider)
+
+            HStack(spacing: Spacing.sm) {
+                // Status indicator
+                if editorState.isProcessing {
+                    BrailleSpinner(size: 12)
+                } else {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 12))
+                        .foregroundColor(settings.resolvedAccentColor)
+                }
+
+                // Instruction text
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(pendingInstruction ?? editorState.currentInstruction ?? "Processing...")
+                        .font(Theme.current.fontSM)
+                        .foregroundColor(Theme.current.foreground)
+                        .lineLimit(1)
+
+                    // Provider/model info
+                    if let provider = editorState.lastUsedProvider ?? resolvedProviderName,
+                       let model = editorState.lastUsedModel ?? resolvedModelName {
+                        Text("\(provider) · \(model)")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundMuted)
+                    }
+                }
+
+                Spacer()
+
+                if editorState.isProcessing {
+                    Button(action: { editorState.cancelGeneration() }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(Theme.current.foregroundMuted)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Cancel generation")
+                }
+
+                // Expand to see full prompt
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showPromptDetails.toggle()
+                    }
+                } label: {
+                    Image(systemName: showPromptDetails ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(Theme.current.foregroundMuted)
+                }
+                .buttonStyle(.plain)
+                .help("Show prompt details")
+            }
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.sm)
+            .background(Theme.current.surface2.opacity(0.5))
+
+            // Expanded prompt details
+            if showPromptDetails, let prompt = editorState.lastPrompt {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    HStack {
+                        Text("PROMPT")
+                            .font(Theme.current.fontXSBold)
+                            .foregroundColor(Theme.current.foregroundMuted)
+
+                        Spacer()
+
+                        // Copy prompt button
+                        Button {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(prompt, forType: .string)
+                        } label: {
+                            Image(systemName: "doc.on.doc")
+                                .font(.system(size: 10))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(Theme.current.foregroundMuted)
+                        .help("Copy prompt")
+
+                        // Edit prompt (opens settings)
+                        Button {
+                            NavigationState.shared.navigateToSettings(.context)
+                        } label: {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 10))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(Theme.current.foregroundMuted)
+                        .help("Edit system prompt in Settings")
+                    }
+
+                    ScrollView {
+                        Text(prompt)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(Theme.current.foregroundSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                    }
+                    .frame(maxHeight: 150)
+                }
+                .padding(Spacing.sm)
+                .background(Theme.current.surface1)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: showPromptDetails)
+    }
+
+    /// Get the resolved provider name for display
+    private var resolvedProviderName: String? {
+        if let providerId = editorState.providerId {
+            return LLMProviderRegistry.shared.provider(for: providerId)?.name
+        }
+        return LLMProviderRegistry.shared.providers.first?.name
+    }
+
+    /// Get the resolved model name for display
+    private var resolvedModelName: String? {
+        if let modelId = editorState.modelId {
+            return modelId
+        }
+        // Get default from config
+        if let provider = LLMProviderRegistry.shared.providers.first {
+            return LLMConfig.shared.providers[provider.id]?.defaultModel
+        }
+        return nil
+    }
+
+    // MARK: - Model Selector Bar
+
+    private var modelSelectorBar: some View {
+        HStack(spacing: Spacing.sm) {
+            modelPicker
+
+            Spacer()
+
+            if editorState.isProcessing {
+                HStack(spacing: 4) {
+                    BrailleSpinner(size: 10)
+                    Text("REVISING")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(Theme.current.foregroundMuted)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(Theme.current.surface2))
+            }
+
+            // History button (only show if there's history)
+            if !editorState.revisions.isEmpty {
+                historyButton
+            }
+
+            if !editorState.text.isEmpty && !editorState.isReviewing {
+                Button(action: { editorState.text = "" }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(Theme.current.foregroundMuted)
+                }
+                .buttonStyle(.plain)
+                .help("Clear text")
+            }
+        }
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.sm)
+    }
+
+    // MARK: - History Button & Popover
+
+    private var historyButton: some View {
+        Button(action: { showHistory.toggle() }) {
+            HStack(spacing: 4) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 10, weight: .medium))
+                Text("\(editorState.revisions.count)")
+                    .font(.system(size: 10, weight: .semibold))
+            }
+            .foregroundColor(Theme.current.foregroundMuted)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .fill(Theme.current.surface2)
+                    .overlay(
+                        Capsule()
+                            .stroke(showHistory ? settings.resolvedAccentColor : Theme.current.divider, lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .help("Edit history (\(editorState.revisions.count) edits)")
+        .popover(isPresented: $showHistory) {
+            historyPopover
+        }
+    }
+
+    private var historyPopover: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header
+            HStack {
+                Text("EDIT HISTORY")
+                    .font(Theme.current.fontXSBold)
+                    .foregroundColor(Theme.current.foregroundMuted)
+                Spacer()
+                Text("\(editorState.revisions.count) edits")
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(Theme.current.foregroundMuted)
+            }
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.sm)
+
+            Divider()
+
+            // Timeline or Preview
+            if let previewing = editorState.previewingRevision {
+                revisionPreview(previewing)
+            } else {
+                // Timeline list
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(editorState.revisions.reversed()) { revision in
+                            historyRow(revision)
+                        }
+                    }
+                    .padding(Spacing.sm)
+                }
+                .frame(maxHeight: 200)
+            }
+        }
+        .frame(width: 320)
+        .background(Theme.current.background)
+    }
+
+    private func historyRow(_ revision: Revision) -> some View {
+        Button(action: {
+            editorState.previewRevision(revision)
+        }) {
+            HStack(spacing: Spacing.sm) {
+                // Timeline dot
+                Circle()
+                    .fill(settings.resolvedAccentColor)
+                    .frame(width: 6, height: 6)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(revision.shortInstruction)
+                        .font(Theme.current.fontSM)
+                        .foregroundColor(Theme.current.foreground)
+                        .lineLimit(1)
+
+                    HStack(spacing: 6) {
+                        Text("\(revision.changeCount) changes")
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundMuted)
+                        Text("•")
+                            .foregroundColor(Theme.current.foregroundMuted)
+                        Text(revision.timeAgo)
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundMuted)
+                    }
+                }
+
+                Spacer()
+
+                Image(systemName: "eye")
+                    .font(.system(size: 10))
+                    .foregroundColor(Theme.current.foregroundMuted)
+            }
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, Spacing.xs + 2)
+            .background(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .fill(Color.clear)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func revisionPreview(_ revision: Revision) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            // Back button + title
+            HStack {
+                Button(action: { editorState.dismissPreview() }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("Back")
+                            .font(Theme.current.fontXS)
+                    }
+                    .foregroundColor(settings.resolvedAccentColor)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                Text(revision.timeAgo)
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(Theme.current.foregroundMuted)
+            }
+            .padding(.horizontal, Spacing.md)
+            .padding(.top, Spacing.sm)
+
+            // Instruction
+            Text(revision.instruction)
+                .font(Theme.current.fontSM)
+                .foregroundColor(Theme.current.foreground)
+                .padding(.horizontal, Spacing.md)
+
+            // Text preview
+            ScrollView {
+                Text(revision.textAfter)
+                    .font(.system(size: 11))
+                    .foregroundColor(Theme.current.foregroundSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(height: 120)
+            .padding(Spacing.sm)
+            .background(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .fill(Theme.current.surface2)
+            )
+            .padding(.horizontal, Spacing.md)
+
+            // Actions
+            HStack(spacing: Spacing.sm) {
+                Button(action: {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(revision.textAfter, forType: .string)
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "doc.on.doc")
+                            .font(.system(size: 10))
+                        Text("Copy")
+                            .font(Theme.current.fontXSMedium)
+                    }
+                    .foregroundColor(Theme.current.foregroundMuted)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .fill(Theme.current.surface2)
+                    )
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                Button(action: {
+                    editorState.restoreFromRevision(revision)
+                    showHistory = false
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(.system(size: 10))
+                        Text("Use This Version")
+                            .font(Theme.current.fontXSMedium)
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .fill(settings.resolvedAccentColor)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, Spacing.md)
+            .padding(.bottom, Spacing.sm)
+        }
+    }
+
+    private func filteredModels(for providerId: String) -> [LLMModel] {
+        LLMProviderRegistry.shared.recommendedModels(for: providerId)
+    }
+
+    private var modelPicker: some View {
+        Menu {
+            ForEach(LLMProviderRegistry.shared.providers, id: \.id) { provider in
+                let models = filteredModels(for: provider.id)
+                if !models.isEmpty {
+                    Menu(provider.name) {
+                        ForEach(models, id: \.id) { model in
+                            Button(action: {
+                                editorState.setLLMSelection(providerId: provider.id, modelId: model.id)
+                            }) {
+                                HStack {
+                                    Text(model.displayName)
+                                    if editorState.modelId == model.id {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                providerIcon
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(providerColor)
+
+                Text(displayModelName)
+                    .font(Theme.current.fontXSMedium)
+                    .foregroundColor(Theme.current.foreground)
+                    .lineLimit(1)
+
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 7, weight: .semibold))
+                    .foregroundColor(Theme.current.foregroundMuted)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .fill(Theme.current.surface2)
+            )
+        }
+        .menuStyle(.borderlessButton)
+    }
+
+    private var providerIcon: Image {
+        guard let providerId = editorState.providerId else {
+            return Image(systemName: "cpu")
+        }
+        switch providerId {
+        case "openai": return Image(systemName: "sparkle")
+        case "anthropic": return Image(systemName: "brain")
+        case "google", "gemini": return Image(systemName: "diamond")
+        case "groq": return Image(systemName: "bolt")
+        default: return Image(systemName: "cpu")
+        }
+    }
+
+    private var providerColor: Color {
+        guard let providerId = editorState.providerId else { return Theme.current.foregroundMuted }
+        switch providerId {
+        case "openai": return Color(red: 0.3, green: 0.7, blue: 0.5)
+        case "anthropic": return Color(red: 0.85, green: 0.55, blue: 0.35)
+        case "google", "gemini": return Color(red: 0.3, green: 0.5, blue: 0.9)
+        case "groq": return Color(red: 0.9, green: 0.4, blue: 0.3)
+        default: return Theme.current.foregroundMuted
+        }
+    }
+
+    private var displayModelName: String {
+        if let model = editorState.modelId {
+            return model
+                .replacingOccurrences(of: "claude-opus-4-6", with: "opus 4.6")
+                .replacingOccurrences(of: "claude-sonnet-4-6", with: "sonnet 4.6")
+                .replacingOccurrences(of: "claude-sonnet-4-5-20250929", with: "sonnet 4.5")
+                .replacingOccurrences(of: "claude-haiku-4-5-20251001", with: "haiku 4.5")
+                .replacingOccurrences(of: "gpt-4o-mini", with: "4o-mini")
+                .replacingOccurrences(of: "gpt-4o", with: "4o")
+                .replacingOccurrences(of: "claude-3-5-sonnet", with: "sonnet")
+                .replacingOccurrences(of: "claude-3-haiku", with: "haiku")
+                .replacingOccurrences(of: "gemini-1.5-flash", with: "flash")
+        }
+        return "Select model"
+    }
+
+    // MARK: - Action Bar
+
+    private var actionBar: some View {
+        HStack(spacing: Spacing.sm) {
+            voicePromptButton
+
+            // Selection hint - shows when text is selected
+            if editorState.isTransformingSelection {
+                Text("Selection")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(Theme.current.foregroundMuted)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(
+                        Capsule()
+                            .stroke(Theme.current.foregroundMuted.opacity(0.3), lineWidth: 1)
+                    )
+                    .help("Commands will apply to selected text only")
+            }
+
+            ForEach(availableActions.prefix(3)) { action in
+                quickActionChip(action)
+            }
+
+            Spacer()
+
+            if let error = editorState.error {
+                Text(error)
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(SemanticColor.error)
+                    .lineLimit(1)
+            }
+
+            // Save to Memo button
+            Button(action: saveToMemo) {
+                Image(systemName: "square.and.arrow.down")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(editorState.text.isEmpty ? Theme.current.foregroundMuted : Theme.current.foreground)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        RoundedRectangle(cornerRadius: CornerRadius.xs)
+                            .fill(Theme.current.surface2)
+                    )
+            }
+            .buttonStyle(.plain)
+            .disabled(editorState.text.isEmpty)
+            .help("Save as Memo")
+
+            Button(action: copyToClipboard) {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        RoundedRectangle(cornerRadius: CornerRadius.xs)
+                            .fill(editorState.text.isEmpty ? Theme.current.foregroundMuted : settings.resolvedAccentColor)
+                    )
+            }
+            .buttonStyle(.plain)
+            .disabled(editorState.text.isEmpty)
+            .help("Copy to clipboard")
+        }
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.sm)
+    }
+
+    private var voicePromptButton: some View {
+        Button(action: toggleVoicePrompt) {
+            HStack(spacing: 6) {
+                if isTranscribingInstruction {
+                    BrailleSpinner(size: 12)
+                        .foregroundColor(.white)
+                } else if isRecordingInstruction {
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                } else {
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "mic.fill")
+                            .font(.system(size: 13, weight: .medium))
+                        Image(systemName: "sparkle")
+                            .font(.system(size: 7, weight: .bold))
+                            .offset(x: 4, y: -2)
+                    }
+                }
+
+                Text(isRecordingInstruction ? "STOP" : "COMMAND")
+                    .font(.system(size: 10, weight: .bold))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(isRecordingInstruction ? SemanticColor.error : settings.resolvedAccentColor)
+            )
+            .overlay(
+                Capsule()
+                    .stroke(SemanticColor.error.opacity(isPulsing ? 0.6 : 0), lineWidth: 2)
+                    .scaleEffect(isPulsing ? 1.15 : 1.0)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(voicePromptDisabled)
+        .help("Speak to tell AI what to do with your text")
+        .onChange(of: isRecordingInstruction) { _, isRecording in
+            if isRecording {
+                withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                    isPulsing = true
+                }
+            } else {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    isPulsing = false
+                }
+            }
+        }
+    }
+
+    private func quickActionChip(_ action: SmartAction) -> some View {
+        Button(action: {
+            Task { await editorState.requestRevision(instruction: action.defaultPrompt) }
+        }) {
+            HStack(spacing: 3) {
+                Image(systemName: action.icon)
+                    .font(.system(size: 9, weight: .medium))
+                Text(action.name)
+                    .font(Theme.current.fontXS)
+            }
+            .foregroundColor(Theme.current.foregroundSecondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: CornerRadius.xs)
+                    .fill(Theme.current.surface2)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(editorState.isProcessing || editorState.text.isEmpty)
+    }
+
+    // MARK: - Quick Actions Section
+
+    private var quickActionsSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text("QUICK ACTIONS")
+                .font(.system(size: 10, weight: .bold))
+                .tracking(1.5)
+                .foregroundColor(Theme.current.foregroundMuted)
+
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible()),
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: Spacing.sm) {
+                ForEach(availableActions) { action in
+                    actionCard(action)
+                }
+            }
+        }
+    }
+
+    private func actionCard(_ action: SmartAction) -> some View {
+        Button(action: {
+            Task { await editorState.requestRevision(instruction: action.defaultPrompt) }
+        }) {
+            VStack(spacing: Spacing.xs) {
+                Image(systemName: action.icon)
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundColor(settings.resolvedAccentColor)
+
+                Text(action.name)
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(Theme.current.foreground)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, Spacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: CornerRadius.sm)
+                    .fill(Theme.current.surface1)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .strokeBorder(Theme.current.divider, lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(editorState.isProcessing || editorState.text.isEmpty)
+    }
+
+    // MARK: - Actions
+
+    private func initializeLLMSettings() {
+        Task { @MainActor in
+            await editorState.initializeLLMSettings()
+        }
+    }
+
+    // MARK: - Dictation (Talkie → Engine via EphemeralTranscriber)
+    // Note: Extension callbacks (draft:*) are now handled by TalkieServer
+    // See apps/macos/TalkieServer/src/extensions/handlers.ts
+
+    private func handleDictationPillTap() {
+        switch dictationPillState {
+        case .idle:
+            guard !instructionOwnsCapture else { return }
+            startDictationRecording()
+        case .recording:
+            stopDictationRecording()
+        case .transcribing, .success:
+            break
+        }
+    }
+
+    private func startDictationRecording() {
+        do {
+            try EphemeralTranscriber.shared.startCapture(purpose: .draftsDictation)
+            dictationPillState = .recording
+            dictationDuration = 0
+
+            dictationTimerRef = Task {
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(100))
+                    dictationDuration += 0.1
+                }
+            }
+        } catch {
+            log.error("Dictation start failed: \(error)")
+            editorState.error = error.localizedDescription
+        }
+    }
+
+    private func stopDictationRecording() {
+        dictationTimerRef?.cancel()
+        dictationTimerRef = nil
+        dictationPillState = .transcribing
+
+        Task {
+            do {
+                let result = try await EphemeralTranscriber.shared.stopAndTranscribePersistent()
+
+                if !result.text.isEmpty {
+                    // Ensure the note exists (auto-save creates it, but ensure parentId)
+                    let noteId = editorState.currentNoteId ?? UUID()
+                    if editorState.currentNoteId == nil {
+                        // Force a note creation so we have a parentId
+                        editorState.currentNoteId = noteId
+                    }
+
+                    // Copy audio to persistent storage
+                    let segmentId = UUID()
+                    let audioFilename = "\(segmentId.uuidString).m4a"
+                    let destURL = AudioStorage.audioDirectory.appendingPathComponent(audioFilename)
+                    do {
+                        try FileManager.default.moveItem(at: result.audioURL, to: destURL)
+                    } catch {
+                        try? FileManager.default.copyItem(at: result.audioURL, to: destURL)
+                        try? FileManager.default.removeItem(at: result.audioURL)
+                    }
+
+                    // Count existing segments for index
+                    let repo = TalkieObjectRepository()
+                    let existingCount = try await repo.countSegments(forNoteId: noteId)
+
+                    // Save segment
+                    let segment = TalkieObject.newSegment(
+                        parentId: noteId,
+                        segmentIndex: existingCount,
+                        text: result.text,
+                        duration: dictationDuration,
+                        audioFilename: audioFilename,
+                        transcriptionModel: nil
+                    )
+                    try await repo.saveRecording(segment)
+
+                    // Append text to editor (existing behavior)
+                    let needsSpace = !editorState.text.isEmpty && !editorState.text.hasSuffix(" ") && !editorState.text.hasSuffix("\n")
+                    if needsSpace {
+                        editorState.text += " "
+                    }
+                    editorState.text += result.text
+
+                    log.info("Dictation segment saved: \(result.text.count) chars, segment \(existingCount)")
+                }
+
+                dictationPillState = .success
+                try? await Task.sleep(for: .milliseconds(800))
+                dictationPillState = .idle
+            } catch {
+                log.error("Dictation transcribe failed: \(error)")
+                editorState.error = error.localizedDescription
+                dictationPillState = .idle
+            }
+        }
+    }
+
+    // MARK: - Voice Prompt (for LLM instructions)
+
+    private func toggleVoicePrompt() {
+        if isRecordingInstruction {
+            Task { await stopVoicePrompt() }
+        } else {
+            guard !dictationOwnsCapture else { return }
+            startVoicePrompt()
+        }
+    }
+
+    private func startVoicePrompt() {
+        guard !isRecordingInstruction else { return }
+
+        do {
+            try EphemeralTranscriber.shared.startCapture(purpose: .draftsCommand)
+            isRecordingInstruction = true
+        } catch {
+            log.error("Voice prompt capture failed: \(error)")
+            editorState.error = error.localizedDescription
+        }
+    }
+
+    private func stopVoicePrompt() async {
+        guard isRecordingInstruction else { return }
+
+        isRecordingInstruction = false
+        isTranscribingInstruction = true
+
+        do {
+            let instruction = try await EphemeralTranscriber.shared.stopAndTranscribe()
+            isTranscribingInstruction = false
+
+            if !instruction.isEmpty {
+                // Show instruction immediately for user feedback
+                pendingInstruction = instruction
+
+                // Then call the LLM
+                await editorState.requestRevision(instruction: instruction)
+
+                // Clear pending after processing (success or failure)
+                pendingInstruction = nil
+            }
+        } catch {
+            log.error("Voice prompt transcribe failed: \(error)")
+            isTranscribingInstruction = false
+            pendingInstruction = nil
+            editorState.error = error.localizedDescription
+        }
+    }
+
+    private func copyToClipboard() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(editorState.text, forType: .string)
+    }
+
+    private func saveToMemo() {
+        guard !editorState.text.isEmpty else { return }
+        Task {
+            await editorState.promoteNoteToMemo()
+        }
+    }
+
+}
+
+#Preview {
+    DraftsScreen()
+        .frame(width: 800, height: 600)
+}
+
+// MARK: - Backwards Compatibility Alias
+typealias ScratchPadView = DraftsScreen

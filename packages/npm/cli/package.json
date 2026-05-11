@@ -1,0 +1,50 @@
+{
+  "name": "@talkie/cli",
+  "version": "0.4.6",
+  "description": "Access Talkie voice memos, dictations, and workflows from the command line",
+  "type": "module",
+  "bin": {
+    "talkie": "./dist/index.js"
+  },
+  "files": [
+    "src",
+    "!src/dev.ts",
+    "!src/commands/dev",
+    "dist/index.js",
+    "SKILL.md"
+  ],
+  "scripts": {
+    "dev": "bun run src/dev.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "prepublishOnly": "bun run build",
+    "link": "bun link && ln -sf \"$(pwd)/src/dev.ts\" \"$HOME/.bun/bin/talkie-dev\""
+  },
+  "keywords": [
+    "talkie",
+    "voice-memos",
+    "dictation",
+    "transcription",
+    "cli",
+    "sqlite",
+    "ai-agent"
+  ],
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arach/talkie",
+    "directory": "packages/npm/cli"
+  },
+  "homepage": "https://usetalkie.com",
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "os": [
+    "darwin"
+  ],
+  "dependencies": {
+    "commander": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+    <title>Talkie for Mac</title>
+
+    <!-- Custom branding - light and dark mode backgrounds -->
+    <background file="background.png" alignment="bottomleft" scaling="proportional"/>
+    <background-darkAqua file="background-dark.png" alignment="bottomleft" scaling="proportional"/>
+
+    <!-- Content pages -->
+    <welcome file="welcome.html"/>
+    <license file="license.html"/>
+    <conclusion file="conclusion.html"/>
+
+    <options customize="always" require-scripts="false" hostArchitectures="arm64,x86_64"/>
+
+    <choices-outline>
+        <line choice="live"/>
+        <line choice="core"/>
+    </choices-outline>
+
+    <!-- TalkieAgent - Required -->
+    <choice id="live"
+            title="Talkie Agent"
+            description="Required. Hosts Talkie's embedded on-device transcription engine and provides quick menu bar capture."
+            enabled="false"
+            selected="true">
+        <pkg-ref id="jdi.talkie.agent"/>
+    </choice>
+
+    <!-- Talkie Core - Optional -->
+    <choice id="core"
+            title="Talkie"
+            description="Full-featured voice memo app with library management, iCloud sync, workflows, and AI-powered actions. Uses Talkie Agent for local transcription."
+            selected="true">
+        <pkg-ref id="jdi.talkie.core"/>
+    </choice>
+
+    <pkg-ref id="jdi.talkie.agent" version="1.3.0" installKBytes="7400">TalkieAgent.pkg</pkg-ref>
+    <pkg-ref id="jdi.talkie.core" version="1.3.0" installKBytes="15000">TalkieCore.pkg</pkg-ref>
+
+</installer-gui-script>

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>TalkieAgent URL</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>$(URL_SCHEME)</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>MachServices</key>
+	<dict>
+		<key>jdi.talkie.agent.xpc</key>
+		<true/>
+		<key>jdi.talkie.agent.xpc.dev</key>
+		<true/>
+		<key>jdi.talkie.agent.xpc.staging</key>
+		<true/>
+	</dict>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_talkie-bridge._tcp</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>TalkieAgent uses your local network to advertise Mac Bridge to nearby Talkie devices.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>TalkieAgent needs access to your microphone to capture and transcribe your voice recordings.</string>
+	<key>TalkieMacAppGroupIdentifier</key>
+	<string>$(TALKIE_MAC_APP_GROUP)</string>
+	<key>TalkieSharedSettingsSuite</key>
+	<string>$(TALKIE_MAC_SHARED_SETTINGS_SUITE)</string>
+</dict>
+</plist>

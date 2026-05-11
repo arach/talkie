@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>$(TALKIE_IOS_APP_BUNDLE_ID).refresh</string>
+		<string>$(TALKIE_IOS_APP_BUNDLE_ID).sync</string>
+	</array>
+	<key>TalkieAppGroupIdentifier</key>
+	<string>$(TALKIE_IOS_APP_GROUP)</string>
+	<key>TalkieAppIdentifier</key>
+	<string>$(TALKIE_IOS_APP_BUNDLE_ID)</string>
+	<key>TalkieCloudKitContainerIdentifier</key>
+	<string>$(TALKIE_IOS_CLOUDKIT_CONTAINER)</string>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Audio File</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.audio</string>
+				<string>com.apple.m4a-audio</string>
+				<string>public.mp3</string>
+				<string>com.microsoft.waveform-audio</string>
+				<string>public.aiff-audio</string>
+				<string>com.apple.coreaudio-format</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.jdi.talkie</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>talkie</string>
+			</array>
+		</dict>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+		<string>remote-notification</string>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Talkie uses the camera to scan QR codes and capture photos for memo attachments.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Talkie uses your photo library so you can attach screenshots and images to memos.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Talkie uses your location to tag voice memos with where they were recorded.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Talkie uses your local network to find and connect to nearby Macs running Talkie.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_talkie-bridge._tcp</string>
+	</array>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>ts.net</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+		</dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+</dict>
+</plist>

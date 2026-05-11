@@ -1,0 +1,144 @@
+import XCTest
+
+// MARK: - Screenshot Spec
+
+/// Declarative description of one screenshot.
+/// Define what state the app should be in — the runner handles launch, wait, and capture.
+struct ScreenshotSpec {
+    let name: String
+    let skipSplash: Bool
+    let readyCondition: @MainActor (XCUIApplication) -> XCUIElement
+    let navigate: (@MainActor (XCUIApplication) -> Void)?
+
+    init(
+        _ name: String,
+        skipSplash: Bool = true,
+        readyWhen readyCondition: @MainActor @escaping (XCUIApplication) -> XCUIElement,
+        navigate: (@MainActor (XCUIApplication) -> Void)? = nil
+    ) {
+        self.name = name
+        self.skipSplash = skipSplash
+        self.readyCondition = readyCondition
+        self.navigate = navigate
+    }
+}
+
+// MARK: - Screen Catalog
+
+/// All screenshot specs in one place.
+/// Adding a new screenshot = adding one entry here + one `func testNN_Name` one-liner.
+extension ScreenshotSpec {
+    static let splash = ScreenshotSpec(
+        "00_Splash",
+        skipSplash: false,
+        readyWhen: { $0.otherElements["splash.screen"].firstMatch }
+    )
+
+    static let home = ScreenshotSpec(
+        "01_Home",
+        readyWhen: { $0.buttons["memo.row"].firstMatch }
+    )
+
+    static let recording = ScreenshotSpec(
+        "02_Recording",
+        readyWhen: { $0.buttons["recording.stop"].firstMatch },
+        navigate: { app in
+            // Try as accessibility element first, fall back to button
+            let record = app.otherElements["dock.record"].firstMatch
+            if record.waitForExistence(timeout: 5) {
+                record.tap()
+            } else {
+                app.buttons["dock.record"].firstMatch.tap()
+            }
+        }
+    )
+
+    static let memoDetail = ScreenshotSpec(
+        "03_MemoDetail",
+        readyWhen: { $0.navigationBars.firstMatch },
+        navigate: { app in
+            let row = app.buttons["memo.row"].firstMatch
+            XCTAssertTrue(row.waitForExistence(timeout: 10), "Seeded memo should appear")
+            row.tap()
+        }
+    )
+
+    static let settings = ScreenshotSpec(
+        "04_Settings",
+        readyWhen: { $0.navigationBars.firstMatch },
+        navigate: { app in
+            let gear = app.buttons["dock.settings"].firstMatch
+            XCTAssertTrue(gear.waitForExistence(timeout: 10), "Settings button should appear")
+            gear.tap()
+        }
+    )
+
+    static let keyboard = ScreenshotSpec(
+        "05_Keyboard",
+        readyWhen: { $0.textViews["keyboard.compose"].firstMatch },
+        navigate: { app in
+            let kb = app.buttons["dock.keyboard"].firstMatch
+            XCTAssertTrue(kb.waitForExistence(timeout: 10), "Keyboard button should appear")
+            kb.tap()
+
+            // Tap compose field to raise keyboard
+            let compose = app.textViews["keyboard.compose"].firstMatch
+            if compose.waitForExistence(timeout: 5) {
+                compose.tap()
+            }
+
+            // Cycle to Talkie keyboard if not already active
+            let joystick = app.buttons["Cursor Joystick"].firstMatch
+            if !joystick.waitForExistence(timeout: 2) {
+                for _ in 0..<3 {
+                    let next = app.buttons["Next keyboard"].firstMatch
+                    guard next.waitForExistence(timeout: 1) else { break }
+                    next.tap()
+                    if joystick.waitForExistence(timeout: 1) { break }
+                }
+            }
+        }
+    )
+}
+
+// MARK: - Test Runner
+
+@MainActor
+final class TalkieUITestsScreenshots: XCTestCase {
+    let app = XCUIApplication()
+
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+        setupSnapshot(app, waitForAnimations: false)
+        app.launchArguments += ["-FASTLANE_SNAPSHOT"]
+    }
+
+    /// Launch app per spec, navigate if needed, wait for ready element, capture.
+    private func capture(_ spec: ScreenshotSpec) {
+        if spec.skipSplash {
+            app.launchArguments += ["--screenshotSkipSplash"]
+        }
+        app.launch()
+
+        // Navigate to the target screen (if the spec requires taps)
+        spec.navigate?(app)
+
+        // Wait for the screen to be ready
+        let readyElement = spec.readyCondition(app)
+        XCTAssertTrue(
+            readyElement.waitForExistence(timeout: 10),
+            "\(spec.name): ready element should exist"
+        )
+
+        snapshot(spec.name, timeWaitingForIdle: 0)
+    }
+
+    // MARK: - Tests
+
+    func test00_Splash()     { capture(.splash) }
+    func test01_Home()       { capture(.home) }
+    func test02_Recording()  { capture(.recording) }
+    func test03_MemoDetail() { capture(.memoDetail) }
+    func test04_Settings()   { capture(.settings) }
+    func test05_Keyboard()   { capture(.keyboard) }
+}

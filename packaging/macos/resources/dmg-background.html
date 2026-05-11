@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 520px;
+      height: 340px;
+      background: #0A0A0A;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Grid: 20px, no offset - perfect 25x17 cells on 500x340 canvas */
+    .grid {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-image:
+        linear-gradient(rgba(50, 50, 50, 0.4) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(50, 50, 50, 0.4) 1px, transparent 1px);
+      background-size: 20px 20px;
+      pointer-events: none;
+    }
+
+    /* Brackets: same distance (40px) from ALL edges for true symmetry
+       Size: 20px (1 grid cell), green */
+    .bracket {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border-color: #22C55E;
+      border-style: solid;
+      border-width: 0;
+    }
+    .bracket.top-left {
+      top: 40px;
+      left: 40px;
+      border-top-width: 2px;
+      border-left-width: 2px;
+    }
+    .bracket.top-right {
+      top: 40px;
+      right: 40px;
+      border-top-width: 2px;
+      border-right-width: 2px;
+    }
+    .bracket.bottom-left {
+      bottom: 40px;
+      left: 40px;
+      border-bottom-width: 2px;
+      border-left-width: 2px;
+    }
+    .bracket.bottom-right {
+      bottom: 40px;
+      right: 40px;
+      border-bottom-width: 2px;
+      border-right-width: 2px;
+    }
+
+    /* Content container - positioned in upper area */
+    .content {
+      position: absolute;
+      top: 48px;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      z-index: 10;
+    }
+
+    /* Logo */
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 12px;
+      border: 2px solid #22C55E;
+      border-radius: 6px;
+      background: #0A0A0A;
+      transform: rotate(-3deg);
+      margin-bottom: 14px;
+    }
+    .logo .wink {
+      font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      color: #22C55E;
+    }
+    .logo .name {
+      font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      color: #FFFFFF;
+    }
+
+    /* Main headline - single line */
+    .headline {
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .headline .voice {
+      font-size: 30px;
+      font-weight: 900;
+      color: #FFFFFF;
+      letter-spacing: -0.5px;
+    }
+    .headline .plus {
+      font-size: 30px;
+      font-weight: 700;
+      color: rgba(106, 106, 106, 0.5);
+    }
+    .headline .ai {
+      font-size: 30px;
+      font-weight: 900;
+      color: #22C55E;
+    }
+
+    /* Tagline */
+    .tagline {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .tagline span {
+      font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #9A9A9A;
+    }
+    .tagline .divider {
+      color: rgba(106, 106, 106, 0.5);
+    }
+
+    /* Arrow - centered vertically with icons at y=225 */
+    .arrow-section {
+      position: absolute;
+      top: 225px;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    .arrow svg {
+      width: 72px;
+      height: 28px;
+      filter: drop-shadow(0 0 6px rgba(34, 197, 94, 0.4));
+    }
+
+    /* Icon labels - white text below icons (520px canvas, center at 260) */
+    .icon-label {
+      position: absolute;
+      top: 282px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #FFFFFF;
+      letter-spacing: 0.3px;
+    }
+
+    .label-talkie {
+      left: 145px;
+      transform: translateX(-50%);
+    }
+
+    .label-applications {
+      left: 395px;
+      transform: translateX(-50%);
+    }
+
+  </style>
+</head>
+<body>
+  <div class="grid"></div>
+
+  <!-- Corner brackets -->
+  <div class="bracket top-left"></div>
+  <div class="bracket top-right"></div>
+  <div class="bracket bottom-left"></div>
+  <div class="bracket bottom-right"></div>
+
+  <!-- Main content -->
+  <div class="content">
+    <!-- Logo -->
+    <div class="logo">
+      <span class="wink">;)</span>
+      <span class="name">Talkie</span>
+    </div>
+
+    <!-- Headline - single line -->
+    <div class="headline">
+      <span class="voice">VOICE</span>
+      <span class="plus">+</span>
+      <span class="ai">AI.</span>
+    </div>
+
+    <!-- Tagline -->
+    <div class="tagline">
+      <span>CAPTURE ANYWHERE</span>
+      <span class="divider">|</span>
+      <span>PROCESS ON-DEVICE</span>
+    </div>
+  </div>
+
+  <!-- Arrow between icons -->
+  <div class="arrow-section">
+    <div class="arrow">
+      <svg viewBox="0 0 55 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M0 14H35V4L55 20L35 36V26H0V14Z" fill="url(#arrowGradient)"/>
+        <defs>
+          <linearGradient id="arrowGradient" x1="0" y1="20" x2="55" y2="20" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#22C55E" stop-opacity="0.5"/>
+            <stop offset="100%" stop-color="#22C55E"/>
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
+  </div>
+
+  <!-- White icon labels -->
+  <div class="icon-label label-talkie">Talkie</div>
+  <div class="icon-label label-applications">Applications</div>
+
+</body>
+</html>

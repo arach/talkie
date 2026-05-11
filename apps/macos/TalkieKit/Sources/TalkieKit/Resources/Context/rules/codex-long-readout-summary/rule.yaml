@@ -1,0 +1,17 @@
+id: codex-long-readout-summary
+kind: route
+name: Codex Long Readout Summary
+enabled: true
+priority: 200
+when:
+  event: selection.readout
+  apps: [Codex]
+  sources: [selection]
+match:
+  type: regex
+  pattern: "(?s)^.{700,}$"
+produce:
+  runWorkflow: summarize-selection
+  vars:
+    profile: codex-readout-summary
+    persist: "false"

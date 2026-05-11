@@ -1,0 +1,71 @@
+# WFKit
+
+> Native workflow editor for Swift. React Flow-like node graphs for macOS and iOS.
+
+WFKit is a SwiftUI library for building visual node-based workflow editors. Zero dependencies, pure Swift.
+
+## Quick Start
+
+```swift
+import SwiftUI
+import WFKit
+
+struct ContentView: View {
+    @State var canvas = CanvasState()
+
+    var body: some View {
+        WFWorkflowEditor(state: canvas)
+    }
+}
+```
+
+## Core Types
+
+- `CanvasState` - Observable state container, holds nodes and connections
+- `WorkflowNode` - A node with type, title, position, inputs/outputs
+- `WFWorkflowEditor` - Main SwiftUI view component
+- `NodeType` - Extensible node type definitions (.trigger, .action, .condition, .output, .llm)
+
+## Creating Nodes
+
+```swift
+let node = WorkflowNode(
+    type: .action,
+    title: "Process Data",
+    position: CGPoint(x: 200, y: 100)
+)
+canvas.addNode(node)
+```
+
+## Connecting Nodes
+
+```swift
+canvas.connect(from: sourceNode, to: targetNode)
+canvas.connect(from: node, port: "output1", to: otherNode)
+```
+
+## Package Dependency
+
+```swift
+.package(url: "https://github.com/arach/WFKit.git", from: "1.0.0")
+```
+
+## Requirements
+
+- iOS 16+ / macOS 13+
+- Swift 5.9+
+- SwiftUI
+
+## Project Structure
+
+- `Sources/WFKit/` - Main library source
+  - `Canvas/` - Canvas and node views (WorkflowCanvas, NodeView)
+  - `Models/` - Data models (CanvasState, WorkflowNode)
+  - `Inspector/` - Property inspector views
+  - `Toolbar/` - Toolbar components
+  - `Theme/` - Theming (WFTheme)
+
+## Links
+
+- GitHub: https://github.com/arach/WFKit
+- Landing: https://arach.github.io/WFKit/

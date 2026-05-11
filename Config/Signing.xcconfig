@@ -1,0 +1,5 @@
+// Shared signing include for Xcode projects generated from project.yml.
+// Keep the local override ignored and machine-specific.
+
+#include "Signing.defaults.xcconfig"
+#include? "Signing.local.xcconfig"

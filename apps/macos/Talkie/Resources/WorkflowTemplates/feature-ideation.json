@@ -1,0 +1,65 @@
+{
+  "name": "Feature Ideation",
+  "description": "Brainstorm features, categorize by effort/impact, save to backlog",
+  "icon": "lightbulb.max",
+  "color": "yellow",
+  "maintainer": "talkie",
+  "steps": [
+    {
+      "type": "llm",
+      "outputKey": "extracted",
+      "costTier": "balanced",
+      "prompt": "Analyze this feature brainstorm:\n\n{{TRANSCRIPT}}\n\nExtract distinct feature ideas and evaluate each. Return JSON:\n{\n  \"project\": \"project name if mentioned, else 'General'\",\n  \"features\": [\n    {\n      \"title\": \"short feature title\",\n      \"description\": \"1-2 sentence description\",\n      \"impact\": \"high|medium|low\",\n      \"effort\": \"high|medium|low\",\n      \"category\": \"ux|performance|integration|infrastructure|polish\",\n      \"dependencies\": [\"other features or prerequisites if any\"]\n    }\n  ],\n  \"quickWins\": [\"features that are high impact + low effort\"],\n  \"bigBets\": [\"features that are high impact + high effort\"],\n  \"contextNotes\": \"any important context or constraints mentioned\"\n}",
+      "systemPrompt": "You help product thinking. Be honest about effort estimates - developers tend to underestimate. Look for hidden dependencies.",
+      "temperature": 0.4,
+      "maxTokens": 2048
+    },
+    {
+      "type": "transform",
+      "outputKey": "parsed",
+      "operation": "extractJSON",
+      "parameters": {
+        "fallback": "{\"project\": \"General\", \"features\": [], \"quickWins\": [], \"bigBets\": []}"
+      }
+    },
+    {
+      "type": "llm",
+      "outputKey": "formatted",
+      "costTier": "budget",
+      "prompt": "Format this as a markdown backlog entry:\n\nProject: {{parsed.project}}\nFeatures: {{parsed.features}}\nQuick Wins: {{parsed.quickWins}}\nBig Bets: {{parsed.bigBets}}\nContext: {{parsed.contextNotes}}\n\nFormat as:\n## Quick Wins (do these first)\n- [ ] Feature (impact/effort) - description\n\n## Backlog\nGroup by category. Each item:\n- [ ] **Feature Title** `impact`/`effort`\n  Description. Dependencies if any.\n\n## Big Bets (need planning)\n- Feature - why it's worth it\n\n## Notes\nAny context or constraints.\n\nUse checkboxes for actionable items.",
+      "temperature": 0.3,
+      "maxTokens": 2048
+    },
+    {
+      "type": "saveFile",
+      "outputKey": "saved",
+      "filename": "{{DATE}}-{{parsed.project}}-ideas.md",
+      "directory": "@Obsidian/Projects/Backlog",
+      "content": "---\ncreated: {{DATE}}\nproject: \"{{parsed.project}}\"\ntype: feature-ideation\n---\n\n# Feature Ideas: {{parsed.project}}\n\n{{formatted}}\n\n---\n\n## Raw Brainstorm\n\n> {{TRANSCRIPT}}",
+      "appendIfExists": false
+    },
+    {
+      "type": "conditional",
+      "outputKey": "hasQuickWins",
+      "condition": "{{parsed.quickWins.length}} > 0",
+      "thenSteps": [5],
+      "elseSteps": []
+    },
+    {
+      "type": "appleReminders",
+      "outputKey": "reminder",
+      "listName": "Inbox",
+      "title": "Quick win: {{parsed.quickWins[0]}}",
+      "notes": "From {{parsed.project}} ideation session.\n\nSee: @Obsidian/Projects/Backlog/{{DATE}}-{{parsed.project}}-ideas.md",
+      "dueDate": "{{NOW+1d}}",
+      "priority": 5
+    },
+    {
+      "type": "notification",
+      "outputKey": "notified",
+      "title": "Ideas captured",
+      "body": "{{parsed.features.length}} features for {{parsed.project}}",
+      "sound": true
+    }
+  ]
+}

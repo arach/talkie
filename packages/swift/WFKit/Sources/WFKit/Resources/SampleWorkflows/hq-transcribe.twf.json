@@ -1,0 +1,46 @@
+{
+  "slug": "hq-transcribe",
+  "name": "HQ Transcribe",
+  "description": "High-quality local transcription using Whisper Large V3 (MLX)",
+  "icon": "waveform.badge.magnifyingglass",
+  "color": "purple",
+  "isEnabled": true,
+  "isPinned": false,
+  "autoRun": false,
+  "steps": [
+    {
+      "id": "transcribe-hq",
+      "type": "Transcribe Audio",
+      "config": {
+        "transcribe": {
+          "model": "distil-whisper_distil-large-v3",
+          "overwriteExisting": true,
+          "saveAsVersion": true
+        }
+      }
+    },
+    {
+      "id": "polish",
+      "type": "LLM Generation",
+      "config": {
+        "llm": {
+          "costTier": "budget",
+          "prompt": "Clean up this transcript. Fix punctuation, add paragraph breaks at natural pauses, correct obvious transcription errors. Preserve the original meaning exactly.\n\n{{transcribe-hq}}",
+          "temperature": 0.2,
+          "maxTokens": 4096
+        }
+      }
+    },
+    {
+      "id": "notify",
+      "type": "Send Notification",
+      "config": {
+        "notification": {
+          "title": "HQ transcription complete",
+          "body": "{{TITLE}} - Large V3 model",
+          "sound": true
+        }
+      }
+    }
+  ]
+}

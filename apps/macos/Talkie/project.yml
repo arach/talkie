@@ -1,0 +1,149 @@
+name: Talkie
+options:
+  bundleIdPrefix: com.example
+  deploymentTarget:
+    macOS: "14.0"
+  developmentLanguage: en
+  createIntermediateGroups: true
+
+configs:
+  Debug: debug
+  Staging: release
+  Release: release
+
+configFiles:
+  Debug: ../../../Config/Signing.xcconfig
+  Staging: ../../../Config/Signing.xcconfig
+  Release: ../../../Config/Signing.xcconfig
+
+settings:
+  base:
+    DEVELOPMENT_TEAM: $(TALKIE_DEVELOPMENT_TEAM)
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+    ENABLE_HARDENED_RUNTIME: YES
+    ARCHS: arm64  # Apple Silicon only
+  configs:
+    Debug:
+      PRODUCT_BUNDLE_IDENTIFIER: $(TALKIE_MAC_CORE_BUNDLE_ID_DEBUG)
+      URL_SCHEME: talkie-dev
+      ENABLE_HARDENED_RUNTIME: NO
+    Staging:
+      PRODUCT_BUNDLE_IDENTIFIER: $(TALKIE_MAC_CORE_BUNDLE_ID_STAGING)
+      URL_SCHEME: talkie-staging
+      CODE_SIGN_ENTITLEMENTS: Talkie-Staging.entitlements
+      ENABLE_HARDENED_RUNTIME: NO
+      # Keep debug symbols for debugging - staging is a dev build
+    Release:
+      PRODUCT_BUNDLE_IDENTIFIER: $(TALKIE_MAC_CORE_BUNDLE_ID)
+      URL_SCHEME: talkie
+      # Optimize for size
+      DEAD_CODE_STRIPPING: YES
+      COPY_PHASE_STRIP: YES
+      SWIFT_OPTIMIZATION_LEVEL: -Osize
+
+packages:
+  TalkieKit:
+    path: ../TalkieKit
+  TermBridgeKit:
+    url: https://github.com/arach/TermBridgeKit.git
+    version: 0.1.2
+  DebugKit:
+    path: ../../../packages/swift/DebugKit
+  FluidAudio:
+    url: https://github.com/FluidInference/FluidAudio.git
+    version: 0.13.6
+  GRDB:
+    url: https://github.com/groue/GRDB.swift.git
+    version: 7.8.0
+  WFKit:
+    path: ../../../packages/swift/WFKit
+
+targets:
+  Talkie:
+    type: application
+    platform: macOS
+    sources:
+      - path: App
+        type: group
+      - path: Apps
+        type: group
+      - path: Components
+        type: group
+      - path: Data
+        type: group
+        excludes:
+          - "*.md"
+      - path: Database
+        type: group
+      - path: Debug
+        type: group
+        excludes:
+          - "*.md"
+      - path: Extensions
+        type: group
+      - path: Features
+        type: group
+      - path: VoiceEditor
+        type: group
+      - path: Models
+        type: group
+      - path: Resources
+        type: folder
+      - path: Services
+        type: group
+      - path: Stores
+        type: group
+      - path: Views
+        type: group
+      - path: Workflow
+        type: group
+      - Assets.xcassets
+    info:
+      path: Talkie-Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleURLTypes:
+          - CFBundleURLName: Talkie URL
+            CFBundleURLSchemes:
+              - $(URL_SCHEME)
+        TalkieCloudKitContainerIdentifier: $(TALKIE_CLOUDKIT_CONTAINER)
+        TalkieMacAppGroupIdentifier: $(TALKIE_MAC_APP_GROUP)
+        TalkieSharedSettingsSuite: $(TALKIE_MAC_SHARED_SETTINGS_SUITE)
+    dependencies:
+      - package: TalkieKit
+      - package: TermBridgeKit
+      - package: DebugKit
+      - package: FluidAudio
+      - package: GRDB
+      - package: WFKit
+    settings:
+      base:
+        MARKETING_VERSION: "2.5.18"
+        CURRENT_PROJECT_VERSION: "12"
+        INFOPLIST_KEY_CFBundleDisplayName: "Talkie"
+        INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        CODE_SIGN_ENTITLEMENTS: Talkie.entitlements
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.productivity"
+        INFOPLIST_KEY_NSAppleEventsUsageDescription: "Talkie can create reminders when you ask it to."
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Talkie needs access to your microphone to record voice memos for transcription."
+
+schemes:
+  Talkie:
+    build:
+      targets:
+        Talkie: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+  Talkie-Staging:
+    build:
+      targets:
+        Talkie: all
+    run:
+      config: Staging
+    archive:
+      config: Staging

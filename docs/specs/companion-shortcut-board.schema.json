@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://talkie.dev/schemas/device-shortcut-board.schema.json",
+  "title": "Talkie Device Shortcut Board",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "spaces"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "spaces": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "$ref": "#/$defs/space"
+      }
+    }
+  },
+  "$defs": {
+    "space": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "layout",
+        "tiles"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "layout": {
+          "$ref": "#/$defs/layout"
+        },
+        "tiles": {
+          "type": "array",
+          "minItems": 16,
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/tile"
+          }
+        }
+      }
+    },
+    "layout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rows",
+        "columns"
+      ],
+      "properties": {
+        "rows": {
+          "type": "integer",
+          "const": 4
+        },
+        "columns": {
+          "type": "integer",
+          "const": 4
+        }
+      }
+    },
+    "tile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "icon",
+        "type",
+        "action"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subtitle": {
+          "type": "string"
+        },
+        "icon": {
+          "type": "string",
+          "minLength": 1
+        },
+        "accentColor": {
+          "type": "string",
+          "pattern": "^[a-z-]+$"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "action",
+            "liveAction"
+          ]
+        },
+        "action": {
+          "$ref": "#/$defs/action"
+        },
+        "liveUI": {
+          "$ref": "#/$defs/liveUI"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "liveAction"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "liveUI"
+            ]
+          }
+        }
+      ]
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "kind"
+      ],
+      "properties": {
+        "target": {
+          "type": "string",
+          "enum": [
+            "talkie",
+            "workflow",
+            "mac",
+            "terminal",
+            "browser",
+            "raycast"
+          ]
+        },
+        "kind": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9-]+$"
+        },
+        "arguments": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "integer",
+              "boolean"
+            ]
+          }
+        }
+      }
+    },
+    "liveUI": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "showsTimer",
+        "showsWaveform",
+        "showsStopControl"
+      ],
+      "properties": {
+        "showsTimer": {
+          "type": "boolean"
+        },
+        "showsWaveform": {
+          "type": "boolean"
+        },
+        "showsStopControl": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

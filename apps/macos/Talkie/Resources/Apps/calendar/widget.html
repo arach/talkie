@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="widget.css">
+</head>
+<body>
+<div class="calendar" id="calendar">
+    <div class="calendar-header">
+        <button class="nav-btn" id="prev-month">&lsaquo;</button>
+        <span class="month-label" id="month-label"></span>
+        <button class="nav-btn" id="next-month">&rsaquo;</button>
+    </div>
+    <div class="weekdays">
+        <span class="weekday">S</span>
+        <span class="weekday">M</span>
+        <span class="weekday">T</span>
+        <span class="weekday">W</span>
+        <span class="weekday">T</span>
+        <span class="weekday">F</span>
+        <span class="weekday">S</span>
+    </div>
+    <div class="days" id="days-grid"></div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+
+    // State
+    let currentYear, currentMonth;
+    let activityData = {};
+    const today = new Date();
+
+    // Initialize to current month
+    currentYear = today.getFullYear();
+    currentMonth = today.getMonth();
+
+    // Elements
+    const monthLabel = document.getElementById('month-label');
+    const daysGrid = document.getElementById('days-grid');
+    const prevBtn = document.getElementById('prev-month');
+    const nextBtn = document.getElementById('next-month');
+
+    // Month names
+    const MONTHS = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+
+    // Format date as YYYY-MM-DD
+    function formatDate(year, month, day) {
+        return year + '-' +
+            String(month + 1).padStart(2, '0') + '-' +
+            String(day).padStart(2, '0');
+    }
+
+    // Render the calendar grid
+    function render() {
+        monthLabel.textContent = MONTHS[currentMonth] + ' ' + currentYear;
+
+        const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+        const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+        const daysInPrevMonth = new Date(currentYear, currentMonth, 0).getDate();
+
+        daysGrid.innerHTML = '';
+
+        // Previous month trailing days
+        for (let i = firstDay - 1; i >= 0; i--) {
+            const day = daysInPrevMonth - i;
+            const el = createDayElement(day, true);
+            daysGrid.appendChild(el);
+        }
+
+        // Current month days
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dateStr = formatDate(currentYear, currentMonth, day);
+            const isToday = (
+                day === today.getDate() &&
+                currentMonth === today.getMonth() &&
+                currentYear === today.getFullYear()
+            );
+            const activity = activityData[dateStr] || 0;
+            const el = createDayElement(day, false, isToday, activity, dateStr);
+            daysGrid.appendChild(el);
+        }
+
+        // Next month leading days (fill to 6 rows max)
+        const totalCells = firstDay + daysInMonth;
+        const remainingCells = (totalCells % 7 === 0) ? 0 : 7 - (totalCells % 7);
+        for (let day = 1; day <= remainingCells; day++) {
+            const el = createDayElement(day, true);
+            daysGrid.appendChild(el);
+        }
+    }
+
+    function createDayElement(day, isOtherMonth, isToday, activity, dateStr) {
+        const el = document.createElement('div');
+        el.className = 'day';
+        el.textContent = day;
+
+        if (isOtherMonth) {
+            el.classList.add('other-month');
+        } else {
+            if (isToday) {
+                el.classList.add('today');
+            }
+            if (activity > 0) {
+                el.classList.add('has-activity');
+                el.classList.add(activity >= 3 ? 'activity-high' : 'activity-low');
+            }
+            if (dateStr) {
+                el.addEventListener('click', function() {
+                    if (window.talkie && window.talkie.navigation) {
+                        window.talkie.navigation.goToDate(dateStr);
+                    }
+                });
+            }
+        }
+
+        return el;
+    }
+
+    // Navigation
+    prevBtn.addEventListener('click', function() {
+        currentMonth--;
+        if (currentMonth < 0) {
+            currentMonth = 11;
+            currentYear--;
+        }
+        render();
+    });
+
+    nextBtn.addEventListener('click', function() {
+        currentMonth++;
+        if (currentMonth > 11) {
+            currentMonth = 0;
+            currentYear++;
+        }
+        render();
+    });
+
+    // Load activity data from Swift bridge
+    function loadActivity() {
+        if (window.talkie && window.talkie.data) {
+            window.talkie.data.getActivityByDay(365, function(data) {
+                activityData = data || {};
+                render();
+            });
+        } else {
+            // Bridge not ready yet, render without activity
+            render();
+        }
+    }
+
+    // Initial render, then load activity
+    render();
+
+    // Retry loading activity data — bridge may not be ready immediately
+    setTimeout(loadActivity, 100);
+    setTimeout(loadActivity, 500);
+})();
+</script>
+</body>
+</html>

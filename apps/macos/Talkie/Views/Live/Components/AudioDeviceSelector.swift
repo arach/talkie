@@ -1,0 +1,191 @@
+//
+//  AudioDeviceSelector.swift
+//  Talkie
+//
+//  Audio device selector with live level monitoring for Live settings
+//  Ported from TalkieAgent with instrumentation
+//
+
+import SwiftUI
+import TalkieKit
+import os
+
+private let logger = Logger(subsystem: "jdi.talkie.core", category: "AgentSettings")
+
+// MARK: - Audio Device Selector with Level Meter
+
+struct AudioDeviceSelector: View {
+    private let audioDevices = AudioDeviceManager.shared
+    private let liveState = ServiceManager.shared.live
+    @State private var isHovered = false
+
+    private var selectedDeviceName: String {
+        let mode = AgentSettings.shared.selectedMicrophoneMode
+        if mode == .systemDefault {
+            return "System Default"
+        }
+        if let device = audioDevices.inputDevices.first(where: { $0.id == audioDevices.selectedDeviceID }) {
+            return device.name
+        }
+        // Fixed device not available - show saved name with warning indicator
+        if let savedName = AgentSettings.shared.selectedMicrophoneName {
+            return "\(savedName) (unavailable)"
+        }
+        return "System Default"
+    }
+
+    private var isSystemDefaultMode: Bool {
+        AgentSettings.shared.selectedMicrophoneMode == .systemDefault
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Device Dropdown
+            Menu {
+                // System Default option
+                Button(action: {
+                    audioDevices.selectSystemDefault()
+                    logger.info("User selected System Default microphone")
+                }) {
+                    HStack {
+                        Text("System Default")
+                        if isSystemDefaultMode {
+                            Spacer()
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+
+                Divider()
+
+                // Specific devices
+                ForEach(audioDevices.inputDevices) { device in
+                    Button(action: {
+                        audioDevices.selectDevice(device)
+                        logger.info("User selected audio device: \(device.name) (uid: \(device.uid))")
+                    }) {
+                        HStack {
+                            Text(device.name)
+                            if device.isDefault {
+                                Text("(default)")
+                                    .foregroundColor(Theme.current.foregroundSecondary)
+                            }
+                            if !isSystemDefaultMode && device.id == audioDevices.selectedDeviceID {
+                                Spacer()
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: Spacing.xs) {
+                    Image(systemName: "mic")
+                        .font(.labelMedium)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+
+                    Text(selectedDeviceName)
+                        .font(.labelMedium)
+                        .foregroundColor(Theme.current.foreground)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.techLabelSmall)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                }
+                .padding(.horizontal, Spacing.sm)
+                .padding(.vertical, Spacing.xs)
+                .background(
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
+                        .fill(Color.primary.opacity(isHovered ? Opacity.light : Opacity.subtle))
+                )
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .onHover { isHovered = $0 }
+
+            // Audio Level Meter - only visible when TalkieAgent is running
+            if liveState.isRunning {
+                AudioLevelMeter()
+                    .frame(width: 80, height: 32)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            } else {
+                Text("Enable Agent Mode to see levels")
+                    .font(.system(size: 10))
+                    .foregroundColor(Theme.current.foregroundSecondary)
+                    .frame(width: 80, height: 32)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: liveState.isRunning)
+        .onAppear {
+            // Initialize CoreAudio on first use (deferred from startup)
+            audioDevices.ensureInitialized()
+            logger.debug("AudioDeviceSelector appeared, device count: \(audioDevices.inputDevices.count)")
+        }
+    }
+}
+
+// MARK: - Audio Level Meter
+
+struct AudioLevelMeter: View {
+    private let liveState = ServiceManager.shared.live
+
+    private let barCount = 8
+    private let barSpacing: CGFloat = 2
+
+    var body: some View {
+        GeometryReader { geometry in
+            HStack(spacing: barSpacing) {
+                ForEach(0..<barCount, id: \.self) { index in
+                    AudioLevelBar(
+                        level: liveState.audioLevel,
+                        index: index,
+                        totalBars: barCount
+                    )
+                }
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: CornerRadius.xs)
+                .fill(Color.primary.opacity(Opacity.subtle))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: CornerRadius.xs)
+                .strokeBorder(Color.primary.opacity(Opacity.light), lineWidth: 0.5)
+        )
+        .onAppear {
+            logger.debug("AudioLevelMeter appeared")
+        }
+    }
+}
+
+// MARK: - Individual Audio Level Bar
+
+struct AudioLevelBar: View {
+    let level: Float
+    let index: Int
+    let totalBars: Int
+
+    private var isActive: Bool {
+        let threshold = Float(index) / Float(totalBars)
+        return level >= threshold
+    }
+
+    private var barColor: Color {
+        let ratio = Float(index) / Float(totalBars)
+        if ratio < 0.6 {
+            return .green
+        } else if ratio < 0.85 {
+            return .yellow
+        } else {
+            return .red
+        }
+    }
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 1.5)
+            .fill(isActive ? barColor : Color.primary.opacity(0.1))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(.easeOut(duration: 0.1), value: isActive)
+    }
+}

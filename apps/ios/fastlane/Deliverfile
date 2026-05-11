@@ -1,0 +1,25 @@
+# App Store Connect API Key
+api_key_path(ENV.fetch("TALKIE_FASTLANE_API_KEY_PATH", "./fastlane/api_key.json"))
+
+# App
+app_identifier(ENV.fetch("TALKIE_IOS_APP_BUNDLE_ID", "com.example.talkie"))
+
+# Screenshots
+screenshots_path("./fastlane/screenshots")
+
+# Only upload screenshots, skip metadata and binary
+skip_metadata(false)
+skip_binary_upload(true)
+
+# Don't submit for review automatically
+submit_for_review(false)
+
+# Overwrite existing screenshots
+overwrite_screenshots(true)
+
+# Force — skip HTML preview confirmation
+force(true)
+
+# Precheck can't validate IAP with API keys — disable it
+run_precheck_before_submit(false)
+precheck_include_in_app_purchases(false)

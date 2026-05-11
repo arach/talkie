@@ -1,0 +1,459 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0E0326CEF7EA36F109660FAD /* MicDeviceResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 538FD2D0CB0D27137709BDC0 /* MicDeviceResolver.swift */; };
+		14BEDB6BB3A80B81D4FCB551 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4245693483CAD0BCA9039AA /* main.swift */; };
+		6667D48688696177BE0AD159 /* MicCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 147A6C8DE8685B0B99034A6A /* MicCaptureService.swift */; };
+		6C9ED55FE954F3B4B53BCF9E /* TalkieKit in Frameworks */ = {isa = PBXBuildFile; productRef = 278F8E943C82E44B3D03EF2A /* TalkieKit */; };
+		8E3937A83631434582057E5B /* MicSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E03A100E120EDD4E8CBDFCC /* MicSession.swift */; };
+		A581016AE52E9E46CF8C1797 /* IdleWatchdog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 458EE81A6F338C044299A187 /* IdleWatchdog.swift */; };
+		C538860F343241C0A18C1C3A /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD2B2F1C2D876864D73D26C4 /* AppDelegate.swift */; };
+		D7A2B1DB426F4840630E7951 /* MicSessionFileWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FFD86BF884D980409DC2F98 /* MicSessionFileWriter.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0322934F647F3ADBC36DC4DC /* TalkieMic.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TalkieMic.entitlements; sourceTree = "<group>"; };
+		147A6C8DE8685B0B99034A6A /* MicCaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicCaptureService.swift; sourceTree = "<group>"; };
+		1E03A100E120EDD4E8CBDFCC /* MicSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicSession.swift; sourceTree = "<group>"; };
+		1FFD86BF884D980409DC2F98 /* MicSessionFileWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicSessionFileWriter.swift; sourceTree = "<group>"; };
+		3F03C80DBBCDF73354B9313C /* TalkieMic.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TalkieMic.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		458EE81A6F338C044299A187 /* IdleWatchdog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdleWatchdog.swift; sourceTree = "<group>"; };
+		538FD2D0CB0D27137709BDC0 /* MicDeviceResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicDeviceResolver.swift; sourceTree = "<group>"; };
+		6727209D55BA3B8FCA390E78 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		7759BB39C5E207AB792448C8 /* TalkieKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = TalkieKit; path = ../TalkieKit; sourceTree = SOURCE_ROOT; };
+		B4245693483CAD0BCA9039AA /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		CD2B2F1C2D876864D73D26C4 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		EF16BB21EE5F20BE09DE29A0 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		CE80F7779534371267A85DBC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6C9ED55FE954F3B4B53BCF9E /* TalkieKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0D687C0AC3F5AB07350ACB34 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				7759BB39C5E207AB792448C8 /* TalkieKit */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		1498C288BEF1B7C4F5CEA515 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				EF16BB21EE5F20BE09DE29A0 /* Signing.xcconfig */,
+			);
+			name = Config;
+			path = ../../../Config;
+			sourceTree = "<group>";
+		};
+		342079BBE51F7E4D383ADA6A /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				3F03C80DBBCDF73354B9313C /* TalkieMic.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		406F4463F3DEB1755283CF2D /* TalkieMic */ = {
+			isa = PBXGroup;
+			children = (
+				CD2B2F1C2D876864D73D26C4 /* AppDelegate.swift */,
+				458EE81A6F338C044299A187 /* IdleWatchdog.swift */,
+				6727209D55BA3B8FCA390E78 /* Info.plist */,
+				B4245693483CAD0BCA9039AA /* main.swift */,
+				147A6C8DE8685B0B99034A6A /* MicCaptureService.swift */,
+				538FD2D0CB0D27137709BDC0 /* MicDeviceResolver.swift */,
+				1E03A100E120EDD4E8CBDFCC /* MicSession.swift */,
+				1FFD86BF884D980409DC2F98 /* MicSessionFileWriter.swift */,
+				0322934F647F3ADBC36DC4DC /* TalkieMic.entitlements */,
+			);
+			path = TalkieMic;
+			sourceTree = "<group>";
+		};
+		D62F21821B4EA7DB0FDDF8C6 = {
+			isa = PBXGroup;
+			children = (
+				1498C288BEF1B7C4F5CEA515 /* Config */,
+				0D687C0AC3F5AB07350ACB34 /* Packages */,
+				406F4463F3DEB1755283CF2D /* TalkieMic */,
+				342079BBE51F7E4D383ADA6A /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0EDFCE74192EE5B968B35ACA /* TalkieMic */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EF4B11810E50888EB925B811 /* Build configuration list for PBXNativeTarget "TalkieMic" */;
+			buildPhases = (
+				FC9B537A2715AEFB0028C2B6 /* Sources */,
+				CE80F7779534371267A85DBC /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = TalkieMic;
+			packageProductDependencies = (
+				278F8E943C82E44B3D03EF2A /* TalkieKit */,
+			);
+			productName = TalkieMic;
+			productReference = 3F03C80DBBCDF73354B9313C /* TalkieMic.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		5155C953652EA9AB60A23F7F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					0EDFCE74192EE5B968B35ACA = {
+						DevelopmentTeam = "$(TALKIE_DEVELOPMENT_TEAM)";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 50F65A0D4A6EF63A1E16E632 /* Build configuration list for PBXProject "TalkieMic" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = D62F21821B4EA7DB0FDDF8C6;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5BB6B971FAF1F61280F199C4 /* XCLocalSwiftPackageReference "../TalkieKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				0EDFCE74192EE5B968B35ACA /* TalkieMic */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		FC9B537A2715AEFB0028C2B6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C538860F343241C0A18C1C3A /* AppDelegate.swift in Sources */,
+				A581016AE52E9E46CF8C1797 /* IdleWatchdog.swift in Sources */,
+				6667D48688696177BE0AD159 /* MicCaptureService.swift in Sources */,
+				0E0326CEF7EA36F109660FAD /* MicDeviceResolver.swift in Sources */,
+				8E3937A83631434582057E5B /* MicSession.swift in Sources */,
+				D7A2B1DB426F4840630E7951 /* MicSessionFileWriter.swift in Sources */,
+				14BEDB6BB3A80B81D4FCB551 /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1AD77D6BDFC0BCC803806B54 /* Staging */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = TalkieMic/TalkieMic.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = TalkieMic/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_NAME = TalkieMic;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Staging;
+		};
+		556E15632753443CE4AF0978 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = EF16BB21EE5F20BE09DE29A0 /* Signing.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_MIC_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		5B653B77391E3511988D152D /* Staging */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = EF16BB21EE5F20BE09DE29A0 /* Signing.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_MIC_BUNDLE_ID_STAGING)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Staging;
+		};
+		84146E89CDB4BA3B9C9746A6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = EF16BB21EE5F20BE09DE29A0 /* Signing.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_MIC_BUNDLE_ID_DEBUG)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		99E77F68387192C7461DFE90 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = TalkieMic/TalkieMic.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = TalkieMic/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_NAME = TalkieMic;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+		D7DC3D8EAB2D5B266EA4AA6F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = TalkieMic/TalkieMic.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = TalkieMic/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_NAME = TalkieMic;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		50F65A0D4A6EF63A1E16E632 /* Build configuration list for PBXProject "TalkieMic" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				84146E89CDB4BA3B9C9746A6 /* Debug */,
+				556E15632753443CE4AF0978 /* Release */,
+				5B653B77391E3511988D152D /* Staging */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		EF4B11810E50888EB925B811 /* Build configuration list for PBXNativeTarget "TalkieMic" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				99E77F68387192C7461DFE90 /* Debug */,
+				D7DC3D8EAB2D5B266EA4AA6F /* Release */,
+				1AD77D6BDFC0BCC803806B54 /* Staging */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		5BB6B971FAF1F61280F199C4 /* XCLocalSwiftPackageReference "../TalkieKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../TalkieKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		278F8E943C82E44B3D03EF2A /* TalkieKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = TalkieKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 5155C953652EA9AB60A23F7F /* Project object */;
+}

@@ -1,0 +1,157 @@
+{
+  "source": "assets/logo-primitives-bezier/bowtie_bezier_e0_clean_right8.json",
+  "anchors": [
+    {
+      "name": "bottom_00",
+      "stroke": "bottom",
+      "index": 0,
+      "x": 53.0,
+      "y": 754.0
+    },
+    {
+      "name": "bottom_01",
+      "stroke": "bottom",
+      "index": 1,
+      "x": 562.0,
+      "y": 593.0
+    },
+    {
+      "name": "bottom_02",
+      "stroke": "bottom",
+      "index": 2,
+      "x": 925.0,
+      "y": 756.08
+    },
+    {
+      "name": "top_00",
+      "stroke": "top",
+      "index": 0,
+      "x": 925.0,
+      "y": 756.08
+    },
+    {
+      "name": "top_01",
+      "stroke": "top",
+      "index": 1,
+      "x": 992.0,
+      "y": 197.47999999999996
+    },
+    {
+      "name": "top_02",
+      "stroke": "top",
+      "index": 2,
+      "x": 853.0,
+      "y": 254.71999999999997
+    },
+    {
+      "name": "top_03",
+      "stroke": "top",
+      "index": 3,
+      "x": 983.0,
+      "y": 205.03999999999996
+    },
+    {
+      "name": "top_04",
+      "stroke": "top",
+      "index": 4,
+      "x": 918.0,
+      "y": 724.52
+    },
+    {
+      "name": "top_05",
+      "stroke": "top",
+      "index": 5,
+      "x": 668.0,
+      "y": 557.0
+    },
+    {
+      "name": "bridge_00",
+      "stroke": "bridge",
+      "index": 0,
+      "x": 668.0,
+      "y": 557.0
+    },
+    {
+      "name": "bridge_01",
+      "stroke": "bridge",
+      "index": 1,
+      "x": 332.0,
+      "y": 305.0
+    },
+    {
+      "name": "left_00",
+      "stroke": "left",
+      "index": 0,
+      "x": 332.0,
+      "y": 305.0
+    },
+    {
+      "name": "left_01",
+      "stroke": "left",
+      "index": 1,
+      "x": 118.0,
+      "y": 241.0
+    },
+    {
+      "name": "left_02",
+      "stroke": "left",
+      "index": 2,
+      "x": 75.0,
+      "y": 350.0
+    },
+    {
+      "name": "left_03",
+      "stroke": "left",
+      "index": 3,
+      "x": 33.0,
+      "y": 658.0
+    },
+    {
+      "name": "left_04",
+      "stroke": "left",
+      "index": 4,
+      "x": 27.0,
+      "y": 756.0
+    },
+    {
+      "name": "left_05",
+      "stroke": "left",
+      "index": 5,
+      "x": 40.0,
+      "y": 759.0
+    },
+    {
+      "name": "left_06",
+      "stroke": "left",
+      "index": 6,
+      "x": 53.0,
+      "y": 754.0
+    }
+  ],
+  "shared": [
+    {
+      "a": "bottom_00",
+      "b": "left_06",
+      "x": 53.0,
+      "y": 754.0
+    },
+    {
+      "a": "bottom_02",
+      "b": "top_00",
+      "x": 925.0,
+      "y": 756.08
+    },
+    {
+      "a": "top_05",
+      "b": "bridge_00",
+      "x": 668.0,
+      "y": 557.0
+    },
+    {
+      "a": "bridge_01",
+      "b": "left_00",
+      "x": 332.0,
+      "y": 305.0
+    }
+  ]
+}

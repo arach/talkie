@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Workspace
+   version = "1.0">
+   <Group
+      location = "group:apps/macos"
+      name = "macOS">
+      <FileSystemSynchronizedGroup
+         location = "group:Logs"
+         name = "Logs">
+      </FileSystemSynchronizedGroup>
+      <FileRef
+         location = "group:Talkie/Talkie.xcodeproj">
+      </FileRef>
+      <FileRef
+         location = "group:TalkieAgent/TalkieAgent.xcodeproj">
+      </FileRef>
+      <FileRef
+         location = "group:TalkieHeadless/TalkieHeadless.xcodeproj">
+      </FileRef>
+      <FileRef
+         location = "group:TalkieSync/TalkieSync.xcodeproj">
+      </FileRef>
+   </Group>
+   <Group
+      location = "group:apps/ios"
+      name = "iOS">
+      <FileRef
+         location = "group:Talkie-iOS.xcodeproj">
+      </FileRef>
+   </Group>
+</Workspace>

@@ -1,0 +1,217 @@
+//
+//  SSHTerminalStartupProfile.swift
+//  Talkie iOS
+//
+//  Connection-level startup modes for the SSH terminal.
+//
+
+import Foundation
+
+enum SSHTerminalStartupProfile: String, Codable, CaseIterable, Sendable {
+    case standardShell = "standardShell"
+    case talkieShell = "cleanShell"
+    case talkieSession = "persistentContext"
+
+    var title: String {
+        switch self {
+        case .standardShell:
+            "Native"
+        case .talkieShell:
+            "T Shell"
+        case .talkieSession:
+            "Tmux"
+        }
+    }
+
+    var shortTitle: String {
+        switch self {
+        case .standardShell:
+            "Native"
+        case .talkieShell:
+            "T Shell"
+        case .talkieSession:
+            "Tmux"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .standardShell:
+            "Uses the host's native login shell. Best for cloud boxes, random SSH hosts, or any machine Talkie does not manage."
+        case .talkieShell:
+            "Starts Talkie's managed shell without tmux. Best when you want Talkie's setup in a fresh shell."
+        case .talkieSession:
+            "Attaches to Talkie's persistent tmux session so your shell and tools survive reconnects."
+        }
+    }
+
+    var startupCommand: String {
+        switch self {
+        case .standardShell:
+            ""
+        case .talkieShell:
+            Self.cleanShellCommand
+        case .talkieSession:
+            Self.persistentContextCommand
+        }
+    }
+
+    static func pairedHomeLauncherCommand() -> String {
+        remoteHelperCommand(
+            helperName: "talkie-enter",
+            fallbackMessage: "[Talkie] Remote entry helper is missing on this Mac. Opening a plain shell."
+        )
+    }
+
+    static func normalizedStartupCommandOverride(
+        _ command: String?,
+        for profile: SSHTerminalStartupProfile
+    ) -> String? {
+        let trimmedCommand = command?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmedCommand.isEmpty else {
+            return nil
+        }
+
+        if currentDefaultCommands(for: profile).contains(trimmedCommand) {
+            return nil
+        }
+
+        if isLegacyHelperWrapper(trimmedCommand, for: profile) {
+            return nil
+        }
+
+        if isLegacyRawStartupScript(trimmedCommand) {
+            return nil
+        }
+
+        return trimmedCommand
+    }
+
+    static func inferredProfile(from command: String) -> SSHTerminalStartupProfile {
+        let trimmedCommand = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedCommand.isEmpty {
+            return .standardShell
+        }
+
+        if currentDefaultCommands(for: .standardShell).contains(trimmedCommand) {
+            return .standardShell
+        }
+
+        if currentDefaultCommands(for: .talkieShell).contains(trimmedCommand) {
+            return .talkieShell
+        }
+
+        if trimmedCommand == pairedHomeLauncherCommand().trimmingCharacters(in: .whitespacesAndNewlines) {
+            return .talkieShell
+        }
+
+        if isLegacyHelperWrapper(trimmedCommand, for: .talkieShell) {
+            return .talkieShell
+        }
+
+        if isLegacyCleanShellCommand(trimmedCommand) {
+            return .talkieShell
+        }
+
+        if currentDefaultCommands(for: .talkieSession).contains(trimmedCommand)
+            || isLegacyHelperWrapper(trimmedCommand, for: .talkieSession) {
+            return .talkieSession
+        }
+
+        return .standardShell
+    }
+
+    private static var cleanShellCommand: String {
+        remoteHelperCommand(
+            helperName: "talkie-shell",
+            fallbackMessage: "[Talkie] Talkie shell helper is missing on this Mac. Opening a plain shell."
+        )
+    }
+
+    private static var persistentContextCommand: String {
+        remoteHelperCommand(
+            helperName: "talkie-session",
+            fallbackMessage: "[Talkie] Talkie session helper is missing on this Mac. Opening a plain shell."
+        )
+    }
+
+    private static var legacyCleanShellCommand: String {
+        remoteHelperCommand(
+            helperName: "talkie-clean",
+            fallbackMessage: "[Talkie] Talkie shell helper is missing on this Mac. Opening a plain shell."
+        )
+    }
+
+    private static var legacyPersistentContextCommand: String {
+        remoteHelperCommand(
+            helperName: "talkie-context",
+            fallbackMessage: "[Talkie] Talkie session helper is missing on this Mac. Opening a plain shell."
+        )
+    }
+
+    private static func remoteHelperCommand(helperName: String, fallbackMessage: String) -> String {
+        let escapedFallbackMessage = fallbackMessage
+            .replacing("\\", with: "\\\\")
+            .replacing("\"", with: "\\\"")
+
+        return #"""
+/bin/zsh -lc 'helper="$HOME/.talkie-shell/bin/\#(helperName)"; if [[ -x "$helper" ]]; then exec "$helper"; fi; printf "\r\n\#(escapedFallbackMessage)\r\n"; exec "$(command -v zsh || printf /bin/zsh)" -il'
+"""#
+    }
+
+    private static func isLegacyCleanShellCommand(_ command: String) -> Bool {
+        isLegacyRawStartupScript(command) && !command.contains(#"TMUX_BIN="$(command -v tmux || true)""#)
+    }
+
+    private static func isLegacyHelperWrapper(
+        _ command: String,
+        for profile: SSHTerminalStartupProfile
+    ) -> Bool {
+        let helperNames: [String]
+        switch profile {
+        case .standardShell:
+            helperNames = []
+        case .talkieShell:
+            helperNames = ["talkie-shell", "talkie-clean"]
+        case .talkieSession:
+            helperNames = ["talkie-session", "talkie-context", "talkie-enter"]
+        }
+
+        return helperNames.contains { helperName in
+            command.contains(#"HELPER="$HOME/.talkie-shell/bin/\#(helperName)";"#)
+                && command.contains(#"exec "$HELPER";"#)
+        }
+    }
+
+    private static func currentDefaultCommands(for profile: SSHTerminalStartupProfile) -> Set<String> {
+        let commands: [String]
+        switch profile {
+        case .standardShell:
+            commands = [""]
+        case .talkieShell:
+            commands = [
+                cleanShellCommand,
+                legacyCleanShellCommand,
+            ]
+        case .talkieSession:
+            commands = [
+                persistentContextCommand,
+                legacyPersistentContextCommand,
+            ]
+        }
+
+        return commands
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .reduce(into: Set<String>()) { result, value in
+            result.insert(value)
+            }
+    }
+
+    private static func isLegacyRawStartupScript(_ command: String) -> Bool {
+        command.contains(#"cat > "$TALKIE_ZDOTDIR/.zshenv" <<'EOF'"#)
+            || command.contains(#"cat > "$TALKIE_ZDOTDIR/.zshrc" <<'EOF'"#)
+            || command.contains(#"export TALKIE_ZDOTDIR="$HOME/.talkie-shell";"#)
+            || command.contains(#"_talkie_script="$(printf '%s'"#)
+            || command.contains(#"base64 -D 2>/dev/null || base64 -d 2>/dev/null"#)
+    }
+}

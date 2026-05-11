@@ -1,0 +1,20 @@
+# SwiftLint Configuration for Talkie
+
+# Paths to exclude
+excluded:
+  - Packages
+  - .build
+  - DerivedData
+
+# Custom rules
+custom_rules:
+  no_os_log:
+    name: "Use TalkieLogger"
+    regex: "import os\\.log|import os$|Logger\\(subsystem:|os_log\\("
+    message: "Use TalkieLogger instead: `import TalkieKit` and `private let log = Log(.category)`"
+    severity: error
+    match_kinds:
+      - comment
+      - identifier
+      - keyword
+      - string

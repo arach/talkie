@@ -1,0 +1,48 @@
+{
+  "slug": "hey-talkie",
+  "name": "Hey Talkie",
+  "description": "Detects voice commands and routes to appropriate workflows",
+  "icon": "waveform.badge.mic",
+  "color": "purple",
+  "isEnabled": true,
+  "isPinned": false,
+  "autoRun": true,
+  "isSystem": true,
+  "steps": [
+    {
+      "id": "detect-trigger",
+      "type": "Trigger Detection",
+      "config": {
+        "trigger": {
+          "phrases": ["hey talkie"],
+          "caseSensitive": false,
+          "searchLocation": "end",
+          "contextWindowSize": 200,
+          "stopIfNoMatch": true
+        }
+      }
+    },
+    {
+      "id": "extract-intent",
+      "type": "Intent Extraction",
+      "config": {
+        "intentExtract": {
+          "inputKey": "{{detect-trigger}}",
+          "extractionMethod": "hybrid",
+          "recognizedIntents": "defaults"
+        }
+      }
+    },
+    {
+      "id": "execute-workflows",
+      "type": "Execute Workflows",
+      "config": {
+        "executeWorkflows": {
+          "intentsKey": "{{extract-intent}}",
+          "stopOnError": false,
+          "parallel": false
+        }
+      }
+    }
+  ]
+}

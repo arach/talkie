@@ -1,0 +1,1567 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		211C202EE4C2274F90D5B43F /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E0B6437C3F6576AA5FD09A5 /* ShareViewController.swift */; };
+		3AC1FFBB834D54631769888B /* TalkieShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 4B36D4B771340B490C02BD1A /* TalkieShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		531A90C32EEE73370084EC25 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 53B43EC22EDB539100C09544 /* WidgetKit.framework */; };
+		531A90C42EEE73370084EC25 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 53B43EC42EDB539200C09544 /* SwiftUI.framework */; };
+		531A90CF2EEE73380084EC25 /* TalkieWatchWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 531A90C22EEE73370084EC25 /* TalkieWatchWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		53A917A72F2C5465004170DE /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = 53A917A62F2C5465004170DE /* FluidAudio */; };
+		53AF328B2F26B2E40000561A /* TalkieKeys.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 53AF32842F26B2E30000561A /* TalkieKeys.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		53AF32922F26B4640000561A /* TalkieMobileKit in Frameworks */ = {isa = PBXBuildFile; productRef = 53AF32912F26B4640000561A /* TalkieMobileKit */; };
+		53AF32942F26B5090000561A /* TalkieMobileKit in Frameworks */ = {isa = PBXBuildFile; productRef = 53AF32932F26B5090000561A /* TalkieMobileKit */; };
+		53B400032F3D0003004170DE /* ClerkKit in Frameworks */ = {isa = PBXBuildFile; productRef = 53B400022F3D0002004170DE /* ClerkKit */; };
+		53B43EC32EDB539200C09544 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 53B43EC22EDB539100C09544 /* WidgetKit.framework */; };
+		53B43EC52EDB539200C09544 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 53B43EC42EDB539200C09544 /* SwiftUI.framework */; };
+		53B43ED62EDB539400C09544 /* TalkieWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 53B43EC02EDB539100C09544 /* TalkieWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		53BF5B962EED010200FDEB2A /* TalkieWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 53BF5B8C2EED010000FDEB2A /* TalkieWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		54C100012F60000100000001 /* NIOCore in Frameworks */ = {isa = PBXBuildFile; productRef = 54C100072F60000100000001 /* NIOCore */; };
+		54C100022F60000100000001 /* NIOSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 54C100082F60000100000001 /* NIOSSH */; };
+		54C100032F60000100000001 /* NIOTransportServices in Frameworks */ = {isa = PBXBuildFile; productRef = 54C100092F60000100000001 /* NIOTransportServices */; };
+		54D200012F70000100000001 /* TermBridgeKit in Frameworks */ = {isa = PBXBuildFile; productRef = 54D200032F70000100000001 /* TermBridgeKit */; };
+		5FC22816F0CCD5C0AC373F7E /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 01206C0EECEC3DE94C13391E /* Foundation.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		4A96D6855B97154BC465E3D1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 539C69292ED39ADE00BC034F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5857537C6736676379D599A6;
+			remoteInfo = TalkieShare;
+		};
+		531A90CD2EEE73380084EC25 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 539C69292ED39ADE00BC034F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 531A90C12EEE73370084EC25;
+			remoteInfo = TalkieWatchWidgetExtension;
+		};
+		539C69442ED39ADF00BC034F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 539C69292ED39ADE00BC034F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 539C69302ED39ADE00BC034F;
+			remoteInfo = talkie;
+		};
+		539C694E2ED39ADF00BC034F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 539C69292ED39ADE00BC034F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 539C69302ED39ADE00BC034F;
+			remoteInfo = talkie;
+		};
+		53AF32892F26B2E40000561A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 539C69292ED39ADE00BC034F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 53AF32832F26B2E30000561A;
+			remoteInfo = TalkieKeys;
+		};
+		53B43ED42EDB539400C09544 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 539C69292ED39ADE00BC034F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 53B43EBF2EDB539100C09544;
+			remoteInfo = TalkieWidgetExtension;
+		};
+		53BF5B942EED010200FDEB2A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 539C69292ED39ADE00BC034F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 53BF5B8B2EED010000FDEB2A;
+			remoteInfo = "TalkieWatch Watch App";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		531A90D42EEE73380084EC25 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				531A90CF2EEE73380084EC25 /* TalkieWatchWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		53B43EDB2EDB539400C09544 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				53AF328B2F26B2E40000561A /* TalkieKeys.appex in Embed Foundation Extensions */,
+				53B43ED62EDB539400C09544 /* TalkieWidgetExtension.appex in Embed Foundation Extensions */,
+				3AC1FFBB834D54631769888B /* TalkieShare.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		53BF5B972EED010200FDEB2A /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				53BF5B962EED010200FDEB2A /* TalkieWatch Watch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		01206C0EECEC3DE94C13391E /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		087709FE208B72C51B604318 /* TalkieShare.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = TalkieShare.entitlements; sourceTree = "<group>"; };
+		41853AEEFE9958C42884B375 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		4B36D4B771340B490C02BD1A /* TalkieShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TalkieShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		531A90C22EEE73370084EC25 /* TalkieWatchWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TalkieWatchWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		539C69312ED39ADE00BC034F /* Talkie.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Talkie.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		539C69432ED39ADF00BC034F /* TalkieTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TalkieTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		539C694D2ED39ADF00BC034F /* TalkieUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TalkieUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		53AF32842F26B2E30000561A /* TalkieKeys.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TalkieKeys.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		53B43EC02EDB539100C09544 /* TalkieWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TalkieWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		53B43EC22EDB539100C09544 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		53B43EC42EDB539200C09544 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		53B43EDF2EDB541600C09544 /* TalkieWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TalkieWidgetExtension.entitlements; sourceTree = "<group>"; };
+		53BF5B8C2EED010000FDEB2A /* TalkieWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "TalkieWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		8E0B6437C3F6576AA5FD09A5 /* ShareViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = Signing.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		531A90D52EEE73380084EC25 /* Exceptions for "TalkieWatchWidget" folder in "TalkieWatchWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 531A90C12EEE73370084EC25 /* TalkieWatchWidgetExtension */;
+		};
+		539C69FF2ED39ADE00BC034F /* Exceptions for "Talkie iOS" folder in "Talkie" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 539C69302ED39ADE00BC034F /* Talkie */;
+		};
+		53AF328F2F26B2E40000561A /* Exceptions for "TalkieKeys" folder in "TalkieKeys" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 53AF32832F26B2E30000561A /* TalkieKeys */;
+		};
+		53B43EDA2EDB539400C09544 /* Exceptions for "TalkieWidget" folder in "TalkieWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 53B43EBF2EDB539100C09544 /* TalkieWidgetExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		531A90C52EEE73370084EC25 /* TalkieWatchWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				531A90D52EEE73380084EC25 /* Exceptions for "TalkieWatchWidget" folder in "TalkieWatchWidgetExtension" target */,
+			);
+			path = TalkieWatchWidget;
+			sourceTree = "<group>";
+		};
+		539C69332ED39ADE00BC034F /* Talkie iOS */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				539C69FF2ED39ADE00BC034F /* Exceptions for "Talkie iOS" folder in "Talkie" target */,
+			);
+			path = "Talkie iOS";
+			sourceTree = "<group>";
+		};
+		53AF32852F26B2E30000561A /* TalkieKeys */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				53AF328F2F26B2E40000561A /* Exceptions for "TalkieKeys" folder in "TalkieKeys" target */,
+			);
+			path = TalkieKeys;
+			sourceTree = "<group>";
+		};
+		53B43EC62EDB539200C09544 /* TalkieWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				53B43EDA2EDB539400C09544 /* Exceptions for "TalkieWidget" folder in "TalkieWidgetExtension" target */,
+			);
+			path = TalkieWidget;
+			sourceTree = "<group>";
+		};
+		53BF5B8D2EED010000FDEB2A /* TalkieWatch Watch App */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			path = "TalkieWatch Watch App";
+			sourceTree = "<group>";
+		};
+		AABB00012F4D000000000001 /* TalkieUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			path = TalkieUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		531A90BF2EEE73370084EC25 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				531A90C42EEE73370084EC25 /* SwiftUI.framework in Frameworks */,
+				531A90C32EEE73370084EC25 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		539C692E2ED39ADE00BC034F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				53A917A72F2C5465004170DE /* FluidAudio in Frameworks */,
+				53B400032F3D0003004170DE /* ClerkKit in Frameworks */,
+				54D200012F70000100000001 /* TermBridgeKit in Frameworks */,
+				54C100012F60000100000001 /* NIOCore in Frameworks */,
+				54C100022F60000100000001 /* NIOSSH in Frameworks */,
+				54C100032F60000100000001 /* NIOTransportServices in Frameworks */,
+				53AF32942F26B5090000561A /* TalkieMobileKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		539C69402ED39ADF00BC034F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		539C694A2ED39ADF00BC034F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		53AF32812F26B2E30000561A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				53AF32922F26B4640000561A /* TalkieMobileKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		53B43EBD2EDB539100C09544 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				53B43EC52EDB539200C09544 /* SwiftUI.framework in Frameworks */,
+				53B43EC32EDB539200C09544 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		53BF5B892EED010000FDEB2A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B13665330682EEAE4C5D190D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5FC22816F0CCD5C0AC373F7E /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		14691642FC1ACF6128A448D6 /* TalkieShare */ = {
+			isa = PBXGroup;
+			children = (
+				8E0B6437C3F6576AA5FD09A5 /* ShareViewController.swift */,
+				41853AEEFE9958C42884B375 /* Info.plist */,
+				087709FE208B72C51B604318 /* TalkieShare.entitlements */,
+			);
+			path = TalkieShare;
+			sourceTree = "<group>";
+		};
+		539C69282ED39ADE00BC034F = {
+			isa = PBXGroup;
+			children = (
+				53B43EDF2EDB541600C09544 /* TalkieWidgetExtension.entitlements */,
+				539C69332ED39ADE00BC034F /* Talkie iOS */,
+				53B43EC62EDB539200C09544 /* TalkieWidget */,
+				53BF5B8D2EED010000FDEB2A /* TalkieWatch Watch App */,
+				531A90C52EEE73370084EC25 /* TalkieWatchWidget */,
+				53AF32852F26B2E30000561A /* TalkieKeys */,
+				AABB00012F4D000000000001 /* TalkieUITests */,
+				53B43EC12EDB539100C09544 /* Frameworks */,
+				539C69322ED39ADE00BC034F /* Products */,
+				14691642FC1ACF6128A448D6 /* TalkieShare */,
+				8F5C744BA498A5596FDFB333 /* Config */,
+			);
+			sourceTree = "<group>";
+		};
+		539C69322ED39ADE00BC034F /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				539C69312ED39ADE00BC034F /* Talkie.app */,
+				539C69432ED39ADF00BC034F /* TalkieTests.xctest */,
+				539C694D2ED39ADF00BC034F /* TalkieUITests.xctest */,
+				53B43EC02EDB539100C09544 /* TalkieWidgetExtension.appex */,
+				53BF5B8C2EED010000FDEB2A /* TalkieWatch Watch App.app */,
+				531A90C22EEE73370084EC25 /* TalkieWatchWidgetExtension.appex */,
+				53AF32842F26B2E30000561A /* TalkieKeys.appex */,
+				4B36D4B771340B490C02BD1A /* TalkieShare.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		53B43EC12EDB539100C09544 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				53B43EC22EDB539100C09544 /* WidgetKit.framework */,
+				53B43EC42EDB539200C09544 /* SwiftUI.framework */,
+				A6052E15112136FE6066FC3B /* iOS */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		8F5C744BA498A5596FDFB333 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */,
+			);
+			name = Config;
+			path = ../../Config;
+			sourceTree = "<group>";
+		};
+		A6052E15112136FE6066FC3B /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				01206C0EECEC3DE94C13391E /* Foundation.framework */,
+			);
+			name = iOS;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		531A90C12EEE73370084EC25 /* TalkieWatchWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 531A90D02EEE73380084EC25 /* Build configuration list for PBXNativeTarget "TalkieWatchWidgetExtension" */;
+			buildPhases = (
+				531A90BE2EEE73370084EC25 /* Sources */,
+				531A90BF2EEE73370084EC25 /* Frameworks */,
+				531A90C02EEE73370084EC25 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				531A90C52EEE73370084EC25 /* TalkieWatchWidget */,
+			);
+			name = TalkieWatchWidgetExtension;
+			productName = TalkieWatchWidgetExtension;
+			productReference = 531A90C22EEE73370084EC25 /* TalkieWatchWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		539C69302ED39ADE00BC034F /* Talkie */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 539C69572ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "Talkie" */;
+			buildPhases = (
+				539C692D2ED39ADE00BC034F /* Sources */,
+				539C692E2ED39ADE00BC034F /* Frameworks */,
+				539C692F2ED39ADE00BC034F /* Resources */,
+				53B43EDB2EDB539400C09544 /* Embed Foundation Extensions */,
+				53BF5B972EED010200FDEB2A /* Embed Watch Content */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				53B43ED52EDB539400C09544 /* PBXTargetDependency */,
+				53BF5B952EED010200FDEB2A /* PBXTargetDependency */,
+				53AF328A2F26B2E40000561A /* PBXTargetDependency */,
+				8A17EC3F44DADDED1E9DE5BD /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				539C69332ED39ADE00BC034F /* Talkie iOS */,
+			);
+			name = Talkie;
+			packageProductDependencies = (
+				53AF32932F26B5090000561A /* TalkieMobileKit */,
+				53A917A62F2C5465004170DE /* FluidAudio */,
+				53B400022F3D0002004170DE /* ClerkKit */,
+				54D200032F70000100000001 /* TermBridgeKit */,
+				54C100072F60000100000001 /* NIOCore */,
+				54C100082F60000100000001 /* NIOSSH */,
+				54C100092F60000100000001 /* NIOTransportServices */,
+			);
+			productName = talkie;
+			productReference = 539C69312ED39ADE00BC034F /* Talkie.app */;
+			productType = "com.apple.product-type.application";
+		};
+		539C69422ED39ADF00BC034F /* TalkieTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 539C695A2ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "TalkieTests" */;
+			buildPhases = (
+				539C693F2ED39ADF00BC034F /* Sources */,
+				539C69402ED39ADF00BC034F /* Frameworks */,
+				539C69412ED39ADF00BC034F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				539C69452ED39ADF00BC034F /* PBXTargetDependency */,
+			);
+			name = TalkieTests;
+			productName = talkieTests;
+			productReference = 539C69432ED39ADF00BC034F /* TalkieTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		539C694C2ED39ADF00BC034F /* TalkieUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 539C695D2ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "TalkieUITests" */;
+			buildPhases = (
+				539C69492ED39ADF00BC034F /* Sources */,
+				539C694A2ED39ADF00BC034F /* Frameworks */,
+				539C694B2ED39ADF00BC034F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				539C694F2ED39ADF00BC034F /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				AABB00012F4D000000000001 /* TalkieUITests */,
+			);
+			name = TalkieUITests;
+			productName = talkieUITests;
+			productReference = 539C694D2ED39ADF00BC034F /* TalkieUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		53AF32832F26B2E30000561A /* TalkieKeys */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 53AF328E2F26B2E40000561A /* Build configuration list for PBXNativeTarget "TalkieKeys" */;
+			buildPhases = (
+				53AF32802F26B2E30000561A /* Sources */,
+				53AF32812F26B2E30000561A /* Frameworks */,
+				53AF32822F26B2E30000561A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				53AF32852F26B2E30000561A /* TalkieKeys */,
+			);
+			name = TalkieKeys;
+			packageProductDependencies = (
+				53AF32912F26B4640000561A /* TalkieMobileKit */,
+			);
+			productName = TalkieKeys;
+			productReference = 53AF32842F26B2E30000561A /* TalkieKeys.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		53B43EBF2EDB539100C09544 /* TalkieWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 53B43ED72EDB539400C09544 /* Build configuration list for PBXNativeTarget "TalkieWidgetExtension" */;
+			buildPhases = (
+				53B43EBC2EDB539100C09544 /* Sources */,
+				53B43EBD2EDB539100C09544 /* Frameworks */,
+				53B43EBE2EDB539100C09544 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				53B43EC62EDB539200C09544 /* TalkieWidget */,
+			);
+			name = TalkieWidgetExtension;
+			productName = TalkieWidgetExtension;
+			productReference = 53B43EC02EDB539100C09544 /* TalkieWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		53BF5B8B2EED010000FDEB2A /* TalkieWatch Watch App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 53BF5B9A2EED010200FDEB2A /* Build configuration list for PBXNativeTarget "TalkieWatch Watch App" */;
+			buildPhases = (
+				53BF5B882EED010000FDEB2A /* Sources */,
+				53BF5B892EED010000FDEB2A /* Frameworks */,
+				53BF5B8A2EED010000FDEB2A /* Resources */,
+				531A90D42EEE73380084EC25 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				531A90CE2EEE73380084EC25 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				53BF5B8D2EED010000FDEB2A /* TalkieWatch Watch App */,
+			);
+			name = "TalkieWatch Watch App";
+			productName = "TalkieWatch Watch App";
+			productReference = 53BF5B8C2EED010000FDEB2A /* TalkieWatch Watch App.app */;
+			productType = "com.apple.product-type.application";
+		};
+		5857537C6736676379D599A6 /* TalkieShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4D524536C2CF1F7D1018808D /* Build configuration list for PBXNativeTarget "TalkieShare" */;
+			buildPhases = (
+				4BD8D224DD985EA2CBCDCD81 /* Sources */,
+				B13665330682EEAE4C5D190D /* Frameworks */,
+				66B7B77186DCE9CFE43073F9 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = TalkieShare;
+			productName = TalkieShare;
+			productReference = 4B36D4B771340B490C02BD1A /* TalkieShare.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		539C69292ED39ADE00BC034F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2620;
+				LastUpgradeCheck = 1640;
+				TargetAttributes = {
+					531A90C12EEE73370084EC25 = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					539C69302ED39ADE00BC034F = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					539C69422ED39ADF00BC034F = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 539C69302ED39ADE00BC034F;
+					};
+					539C694C2ED39ADF00BC034F = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 539C69302ED39ADE00BC034F;
+					};
+					53AF32832F26B2E30000561A = {
+						CreatedOnToolsVersion = 26.2;
+					};
+					53B43EBF2EDB539100C09544 = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					53BF5B8B2EED010000FDEB2A = {
+						CreatedOnToolsVersion = 16.4;
+					};
+				};
+			};
+			buildConfigurationList = 539C692C2ED39ADE00BC034F /* Build configuration list for PBXProject "Talkie-iOS" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 539C69282ED39ADE00BC034F;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				53AF32902F26B4640000561A /* XCLocalSwiftPackageReference "TalkieMobileKit" */,
+				53A917A52F2C52CB004170DE /* XCRemoteSwiftPackageReference "FluidAudio" */,
+				53B400012F3D0001004170DE /* XCRemoteSwiftPackageReference "clerk-ios" */,
+				54D200022F70000100000001 /* XCRemoteSwiftPackageReference "TermBridgeKit" */,
+				54C100042F60000100000001 /* XCRemoteSwiftPackageReference "swift-nio" */,
+				54C100052F60000100000001 /* XCRemoteSwiftPackageReference "swift-nio-ssh" */,
+				54C100062F60000100000001 /* XCRemoteSwiftPackageReference "swift-nio-transport-services" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 539C69322ED39ADE00BC034F /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				539C69302ED39ADE00BC034F /* Talkie */,
+				539C69422ED39ADF00BC034F /* TalkieTests */,
+				539C694C2ED39ADF00BC034F /* TalkieUITests */,
+				53B43EBF2EDB539100C09544 /* TalkieWidgetExtension */,
+				53BF5B8B2EED010000FDEB2A /* TalkieWatch Watch App */,
+				531A90C12EEE73370084EC25 /* TalkieWatchWidgetExtension */,
+				53AF32832F26B2E30000561A /* TalkieKeys */,
+				5857537C6736676379D599A6 /* TalkieShare */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		531A90C02EEE73370084EC25 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		539C692F2ED39ADE00BC034F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		539C69412ED39ADF00BC034F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		539C694B2ED39ADF00BC034F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		53AF32822F26B2E30000561A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		53B43EBE2EDB539100C09544 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		53BF5B8A2EED010000FDEB2A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		66B7B77186DCE9CFE43073F9 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		4BD8D224DD985EA2CBCDCD81 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				211C202EE4C2274F90D5B43F /* ShareViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		531A90BE2EEE73370084EC25 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		539C692D2ED39ADE00BC034F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		539C693F2ED39ADF00BC034F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		539C69492ED39ADF00BC034F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		53AF32802F26B2E30000561A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		53B43EBC2EDB539100C09544 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		53BF5B882EED010000FDEB2A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		531A90CE2EEE73380084EC25 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 531A90C12EEE73370084EC25 /* TalkieWatchWidgetExtension */;
+			targetProxy = 531A90CD2EEE73380084EC25 /* PBXContainerItemProxy */;
+		};
+		539C69452ED39ADF00BC034F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 539C69302ED39ADE00BC034F /* Talkie */;
+			targetProxy = 539C69442ED39ADF00BC034F /* PBXContainerItemProxy */;
+		};
+		539C694F2ED39ADF00BC034F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 539C69302ED39ADE00BC034F /* Talkie */;
+			targetProxy = 539C694E2ED39ADF00BC034F /* PBXContainerItemProxy */;
+		};
+		53AF328A2F26B2E40000561A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 53AF32832F26B2E30000561A /* TalkieKeys */;
+			targetProxy = 53AF32892F26B2E40000561A /* PBXContainerItemProxy */;
+		};
+		53B43ED52EDB539400C09544 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 53B43EBF2EDB539100C09544 /* TalkieWidgetExtension */;
+			targetProxy = 53B43ED42EDB539400C09544 /* PBXContainerItemProxy */;
+		};
+		53BF5B952EED010200FDEB2A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 53BF5B8B2EED010000FDEB2A /* TalkieWatch Watch App */;
+			targetProxy = 53BF5B942EED010200FDEB2A /* PBXContainerItemProxy */;
+		};
+		8A17EC3F44DADDED1E9DE5BD /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = TalkieShare;
+			target = 5857537C6736676379D599A6 /* TalkieShare */;
+			targetProxy = 4A96D6855B97154BC465E3D1 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		1B52A0A350261057B390ABF0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = TalkieShare/TalkieShare.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TalkieShare/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_SHARE_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		531A90D12EEE73380084EC25 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TalkieWatchWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = TalkieWatchWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_WATCH_WIDGET_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.5;
+			};
+			name = Debug;
+		};
+		531A90D22EEE73380084EC25 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TalkieWatchWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = TalkieWatchWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_WATCH_WIDGET_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.5;
+			};
+			name = Release;
+		};
+		539C69552ED39ADF00BC034F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		539C69562ED39ADF00BC034F /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		539C69582ED39ADF00BC034F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Talkie iOS/talkie.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				ENABLE_PREVIEWS = YES;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Talkie iOS/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_LSRequiresIPhoneOS = YES;
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = NO;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talkie AI OS needs access to your microphone to record voice memos.";
+				INFOPLIST_KEY_NSRemindersUsageDescription = "Talkie can create reminders from your voice memos so you don't forget important tasks.";
+				INFOPLIST_KEY_NSSiriUsageDescription = "Talkie uses Siri to let you record voice memos, play recordings, and search your memos hands-free.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Talkie AI OS uses speech recognition to transcribe your voice memos.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				"INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad" = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_APP_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		539C69592ED39ADF00BC034F /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Talkie iOS/talkie.release.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				ENABLE_PREVIEWS = YES;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Talkie iOS/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_LSRequiresIPhoneOS = YES;
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = NO;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talkie AI OS needs access to your microphone to record voice memos.";
+				INFOPLIST_KEY_NSRemindersUsageDescription = "Talkie can create reminders from your voice memos so you don't forget important tasks.";
+				INFOPLIST_KEY_NSSiriUsageDescription = "Talkie uses Siri to let you record voice memos, play recordings, and search your memos hands-free.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Talkie AI OS uses speech recognition to transcribe your voice memos.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				"INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad" = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_APP_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		539C695B2ED39ADF00BC034F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_TESTS_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Talkie.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Talkie";
+			};
+			name = Debug;
+		};
+		539C695C2ED39ADF00BC034F /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_TESTS_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Talkie.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Talkie";
+			};
+			name = Release;
+		};
+		539C695E2ED39ADF00BC034F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_UITESTS_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Talkie;
+			};
+			name = Debug;
+		};
+		539C695F2ED39ADF00BC034F /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_UITESTS_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Talkie;
+			};
+			name = Release;
+		};
+		53AF328C2F26B2E40000561A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TalkieKeys/TalkieKeys.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TalkieKeys/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_KEYS_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		53AF328D2F26B2E40000561A /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TalkieKeys/TalkieKeys.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TalkieKeys/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_KEYS_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		53B43ED82EDB539400C09544 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = TalkieWidgetExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TalkieWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = TalkieWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_WIDGET_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		53B43ED92EDB539400C09544 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = TalkieWidgetExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TalkieWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = TalkieWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_WIDGET_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		53BF5B982EED010200FDEB2A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talkie needs microphone access to record voice memos";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "$(TALKIE_IOS_APP_BUNDLE_ID)";
+				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_WATCH_APP_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.6;
+			};
+			name = Debug;
+		};
+		53BF5B992EED010200FDEB2A /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talkie needs microphone access to record voice memos";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "$(TALKIE_IOS_APP_BUNDLE_ID)";
+				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_WATCH_APP_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.6;
+			};
+			name = Release;
+		};
+		DA0A686E9F3E736D108CD5CA /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = TalkieShare/TalkieShare.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 12;
+				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TalkieShare/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.5.18;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_SHARE_BUNDLE_ID)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4D524536C2CF1F7D1018808D /* Build configuration list for PBXNativeTarget "TalkieShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DA0A686E9F3E736D108CD5CA /* Release */,
+				1B52A0A350261057B390ABF0 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		531A90D02EEE73380084EC25 /* Build configuration list for PBXNativeTarget "TalkieWatchWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				531A90D12EEE73380084EC25 /* Debug */,
+				531A90D22EEE73380084EC25 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		539C692C2ED39ADE00BC034F /* Build configuration list for PBXProject "Talkie-iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				539C69552ED39ADF00BC034F /* Debug */,
+				539C69562ED39ADF00BC034F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		539C69572ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "Talkie" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				539C69582ED39ADF00BC034F /* Debug */,
+				539C69592ED39ADF00BC034F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		539C695A2ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "TalkieTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				539C695B2ED39ADF00BC034F /* Debug */,
+				539C695C2ED39ADF00BC034F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		539C695D2ED39ADF00BC034F /* Build configuration list for PBXNativeTarget "TalkieUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				539C695E2ED39ADF00BC034F /* Debug */,
+				539C695F2ED39ADF00BC034F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		53AF328E2F26B2E40000561A /* Build configuration list for PBXNativeTarget "TalkieKeys" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				53AF328C2F26B2E40000561A /* Debug */,
+				53AF328D2F26B2E40000561A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		53B43ED72EDB539400C09544 /* Build configuration list for PBXNativeTarget "TalkieWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				53B43ED82EDB539400C09544 /* Debug */,
+				53B43ED92EDB539400C09544 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		53BF5B9A2EED010200FDEB2A /* Build configuration list for PBXNativeTarget "TalkieWatch Watch App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				53BF5B982EED010200FDEB2A /* Debug */,
+				53BF5B992EED010200FDEB2A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		53AF32902F26B4640000561A /* XCLocalSwiftPackageReference "TalkieMobileKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = TalkieMobileKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		53A917A52F2C52CB004170DE /* XCRemoteSwiftPackageReference "FluidAudio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/FluidInference/FluidAudio.git";
+			requirement = {
+				kind = exactVersion;
+				version = 0.13.6;
+			};
+		};
+		53B400012F3D0001004170DE /* XCRemoteSwiftPackageReference "clerk-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/clerk/clerk-ios.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
+		54C100042F60000100000001 /* XCRemoteSwiftPackageReference "swift-nio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-nio.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.83.0;
+			};
+		};
+		54C100052F60000100000001 /* XCRemoteSwiftPackageReference "swift-nio-ssh" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-nio-ssh.git";
+			requirement = {
+				kind = exactVersion;
+				version = 0.9.1;
+			};
+		};
+		54C100062F60000100000001 /* XCRemoteSwiftPackageReference "swift-nio-transport-services" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-nio-transport-services.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.26.0;
+			};
+		};
+		54D200022F70000100000001 /* XCRemoteSwiftPackageReference "TermBridgeKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/arach/TermBridgeKit.git";
+			requirement = {
+				kind = exactVersion;
+				version = 0.1.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		53A917A62F2C5465004170DE /* FluidAudio */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 53A917A52F2C52CB004170DE /* XCRemoteSwiftPackageReference "FluidAudio" */;
+			productName = FluidAudio;
+		};
+		53AF32912F26B4640000561A /* TalkieMobileKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = TalkieMobileKit;
+		};
+		53AF32932F26B5090000561A /* TalkieMobileKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 53AF32902F26B4640000561A /* XCLocalSwiftPackageReference "TalkieMobileKit" */;
+			productName = TalkieMobileKit;
+		};
+		53B400022F3D0002004170DE /* ClerkKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 53B400012F3D0001004170DE /* XCRemoteSwiftPackageReference "clerk-ios" */;
+			productName = ClerkKit;
+		};
+		54C100072F60000100000001 /* NIOCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 54C100042F60000100000001 /* XCRemoteSwiftPackageReference "swift-nio" */;
+			productName = NIOCore;
+		};
+		54C100082F60000100000001 /* NIOSSH */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 54C100052F60000100000001 /* XCRemoteSwiftPackageReference "swift-nio-ssh" */;
+			productName = NIOSSH;
+		};
+		54C100092F60000100000001 /* NIOTransportServices */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 54C100062F60000100000001 /* XCRemoteSwiftPackageReference "swift-nio-transport-services" */;
+			productName = NIOTransportServices;
+		};
+		54D200032F70000100000001 /* TermBridgeKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 54D200022F70000100000001 /* XCRemoteSwiftPackageReference "TermBridgeKit" */;
+			productName = TermBridgeKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 539C69292ED39ADE00BC034F /* Project object */;
+}

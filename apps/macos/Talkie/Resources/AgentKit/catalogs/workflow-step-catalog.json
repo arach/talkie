@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "description": "Machine-readable workflow step catalog for Talkie agent authoring.",
+  "variables": [
+    "{{TRANSCRIPT}}",
+    "{{PREVIOUS_OUTPUT}}",
+    "{{OUTPUT}}",
+    "{{some_output_key}}"
+  ],
+  "stepTypes": [
+    {
+      "type": "llm",
+      "requiredFields": ["prompt"],
+      "commonFields": ["outputKey", "provider", "modelId", "costTier", "systemPrompt", "temperature", "maxTokens", "topP"],
+      "bestFor": ["summaries", "rewrites", "classification", "structured drafting"]
+    },
+    {
+      "type": "shell",
+      "requiredFields": ["executable"],
+      "commonFields": ["outputKey", "arguments", "stdin", "workingDirectory", "environment", "timeout", "captureStderr"],
+      "bestFor": ["text extraction", "local scripts", "file utilities"]
+    },
+    {
+      "type": "speak",
+      "requiredFields": [],
+      "commonFields": ["outputKey", "text", "provider", "voice", "rate", "pitch", "playImmediately", "saveToFile", "useCache"],
+      "bestFor": ["tts playback", "audible confirmations"]
+    },
+    {
+      "type": "saveFile",
+      "requiredFields": [],
+      "commonFields": ["outputKey", "filename", "directory", "content", "appendIfExists"],
+      "bestFor": ["persisting summaries", "exporting artifacts"]
+    },
+    {
+      "type": "notification",
+      "requiredFields": [],
+      "commonFields": ["outputKey", "title", "body", "sound", "actionLabel"],
+      "bestFor": ["local alerts", "status notifications"]
+    },
+    {
+      "type": "transcribe",
+      "requiredFields": [],
+      "commonFields": ["outputKey", "qualityTier", "fallbackStrategy", "overwriteExisting", "saveAsVersion"],
+      "bestFor": ["audio to transcript"]
+    },
+    {
+      "type": "transform",
+      "requiredFields": [],
+      "commonFields": ["outputKey", "operation", "parameters"],
+      "bestFor": ["simple reshaping", "extraction"]
+    },
+    {
+      "type": "conditional",
+      "requiredFields": ["condition"],
+      "commonFields": ["outputKey", "thenSteps", "elseSteps"],
+      "bestFor": ["gating behavior", "branching"]
+    },
+    {
+      "type": "trigger",
+      "requiredFields": [],
+      "commonFields": ["outputKey", "phrases", "caseSensitive", "searchLocation", "contextWindowSize", "stopIfNoMatch"],
+      "bestFor": ["phrase detection"]
+    },
+    {
+      "type": "intentExtract",
+      "requiredFields": [],
+      "commonFields": ["outputKey", "inputKey", "extractionMethod", "confidenceThreshold"],
+      "bestFor": ["intent routing"]
+    },
+    {
+      "type": "executeWorkflows",
+      "requiredFields": [],
+      "commonFields": ["outputKey", "intentsKey", "stopOnError", "parallel"],
+      "bestFor": ["workflow fan-out"]
+    }
+  ],
+  "otherSupportedTypes": [
+    "clipboard",
+    "iOSPush",
+    "appleReminders",
+    "webhook",
+    "email",
+    "cloudUpload"
+  ]
+}
