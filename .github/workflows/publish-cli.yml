@@ -5,13 +5,21 @@ on:
     tags:
       - 'cli-v*'
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish to npm instead of running the package dry-run'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: cli
+        working-directory: packages/npm/cli
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,7 +33,12 @@ jobs:
       - name: Build
         run: bun run build
 
+      - name: Package dry run
+        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.publish }}
+        run: npm publish --dry-run --access public
+
       - name: Publish to npm
+        if: ${{ github.event_name == 'push' || inputs.publish }}
         run: npm publish --access public
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
