@@ -356,6 +356,7 @@ else
         -allowProvisioningUpdates \
         "${XCODE_AUTH_ARGS[@]}" \
         "${XCODE_RELEASE_SETTINGS[@]}" \
+        TALKIE_MAC_SYNC_PROFILE_NAME="$SYNC_PROFILE_NAME" \
         MARKETING_VERSION="$VERSION" \
         CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
         archive 2>&1 | grep -E "(error:|warning:|ARCHIVE)" || true
@@ -405,6 +406,7 @@ else
         -allowProvisioningUpdates \
         "${XCODE_AUTH_ARGS[@]}" \
         "${XCODE_RELEASE_SETTINGS[@]}" \
+        TALKIE_MAC_CORE_PROFILE_NAME="$CORE_PROFILE_NAME" \
         MARKETING_VERSION="$VERSION" \
         CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
         'OTHER_SWIFT_FLAGS=$(inherited) -swift-version 5' \

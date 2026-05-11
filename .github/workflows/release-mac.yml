@@ -279,6 +279,14 @@ jobs:
             -arch arm64 \
             -allowProvisioningUpdates \
             "${auth_args[@]}" \
+            DEVELOPMENT_TEAM="$TALKIE_TEAM_ID" \
+            TALKIE_DEVELOPMENT_TEAM="$TALKIE_TEAM_ID" \
+            TALKIE_APP_IDENTIFIER="$TALKIE_APP_IDENTIFIER" \
+            TALKIE_MAC_SYNC_BUNDLE_ID="$TALKIE_MAC_SYNC_BUNDLE_ID" \
+            TALKIE_MAC_APP_GROUP="$TALKIE_MAC_APP_GROUP" \
+            TALKIE_MAC_SHARED_SETTINGS_SUITE="$TALKIE_MAC_SHARED_SETTINGS_SUITE" \
+            TALKIE_CLOUDKIT_CONTAINER="$TALKIE_CLOUDKIT_CONTAINER" \
+            TALKIE_MAC_SYNC_PROFILE_NAME="$TALKIE_MAC_SYNC_PROFILE_NAME" \
             MARKETING_VERSION="$VERSION" \
             CURRENT_PROJECT_VERSION="$build_number" \
             archive
