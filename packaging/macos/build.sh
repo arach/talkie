@@ -166,6 +166,18 @@ if [ -n "${APP_STORE_CONNECT_API_KEY_PATH:-}" ] && \
     )
 fi
 
+XCODE_RELEASE_SETTINGS=(
+    DEVELOPMENT_TEAM="$TEAM_ID"
+    TALKIE_DEVELOPMENT_TEAM="$TEAM_ID"
+    TALKIE_APP_IDENTIFIER="$APP_IDENTIFIER"
+    TALKIE_MAC_CORE_BUNDLE_ID="$CORE_BUNDLE_ID"
+    TALKIE_MAC_AGENT_BUNDLE_ID="$AGENT_BUNDLE_ID"
+    TALKIE_MAC_SYNC_BUNDLE_ID="$SYNC_BUNDLE_ID"
+    TALKIE_MAC_APP_GROUP="$MAC_APP_GROUP"
+    TALKIE_MAC_SHARED_SETTINGS_SUITE="$MAC_SHARED_SETTINGS_SUITE"
+    TALKIE_CLOUDKIT_CONTAINER="$CLOUDKIT_CONTAINER"
+)
+
 # Processed entitlements directory
 PROCESSED_ENTITLEMENTS_DIR="$BUILD_DIR/ProcessedEntitlements"
 mkdir -p "$PROCESSED_ENTITLEMENTS_DIR"
@@ -293,6 +305,7 @@ else
         -arch arm64 \
         -allowProvisioningUpdates \
         "${XCODE_AUTH_ARGS[@]}" \
+        "${XCODE_RELEASE_SETTINGS[@]}" \
         MARKETING_VERSION="$VERSION" \
         CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
         'OTHER_SWIFT_FLAGS=$(inherited) -swift-version 5' \
@@ -342,6 +355,7 @@ else
         -arch arm64 \
         -allowProvisioningUpdates \
         "${XCODE_AUTH_ARGS[@]}" \
+        "${XCODE_RELEASE_SETTINGS[@]}" \
         MARKETING_VERSION="$VERSION" \
         CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
         archive 2>&1 | grep -E "(error:|warning:|ARCHIVE)" || true
@@ -390,6 +404,7 @@ else
         -arch arm64 \
         -allowProvisioningUpdates \
         "${XCODE_AUTH_ARGS[@]}" \
+        "${XCODE_RELEASE_SETTINGS[@]}" \
         MARKETING_VERSION="$VERSION" \
         CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
         'OTHER_SWIFT_FLAGS=$(inherited) -swift-version 5' \
