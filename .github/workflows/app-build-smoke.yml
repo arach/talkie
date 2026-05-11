@@ -1,0 +1,74 @@
+name: App Build Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: 'Build scope'
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - macos
+          - ios
+  push:
+    tags:
+      - 'build-smoke-*'
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  macos:
+    name: Build macOS apps
+    runs-on: macos-26
+    timeout-minutes: 75
+    if: ${{ github.event_name == 'push' || inputs.scope == 'all' || inputs.scope == 'macos' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -d /Applications/Xcode_26.4.0.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.4.0.app
+          else
+            sudo xcode-select -s /Applications/Xcode.app
+          fi
+
+          xcodebuild -version
+
+      - name: Build macOS app targets
+        run: scripts/ci/build-apple-smoke.sh macos
+
+  ios:
+    name: Build iOS/watchOS simulator apps
+    runs-on: macos-26
+    timeout-minutes: 75
+    if: ${{ github.event_name == 'push' || inputs.scope == 'all' || inputs.scope == 'ios' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -d /Applications/Xcode_26.4.0.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.4.0.app
+          else
+            sudo xcode-select -s /Applications/Xcode.app
+          fi
+
+          xcodebuild -version
+
+      - name: Build iOS and watchOS simulator targets
+        run: scripts/ci/build-apple-smoke.sh ios
