@@ -70,6 +70,15 @@ The workflow expects GitHub release variables for the full macOS signing namespa
 - `TALKIE_MAC_CORE_PROFILE_NAME`
 - `TALKIE_MAC_SYNC_PROFILE_NAME`
 
+Required GitHub release secrets:
+
+- `DEVELOPER_ID_APPLICATION_CERT_BASE64`
+- `DEVELOPER_ID_APPLICATION_CERT_PASSWORD`
+- `KEYCHAIN_PASSWORD`
+- `APP_STORE_CONNECT_API_KEY_P8`
+
+`TALKIE_PROVISIONING_PROFILES_BASE64` is optional. When it is absent, the workflow relies on App Store Connect API auth plus Xcode `-allowProvisioningUpdates` to fetch or create the needed Developer ID profiles.
+
 ```bash
 # Build signed & notarized DMG
 ./packaging/macos/build.sh

@@ -131,8 +131,7 @@ jobs:
             KEYCHAIN_PASSWORD \
             APP_STORE_CONNECT_API_KEY_P8 \
             APP_STORE_CONNECT_KEY_ID \
-            APP_STORE_CONNECT_ISSUER_ID \
-            PROFILES_BASE64; do
+            APP_STORE_CONNECT_ISSUER_ID; do
             if [ -z "${!name:-}" ]; then
               missing+=("$name")
             fi
@@ -216,6 +215,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          if [ -z "${PROFILES_BASE64:-}" ]; then
+            echo "No profile archive configured; xcodebuild will use App Store Connect API auth with -allowProvisioningUpdates."
+            exit 0
+          fi
 
           profiles_dir="$HOME/Library/MobileDevice/Provisioning Profiles"
           xcode_profiles_dir="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
