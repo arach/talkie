@@ -35,7 +35,7 @@ TALKIE_MAC_AGENT_BUNDLE_ID = to.talkie.app.agent
 TALKIE_MAC_SYNC_BUNDLE_ID = to.talkie.app.sync
 TALKIE_MAC_APP_GROUP = group.to.talkie.app.mac
 TALKIE_MAC_SHARED_SETTINGS_SUITE = to.talkie.app.shared
-TALKIE_CLOUDKIT_CONTAINER = iCloud.to.talkie.app
+TALKIE_CLOUDKIT_CONTAINER = iCloud.to.talkie
 ```
 
 Treat the iOS App Store app as the continuity exception. For production iOS releases, keep the existing App Store bundle IDs, app group, and CloudKit container in `Signing.local.xcconfig`:
