@@ -62,7 +62,6 @@ build_ios_project() {
       -project apps/ios/Talkie-iOS.xcodeproj \
       -scheme Talkie \
       -configuration Debug \
-      -sdk iphonesimulator \
       -destination 'generic/platform=iOS Simulator' \
       -derivedDataPath "$derived_root/ios" \
       "${xcode_common[@]}" \
