@@ -18,10 +18,15 @@ on:
         options:
           - all
           - talkiesync
+      publish:
+        description: 'Publish the DMG to the public usetalkie.com release'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   release:
-    name: Build, notarize, and publish
+    name: Build, notarize, and optionally publish
     runs-on: macos-26
     environment: release
     timeout-minutes: 90
@@ -34,6 +39,7 @@ jobs:
       TALKIE_MAC_CORE_PROFILE_NAME: ${{ vars.TALKIE_MAC_CORE_PROFILE_NAME }}
       TALKIE_MAC_SYNC_PROFILE_NAME: ${{ vars.TALKIE_MAC_SYNC_PROFILE_NAME }}
       TALKIE_NOTARY_PROFILE: notarytool
+      TALKIE_PUBLISH_PUBLIC_RELEASE: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish == true) }}
 
     steps:
       - name: Checkout
@@ -96,6 +102,43 @@ jobs:
             exit 1
           fi
 
+      - name: Validate release secrets
+        env:
+          CERT_BASE64: ${{ secrets.DEVELOPER_ID_APPLICATION_CERT_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_APPLICATION_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          APP_STORE_CONNECT_API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ vars.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ vars.APP_STORE_CONNECT_ISSUER_ID }}
+          PROFILES_BASE64: ${{ secrets.TALKIE_PROVISIONING_PROFILES_BASE64 }}
+          USETALKIE_RELEASE_TOKEN: ${{ secrets.USETALKIE_RELEASE_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          missing=()
+          for name in \
+            CERT_BASE64 \
+            CERT_PASSWORD \
+            KEYCHAIN_PASSWORD \
+            APP_STORE_CONNECT_API_KEY_P8 \
+            APP_STORE_CONNECT_KEY_ID \
+            APP_STORE_CONNECT_ISSUER_ID \
+            PROFILES_BASE64; do
+            if [ -z "${!name:-}" ]; then
+              missing+=("$name")
+            fi
+          done
+
+          if [ "$TALKIE_PUBLISH_PUBLIC_RELEASE" = "true" ] && [ -z "${USETALKIE_RELEASE_TOKEN:-}" ]; then
+            missing+=("USETALKIE_RELEASE_TOKEN")
+          fi
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf 'Missing release secret or variable: %s\n' "${missing[@]}" >&2
+            exit 1
+          fi
+
       - name: Import Developer ID certificate
         env:
           CERT_BASE64: ${{ secrets.DEVELOPER_ID_APPLICATION_CERT_BASE64 }}
@@ -137,7 +180,7 @@ jobs:
           security default-keychain -d user -s "$keychain"
           security find-identity -v -p codesigning "$keychain"
 
-      - name: Configure App Store Connect API key
+      - name: Configure notarization API key
         env:
           APP_STORE_CONNECT_API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
           APP_STORE_CONNECT_KEY_ID: ${{ vars.APP_STORE_CONNECT_KEY_ID }}
@@ -252,7 +295,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish public release
-        if: ${{ github.event_name == 'push' || inputs.component == 'all' }}
+        if: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish == true)) && (github.event_name == 'push' || inputs.component == 'all') }}
         env:
           GH_TOKEN: ${{ secrets.USETALKIE_RELEASE_TOKEN }}
         shell: bash

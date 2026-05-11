@@ -38,6 +38,24 @@ The same `VERSION` and `BUILD_NUMBER` are synced across iOS, macOS Talkie, Talki
 
 ## macOS Release Build
 
+GitHub Actions has a macOS-only release workflow:
+
+```bash
+# Build, sign, notarize, and upload a private workflow artifact only
+gh workflow run release-mac.yml --repo arach/talkie --ref master \
+  -f version=X.Y.Z \
+  -f component=all \
+  -f publish=false
+
+# Publish publicly only when intentionally shipping
+gh workflow run release-mac.yml --repo arach/talkie --ref master \
+  -f version=X.Y.Z \
+  -f component=all \
+  -f publish=true
+```
+
+Tag pushes matching `v*` still build and publish the public DMG automatically.
+
 ```bash
 # Build signed & notarized DMG
 ./packaging/macos/build.sh
@@ -61,7 +79,8 @@ SKIP_CLEAN=1 ./packaging/macos/build.sh
 
 ## iOS Release Build
 
-iOS and watchOS use the shared root `VERSION` and `BUILD_NUMBER`.
+iOS and watchOS use the shared root `VERSION` and `BUILD_NUMBER`, but shipping remains a local Xcode/App Store Connect path.
+
 1. Run `./scripts/sync-version.sh --bump-build` once for the new archive train.
 2. Open `apps/ios/Talkie-iOS.xcodeproj`.
 3. Product → Archive.
@@ -80,10 +99,10 @@ git push origin vX.Y.Z
 1. [ ] Sync version/build: `./scripts/sync-version.sh X.Y.Z --bump-build`
 2. [ ] Verify: `./scripts/sync-version.sh --check`
 3. [ ] Commit: `git commit -am "🔖 Bump version to X.Y.Z"`
-4. [ ] Build macOS: `./packaging/macos/build.sh`
+4. [ ] Build macOS: `gh workflow run release-mac.yml --repo arach/talkie --ref master -f version=X.Y.Z -f component=all -f publish=false`
 5. [ ] Build iOS: Xcode Archive → App Store Connect
 6. [ ] Tag: `git tag vX.Y.Z && git push origin vX.Y.Z`
-7. [ ] Publish to usetalkie.com: `gh release create vX.Y.Z packaging/macos/Talkie.dmg packaging/macos/Talkie-X.Y.Z.dmg --repo arach/usetalkie.com --title "Talkie X.Y.Z"`
+7. [ ] Publish to usetalkie.com: rerun the macOS workflow with `publish=true`, or push a `vX.Y.Z` tag once the release candidate artifact is verified.
 
 ## Website Publishing
 
