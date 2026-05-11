@@ -13,7 +13,7 @@ import Foundation
 final class NotchTuning {
     static let shared = NotchTuning()
 
-    nonisolated static let liveSuiteName = "jdi.talkie.notch.lab"
+    nonisolated static let liveSuiteName = "to.talkie.app.notch.lab"
     nonisolated static let liveHoverPokeOutKey = "hoverPokeOut"
     nonisolated static let liveActivePokeOutKey = "activePokeOut"
     nonisolated static let liveTopOuterRadiusKey = "topOuterRadius"

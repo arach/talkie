@@ -69,7 +69,7 @@ These are still used for transport or backward compatibility, but agents should 
 - shared/app-group defaults used by older runtime paths or extensions
 - GRDB workflow preference rows that are synchronized from `workflows/config.json`
 - `NSUbiquitousKeyValueStore` payloads such as `pinnedWorkflows`
-- notch lab live-suite defaults under `jdi.talkie.notch.lab`
+- notch lab live-suite defaults under `to.talkie.app.notch.lab`
 
 ## Workflow Pinning Rule
 

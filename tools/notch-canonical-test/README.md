@@ -1,4 +1,4 @@
-# NotchCanonicalTest
+# Notch Canonical Test
 
 Small macOS SwiftUI app for testing notch path geometry.
 
@@ -12,7 +12,7 @@ Small macOS SwiftUI app for testing notch path geometry.
 ## Run
 
 ```bash
-cd tools/NotchCanonicalTest
+cd tools/notch-canonical-test
 swift run
 
 # non-blocking launch

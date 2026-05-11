@@ -12,7 +12,7 @@ struct NotchParameters: Equatable {
 }
 
 enum NotchLiveBridge {
-    static let suiteName = "jdi.talkie.notch.lab"
+    static let suiteName = "to.talkie.app.notch.lab"
     static let hoverPokeOutKey = "hoverPokeOut"
     static let activePokeOutKey = "activePokeOut"
     static let topOuterRadiusKey = "topOuterRadius"
