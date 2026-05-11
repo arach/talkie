@@ -56,6 +56,20 @@ gh workflow run release-mac.yml --repo arach/talkie --ref master \
 
 Tag pushes matching `v*` still build and publish the public DMG automatically.
 
+The workflow expects GitHub release variables for the full macOS signing namespace, not just the bundle IDs:
+
+- `TALKIE_TEAM_ID`
+- `TALKIE_DEVELOPER_ID_APP`
+- `TALKIE_APP_IDENTIFIER`
+- `TALKIE_MAC_CORE_BUNDLE_ID`
+- `TALKIE_MAC_AGENT_BUNDLE_ID`
+- `TALKIE_MAC_SYNC_BUNDLE_ID`
+- `TALKIE_MAC_APP_GROUP`
+- `TALKIE_MAC_SHARED_SETTINGS_SUITE`
+- `TALKIE_CLOUDKIT_CONTAINER`
+- `TALKIE_MAC_CORE_PROFILE_NAME`
+- `TALKIE_MAC_SYNC_PROFILE_NAME`
+
 ```bash
 # Build signed & notarized DMG
 ./packaging/macos/build.sh
