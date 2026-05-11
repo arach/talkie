@@ -28,7 +28,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.2
 
       - name: Resolve smoke version
         id: version
@@ -91,7 +91,7 @@ jobs:
           git push origin "refs/tags/$tag"
 
       - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: talkie-${{ steps.version.outputs.tag }}-source
           path: |
