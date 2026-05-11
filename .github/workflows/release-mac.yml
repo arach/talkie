@@ -19,7 +19,7 @@ on:
           - all
           - talkiesync
       publish:
-        description: 'Publish the DMG to the public usetalkie.com release'
+        description: 'Publish the DMG to this repository as a GitHub Release'
         required: false
         default: false
         type: boolean
@@ -30,6 +30,8 @@ jobs:
     runs-on: macos-26
     environment: release
     timeout-minutes: 90
+    permissions:
+      contents: write
     env:
       TALKIE_TEAM_ID: ${{ vars.TALKIE_TEAM_ID }}
       TALKIE_DEVELOPER_ID_APP: ${{ vars.TALKIE_DEVELOPER_ID_APP }}
@@ -119,7 +121,6 @@ jobs:
           APP_STORE_CONNECT_KEY_ID: ${{ vars.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ vars.APP_STORE_CONNECT_ISSUER_ID }}
           PROFILES_BASE64: ${{ secrets.TALKIE_PROVISIONING_PROFILES_BASE64 }}
-          USETALKIE_RELEASE_TOKEN: ${{ secrets.USETALKIE_RELEASE_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -136,10 +137,6 @@ jobs:
               missing+=("$name")
             fi
           done
-
-          if [ "$TALKIE_PUBLISH_PUBLIC_RELEASE" = "true" ] && [ -z "${USETALKIE_RELEASE_TOKEN:-}" ]; then
-            missing+=("USETALKIE_RELEASE_TOKEN")
-          fi
 
           if [ "${#missing[@]}" -gt 0 ]; then
             printf 'Missing release secret or variable: %s\n' "${missing[@]}" >&2
@@ -317,13 +314,13 @@ jobs:
       - name: Publish public release
         if: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish == true)) && (github.event_name == 'push' || inputs.component == 'all') }}
         env:
-          GH_TOKEN: ${{ secrets.USETALKIE_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
 
           release_tag="v$VERSION"
-          dmg_path="$RUNNER_TEMP/Talkie.dmg"
+          dmg_path="$RUNNER_TEMP/Talkie-for-Mac-$VERSION.dmg"
           notes_path="$RUNNER_TEMP/release-notes.md"
           cp packaging/macos/Talkie-for-Mac.dmg "$dmg_path"
           cat > "$notes_path" <<EOF
@@ -332,17 +329,17 @@ jobs:
           Download and install Talkie for Mac.
           EOF
 
-          if gh release view "$release_tag" --repo arach/usetalkie.com >/dev/null 2>&1; then
+          if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$release_tag" "$dmg_path" \
-              --repo arach/usetalkie.com \
+              --repo "$GITHUB_REPOSITORY" \
               --clobber
             gh release edit "$release_tag" \
-              --repo arach/usetalkie.com \
+              --repo "$GITHUB_REPOSITORY" \
               --title "Talkie $VERSION" \
               --notes-file "$notes_path"
           else
             gh release create "$release_tag" "$dmg_path" \
-              --repo arach/usetalkie.com \
+              --repo "$GITHUB_REPOSITORY" \
               --title "Talkie $VERSION" \
               --notes-file "$notes_path"
           fi
