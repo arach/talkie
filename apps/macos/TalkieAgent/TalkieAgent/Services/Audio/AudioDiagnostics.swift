@@ -11,7 +11,7 @@ import AppKit
 import os.log
 import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.agent", category: "AudioDiagnostics")
+private let logger = Logger(subsystem: "to.talkie.app.agent", category: "AudioDiagnostics")
 
 // MARK: - Diagnostic Check Item
 

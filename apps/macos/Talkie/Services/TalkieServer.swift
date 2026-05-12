@@ -1048,7 +1048,7 @@ final class TalkieServer {
 
         case "mac-windows":
             DistributedNotificationCenter.default().postNotificationName(
-                NSNotification.Name("com.jdi.talkie.screenshotChord"),
+                NSNotification.Name("to.talkie.app.screenshotChord"),
                 object: nil,
                 userInfo: nil,
                 deliverImmediately: true
@@ -1103,7 +1103,7 @@ final class TalkieServer {
 
         case "talkie-keyboard":
             DistributedNotificationCenter.default().postNotificationName(
-                NSNotification.Name("com.jdi.talkie.screenRecordChord"),
+                NSNotification.Name("to.talkie.app.screenRecordChord"),
                 object: nil,
                 userInfo: nil,
                 deliverImmediately: true

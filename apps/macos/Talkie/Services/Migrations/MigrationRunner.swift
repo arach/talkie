@@ -10,7 +10,7 @@ import Foundation
 import CoreData
 import os
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "Migration")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "Migration")
 
 // MARK: - Migration Type
 

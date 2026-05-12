@@ -33,10 +33,10 @@ import TalkieKit
 // MARK: - Performance Instrumentation
 
 /// Signpost log for lite interstitial performance profiling in Instruments
-private let liteInterstitialLog = OSLog(subsystem: "jdi.talkie.performance", category: "LiteInterstitial")
+private let liteInterstitialLog = OSLog(subsystem: "to.talkie.app.performance", category: "LiteInterstitial")
 
 /// Signposter for lite interstitial workflow intervals
-private let liteSignposter = OSSignposter(subsystem: "jdi.talkie.performance", category: "LiteInterstitial")
+private let liteSignposter = OSSignposter(subsystem: "to.talkie.app.performance", category: "LiteInterstitial")
 
 // MARK: - Lite Mode Entry Point
 

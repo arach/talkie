@@ -17,7 +17,7 @@ import TalkieKit
 import TermBridgeKit
 #endif
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "Settings")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "Settings")
 
 // MARK: - Cached Theme Tokens
 

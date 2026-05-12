@@ -98,7 +98,7 @@ Automatically measure async ViewModel methods:
 ```swift
 import OSLog
 
-private let talkieSignposter = OSSignposter(subsystem: "jdi.talkie", category: "Performance")
+private let talkieSignposter = OSSignposter(subsystem: "to.talkie.app", category: "Performance")
 
 /// Automatically instruments async ViewModel actions
 @propertyWrapper
@@ -391,10 +391,10 @@ Use these subsystems for different categories:
 
 | Subsystem | Category | Use For |
 |-----------|----------|---------|
-| `jdi.talkie` | Performance | General app performance |
-| `jdi.talkie.db` | Database | Database operations |
-| `jdi.talkie.agent` | LiveController | TalkieAgent state machine |
-| `jdi.talkie.engine` | EngineService | Transcription engine |
+| `to.talkie.app` | Performance | General app performance |
+| `to.talkie.app.db` | Database | Database operations |
+| `to.talkie.app.agent` | LiveController | TalkieAgent state machine |
+| `to.talkie.app.engine` | EngineService | Transcription engine |
 
 ### Common Signpost Patterns
 

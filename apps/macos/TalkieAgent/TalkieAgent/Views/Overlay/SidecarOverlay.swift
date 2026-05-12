@@ -11,7 +11,7 @@ import TalkieKit
 import AppKit
 import os
 
-private let log = Logger(subsystem: "jdi.talkie.agent", category: "SidecarOverlay")
+private let log = Logger(subsystem: "to.talkie.app.agent", category: "SidecarOverlay")
 
 // MARK: - Touch-Enabled Panel
 

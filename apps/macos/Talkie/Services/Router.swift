@@ -141,7 +141,7 @@ final class Router {
     var isLoggingEnabled = true
 
     // Signpost integration for Instruments profiling
-    private let signpostLog = OSLog(subsystem: "com.jdi.talkie", category: "Router")
+    private let signpostLog = OSLog(subsystem: "to.talkie.app", category: "Router")
     private let signposter: OSSignposter
 
     // Gating (for feature flags, debug modes)

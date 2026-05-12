@@ -11,7 +11,7 @@ import os
 
 #if DEBUG
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "Memory")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "Memory")
 
 // MARK: - Memory Monitor
 

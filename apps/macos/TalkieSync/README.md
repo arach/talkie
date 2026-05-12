@@ -23,8 +23,8 @@ Dedicated sync helper service for Talkie. Handles Core Data + CloudKit sync in a
 3. Choose macOS → App
 4. Product Name: `TalkieSync`
 5. Team: Your team
-6. Organization Identifier: `jdi.talkie`
-7. Bundle Identifier: `jdi.talkie.sync.dev` (for development)
+6. Organization Identifier: `to.talkie.app`
+7. Bundle Identifier: `to.talkie.app.sync.dev` (for development)
 8. Interface: SwiftUI
 9. Language: Swift
 10. Storage: None (we manage Core Data manually)
@@ -69,8 +69,8 @@ For development, install the launchd plist:
 ```bash
 # Update the path in the plist to match your DerivedData location
 # Then install:
-cp jdi.talkie.sync.xpc.dev.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/jdi.talkie.sync.xpc.dev.plist
+cp to.talkie.app.sync.xpc.dev.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/to.talkie.app.sync.xpc.dev.plist
 ```
 
 ## Build & Run
@@ -83,7 +83,7 @@ xcodebuild -scheme TalkieSync -configuration Debug build
 ## Testing
 
 1. Build and run TalkieSync
-2. Check logs: `tail -f /tmp/jdi.talkie.sync.xpc.dev.stdout.log`
+2. Check logs: `tail -f /tmp/to.talkie.app.sync.xpc.dev.stdout.log`
 3. Launch Talkie main app
 4. Verify XPC connection in logs
 
@@ -156,5 +156,5 @@ TalkieSync/
 ├── Assets.xcassets/             # App icons
 ├── Info.plist
 ├── TalkieSync.entitlements
-└── jdi.talkie.sync.xpc.dev.plist  # launchd service definition
+└── to.talkie.app.sync.xpc.dev.plist  # launchd service definition
 ```

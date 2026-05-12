@@ -12,13 +12,13 @@ import OSLog
 // MARK: - Signpost Configuration
 
 /// TalkieSync performance signposting subsystem
-let syncPerformanceLog = OSLog(subsystem: "jdi.talkie.sync", category: .pointsOfInterest)
+let syncPerformanceLog = OSLog(subsystem: "to.talkie.app.sync", category: .pointsOfInterest)
 
 /// Signposter for sync performance tracking (for Instruments)
-let syncSignposter = OSSignposter(subsystem: "jdi.talkie.sync", category: "Sync")
+let syncSignposter = OSSignposter(subsystem: "to.talkie.app.sync", category: "Sync")
 
 /// Signposter for database operations
-let dbSignposter = OSSignposter(subsystem: "jdi.talkie.sync", category: "Database")
+let dbSignposter = OSSignposter(subsystem: "to.talkie.app.sync", category: "Database")
 
 // MARK: - Sync Interval Tracking
 

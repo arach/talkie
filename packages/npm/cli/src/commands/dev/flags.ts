@@ -30,10 +30,10 @@ const SHARED_FLAG_KEYS: Record<string, string> = {
 };
 
 /** UserDefaults domain (dev build). */
-const DEFAULTS_DOMAIN = "jdi.talkie.core.dev";
+const DEFAULTS_DOMAIN = "to.talkie.app.mac.dev";
 
 /** Shared suite for Agent cross-process reads. */
-const SHARED_SUITE = "com.jdi.talkie.shared.dev";
+const SHARED_SUITE = "to.talkie.app.shared.dev";
 
 /** Keys inside UserDefaults. */
 const REMOTE_KEY = "featureFlags.remote";
@@ -334,7 +334,7 @@ async function adminFetch(path: string, init?: RequestInit): Promise<Response> {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`\x1b[31mCannot reach admin API at ${ADMIN_URL}: ${msg}\x1b[0m`);
-    console.error(`\x1b[90mIs the admin server running? (cd admin && npm run dev)\x1b[0m`);
+    console.error(`\x1b[90mIs the admin server running? (cd admin && bun run dev)\x1b[0m`);
     console.error(`\x1b[90mOr set TALKIE_ADMIN_URL to point elsewhere.\x1b[0m`);
     process.exit(1);
   }

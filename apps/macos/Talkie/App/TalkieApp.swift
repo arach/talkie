@@ -11,8 +11,8 @@ import CoreData
 import os
 import TalkieKit
 
-private let startupLogger = Logger(subsystem: "jdi.talkie.performance", category: "Startup")
-private let startupSignposter = OSSignposter(subsystem: "jdi.talkie.performance", category: "Startup")
+private let startupLogger = Logger(subsystem: "to.talkie.app.performance", category: "Startup")
+private let startupSignposter = OSSignposter(subsystem: "to.talkie.app.performance", category: "Startup")
 
 // MARK: - Sidebar Toggle Action
 

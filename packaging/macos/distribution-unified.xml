@@ -22,9 +22,9 @@
             title="Talkie for Mac"
             description="Voice-first productivity suite for macOS."
             visible="false">
-        <pkg-ref id="jdi.talkie.unified"/>
+        <pkg-ref id="to.talkie.app.unified"/>
     </choice>
 
-    <pkg-ref id="jdi.talkie.unified" version="1.9.0" installKBytes="50000">TalkieUnified.pkg</pkg-ref>
+    <pkg-ref id="to.talkie.app.unified" version="1.9.0" installKBytes="50000">TalkieUnified.pkg</pkg-ref>
 
 </installer-gui-script>

@@ -11,8 +11,8 @@ import os
 import DebugKit
 import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "AppDelegate")
-private let signposter = OSSignposter(subsystem: "jdi.talkie.performance", category: "Startup")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "AppDelegate")
+private let signposter = OSSignposter(subsystem: "to.talkie.app.performance", category: "Startup")
 
 // Free function to capture settings screenshots using subprocess
 @MainActor
@@ -1592,19 +1592,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(screenshotChordReceived),
-            name: NSNotification.Name("com.jdi.talkie.screenshotChord"),
+            name: NSNotification.Name("to.talkie.app.screenshotChord"),
             object: nil
         )
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(screenRecordChordReceived),
-            name: NSNotification.Name("com.jdi.talkie.screenRecordChord"),
+            name: NSNotification.Name("to.talkie.app.screenRecordChord"),
             object: nil
         )
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(selectionContextCaptured),
-            name: NSNotification.Name("com.jdi.talkie.captureSelectionContext"),
+            name: NSNotification.Name("to.talkie.app.captureSelectionContext"),
             object: nil
         )
 
@@ -1612,13 +1612,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(pasteChordReceived),
-            name: NSNotification.Name("com.jdi.talkie.pasteChord"),
+            name: NSNotification.Name("to.talkie.app.pasteChord"),
             object: nil
         )
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(pasteLastScreenshotReceived),
-            name: NSNotification.Name("com.jdi.talkie.pasteLastScreenshot"),
+            name: NSNotification.Name("to.talkie.app.pasteLastScreenshot"),
             object: nil
         )
 
@@ -2071,7 +2071,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
     private func setupDirectScreenshotShortcuts() {
         DistributedNotificationCenter.default().addObserver(
-            forName: NSNotification.Name("com.jdi.talkie.screenshotDirect"),
+            forName: NSNotification.Name("to.talkie.app.screenshotDirect"),
             object: nil,
             queue: nil
         ) { [weak self] notification in
@@ -2175,7 +2175,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(cameraBubbleToggleReceived),
-            name: NSNotification.Name("com.jdi.talkie.cameraBubbleToggle"),
+            name: NSNotification.Name("to.talkie.app.cameraBubbleToggle"),
             object: nil
         )
 
@@ -2214,13 +2214,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(shelfToggleReceived),
-            name: NSNotification.Name("com.jdi.talkie.shelfToggle"),
+            name: NSNotification.Name("to.talkie.app.shelfToggle"),
             object: nil
         )
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(trayViewerToggleReceived),
-            name: NSNotification.Name("com.jdi.talkie.trayViewerToggle"),
+            name: NSNotification.Name("to.talkie.app.trayViewerToggle"),
             object: nil
         )
 

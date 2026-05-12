@@ -10,7 +10,7 @@ import AVFoundation
 import os
 import Observation
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "SpeechSynthesis")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "SpeechSynthesis")
 
 // MARK: - Speech Synthesis Service
 

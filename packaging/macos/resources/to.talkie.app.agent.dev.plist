@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>jdi.talkie.agent.dev</string>
+    <string>to.talkie.app.agent.dev</string>
     <key>ProgramArguments</key>
     <array>
         <string>/bin/zsh</string>
@@ -12,7 +12,7 @@
     </array>
     <key>MachServices</key>
     <dict>
-        <key>jdi.talkie.agent.xpc.dev</key>
+        <key>to.talkie.app.agent.xpc.dev</key>
         <true/>
     </dict>
     <key>RunAtLoad</key>

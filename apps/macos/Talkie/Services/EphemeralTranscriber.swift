@@ -17,15 +17,15 @@ import TalkieKit
 import CoreAudio
 import AudioToolbox
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "EphemeralTranscriber")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "EphemeralTranscriber")
 
 // MARK: - Performance Instrumentation
 
 /// Signpost log for ephemeral transcription performance profiling in Instruments
-private let ephemeralPerformanceLog = OSLog(subsystem: "jdi.talkie.performance", category: "Ephemeral")
+private let ephemeralPerformanceLog = OSLog(subsystem: "to.talkie.app.performance", category: "Ephemeral")
 
 /// Signposter for ephemeral transcription intervals
-private let ephemeralSignposter = OSSignposter(subsystem: "jdi.talkie.performance", category: "Ephemeral")
+private let ephemeralSignposter = OSSignposter(subsystem: "to.talkie.app.performance", category: "Ephemeral")
 
 /// Ephemeral transcription service for voice guidance
 /// Captures audio, transcribes via TalkieEngine, returns text without any persistence

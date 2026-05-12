@@ -29,7 +29,8 @@ The public README used to describe older platform targets. Current public-readin
 - The active iOS app target is moving with iOS 26 work; some extensions still declare lower deployment targets.
 - macOS targets are being cleaned up for Tahoe-era SwiftUI and signing expectations.
 - Swift package manifests are mixed across Swift tools 5.9 and 6.0.
-- Bun packages declare Bun 1.0+ and should be installed per package directory; there is no root `package.json`.
+- The root `package.json` is a command hub for common repository workflows. It does not install app dependencies.
+- Bun packages declare Bun 1.0+ and should be installed per package directory.
 
 Use the Xcode project settings as the source of truth while the public docs and signing configuration are catching up.
 
@@ -38,7 +39,7 @@ Use the Xcode project settings as the source of truth while the public docs and 
 Prerequisites:
 
 - macOS with a recent Xcode capable of opening the project targets in this repo
-- Bun 1.0 or newer
+- Bun 1.3 or newer
 - Tailscale if you want the paired-device bridge outside local development
 - Optional provider keys for AI features: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, or `GROQ_API_KEY`
 
@@ -56,6 +57,18 @@ Install TypeScript package dependencies where needed:
 (cd packages/npm/cli && bun install)
 (cd packages/npm/sdk && bun install)
 ```
+
+Use the root command hub for common macOS workflows:
+
+```bash
+bun run setup
+bun run build:clean
+bun run launch
+bun run status
+bun run check
+```
+
+The root `package.json` is intentionally a Bun-first command hub; package dependencies are still installed in the package directories that own them.
 
 Open the Apple projects:
 
@@ -80,6 +93,9 @@ For public forks or fresh clones without private Apple signing and CloudKit acce
 ## Build And Test
 
 ```bash
+# macOS app + agent
+bun run build
+
 # macOS app
 xcodebuild -project apps/macos/Talkie/Talkie.xcodeproj \
   -scheme Talkie \

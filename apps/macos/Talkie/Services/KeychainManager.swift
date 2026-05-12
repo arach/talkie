@@ -9,12 +9,12 @@ import Foundation
 import Security
 import os
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "Keychain")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "Keychain")
 /// Manages secure storage of API keys in the macOS Keychain
 final class KeychainManager {
     static let shared = KeychainManager()
 
-    private let service = "jdi.talkie.core"
+    private let service = "to.talkie.app.mac"
 
     // Keychain item keys
     enum Key: String {

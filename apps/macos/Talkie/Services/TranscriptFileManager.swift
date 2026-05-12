@@ -15,7 +15,7 @@ import os
 import CryptoKit
 import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "LocalFiles")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "LocalFiles")
 
 @MainActor
 final class TranscriptFileManager: NSObject {

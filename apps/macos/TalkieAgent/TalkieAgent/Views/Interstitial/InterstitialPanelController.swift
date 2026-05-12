@@ -290,7 +290,7 @@ public final class InterstitialPanelController: ObservableObject {
         TalkieNotifier.shared.sendURL("compose", params: ["text": text])
 
         // Activate Talkie main app
-        let talkieBundleIDs = ["jdi.talkie.core", "jdi.talkie.core.dev"]
+        let talkieBundleIDs = ["to.talkie.app.mac", "to.talkie.app.mac.dev"]
         if let talkieApp = NSWorkspace.shared.runningApplications.first(where: { app in
             guard let bundleID = app.bundleIdentifier else { return false }
             return talkieBundleIDs.contains(bundleID)

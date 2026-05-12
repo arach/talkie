@@ -9,7 +9,7 @@ import SwiftUI
 import os
 import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "Views")
 
 // MARK: - API Settings View
 struct APISettingsView: View {

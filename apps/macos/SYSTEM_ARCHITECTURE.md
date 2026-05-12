@@ -113,7 +113,7 @@ static let initialLoadSize = 50  // Configurable constant
 
 **Result**: ~700ms faster perceived startup
 
-**Instrumentation**: `os_signpost` with subsystem `"jdi.talkie.performance"` category `"Startup"`
+**Instrumentation**: `os_signpost` with subsystem `"to.talkie.app.performance"` category `"Startup"`
 
 ---
 
@@ -250,7 +250,7 @@ engine.transcribe(..., priority: .low, ...)
 ### Startup Performance
 ```bash
 # Profile with Instruments (os_signpost template)
-# Filter by subsystem: "jdi.talkie.performance"
+# Filter by subsystem: "to.talkie.app.performance"
 # Look for "App Launch", "Phase 1: Critical", etc.
 ```
 
@@ -277,7 +277,7 @@ sqlite3 ~/Library/Application\ Support/Talkie/live.sqlite
 launchctl list | grep talkie.engine
 
 # View XPC logs
-log show --predicate 'subsystem == "jdi.talkie.core"' --last 5m
+log show --predicate 'subsystem == "to.talkie.app.mac"' --last 5m
 ```
 
 ---

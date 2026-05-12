@@ -112,7 +112,7 @@ public final class UnifiedTrace: @unchecked Sendable {
     private var currentSpanMetadata: [String: String] = [:]
 
     // Signpost for Instruments
-    private static let signpostLog = OSLog(subsystem: "jdi.talkie.trace", category: "Unified")
+    private static let signpostLog = OSLog(subsystem: "to.talkie.app.trace", category: "Unified")
     private var currentSignpostID: OSSignpostID?
 
     /// All completed spans (thread-safe read)

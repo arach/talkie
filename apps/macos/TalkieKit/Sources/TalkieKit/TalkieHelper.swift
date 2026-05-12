@@ -15,7 +15,7 @@ import Foundation
 ///
 /// ```swift
 /// let bundleId = TalkieHelper.sync.bundleId(for: .dev)
-/// // → "jdi.talkie.sync.dev"
+/// // → "to.talkie.app.sync.dev"
 /// ```
 public enum TalkieHelper: String, CaseIterable, Sendable {
     case agent     // TalkieAgent
@@ -63,9 +63,9 @@ public enum TalkieHelper: String, CaseIterable, Sendable {
 
     private var bundleIdBase: String {
         switch self {
-        case .agent: return "jdi.talkie.agent"
-        case .engine: return "jdi.talkie.engine"
-        case .sync: return "jdi.talkie.sync"
+        case .agent: return "to.talkie.app.agent"
+        case .engine: return "to.talkie.app.engine"
+        case .sync: return "to.talkie.app.sync"
         }
     }
 

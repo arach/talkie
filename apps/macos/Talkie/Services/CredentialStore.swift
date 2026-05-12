@@ -246,8 +246,8 @@ actor CredentialStore {
 
     static let shared = CredentialStore()
 
-    private let service = "com.jdi.talkie.credentials"
-    private let metadataService = "com.jdi.talkie.credentials.metadata"
+    private let service = "to.talkie.app.credentials"
+    private let metadataService = "to.talkie.app.credentials.metadata"
 
     private init() {}
 

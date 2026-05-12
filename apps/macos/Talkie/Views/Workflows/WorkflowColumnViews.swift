@@ -8,7 +8,7 @@
 import SwiftUI
 import os
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "Views")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "Views")
 
 // MARK: - Workflow Column Views
 

@@ -13,7 +13,7 @@ import os
 import Observation
 import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "AudioDeviceManager")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "AudioDeviceManager")
 
 /// Result of resolving which device to use for recording
 struct DeviceResolution {

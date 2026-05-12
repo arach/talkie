@@ -11,7 +11,7 @@ import SwiftUI
 import Observation
 import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "Workflow")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "Workflow")
 // MARK: - Workflow Definition
 
 struct WorkflowDefinition: Identifiable, Codable, Hashable {

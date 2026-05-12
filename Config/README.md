@@ -1,6 +1,6 @@
 # Signing Configuration
 
-`Signing.defaults.xcconfig` is the checked-in source of truth for Talkie's bundle IDs, app groups, shared suites, and CloudKit containers.
+`Signing.defaults.xcconfig` is the checked-in source of truth for Talkie's bundle IDs, app groups, shared suites, CloudKit containers, and unsigned local build defaults.
 
 `Signing.xcconfig` includes those defaults and then optionally includes ignored machine-local overrides from `Signing.local.xcconfig`.
 
@@ -8,6 +8,8 @@ Use `Signing.local.xcconfig` only for values that should vary by machine or Appl
 
 ```xcconfig
 TALKIE_DEVELOPMENT_TEAM = D58PF38LQK
+TALKIE_CODE_SIGNING_ALLOWED = YES
+TALKIE_CODE_SIGNING_REQUIRED = YES
 ```
 
 Do not create or maintain separate `.example` signing files. Identifiers are not secrets; credentials, certificates, provisioning profiles, API keys, and notarization profiles should live in Keychain, App Store Connect, `secret`, or CI secrets.

@@ -60,7 +60,7 @@ public final class TalkieLogFileWriter: @unchecked Sendable {
 
     private let source: LogSource
     private let applicationSupportDirectory: URL
-    private let queue = DispatchQueue(label: "jdi.talkie.logwriter", qos: .utility)
+    private let queue = DispatchQueue(label: "to.talkie.app.logwriter", qos: .utility)
 
     // Buffer settings
     private let maxBufferSize = 50

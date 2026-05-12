@@ -150,7 +150,7 @@ public final class TalkieLogger: @unchecked Sendable {
     /// Default is false to avoid duplicate console lines (print + os.Logger).
     private var mirrorToOSLogInDebug = false
 
-    private let queue = DispatchQueue(label: "jdi.talkie.logger", qos: .utility)
+    private let queue = DispatchQueue(label: "to.talkie.app.logger", qos: .utility)
 
     // MARK: - Initialization
 
@@ -178,7 +178,7 @@ public final class TalkieLogger: @unchecked Sendable {
             }
 
             // Create os.Logger for each category
-            let subsystem = "jdi.talkie.\(source.rawValue.lowercased())"
+            let subsystem = "to.talkie.app.\(source.rawValue.lowercased())"
             for category in [LogCategory.system, .audio, .transcription, .database, .xpc, .sync, .ui, .workflow] {
                 shared.osLoggers[category] = Logger(subsystem: subsystem, category: category.rawValue)
             }

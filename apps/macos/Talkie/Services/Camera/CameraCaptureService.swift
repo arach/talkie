@@ -168,7 +168,7 @@ final class CameraCaptureService: NSObject {
     @ObservationIgnored
     private var videoOutput: AVCaptureVideoDataOutput?
     @ObservationIgnored
-    private let captureQueue = DispatchQueue(label: "com.jdi.talkie.cameraCapture")
+    private let captureQueue = DispatchQueue(label: "to.talkie.app.cameraCapture")
 
     private override init() {
         super.init()

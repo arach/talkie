@@ -394,9 +394,9 @@ final class SystemRoutes: RouteGroup {
 // MARK: - Notification Names
 
 extension Notification.Name {
-    static let openSettings = Notification.Name("com.jdi.talkie.openSettings")
-    static let navigateHome = Notification.Name("com.jdi.talkie.navigateHome")
-    static let navigateAgent = Notification.Name("com.jdi.talkie.navigateAgent")
+    static let openSettings = Notification.Name("to.talkie.app.openSettings")
+    static let navigateHome = Notification.Name("to.talkie.app.navigateHome")
+    static let navigateAgent = Notification.Name("to.talkie.app.navigateAgent")
     @available(*, deprecated, renamed: "navigateAgent")
     static let navigateLive = navigateAgent
 }

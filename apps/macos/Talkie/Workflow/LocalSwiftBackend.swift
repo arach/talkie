@@ -9,7 +9,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "LocalSwiftBackend")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "LocalSwiftBackend")
 
 // MARK: - Local Swift Backend
 

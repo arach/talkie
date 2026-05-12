@@ -1,7 +1,7 @@
 import Foundation
 import os.log
 
-private let logger = Logger(subsystem: "jdi.talkie.agent", category: "Dependencies")
+private let logger = Logger(subsystem: "to.talkie.app.agent", category: "Dependencies")
 
 // MARK: - Audio Reboot Result
 

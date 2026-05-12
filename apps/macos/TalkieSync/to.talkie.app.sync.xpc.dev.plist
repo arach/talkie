@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>jdi.talkie.sync.xpc.dev</string>
+    <string>to.talkie.app.sync.xpc.dev</string>
     <key>ProgramArguments</key>
     <array>
         <string>/bin/zsh</string>
@@ -12,7 +12,7 @@
     </array>
     <key>MachServices</key>
     <dict>
-        <key>jdi.talkie.sync.xpc.dev</key>
+        <key>to.talkie.app.sync.xpc.dev</key>
         <true/>
     </dict>
     <key>RunAtLoad</key>
@@ -27,8 +27,8 @@
     <key>LimitLoadToSessionType</key>
     <string>Aqua</string>
     <key>StandardOutPath</key>
-    <string>/tmp/jdi.talkie.sync.xpc.dev.stdout.log</string>
+    <string>/tmp/to.talkie.app.sync.xpc.dev.stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/jdi.talkie.sync.xpc.dev.stderr.log</string>
+    <string>/tmp/to.talkie.app.sync.xpc.dev.stderr.log</string>
 </dict>
 </plist>

@@ -32,7 +32,7 @@ enum EventType: String {
 /// Uses TalkieKit's TalkieLogFileWriter for unified log format
 final class AppLogger {
     static let shared = AppLogger()
-    private let subsystem = "jdi.talkie.engine"
+    private let subsystem = "to.talkie.app.engine"
 
     /// File writer for cross-app log viewing in Talkie
     private let fileWriter = TalkieLogFileWriter(source: .talkieEngine)
@@ -1424,7 +1424,7 @@ extension EngineService: EmbeddedEngineRuntime {
             pid: ProcessInfo.processInfo.processIdentifier,
             version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
             startedAt: startedAt,
-            bundleId: Bundle.main.bundleIdentifier ?? "jdi.talkie.engine",
+            bundleId: Bundle.main.bundleIdentifier ?? "to.talkie.app.engine",
             isDebugBuild: isDebug,
             loadedModelId: loadedId,
             isTranscribing: isTranscribing,

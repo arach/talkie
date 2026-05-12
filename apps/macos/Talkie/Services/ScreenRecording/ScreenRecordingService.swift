@@ -124,7 +124,7 @@ final class ScreenRecordingService: NSObject {
     nonisolated(unsafe) private var _recordedHeight: Int = 0
 
     @ObservationIgnored
-    private let outputQueue = DispatchQueue(label: "com.jdi.talkie.screenRecording")
+    private let outputQueue = DispatchQueue(label: "to.talkie.app.screenRecording")
 
     private override init() {
         super.init()

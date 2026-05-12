@@ -25,7 +25,7 @@ struct LogViewerConsole: View {
 final class AppLogger {
     static let shared = AppLogger()
 
-    private let logger = Logger(subsystem: "jdi.talkie", category: "AppLogger")
+    private let logger = Logger(subsystem: "to.talkie.app", category: "AppLogger")
 
     enum Category {
         case system, file, transcription, error, debug, ui, database

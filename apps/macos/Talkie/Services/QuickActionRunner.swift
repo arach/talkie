@@ -12,7 +12,7 @@ import CoreData
 import os.log
 import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.agent", category: "QuickAction")
+private let logger = Logger(subsystem: "to.talkie.app.agent", category: "QuickAction")
 
 // MARK: - Quick Action Runner
 

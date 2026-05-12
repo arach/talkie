@@ -120,9 +120,9 @@ XPC protocol definitions.
   - `.background` - Maintenance
 
 - **EngineServiceMode:** Environment-based service names
-  - `.production` → `jdi.talkie.engine.xpc`
-  - `.staging` → `jdi.talkie.engine.xpc.staging`
-  - `.dev` → `jdi.talkie.engine.xpc.dev`
+  - `.production` → `to.talkie.app.engine.xpc`
+  - `.staging` → `to.talkie.app.engine.xpc.staging`
+  - `.dev` → `to.talkie.app.engine.xpc.dev`
 
 - **Data Types (Codable for JSON over XPC):**
   - `EngineStatus` - PID, version, model state, memory usage

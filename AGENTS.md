@@ -430,7 +430,7 @@ git commit -m "♻️ Refactor to async/await"
 
 - Do not introduce third-party frameworks without asking first
 - Prefer Swift Package Manager for apps/ios/macOS
-- Prefer pnpm for Node.js projects
+- Prefer Bun for Node.js projects
 - Avoid UIKit unless specifically requested
 
 ---
@@ -493,7 +493,7 @@ let debugPath = "\(NSHomeDirectory())/Library/Developer/Xcode/DerivedData/.../Ta
 NSWorkspace.shared.open(URL(string: "talkie://live/recent")!)
 
 // ✅ Correct - Bundle identifier lookup
-if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "jdi.talkie") {
+if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "to.talkie.app") {
     NSWorkspace.shared.openApplication(at: appURL, configuration: config)
 }
 

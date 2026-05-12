@@ -227,7 +227,7 @@ do {
 All services use structured logging:
 
 ```swift
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "ServiceName")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "ServiceName")
 ```
 
 ---

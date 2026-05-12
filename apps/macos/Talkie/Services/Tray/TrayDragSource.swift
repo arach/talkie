@@ -16,7 +16,7 @@ import UniformTypeIdentifiers
 // MARK: - Internal Drag Marker
 
 enum TalkieInternalDrag {
-    static let typeIdentifier = "com.jdi.talkie.internal-drag"
+    static let typeIdentifier = "to.talkie.app.internal-drag"
     static let pasteboardType = NSPasteboard.PasteboardType(typeIdentifier)
 
     static func isInternal(_ providers: [NSItemProvider]) -> Bool {

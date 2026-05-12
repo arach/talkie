@@ -73,7 +73,7 @@ cat > "$MOUNT_DIR/Talkie.app/Contents/Info.plist" << PLIST
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key><string>Talkie</string>
-    <key>CFBundleIdentifier</key><string>jdi.talkie.test</string>
+    <key>CFBundleIdentifier</key><string>to.talkie.app.test</string>
     <key>CFBundleName</key><string>Talkie</string>
     $ICON_KEY
 </dict>

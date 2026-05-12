@@ -11,7 +11,7 @@ import AppKit
 import os
 import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "AppEnvironment")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "AppEnvironment")
 
 @MainActor
 final class AppEnvironment {

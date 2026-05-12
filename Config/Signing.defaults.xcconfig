@@ -1,7 +1,14 @@
-// Default Talkie signing identifiers. Use Config/Signing.local.xcconfig for
-// machine-local Apple team IDs or per-account overrides.
+// Default Talkie signing identifiers.
+// Fresh source checkouts build unsigned by default. Use
+// Config/Signing.local.xcconfig for machine-local Apple team IDs,
+// signed local builds, or per-account overrides.
 
 TALKIE_DEVELOPMENT_TEAM =
+TALKIE_CODE_SIGNING_ALLOWED = NO
+TALKIE_CODE_SIGNING_REQUIRED = NO
+
+CODE_SIGNING_ALLOWED = $(TALKIE_CODE_SIGNING_ALLOWED)
+CODE_SIGNING_REQUIRED = $(TALKIE_CODE_SIGNING_REQUIRED)
 
 TALKIE_APP_IDENTIFIER = to.talkie.app
 TALKIE_IOS_APP_BUNDLE_ID = to.talkie.app

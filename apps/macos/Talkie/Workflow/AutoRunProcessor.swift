@@ -13,7 +13,7 @@ import os
 import Observation
 import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "AutoRunProcessor")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "AutoRunProcessor")
 
 // MARK: - Auto-Run Processor
 

@@ -12,7 +12,7 @@ import CryptoKit
 import os
 import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "APIKeyStore")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "APIKeyStore")
 
 /// Encrypted storage for API keys - simpler than Keychain, no prompts
 final class APIKeyStore {
@@ -208,7 +208,7 @@ final class APIKeyStore {
     private static func deriveKey() -> SymmetricKey {
         // Derive key from machine UUID + bundle ID
         // This isn't Fort Knox security, but it's good enough for API keys
-        var seed = "jdi.talkie.apikeys"
+        var seed = "to.talkie.app.apikeys"
 
         // Add hardware UUID if available
         if let uuid = getHardwareUUID() {

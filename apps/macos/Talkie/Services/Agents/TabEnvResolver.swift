@@ -125,7 +125,7 @@ enum TabEnvResolver {
     private static func readKeychain(service: String) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "jdi.talkie.core",
+            kSecAttrService as String: "to.talkie.app.mac",
             kSecAttrAccount as String: service,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,

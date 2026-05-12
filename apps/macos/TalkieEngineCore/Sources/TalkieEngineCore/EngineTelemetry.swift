@@ -2,7 +2,7 @@ import Foundation
 import Observation
 import os
 
-private let transcriptionSignpostLog = OSLog(subsystem: "jdi.talkie.engine", category: .pointsOfInterest)
+private let transcriptionSignpostLog = OSLog(subsystem: "to.talkie.app.engine", category: .pointsOfInterest)
 
 struct EngineLogEntry: Identifiable {
     enum LogLevel {

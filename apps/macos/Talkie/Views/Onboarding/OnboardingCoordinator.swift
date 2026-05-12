@@ -263,7 +263,7 @@ final class OnboardingManager {
         isCheckingServices = true
 
         // Check if TalkieAgent is running (production or dev)
-        let liveBundleIds = ["jdi.talkie.agent", "jdi.talkie.agent.dev"]
+        let liveBundleIds = ["to.talkie.app.agent", "to.talkie.app.agent.dev"]
         let liveRunning = NSWorkspace.shared.runningApplications.contains {
             liveBundleIds.contains($0.bundleIdentifier ?? "")
         }
@@ -282,7 +282,7 @@ final class OnboardingManager {
         do {
             // Launch TalkieAgent
             if !isTalkieAgentRunning {
-                if let liveURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "jdi.talkie.agent") {
+                if let liveURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "to.talkie.app.agent") {
                     try NSWorkspace.shared.launchApplication(at: liveURL, options: [], configuration: [:])
                     try? await Task.sleep(for: .seconds(1))
                     await checkServices()

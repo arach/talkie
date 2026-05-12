@@ -8,7 +8,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "jdi.talkiekit", category: "OpenAI")
+private let logger = Logger(subsystem: "to.talkie.app.kit", category: "OpenAI")
 
 public final class LLMOpenAIProvider: LLMProvider, @unchecked Sendable {
     public let id = "openai"

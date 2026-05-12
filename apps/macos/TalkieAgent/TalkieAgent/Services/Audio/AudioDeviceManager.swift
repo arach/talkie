@@ -11,7 +11,7 @@ import AVFoundation
 import os.log
 import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.agent", category: "AudioDeviceManager")
+private let logger = Logger(subsystem: "to.talkie.app.agent", category: "AudioDeviceManager")
 private let deviceLog = Log(.audio)
 
 extension Notification.Name {

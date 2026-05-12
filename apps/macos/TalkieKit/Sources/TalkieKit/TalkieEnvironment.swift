@@ -95,8 +95,8 @@ public enum TalkieEnvironment: String, CaseIterable, Sendable {
     /// Talkie main app bundle ID
     public var talkieBundleId: String {
         switch self {
-        case .production: return "jdi.talkie.core"
-        case .dev: return "jdi.talkie.core.dev"
+        case .production: return "to.talkie.app.mac"
+        case .dev: return "to.talkie.app.mac.dev"
         }
     }
 

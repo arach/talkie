@@ -50,11 +50,9 @@ ensure_bun() {
 # ---------------------------------------------------------------------------
 
 detect_pm() {
-  # Prefer bun > pnpm > yarn > npm
+  # Prefer bun, but keep common package managers as installer fallbacks.
   if command -v bun &>/dev/null; then
     echo "bun"
-  elif command -v pnpm &>/dev/null; then
-    echo "pnpm"
   elif command -v yarn &>/dev/null; then
     echo "yarn"
   elif command -v npm &>/dev/null; then
@@ -70,7 +68,6 @@ install_global() {
 
   case "$pm" in
     bun)   bun install -g "$pkg" ;;
-    pnpm)  pnpm add -g "$pkg" ;;
     yarn)  yarn global add "$pkg" ;;
     npm)   npm install -g "$pkg" ;;
   esac

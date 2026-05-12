@@ -8,7 +8,7 @@
 import Foundation
 import os.log
 
-private let logger = Logger(subsystem: "jdi.talkie.agent", category: "AudioStorage")
+private let logger = Logger(subsystem: "to.talkie.app.agent", category: "AudioStorage")
 
 enum AudioStorage {
     /// Directory where audio files are stored (shared across all Talkie apps)
