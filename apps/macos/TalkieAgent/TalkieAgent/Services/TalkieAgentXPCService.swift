@@ -352,9 +352,14 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
 
             let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
             let granted = AXIsProcessTrustedWithOptions(options)
-            AccessibilityCache.shared.preflight()
-            NSLog("[TalkieAgentXPC] Accessibility permission request result: \(granted)")
-            reply(granted)
+            let refreshed = AccessibilityCache.shared.preflight()
+
+            if !refreshed {
+                PermissionManager.shared.openSettings(for: .accessibility)
+            }
+
+            NSLog("[TalkieAgentXPC] Accessibility permission request result: \(refreshed)")
+            reply(refreshed || granted)
         }
     }
 
