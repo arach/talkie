@@ -13,9 +13,9 @@
 //  │                                                                              │
 //  │  To prevent conflicts, EVERYTHING environment-specific flows from here:      │
 //  │                                                                              │
-//  │    • Bundle IDs        → app-specific production/staging/dev IDs             │
-//  │    • XPC Services      → app-specific production/staging/dev service names   │
-//  │    • Settings Storage  → app-specific production/staging/dev suites          │
+//  │    • Bundle IDs        → app-specific production/dev IDs                     │
+//  │    • XPC Services      → app-specific production/dev service names           │
+//  │    • Settings Storage  → app-specific production/dev suites                  │
 //  │    • Database Paths    → ~/Library/Application Support/Talkie vs Talkie.dev │
 //  │    • Hotkey Signatures → TLIV vs DLIV (OS-level hotkey routing)             │
 //  │    • Default Hotkeys   → ⌥⌘L (prod) vs ⌃⌥⌘L (dev, intentionally awkward)   │
@@ -35,18 +35,12 @@ import Carbon.HIToolbox
 /// Talkie deployment environment - the single source of truth for all environment-specific config
 public enum TalkieEnvironment: String, CaseIterable, Sendable {
     case production = "production"
-    case staging = "staging"
     case dev = "dev"
 
     /// Detect current environment from bundle identifier
     public static var current: TalkieEnvironment {
         guard let bundleId = Bundle.main.bundleIdentifier else {
             return .dev  // Default to dev if no bundle ID (shouldn't happen)
-        }
-
-        // Check for staging suffix
-        if bundleId.hasSuffix(".staging") {
-            return .staging
         }
 
         // Check for dev suffix
@@ -63,7 +57,6 @@ public enum TalkieEnvironment: String, CaseIterable, Sendable {
     public var displayName: String {
         switch self {
         case .production: return "Production"
-        case .staging: return "Staging"
         case .dev: return "Dev"
         }
     }
@@ -71,7 +64,6 @@ public enum TalkieEnvironment: String, CaseIterable, Sendable {
     public var badge: String {
         switch self {
         case .production: return "PROD"
-        case .staging: return "STAGE"
         case .dev: return "DEV"
         }
     }
@@ -104,7 +96,6 @@ public enum TalkieEnvironment: String, CaseIterable, Sendable {
     public var talkieBundleId: String {
         switch self {
         case .production: return "jdi.talkie.core"
-        case .staging: return "jdi.talkie.core.staging"
         case .dev: return "jdi.talkie.core.dev"
         }
     }
@@ -151,11 +142,10 @@ public enum TalkieEnvironment: String, CaseIterable, Sendable {
 
     // MARK: - URL Schemes
 
-    /// Talkie URL scheme (e.g., "talkie", "talkie-staging", "talkie-dev")
+    /// Talkie URL scheme (e.g., "talkie", "talkie-dev")
     public var talkieURLScheme: String {
         switch self {
         case .production: return "talkie"
-        case .staging: return "talkie-staging"
         case .dev: return "talkie-dev"
         }
     }
@@ -179,8 +169,6 @@ public enum TalkieEnvironment: String, CaseIterable, Sendable {
         switch self {
         case .production:
             return "/Applications/Talkie.app"
-        case .staging:
-            return "~/Applications/Staging/Talkie.app"
         case .dev:
             return "~/Library/Developer/Xcode/DerivedData/.../Talkie.app"
         }
@@ -220,7 +208,6 @@ public enum TalkieEnvironment: String, CaseIterable, Sendable {
     private var defaultMacAppGroupIdentifier: String {
         switch self {
         case .production: return "group.com.example.talkie.mac"
-        case .staging: return "group.com.example.talkie.mac.staging"
         case .dev: return "group.com.example.talkie.mac.dev"
         }
     }
@@ -229,7 +216,6 @@ public enum TalkieEnvironment: String, CaseIterable, Sendable {
     public var appSupportDirectoryName: String {
         switch self {
         case .production: return "Talkie"
-        case .staging: return "Talkie.staging"
         case .dev: return "Talkie.dev"
         }
     }
@@ -253,20 +239,18 @@ public enum TalkieEnvironment: String, CaseIterable, Sendable {
     // MARK: - Hotkey Configuration
 
     /// Hotkey signature prefix (4-char OSType needs 2-char prefix + 2-char suffix)
-    /// Ensures dev/staging/prod hotkeys don't conflict at the OS level
+    /// Ensures dev/prod hotkeys don't conflict at the OS level
     public var hotkeySignaturePrefix: String {
         switch self {
         case .production: return "TL"  // TLIV, TLPT, etc.
-        case .staging: return "SL"     // SLIV, SLPT, etc.
         case .dev: return "DL"         // DLIV, DLPT, etc.
         }
     }
 
-    /// Default hotkey modifiers - dev/staging add extra modifier to avoid muscle-memory conflicts
+    /// Default hotkey modifiers - dev adds an extra modifier to avoid muscle-memory conflicts
     public var defaultHotkeyModifiers: UInt32 {
         switch self {
         case .production: return UInt32(cmdKey | optionKey)              // ⌥⌘
-        case .staging: return UInt32(cmdKey | optionKey | shiftKey)      // ⇧⌥⌘
         case .dev: return UInt32(cmdKey | optionKey | controlKey)        // ⌃⌥⌘
         }
     }
@@ -282,7 +266,6 @@ public enum TalkieEnvironment: String, CaseIterable, Sendable {
     public var indicatorColor: String {
         switch self {
         case .production: return "blue"
-        case .staging: return "orange"
         case .dev: return "red"
         }
     }
@@ -293,7 +276,6 @@ public enum TalkieEnvironment: String, CaseIterable, Sendable {
     public var apiBaseURL: String {
         switch self {
         case .production: return "https://api.usetalkie.com"
-        case .staging: return "https://api.usetalkie.com"  // Same as prod for now
         case .dev: return "https://api.usetalkie.com"      // Use prod API in dev too
         }
     }
@@ -312,7 +294,6 @@ public enum TalkieEnvironment: String, CaseIterable, Sendable {
     public var authDomain: String {
         switch self {
         case .production: return "https://clerk.usetalkie.com"
-        case .staging: return "https://clerk.usetalkie.com"
         case .dev: return "https://supreme-stallion-9.clerk.accounts.dev"
         }
     }
@@ -321,7 +302,6 @@ public enum TalkieEnvironment: String, CaseIterable, Sendable {
     public var portalDomain: String {
         switch self {
         case .production: return "https://my.usetalkie.com"
-        case .staging: return "https://my.usetalkie.com"
         case .dev: return "https://my.usetalkie.com"  // No dev portal yet
         }
     }
@@ -330,7 +310,6 @@ public enum TalkieEnvironment: String, CaseIterable, Sendable {
     public var cloudBaseURL: String {
         switch self {
         case .production: return "https://cloud.usetalkie.com"
-        case .staging: return "https://cloud.usetalkie.com"
         case .dev: return "https://cloud.usetalkie.com"  // TBD
         }
     }
@@ -373,8 +352,6 @@ public enum TalkieEnvironment: String, CaseIterable, Sendable {
         switch self {
         case .production:
             return identifier
-        case .staging:
-            return identifier.hasSuffix(".staging") ? identifier : "\(identifier).staging"
         case .dev:
             return identifier.hasSuffix(".dev") ? identifier : "\(identifier).dev"
         }

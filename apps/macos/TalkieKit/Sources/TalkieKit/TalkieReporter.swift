@@ -73,7 +73,7 @@ public struct ReportContext: Codable {
 
 /// Health check snapshot included in reports
 public struct ReportHealthCheck: Codable {
-    public let talkieMic: String
+    public let talkieMicrophone: String
     public let talkieAccessibility: String
     public let talkieAutomation: String
     public let agentRunning: Bool
@@ -96,7 +96,7 @@ public struct ReportHealthCheck: Codable {
     public let permissionNotes: [String]?
 
     public init(
-        talkieMic: String,
+        talkieMicrophone: String,
         talkieAccessibility: String,
         talkieAutomation: String,
         agentRunning: Bool,
@@ -118,7 +118,7 @@ public struct ReportHealthCheck: Codable {
         agentPermissionSnapshotAgeSeconds: Int? = nil,
         permissionNotes: [String]? = nil
     ) {
-        self.talkieMic = talkieMic
+        self.talkieMicrophone = talkieMicrophone
         self.talkieAccessibility = talkieAccessibility
         self.talkieAutomation = talkieAutomation
         self.agentRunning = agentRunning
@@ -146,7 +146,7 @@ public struct ReportHealthCheck: Codable {
             "appEnv=\(appEnvironment ?? "unknown")",
             "helperEnv=\(helperEnvironment ?? "unknown")",
             "model=\(permissionModel ?? "unknown")",
-            "talkieMic=\(talkieMic)",
+            "talkieMicrophone=\(talkieMicrophone)",
             "talkieAX=\(talkieAccessibility)",
             "agentRunning=\(agentRunning)",
             "agentConnected=\(agentConnected)",

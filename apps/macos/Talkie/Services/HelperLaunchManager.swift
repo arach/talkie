@@ -299,7 +299,7 @@ public final class HelperLaunchManager {
     /// Uninstall a launch agent (bootout + remove plist).
     /// Cleans up both production and dev plists.
     public func uninstallLaunchAgent(for kind: TalkieHelper) async {
-        // Clean up all environment variants (production, dev, staging)
+        // Clean up all environment variants (production, dev)
         for env in TalkieEnvironment.allCases {
             let label = kind.bundleId(for: env)
             let plist = userLaunchAgentsDir.appendingPathComponent("\(label).plist")
@@ -449,7 +449,6 @@ public final class HelperLaunchManager {
     private func legacyLiveLabel(for env: TalkieEnvironment) -> String {
         switch env {
         case .production: return "jdi.talkie.live"
-        case .staging: return "jdi.talkie.live.staging"
         case .dev: return "jdi.talkie.live.dev"
         }
     }
@@ -457,7 +456,6 @@ public final class HelperLaunchManager {
     private func legacyLiveXPCLabel(for env: TalkieEnvironment) -> String {
         switch env {
         case .production: return "jdi.talkie.live.xpc"
-        case .staging: return "jdi.talkie.live.xpc.staging"
         case .dev: return "jdi.talkie.live.xpc.dev"
         }
     }

@@ -20,17 +20,12 @@ TALKIE_IOS_UITESTS_BUNDLE_ID = com.example.talkie.uitests
 
 TALKIE_MAC_CORE_BUNDLE_ID = to.talkie.app.mac
 TALKIE_MAC_CORE_BUNDLE_ID_DEBUG = to.talkie.app.mac.dev
-TALKIE_MAC_CORE_BUNDLE_ID_STAGING = to.talkie.app.mac.staging
 TALKIE_MAC_AGENT_BUNDLE_ID = to.talkie.app.agent
 TALKIE_MAC_AGENT_BUNDLE_ID_DEBUG = to.talkie.app.agent.dev
-TALKIE_MAC_AGENT_BUNDLE_ID_STAGING = to.talkie.app.agent.staging
 TALKIE_MAC_AGENT_TESTS_BUNDLE_ID = to.talkie.app.agent.tests
 TALKIE_MAC_AGENT_UITESTS_BUNDLE_ID = to.talkie.app.agent.uitests
 TALKIE_MAC_SYNC_BUNDLE_ID = to.talkie.app.sync
 TALKIE_MAC_SYNC_BUNDLE_ID_DEBUG = to.talkie.app.sync.dev
-TALKIE_MAC_MIC_BUNDLE_ID = to.talkie.app.mic
-TALKIE_MAC_MIC_BUNDLE_ID_DEBUG = to.talkie.app.mic.dev
-TALKIE_MAC_MIC_BUNDLE_ID_STAGING = to.talkie.app.mic.staging
 
 TALKIE_IOS_APP_GROUP = group.com.example.talkie
 TALKIE_IOS_CLOUDKIT_CONTAINER = iCloud.com.example.talkie

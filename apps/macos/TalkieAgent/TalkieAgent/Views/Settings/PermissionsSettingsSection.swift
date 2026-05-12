@@ -486,9 +486,9 @@ struct PermissionsSettingsSection: View {
                 tipRow(icon: "trash", text: "Remove and re-add the app in System Settings if issues persist")
                 tipRow(icon: "hammer", text: "Permissions can reset after app updates or rebuilds")
 
-                // Show bundle ID for dev/staging builds
+                // Show bundle ID for dev builds
                 if let bundleID = Bundle.main.bundleIdentifier,
-                   bundleID.hasSuffix(".dev") || bundleID.hasSuffix(".staging") {
+                   bundleID.hasSuffix(".dev") {
                     Divider()
                         .background(Color.white.opacity(0.08))
                         .padding(.vertical, Spacing.xs)

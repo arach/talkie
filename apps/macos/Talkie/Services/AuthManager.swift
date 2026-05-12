@@ -67,7 +67,7 @@ final class AuthManager {
     /// Different client IDs for production vs dev environments
     private var clientId: String {
         switch TalkieEnvironment.current {
-        case .production, .staging:
+        case .production:
             return "d8RRsRnH4u7UonCj"
         case .dev:
             return "7k1bKqLDQR4pzSqT"

@@ -834,7 +834,7 @@ class DesignAuditor {
 
             // Capture window
             var savedPath: String? = nil
-            if let screenshot = captureWindow(mainWindow) {
+            if let screenshot = await captureWindow(mainWindow) {
                 let filename = "\(screen.rawValue).png"
                 let fileURL = directory.appendingPathComponent(filename)
 
@@ -913,8 +913,7 @@ class DesignAuditor {
         }
     }
 
-    /// Capture a window using CGWindowListCreateImage
-    private func captureWindow(_ window: NSWindow) -> NSImage? {
+    private func captureWindow(_ window: NSWindow) async -> NSImage? {
         // Convert Int to CGWindowID (UInt32) - don't use as? cast which always fails
         let windowNumber = CGWindowID(window.windowNumber)
         guard windowNumber > 0 else {
@@ -922,17 +921,10 @@ class DesignAuditor {
             return nil
         }
 
-        // Small delay for rendering
-        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
+        try? await Task.sleep(for: .milliseconds(100))
 
-        // Capture the full window
-        guard let cgImage = CGWindowListCreateImage(
-            .null,
-            .optionIncludingWindow,
-            windowNumber,
-            [.boundsIgnoreFraming]
-        ) else {
-            print("⚠️ CGWindowListCreateImage failed for window \(windowNumber)")
+        guard let cgImage = await ScreenshotCaptureService.shared.captureWindowImage(windowID: windowNumber) else {
+            print("⚠️ Window capture failed for window \(windowNumber)")
             return nil
         }
 
@@ -1199,7 +1191,7 @@ class DesignAuditor {
         try? await Task.sleep(for: .milliseconds(500))
 
         // Capture window
-        if let screenshot = captureWindow(mainWindow) {
+        if let screenshot = await captureWindow(mainWindow) {
             let filename = "\(screen.rawValue).png"
             let fileURL = directory.appendingPathComponent(filename)
 

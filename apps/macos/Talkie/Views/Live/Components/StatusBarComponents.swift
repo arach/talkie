@@ -74,18 +74,16 @@ struct LiveEnvironmentBadge: View {
         // Use same color scheme as engine badge for consistency
         switch environment {
         case .production: return .green
-        case .staging: return .orange
         case .dev: return .purple
         }
     }
 
     private var badgeText: String {
         if isHovered {
-            return environment.badge  // "STAGE" or "DEV"
+            return environment.badge  // "DEV" for development builds
         } else {
             // Compact mode: just first letter
             switch environment {
-            case .staging: return "S"
             case .dev: return "D"
             case .production: return "P"
             }

@@ -31,7 +31,7 @@ final class ConsoleScreenshotGenerator {
 
         defer { window.close() }
 
-        guard let screenshot = captureWindow(window),
+        guard let screenshot = await captureWindow(window),
               let tiffData = screenshot.tiffRepresentation,
               let bitmapImage = NSBitmapImageRep(data: tiffData),
               let pngData = bitmapImage.representation(using: .png, properties: [:]) else {
@@ -71,15 +71,10 @@ final class ConsoleScreenshotGenerator {
         return window
     }
 
-    private func captureWindow(_ window: NSWindow) -> NSImage? {
-        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
+    private func captureWindow(_ window: NSWindow) async -> NSImage? {
+        try? await Task.sleep(for: .milliseconds(100))
 
-        if let cgImage = CGWindowListCreateImage(
-            .null,
-            .optionIncludingWindow,
-            CGWindowID(window.windowNumber),
-            [.boundsIgnoreFraming]
-        ) {
+        if let cgImage = await ScreenshotCaptureService.shared.captureWindowImage(windowID: CGWindowID(window.windowNumber)) {
             return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
         }
 

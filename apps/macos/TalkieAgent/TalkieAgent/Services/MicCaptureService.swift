@@ -7,7 +7,7 @@ private let log = Log(.audio)
 final class MicCaptureService: @unchecked Sendable {
     private let lock = NSLock()
     private let resolver = MicDeviceResolver()
-    private let fanOutQueue = DispatchQueue(label: "jdi.talkie.mic.fanout", qos: .userInitiated)
+    private let fanOutQueue = DispatchQueue(label: "to.talkie.agent.mic.fanout", qos: .userInitiated)
 
     private let maxSessionDuration: TimeInterval = 7200  // 2 hour hard ceiling
     private let sessionSweepInterval: TimeInterval = 30
@@ -215,7 +215,7 @@ final class MicCaptureService: @unchecked Sendable {
 
     private func makeOutputURL(sessionId: String) throws -> URL {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("TalkieMic", isDirectory: true)
+            .appendingPathComponent("TalkieAgentMic", isDirectory: true)
         try FileManager.default.createDirectory(
             at: directory,
             withIntermediateDirectories: true,

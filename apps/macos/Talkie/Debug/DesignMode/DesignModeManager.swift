@@ -441,7 +441,7 @@ final class DesignModeManager {
     /// Temporarily hides design overlay during capture
     /// Returns the file path on success
     @discardableResult
-    func captureScreenshot() -> String? {
+    func captureScreenshot() async -> String? {
         guard let window = NSApplication.shared.mainWindow else {
             print("🎨 Screenshot: No main window")
             return nil
@@ -454,13 +454,7 @@ final class DesignModeManager {
         // Flush pending UI updates (synchronous, minimal delay)
         CATransaction.flush()
 
-        // Capture window content
-        guard let cgImage = CGWindowListCreateImage(
-            .null,
-            .optionIncludingWindow,
-            CGWindowID(window.windowNumber),
-            [.boundsIgnoreFraming, .bestResolution]
-        ) else {
+        guard let cgImage = await ScreenshotCaptureService.shared.captureWindowImage(windowID: CGWindowID(window.windowNumber)) else {
             print("🎨 Screenshot: Failed to capture")
             isEnabled = wasEnabled
             return nil

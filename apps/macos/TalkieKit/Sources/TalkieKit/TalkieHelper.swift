@@ -75,7 +75,6 @@ public enum TalkieHelper: String, CaseIterable, Sendable {
     public func bundleId(for env: TalkieEnvironment) -> String {
         switch env {
         case .production: return bundleIdBase
-        case .staging: return "\(bundleIdBase).staging"
         case .dev: return "\(bundleIdBase).dev"
         }
     }
@@ -84,7 +83,6 @@ public enum TalkieHelper: String, CaseIterable, Sendable {
     public func xpcServiceName(for env: TalkieEnvironment) -> String {
         switch env {
         case .production: return "\(bundleIdBase).xpc"
-        case .staging: return "\(bundleIdBase).xpc.staging"
         case .dev: return "\(bundleIdBase).xpc.dev"
         }
     }
@@ -105,7 +103,6 @@ public enum TalkieHelper: String, CaseIterable, Sendable {
 
         switch env {
         case .production: return base
-        case .staging: return "\(base)-staging"
         case .dev: return "\(base)-dev"
         }
     }
@@ -116,7 +113,7 @@ public enum TalkieHelper: String, CaseIterable, Sendable {
     }
 
     /// The production launchd label (without environment suffix) used for bundled plist filenames.
-    /// For environment-specific labels (dev/staging), use `bundleId(for:)` instead.
+    /// For environment-specific labels (dev), use `bundleId(for:)` instead.
     public var plistLabel: String {
         bundleIdBase
     }

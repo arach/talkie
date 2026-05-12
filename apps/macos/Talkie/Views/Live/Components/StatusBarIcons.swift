@@ -210,7 +210,6 @@ struct EngineStatusIcon: View {
 
         // Always show full text when visible (since it only shows on Ctrl+hover)
         switch mode {
-        case .staging: return "STAGING"
         case .dev: return "DEV"
         case .production: return nil
         }
@@ -220,7 +219,6 @@ struct EngineStatusIcon: View {
         guard let mode = badgeMode else { return .green }
         switch mode {
         case .production: return .green
-        case .staging: return .orange
         case .dev: return .purple
         }
     }

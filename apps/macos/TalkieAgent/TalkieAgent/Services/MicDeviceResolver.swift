@@ -79,7 +79,7 @@ struct MicDeviceResolver {
     private func selectSystemDefault() -> MicDeviceSelection {
         let deviceID = getDefaultInputDeviceID()
         guard deviceID != 0 else {
-            log.warning("TalkieMic found no audio input device")
+            log.warning("Bridge mic found no audio input device")
             return MicDeviceSelection(deviceID: 0, uid: "none", name: "No Input Device", isFixedDevice: false)
         }
 

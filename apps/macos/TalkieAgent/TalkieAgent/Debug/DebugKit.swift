@@ -1545,8 +1545,7 @@ struct StatusBar: View {
     private func openTalkieAgent() {
         let agentBundleIds = [
             "jdi.talkie.agent",
-            "jdi.talkie.agent.dev",
-            "jdi.talkie.agent.staging"
+            "jdi.talkie.agent.dev"
         ]
 
         for bundleId in agentBundleIds {

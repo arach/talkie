@@ -255,13 +255,13 @@ struct HotkeyConfig: Codable, Equatable {
     var modifiers: UInt32
 
     /// Toggle hotkey default - uses TalkieEnvironment for environment-specific modifiers
-    /// Prod: ⌥⌘L, Staging: ⇧⌥⌘L, Dev: ⌃⌥⌘L
+    /// Prod: ⌥⌘L, Dev: ⌃⌥⌘L
     static var `default`: HotkeyConfig {
         HotkeyConfig(keyCode: 37, modifiers: TalkieEnvironment.current.defaultHotkeyModifiers)  // L
     }
 
     /// Push-to-talk hotkey default - uses TalkieEnvironment for environment-specific modifiers
-    /// Prod: ⌥⌘;, Staging: ⇧⌥⌘;, Dev: ⌃⌥⌘;
+    /// Prod: ⌥⌘;, Dev: ⌃⌥⌘;
     static var defaultPTT: HotkeyConfig {
         HotkeyConfig(keyCode: 41, modifiers: TalkieEnvironment.current.defaultHotkeyModifiers)  // ;
     }

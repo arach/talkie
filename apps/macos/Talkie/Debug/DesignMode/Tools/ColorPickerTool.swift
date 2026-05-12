@@ -47,31 +47,25 @@ struct ColorPickerTool: View {
         let windowPoint = NSPoint(x: location.x, y: geometry.size.height - location.y)
         let screenPoint = window.convertPoint(toScreen: windowPoint)
 
-        // Capture pixel color at screen point
-        if let color = captureScreenColor(at: screenPoint) {
-            pickedColor = color
-            pickPosition = location
-            showTooltip = true
+        Task { @MainActor in
+            if let color = await captureScreenColor(at: screenPoint) {
+                pickedColor = color
+                pickPosition = location
+                showTooltip = true
 
-            // Hide tooltip after 3 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    showTooltip = false
+                // Hide tooltip after 3 seconds
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        showTooltip = false
+                    }
                 }
             }
         }
     }
 
-    private func captureScreenColor(at point: NSPoint) -> NSColor? {
-        // Create a 1x1 screenshot at the point
+    private func captureScreenColor(at point: NSPoint) async -> NSColor? {
         let rect = CGRect(x: point.x, y: point.y, width: 1, height: 1)
-
-        guard let image = CGWindowListCreateImage(
-            rect,
-            .optionOnScreenOnly,
-            kCGNullWindowID,
-            .bestResolution
-        ) else { return nil }
+        guard let image = await ScreenshotCaptureService.shared.captureScreenRegion(screenRect: rect) else { return nil }
 
         // Get the pixel color
         let bitmap = NSBitmapImageRep(cgImage: image)

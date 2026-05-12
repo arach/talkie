@@ -8,12 +8,10 @@ options:
 
 configs:
   Debug: debug
-  Staging: release
   Release: release
 
 configFiles:
   Debug: ../../../Config/Signing.xcconfig
-  Staging: ../../../Config/Signing.xcconfig
   Release: ../../../Config/Signing.xcconfig
 
 settings:
@@ -28,12 +26,6 @@ settings:
       PRODUCT_BUNDLE_IDENTIFIER: $(TALKIE_MAC_CORE_BUNDLE_ID_DEBUG)
       URL_SCHEME: talkie-dev
       ENABLE_HARDENED_RUNTIME: NO
-    Staging:
-      PRODUCT_BUNDLE_IDENTIFIER: $(TALKIE_MAC_CORE_BUNDLE_ID_STAGING)
-      URL_SCHEME: talkie-staging
-      CODE_SIGN_ENTITLEMENTS: Talkie-Staging.entitlements
-      ENABLE_HARDENED_RUNTIME: NO
-      # Keep debug symbols for debugging - staging is a dev build
     Release:
       PRODUCT_BUNDLE_IDENTIFIER: $(TALKIE_MAC_CORE_BUNDLE_ID)
       URL_SCHEME: talkie
@@ -143,11 +135,3 @@ schemes:
       config: Debug
     archive:
       config: Release
-  Talkie-Staging:
-    build:
-      targets:
-        Talkie: all
-    run:
-      config: Staging
-    archive:
-      config: Staging

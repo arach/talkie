@@ -358,10 +358,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         guard let button = statusItem.button,
               let bundleID = Bundle.main.bundleIdentifier else { return }
 
-        // Only show badge for dev/staging builds when Control is held
-        if controlPressed && (bundleID.hasSuffix(".dev") || bundleID.hasSuffix(".staging")) {
-            let badge = bundleID.hasSuffix(".dev") ? "DEV" : "STG"
-            button.title = badge
+        // Only show badge for dev builds when Control is held
+        if controlPressed && bundleID.hasSuffix(".dev") {
+            button.title = "DEV"
             button.image = nil
             button.contentTintColor = nil
         } else {

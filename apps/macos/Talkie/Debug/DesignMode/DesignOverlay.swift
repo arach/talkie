@@ -588,7 +588,9 @@ struct DesignToolsOverlay<CustomContent: View>: View {
                     screenshotFlash = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                         screenshotFlash = false
-                        _ = designMode.captureScreenshot()
+                        Task { @MainActor in
+                            _ = await designMode.captureScreenshot()
+                        }
                     }
                 }) {
                     Image(systemName: "camera.fill")

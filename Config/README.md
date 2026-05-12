@@ -32,10 +32,8 @@ For Talkie's private production namespace, `to.talkie.app` is the intended root 
 TALKIE_APP_IDENTIFIER = to.talkie.app
 TALKIE_MAC_CORE_BUNDLE_ID = to.talkie.app.mac
 TALKIE_MAC_CORE_BUNDLE_ID_DEBUG = to.talkie.app.mac.dev
-TALKIE_MAC_CORE_BUNDLE_ID_STAGING = to.talkie.app.mac.staging
 TALKIE_MAC_AGENT_BUNDLE_ID = to.talkie.app.agent
 TALKIE_MAC_AGENT_BUNDLE_ID_DEBUG = to.talkie.app.agent.dev
-TALKIE_MAC_AGENT_BUNDLE_ID_STAGING = to.talkie.app.agent.staging
 TALKIE_MAC_SYNC_BUNDLE_ID = to.talkie.app.sync
 TALKIE_MAC_SYNC_BUNDLE_ID_DEBUG = to.talkie.app.sync.dev
 TALKIE_MAC_APP_GROUP = group.to.talkie.app.mac

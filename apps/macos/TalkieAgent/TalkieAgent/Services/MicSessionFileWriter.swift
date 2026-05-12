@@ -21,7 +21,7 @@ struct MicSessionFinalizedFile {
 
 final class MicSessionFileWriter {
     private static let trailingSilenceDuration: Double = 1.5
-    private static let compressQueue = DispatchQueue(label: "jdi.talkie.mic.compress", qos: .utility)
+    private static let compressQueue = DispatchQueue(label: "to.talkie.agent.mic.compress", qos: .utility)
 
     // Target format for completed segments (16kHz int16 mono = ~32KB/s)
     private static let compressSampleRate: Double = 16000

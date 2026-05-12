@@ -51,7 +51,7 @@ final class MicSession: @unchecked Sendable {
         self.persist = persist
         self.label = label
         self.startedAt = Date()
-        self.queue = DispatchQueue(label: "jdi.talkie.mic.session.\(sessionId)")
+        self.queue = DispatchQueue(label: "to.talkie.agent.mic.session.\(sessionId)")
         self.writer = MicSessionFileWriter(outputURL: outputURL, segmentDuration: segmentDuration)
     }
 
@@ -123,7 +123,7 @@ final class MicSession: @unchecked Sendable {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             queue.async {
                 self.writer.cancel()
-                log.info("TalkieMic cancelled session", detail: self.sessionId)
+                log.info("Bridge mic cancelled session", detail: self.sessionId)
                 continuation.resume()
             }
         }

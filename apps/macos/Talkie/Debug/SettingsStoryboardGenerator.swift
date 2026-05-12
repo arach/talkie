@@ -260,7 +260,7 @@ class SettingsStoryboardGenerator {
             // Wait for window to resize and render
             try? await Task.sleep(for: .milliseconds(600))
 
-            if let screenshot = captureWindow(window) {
+            if let screenshot = await captureWindow(window) {
                 let pathSegment = page.settingsSection.pathSegment
                 let filename = "settings-\(pathSegment)-\(size.rawValue).png"
                 let fileURL = directory.appendingPathComponent(filename)
@@ -308,7 +308,7 @@ class SettingsStoryboardGenerator {
         NSLog("[captureSinglePage] Wait complete, capturing...")
 
         var result: URL?
-        if let screenshot = captureWindow(window) {
+        if let screenshot = await captureWindow(window) {
             NSLog("[captureSinglePage] Screenshot captured")
             // Use pathSegment for filename: settings-appearance-medium.png
             let pathSegment = page.settingsSection.pathSegment
@@ -361,7 +361,7 @@ class SettingsStoryboardGenerator {
             // Wait for window to render fully
             try? await Task.sleep(for: .milliseconds(600))
 
-            if let screenshot = captureWindow(window) {
+            if let screenshot = await captureWindow(window) {
                 // Use pathSegment for filename consistency: settings-appearance.png, settings-permissions.png
                 let pathSegment = page.settingsSection.pathSegment
                 let filename = "settings-\(pathSegment).png"
@@ -427,8 +427,7 @@ class SettingsStoryboardGenerator {
             // Wait for navigation animation
             try? await Task.sleep(for: .milliseconds(400))
 
-            // Capture using CGWindowListCreateImage for full chrome
-            if let screenshot = captureRealWindow(windowNumber: CGWindowID(window.windowNumber)) {
+            if let screenshot = await captureRealWindow(windowNumber: CGWindowID(window.windowNumber)) {
                 // Filename matches pathSegment: settings-appearance.png, settings-permissions.png
                 let filename = "settings-\(pathSegment).png"
                 let fileURL = directory.appendingPathComponent(filename)
@@ -446,16 +445,10 @@ class SettingsStoryboardGenerator {
         return results
     }
 
-    /// Capture a real window with its chrome using CGWindowListCreateImage
-    private func captureRealWindow(windowNumber: CGWindowID) -> NSImage? {
-        let cgImage = CGWindowListCreateImage(
-            .null,
-            .optionIncludingWindow,
-            windowNumber,
-            [.boundsIgnoreFraming]
-        )
-
-        guard let cgImage = cgImage else { return nil }
+    private func captureRealWindow(windowNumber: CGWindowID) async -> NSImage? {
+        guard let cgImage = await ScreenshotCaptureService.shared.captureWindowImage(windowID: windowNumber) else {
+            return nil
+        }
 
         return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
     }
@@ -502,7 +495,7 @@ class SettingsStoryboardGenerator {
 
             try? await Task.sleep(for: .milliseconds(300))
 
-            if let screenshot = captureWindow(window) {
+            if let screenshot = await captureWindow(window) {
                 let col = index % columns
                 let row = index / columns
 
@@ -716,24 +709,15 @@ class SettingsStoryboardGenerator {
         return window
     }
 
-    private func captureWindow(_ window: NSWindow) -> NSImage? {
-        // Use CGWindowListCreateImage to capture full window including chrome
-        guard let windowNumber = window.windowNumber as? CGWindowID else {
+    private func captureWindow(_ window: NSWindow) async -> NSImage? {
+        let windowNumber = CGWindowID(window.windowNumber)
+        guard windowNumber > 0 else {
             return captureContentOnly(window)
         }
 
-        // Small delay to ensure window is rendered
-        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
+        try? await Task.sleep(for: .milliseconds(100))
 
-        // Capture the full window including title bar
-        let cgImage = CGWindowListCreateImage(
-            .null,
-            .optionIncludingWindow,
-            windowNumber,
-            [.boundsIgnoreFraming]
-        )
-
-        guard let cgImage = cgImage else {
+        guard let cgImage = await ScreenshotCaptureService.shared.captureWindowImage(windowID: windowNumber) else {
             return captureContentOnly(window)
         }
 

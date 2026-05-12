@@ -9,6 +9,7 @@
 import Foundation
 import AppKit
 import ImageIO
+import ScreenCaptureKit
 import TalkieKit
 import UniformTypeIdentifiers
 
@@ -277,15 +278,11 @@ final class ScreenshotCaptureService {
             guard let self else { return }
             try? await Task.sleep(for: .milliseconds(1200))
             guard await self.hasScreenRecordingPermission() else { return }
-            guard let screen = NSScreen.main ?? NSScreen.screens.first,
-                  let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
-                return
-            }
+            guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
 
-            _ = await Task.detached(priority: .utility) {
-                guard let image = CGDisplayCreateImage(displayID) else { return nil as Data? }
-                return Self.pngData(from: image)
-            }.value
+            if let image = await self.captureScreenRegion(screenRect: screen.frame) {
+                _ = Self.pngData(from: image)
+            }
             if self.captureHotPathLoggingEnabled {
                 self.log.debug("Screenshot pipeline prewarmed")
             }
@@ -305,15 +302,8 @@ final class ScreenshotCaptureService {
             return nil
         }
 
-        guard let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
-            log.error("Fullscreen capture failed: missing display ID")
-            return nil
-        }
-
         CapturePerformanceMonitor.shared.mark("capture.fullscreen.read.begin")
-        let image = await Task.detached(priority: .userInitiated) {
-            CGDisplayCreateImage(displayID)
-        }.value
+        let image = await captureScreenRegion(screenRect: screen.frame)
         guard let image else {
             CapturePerformanceMonitor.shared.mark("capture.fullscreen.read.failed")
             log.error("Fullscreen capture failed: unable to create display image")
@@ -345,14 +335,7 @@ final class ScreenshotCaptureService {
         )
 
         CapturePerformanceMonitor.shared.mark("capture.region.read.begin")
-        let image = await Task.detached(priority: .userInitiated) {
-            CGWindowListCreateImage(
-                captureRect,
-                .optionOnScreenOnly,
-                kCGNullWindowID,
-                [.bestResolution]
-            )
-        }.value
+        let image = await captureScreenRegion(screenRect: captureRect)
         guard let image else {
             CapturePerformanceMonitor.shared.mark("capture.region.read.failed")
             log.error("Region capture failed: unable to capture selected rect")
@@ -379,14 +362,7 @@ final class ScreenshotCaptureService {
         let meta = windowMetadata(for: windowID)
 
         CapturePerformanceMonitor.shared.mark("capture.window.read.begin")
-        let image = await Task.detached(priority: .userInitiated) {
-            CGWindowListCreateImage(
-                .null,
-                .optionIncludingWindow,
-                windowID,
-                [.bestResolution, .boundsIgnoreFraming]
-            )
-        }.value
+        let image = await captureWindowImage(windowID: windowID)
         guard let image else {
             CapturePerformanceMonitor.shared.mark("capture.window.read.failed")
             log.error("Window capture failed: unable to capture window \(windowID)")
@@ -410,6 +386,81 @@ final class ScreenshotCaptureService {
         lastPermissionCheckAt = now
         lastPermissionCheckResult = hasPermission
         return hasPermission
+    }
+
+    func captureWindowImage(windowID: CGWindowID) async -> CGImage? {
+        do {
+            let content = try await SCShareableContent.current
+            guard let window = content.windows.first(where: { $0.windowID == windowID }) else {
+                log.error("Window capture failed: no ScreenCaptureKit window for id \(windowID)")
+                return nil
+            }
+
+            let filter = SCContentFilter(desktopIndependentWindow: window)
+            let config = SCStreamConfiguration()
+            let scale = CGFloat(filter.pointPixelScale)
+            config.width = max(1, Int(filter.contentRect.width * scale))
+            config.height = max(1, Int(filter.contentRect.height * scale))
+            config.scalesToFit = false
+            config.showsCursor = false
+
+            return try await SCScreenshotManager.captureImage(
+                contentFilter: filter,
+                configuration: config
+            )
+        } catch {
+            log.error("Window capture failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    func captureScreenRegion(screenRect: CGRect) async -> CGImage? {
+        let midPoint = NSPoint(x: screenRect.midX, y: screenRect.midY)
+        guard let nsScreen = NSScreen.screens.first(where: { NSMouseInRect(midPoint, $0.frame, false) })
+                ?? NSScreen.main else {
+            log.error("Region capture failed: no screen found for region \(String(describing: screenRect))")
+            return nil
+        }
+
+        guard let directDisplayIDValue = nsScreen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
+            log.error("Region capture failed: no display ID for screen")
+            return nil
+        }
+
+        let screenFrame = nsScreen.frame
+        let displayLocalRect = CGRect(
+            x: screenRect.origin.x - screenFrame.origin.x,
+            y: screenFrame.height - (screenRect.origin.y - screenFrame.origin.y) - screenRect.height,
+            width: screenRect.width,
+            height: screenRect.height
+        )
+
+        do {
+            let directDisplayID = CGDirectDisplayID(directDisplayIDValue.uint32Value)
+            let content = try await SCShareableContent.current
+            guard let display = content.displays.first(where: { $0.displayID == directDisplayID })
+                  ?? content.displays.first else {
+                log.error("Region capture failed: no ScreenCaptureKit display available")
+                return nil
+            }
+
+            let filter = SCContentFilter(display: display, excludingWindows: [])
+            let config = SCStreamConfiguration()
+            let scale = nsScreen.backingScaleFactor
+            config.width = max(1, Int(screenRect.width * scale))
+            config.height = max(1, Int(screenRect.height * scale))
+            config.sourceRect = displayLocalRect
+            config.scalesToFit = false
+            config.showsCursor = false
+
+            return try await SCScreenshotManager.captureImage(
+                contentFilter: filter,
+                configuration: config
+            )
+        } catch {
+            log.error("Region capture failed: \(error.localizedDescription)")
+            return nil
+        }
     }
 
     private func showPermissionAlert() {

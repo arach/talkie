@@ -659,9 +659,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                     }
                     try? await Task.sleep(for: .milliseconds(200))
 
-                    // Capture using CGWindowListCreateImage
                     let windowNumber = await MainActor.run(body: { CGWindowID(mainWindow.windowNumber) })
-                    if let cgImage = CGWindowListCreateImage(.null, .optionIncludingWindow, windowNumber, [.boundsIgnoreFraming]) {
+                    if let cgImage = await ScreenshotCaptureService.shared.captureWindowImage(windowID: windowNumber) {
                         let image = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
                         if let tiffData = image.tiffRepresentation,
                            let bitmapImage = NSBitmapImageRep(data: tiffData),
@@ -893,7 +892,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
         logger.debug("URL: \(urlString)")
 
-        // Accept environment-specific URL schemes (talkie, talkie-staging, talkie-dev)
+        // Accept environment-specific URL schemes (talkie, talkie-dev)
         guard url.scheme == TalkieEnvironment.current.talkieURLScheme else {
             NSLog("[AppDelegate] URL not handled: invalid scheme (expected \(TalkieEnvironment.current.talkieURLScheme), got \(url.scheme ?? "nil"))")
             return
@@ -1344,8 +1343,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 .replacingOccurrences(of: " ", with: "-")
                 .replacingOccurrences(of: "/", with: "-")
 
-            // Capture the window
-            if let cgImage = CGWindowListCreateImage(.null, .optionIncludingWindow, windowID, [.boundsIgnoreFraming]) {
+            if let cgImage = await ScreenshotCaptureService.shared.captureWindowImage(windowID: windowID) {
                 let image = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
 
                 let filename = "\(String(format: "%02d", count))-\(safeName).png"
@@ -2299,8 +2297,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
             // ⌘⇧⌥D = Screenshot (with Option)
             if hasCommand && hasShift && hasOption && key == "d" {
-                if let path = DesignModeManager.shared.captureScreenshot() {
-                    self?.showToast(message: "📸 Screenshot saved!\n\(path)")
+                Task { @MainActor [weak self] in
+                    if let path = await DesignModeManager.shared.captureScreenshot() {
+                        self?.showToast(message: "📸 Screenshot saved!\n\(path)")
+                    }
                 }
                 return nil
             }

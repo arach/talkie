@@ -14,7 +14,6 @@ private let log = Log(.xpc)
 
 public enum EngineServiceMode: String, CaseIterable, Identifiable {
     case production = "jdi.talkie.agent.xpc"
-    case staging = "jdi.talkie.agent.xpc.staging"
     case dev = "jdi.talkie.agent.xpc.dev"
 
     public var id: String { rawValue }
@@ -22,7 +21,6 @@ public enum EngineServiceMode: String, CaseIterable, Identifiable {
     public var displayName: String {
         switch self {
         case .production: return "Production"
-        case .staging: return "Staging"
         case .dev: return "Dev"
         }
     }
@@ -30,7 +28,6 @@ public enum EngineServiceMode: String, CaseIterable, Identifiable {
     public var shortName: String {
         switch self {
         case .production: return "PROD"
-        case .staging: return "STAGE"
         case .dev: return "DEV"
         }
     }
@@ -38,7 +35,6 @@ public enum EngineServiceMode: String, CaseIterable, Identifiable {
     public var environment: TalkieEnvironment {
         switch self {
         case .production: return .production
-        case .staging: return .staging
         case .dev: return .dev
         }
     }
@@ -46,7 +42,6 @@ public enum EngineServiceMode: String, CaseIterable, Identifiable {
     public init(from environment: TalkieEnvironment) {
         switch environment {
         case .production: self = .production
-        case .staging: self = .staging
         case .dev: self = .dev
         }
     }

@@ -264,7 +264,7 @@ final class StartupCoordinator {
                 var permissionNotes = [
                     helperEnvironment == .production
                         ? "Production Agent is embedded inside Talkie.app; microphone permission is expected under Talkie."
-                        : "Dev/staging Agent runs standalone and may have separate microphone permission.",
+                        : "Dev Agent runs standalone and may have separate microphone permission.",
                 ]
 
                 if !agent.isXPCConnected {
@@ -275,7 +275,7 @@ final class StartupCoordinator {
                 }
 
                 return ReportHealthCheck(
-                    talkieMic: permissions.microphoneStatus.displayName,
+                    talkieMicrophone: permissions.microphoneStatus.displayName,
                     talkieAccessibility: permissions.accessibilityStatus.displayName,
                     talkieAutomation: permissions.automationStatus.displayName,
                     agentRunning: agent.isRunning,

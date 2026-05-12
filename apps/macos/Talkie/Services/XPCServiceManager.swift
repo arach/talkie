@@ -193,7 +193,7 @@ public class XPCServiceManager<ServiceProtocol> {
         }
 
         if allowsCrossEnvironmentFallback {
-            let envOrder: [TalkieEnvironment] = [.production, .staging, .dev].filter { $0 != currentEnv }
+            let envOrder: [TalkieEnvironment] = [.production, .dev].filter { $0 != currentEnv }
             for env in envOrder {
                 if await tryConnect(to: env) {
                     isConnecting = false

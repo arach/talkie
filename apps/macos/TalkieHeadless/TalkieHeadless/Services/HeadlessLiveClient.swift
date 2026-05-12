@@ -18,7 +18,6 @@ import Foundation
 /// Live service modes
 enum LiveServiceMode: String {
     case production = "jdi.talkie.agent.xpc"
-    case staging = "jdi.talkie.agent.xpc.staging"
     case dev = "jdi.talkie.agent.xpc.dev"
 }
 

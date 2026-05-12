@@ -447,40 +447,35 @@ struct AdaptiveCardView: View {
 
 /// Screenshots a panel to clipboard and Desktop.
 /// Uses view-tree rendering as primary (always works regardless of sharingType),
-/// with CGWindowList as optional upgrade when the window is shareable.
+/// with ScreenCaptureKit as optional upgrade when the window is shareable.
 @MainActor
 func capturePanelToClipboard(_ window: NSWindow, metadataLines: [String] = []) {
-    window.displayIfNeeded()
-    window.contentView?.layoutSubtreeIfNeeded()
-    CATransaction.flush()
+    Task { @MainActor in
+        window.displayIfNeeded()
+        window.contentView?.layoutSubtreeIfNeeded()
+        CATransaction.flush()
 
-    var cgImage: CGImage?
+        var cgImage: CGImage?
 
-    // If window is already shareable, try CGWindowList first (captures material effects)
-    if window.sharingType != .none {
-        let windowID = CGWindowID(window.windowNumber)
-        cgImage = CGWindowListCreateImage(
-            .null,
-            .optionIncludingWindow,
-            windowID,
-            [.boundsIgnoreFraming, .bestResolution]
-        )
-        if let image = cgImage, isLikelyBlackImage(image) {
-            cgImage = nil
+        if window.sharingType != .none {
+            let windowID = CGWindowID(window.windowNumber)
+            cgImage = await ScreenshotCaptureService.shared.captureWindowImage(windowID: windowID)
+            if let image = cgImage, isLikelyBlackImage(image) {
+                cgImage = nil
+            }
         }
-    }
 
-    // Primary: render directly from view tree — always works, no permission issues
-    if cgImage == nil {
-        cgImage = renderWindowContentImage(window)
-    }
+        if cgImage == nil {
+            cgImage = renderWindowContentImage(window)
+        }
 
-    guard let cgImage else {
-        Log(.system).warning("Panel capture failed")
-        return
-    }
+        guard let cgImage else {
+            Log(.system).warning("Panel capture failed")
+            return
+        }
 
-    writePanelCapture(cgImage, window: window, metadataLines: metadataLines)
+        writePanelCapture(cgImage, window: window, metadataLines: metadataLines)
+    }
 }
 
 @MainActor
