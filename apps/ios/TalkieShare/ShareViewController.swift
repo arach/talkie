@@ -13,11 +13,11 @@ import UniformTypeIdentifiers
 
 private var kTalkieAppGroup: String {
     guard let value = Bundle.main.object(forInfoDictionaryKey: "TalkieAppGroupIdentifier") as? String else {
-        return "group.com.example.talkie"
+        return "group.to.talkie.app"
     }
 
     let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-    return trimmed.isEmpty ? "group.com.example.talkie" : trimmed
+    return trimmed.isEmpty ? "group.to.talkie.app" : trimmed
 }
 
 class ShareViewController: UIViewController {

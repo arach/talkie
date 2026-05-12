@@ -28,7 +28,7 @@ xcodebuild -project apps/ios/Talkie-iOS.xcodeproj \
 
 ## What Is Intentionally Disabled Or Limited
 
-Public defaults in `Config/Signing.defaults.xcconfig` use inert identifiers such as `com.example.talkie` and `iCloud.com.example.talkie`. They are safe for source checkouts, but they are not registered services.
+Defaults in `Config/Signing.defaults.xcconfig` use the canonical Talkie identifiers such as `to.talkie.app` and `iCloud.to.talkie`. They still require a matching Apple team and registered services for signed device builds.
 
 Without a real Apple team and registered containers, these areas should be treated as unavailable:
 
@@ -37,15 +37,9 @@ Without a real Apple team and registered containers, these areas should be treat
 - device builds that require provisioning profiles
 - App Store, notarization, Fastlane, and release packaging
 
-## Enabling CloudKit In A Fork
+## Enabling CloudKit With Local Overrides
 
-To test CloudKit in your own fork, create a private local config file:
-
-```bash
-cp Config/Signing.local.xcconfig.example Config/Signing.local.xcconfig
-```
-
-Then set your own Apple team and identifiers in `Config/Signing.local.xcconfig`. Do not use the maintainer production identifiers, and do not commit the local config.
+To test CloudKit against a different Apple team or container set, create ignored local overrides in `Config/Signing.local.xcconfig`.
 
 At minimum you need:
 

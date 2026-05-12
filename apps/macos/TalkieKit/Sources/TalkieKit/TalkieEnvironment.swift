@@ -181,7 +181,7 @@ public enum TalkieEnvironment: String, CaseIterable, Sendable {
         let baseSuite = configuredIdentifier(
             environmentKey: "TALKIE_MAC_SHARED_SETTINGS_SUITE",
             infoDictionaryKey: "TalkieSharedSettingsSuite",
-            fallback: "com.example.talkie.shared"
+            fallback: "to.talkie.app.shared"
         )
 
         return environmentScopedIdentifier(baseSuite)
@@ -201,14 +201,14 @@ public enum TalkieEnvironment: String, CaseIterable, Sendable {
         configuredIdentifier(
             environmentKey: "TALKIE_CLOUDKIT_CONTAINER",
             infoDictionaryKey: "TalkieCloudKitContainerIdentifier",
-            fallback: "iCloud.com.example.talkie"
+            fallback: "iCloud.to.talkie"
         )
     }
 
     private var defaultMacAppGroupIdentifier: String {
         switch self {
-        case .production: return "group.com.example.talkie.mac"
-        case .dev: return "group.com.example.talkie.mac.dev"
+        case .production: return "group.to.talkie.app.mac"
+        case .dev: return "group.to.talkie.app.mac.dev"
         }
     }
 

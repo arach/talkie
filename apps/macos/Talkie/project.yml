@@ -1,6 +1,6 @@
 name: Talkie
 options:
-  bundleIdPrefix: com.example
+  bundleIdPrefix: to.talkie.app
   deploymentTarget:
     macOS: "14.0"
   developmentLanguage: en

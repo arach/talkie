@@ -1,30 +1,29 @@
-// Public-safe defaults for open-source checkouts.
-// These values are intentionally inert. Use Config/Signing.local.xcconfig for
-// real Apple team IDs, bundle IDs, app groups, and CloudKit containers.
+// Default Talkie signing identifiers. Use Config/Signing.local.xcconfig for
+// machine-local Apple team IDs or per-account overrides.
 
 TALKIE_DEVELOPMENT_TEAM =
 
-TALKIE_APP_IDENTIFIER = com.example.talkie
-TALKIE_IOS_APP_BUNDLE_ID = com.example.talkie
-TALKIE_IOS_SHARE_BUNDLE_ID = com.example.talkie.share
-TALKIE_IOS_KEYS_BUNDLE_ID = com.example.talkie.keys
-TALKIE_IOS_WIDGET_BUNDLE_ID = com.example.talkie.widgets
-TALKIE_WATCH_APP_BUNDLE_ID = com.example.talkie.watchkitapp
-TALKIE_WATCH_WIDGET_BUNDLE_ID = com.example.talkie.watchkitapp.widgets
-TALKIE_IOS_TESTS_BUNDLE_ID = com.example.talkie.tests
-TALKIE_IOS_UITESTS_BUNDLE_ID = com.example.talkie.uitests
+TALKIE_APP_IDENTIFIER = to.talkie.app
+TALKIE_IOS_APP_BUNDLE_ID = to.talkie.app
+TALKIE_IOS_SHARE_BUNDLE_ID = to.talkie.app.share
+TALKIE_IOS_KEYS_BUNDLE_ID = to.talkie.app.keys
+TALKIE_IOS_WIDGET_BUNDLE_ID = to.talkie.app.widgets
+TALKIE_WATCH_APP_BUNDLE_ID = to.talkie.app.watchkitapp
+TALKIE_WATCH_WIDGET_BUNDLE_ID = to.talkie.app.watchkitapp.widgets
+TALKIE_IOS_TESTS_BUNDLE_ID = to.talkie.app.tests
+TALKIE_IOS_UITESTS_BUNDLE_ID = to.talkie.app.uitests
 
-TALKIE_MAC_CORE_BUNDLE_ID = com.example.talkie.mac
-TALKIE_MAC_CORE_BUNDLE_ID_DEBUG = com.example.talkie.mac.dev
-TALKIE_MAC_AGENT_BUNDLE_ID = com.example.talkie.agent
-TALKIE_MAC_AGENT_BUNDLE_ID_DEBUG = com.example.talkie.agent.dev
-TALKIE_MAC_AGENT_TESTS_BUNDLE_ID = com.example.talkie.agent.tests
-TALKIE_MAC_AGENT_UITESTS_BUNDLE_ID = com.example.talkie.agent.uitests
-TALKIE_MAC_SYNC_BUNDLE_ID = com.example.talkie.sync
-TALKIE_MAC_SYNC_BUNDLE_ID_DEBUG = com.example.talkie.sync.dev
+TALKIE_MAC_CORE_BUNDLE_ID = to.talkie.app.mac
+TALKIE_MAC_CORE_BUNDLE_ID_DEBUG = to.talkie.app.mac.dev
+TALKIE_MAC_AGENT_BUNDLE_ID = to.talkie.app.agent
+TALKIE_MAC_AGENT_BUNDLE_ID_DEBUG = to.talkie.app.agent.dev
+TALKIE_MAC_AGENT_TESTS_BUNDLE_ID = to.talkie.app.agent.tests
+TALKIE_MAC_AGENT_UITESTS_BUNDLE_ID = to.talkie.app.agent.uitests
+TALKIE_MAC_SYNC_BUNDLE_ID = to.talkie.app.sync
+TALKIE_MAC_SYNC_BUNDLE_ID_DEBUG = to.talkie.app.sync.dev
 
-TALKIE_IOS_APP_GROUP = group.com.example.talkie
-TALKIE_IOS_CLOUDKIT_CONTAINER = iCloud.com.example.talkie
-TALKIE_MAC_APP_GROUP = group.com.example.talkie.mac
-TALKIE_MAC_SHARED_SETTINGS_SUITE = com.example.talkie.shared
-TALKIE_CLOUDKIT_CONTAINER = iCloud.com.example.talkie
+TALKIE_IOS_APP_GROUP = group.to.talkie.app
+TALKIE_IOS_CLOUDKIT_CONTAINER = iCloud.to.talkie
+TALKIE_MAC_APP_GROUP = group.to.talkie.app.mac
+TALKIE_MAC_SHARED_SETTINGS_SUITE = to.talkie.app.shared
+TALKIE_CLOUDKIT_CONTAINER = iCloud.to.talkie
