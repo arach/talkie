@@ -1316,13 +1316,21 @@ public final class ServiceManager {
         }
 
         if let repoRoot = LocalCheckoutLocator.talkieRepositoryRootURL(compileTimeFilePath: #filePath) {
-            appendCandidate(
+            let repoBuildRoots = [
                 repoRoot
                     .appendingPathComponent("build")
-                    .appendingPathComponent(executableName)
-                    .appendingPathComponent("Build/Products/Debug")
-                    .appendingPathComponent(appName)
-            )
+                    .appendingPathComponent("macos"),
+                repoRoot.appendingPathComponent("build")
+            ]
+
+            for buildRoot in repoBuildRoots {
+                appendCandidate(
+                    buildRoot
+                        .appendingPathComponent(executableName)
+                        .appendingPathComponent("Build/Products/Debug")
+                        .appendingPathComponent(appName)
+                )
+            }
         }
 
         let derivedDataPath = FileManager.default.homeDirectoryForCurrentUser

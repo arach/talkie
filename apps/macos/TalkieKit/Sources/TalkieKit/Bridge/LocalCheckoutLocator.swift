@@ -47,7 +47,7 @@ public enum LocalCheckoutLocator {
             return nil
         }
 
-        return repoRoot.appendingPathComponent("macOS", isDirectory: true)
+        return macOSRoot(in: repoRoot)
     }
 
     public static func talkieServerSourceURL(
@@ -124,13 +124,14 @@ public enum LocalCheckoutLocator {
                 homeDirectoryURL: homeDirectoryURL
             ) {
                 appendUnique(
-                    remappedMacOSRoot.deletingLastPathComponent(),
+                    repositoryRoot(containingMacOSRoot: remappedMacOSRoot),
                     to: &candidates,
                     seen: &seen
                 )
             }
 
-            if let repoName = compileTimeMacOSRoot.deletingLastPathComponent().lastPathComponent.nilIfEmpty {
+            let compileTimeRepoRoot = repositoryRoot(containingMacOSRoot: compileTimeMacOSRoot)
+            if let repoName = compileTimeRepoRoot.lastPathComponent.nilIfEmpty {
                 for workspaceRoot in commonWorkspaceRoots(homeDirectoryURL: homeDirectoryURL) {
                     appendUnique(
                         workspaceRoot.appendingPathComponent(repoName, isDirectory: true),
@@ -141,7 +142,7 @@ public enum LocalCheckoutLocator {
             }
 
             appendUnique(
-                compileTimeMacOSRoot.deletingLastPathComponent(),
+                compileTimeRepoRoot,
                 to: &candidates,
                 seen: &seen
             )
@@ -154,7 +155,8 @@ public enum LocalCheckoutLocator {
         var url = URL(fileURLWithPath: filePath)
 
         while true {
-            if url.lastPathComponent == "macOS" {
+            if url.lastPathComponent == "macOS" ||
+                (url.lastPathComponent == "macos" && url.deletingLastPathComponent().lastPathComponent == "apps") {
                 return url
             }
 
@@ -164,6 +166,14 @@ public enum LocalCheckoutLocator {
             }
             url = parent
         }
+    }
+
+    private static func repositoryRoot(containingMacOSRoot macOSRoot: URL) -> URL {
+        let parent = macOSRoot.deletingLastPathComponent()
+        if macOSRoot.lastPathComponent == "macos", parent.lastPathComponent == "apps" {
+            return parent.deletingLastPathComponent()
+        }
+        return parent
     }
 
     private static func remapToCurrentHome(_ url: URL, homeDirectoryURL: URL) -> URL? {
@@ -217,8 +227,18 @@ public enum LocalCheckoutLocator {
     }
 
     private static func hasMacOSDirectory(in repoRoot: URL) -> Bool {
-        let macOSRoot = repoRoot.appendingPathComponent("macOS", isDirectory: true)
-        return FileManager.default.fileExists(atPath: macOSRoot.path)
+        macOSRoot(in: repoRoot) != nil
+    }
+
+    private static func macOSRoot(in repoRoot: URL) -> URL? {
+        let candidates = [
+            repoRoot
+                .appendingPathComponent("apps", isDirectory: true)
+                .appendingPathComponent("macos", isDirectory: true),
+            repoRoot.appendingPathComponent("macOS", isDirectory: true)
+        ]
+
+        return candidates.first { FileManager.default.fileExists(atPath: $0.path) }
     }
 
     private static func hasTalkieServerEntryPoint(at sourceURL: URL) -> Bool {

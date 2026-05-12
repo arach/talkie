@@ -49,6 +49,13 @@ AVAILABLE_APPS="TalkieAgent Talkie"
 get_scheme() {
     case $1 in
         TalkieAgent|live) echo "TalkieAgent" ;;
+        Talkie|core|code) echo "Talkie (Talkie project)" ;;
+    esac
+}
+
+get_product() {
+    case $1 in
+        TalkieAgent|live) echo "TalkieAgent" ;;
         Talkie|core|code) echo "Talkie" ;;
     esac
 }
@@ -83,7 +90,7 @@ get_xpc_service_name() {
 }
 
 latest_derived_app() {
-    local scheme=$1
+    local product=$1
     local derived_data="$HOME/Library/Developer/Xcode/DerivedData"
     local latest_app=""
     local latest_time=0
@@ -93,8 +100,8 @@ latest_derived_app() {
     for project_dir in "$derived_data"/*; do
         [ -d "$project_dir" ] || continue
 
-        local app_path="$project_dir/Build/Products/Debug/$scheme.app"
-        local executable_path="$app_path/Contents/MacOS/$scheme"
+        local app_path="$project_dir/Build/Products/Debug/$product.app"
+        local executable_path="$app_path/Contents/MacOS/$product"
         [ -f "$executable_path" ] || continue
 
         local mod_time
@@ -112,12 +119,12 @@ latest_derived_app() {
 
 resolve_app_path() {
     local app=$1
-    local scheme=$(get_scheme "$app")
-    local local_app="$BUILD_BASE/$scheme/Build/Products/Debug/$scheme.app"
+    local product=$(get_product "$app")
+    local local_app="$BUILD_BASE/$product/Build/Products/Debug/$product.app"
 
     if $EXEC_ONLY; then
-        latest_derived_app "$scheme" && return 0
         [ -d "$local_app" ] && echo "$local_app" && return 0
+        latest_derived_app "$product" && return 0
         return 1
     fi
 
@@ -232,13 +239,13 @@ EOF
 launch_app() {
     local app=$1
     local app_path=$2
-    local scheme=$(get_scheme "$app")
+    local product=$(get_product "$app")
     local bundle_id
     bundle_id=$(get_bundle_id "$app_path")
 
-    if [ "$scheme" = "TalkieAgent" ] && [[ "$bundle_id" == *.dev || "$bundle_id" == *.staging ]]; then
+    if [ "$product" = "TalkieAgent" ] && [[ "$bundle_id" == *.dev || "$bundle_id" == *.staging ]]; then
         echo -n "  Launching via launchctl... "
-        if launch_dev_agent_via_launchctl "$app_path" "$scheme" "$bundle_id"; then
+        if launch_dev_agent_via_launchctl "$app_path" "$product" "$bundle_id"; then
             echo -e "${GREEN}done${NC}"
         else
             echo -e "${RED}failed${NC}"
@@ -346,10 +353,11 @@ build_filter() {
 build_app() {
     local app=$1
     local scheme=$(get_scheme "$app")
-    local build_dir="$BUILD_BASE/$scheme"
+    local product=$(get_product "$app")
+    local build_dir="$BUILD_BASE/$product"
     local app_path
 
-    echo -e "${CYAN}━━━ $scheme ━━━${NC}"
+    echo -e "${CYAN}━━━ $product ━━━${NC}"
 
     # Stop conflicting production/dev instances before relaunching
     stop_conflicting_instances "$app"
@@ -358,7 +366,7 @@ build_app() {
     if $EXEC_ONLY; then
         app_path=$(resolve_app_path "$app") || true
         if [ -z "$app_path" ] || [ ! -d "$app_path" ]; then
-            echo -e "  ${RED}No runnable build found for $scheme${NC}"
+            echo -e "  ${RED}No runnable build found for $product${NC}"
             echo "  Run without -e to build first."
             return 1
         fi
@@ -381,6 +389,7 @@ build_app() {
             -workspace "$WORKSPACE"
             -scheme "$scheme"
             -configuration Debug
+            -destination "platform=macOS"
             -derivedDataPath "$build_dir"
         )
 
@@ -410,7 +419,7 @@ build_app() {
         fi
 
         echo -e "  ${GREEN}Build SUCCEEDED${NC}"
-        app_path="$build_dir/Build/Products/Debug/$scheme.app"
+        app_path="$build_dir/Build/Products/Debug/$product.app"
     fi
 
     dequarantine_app "$app_path"
@@ -421,7 +430,7 @@ build_app() {
 
         # Debug mode: show PID and attach debugger
         if $DEBUG_MODE; then
-            attach_xcode_debugger "$scheme" "$app_path"
+            attach_xcode_debugger "$product" "$app_path"
         fi
     fi
 

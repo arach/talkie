@@ -559,14 +559,22 @@ public final class HelperLaunchManager {
         }()
 
         if let repoRoot = LocalCheckoutLocator.talkieRepositoryRootURL(compileTimeFilePath: #filePath) {
-            let repoBuildURL = repoRoot
-                .appendingPathComponent("build")
-                .appendingPathComponent(resolvedExecutableName)
-                .appendingPathComponent("Build/Products/Debug")
-                .appendingPathComponent(appName)
-            if FileManager.default.fileExists(atPath: repoBuildURL.path) {
-                log.debug("[HelperLaunchManager] Using repository debug build for \(appName): \(repoBuildURL.path)")
-                return repoBuildURL
+            let repoBuildRoots = [
+                repoRoot
+                    .appendingPathComponent("build")
+                    .appendingPathComponent("macos"),
+                repoRoot.appendingPathComponent("build")
+            ]
+
+            for buildRoot in repoBuildRoots {
+                let repoBuildURL = buildRoot
+                    .appendingPathComponent(resolvedExecutableName)
+                    .appendingPathComponent("Build/Products/Debug")
+                    .appendingPathComponent(appName)
+                if FileManager.default.fileExists(atPath: repoBuildURL.path) {
+                    log.debug("[HelperLaunchManager] Using repository debug build for \(appName): \(repoBuildURL.path)")
+                    return repoBuildURL
+                }
             }
         }
 

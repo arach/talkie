@@ -118,6 +118,8 @@ class PermissionsManager {
     var automationStatus: PermissionStatus = .unknown
     var screenRecordingStatus: PermissionStatus = .unknown
     var isRequestingAgentMicrophonePermission = false
+    private var accessibilityCheckTimer: Timer?
+    private var accessibilityPollingDeadline: Date?
     private var automationTargetStatuses: [AutomationTarget: PermissionStatus] =
         Dictionary(uniqueKeysWithValues: AutomationTarget.allCases.map { ($0, .unknown) })
 
@@ -237,15 +239,10 @@ class PermissionsManager {
     }
 
     func requestAccessibilityPermission() {
-        // This opens System Settings to the Accessibility pane
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
-        AXIsProcessTrustedWithOptions(options as CFDictionary)
-
-        // Recheck after a delay
-        Task { [weak self] in
-            try? await Task.sleep(for: .seconds(1))
-            self?.checkAccessibilityPermission()
-        }
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        AXIsProcessTrustedWithOptions(options)
+        openAccessibilitySettings()
+        startAccessibilityPermissionPolling()
     }
 
     // MARK: - Automation (AppleScript)
@@ -319,6 +316,7 @@ class PermissionsManager {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)
         }
+        startAccessibilityPermissionPolling()
     }
 
     func openAutomationSettings() {
@@ -463,6 +461,34 @@ class PermissionsManager {
             result[entry.key.rawValue] = entry.value.storedValue
         }
         UserDefaults.standard.set(values, forKey: automationStatusDefaultsKey)
+    }
+
+    private func startAccessibilityPermissionPolling() {
+        accessibilityCheckTimer?.invalidate()
+        accessibilityPollingDeadline = Date().addingTimeInterval(90)
+        accessibilityCheckTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.pollAccessibilityPermission()
+            }
+        }
+
+        if let accessibilityCheckTimer {
+            RunLoop.main.add(accessibilityCheckTimer, forMode: .common)
+        }
+    }
+
+    private func pollAccessibilityPermission() {
+        checkAccessibilityPermission()
+
+        if accessibilityStatus == .granted || Date() >= (accessibilityPollingDeadline ?? .distantPast) {
+            stopAccessibilityPermissionPolling()
+        }
+    }
+
+    private func stopAccessibilityPermissionPolling() {
+        accessibilityCheckTimer?.invalidate()
+        accessibilityCheckTimer = nil
+        accessibilityPollingDeadline = nil
     }
 }
 
