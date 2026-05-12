@@ -134,6 +134,16 @@ bootout_label() {
     /bin/launchctl bootout "gui/$(id -u)/$label" >/dev/null 2>&1 || true
 }
 
+dequarantine_app() {
+    local app_path=$1
+
+    [ -d "$app_path" ] || return 0
+
+    echo -n "  Clearing quarantine... "
+    /usr/bin/xattr -dr com.apple.quarantine "$app_path" 2>/dev/null || true
+    echo -e "${GREEN}done${NC}"
+}
+
 stop_conflicting_instances() {
     local app=$1
 
@@ -363,11 +373,19 @@ build_app() {
             -scheme "$scheme"
             -configuration Debug
             -derivedDataPath "$build_dir"
-            "CODE_SIGN_IDENTITY=$code_sign_identity"
         )
 
         if [ -n "$development_team" ]; then
-            xcodebuild_args+=("DEVELOPMENT_TEAM=$development_team")
+            xcodebuild_args+=(
+                "DEVELOPMENT_TEAM=$development_team"
+                "CODE_SIGN_IDENTITY=$code_sign_identity"
+            )
+        else
+            xcodebuild_args+=(
+                "CODE_SIGNING_ALLOWED=${TALKIE_CODE_SIGNING_ALLOWED:-NO}"
+                "CODE_SIGNING_REQUIRED=NO"
+                "CODE_SIGN_IDENTITY="
+            )
         fi
 
         if $VERBOSE; then
@@ -385,6 +403,8 @@ build_app() {
         echo -e "  ${GREEN}Build SUCCEEDED${NC}"
         app_path="$build_dir/Build/Products/Debug/$scheme.app"
     fi
+
+    dequarantine_app "$app_path"
 
     # Launch
     if ! $NO_LAUNCH; then
