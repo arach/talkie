@@ -14,6 +14,15 @@ import TalkieKit
 
 private let log = Log(.system)
 
+private extension NWError {
+    var isAddressAlreadyInUse: Bool {
+        if case .posix(let code) = self {
+            return code == .EADDRINUSE
+        }
+        return false
+    }
+}
+
 // MARK: - Error Messages
 
 /// Actionable error messages with troubleshooting steps
@@ -178,6 +187,7 @@ final class TalkieServer {
     private var lastCompanionDictationShortcutId: String?
     private var lastCompanionDictationStartedAt: Date?
     private var isCompanionAppSwitcherActive = false
+    private var isUsingExternalRelay = false
     private var companionAppSwitcherReleaseTask: Task<Void, Never>?
     private var companionAppActivationOrder: [Int32] = []
     private var companionWorkspaceActivationObserver: NSObjectProtocol?
@@ -188,7 +198,7 @@ final class TalkieServer {
     }
 
     var isRunning: Bool {
-        listener?.state == .ready
+        listener?.state == .ready || isUsingExternalRelay
     }
 
     private init() {}
@@ -203,6 +213,10 @@ final class TalkieServer {
 
         guard listener == nil else {
             log.debug("TalkieServer already running")
+            return
+        }
+        guard !isUsingExternalRelay else {
+            log.debug("TalkieServer relay already owned by another process")
             return
         }
 
@@ -227,14 +241,23 @@ final class TalkieServer {
             listener?.start(queue: .main)
             log.info("TalkieServer starting on port \(port)")
         } catch {
+            if (error as? NWError)?.isAddressAlreadyInUse == true {
+                isUsingExternalRelay = true
+                log.info("TalkieServer port \(port) already owned by another process; using existing relay")
+                return
+            }
             log.error("Failed to start TalkieServer: \(error)")
         }
     }
 
     func stop() {
+        let hadLocalListener = listener != nil
         listener?.cancel()
         listener = nil
-        log.info("TalkieServer stopped")
+        isUsingExternalRelay = false
+        if hadLocalListener {
+            log.info("TalkieServer stopped")
+        }
     }
 
     // MARK: - Private
@@ -242,9 +265,17 @@ final class TalkieServer {
     private func handleStateUpdate(_ state: NWListener.State) {
         switch state {
         case .ready:
+            isUsingExternalRelay = false
             log.info("TalkieServer ready on port \(port)")
         case .failed(let error):
-            log.error("TalkieServer failed: \(error)")
+            if error.isAddressAlreadyInUse {
+                isUsingExternalRelay = true
+                log.info("TalkieServer port \(port) already owned by another process; using existing relay")
+            } else {
+                isUsingExternalRelay = false
+                log.error("TalkieServer failed: \(error)")
+            }
+            listener?.cancel()
             listener = nil
         case .cancelled:
             log.info("TalkieServer cancelled")
