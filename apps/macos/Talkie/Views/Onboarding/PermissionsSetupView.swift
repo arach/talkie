@@ -18,7 +18,9 @@ struct PermissionsSetupView: View {
     }
 
     private var requiredPermissionsGranted: Bool {
-        manager.hasMicrophonePermission && (!manager.enableLiveMode || manager.hasAgentMicrophonePermission)
+        manager.hasMicrophonePermission
+            && manager.hasAccessibilityPermission
+            && (!manager.enableLiveMode || (manager.hasAgentMicrophonePermission && manager.hasAgentAccessibilityPermission))
     }
 
     var body: some View {
@@ -53,64 +55,114 @@ struct PermissionsSetupView: View {
             },
             content: {
                 VStack(spacing: Spacing.md) {
-                    // Microphone permission row (always shown)
-                    PermissionRow(
-                        colors: colors,
-                        icon: "mic.fill",
-                        title: "Microphone Access",
-                        description: "Capture audio for transcriptions",
-                        isGranted: manager.hasMicrophonePermission,
-                        actionTitle: "Grant Access",
-                        isRequired: true,
-                        action: {
-                            Task {
-                                await manager.requestMicrophonePermission()
+                    if manager.enableLiveMode {
+                        HStack(alignment: .top, spacing: Spacing.md) {
+                            PermissionGroup(colors: colors, title: "Talkie") {
+                                PermissionRow(
+                                    colors: colors,
+                                    icon: "mic.fill",
+                                    title: "Microphone Access",
+                                    description: "Capture audio for transcriptions",
+                                    isGranted: manager.hasMicrophonePermission,
+                                    actionTitle: "Grant",
+                                    isRequired: true,
+                                    action: {
+                                        Task {
+                                            await manager.requestMicrophonePermission()
+                                        }
+                                    }
+                                )
+
+                                PermissionRow(
+                                    colors: colors,
+                                    icon: "app",
+                                    title: "Accessibility Access",
+                                    description: "Read app context for workflows",
+                                    isGranted: manager.hasAccessibilityPermission,
+                                    actionTitle: "Open",
+                                    isRequired: true,
+                                    action: {
+                                        manager.requestAccessibilityPermission()
+                                    }
+                                )
+                            }
+
+                            PermissionGroup(colors: colors, title: "Agent") {
+                                PermissionRow(
+                                    colors: colors,
+                                    icon: "waveform",
+                                    title: "Microphone Access",
+                                    description: "Listen for live dictation",
+                                    isGranted: manager.hasAgentMicrophonePermission,
+                                    actionTitle: manager.isRequestingAgentMicrophonePermission ? "Requesting..." : "Grant",
+                                    isRequired: true,
+                                    action: {
+                                        Task {
+                                            await manager.requestAgentMicrophonePermission()
+                                        }
+                                    }
+                                )
+
+                                PermissionRow(
+                                    colors: colors,
+                                    icon: "command",
+                                    title: "Accessibility Access",
+                                    description: "Auto-paste dictated text",
+                                    isGranted: manager.hasAgentAccessibilityPermission,
+                                    actionTitle: manager.isRequestingAgentAccessibilityPermission ? "Requesting..." : "Open",
+                                    isRequired: true,
+                                    action: {
+                                        Task {
+                                            await manager.requestAgentAccessibilityPermission()
+                                        }
+                                    }
+                                )
                             }
                         }
-                    )
-
-                    if manager.enableLiveMode {
-                        PermissionRow(
-                            colors: colors,
-                            icon: "waveform",
-                            title: "Agent Microphone Access",
-                            description: "Required for live dictation and auto-paste",
-                            isGranted: manager.hasAgentMicrophonePermission,
-                            actionTitle: manager.isRequestingAgentMicrophonePermission ? "Requesting..." : "Grant Access",
-                            isRequired: true,
-                            action: {
-                                Task {
-                                    await manager.requestAgentMicrophonePermission()
+                        .frame(width: 584)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    } else {
+                        VStack(spacing: Spacing.md) {
+                            PermissionRow(
+                                colors: colors,
+                                icon: "mic.fill",
+                                title: "Microphone Access",
+                                description: "Capture audio for transcriptions",
+                                isGranted: manager.hasMicrophonePermission,
+                                actionTitle: "Grant Access",
+                                isRequired: true,
+                                action: {
+                                    Task {
+                                        await manager.requestMicrophonePermission()
+                                    }
                                 }
-                            }
-                        )
-                        .transition(.opacity.combined(with: .move(edge: .top)))
+                            )
 
-                        PermissionRow(
-                            colors: colors,
-                            icon: "command",
-                            title: "Accessibility Access",
-                            description: "Required for Agent to auto-paste dictated text",
-                            isGranted: manager.hasAccessibilityPermission,
-                            actionTitle: "Open Settings",
-                            isRequired: true,
-                            action: {
-                                manager.requestAccessibilityPermission()
-                            }
-                        )
-                        .transition(.opacity.combined(with: .move(edge: .top)))
+                            PermissionRow(
+                                colors: colors,
+                                icon: "app",
+                                title: "Accessibility Access",
+                                description: "Read app context for workflows",
+                                isGranted: manager.hasAccessibilityPermission,
+                                actionTitle: "Open Settings",
+                                isRequired: true,
+                                action: {
+                                    manager.requestAccessibilityPermission()
+                                }
+                            )
+                        }
+                        .frame(width: 380)
                     }
 
                     // Helper text
                     Text(manager.enableLiveMode
-                         ? "Grant both microphone permissions now so setup can verify Agent dictation before you continue."
+                         ? "Grant Talkie and Agent permissions before continuing so setup can verify dictation and auto-paste."
                          : "Microphone access is needed to record and transcribe audio.")
                         .font(.system(size: 11))
                         .foregroundColor(colors.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.top, Spacing.xs)
                 }
-                .frame(width: 380)
             },
             cta: {
                 HStack {
@@ -130,8 +182,30 @@ struct PermissionsSetupView: View {
             manager.checkAccessibilityPermission()
             Task {
                 await manager.refreshAgentMicrophonePermission()
+                await manager.refreshAgentAccessibilityPermission()
+                manager.startPermissionPolling()
             }
         }
+    }
+}
+
+private struct PermissionGroup<Content: View>: View {
+    let colors: OnboardingColors
+    let title: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .tracking(0.8)
+                .foregroundColor(colors.textSecondary)
+
+            VStack(spacing: Spacing.sm) {
+                content()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 }
 
@@ -223,6 +297,7 @@ private struct PermissionRow: View {
         .padding(Spacing.sm)
         .background(colors.surfaceCard)
         .cornerRadius(CornerRadius.sm)
+        .frame(minHeight: 48)
     }
 }
 

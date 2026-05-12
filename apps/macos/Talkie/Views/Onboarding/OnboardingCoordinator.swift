@@ -24,8 +24,9 @@ enum OnboardingStep: Int, CaseIterable {
 
 enum PermissionType {
     case microphone
-    case agentMicrophone
     case accessibility
+    case agentMicrophone
+    case agentAccessibility
 }
 
 // MARK: - Status Check Types
@@ -85,8 +86,10 @@ final class OnboardingManager {
     var hasMicrophonePermission = false
     var hasAgentMicrophonePermission = false
     var hasAccessibilityPermission = false
+    var hasAgentAccessibilityPermission = false
     var isRequestingPermission = false
     var isRequestingAgentMicrophonePermission = false
+    var isRequestingAgentAccessibilityPermission = false
 
     // Service setup state
     var isTalkieAgentRunning = false
@@ -120,10 +123,11 @@ final class OnboardingManager {
     var errorMessage: String?
 
     private var accessibilityCheckTimer: Timer?
+    private var agentAccessibilityCheckTimer: Timer?
 
     // Computed property: permissions to show based on Live mode
     var permissionsToShow: [PermissionType] {
-        enableLiveMode ? [.microphone, .agentMicrophone, .accessibility] : [.microphone]
+        enableLiveMode ? [.microphone, .accessibility, .agentMicrophone, .agentAccessibility] : [.microphone, .accessibility]
     }
 
     private init() {
@@ -135,6 +139,7 @@ final class OnboardingManager {
         // Clean up all timers to prevent memory leaks
         Task { @MainActor in
             stopAccessibilityPolling()
+            stopAgentAccessibilityPolling()
             stopMicrophonePolling()
             stopAgentMicrophonePolling()
         }
@@ -165,6 +170,7 @@ final class OnboardingManager {
         hasMicrophonePermission = false
         hasAgentMicrophonePermission = false
         hasAccessibilityPermission = false
+        hasAgentAccessibilityPermission = false
         isTalkieAgentRunning = false
         isTalkieEngineRunning = false
         isModelDownloaded = false
@@ -181,6 +187,7 @@ final class OnboardingManager {
         checkMicrophonePermission()
         checkAgentMicrophonePermission()
         checkAccessibilityPermission()
+        checkAgentAccessibilityPermission()
     }
 
     func checkMicrophonePermission() {
@@ -194,8 +201,10 @@ final class OnboardingManager {
     func refreshAgentMicrophonePermission() async {
         if let permissions = await ServiceManager.shared.live.checkPermissions() {
             hasAgentMicrophonePermission = permissions.microphone
+            hasAgentAccessibilityPermission = permissions.accessibility
         } else {
             checkAgentMicrophonePermission()
+            checkAgentAccessibilityPermission()
         }
     }
 
@@ -281,17 +290,62 @@ final class OnboardingManager {
         hasAccessibilityPermission = AXIsProcessTrusted()
     }
 
+    func checkAgentAccessibilityPermission() {
+        hasAgentAccessibilityPermission = ServiceManager.shared.live.hasAccessibilityPermission == true
+    }
+
+    func refreshAgentAccessibilityPermission() async {
+        if let permissions = await ServiceManager.shared.live.checkPermissions() {
+            hasAgentAccessibilityPermission = permissions.accessibility
+            hasAgentMicrophonePermission = permissions.microphone
+        } else {
+            checkAgentAccessibilityPermission()
+        }
+    }
+
     func requestAccessibilityPermission() {
         // Use system prompt — shows a dialog explaining which app needs access
         // and pre-adds it to the Accessibility list in System Settings
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         AXIsProcessTrustedWithOptions(options)
+        PermissionsManager.shared.openAccessibilitySettings()
         startAccessibilityPolling()
+    }
+
+    func requestAgentAccessibilityPermission() async {
+        guard !isRequestingAgentAccessibilityPermission else { return }
+
+        isRequestingAgentAccessibilityPermission = true
+        let granted = await ServiceManager.shared.requestAgentAccessibilityPermission()
+        hasAgentAccessibilityPermission = granted == true
+        isRequestingAgentAccessibilityPermission = false
+
+        if granted != true {
+            PermissionsManager.shared.openAccessibilitySettings()
+            startAgentAccessibilityPolling()
+        }
+    }
+
+    func startPermissionPolling() {
+        if !hasMicrophonePermission {
+            startMicrophonePolling()
+        }
+        if !hasAccessibilityPermission {
+            startAccessibilityPolling()
+        }
+        if enableLiveMode {
+            if !hasAgentMicrophonePermission {
+                startAgentMicrophonePolling()
+            }
+            if !hasAgentAccessibilityPermission {
+                startAgentAccessibilityPolling()
+            }
+        }
     }
 
     private func startAccessibilityPolling() {
         accessibilityCheckTimer?.invalidate()
-        accessibilityCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+        accessibilityCheckTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.checkAccessibilityPermission()
                 if self?.hasAccessibilityPermission == true {
@@ -306,6 +360,24 @@ final class OnboardingManager {
     private func stopAccessibilityPolling() {
         accessibilityCheckTimer?.invalidate()
         accessibilityCheckTimer = nil
+    }
+
+    private func startAgentAccessibilityPolling() {
+        agentAccessibilityCheckTimer?.invalidate()
+        agentAccessibilityCheckTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                await self?.refreshAgentAccessibilityPermission()
+                if self?.hasAgentAccessibilityPermission == true {
+                    self?.stopAgentAccessibilityPolling()
+                }
+            }
+        }
+        RunLoop.main.add(agentAccessibilityCheckTimer!, forMode: .common)
+    }
+
+    private func stopAgentAccessibilityPolling() {
+        agentAccessibilityCheckTimer?.invalidate()
+        agentAccessibilityCheckTimer = nil
     }
 
     // MARK: - Service Setup
@@ -644,8 +716,14 @@ final class OnboardingManager {
                     }
                 }
                 if !permissions.accessibility {
-                    await updateCheck(.liveService, status: .error("Agent needs Accessibility permission"))
-                    return
+                    await updateCheck(.liveService, status: .inProgress("Requesting Accessibility..."))
+                    await requestAgentAccessibilityPermission()
+                    if let refreshed = await ServiceManager.shared.live.checkPermissions(), refreshed.accessibility {
+                        hasAgentAccessibilityPermission = true
+                    } else {
+                        await updateCheck(.liveService, status: .error("Grant Agent Accessibility permission"))
+                        return
+                    }
                 }
                 await updateCheck(.liveService, status: .complete)
             } else {

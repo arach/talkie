@@ -71,6 +71,10 @@ public struct HotKeyStatusInfo: Codable, Sendable, Identifiable {
     /// Used when Talkie detects the agent is missing capture permission.
     func requestMicrophonePermission(reply: @escaping (_ granted: Bool) -> Void)
 
+    /// Request Accessibility permission for TalkieAgent.
+    /// Used when Talkie detects the agent is missing auto-paste permission.
+    func requestAccessibilityPermission(reply: @escaping (_ granted: Bool) -> Void)
+
     /// Request Screen Recording permission for TalkieAgent.
     /// Used when enabling capture features from Talkie.
     func requestScreenRecordingPermission(reply: @escaping (_ granted: Bool) -> Void)

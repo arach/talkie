@@ -343,6 +343,21 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         }
     }
 
+    nonisolated func requestAccessibilityPermission(reply: @escaping (Bool) -> Void) {
+        Task { @MainActor in
+            xpcLog.info(
+                "Accessibility permission request received",
+                detail: "bundle=\(Bundle.main.bundleIdentifier ?? "unknown"), executable=\(Bundle.main.executableURL?.path ?? "unknown")"
+            )
+
+            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+            let granted = AXIsProcessTrustedWithOptions(options)
+            AccessibilityCache.shared.preflight()
+            NSLog("[TalkieAgentXPC] Accessibility permission request result: \(granted)")
+            reply(granted)
+        }
+    }
+
     nonisolated func requestScreenRecordingPermission(reply: @escaping (Bool) -> Void) {
         Task { @MainActor in
             let granted = await ScreenshotService.shared.requestPermission()
