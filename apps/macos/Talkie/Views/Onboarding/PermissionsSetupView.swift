@@ -17,9 +17,8 @@ struct PermissionsSetupView: View {
         OnboardingColors.forScheme(colorScheme)
     }
 
-    // Only mic is required to proceed — accessibility and screen recording can be granted later
     private var requiredPermissionsGranted: Bool {
-        manager.hasMicrophonePermission
+        manager.hasMicrophonePermission && (!manager.enableLiveMode || manager.hasAgentMicrophonePermission)
     }
 
     var body: some View {
@@ -73,6 +72,22 @@ struct PermissionsSetupView: View {
                     if manager.enableLiveMode {
                         PermissionRow(
                             colors: colors,
+                            icon: "waveform",
+                            title: "Agent Microphone Access",
+                            description: "Required for live dictation and auto-paste",
+                            isGranted: manager.hasAgentMicrophonePermission,
+                            actionTitle: manager.isRequestingAgentMicrophonePermission ? "Requesting..." : "Grant Access",
+                            isRequired: true,
+                            action: {
+                                Task {
+                                    await manager.requestAgentMicrophonePermission()
+                                }
+                            }
+                        )
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+
+                        PermissionRow(
+                            colors: colors,
                             icon: "command",
                             title: "Accessibility Access",
                             description: "Required for Agent to auto-paste dictated text",
@@ -87,7 +102,9 @@ struct PermissionsSetupView: View {
                     }
 
                     // Helper text
-                    Text("Only microphone is needed to get started — you can enable other permissions later in Settings")
+                    Text(manager.enableLiveMode
+                         ? "Grant both microphone permissions now so setup can verify Agent dictation before you continue."
+                         : "Microphone access is needed to record and transcribe audio.")
                         .font(.system(size: 11))
                         .foregroundColor(colors.textSecondary)
                         .multilineTextAlignment(.center)
@@ -111,6 +128,9 @@ struct PermissionsSetupView: View {
         .onAppear {
             manager.checkMicrophonePermission()
             manager.checkAccessibilityPermission()
+            Task {
+                await manager.refreshAgentMicrophonePermission()
+            }
         }
     }
 }

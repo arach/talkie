@@ -24,6 +24,7 @@ enum OnboardingStep: Int, CaseIterable {
 
 enum PermissionType {
     case microphone
+    case agentMicrophone
     case accessibility
 }
 
@@ -82,8 +83,10 @@ final class OnboardingManager {
 
     // Permissions state
     var hasMicrophonePermission = false
+    var hasAgentMicrophonePermission = false
     var hasAccessibilityPermission = false
     var isRequestingPermission = false
+    var isRequestingAgentMicrophonePermission = false
 
     // Service setup state
     var isTalkieAgentRunning = false
@@ -120,7 +123,7 @@ final class OnboardingManager {
 
     // Computed property: permissions to show based on Live mode
     var permissionsToShow: [PermissionType] {
-        enableLiveMode ? [.microphone, .accessibility] : [.microphone]
+        enableLiveMode ? [.microphone, .agentMicrophone, .accessibility] : [.microphone]
     }
 
     private init() {
@@ -133,6 +136,7 @@ final class OnboardingManager {
         Task { @MainActor in
             stopAccessibilityPolling()
             stopMicrophonePolling()
+            stopAgentMicrophonePolling()
         }
     }
 
@@ -159,6 +163,7 @@ final class OnboardingManager {
 
     private func resetState() {
         hasMicrophonePermission = false
+        hasAgentMicrophonePermission = false
         hasAccessibilityPermission = false
         isTalkieAgentRunning = false
         isTalkieEngineRunning = false
@@ -174,11 +179,38 @@ final class OnboardingManager {
 
     private func checkInitialPermissions() {
         checkMicrophonePermission()
+        checkAgentMicrophonePermission()
         checkAccessibilityPermission()
     }
 
     func checkMicrophonePermission() {
         hasMicrophonePermission = MicrophonePermission.isGranted
+    }
+
+    func checkAgentMicrophonePermission() {
+        hasAgentMicrophonePermission = ServiceManager.shared.live.hasMicrophonePermission == true
+    }
+
+    func refreshAgentMicrophonePermission() async {
+        if let permissions = await ServiceManager.shared.live.checkPermissions() {
+            hasAgentMicrophonePermission = permissions.microphone
+        } else {
+            checkAgentMicrophonePermission()
+        }
+    }
+
+    func requestAgentMicrophonePermission() async {
+        guard !isRequestingAgentMicrophonePermission else { return }
+
+        isRequestingAgentMicrophonePermission = true
+        let granted = await ServiceManager.shared.requestAgentMicrophonePermission()
+        hasAgentMicrophonePermission = granted == true
+        isRequestingAgentMicrophonePermission = false
+
+        if granted != true {
+            PermissionsManager.shared.openMicrophoneSettings()
+            startAgentMicrophonePolling()
+        }
     }
 
     func requestMicrophonePermission() async {
@@ -206,6 +238,7 @@ final class OnboardingManager {
     }
 
     private var microphoneCheckTimer: Timer?
+    private var agentMicrophoneCheckTimer: Timer?
 
     private func startMicrophonePolling() {
         microphoneCheckTimer?.invalidate()
@@ -224,6 +257,24 @@ final class OnboardingManager {
     private func stopMicrophonePolling() {
         microphoneCheckTimer?.invalidate()
         microphoneCheckTimer = nil
+    }
+
+    private func startAgentMicrophonePolling() {
+        agentMicrophoneCheckTimer?.invalidate()
+        agentMicrophoneCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                await self?.refreshAgentMicrophonePermission()
+                if self?.hasAgentMicrophonePermission == true {
+                    self?.stopAgentMicrophonePolling()
+                }
+            }
+        }
+        RunLoop.main.add(agentMicrophoneCheckTimer!, forMode: .common)
+    }
+
+    private func stopAgentMicrophonePolling() {
+        agentMicrophoneCheckTimer?.invalidate()
+        agentMicrophoneCheckTimer = nil
     }
 
     func checkAccessibilityPermission() {
@@ -439,11 +490,9 @@ final class OnboardingManager {
     func performStatusChecks() async {
         allChecksComplete = false
 
-        // 0. Pre-flight: Verify microphone permission (required for all modes)
-        // This ensures permission is granted before launching services that might trigger dialogs
+        // 0. Pre-flight: Verify Talkie microphone permission (required for all modes).
         checkMicrophonePermission()
         if !hasMicrophonePermission {
-            // If permission somehow not granted, show clear error
             await updateCheck(.modelSelection, status: .error("Microphone permission required"))
             return
         }
@@ -585,8 +634,14 @@ final class OnboardingManager {
 
             if let permissions = await ServiceManager.shared.live.checkPermissions() {
                 if !permissions.microphone {
-                    await updateCheck(.liveService, status: .error("Agent needs Microphone permission"))
-                    return
+                    await updateCheck(.liveService, status: .inProgress("Requesting microphone..."))
+                    await requestAgentMicrophonePermission()
+                    if let refreshed = await ServiceManager.shared.live.checkPermissions(), refreshed.microphone {
+                        hasAgentMicrophonePermission = true
+                    } else {
+                        await updateCheck(.liveService, status: .error("Grant Agent Microphone permission"))
+                        return
+                    }
                 }
                 if !permissions.accessibility {
                     await updateCheck(.liveService, status: .error("Agent needs Accessibility permission"))
