@@ -2,9 +2,9 @@
 # Unified build and run script for Talkie macOS apps
 #
 # Usage:
-#   ./run.sh live           # Build and run TalkieAgent
-#   ./run.sh core           # Build and run Talkie (main app)
-#   ./run.sh live core      # Build and run multiple apps
+#   ./run.sh TalkieAgent    # Build and run TalkieAgent
+#   ./run.sh Talkie         # Build and run Talkie (main app)
+#   ./run.sh TalkieAgent Talkie
 #   ./run.sh all            # Build all apps
 #   ./run.sh --list         # List available apps
 #
@@ -43,13 +43,21 @@ VERBOSE=false
 DEBUG_MODE=false
 EXEC_ONLY=false
 
-AVAILABLE_APPS="live core"
+AVAILABLE_APPS="TalkieAgent Talkie"
 
 # Get scheme for app
 get_scheme() {
     case $1 in
-        live)   echo "TalkieAgent" ;;
-        core)   echo "Talkie" ;;
+        TalkieAgent|live) echo "TalkieAgent" ;;
+        Talkie|core|code) echo "Talkie" ;;
+    esac
+}
+
+normalize_app() {
+    case $1 in
+        TalkieAgent|live) echo "TalkieAgent" ;;
+        Talkie|core|code) echo "Talkie" ;;
+        *) return 1 ;;
     esac
 }
 
@@ -130,7 +138,7 @@ stop_conflicting_instances() {
     local app=$1
 
     case "$app" in
-        live)
+        TalkieAgent|live)
             echo -n "  Stopping conflicting TalkieAgent instances... "
             quit_bundle_id "jdi.talkie.agent"
             quit_bundle_id "jdi.talkie.agent.dev"
@@ -142,7 +150,7 @@ stop_conflicting_instances() {
             pkill -f "/TalkieAgent.app/Contents/MacOS/TalkieAgent" 2>/dev/null || true
             echo -e "${GREEN}done${NC}"
             ;;
-        core)
+        Talkie|core|code)
             echo -n "  Stopping conflicting Talkie instances... "
             quit_bundle_id "jdi.talkie.core"
             quit_bundle_id "jdi.talkie.core.dev"
@@ -209,7 +217,7 @@ launch_app() {
     local bundle_id
     bundle_id=$(get_bundle_id "$app_path")
 
-    if [ "$app" = "live" ] && [[ "$bundle_id" == *.dev || "$bundle_id" == *.staging ]]; then
+    if [ "$scheme" = "TalkieAgent" ] && [[ "$bundle_id" == *.dev || "$bundle_id" == *.staging ]]; then
         echo -n "  Launching via launchctl... "
         if launch_dev_agent_via_launchctl "$app_path" "$scheme" "$bundle_id"; then
             echo -e "${GREEN}done${NC}"
@@ -246,12 +254,13 @@ for arg in "$@"; do
             ;;
         --list|-l)
             echo "Available apps:"
-            echo "  live    - TalkieAgent (always-on transcription UI)"
-            echo "  core    - Talkie (main app with workflows)"
+            echo "  TalkieAgent  - menu bar transcription agent"
+            echo "  Talkie       - main app with workflows"
             echo ""
             echo "Usage: ./run.sh [apps...] [options]"
-            echo "  ./run.sh live              Build and run TalkieAgent"
-            echo "  ./run.sh live core         Build multiple apps"
+            echo "  ./run.sh TalkieAgent       Build and run TalkieAgent"
+            echo "  ./run.sh TalkieAgent Talkie"
+            echo "                            Build multiple apps"
             echo "  ./run.sh all               Build all apps"
             echo ""
             echo "Options:"
@@ -267,7 +276,7 @@ for arg in "$@"; do
             echo ""
             echo "Usage: ./run.sh [apps...] [options]"
             echo ""
-            echo "Apps: live, core, all"
+            echo "Apps: TalkieAgent, Talkie, all"
             echo ""
             echo "Options:"
             echo "  -e            Just run latest build (no rebuild)"
@@ -283,8 +292,8 @@ for arg in "$@"; do
             APPS_TO_BUILD="$AVAILABLE_APPS"
             ;;
         *)
-            if echo " $AVAILABLE_APPS " | grep -q " $arg "; then
-                APPS_TO_BUILD="$APPS_TO_BUILD $arg"
+            if normalized_app=$(normalize_app "$arg"); then
+                APPS_TO_BUILD="$APPS_TO_BUILD $normalized_app"
             else
                 echo -e "${RED}Unknown app or option: $arg${NC}"
                 echo "Run './run.sh --list' to see available apps"
@@ -296,10 +305,10 @@ done
 
 # Default to TalkieAgent if no app specified
 if [ -z "$APPS_TO_BUILD" ]; then
-    echo -e "${YELLOW}No app specified, defaulting to 'live'${NC}"
+    echo -e "${YELLOW}No app specified, defaulting to 'TalkieAgent'${NC}"
     echo "Run './run.sh --list' for options"
     echo ""
-    APPS_TO_BUILD="live"
+    APPS_TO_BUILD="TalkieAgent"
 fi
 
 # Trim leading space

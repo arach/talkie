@@ -1,0 +1,23 @@
+{
+  "name": "talkie",
+  "private": true,
+  "description": "Command hub for Talkie development workflows.",
+  "scripts": {
+    "build": "apps/macos/run.sh TalkieAgent Talkie --no-launch",
+    "build:clean": "apps/macos/run.sh TalkieAgent Talkie --clean --no-launch",
+    "build:agent": "apps/macos/run.sh TalkieAgent --no-launch",
+    "build:app": "apps/macos/run.sh Talkie --no-launch",
+    "dev": "apps/macos/run.sh TalkieAgent Talkie",
+    "launch": "apps/macos/run.sh TalkieAgent Talkie -e",
+    "launch:agent": "apps/macos/run.sh TalkieAgent -e",
+    "launch:app": "apps/macos/run.sh Talkie -e",
+    "status": "scripts/launchctl-status.sh",
+    "status:clean": "scripts/launchctl-status.sh --clean",
+    "test": "xcodebuild -workspace TalkieSuite.xcworkspace -scheme Talkie -configuration Debug -destination 'platform=macOS' test",
+    "test:agent": "xcodebuild -workspace TalkieSuite.xcworkspace -scheme TalkieAgent -configuration Debug -destination 'platform=macOS' test",
+    "clean": "rm -rf build/macos"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
