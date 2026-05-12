@@ -192,7 +192,7 @@ final class HotkeyRegistry {
         syncToAgentSettings(action, config)
         NotificationCenter.default.post(name: .hotkeyDidChange, object: action.rawValue)
         DistributedNotificationCenter.default().postNotificationName(
-            NSNotification.Name("com.jdi.talkie.agentHotkeysDidChange"),
+            NSNotification.Name("to.talkie.app.agentHotkeysDidChange"),
             object: action.rawValue,
             userInfo: nil,
             deliverImmediately: true

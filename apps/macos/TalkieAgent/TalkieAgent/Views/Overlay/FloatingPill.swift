@@ -11,7 +11,7 @@ import AppKit
 import Combine
 import os
 
-private let pillLogger = Logger(subsystem: "jdi.talkie.agent", category: "FloatingPill")
+private let pillLogger = Logger(subsystem: "to.talkie.app.agent", category: "FloatingPill")
 
 // Notification for showing permissions window
 extension Notification.Name {

@@ -13,9 +13,9 @@ const DEFAULT_SETTINGS_PATHS = [
 ];
 
 const DEFAULT_SHARED_SETTINGS_SUITES = [
-  "com.jdi.talkie.shared.dev",
-  "com.jdi.talkie.shared.staging",
-  "com.jdi.talkie.shared",
+  "to.talkie.app.shared.dev",
+  "to.talkie.app.shared.staging",
+  "to.talkie.app.shared",
 ];
 
 type ComposeSettingsFile = {

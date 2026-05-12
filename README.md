@@ -39,7 +39,7 @@ Use the Xcode project settings as the source of truth while the public docs and 
 Prerequisites:
 
 - macOS with a recent Xcode capable of opening the project targets in this repo
-- Bun 1.0 or newer
+- Bun 1.3 or newer
 - Tailscale if you want the paired-device bridge outside local development
 - Optional provider keys for AI features: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, or `GROQ_API_KEY`
 
@@ -61,12 +61,14 @@ Install TypeScript package dependencies where needed:
 Use the root command hub for common macOS workflows:
 
 ```bash
-pnpm build:clean
-pnpm launch
-pnpm status
+bun run setup
+bun run build:clean
+bun run launch
+bun run status
+bun run check
 ```
 
-The same scripts also work through `npm run`, for example `npm run build:clean`.
+The root `package.json` is intentionally a Bun-first command hub; package dependencies are still installed in the package directories that own them.
 
 Open the Apple projects:
 
@@ -92,7 +94,7 @@ For public forks or fresh clones without private Apple signing and CloudKit acce
 
 ```bash
 # macOS app + agent
-pnpm build
+bun run build
 
 # macOS app
 xcodebuild -project apps/macos/Talkie/Talkie.xcodeproj \

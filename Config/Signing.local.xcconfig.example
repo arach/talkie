@@ -7,16 +7,18 @@
 #include "Signing.defaults.xcconfig"
 
 TALKIE_DEVELOPMENT_TEAM = ABCDE12345
+TALKIE_CODE_SIGNING_ALLOWED = YES
+TALKIE_CODE_SIGNING_REQUIRED = YES
 
 TALKIE_APP_IDENTIFIER = to.talkie.app
-TALKIE_IOS_APP_BUNDLE_ID = com.example.talkie
-TALKIE_IOS_SHARE_BUNDLE_ID = com.example.talkie.share
-TALKIE_IOS_KEYS_BUNDLE_ID = com.example.talkie.keys
-TALKIE_IOS_WIDGET_BUNDLE_ID = com.example.talkie.widgets
-TALKIE_WATCH_APP_BUNDLE_ID = com.example.talkie.watchkitapp
-TALKIE_WATCH_WIDGET_BUNDLE_ID = com.example.talkie.watchkitapp.widgets
-TALKIE_IOS_TESTS_BUNDLE_ID = com.example.talkie.tests
-TALKIE_IOS_UITESTS_BUNDLE_ID = com.example.talkie.uitests
+TALKIE_IOS_APP_BUNDLE_ID = to.talkie.app.ios
+TALKIE_IOS_SHARE_BUNDLE_ID = to.talkie.app.ios.share
+TALKIE_IOS_KEYS_BUNDLE_ID = to.talkie.app.ios.keys
+TALKIE_IOS_WIDGET_BUNDLE_ID = to.talkie.app.ios.widgets
+TALKIE_WATCH_APP_BUNDLE_ID = to.talkie.app.ios.watch
+TALKIE_WATCH_WIDGET_BUNDLE_ID = to.talkie.app.ios.watch.widgets
+TALKIE_IOS_TESTS_BUNDLE_ID = to.talkie.app.ios.tests
+TALKIE_IOS_UITESTS_BUNDLE_ID = to.talkie.app.ios.uitests
 
 TALKIE_MAC_CORE_BUNDLE_ID = to.talkie.app.mac
 TALKIE_MAC_CORE_BUNDLE_ID_DEBUG = to.talkie.app.mac.dev
@@ -27,8 +29,8 @@ TALKIE_MAC_AGENT_UITESTS_BUNDLE_ID = to.talkie.app.agent.uitests
 TALKIE_MAC_SYNC_BUNDLE_ID = to.talkie.app.sync
 TALKIE_MAC_SYNC_BUNDLE_ID_DEBUG = to.talkie.app.sync.dev
 
-TALKIE_IOS_APP_GROUP = group.com.example.talkie
-TALKIE_IOS_CLOUDKIT_CONTAINER = iCloud.com.example.talkie
+TALKIE_IOS_APP_GROUP = group.to.talkie.app.ios
+TALKIE_IOS_CLOUDKIT_CONTAINER = iCloud.to.talkie.ios
 TALKIE_MAC_APP_GROUP = group.to.talkie.app.mac
 TALKIE_MAC_SHARED_SETTINGS_SUITE = to.talkie.app.shared
 TALKIE_CLOUDKIT_CONTAINER = iCloud.to.talkie

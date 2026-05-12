@@ -41,11 +41,11 @@
 	<true/>
 	<key>MachServices</key>
 	<dict>
-		<key>jdi.talkie.sync.xpc</key>
+		<key>to.talkie.app.sync.xpc</key>
 		<true/>
-		<key>jdi.talkie.sync.xpc.dev</key>
+		<key>to.talkie.app.sync.xpc.dev</key>
 		<true/>
-		<key>jdi.talkie.sync.xpc.staging</key>
+		<key>to.talkie.app.sync.xpc.staging</key>
 		<true/>
 	</dict>
 	<key>NSHumanReadableCopyright</key>

@@ -413,7 +413,7 @@ TalkieDebugToolbar {
 2. **Debug Tools**:
    - TalkieAgent logs: `~/Library/Logs/TalkieAgent/TalkieAgent.log`
    - Database: `sqlite3 ~/Library/Application\ Support/Talkie/live.sqlite`
-   - Unified engine/XPC logs: `log show --predicate 'subsystem == "jdi.talkie.core"' --last 5m`
+   - Unified engine/XPC logs: `log show --predicate 'subsystem == "to.talkie.app.mac"' --last 5m`
 
 3. **Common Issues**:
    - **Slow transcription during builds** → Check priority (should be `.high` in TalkieAgent) and whether the embedded engine has finished warming up
@@ -454,7 +454,7 @@ TalkieDebugToolbar {
    # Build and profile
    xcodebuild -scheme Talkie -configuration Release build
    # Open in Instruments → "os_signpost" template
-   # Filter by subsystem: "jdi.talkie.performance"
+   # Filter by subsystem: "to.talkie.app.performance"
    ```
 
 2. **Key Signposts**:
@@ -552,7 +552,7 @@ TalkieLogger routes to Console.app + file logs. SwiftLint flags violations.
 - **Design system compliance** - Use tokens, not hardcoded values
 - **Performance obsessed** - Instrument everything, minimize blocking work
 - **Clean commits** - No "Generated with Claude Code" footers (see `CLAUDE.md`)
-- **Pnpm preferred** - For Node.js projects (check for `pnpm-lock.yaml` first)
+- **Bun preferred** - For Node.js projects
 - **Gitmoji in commits** - Add emoji prefixes (✨ features, 🐛 bugs, ⚡️ performance)
 
 ---
@@ -607,7 +607,7 @@ TalkieLogger routes to Console.app + file logs. SwiftLint flags violations.
 | Build unified bundle | `./packaging/macos/build.sh unified --version {{VERSION}}` |
 | Interactive release | `./packaging/macos/release.sh {{VERSION}}` |
 | Sync Xcode project | `./scripts/sync-xcode-files.py` |
-| Profile startup | Instruments → os_signpost → filter "jdi.talkie.performance" |
+| Profile startup | Instruments → os_signpost → filter "to.talkie.app.performance" |
 | Toggle Design Mode | Press ⌘⇧D |
 | Check DB | `sqlite3 ~/Library/Application\ Support/Talkie/live.sqlite` |
 | Find build output | `./scripts/find-build.sh` |

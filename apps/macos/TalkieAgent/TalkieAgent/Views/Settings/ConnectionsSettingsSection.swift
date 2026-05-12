@@ -175,8 +175,8 @@ struct TalkieAppCard: View {
     // (XPC connection status is an implementation detail for real-time updates)
     private var isTalkieRunning: Bool {
         let targetBundleId = TalkieEnvironment.current == .production
-            ? "jdi.talkie.core"
-            : "jdi.talkie.core.dev"
+            ? "to.talkie.app.mac"
+            : "to.talkie.app.mac.dev"
         return NSWorkspace.shared.runningApplications.contains {
             $0.bundleIdentifier == targetBundleId
         }
@@ -313,8 +313,8 @@ struct TalkieAppCard: View {
 
         // Fall back to opening by bundle ID
         let bundleID = TalkieEnvironment.current == .production
-            ? "com.jdi.talkie"
-            : "com.jdi.talkie.dev"
+            ? "to.talkie.app"
+            : "to.talkie.app.dev"
 
         if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
             NSWorkspace.shared.open(url)

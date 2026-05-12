@@ -1,4 +1,4 @@
-app_identifier(ENV.fetch("TALKIE_IOS_APP_BUNDLE_ID", "com.example.talkie"))
+app_identifier(ENV.fetch("TALKIE_IOS_APP_BUNDLE_ID", "to.talkie.app.ios"))
 
 # App Store Connect API Key
 json_key_file(nil) # Not using Google Play

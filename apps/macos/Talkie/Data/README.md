@@ -101,7 +101,7 @@ Replace old views with new ones:
 ### Step 5: CloudKit Sync
 
 CloudKit sync is handled by `CloudKitSyncManager` in the Services folder.
-Container ID: `iCloud.com.example.talkie`
+Container ID: `iCloud.to.talkie`
 
 ## 🔍 Key Performance Features
 

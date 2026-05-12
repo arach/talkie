@@ -16,7 +16,7 @@ import os.signpost
 
 /// Shared signpost log for TalkieAgent performance profiling in Instruments
 /// Uses consistent subsystem for cross-app correlation
-let livePerformanceLog = OSLog(subsystem: "jdi.talkie.performance", category: "Live")
+let livePerformanceLog = OSLog(subsystem: "to.talkie.app.performance", category: "Live")
 
 // MARK: - Trace Step
 

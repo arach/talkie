@@ -16,7 +16,7 @@ import os
 import TalkieKit
 import Observation
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "EngineClient")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "EngineClient")
 
 // MARK: - Backwards Compatibility
 

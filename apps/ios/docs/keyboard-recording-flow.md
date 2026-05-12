@@ -4,7 +4,7 @@ Technical documentation of the keyboard extension recording architecture.
 
 ## Architecture Overview
 
-Three-tier communication via App Group (`group.com.example.talkie`):
+Three-tier communication via App Group (`group.to.talkie.app.ios`):
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐

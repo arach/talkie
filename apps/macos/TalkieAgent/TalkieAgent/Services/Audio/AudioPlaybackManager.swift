@@ -10,7 +10,7 @@ import AVFoundation
 import Combine
 import os.log
 
-private let logger = Logger(subsystem: "jdi.talkie.agent", category: "AudioPlayback")
+private let logger = Logger(subsystem: "to.talkie.app.agent", category: "AudioPlayback")
 
 @MainActor
 final class AudioPlaybackManager: NSObject, ObservableObject {

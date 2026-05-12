@@ -320,7 +320,7 @@ public final class ServiceManager {
         ) { [weak self] notification in
             guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
                   let bundleId = app.bundleIdentifier,
-                  bundleId.hasPrefix("jdi.talkie.") else { return }
+                  bundleId.hasPrefix("to.talkie.app.") else { return }
             Task { @MainActor in
                 self?.refreshStatus()
             }
@@ -333,7 +333,7 @@ public final class ServiceManager {
         ) { [weak self] notification in
             guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
                   let bundleId = app.bundleIdentifier,
-                  bundleId.hasPrefix("jdi.talkie.") else { return }
+                  bundleId.hasPrefix("to.talkie.app.") else { return }
             Task { @MainActor in
                 self?.refreshStatus()
             }
@@ -1606,7 +1606,7 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
 
         let center = DistributedNotificationCenter.default()
         let queue = OperationQueue.main
-        let prefix = "com.jdi.talkie.agent"
+        let prefix = "to.talkie.app.agent"
 
         func observe(_ suffix: String, _ handler: @escaping (Notification) -> Void) {
             let name = Notification.Name("\(prefix).\(suffix)")

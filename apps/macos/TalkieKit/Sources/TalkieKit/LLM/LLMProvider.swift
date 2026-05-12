@@ -9,7 +9,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "jdi.talkiekit", category: "LLM")
+private let logger = Logger(subsystem: "to.talkie.app.kit", category: "LLM")
 
 // MARK: - Core Protocol
 

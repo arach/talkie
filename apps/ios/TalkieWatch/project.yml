@@ -1,6 +1,6 @@
 name: TalkieWatch
 options:
-  bundleIdPrefix: com.example.talkie
+  bundleIdPrefix: to.talkie.app.ios
   deploymentTarget:
     watchOS: "10.0"
   developmentLanguage: en

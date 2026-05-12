@@ -11,7 +11,7 @@ import Foundation
 import os
 import Observation
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "PendingActionsManager")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "PendingActionsManager")
 
 // MARK: - Pending Action Model
 

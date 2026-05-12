@@ -8,7 +8,7 @@
 import SwiftUI
 import os
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "QuickOpenSettings")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "QuickOpenSettings")
 
 // MARK: - Quick Open Settings View
 

@@ -8,7 +8,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "jdi.talkiekit", category: "Gemini")
+private let logger = Logger(subsystem: "to.talkie.app.kit", category: "Gemini")
 
 public final class LLMGeminiProvider: LLMProvider, @unchecked Sendable {
     public let id = "gemini"

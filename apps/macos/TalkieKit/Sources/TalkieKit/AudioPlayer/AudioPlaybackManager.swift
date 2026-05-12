@@ -10,7 +10,7 @@ import AVFoundation
 import Combine
 import os.log
 
-private let logger = Logger(subsystem: "com.jdi.talkiekit", category: "AudioPlayback")
+private let logger = Logger(subsystem: "to.talkie.app.kit", category: "AudioPlayback")
 
 // MARK: - Audio Playback Manager
 

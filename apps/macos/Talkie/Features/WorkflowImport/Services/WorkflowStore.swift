@@ -24,7 +24,7 @@ actor WorkflowStore {
 
     static let shared = WorkflowStore()
 
-    private let service = "com.jdi.talkie.workflows"
+    private let service = "to.talkie.app.workflows"
 
     private init() {}
 

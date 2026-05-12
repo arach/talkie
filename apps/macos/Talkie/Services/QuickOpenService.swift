@@ -11,7 +11,7 @@ import SwiftUI
 import os
 import Observation
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "QuickOpen")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "QuickOpen")
 
 // MARK: - Quick Open Target
 

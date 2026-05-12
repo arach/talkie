@@ -8,8 +8,8 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-PLIST_SRC="$PROJECT_DIR/jdi.talkie.sync.xpc.dev.plist"
-PLIST_DST="$HOME/Library/LaunchAgents/jdi.talkie.sync.xpc.dev.plist"
+PLIST_SRC="$PROJECT_DIR/to.talkie.app.sync.xpc.dev.plist"
+PLIST_DST="$HOME/Library/LaunchAgents/to.talkie.app.sync.xpc.dev.plist"
 
 echo "TalkieSync launchd setup"
 echo "========================"
@@ -34,14 +34,14 @@ cat > "$PLIST_DST" << EOF
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>jdi.talkie.sync.xpc.dev</string>
+    <string>to.talkie.app.sync.xpc.dev</string>
     <key>ProgramArguments</key>
     <array>
         <string>$TALKIESYNC_BIN</string>
     </array>
     <key>MachServices</key>
     <dict>
-        <key>jdi.talkie.sync.xpc.dev</key>
+        <key>to.talkie.app.sync.xpc.dev</key>
         <true/>
     </dict>
     <key>RunAtLoad</key>
@@ -56,9 +56,9 @@ cat > "$PLIST_DST" << EOF
     <key>LimitLoadToSessionType</key>
     <string>Aqua</string>
     <key>StandardOutPath</key>
-    <string>/tmp/jdi.talkie.sync.xpc.dev.stdout.log</string>
+    <string>/tmp/to.talkie.app.sync.xpc.dev.stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/jdi.talkie.sync.xpc.dev.stderr.log</string>
+    <string>/tmp/to.talkie.app.sync.xpc.dev.stderr.log</string>
 </dict>
 </plist>
 EOF
@@ -66,7 +66,7 @@ EOF
 echo "Created plist: $PLIST_DST"
 
 # Unload existing if present
-if launchctl list | grep -q "jdi.talkie.sync.xpc.dev"; then
+if launchctl list | grep -q "to.talkie.app.sync.xpc.dev"; then
     echo "Unloading existing service..."
     launchctl unload "$PLIST_DST" 2>/dev/null || true
 fi
@@ -79,8 +79,8 @@ echo ""
 echo "TalkieSync XPC service installed!"
 echo ""
 echo "View logs:"
-echo "  tail -f /tmp/jdi.talkie.sync.xpc.dev.stdout.log"
+echo "  tail -f /tmp/to.talkie.app.sync.xpc.dev.stdout.log"
 echo ""
 echo "Restart service:"
-echo "  launchctl unload ~/Library/LaunchAgents/jdi.talkie.sync.xpc.dev.plist"
-echo "  launchctl load ~/Library/LaunchAgents/jdi.talkie.sync.xpc.dev.plist"
+echo "  launchctl unload ~/Library/LaunchAgents/to.talkie.app.sync.xpc.dev.plist"
+echo "  launchctl load ~/Library/LaunchAgents/to.talkie.app.sync.xpc.dev.plist"

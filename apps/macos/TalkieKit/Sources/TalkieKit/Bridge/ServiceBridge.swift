@@ -49,7 +49,7 @@ public final class ServiceBridge: @unchecked Sendable {
         self.port = port
         self.serviceName = serviceName
         self.bindAddress = bindAddress
-        self.queue = DispatchQueue(label: "jdi.talkie.bridge.\(serviceName.lowercased())")
+        self.queue = DispatchQueue(label: "to.talkie.app.bridge.\(serviceName.lowercased())")
     }
 
     // MARK: - Handler Registration

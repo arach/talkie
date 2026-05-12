@@ -2,7 +2,7 @@
 api_key_path(ENV.fetch("TALKIE_FASTLANE_API_KEY_PATH", "./fastlane/api_key.json"))
 
 # App
-app_identifier(ENV.fetch("TALKIE_IOS_APP_BUNDLE_ID", "com.example.talkie"))
+app_identifier(ENV.fetch("TALKIE_IOS_APP_BUNDLE_ID", "to.talkie.app.ios"))
 
 # Screenshots
 screenshots_path("./fastlane/screenshots")

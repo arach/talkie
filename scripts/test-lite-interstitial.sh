@@ -14,8 +14,8 @@
 set -e
 
 # Configuration
-TALKIE_BUNDLE_ID_RELEASE="jdi.talkie.core"
-TALKIE_BUNDLE_ID_DEV="jdi.talkie.core.dev"
+TALKIE_BUNDLE_ID_RELEASE="to.talkie.app.mac"
+TALKIE_BUNDLE_ID_DEV="to.talkie.app.mac.dev"
 
 # Parse arguments
 DEBUG_MODE=false

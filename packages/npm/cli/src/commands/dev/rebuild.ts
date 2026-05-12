@@ -40,7 +40,7 @@ export function killEverything(service: TalkieService, uid: number): RebuildStep
     }
   }
 
-  // 2. Bootout the prod launchd label (e.g. jdi.talkie.engine registered by prod)
+  // 2. Bootout the prod launchd label (e.g. to.talkie.app.engine registered by prod)
   if (service.prodBundleId) {
     const prodLabels = [service.prodBundleId];
     for (const label of prodLabels) {

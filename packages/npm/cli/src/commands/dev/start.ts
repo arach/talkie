@@ -132,10 +132,10 @@ export function launchViaLaunchd(
   });
 
   // Bootout production instances to prevent doubling.
-  // Production app registers its own launchd agents (e.g. jdi.talkie.agent)
+  // Production app registers its own launchd agents (e.g. to.talkie.app.agent)
   // and macOS may also register application.{bundleId}.* entries for LoginItems.
   if (service.prodBundleId) {
-    // Direct prod label (e.g. jdi.talkie.agent)
+    // Direct prod label (e.g. to.talkie.app.agent)
     Bun.spawnSync(["launchctl", "bootout", `gui/${uid}/${service.prodBundleId}`], {
       stdout: "pipe",
       stderr: "pipe",

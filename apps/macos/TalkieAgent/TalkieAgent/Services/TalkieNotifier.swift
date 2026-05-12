@@ -18,11 +18,11 @@ import AppKit
 import TalkieKit
 import os.log
 
-private let logger = Logger(subsystem: "com.jdi.talkie.agent", category: "Notifier")
+private let logger = Logger(subsystem: "to.talkie.app.agent", category: "Notifier")
 
 /// Notification name prefix for distributed notifications from TalkieAgent → Talkie
-/// Format: com.jdi.talkie.agent.{path} (e.g., com.jdi.talkie.agent.recording.started)
-let kTalkieAgentNotificationPrefix = "com.jdi.talkie.agent"
+/// Format: to.talkie.app.agent.{path} (e.g., to.talkie.app.agent.recording.started)
+let kTalkieAgentNotificationPrefix = "to.talkie.app.agent"
 
 @MainActor
 final class TalkieNotifier {
@@ -43,8 +43,8 @@ final class TalkieNotifier {
     /// Check if Talkie main app is running (any environment)
     private var isTalkieRunning: Bool {
         let talkieBundleIDs = [
-            "jdi.talkie.core",      // Production
-            "jdi.talkie.core.dev"   // Development
+            "to.talkie.app.mac",      // Production
+            "to.talkie.app.mac.dev"   // Development
         ]
         return NSWorkspace.shared.runningApplications.contains { app in
             guard let bundleID = app.bundleIdentifier else { return false }

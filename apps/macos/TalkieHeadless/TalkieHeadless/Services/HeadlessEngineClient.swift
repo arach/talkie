@@ -17,8 +17,8 @@ import Foundation
 
 /// Agent XPC service modes for the embedded engine.
 enum EmbeddedEngineServiceMode: String {
-    case production = "jdi.talkie.agent.xpc"
-    case dev = "jdi.talkie.agent.xpc.dev"
+    case production = "to.talkie.app.agent.xpc"
+    case dev = "to.talkie.app.agent.xpc.dev"
 }
 
 actor HeadlessEngineClient {

@@ -9,7 +9,7 @@
 import Foundation
 import os.log
 
-private let logger = Logger(subsystem: "jdi.talkie.agent", category: "AudioInputLogger")
+private let logger = Logger(subsystem: "to.talkie.app.agent", category: "AudioInputLogger")
 
 /// JSON Lines logger for audio input diagnostics
 /// Each line is a valid JSON object for easy parsing with tools like jq

@@ -24,7 +24,7 @@
             description="Required. Hosts Talkie's embedded on-device transcription engine and provides quick menu bar capture."
             enabled="false"
             selected="true">
-        <pkg-ref id="jdi.talkie.agent"/>
+        <pkg-ref id="to.talkie.app.agent"/>
     </choice>
 
     <!-- Talkie Core - Optional -->
@@ -32,10 +32,10 @@
             title="Talkie"
             description="Full-featured voice memo app with library management, iCloud sync, workflows, and AI-powered actions. Uses Talkie Agent for local transcription."
             selected="true">
-        <pkg-ref id="jdi.talkie.core"/>
+        <pkg-ref id="to.talkie.app.mac"/>
     </choice>
 
-    <pkg-ref id="jdi.talkie.agent" version="1.3.0" installKBytes="7400">TalkieAgent.pkg</pkg-ref>
-    <pkg-ref id="jdi.talkie.core" version="1.3.0" installKBytes="15000">TalkieCore.pkg</pkg-ref>
+    <pkg-ref id="to.talkie.app.agent" version="1.3.0" installKBytes="7400">TalkieAgent.pkg</pkg-ref>
+    <pkg-ref id="to.talkie.app.mac" version="1.3.0" installKBytes="15000">TalkieCore.pkg</pkg-ref>
 
 </installer-gui-script>

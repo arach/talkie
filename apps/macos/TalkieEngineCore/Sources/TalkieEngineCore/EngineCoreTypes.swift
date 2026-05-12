@@ -12,8 +12,8 @@ import TalkieKit
 
 /// Mach service names for XPC connection (matches TalkieEnvironment)
 public enum EngineServiceMode: String, CaseIterable {
-    case production = "jdi.talkie.engine.xpc"
-    case dev = "jdi.talkie.engine.xpc.dev"
+    case production = "to.talkie.app.engine.xpc"
+    case dev = "to.talkie.app.engine.xpc.dev"
 
     public var displayName: String {
         switch self {
@@ -42,8 +42,8 @@ public enum EngineServiceMode: String, CaseIterable {
     /// This is the Label in the plist, NOT the MachService name
     public var launchdLabel: String {
         switch self {
-        case .production: return "jdi.talkie.engine"
-        case .dev: return "jdi.talkie.engine.dev"
+        case .production: return "to.talkie.app.engine"
+        case .dev: return "to.talkie.app.engine.dev"
         }
     }
 }

@@ -13,7 +13,7 @@ import os
 import Observation
 import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "AppleSpeechService")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "AppleSpeechService")
 
 // MARK: - Apple Speech Service
 

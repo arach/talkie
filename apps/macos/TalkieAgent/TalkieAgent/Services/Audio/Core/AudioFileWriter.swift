@@ -19,7 +19,7 @@ final class AudioFileWriter: AudioWriterProtocol {
 
     // MARK: - Segment compression
 
-    private static let compressQueue = DispatchQueue(label: "jdi.talkie.audio.compress", qos: .utility)
+    private static let compressQueue = DispatchQueue(label: "to.talkie.app.audio.compress", qos: .utility)
     private static let compressSampleRate: Double = 16000
     private static let compressBitDepth: Int = 16
 

@@ -13,8 +13,8 @@ import UserNotifications
 import Darwin
 import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "Startup")
-private let signposter = OSSignposter(subsystem: "jdi.talkie.performance", category: "Startup")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "Startup")
+private let signposter = OSSignposter(subsystem: "to.talkie.app.performance", category: "Startup")
 
 /// Coordinates app startup to minimize time-to-interactive
 /// Defers non-critical initialization until after UI is visible

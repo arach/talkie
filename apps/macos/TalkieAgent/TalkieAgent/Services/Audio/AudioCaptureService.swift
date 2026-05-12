@@ -140,7 +140,7 @@ final class AudioCaptureService: AgentAudioCapture {
 
     /// Dedicated queue for audio engine setup to avoid blocking MainActor during HAL initialization
     /// This queue is recreated on reboot() to recover from stuck HAL operations
-    private var audioSetupQueue = DispatchQueue(label: "jdi.talkie.audio.setup", qos: .userInitiated)
+    private var audioSetupQueue = DispatchQueue(label: "to.talkie.app.audio.setup", qos: .userInitiated)
 
     // MARK: - Recording State
 
@@ -602,7 +602,7 @@ final class AudioCaptureService: AgentAudioCapture {
         // Recreate the audioSetupQueue to recover from stuck HAL operations
         // If a HAL initialization hung on the old queue, the serial queue is stuck forever.
         // Creating a new queue abandons the old one and any stuck operations.
-        audioSetupQueue = DispatchQueue(label: "jdi.talkie.audio.setup", qos: .userInitiated)
+        audioSetupQueue = DispatchQueue(label: "to.talkie.app.audio.setup", qos: .userInitiated)
         log.debug("Recreated audio setup queue")
 
         // Adaptive delay based on HAL health - give degraded HAL more time to recover

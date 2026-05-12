@@ -17,8 +17,8 @@ import Foundation
 
 /// Live service modes
 enum LiveServiceMode: String {
-    case production = "jdi.talkie.agent.xpc"
-    case dev = "jdi.talkie.agent.xpc.dev"
+    case production = "to.talkie.app.agent.xpc"
+    case dev = "to.talkie.app.agent.xpc.dev"
 }
 
 actor HeadlessLiveClient {

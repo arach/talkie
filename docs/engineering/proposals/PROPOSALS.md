@@ -81,7 +81,7 @@ SystemEventManager.shared.log(.error, "Transcription failed", detail: "\(error)"
 1. **os.log (Logger)** - Apple's structured logging
    - Goes to Console.app (which is hard to use)
    - Filterable by subsystem/category
-   - Used throughout: `Logger(subsystem: "jdi.talkie.agent", category: "LiveController")`
+   - Used throughout: `Logger(subsystem: "to.talkie.app.agent", category: "LiveController")`
 
 2. **SystemEventManager** - Custom event logger
    - Stores events in memory
@@ -101,7 +101,7 @@ Use `Logger` as the single logging mechanism, but build a nice in-app log viewer
 
 ```swift
 // 1. All logging goes through Logger (no change to existing pattern)
-private let logger = Logger(subsystem: "jdi.talkie.agent", category: "LiveController")
+private let logger = Logger(subsystem: "to.talkie.app.agent", category: "LiveController")
 logger.info("Transcription started")
 logger.error("Transcription failed: \(error)")
 
@@ -111,7 +111,7 @@ final class LogViewer: ObservableObject {
     @Published private(set) var entries: [LogEntry] = []
     @Published var filter: LogFilter = .all
 
-    private let subsystem = "jdi.talkie.agent"
+    private let subsystem = "to.talkie.app.agent"
 
     struct LogEntry: Identifiable {
         let id: UUID

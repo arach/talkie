@@ -16,7 +16,7 @@ import Combine
 import os
 import Observation
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "SessionLayout")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "SessionLayout")
 
 @MainActor
 @Observable

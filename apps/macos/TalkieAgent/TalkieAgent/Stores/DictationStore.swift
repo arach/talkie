@@ -9,7 +9,7 @@ import Foundation
 import AppKit
 import os.log
 
-private let logger = Logger(subsystem: "jdi.talkie.agent", category: "DictationStore")
+private let logger = Logger(subsystem: "to.talkie.app.agent", category: "DictationStore")
 
 // MARK: - Dictation Metadata
 
@@ -235,7 +235,7 @@ struct Utterance: Identifiable, Codable, Hashable {
 @MainActor
 struct ContextCapture {
     /// Our own bundle identifier
-    static let agentBundleID = Bundle.main.bundleIdentifier ?? "jdi.talkie.agent"
+    static let agentBundleID = Bundle.main.bundleIdentifier ?? "to.talkie.app.agent"
 
     /// Check if Talkie Agent is the frontmost app
     static func isTalkieAgentFrontmost() -> Bool {

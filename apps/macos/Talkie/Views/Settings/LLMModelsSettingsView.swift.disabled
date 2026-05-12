@@ -9,7 +9,7 @@
 import SwiftUI
 import os
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "LLMModelsSettings")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "LLMModelsSettings")
 
 // MARK: - LLM Models Settings View
 

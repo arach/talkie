@@ -42,7 +42,7 @@ final class AppLogger: ObservableObject {
 
     @Published private(set) var entries: [LogEntry] = []
     private let maxEntries = 500
-    private let subsystem = "jdi.talkie.agent"
+    private let subsystem = "to.talkie.app.agent"
 
     private var loggers: [String: Logger] = [:]
 
@@ -421,7 +421,7 @@ struct LogViewerConsole: View {
         }
 
         // Also copy the filter predicate to clipboard for easy use
-        let predicate = "subsystem == \"jdi.talkie.agent\""
+        let predicate = "subsystem == \"to.talkie.app.agent\""
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(predicate, forType: .string)
     }

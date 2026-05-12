@@ -10,7 +10,7 @@ import SwiftUI
 import Combine
 import os
 
-private let fileLogger = Logger(subsystem: "jdi.talkie.core", category: "LogFile")
+private let fileLogger = Logger(subsystem: "to.talkie.app.mac", category: "LogFile")
 
 // Cached ISO8601 formatter for performance
 private let iso8601Formatter: ISO8601DateFormatter = {
@@ -179,7 +179,7 @@ class LogFileManager {
     private let fileManager = FileManager.default
     private var currentFileHandle: FileHandle?
     private var currentLogDate: String?
-    private let queue = DispatchQueue(label: "jdi.talkie.logfile", qos: .utility)
+    private let queue = DispatchQueue(label: "to.talkie.app.logfile", qos: .utility)
     private let readChunkSize = 64 * 1024
     private let maxTailReadBytes = 4 * 1024 * 1024
 

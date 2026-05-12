@@ -218,7 +218,7 @@ enum InterstitialAPIKeyStore {
 
     private static func deriveKey() -> SymmetricKey {
         // Must match Talkie's APIKeyStore.deriveKey()
-        var seed = "jdi.talkie.apikeys"
+        var seed = "to.talkie.app.apikeys"
 
         if let uuid = getHardwareUUID() {
             seed += ".\(uuid)"

@@ -448,15 +448,15 @@ public final class HelperLaunchManager {
 
     private func legacyLiveLabel(for env: TalkieEnvironment) -> String {
         switch env {
-        case .production: return "jdi.talkie.live"
-        case .dev: return "jdi.talkie.live.dev"
+        case .production: return "to.talkie.app.agent"
+        case .dev: return "to.talkie.app.agent.dev"
         }
     }
 
     private func legacyLiveXPCLabel(for env: TalkieEnvironment) -> String {
         switch env {
-        case .production: return "jdi.talkie.live.xpc"
-        case .dev: return "jdi.talkie.live.xpc.dev"
+        case .production: return "to.talkie.app.agent.xpc"
+        case .dev: return "to.talkie.app.agent.xpc.dev"
         }
     }
 

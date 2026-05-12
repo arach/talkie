@@ -9,15 +9,15 @@ import Foundation
 
 public enum TalkieMobileRuntimeIdentifiers {
     public static var appIdentifier: String {
-        infoDictionaryString("TalkieAppIdentifier", fallback: "com.example.talkie")
+        infoDictionaryString("TalkieAppIdentifier", fallback: "to.talkie.app.ios")
     }
 
     public static var cloudKitContainerIdentifier: String {
-        infoDictionaryString("TalkieCloudKitContainerIdentifier", fallback: "iCloud.com.example.talkie")
+        infoDictionaryString("TalkieCloudKitContainerIdentifier", fallback: "iCloud.to.talkie.ios")
     }
 
     public static var appGroupIdentifier: String {
-        infoDictionaryString("TalkieAppGroupIdentifier", fallback: "group.com.example.talkie")
+        infoDictionaryString("TalkieAppGroupIdentifier", fallback: "group.to.talkie.app.ios")
     }
 
     public static var refreshTaskIdentifier: String {

@@ -3,25 +3,18 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>jdi.talkie.sync</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/Applications/Talkie.app/Contents/Library/LoginItems/TalkieSync.app/Contents/MacOS/TalkieSync</string>
-    </array>
+    <string>to.talkie.app.agent</string>
+    <key>BundleProgram</key>
+    <string>Contents/Library/LoginItems/TalkieAgent.app/Contents/MacOS/TalkieAgent</string>
     <key>MachServices</key>
     <dict>
-        <key>jdi.talkie.sync.xpc</key>
+        <key>to.talkie.app.agent.xpc</key>
         <true/>
     </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
-    <dict>
-        <key>SuccessfulExit</key>
-        <false/>
-    </dict>
-    <key>ThrottleInterval</key>
-    <integer>30</integer>
+    <true/>
     <key>LimitLoadToSessionType</key>
     <string>Aqua</string>
 </dict>

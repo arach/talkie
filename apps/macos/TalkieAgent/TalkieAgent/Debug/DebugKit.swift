@@ -647,7 +647,7 @@ final class SystemEventManager: ObservableObject {
         }
 
         // Also log to os_log
-        let logger = Logger(subsystem: "jdi.talkie.agent", category: type.rawValue)
+        let logger = Logger(subsystem: "to.talkie.app.agent", category: type.rawValue)
         if let detail = detail {
             logger.info("\(message): \(detail)")
         } else {
@@ -1544,8 +1544,8 @@ struct StatusBar: View {
 
     private func openTalkieAgent() {
         let agentBundleIds = [
-            "jdi.talkie.agent",
-            "jdi.talkie.agent.dev"
+            "to.talkie.app.agent",
+            "to.talkie.app.agent.dev"
         ]
 
         for bundleId in agentBundleIds {

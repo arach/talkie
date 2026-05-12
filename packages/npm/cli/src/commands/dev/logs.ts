@@ -2,8 +2,8 @@ import type { Command } from "commander";
 import { SERVICES, resolveService } from "./services";
 
 const COLORS: Record<string, string> = {
-  "jdi.talkie.core": "\x1b[36m",   // cyan
-  "jdi.talkie.agent": "\x1b[35m",  // magenta
+  "to.talkie.app.mac": "\x1b[36m",   // cyan
+  "to.talkie.app.agent": "\x1b[35m",  // magenta
 };
 const RESET = "\x1b[0m";
 
@@ -18,7 +18,7 @@ function buildPredicate(serviceName?: string): string {
     return `subsystem == "${service.logSubsystem}"`;
   }
   // All talkie subsystems
-  return `subsystem BEGINSWITH "jdi.talkie"`;
+  return `subsystem BEGINSWITH "to.talkie.app"`;
 }
 
 export function registerLogsCommand(devCmd: Command): void {

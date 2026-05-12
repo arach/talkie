@@ -134,6 +134,18 @@ bootout_label() {
     /bin/launchctl bootout "gui/$(id -u)/$label" >/dev/null 2>&1 || true
 }
 
+stop_bundle_ids() {
+    for bundle_id in "$@"; do
+        quit_bundle_id "$bundle_id"
+    done
+
+    sleep 0.5
+
+    for bundle_id in "$@"; do
+        bootout_label "$bundle_id"
+    done
+}
+
 dequarantine_app() {
     local app_path=$1
 
@@ -150,22 +162,19 @@ stop_conflicting_instances() {
     case "$app" in
         TalkieAgent|live)
             echo -n "  Stopping conflicting TalkieAgent instances... "
-            quit_bundle_id "jdi.talkie.agent"
-            quit_bundle_id "jdi.talkie.agent.dev"
-            quit_bundle_id "jdi.talkie.agent.staging"
-            sleep 0.5
-            bootout_label "jdi.talkie.agent"
-            bootout_label "jdi.talkie.agent.dev"
-            bootout_label "jdi.talkie.agent.staging"
+            stop_bundle_ids \
+                "to.talkie.app.agent" \
+                "to.talkie.app.agent.dev" \
+                "to.talkie.app.agent.staging"
             pkill -f "/TalkieAgent.app/Contents/MacOS/TalkieAgent" 2>/dev/null || true
             echo -e "${GREEN}done${NC}"
             ;;
         Talkie|core|code)
             echo -n "  Stopping conflicting Talkie instances... "
-            quit_bundle_id "jdi.talkie.core"
-            quit_bundle_id "jdi.talkie.core.dev"
-            quit_bundle_id "jdi.talkie.core.staging"
-            sleep 0.5
+            stop_bundle_ids \
+                "to.talkie.app.mac" \
+                "to.talkie.app.mac.dev" \
+                "to.talkie.app.mac.staging"
             pkill -f "/Talkie.app/Contents/MacOS/Talkie" 2>/dev/null || true
             echo -e "${GREEN}done${NC}"
             ;;
@@ -204,7 +213,7 @@ launch_dev_agent_via_launchctl() {
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
-    <true/>
+    <false/>
     <key>LimitLoadToSessionType</key>
     <string>Aqua</string>
     <key>StandardOutPath</key>

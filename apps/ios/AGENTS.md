@@ -108,7 +108,7 @@ iOS is the primary source for voice memos. Data syncs automatically via `NSPersi
 // Persistence.swift
 let container = NSPersistentCloudKitContainer(name: "Talkie")
 container.persistentStoreDescriptions.first?.cloudKitContainerOptions =
-    NSPersistentCloudKitContainerOptions(containerIdentifier: "iCloud.com.example.talkie")
+    NSPersistentCloudKitContainerOptions(containerIdentifier: "iCloud.to.talkie.ios")
 ```
 
 ### Widgets

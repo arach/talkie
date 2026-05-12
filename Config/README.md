@@ -1,6 +1,6 @@
 # Local Signing Configuration
 
-Talkie keeps Apple signing identifiers out of source-controlled project files where possible. The checked-in defaults are intentionally inert so a public checkout cannot accidentally build or upload with the private production identifiers.
+Talkie keeps Apple signing identifiers out of source-controlled project files where possible. The checked-in defaults use the `to.talkie.app` namespace but disable code signing, so a fresh checkout can build locally without an Apple Developer account.
 
 ## Xcode Builds
 
@@ -11,6 +11,14 @@ cp Config/Signing.local.xcconfig.example Config/Signing.local.xcconfig
 ```
 
 Keep `Config/Signing.local.xcconfig` local. It is ignored by git.
+
+For signed local builds, set your team and re-enable signing in the local file:
+
+```xcconfig
+TALKIE_DEVELOPMENT_TEAM = ABCDE12345
+TALKIE_CODE_SIGNING_ALLOWED = YES
+TALKIE_CODE_SIGNING_REQUIRED = YES
+```
 
 ## Release and App Store Tools
 

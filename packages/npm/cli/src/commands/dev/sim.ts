@@ -342,7 +342,7 @@ export function registerSimCommand(devCmd: Command): void {
 
       console.log(`Launching Talkie on ${GREEN}${device.name}${RESET}...`);
       const result = Bun.spawnSync([
-        "xcrun", "simctl", "launch", device.udid, "jdi.talkie-os",
+        "xcrun", "simctl", "launch", device.udid, "to.talkie.app.ios",
       ]);
 
       if (result.exitCode === 0) {

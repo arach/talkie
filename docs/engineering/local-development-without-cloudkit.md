@@ -28,7 +28,7 @@ xcodebuild -project apps/ios/Talkie-iOS.xcodeproj \
 
 ## What Is Intentionally Disabled Or Limited
 
-Public defaults in `Config/Signing.defaults.xcconfig` use inert identifiers such as `com.example.talkie` and `iCloud.com.example.talkie`. They are safe for source checkouts, but they are not registered services.
+Public defaults in `Config/Signing.defaults.xcconfig` use inert identifiers such as `to.talkie.app.ios` and `iCloud.to.talkie.ios`. They are safe for source checkouts, but they are not registered services.
 
 Without a real Apple team and registered containers, these areas should be treated as unavailable:
 

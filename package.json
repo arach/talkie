@@ -2,7 +2,12 @@
   "name": "talkie",
   "private": true,
   "description": "Command hub for Talkie development workflows.",
+  "packageManager": "bun@1.3.11",
   "scripts": {
+    "setup": "bun run install:server && bun run install:cli && bun run install:sdk",
+    "install:server": "(cd apps/macos/TalkieServer && bun install)",
+    "install:cli": "(cd packages/npm/cli && bun install)",
+    "install:sdk": "(cd packages/npm/sdk && bun install)",
     "build": "apps/macos/run.sh TalkieAgent Talkie --no-launch",
     "build:clean": "apps/macos/run.sh TalkieAgent Talkie --clean --no-launch",
     "build:agent": "apps/macos/run.sh TalkieAgent --no-launch",
@@ -13,11 +18,14 @@
     "launch:app": "apps/macos/run.sh Talkie -e",
     "status": "scripts/launchctl-status.sh",
     "status:clean": "scripts/launchctl-status.sh --clean",
+    "check": "bun run check:scripts && bun run check:package",
+    "check:scripts": "bash -n apps/macos/run.sh apps/macos/Talkie/run.sh apps/macos/TalkieAgent/run.sh apps/macos/TalkieSync/scripts/setup-launchd.sh scripts/install.sh scripts/launchctl-status.sh scripts/test-lite-interstitial.sh",
+    "check:package": "bun -e \"JSON.parse(await Bun.file('package.json').text()); console.log('package.json ok')\"",
     "test": "xcodebuild -workspace TalkieSuite.xcworkspace -scheme Talkie -configuration Debug -destination 'platform=macOS' test",
     "test:agent": "xcodebuild -workspace TalkieSuite.xcworkspace -scheme TalkieAgent -configuration Debug -destination 'platform=macOS' test",
     "clean": "rm -rf build/macos"
   },
   "engines": {
-    "node": ">=20"
+    "bun": ">=1.3.0"
   }
 }

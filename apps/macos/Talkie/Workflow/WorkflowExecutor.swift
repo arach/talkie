@@ -14,7 +14,7 @@ import Observation
 import CryptoKit
 import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "WorkflowExecutor")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "WorkflowExecutor")
 // MARK: - Workflow Execution Context
 
 struct WorkflowContext {

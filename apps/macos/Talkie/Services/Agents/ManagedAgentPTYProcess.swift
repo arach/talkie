@@ -34,7 +34,7 @@ final class ManagedAgentPTYProcess: @unchecked Sendable {
     var onOutput: (@Sendable (Data) -> Void)?
     var onExit: (@Sendable (Int32) -> Void)?
 
-    private let queue = DispatchQueue(label: "jdi.talkie.agent.console.pty")
+    private let queue = DispatchQueue(label: "to.talkie.app.agent.console.pty")
     private var masterFileDescriptor: Int32 = -1
     private var childPID: pid_t = 0
     private var readSource: DispatchSourceRead?

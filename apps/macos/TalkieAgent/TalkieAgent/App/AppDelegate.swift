@@ -735,7 +735,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(sharedHotkeysDidChange(_:)),
-            name: NSNotification.Name("com.jdi.talkie.agentHotkeysDidChange"),
+            name: NSNotification.Name("to.talkie.app.agentHotkeysDidChange"),
             object: nil
         )
 
@@ -787,7 +787,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                     }
                 } else {
                     DistributedNotificationCenter.default().postNotificationName(
-                        NSNotification.Name("com.jdi.talkie.screenshotChord"),
+                        NSNotification.Name("to.talkie.app.screenshotChord"),
                         object: nil,
                         userInfo: nil,
                         deliverImmediately: true
@@ -805,7 +805,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             keyCode: screenRecordChord.keyCode
         ) { [weak self] _ in
             DistributedNotificationCenter.default().postNotificationName(
-                NSNotification.Name("com.jdi.talkie.screenRecordChord"),
+                NSNotification.Name("to.talkie.app.screenRecordChord"),
                 object: nil,
                 userInfo: nil,
                 deliverImmediately: true
@@ -826,7 +826,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             keyCode: pasteChord.keyCode
         ) { _ in
             DistributedNotificationCenter.default().postNotificationName(
-                NSNotification.Name("com.jdi.talkie.pasteChord"),
+                NSNotification.Name("to.talkie.app.pasteChord"),
                 object: nil,
                 userInfo: nil,
                 deliverImmediately: true
@@ -856,7 +856,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                         let selectionPayload = self?.selectionCaptureUserInfo()
                         if let selectionPayload {
                             DistributedNotificationCenter.default().postNotificationName(
-                                NSNotification.Name("com.jdi.talkie.captureSelectionContext"),
+                                NSNotification.Name("to.talkie.app.captureSelectionContext"),
                                 object: nil,
                                 userInfo: selectionPayload,
                                 deliverImmediately: true
@@ -867,7 +867,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                     }
 
                     DistributedNotificationCenter.default().postNotificationName(
-                        NSNotification.Name("com.jdi.talkie.screenshotDirect"),
+                        NSNotification.Name("to.talkie.app.screenshotDirect"),
                         object: mode,
                         userInfo: nil,
                         deliverImmediately: true
@@ -888,7 +888,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             keyCode: pasteLastScreenshot.keyCode
         ) { _ in
             DistributedNotificationCenter.default().postNotificationName(
-                NSNotification.Name("com.jdi.talkie.pasteLastScreenshot"),
+                NSNotification.Name("to.talkie.app.pasteLastScreenshot"),
                 object: nil,
                 userInfo: nil,
                 deliverImmediately: true

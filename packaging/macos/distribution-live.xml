@@ -22,9 +22,9 @@
             title="Talkie Agent"
             description="Includes Talkie Agent with the embedded local transcription engine."
             visible="false">
-        <pkg-ref id="jdi.talkie.agent"/>
+        <pkg-ref id="to.talkie.app.agent"/>
     </choice>
 
-    <pkg-ref id="jdi.talkie.agent" version="1.3.0" installKBytes="7400">TalkieAgent.pkg</pkg-ref>
+    <pkg-ref id="to.talkie.app.agent" version="1.3.0" installKBytes="7400">TalkieAgent.pkg</pkg-ref>
 
 </installer-gui-script>

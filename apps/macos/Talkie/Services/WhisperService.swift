@@ -10,7 +10,7 @@ import os
 import Observation
 import TalkieKit
 
-private let logger = Logger(subsystem: "jdi.talkie.core", category: "WhisperService")
+private let logger = Logger(subsystem: "to.talkie.app.mac", category: "WhisperService")
 
 // MARK: - Whisper Model Options
 

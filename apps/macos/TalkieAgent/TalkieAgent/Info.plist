@@ -21,9 +21,9 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>MachServices</key>
 	<dict>
-		<key>jdi.talkie.agent.xpc</key>
+		<key>to.talkie.app.agent.xpc</key>
 		<true/>
-		<key>jdi.talkie.agent.xpc.dev</key>
+		<key>to.talkie.app.agent.xpc.dev</key>
 		<true/>
 	</dict>
 	<key>NSBonjourServices</key>
