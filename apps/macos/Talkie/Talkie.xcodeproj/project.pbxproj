@@ -207,7 +207,6 @@
 		68132B9194554B25C0B12B73 /* TalkieExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C9D3D339A16005123611D0B /* TalkieExtension.swift */; };
 		685851BAF02FD2875905855F /* HotkeyRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F951C816E088AA9B7E1D317 /* HotkeyRecorder.swift */; };
 		6863D76979AE115BC108363F /* TalkieSettingsConfigurationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ACF94B34ADCED06FAC41590 /* TalkieSettingsConfigurationStore.swift */; };
-		69CBC300CD2AC7DA92108356 /* ResourceDownloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE7496B100C0BB66B02F8861 /* ResourceDownloader.swift */; };
 		6B72928F8016CD3A48F0E39E /* SimpleWorkflowLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0D7A667503549B6652DB0E5 /* SimpleWorkflowLoader.swift */; };
 		6BA0C7FF42FABFF660470A3C /* DemoKitTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49BEFEDEE8EB7C8036A87ABC /* DemoKitTest.swift */; };
 		6BACF5AA67DED80DE1BA8C7C /* ServerSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AB0A81EE0443BF8C7DFD1E1 /* ServerSettingsView.swift */; };
@@ -966,7 +965,6 @@
 		F9889D9D71A77FE771F8DBB4 /* TrayItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrayItem.swift; sourceTree = "<group>"; };
 		FB62E8A6B36402BB34BE160C /* TraySettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TraySettings.swift; sourceTree = "<group>"; };
 		FDDE4E10FB667DA80E5BD1E5 /* QuickActionsSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickActionsSettings.swift; sourceTree = "<group>"; };
-		FE7496B100C0BB66B02F8861 /* ResourceDownloader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourceDownloader.swift; sourceTree = "<group>"; };
 		FE8763583C38788C862FE91A /* SQLiteViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLiteViewer.swift; sourceTree = "<group>"; };
 		FEE68488C46C5431620F90C5 /* SoundManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -1967,7 +1965,6 @@
 				7EB3DC2359B9E712BF820F99 /* QuickOpenService.swift */,
 				CA102C795808328B24E8B0C1 /* RecordingController.swift */,
 				7EE36EF64CD97437B00A45D1 /* RecordingRetranscriptionService.swift */,
-				FE7496B100C0BB66B02F8861 /* ResourceDownloader.swift */,
 				CD24716F168F4322F19E871C /* Router.swift */,
 				54A73419859DFFC89D7C1D61 /* ScreenCapturePermissionManager.swift */,
 				A8884D4B5347C59E03279248 /* ScreenshotCaptureService.swift */,
@@ -2401,7 +2398,6 @@
 				D5322C7672EB2F4843DA6AAF /* RelativeTimeTicker.swift in Sources */,
 				A08BA6C9C2259A5ED2A730F3 /* ReportSheet.swift in Sources */,
 				C92FBA5D14EAC5682D04C9FC /* RepositoryInstrumentation.swift in Sources */,
-				69CBC300CD2AC7DA92108356 /* ResourceDownloader.swift in Sources */,
 				1A8F5D9F276CB44D5CFC58FF /* RevisionHistoryView.swift in Sources */,
 				E36FBDD35D8FF8986BE97535 /* Router.swift in Sources */,
 				414905D45E0EEBB7E5576687 /* RoutingMode.swift in Sources */,
