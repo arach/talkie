@@ -11,11 +11,11 @@ import SwiftUI
 enum TalkieWidgetRuntimeIdentifiers {
     static var appGroupIdentifier: String {
         guard let value = Bundle.main.object(forInfoDictionaryKey: "TalkieAppGroupIdentifier") as? String else {
-            return "group.to.talkie.app.ios"
+            return "group.to.talkie.app"
         }
 
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "group.to.talkie.app.ios" : trimmed
+        return trimmed.isEmpty ? "group.to.talkie.app" : trimmed
     }
 }
 

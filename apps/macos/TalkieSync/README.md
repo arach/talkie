@@ -36,7 +36,7 @@ Dedicated sync helper service for Talkie. Handles Core Data + CloudKit sync in a
 3. Add GRDB package dependency
 4. Enable CloudKit capabilities
 5. Add iCloud container: `iCloud.to.talkie`
-6. Add App Group: `group.example.talkie`
+6. Add App Group: `group.to.talkie.app`
 
 ### 3. Add Files
 
@@ -58,7 +58,7 @@ Copy all files from `TalkieSync/` folder to your Xcode project:
 Ensure these entitlements are set in `TalkieSync.entitlements`:
 - `com.apple.developer.icloud-container-identifiers`: `iCloud.to.talkie`
 - `com.apple.developer.icloud-services`: `CloudKit`
-- `com.apple.security.application-groups`: `group.example.talkie`
+- `com.apple.security.application-groups`: `group.to.talkie.app`
 - `com.apple.security.app-sandbox`: `true`
 - `com.apple.security.network.client`: `true`
 

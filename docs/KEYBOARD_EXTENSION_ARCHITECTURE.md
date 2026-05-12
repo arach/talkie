@@ -206,7 +206,7 @@ The keyboard extension and main app communicate through **three overlapping chan
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    App Group UserDefaults                        │
-│                    (group.to.talkie.app.ios)                        │
+│                    (group.to.talkie.app)                        │
 │                                                                 │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │  CHANNEL 1: DictationSharedStore (JSON blob)            │    │

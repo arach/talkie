@@ -1,63 +1,28 @@
-# Local Signing Configuration
+# Signing Configuration
 
-Talkie keeps Apple signing identifiers out of source-controlled project files where possible. The checked-in defaults use the `to.talkie.app` namespace but disable code signing, so a fresh checkout can build locally without an Apple Developer account.
+`Signing.defaults.xcconfig` is the checked-in source of truth for Talkie's bundle IDs, app groups, shared suites, CloudKit containers, and unsigned local build defaults.
 
-## Xcode Builds
+`Signing.xcconfig` includes those defaults and then optionally includes ignored machine-local overrides from `Signing.local.xcconfig`.
 
-Copy the example file and replace the placeholders:
-
-```bash
-cp Config/Signing.local.xcconfig.example Config/Signing.local.xcconfig
-```
-
-Keep `Config/Signing.local.xcconfig` local. It is ignored by git.
-
-For signed local builds, set your team and re-enable signing in the local file:
+Use `Signing.local.xcconfig` only for values that should vary by machine or Apple account, such as:
 
 ```xcconfig
-TALKIE_DEVELOPMENT_TEAM = ABCDE12345
+TALKIE_DEVELOPMENT_TEAM = D58PF38LQK
 TALKIE_CODE_SIGNING_ALLOWED = YES
 TALKIE_CODE_SIGNING_REQUIRED = YES
 ```
 
-## Release and App Store Tools
+Do not create or maintain separate `.example` signing files. Identifiers are not secrets; credentials, certificates, provisioning profiles, API keys, and notarization profiles should live in Keychain, App Store Connect, `secret`, or CI secrets.
 
-Copy `Config/signing.env.example` to a private location, fill in your identifiers, and source it before running release tooling:
-
-```bash
-source /path/to/private/talkie-signing.env
-```
-
-Secrets, API keys, and notarization credentials should stay in the keychain, `secret`, or App Store Connect configuration. This directory is only for identifiers and local wiring.
-
-## CloudKit, App Groups, And App Store Continuity
-
-CloudKit containers and app groups are namespace identifiers tied to an Apple Developer account. A public fork needs its own values before enabling CloudKit or shared app-group storage.
-
-For Talkie's private production namespace, `to.talkie.app` is the intended root for new non-iOS app identities and services:
+The canonical namespace is `to.talkie.app`:
 
 ```xcconfig
 TALKIE_APP_IDENTIFIER = to.talkie.app
+TALKIE_IOS_APP_BUNDLE_ID = to.talkie.app
 TALKIE_MAC_CORE_BUNDLE_ID = to.talkie.app.mac
-TALKIE_MAC_CORE_BUNDLE_ID_DEBUG = to.talkie.app.mac.dev
 TALKIE_MAC_AGENT_BUNDLE_ID = to.talkie.app.agent
-TALKIE_MAC_AGENT_BUNDLE_ID_DEBUG = to.talkie.app.agent.dev
 TALKIE_MAC_SYNC_BUNDLE_ID = to.talkie.app.sync
-TALKIE_MAC_SYNC_BUNDLE_ID_DEBUG = to.talkie.app.sync.dev
+TALKIE_IOS_APP_GROUP = group.to.talkie.app
 TALKIE_MAC_APP_GROUP = group.to.talkie.app.mac
-TALKIE_MAC_SHARED_SETTINGS_SUITE = to.talkie.app.shared
 TALKIE_CLOUDKIT_CONTAINER = iCloud.to.talkie
 ```
-
-Treat the iOS App Store app as the continuity exception. For production iOS releases, keep the existing App Store bundle IDs, app group, and CloudKit container in `Signing.local.xcconfig`:
-
-```xcconfig
-TALKIE_IOS_APP_BUNDLE_ID = existing.ios.bundle.id
-TALKIE_IOS_SHARE_BUNDLE_ID = existing.ios.bundle.id.share
-TALKIE_IOS_KEYS_BUNDLE_ID = existing.ios.bundle.id.keys
-TALKIE_IOS_WIDGET_BUNDLE_ID = existing.ios.bundle.id.widgets
-TALKIE_IOS_APP_GROUP = group.existing.ios.bundle.id
-TALKIE_IOS_CLOUDKIT_CONTAINER = iCloud.existing.ios.bundle.id
-```
-
-Fastlane and iOS entitlements read the iOS-specific values so the global `TALKIE_APP_IDENTIFIER` can move forward without changing the shipped iOS app identity.
