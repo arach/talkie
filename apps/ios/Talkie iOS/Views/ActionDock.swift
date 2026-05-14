@@ -107,6 +107,16 @@ struct ActionDock: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if showingModePicker {
+                dockModePicker
+                    .padding(.top, 12)
+                    .padding(.bottom, 4)
+                    .transition(
+                        .move(edge: .bottom)
+                        .combined(with: .scale(scale: 0.9))
+                        .combined(with: .opacity)
+                    )
+            }
             buttonRow
         }
         .frame(maxWidth: .infinity)
@@ -198,17 +208,6 @@ struct ActionDock: View {
 
     private var centerButton: some View {
         ZStack {
-            if showingModePicker {
-                dockModePicker
-                    .offset(y: -72)
-                    .transition(
-                        .move(edge: .bottom)
-                        .combined(with: .scale(scale: 0.9))
-                        .combined(with: .opacity)
-                    )
-                    .zIndex(1)
-            }
-
             Circle()
                 .fill(centerButtonColor)
                 .frame(width: DockLayout.recordButtonSize, height: DockLayout.recordButtonSize)
@@ -224,16 +223,22 @@ struct ActionDock: View {
         }
         .frame(width: DockLayout.recordButtonSize, height: DockLayout.recordButtonSize)
         .contentShape(Circle())
-        .onTapGesture {
-            triggerCurrentMode()
-        }
-        .onLongPressGesture(minimumDuration: 0.45) {
-            let impact = UIImpactFeedbackGenerator(style: .rigid)
-            impact.impactOccurred()
-            withAnimation(.spring(response: 0.24, dampingFraction: 0.84)) {
-                showingModePicker.toggle()
-            }
-        }
+        .gesture(
+            LongPressGesture(minimumDuration: 0.45)
+                .onEnded { _ in
+                    let impact = UIImpactFeedbackGenerator(style: .rigid)
+                    impact.impactOccurred()
+                    withAnimation(.spring(response: 0.24, dampingFraction: 0.84)) {
+                        showingModePicker.toggle()
+                    }
+                }
+                .exclusively(
+                    before: TapGesture()
+                        .onEnded {
+                            triggerCurrentMode()
+                        }
+                )
+        )
         .accessibilityIdentifier("dock.center")
         .accessibilityAddTraits(.isButton)
         .accessibilityHint("Tap to start the selected input mode. Long press to choose a different mode.")
