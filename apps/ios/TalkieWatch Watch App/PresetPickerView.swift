@@ -14,8 +14,9 @@ struct PresetPickerView: View {
     @Binding var isRecording: Bool
 
     private var goPreset: WatchPreset { .go }
+    private var aiPreset: WatchPreset { .ai }
     private var otherPresets: [WatchPreset] {
-        WatchPreset.presets.filter { $0.id != "go" }
+        WatchPreset.presets.filter { $0.id != "go" && $0.id != "ai" }
     }
 
     var body: some View {
@@ -32,6 +33,11 @@ struct PresetPickerView: View {
                 GoButton {
                     selectAndRecord(goPreset)
                 }
+
+                TalkToAIButton {
+                    selectAndRecord(aiPreset)
+                }
+                .padding(.horizontal, 4)
 
                 // Other presets in a row
                 HStack(spacing: 6) {
@@ -52,6 +58,33 @@ struct PresetPickerView: View {
         WKInterfaceDevice.current().play(.click)
         selectedPreset = preset
         isRecording = true
+    }
+}
+
+// MARK: - Talk to AI Button
+
+struct TalkToAIButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.cyan)
+
+                Text("Talk to AI")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 7)
+            .background(Color.cyan.opacity(0.18))
+            .clipShape(.rect(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
     }
 }
 

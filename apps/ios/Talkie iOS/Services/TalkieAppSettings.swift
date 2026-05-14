@@ -44,10 +44,14 @@ final class TalkieAppSettings {
     var ttsVoice = "echo" { didSet { persistIfNeeded() } }
     var ttsApiKey = "" { didSet { persistIfNeeded() } }
     var ttsPlaybackRate = 1.0 { didSet { persistIfNeeded() } }
+    var aiVoiceOutputRoute = "phone" { didSet { persistIfNeeded() } }
 
     var composeRevisionPath = "direct" { didSet { persistIfNeeded() } }
     var composeDirectProviderId = "openai" { didSet { persistIfNeeded() } }
     var composeDirectModelId = "" { didSet { persistIfNeeded() } }
+    /// When false (default) HyperScan uploads are ephemeral on the Mac and auto-deleted
+    /// after a short TTL. When true the user has opted in to keep them indefinitely.
+    var hyperScanRetainCaptures = false { didSet { persistIfNeeded() } }
     var sshHost = "" { didSet { persistIfNeeded() } }
     var sshPort = "22" { didSet { persistIfNeeded() } }
     var sshUsername = "" { didSet { persistIfNeeded() } }
@@ -99,9 +103,11 @@ final class TalkieAppSettings {
         ttsVoice = configuration.tts.voice
         ttsApiKey = configuration.tts.apiKey
         ttsPlaybackRate = configuration.tts.playbackRate ?? 1.0
+        aiVoiceOutputRoute = configuration.tts.aiVoiceOutputRoute
         composeRevisionPath = configuration.compose.revisionPath
         composeDirectProviderId = configuration.compose.directProviderId
         composeDirectModelId = configuration.compose.directModelId
+        hyperScanRetainCaptures = configuration.hyperScan.retainCaptures
         sshHost = configuration.ssh.host
         sshPort = configuration.ssh.port
         sshUsername = configuration.ssh.username
@@ -149,9 +155,11 @@ final class TalkieAppSettings {
             configuration.tts.voice = ttsVoice
             configuration.tts.apiKey = ttsApiKey
             configuration.tts.playbackRate = ttsPlaybackRate
+            configuration.tts.aiVoiceOutputRoute = aiVoiceOutputRoute
             configuration.compose.revisionPath = composeRevisionPath
             configuration.compose.directProviderId = composeDirectProviderId
             configuration.compose.directModelId = composeDirectModelId
+            configuration.hyperScan.retainCaptures = hyperScanRetainCaptures
             configuration.ssh.host = sshHost
             configuration.ssh.port = sshPort
             configuration.ssh.username = sshUsername
@@ -214,6 +222,8 @@ final class TalkieAppSettings {
         defaults.set(configuration.ssh.primaryActionMode, forKey: "sshTerminal.primaryActionMode")
         defaults.set(configuration.ssh.renderer, forKey: "sshTerminal.renderer")
         defaults.set(configuration.tts.playbackRate ?? 1.0, forKey: "tts.playbackRate")
+        defaults.set(configuration.tts.aiVoiceOutputRoute, forKey: "tts.aiVoiceOutputRoute")
+        defaults.set(configuration.hyperScan.retainCaptures, forKey: "hyperScan.retainCaptures")
 
         if let savedHostsData = try? encoder.encode(configuration.ssh.savedHosts) {
             defaults.set(savedHostsData, forKey: SSHTerminalSavedHostStore.defaultsKey)

@@ -82,8 +82,14 @@ struct MemoRow: View {
             case .received:
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(.blue)
+            case .thinking:
+                Image(systemName: "sparkles")
+                    .foregroundColor(.cyan)
             case .transcribed:
                 Image(systemName: "text.bubble.fill")
+                    .foregroundColor(.green)
+            case .answered:
+                Image(systemName: "sparkles.square.filled.on.square")
                     .foregroundColor(.green)
             case .failed:
                 Image(systemName: "exclamationmark.circle")

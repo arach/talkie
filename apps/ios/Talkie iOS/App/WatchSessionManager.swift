@@ -48,6 +48,73 @@ final class WatchSessionManager: NSObject, ObservableObject {
 
     /// Called when audio is received from Watch
     var onAudioReceived: ((URL, [String: Any]) -> Void)?
+
+    func sendMemoUpdate(memoId: String, status: String, preview: String? = nil) {
+        activateIfNeeded()
+
+        guard let session, session.activationState == .activated else {
+            log.debug("Watch memo update skipped; session is not activated")
+            return
+        }
+
+        var update: [String: Any] = [
+            "type": "memoUpdate",
+            "memoId": memoId,
+            "status": status
+        ]
+
+        if let preview {
+            update["preview"] = String(preview.prefix(240))
+        }
+
+        if session.isReachable {
+            session.sendMessage(update, replyHandler: nil) { [log] error in
+                log.debug("Watch memo update send failed: \(error.localizedDescription)")
+            }
+        }
+
+        do {
+            try session.updateApplicationContext(["memoUpdates": [update]])
+        } catch {
+            log.debug("Watch memo update context failed: \(error.localizedDescription)")
+        }
+    }
+
+    func sendAIAudio(memoId: String, audioData: Data, preview: String? = nil) -> Bool {
+        activateIfNeeded()
+
+        guard let session, session.activationState == .activated else {
+            log.debug("Watch AI audio skipped; session is not activated")
+            return false
+        }
+
+        guard session.isWatchAppInstalled else {
+            log.debug("Watch AI audio skipped; Watch app is not installed")
+            return false
+        }
+
+        do {
+            let fileURL = FileManager.default.temporaryDirectory
+                .appending(path: "talkie-watch-ai-\(UUID().uuidString)")
+                .appendingPathExtension("mp3")
+            try audioData.write(to: fileURL, options: .atomic)
+
+            var metadata: [String: Any] = [
+                "type": "aiAudio",
+                "memoId": memoId
+            ]
+            if let preview {
+                metadata["preview"] = String(preview.prefix(240))
+            }
+
+            session.transferFile(fileURL, metadata: metadata)
+            log.info("Queued AI audio for Watch")
+            return true
+        } catch {
+            log.warning("Watch AI audio file failed: \(error.localizedDescription)")
+            return false
+        }
+    }
 }
 
 // MARK: - WCSessionDelegate
@@ -117,6 +184,22 @@ extension WatchSessionManager: WCSessionDelegate {
         } catch {
             Task { @MainActor in
                 self.log.error("Failed to save Watch audio: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    nonisolated func session(_ session: WCSession, didFinish fileTransfer: WCSessionFileTransfer, error: Error?) {
+        let metadata = fileTransfer.file.metadata ?? [:]
+        guard metadata["type"] as? String == "aiAudio" else { return }
+
+        let fileURL = fileTransfer.file.fileURL
+        try? FileManager.default.removeItem(at: fileURL)
+
+        Task { @MainActor in
+            if let error {
+                self.log.warning("Watch AI audio transfer failed: \(error.localizedDescription)")
+            } else {
+                self.log.info("Watch AI audio transfer completed")
             }
         }
     }

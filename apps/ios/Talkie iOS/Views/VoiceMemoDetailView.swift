@@ -67,6 +67,7 @@ struct VoiceMemoDetailView: View {
     @State private var isRunningOCR = false
     @State private var ocrResultText: String?
     @State private var showingAgentSheet = false
+    @State private var showingMemoAISheet = false
     @State private var showingCLISheet = false
     @Environment(\.managedObjectContext) private var viewContext
     @StateObject private var aiService = OnDeviceAIService.shared
@@ -278,6 +279,17 @@ struct VoiceMemoDetailView: View {
                     memoTitle: memoTitle,
                     memoTranscript: memo.transcription ?? "",
                     memoId: memo.id?.uuidString
+                )
+            }
+            .sheet(isPresented: $showingMemoAISheet) {
+                MemoAICommandsSheet(
+                    memoTitle: memoTitle,
+                    memoTranscript: memo.currentTranscript ?? "",
+                    memoId: memo.id?.uuidString,
+                    onAnswer: { answer in
+                        memo.summary = answer
+                        try? viewContext.save()
+                    }
                 )
             }
             .sheet(isPresented: $showingCLISheet) {
@@ -1191,6 +1203,17 @@ struct VoiceMemoDetailView: View {
                     createNote()
                 }
 
+                QuickActionButton(
+                    icon: "sparkles",
+                    label: "Ask",
+                    badge: .local,
+                    isProcessing: false,
+                    hasContent: memo.id.map { AgentSessionStore.shared.hasConversation(forMemoId: $0.uuidString) } ?? false,
+                    isAvailable: memo.currentTranscript?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                ) {
+                    showingMemoAISheet = true
+                }
+
                 // Set Reminder (creates via EventKit)
                 QuickActionButton(
                     icon: reminderStatusIcon,
@@ -1953,15 +1976,7 @@ struct VoiceMemoDetailView: View {
             hasLoadedRecentAttachmentAssets = true
             recentAttachmentAssets = fetchRecentAttachmentAssets()
         case .notDetermined:
-            PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
-                Task { @MainActor in
-                    attachmentPhotoAuthorizationStatus = status
-                    if status == .authorized || status == .limited {
-                        hasLoadedRecentAttachmentAssets = true
-                        recentAttachmentAssets = fetchRecentAttachmentAssets()
-                    }
-                }
-            }
+            recentAttachmentAssets = []
         default:
             recentAttachmentAssets = []
         }

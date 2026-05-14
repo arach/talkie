@@ -48,6 +48,7 @@ import {
   cleanupLocalAuthToken,
 } from "./auth/local";
 import { setAutoApprove } from "./bridge/routes/pair";
+import { startBonjourAdvertisement } from "./bonjour";
 import { log, clearLog } from "./log";
 import { PID_FILE, LOCAL_AUTH_TOKEN_FILE, ensureDirectories } from "./paths";
 
@@ -105,6 +106,12 @@ function getLocalBonjourHostname(): string {
     return raw;
   }
   return `${raw}.local`;
+}
+
+function getBonjourServiceName(): string {
+  const raw = systemHostname().trim().replace(/\.$/, "");
+  const shortName = raw.split(".")[0]?.replace(/-/g, " ").trim();
+  return shortName ? `Talkie Bridge (${shortName})` : "Talkie Bridge";
 }
 
 function isLoopbackOrigin(origin: string): boolean {
@@ -350,6 +357,8 @@ async function main() {
   const devices = await getDevices();
   log.info(`Paired devices: ${devices.length}`);
 
+  let stopBonjour: (() => void) | undefined;
+
   // Write PID file
   await Bun.write(PID_FILE, process.pid.toString());
   log.info(`PID ${process.pid} written to ${PID_FILE}`);
@@ -357,6 +366,7 @@ async function main() {
   // Clean up on exit
   const shutdown = async () => {
     log.info("Shutting down...");
+    stopBonjour?.();
     sessionCache.shutdown();
     await Bun.write(PID_FILE, "").catch(() => {});
     await cleanupLocalAuthToken();
@@ -375,6 +385,17 @@ async function main() {
   log.info(`TalkieServer HTTP at http://${bindAddress}:${PORT}`);
   if (!LOCAL_MODE) {
     log.info(`Tailscale hostname: ${serverConfig.hostname}`);
+  }
+
+  if (NEARBY_MODE) {
+    stopBonjour = startBonjourAdvertisement({
+      name: getBonjourServiceName(),
+      hostname: serverConfig.hostname,
+      port: PORT,
+      mode: SERVER_MODE,
+      route: serverConfig.alternateHosts.length > 0 ? "lan,tailscale" : "lan",
+      capabilities: ["bridge", "pairing", "hyper-scan"],
+    });
   }
 
   // Start Unix socket server (if enabled)

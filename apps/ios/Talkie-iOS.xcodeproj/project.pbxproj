@@ -215,6 +215,13 @@
 			path = TalkieUITests;
 			sourceTree = "<group>";
 		};
+		AABB00012F4D000000000002 /* TalkieTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			path = TalkieTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -310,6 +317,7 @@
 				531A90C52EEE73370084EC25 /* TalkieWatchWidget */,
 				53AF32852F26B2E30000561A /* TalkieKeys */,
 				AABB00012F4D000000000001 /* TalkieUITests */,
+				AABB00012F4D000000000002 /* TalkieTests */,
 				53B43EC12EDB539100C09544 /* Frameworks */,
 				539C69322ED39ADE00BC034F /* Products */,
 				14691642FC1ACF6128A448D6 /* TalkieShare */,
@@ -429,6 +437,9 @@
 			);
 			dependencies = (
 				539C69452ED39ADF00BC034F /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				AABB00012F4D000000000002 /* TalkieTests */,
 			);
 			name = TalkieTests;
 			productName = talkieTests;

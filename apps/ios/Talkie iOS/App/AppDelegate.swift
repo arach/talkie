@@ -85,6 +85,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         let context = PersistenceController.shared.container.viewContext
         let recordedAt = watchRecordedAt(from: metadata)
         let watchTitle = watchTitle(from: metadata, recordedAt: recordedAt)
+        let isAIRequest = isWatchAIRequest(metadata)
 
         // Extract memoId from watch metadata for deduplication
         var watchMemoId: UUID?
@@ -142,10 +143,30 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             PersistenceController.refreshWidgetData(context: context)
 
             let memoObjectID = newMemo.objectID
+            let memoId = newMemo.id
+
+            WatchSessionManager.shared.sendMemoUpdate(
+                memoId: memoId?.uuidString ?? "",
+                status: "received",
+                preview: isAIRequest ? "Received. Transcribing..." : nil
+            )
+
+            if isAIRequest {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(500))
+                    await processWatchAIRequest(
+                        memoObjectID: memoObjectID,
+                        audioURL: audioURL,
+                        context: context,
+                        watchMemoId: memoId
+                    )
+                }
+                return
+            }
 
             // Start transcription after a brief delay
             Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 500_000_000)
+                try? await Task.sleep(for: .milliseconds(500))
 
                 if let savedMemo = context.object(with: memoObjectID) as? VoiceMemo {
                     AppLogger.transcription.info("[Watch] Starting transcription for Watch memo")
@@ -155,6 +176,103 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         } catch {
             let nsError = error as NSError
             AppLogger.persistence.error("[Watch] Error saving Watch memo: \(nsError.localizedDescription)")
+        }
+    }
+
+    @MainActor
+    private func processWatchAIRequest(
+        memoObjectID: NSManagedObjectID,
+        audioURL: URL,
+        context: NSManagedObjectContext,
+        watchMemoId: UUID?
+    ) async {
+        let watchMemoIdString = watchMemoId?.uuidString ?? ""
+
+        do {
+            if let memo = try? context.existingObject(with: memoObjectID) as? VoiceMemo {
+                memo.isTranscribing = true
+                try? context.save()
+            }
+
+            WatchSessionManager.shared.sendMemoUpdate(
+                memoId: watchMemoIdString,
+                status: "thinking",
+                preview: "Listening..."
+            )
+
+            let transcription = try await transcribeWatchAIQuestion(audioURL: audioURL)
+
+            guard let memo = try? context.existingObject(with: memoObjectID) as? VoiceMemo else {
+                throw WatchAIAppDelegateError.memoMissing
+            }
+
+            memo.addSystemTranscript(
+                content: transcription,
+                fromMacOS: false,
+                engine: TranscriptEngines.bestIOSEngine
+            )
+            memo.isTranscribing = false
+            memo.summary = "Ask AI is answering..."
+            try context.save()
+
+            let memoId = memo.id?.uuidString ?? watchMemoIdString
+            let memoTitle = memo.title ?? "Ask AI"
+            _ = AgentSessionStore.shared.session(forMemoId: memoId, memoTitle: memoTitle)
+            AgentSessionStore.shared.addUserTurn(memoId: memoId, content: transcription)
+
+            WatchSessionManager.shared.sendMemoUpdate(
+                memoId: watchMemoIdString,
+                status: "thinking",
+                preview: "Answering..."
+            )
+
+            let response = try await WatchAIService.shared.answer(
+                question: transcription,
+                memoId: watchMemoIdString
+            )
+
+            if let memo = try? context.existingObject(with: memoObjectID) as? VoiceMemo {
+                memo.summary = response.answer
+                memo.isTranscribing = false
+                try? context.save()
+            }
+
+            AgentSessionStore.shared.addAssistantTurn(
+                memoId: memoId,
+                content: response.answer
+            )
+
+            let previewPrefix = response.didSpeak ? "Spoken on \(response.speechRoute.displayName): " : ""
+            WatchSessionManager.shared.sendMemoUpdate(
+                memoId: watchMemoIdString,
+                status: "answered",
+                preview: "\(previewPrefix)\(response.answer)"
+            )
+
+            AppLogger.ai.info("[Watch] AI answered with \(response.providerName) \(response.modelId)")
+        } catch {
+            let failureMessage = "AI unavailable: \(error.localizedDescription)"
+
+            if let memo = try? context.existingObject(with: memoObjectID) as? VoiceMemo {
+                memo.isTranscribing = false
+                memo.summary = failureMessage
+                try? context.save()
+            }
+
+            AppLogger.ai.warning("[Watch] AI request failed: \(error.localizedDescription)")
+            WatchSessionManager.shared.sendMemoUpdate(
+                memoId: watchMemoIdString,
+                status: "failed",
+                preview: failureMessage
+            )
+        }
+    }
+
+    private func transcribeWatchAIQuestion(audioURL: URL) async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            TranscriptionService.shared.transcribe(audioURL: audioURL, useCase: .memo) { result in
+                continuation.resume(with: result)
+            }
         }
     }
 
@@ -176,11 +294,34 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     }
 
     private func watchTitle(from metadata: [String: Any], recordedAt: Date) -> String {
+        if isWatchAIRequest(metadata) {
+            return "Ask AI \(formatWatchDate(recordedAt))"
+        }
+
         if let presetName = metadata["presetName"] as? String,
            !presetName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return "\(presetName) \(formatWatchDate(recordedAt))"
         }
         return "Watch Recording \(formatWatchDate(recordedAt))"
+    }
+
+    private func isWatchAIRequest(_ metadata: [String: Any]) -> Bool {
+        if let intent = metadata["intent"] as? String, intent == "ai" {
+            return true
+        }
+
+        return false
+    }
+
+    private enum WatchAIAppDelegateError: LocalizedError {
+        case memoMissing
+
+        var errorDescription: String? {
+            switch self {
+            case .memoMissing:
+                return "Could not find the saved Watch memo."
+            }
+        }
     }
 
     private func requestNotificationPermissions() {

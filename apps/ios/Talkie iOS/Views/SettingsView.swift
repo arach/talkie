@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 import TalkieMobileKit
 
 struct SettingsView: View {
@@ -14,6 +15,8 @@ struct SettingsView: View {
     @ObservedObject var logStore = LogStore.shared
     @State private var appSettings = TalkieAppSettings.shared
     @State private var showingAllLogs = false
+    @State private var showingAIQRScanner = false
+    @State private var aiCredentialRefreshID = UUID()
     @State private var showLocationPrivacy = false
     @State private var showSignIn = false
     private var bridgeManager = BridgeManager.shared
@@ -196,6 +199,104 @@ struct SettingsView: View {
                                     .tint(.active)
                             }
                             .padding(Spacing.sm)
+                        }
+
+                        settingsSection("AI") {
+                            VStack(spacing: 0) {
+                                HStack(spacing: Spacing.sm) {
+                                    SettingsLeadingIcon(systemName: "sparkles", color: .cyan)
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Credentials")
+                                            .font(.system(size: 14, weight: .regular))
+                                            .foregroundColor(.textPrimary)
+
+                                        Text(aiCredentialSummary)
+                                            .font(.system(size: 12, weight: .light))
+                                            .foregroundColor(.textSecondary)
+                                    }
+
+                                    Spacer()
+
+                                    if aiCredentialProvider != nil {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundColor(.green)
+                                    }
+                                }
+                                .padding(Spacing.sm)
+                                .id(aiCredentialRefreshID)
+
+                                Divider().background(Color.borderPrimary).padding(.leading, settingsRowDividerInset)
+
+                                HStack {
+                                    SettingsLeadingIcon(systemName: "speaker.wave.2.fill", color: .orange)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("AI Voice")
+                                            .font(.system(size: 14, weight: .regular))
+                                            .foregroundColor(.textPrimary)
+                                        Text("Where short AI replies speak back")
+                                            .font(.system(size: 12, weight: .light))
+                                            .foregroundColor(.textSecondary)
+                                    }
+
+                                    Spacer()
+
+                                    Picker("", selection: $appSettings.aiVoiceOutputRoute) {
+                                        Text("iPhone").tag("phone")
+                                        Text("Watch").tag("watch")
+                                        Text("Silent").tag("silent")
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .frame(width: 220)
+                                }
+                                .padding(.horizontal, Spacing.sm)
+                                .padding(.vertical, 10)
+
+                                Divider().background(Color.borderPrimary).padding(.leading, settingsRowDividerInset)
+
+                                Button {
+                                    showingAIQRScanner = true
+                                } label: {
+                                    settingsRow(
+                                        icon: "qrcode.viewfinder",
+                                        iconColor: .active,
+                                        title: "Scan Setup QR",
+                                        subtitle: "Run npx @talkie/ai qr on your Mac"
+                                    )
+                                }
+                                .buttonStyle(.plain)
+
+                                if aiCredentialProvider != nil {
+                                    Divider().background(Color.borderPrimary).padding(.leading, settingsRowDividerInset)
+
+                                    Button(role: .destructive) {
+                                        ComposeProviderCredentialStore.shared.deleteAll()
+                                        appSettings.composeDirectProviderId = "openai"
+                                        appSettings.composeDirectModelId = ""
+                                        aiCredentialRefreshID = UUID()
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            SettingsLeadingIcon(systemName: "trash", color: .red)
+
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text("Clear AI Credentials")
+                                                    .font(.system(size: 14, weight: .regular))
+                                                    .foregroundColor(.red)
+
+                                                Text("Remove phone-stored provider keys")
+                                                    .font(.system(size: 11, weight: .light))
+                                                    .foregroundColor(.textSecondary)
+                                            }
+
+                                            Spacer()
+                                        }
+                                        .padding(.horizontal, Spacing.sm)
+                                        .padding(.vertical, 10)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
                         }
 
                         // MARK: - Recording
@@ -496,6 +597,11 @@ struct SettingsView: View {
         .sheet(isPresented: $showingAllLogs) {
             LogViewerSheet()
         }
+        .sheet(isPresented: $showingAIQRScanner, onDismiss: {
+            aiCredentialRefreshID = UUID()
+        }) {
+            QRScannerView()
+        }
     }
 
     // MARK: - Settings Helpers
@@ -521,6 +627,22 @@ struct SettingsView: View {
         }
 
         return "\(savedHosts.count) saved hosts"
+    }
+
+    private var aiCredentialProvider: ComposeBorrowedProvider? {
+        _ = aiCredentialRefreshID
+        return ComposeProviderCredentialStore.shared.load(
+            providerId: appSettings.composeDirectProviderId,
+            modelId: appSettings.composeDirectModelId
+        )
+    }
+
+    private var aiCredentialSummary: String {
+        guard let provider = aiCredentialProvider else {
+            return "Not configured"
+        }
+
+        return "\(provider.providerName) • \(provider.modelId)"
     }
 
     private var companionSubtitle: String {
@@ -553,6 +675,7 @@ struct SettingsView: View {
     }
 
     private static let quickNavItems: [(icon: String, label: String, section: String)] = [
+        ("sparkles",             "AI",         "AI"),
         ("ipad.and.iphone",      "Companion",  "COMPANION"),
         ("keyboard",             "Dictation",  "KEYBOARD & DICTATION"),
         ("waveform",             "Recording",  "RECORDING"),

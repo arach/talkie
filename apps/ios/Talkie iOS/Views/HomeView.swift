@@ -106,6 +106,9 @@ struct HomeView: View {
     @State private var isPastingImageToMac = false
     @State private var showingCaptureLauncher = false
     @State private var showingCaptureCompose = false
+    @State private var showingCompose = false
+    @State private var showingHyperScan = false
+    @State private var showingQRCodeScanner = false
     @State private var selectedCapture: Capture?
     @State private var selectedHomeDictation: KeyboardDictation?
     @State private var homeDictations: [KeyboardDictation] = []
@@ -129,6 +132,7 @@ struct HomeView: View {
     }
 
     private var showsCompanionShortcutMode: Bool {
+        guard bridgeManager.hasPairedMacs else { return false }
         guard appSettings.followComputerShortcutMode else { return false }
         guard bridgeManager.status == .connected else { return false }
         guard let companionState = bridgeManager.companionState else { return false }
@@ -136,7 +140,7 @@ struct HomeView: View {
     }
 
     private var showsDeckButton: Bool {
-        bridgeManager.pairedMacName != nil || showsCompanionShortcutMode
+        bridgeManager.hasPairedMacs
     }
 
     private var latestSecurityEvent: BridgeSecurityEvent? {
@@ -235,9 +239,18 @@ struct HomeView: View {
                 saveAndShowCapture(capture)
             }
         }
+        .sheet(isPresented: $showingCompose) {
+            ComposeView()
+        }
+        .sheet(isPresented: $showingHyperScan) {
+            HyperScanCaptureView()
+        }
+        .sheet(isPresented: $showingQRCodeScanner) {
+            QRScannerView()
+        }
         .sheet(isPresented: $showingCaptureLauncher) {
             HomeCaptureLauncherView(
-                showsMacShortcuts: bridgeManager.isPaired || showsDeckButton,
+                showsMacShortcuts: showsDeckButton,
                 macName: bridgeManager.pairedMacName ?? bridgeManager.pairedHostname
             ) { action in
                 Task { @MainActor in
@@ -287,6 +300,30 @@ struct HomeView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
+        .overlay(alignment: .top) {
+            if let status = deepLinkManager.aiSetupStatus {
+                aiSetupStatusToast(status)
+                    .padding(.top, 8)
+                    .padding(.horizontal, Spacing.md)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .onChange(of: deepLinkManager.aiSetupStatus) { _, status in
+            guard let status else { return }
+            let feedback: UINotificationFeedbackGenerator.FeedbackType
+            switch status {
+            case .success: feedback = .success
+            case .failure: feedback = .error
+            }
+            UINotificationFeedbackGenerator().notificationOccurred(feedback)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    if deepLinkManager.aiSetupStatus == status {
+                        deepLinkManager.aiSetupStatus = nil
+                    }
+                }
+            }
+        }
         .preferredColorScheme(themeManager.appearanceMode.colorScheme)
         .onAppear {
             refreshHomePreviewCollections()
@@ -331,7 +368,12 @@ struct HomeView: View {
             }
         }
         .onChange(of: showsCompanionShortcutMode) { _, isAvailable in
-            if !isAvailable && bridgeManager.pairedMacName == nil {
+            if !isAvailable && !showsDeckButton {
+                showingCompanionHelper = false
+            }
+        }
+        .onChange(of: showsDeckButton) { _, canShowDeck in
+            if !canShowDeck {
                 showingCompanionHelper = false
             }
         }
@@ -501,12 +543,6 @@ struct HomeView: View {
                                 .padding(.horizontal, Spacing.sm)
                                 .padding(.bottom, Spacing.xs)
                                 .transition(.move(edge: .top).combined(with: .opacity))
-                        }
-
-                        if allVoiceMemos.count >= 5 && !appSettings.tagLocationEnabled && !appSettings.locationTipDismissed {
-                            locationTipBanner
-                                .padding(.horizontal, Spacing.sm)
-                                .padding(.bottom, Spacing.xs)
                         }
 
                         if let securityEvent = latestSecurityEvent {
@@ -769,10 +805,6 @@ struct HomeView: View {
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
 
-                if allVoiceMemos.count >= 5 && !appSettings.tagLocationEnabled && !appSettings.locationTipDismissed {
-                    locationTipBanner
-                }
-
                 if let securityEvent = latestSecurityEvent {
                     securityEventBanner(securityEvent)
                         .transition(.move(edge: .top).combined(with: .opacity))
@@ -794,63 +826,7 @@ struct HomeView: View {
                 } else {
                     recentDashboardSection(entries: homeRecentEntries)
 
-                    HomePreviewSection(title: "COMMAND DECK") {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: Spacing.xs) {
-                                HomeToolButton(
-                                    title: "Record",
-                                    icon: "mic.badge.plus",
-                                    tint: .indigo,
-                                    width: 88,
-                                    accessibilityLabel: "Record a memo on your Mac"
-                                ) {
-                                    Task { await triggerHomeMacShortcut(shortcutID: "talkie-record", fallbackTitle: "RECORD MEMO") }
-                                }
-
-                                HomeToolButton(
-                                    title: "Dictate",
-                                    icon: "waveform.badge.mic",
-                                    tint: .orange,
-                                    width: 88,
-                                    accessibilityLabel: "Start dictation on your Mac"
-                                ) {
-                                    Task { await triggerHomeMacShortcut(shortcutID: "talkie-dictate", fallbackTitle: "DICTATE") }
-                                }
-
-                                HomeToolButton(
-                                    title: "Palette",
-                                    icon: "command",
-                                    tint: .indigo,
-                                    width: 88
-                                ) {
-                                    Task { await triggerHomeMacShortcut(shortcutID: "talkie-command", fallbackTitle: "PALETTE") }
-                                }
-
-                                HomeToolButton(
-                                    title: "Claude",
-                                    icon: "sparkles",
-                                    tint: .purple,
-                                    width: 88
-                                ) {
-                                    Task { await triggerHomeMacShortcut(shortcutID: "mac-claude", fallbackTitle: "CLAUDE") }
-                                }
-
-                                HomeToolButton(
-                                    title: "Shell",
-                                    icon: "terminal",
-                                    tint: .mint,
-                                    width: 88
-                                ) {
-                                    if bridgeManager.status == .connected {
-                                        Task { await triggerHomeMacShortcut(shortcutID: "talkie-ssh", fallbackTitle: "SHELL") }
-                                    } else {
-                                        openTerminalPicker()
-                                    }
-                                }
-                            }
-                            .padding(Spacing.sm)
-                        }
-                    }
+                    typeAndGrabSlots
 
                     if !recentWorkflowRunPreviews.isEmpty {
                         HomePreviewSection(
@@ -994,6 +970,29 @@ struct HomeView: View {
             .fill(themeManager.colors.tableDivider)
             .frame(height: 0.5)
             .padding(.leading, 16)
+    }
+
+    private var typeAndGrabSlots: some View {
+        HStack(spacing: Spacing.sm) {
+            HomeBigTile(
+                title: "Type",
+                subtitle: "Dictate · revise · speak back",
+                icon: "text.bubble",
+                tint: .indigo
+            ) {
+                showingCompose = true
+            }
+
+            HomeBigTile(
+                title: "Grab",
+                subtitle: "Capture, scan, paste",
+                icon: "viewfinder",
+                tint: .orange
+            ) {
+                showingCaptureLauncher = true
+            }
+        }
+        .padding(.horizontal, Spacing.sm)
     }
 
     private func refreshHomePreviewCollections() {
@@ -1176,6 +1175,10 @@ struct HomeView: View {
             }
         case .newCapture:
             showingCaptureCompose = true
+        case .hyperScan:
+            showingHyperScan = true
+        case .scanQRCode:
+            showingQRCodeScanner = true
         case .scanHandwriting:
             showingOCRPhotoPicker = true
         case .pasteImageToMac:
@@ -1990,52 +1993,6 @@ struct HomeView: View {
         }
     }
 
-    private var locationTipBanner: some View {
-        HStack(spacing: Spacing.sm) {
-            Image(systemName: "location")
-                .font(.system(size: 16, weight: .light))
-                .foregroundColor(.active)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Tag memos with location")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.textPrimary)
-                Text("Remember where you recorded. Enable in Settings.")
-                    .font(.system(size: 11, weight: .light))
-                    .foregroundColor(.textSecondary)
-            }
-
-            Spacer()
-
-            Button {
-                showingSettings = true
-            } label: {
-                Text("Settings")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.active)
-                    .padding(.horizontal, Spacing.sm)
-                    .padding(.vertical, Spacing.xs)
-                    .background(Color.active.opacity(0.1))
-                    .cornerRadius(CornerRadius.sm)
-            }
-
-            Button {
-                withAnimation { appSettings.locationTipDismissed = true }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.textTertiary)
-            }
-        }
-        .padding(Spacing.sm)
-        .background(Color.surfaceSecondary)
-        .cornerRadius(CornerRadius.md)
-        .overlay(
-            RoundedRectangle(cornerRadius: CornerRadius.md)
-                .strokeBorder(Color.borderPrimary.opacity(0.5), lineWidth: 0.5)
-        )
-    }
-
     private func securityEventBanner(_ event: BridgeSecurityEvent) -> some View {
         let tint = securityEventTint(event)
 
@@ -2206,6 +2163,78 @@ struct HomeView: View {
             RoundedRectangle(cornerRadius: CornerRadius.md)
                 .strokeBorder(Color.recording.opacity(0.3), lineWidth: 0.5)
         )
+    }
+
+    @ViewBuilder
+    private func aiSetupStatusToast(_ status: DeepLinkManager.AISetupStatus) -> some View {
+        switch status {
+        case .success(let providerName, let modelId):
+            HStack(spacing: Spacing.sm) {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("AI credentials saved")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                    Text("\(providerName) · \(modelId)")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.85))
+                }
+
+                Spacer()
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        deepLinkManager.aiSetupStatus = nil
+                    }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.85))
+                }
+            }
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.sm)
+            .background(Color.accentColor)
+            .clipShape(RoundedRectangle(cornerRadius: CornerRadius.md))
+            .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+
+        case .failure(let message):
+            HStack(spacing: Spacing.sm) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("AI setup failed")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                    Text(message)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.9))
+                        .lineLimit(3)
+                }
+
+                Spacer()
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        deepLinkManager.aiSetupStatus = nil
+                    }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.9))
+                }
+            }
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.sm)
+            .background(Color.recording)
+            .clipShape(RoundedRectangle(cornerRadius: CornerRadius.md))
+            .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+        }
     }
 
     private func deleteMemo(_ memo: VoiceMemo) {
@@ -2551,6 +2580,8 @@ private enum HomeCaptureLauncherAction {
     case recordMemoOnMac
     case startDictationOnMac
     case newCapture
+    case hyperScan
+    case scanQRCode
     case scanHandwriting
     case pasteImageToMac
     case captureAndPasteToMac
@@ -2597,12 +2628,30 @@ private struct HomeCaptureLauncherView: View {
                                 )
                             }
 
+                            HStack(spacing: Spacing.sm) {
+                                compactCard(
+                                    title: "Scan Handwriting",
+                                    subtitle: "Use a photo and run OCR",
+                                    icon: "text.viewfinder",
+                                    tint: .green,
+                                    action: .scanHandwriting
+                                )
+
+                                compactCard(
+                                    title: "Hyper Scan",
+                                    subtitle: "Map a target with snaps",
+                                    icon: "viewfinder.rectangular",
+                                    tint: .mint,
+                                    action: .hyperScan
+                                )
+                            }
+
                             compactCard(
-                                title: "Scan Handwriting",
-                                subtitle: "Use a photo and run OCR",
-                                icon: "text.viewfinder",
-                                tint: .green,
-                                action: .scanHandwriting
+                                title: "Scan QR Code",
+                                subtitle: "Set up AI, pair Macs, or add SSH",
+                                icon: "qrcode.viewfinder",
+                                tint: .cyan,
+                                action: .scanQRCode
                             )
 
                             if showsMacShortcuts {
@@ -3077,37 +3126,46 @@ private struct HomeLibraryView: View {
     }
 }
 
-private struct HomeToolButton: View {
+private struct HomeBigTile: View {
     let title: String
+    let subtitle: String
     let icon: String
     let tint: Color
-    var width: CGFloat? = nil
-    var accessibilityLabel: String? = nil
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 Image(systemName: icon)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(tint)
-                    .frame(width: 34, height: 34)
+                    .frame(width: 40, height: 40)
                     .background(tint.opacity(0.14))
-                    .clipShape(Circle())
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
 
-                Text(title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.textPrimary)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(.textPrimary)
+
+                    Text(subtitle)
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundColor(.textSecondary)
+                        .lineLimit(1)
+                }
             }
-            .frame(maxWidth: width == nil ? .infinity : nil)
-            .frame(width: width)
-            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
             .background(Color.surfaceSecondary)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(tint.opacity(0.18), lineWidth: 0.5)
+            )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(accessibilityLabel ?? title)
+        .accessibilityLabel(title)
+        .accessibilityHint(subtitle)
     }
 }
 

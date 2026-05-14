@@ -33,6 +33,7 @@ import {
 } from "./routes/pair";
 import { sendMessageRoute } from "./routes/message";
 import { memoAttachmentsUploadRoute } from "./routes/memo-attachments";
+import { hyperScanUploadRoute } from "./routes/hyper-scan";
 import {
   composeCommandRoute,
   composeRevisionRoute,
@@ -227,6 +228,13 @@ export const bridge = new Elysia({ name: "bridge" })
     params: t.Object({
       memoId: t.String(),
     }),
+  })
+  .post("/debug/hyper-scan", async ({ request }) => {
+    const body = await request.json();
+    return hyperScanUploadRoute(
+      body,
+      request.headers.get("X-Device-ID")
+    );
   })
   .post("/compose/revision", async ({ request }) => {
     // Parse body manually to avoid consuming the request stream before HMAC

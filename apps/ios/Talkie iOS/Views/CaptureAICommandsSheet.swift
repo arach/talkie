@@ -212,6 +212,10 @@ struct CaptureAICommandsSheet: View {
         return selectedDirectProvider.models.first
     }
 
+    private var phoneAIProvider: ComposeBorrowedProvider? {
+        TalkieAIProviderResolver.shared.configuredProvider()
+    }
+
     private var contextCard: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack(spacing: 8) {
@@ -265,6 +269,8 @@ struct CaptureAICommandsSheet: View {
             selectedDirectModelId: appSettings.composeDirectModelId,
             isLoadingDirectOptions: isLoadingDirectOptions,
             directOptionsError: directOptionsError,
+            hasPhoneAIProvider: phoneAIProvider != nil,
+            phoneAIProviderName: phoneAIProvider?.providerName,
             selectPath: selectPath,
             selectPairedMac: { macID in
                 Task { await bridgeManager.activatePairedMac(id: macID) }
@@ -632,16 +638,21 @@ struct CaptureAICommandsSheet: View {
 
                 switch selectedPath {
                 case .direct:
-                    guard let selectedDirectProvider else {
-                        throw BridgeError.messageFailed(
-                            directOptionsError ?? "Direct iPhone AI Commands is not ready yet."
+                    let provider: ComposeBorrowedProvider
+                    if let phoneProvider = TalkieAIProviderResolver.shared.configuredProvider() {
+                        provider = phoneProvider
+                    } else {
+                        guard let selectedDirectProvider else {
+                            throw BridgeError.messageFailed(
+                                directOptionsError ?? "Set up AI credentials in Settings -> AI, or pair a Mac provider."
+                            )
+                        }
+
+                        provider = try await bridgeManager.composeBorrowedProvider(
+                            providerId: selectedDirectProvider.providerId,
+                            modelId: selectedDirectModel?.id ?? appSettings.composeDirectModelId
                         )
                     }
-
-                    let provider = try await bridgeManager.composeBorrowedProvider(
-                        providerId: selectedDirectProvider.providerId,
-                        modelId: selectedDirectModel?.id ?? appSettings.composeDirectModelId
-                    )
 
                     result = try await CaptureAICommandService.shared.run(
                         context: capture.text,
@@ -871,6 +882,8 @@ private struct CaptureAICommandRunnerControlsRow: View {
     let selectedDirectModelId: String
     let isLoadingDirectOptions: Bool
     let directOptionsError: String?
+    let hasPhoneAIProvider: Bool
+    let phoneAIProviderName: String?
     let selectPath: (CaptureAICommandPath) -> Void
     let selectPairedMac: (String) -> Void
     let selectDirectProvider: (String) -> Void
@@ -1066,8 +1079,13 @@ private struct CaptureAICommandRunnerControlsRow: View {
     private var statusMessage: String? {
         switch selectedPath {
         case .direct:
+            if hasPhoneAIProvider {
+                return phoneAIProviderName.map { "Using iPhone \($0) credentials." }
+                    ?? "Using iPhone AI credentials."
+            }
+
             if !isPaired {
-                return "Pair your Mac once, then use its saved API providers here."
+                return "Set up AI credentials in Settings -> AI, or pair your Mac once."
             }
 
             switch connectionStatus {
@@ -1103,6 +1121,10 @@ private struct CaptureAICommandRunnerControlsRow: View {
     }
 
     private var statusIcon: String {
+        if selectedPath == .direct, hasPhoneAIProvider {
+            return "iphone"
+        }
+
         if !isPaired {
             return "desktopcomputer.badge.plus"
         }
@@ -1120,6 +1142,10 @@ private struct CaptureAICommandRunnerControlsRow: View {
     }
 
     private var statusColor: Color {
+        if selectedPath == .direct, hasPhoneAIProvider {
+            return Color.success
+        }
+
         if !isPaired {
             return Color.warning
         }

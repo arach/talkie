@@ -628,6 +628,26 @@ final class BridgeManager {
         return response
     }
 
+    func sendHyperScanCapture(
+        body: HyperScanUploadRequest
+    ) async throws -> HyperScanUploadResponse {
+        guard isPaired else {
+            throw BridgeError.notConfigured
+        }
+
+        if status != .connected {
+            await connect()
+        }
+
+        guard status == .connected else {
+            throw BridgeError.connectionFailed
+        }
+
+        let response = try await client.sendHyperScanCapture(body: body)
+        lastSuccessfulContactAt = .now
+        return response
+    }
+
     func composeRevision(
         text: String,
         instruction: String

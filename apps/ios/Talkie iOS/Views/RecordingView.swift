@@ -678,15 +678,7 @@ struct RecordingView: View {
             hasLoadedRecentVisuals = true
             recentVisualAssets = fetchRecentVisualAssets()
         case .notDetermined:
-            PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
-                Task { @MainActor in
-                    photoAuthorizationStatus = status
-                    if status == .authorized || status == .limited {
-                        hasLoadedRecentVisuals = true
-                        recentVisualAssets = fetchRecentVisualAssets()
-                    }
-                }
-            }
+            recentVisualAssets = []
         default:
             recentVisualAssets = []
         }
