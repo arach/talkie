@@ -770,43 +770,20 @@ struct AppNavigation: View {
     // MARK: - Sidebar
 
     private var sidebarView: some View {
-        // Overlay with an alignment guide — NOT an HStack sibling and NOT
-        // `.offset`. The HStack approach gave the handle real layout
-        // width, which pushed everything 18pt rightward and made the
-        // handle look like a "floating" tab in a gap. `.offset` is
-        // render-only and breaks hit-testing.
-        //
-        // The trick: `.alignmentGuide(.trailing) { d in d[.trailing] - W/2 }`
-        // shifts the overlay's actual frame (and therefore its hit zone)
-        // outward by half its width, so the handle's CENTER sits exactly
-        // on the sidebar's trailing edge. The 12pt hit zone straddles the
-        // boundary — 6pt inside the rail (past the icon's trailing edge),
-        // 6pt outside (over the detail column's leading padding).
-        sidebarList
-            .overlay(alignment: .trailing) {
-                sidebarEdgeHandle
-                    .alignmentGuide(.trailing) { d in
-                        d[.trailing] - SidebarEdgeHandle.hitWidth / 2
-                    }
-            }
-            .padding(.leading, SidebarLayout.leadingInset)
-    }
-
-    @State private var edgeHandleDragging = false
-
-    private var sidebarEdgeHandle: some View {
-        SidebarEdgeHandle(
+        AppNavigationSidebar(
+            selection: sidebarSelectionBinding,
+            entries: sidebarEntries,
+            progress: sidebarTransition.progress,
+            accent: Theme.current.accent,
+            allCaps: settings.uiAllCaps,
+            committedLabelWidth: expandedLabelWidth,
             isCompact: sidebarIconsOnly,
             activationDistance: Self.sidebarResizeActivationDistance,
-            currentWidth: expandedLabelWidth,
             minWidth: Self.sidebarMinLabelWidth,
             maxWidth: Self.sidebarMaxLabelWidth,
             collapseWidth: Self.sidebarCollapseLabelWidth,
             isDragging: $edgeHandleDragging,
             onToggle: toggleSidebarRenderMode,
-            onResize: { width in
-                expandedLabelWidth = Self.clampedSidebarResizeLabelWidth(width)
-            },
             onResizeEnded: { width in
                 let clamped = Self.clampedSidebarLabelWidth(width)
                 expandedLabelWidth = clamped
@@ -817,19 +794,7 @@ struct AppNavigation: View {
             },
             onExpand: { width in
                 expandSidebarFromCompact(to: width)
-            }
-        )
-    }
-
-    private var sidebarList: some View {
-        Sidebar(
-            selection: sidebarSelectionBinding,
-            entries: sidebarEntries,
-            progress: sidebarTransition.progress,
-            accent: Theme.current.accent,
-            allCaps: settings.uiAllCaps,
-            labelWidth: CGFloat(expandedLabelWidth),
-            onHeaderTap: { toggleSidebarRenderMode() },
+            },
             railHeader: { talkieLogo },
             labelHeader: { baselineAnchoredWordmark },
             footer: {
@@ -846,8 +811,9 @@ struct AppNavigation: View {
                     }
             }
         )
-        .frame(maxHeight: .infinity, alignment: .top)
     }
+
+    @State private var edgeHandleDragging = false
 
     private var sidebarSelectionBinding: Binding<NavigationSection?> {
         Binding(
@@ -1169,6 +1135,135 @@ private struct NavigationShellTimingProbe: View {
     }
 }
 #endif
+
+private struct AppNavigationSidebar<RailHeader: View, LabelHeader: View, Footer: View>: View {
+    @Binding var selection: NavigationSection?
+    let entries: [SidebarEntry<NavigationSection>]
+    let progress: Double
+    let accent: Color
+    let allCaps: Bool
+    let committedLabelWidth: Double
+    let isCompact: Bool
+    let activationDistance: CGFloat
+    let minWidth: Double
+    let maxWidth: Double
+    let collapseWidth: Double
+    @Binding var isDragging: Bool
+    let onToggle: () -> Void
+    let onResizeEnded: (Double) -> Void
+    let onCollapse: (Double) -> Void
+    let onExpand: (Double) -> Void
+    @ViewBuilder let railHeader: () -> RailHeader
+    @ViewBuilder let labelHeader: () -> LabelHeader
+    @ViewBuilder let footer: () -> Footer
+
+    /// Expanded-mode drag preview width. This intentionally lives below
+    /// `AppNavigation`: drag ticks can resize the sidebar locally without
+    /// writing the root `expandedLabelWidth` state that also drives the
+    /// detail column and global chrome.
+    @State private var dragPreviewLabelWidth: Double?
+
+    private var effectiveLabelWidth: Double {
+        dragPreviewLabelWidth ?? committedLabelWidth
+    }
+
+    /// Width reported to the parent `SidebarColumns` layout. During an
+    /// expanded drag this stays at the committed root width while the
+    /// sidebar content paints its local preview width inside/over that
+    /// stable slot. That keeps the detail column from receiving a new
+    /// width on every drag tick; it relayouts once when drag-end commits.
+    private var layoutWidth: CGFloat {
+        sidebarWidth(labelWidth: isDragging ? committedLabelWidth : effectiveLabelWidth)
+    }
+
+    var body: some View {
+        // Overlay with an alignment guide — NOT an HStack sibling and NOT
+        // `.offset`. The HStack approach gave the handle real layout
+        // width, which pushed everything 18pt rightward and made the
+        // handle look like a "floating" tab in a gap. `.offset` is
+        // render-only and breaks hit-testing.
+        //
+        // The trick: `.alignmentGuide(.trailing) { d in d[.trailing] - W/2 }`
+        // shifts the overlay's actual frame (and therefore its hit zone)
+        // outward by half its width, so the handle's CENTER sits exactly
+        // on the sidebar's trailing edge. The 12pt hit zone straddles the
+        // boundary — 6pt inside the rail (past the icon's trailing edge),
+        // 6pt outside (over the detail column's leading padding).
+        sidebarList
+            .overlay(alignment: .trailing) {
+                sidebarEdgeHandle
+                    .alignmentGuide(.trailing) { d in
+                        d[.trailing] - SidebarEdgeHandle.hitWidth / 2
+                    }
+            }
+            .padding(.leading, SidebarLayout.leadingInset)
+            .frame(width: layoutWidth, alignment: .leading)
+            .onChange(of: isDragging) { _, dragging in
+                if !dragging {
+                    dragPreviewLabelWidth = nil
+                }
+            }
+            .onChange(of: isCompact) { _, _ in
+                if !isDragging {
+                    dragPreviewLabelWidth = nil
+                }
+            }
+    }
+
+    private var sidebarList: some View {
+        Sidebar(
+            selection: $selection,
+            entries: entries,
+            progress: progress,
+            accent: accent,
+            allCaps: allCaps,
+            labelWidth: CGFloat(effectiveLabelWidth),
+            onHeaderTap: onToggle,
+            railHeader: railHeader,
+            labelHeader: labelHeader,
+            footer: footer
+        )
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private var sidebarEdgeHandle: some View {
+        SidebarEdgeHandle(
+            isCompact: isCompact,
+            activationDistance: activationDistance,
+            currentWidth: effectiveLabelWidth,
+            minWidth: minWidth,
+            maxWidth: maxWidth,
+            collapseWidth: collapseWidth,
+            isDragging: $isDragging,
+            onToggle: onToggle,
+            onResize: { width in
+                dragPreviewLabelWidth = clampedPreviewWidth(width)
+            },
+            onResizeEnded: { width in
+                dragPreviewLabelWidth = clampedPreviewWidth(width)
+                onResizeEnded(width)
+            },
+            onCollapse: { restoreWidth in
+                dragPreviewLabelWidth = nil
+                onCollapse(restoreWidth)
+            },
+            onExpand: { width in
+                dragPreviewLabelWidth = nil
+                onExpand(width)
+            }
+        )
+    }
+
+    private func clampedPreviewWidth(_ width: Double) -> Double {
+        min(maxWidth, max(0, width))
+    }
+
+    private func sidebarWidth(labelWidth: Double) -> CGFloat {
+        SidebarLayout.leadingInset
+            + SidebarLayout.railWidth
+            + CGFloat(labelWidth) * CGFloat(1 - progress)
+    }
+}
 
 
 // MARK: - View Extensions
@@ -2095,7 +2190,9 @@ private struct SidebarEdgeHandle: View {
         }
 
         didCommitResize = true
-        isDragging = true
+        if !isDragging {
+            isDragging = true
+        }
 
         let rawProposed = (dragStartWidth ?? currentWidth) + Double(horizontalDelta)
         let proposed = clampedWidth(rawProposed)
