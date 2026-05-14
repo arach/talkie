@@ -136,6 +136,32 @@ struct HomeScreen: View {
     }
 
     var body: some View {
+        if settings.isScopeTheme {
+            // Cream-phosphor Home — homepage-inspired layout. Bypasses
+            // the grid/widget system entirely; pulls activity from the
+            // same data sources HomeGrid would use.
+            ScopeHomeView(
+                unifiedActivity: unifiedActivity,
+                todayMemos: todayMemos,
+                todayDictations: todayDictations,
+                totalWords: totalWords,
+                streak: streak,
+                onStartRecording: { showingRecordingView = true },
+                onOpenLibrary: { /* TODO: wire library nav */ },
+                onOpenItem: { _ in /* TODO: wire item nav */ }
+            )
+            .task {
+                if !hasPerformedInitialLoad { loadData() }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .talkieSyncCompleted)) { _ in
+                handleSyncDrivenRefresh()
+            }
+        } else {
+            standardHome
+        }
+    }
+
+    private var standardHome: some View {
         TalkiePage("Home", style: .page) {
             header
         } content: {

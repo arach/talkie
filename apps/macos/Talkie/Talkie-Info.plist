@@ -35,5 +35,7 @@
 	<string>$(TALKIE_MAC_APP_GROUP)</string>
 	<key>TalkieSharedSettingsSuite</key>
 	<string>$(TALKIE_MAC_SHARED_SETTINGS_SUITE)</string>
+	<key>ATSApplicationFontsPath</key>
+	<string>Resources/Fonts/</string>
 </dict>
 </plist>

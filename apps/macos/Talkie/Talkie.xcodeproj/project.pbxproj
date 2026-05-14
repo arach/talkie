@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B00AD33E59874ED29D2233B0 /* ScopeWorkflowStepCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19E80E0B71394B66BEF56B71 /* ScopeWorkflowStepCard.swift */; };
+		A977D907A9F344DAB208C424 /* ScopeDraftsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 409F048DACD9412483B4B67C /* ScopeDraftsScreen.swift */; };
+		EB1E5CD3E80648249ED16FCD /* ScopeWorkflowListColumn.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1CE4B10EA624D4FB32A7D57 /* ScopeWorkflowListColumn.swift */; };
+		57597A361A5748F3BE1CCE18 /* ScopeHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D2D162EB3F404990A08A40 /* ScopeHomeView.swift */; };
 		000B06752659571E4EA8208D /* ClaudeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA2846DC98F2A0A65B237633 /* ClaudeView.swift */; };
 		002E40F62A1545B7D7AE2CD9 /* CaptureRadialPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E46A5885BA07F1A04FDD14B /* CaptureRadialPanel.swift */; };
 		003E46C586EEA89FF2196307 /* NotchRecordingPillView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 559904F06C63DF1AC81FC2B5 /* NotchRecordingPillView.swift */; };
@@ -489,6 +493,10 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		19E80E0B71394B66BEF56B71 /* ScopeWorkflowStepCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeWorkflowStepCard.swift; sourceTree = "<group>"; };
+		409F048DACD9412483B4B67C /* ScopeDraftsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeDraftsScreen.swift; sourceTree = "<group>"; };
+		E1CE4B10EA624D4FB32A7D57 /* ScopeWorkflowListColumn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeWorkflowListColumn.swift; sourceTree = "<group>"; };
+		04D2D162EB3F404990A08A40 /* ScopeHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeHomeView.swift; sourceTree = "<group>"; };
 		0005DBD402FA866318CD2439 /* WorkflowListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowListView.swift; sourceTree = "<group>"; };
 		0015AD90597F690662A7F1D3 /* SyncClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncClient.swift; sourceTree = "<group>"; };
 		01985189454C04D200B36B2E /* WorkflowControlPlaneClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowControlPlaneClient.swift; sourceTree = "<group>"; };
@@ -986,6 +994,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		07F14E9974574A7AB6ADAC8E /* Drafts */ = {
+			isa = PBXGroup;
+			children = (
+				409F048DACD9412483B4B67C /* ScopeDraftsScreen.swift */,
+			);
+			path = Drafts;
+			sourceTree = "<group>";
+		};
 		06958D87321BB4B18D1C1FD8 /* Apps */ = {
 			isa = PBXGroup;
 			children = (
@@ -1146,6 +1162,7 @@
 		3CB63CA63DE037B0AD57EA6F /* Home */ = {
 			isa = PBXGroup;
 			children = (
+				04D2D162EB3F404990A08A40 /* ScopeHomeView.swift */,
 				DF09271641E02C38A5C4A3A1 /* ContentSearchOverlay.swift */,
 				A0A7F28290FD6E23A24DA5DA /* ContentSearchView.swift */,
 				C90ECB98009A0DA116C86AB5 /* HomeActivityWidget.swift */,
@@ -1242,6 +1259,7 @@
 		5CC7B1BEDA8719A80E0BFD4C /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				07F14E9974574A7AB6ADAC8E /* Drafts */,
 				A2EDA2E38649627130FC8C77 /* AppNavigation.swift */,
 				BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */,
 				ECF1124572A3283EFFF6087C /* DraftsScreen.swift */,
@@ -1592,6 +1610,8 @@
 		A467CE2E477CD03D3FDDE965 /* Workflows */ = {
 			isa = PBXGroup;
 			children = (
+				19E80E0B71394B66BEF56B71 /* ScopeWorkflowStepCard.swift */,
+				E1CE4B10EA624D4FB32A7D57 /* ScopeWorkflowListColumn.swift */,
 				CB56E334D880A89D96C5F7FD /* WorkflowColumnViews.swift */,
 				6004FB1AB3BD3324B0E0F903 /* WorkflowContentViews.swift */,
 			);
@@ -2118,6 +2138,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B00AD33E59874ED29D2233B0 /* ScopeWorkflowStepCard.swift in Sources */,
+				A977D907A9F344DAB208C424 /* ScopeDraftsScreen.swift in Sources */,
+				EB1E5CD3E80648249ED16FCD /* ScopeWorkflowListColumn.swift in Sources */,
+				57597A361A5748F3BE1CCE18 /* ScopeHomeView.swift in Sources */,
 				46BCB0361A074CFCE3C32252 /* AIResultsViews.swift in Sources */,
 				FF50DD21DD6B6C2C95BE8EBD /* APIKeyStore.swift in Sources */,
 				A99F74DC6D3F9B3A38A11425 /* APISettings.swift in Sources */,

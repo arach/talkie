@@ -845,10 +845,17 @@ struct AppNavigation: View {
     private var contentView: some View {
         switch selectedSection {
         case .workflows:
-            WorkflowListColumn(
-                selectedWorkflowID: $selectedWorkflowID,
-                editingWorkflow: $editingWorkflow
-            )
+            if SettingsManager.shared.isScopeTheme {
+                ScopeWorkflowListColumn(
+                    selectedWorkflowID: $selectedWorkflowID,
+                    editingWorkflow: $editingWorkflow
+                )
+            } else {
+                WorkflowListColumn(
+                    selectedWorkflowID: $selectedWorkflowID,
+                    editingWorkflow: $editingWorkflow
+                )
+            }
         case .contextRules:
             EmptyView()
         case .settings:
@@ -870,7 +877,11 @@ struct AppNavigation: View {
                 case .home:
                     HomeScreen()
                 case .drafts:
-                    DraftsScreen()
+                    if SettingsManager.shared.isScopeTheme {
+                        ScopeDraftsScreen()
+                    } else {
+                        DraftsScreen()
+                    }
                 case .notes:
                     RecordingsScreen(initialTypeFilter: RecordingTypeFilter.notes)
                 case .models:
