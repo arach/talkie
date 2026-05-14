@@ -22,45 +22,82 @@ struct ConsoleScreen: View {
     @State private var debugLoaderReplayToken = UUID()
     #endif
 
+    private var isScope: Bool { SettingsManager.shared.isScopeTheme }
+
     var body: some View {
         HStack(spacing: 0) {
-            ConsoleTabRail(
-                tabs: registry.tabs,
-                errors: registry.errors,
-                activeTabId: Binding(
-                    get: { registry.activeTabId },
-                    set: { registry.activeTabId = $0 }
-                ),
-                sessionPool: pool,
-                onNewTab: { showTabEditor = true; editingTab = nil },
-                onEdit: { tab in editingTab = tab; showTabEditor = true },
-                onDuplicate: { tab in
-                    if let copy = registry.duplicate(tab.id) {
-                        registry.activeTabId = copy.id
+            if isScope {
+                ScopeConsoleRail(
+                    tabs: registry.tabs,
+                    errors: registry.errors,
+                    activeTabId: Binding(
+                        get: { registry.activeTabId },
+                        set: { registry.activeTabId = $0 }
+                    ),
+                    sessionPool: pool,
+                    onNewTab: { showTabEditor = true; editingTab = nil },
+                    onEdit: { tab in editingTab = tab; showTabEditor = true },
+                    onDuplicate: { tab in
+                        if let copy = registry.duplicate(tab.id) {
+                            registry.activeTabId = copy.id
+                        }
+                    },
+                    onReveal: { tab in
+                        if let url = tab.sourceURL {
+                            NSWorkspace.shared.activateFileViewerSelecting([url])
+                        } else {
+                            let url = registry.tabsDirectoryURL.appending(path: "\(tab.id).talkierc")
+                            NSWorkspace.shared.activateFileViewerSelecting([url])
+                        }
+                    },
+                    onDelete: { tab in
+                        pool.close(tabId: tab.id)
+                        registry.delete(tab.id)
                     }
-                },
-                onReveal: { tab in
-                    if let url = tab.sourceURL {
-                        NSWorkspace.shared.activateFileViewerSelecting([url])
-                    } else {
-                        let url = registry.tabsDirectoryURL.appending(path: "\(tab.id).talkierc")
-                        NSWorkspace.shared.activateFileViewerSelecting([url])
-                    }
-                },
-                onDelete: { tab in
-                    pool.close(tabId: tab.id)
-                    registry.delete(tab.id)
-                }
-            )
+                )
 
-            Rectangle()
-                .fill(Theme.current.border.opacity(0.5))
-                .frame(width: 1)
+                Rectangle()
+                    .fill(ScopeEdge.faint)
+                    .frame(width: 1)
+            } else {
+                ConsoleTabRail(
+                    tabs: registry.tabs,
+                    errors: registry.errors,
+                    activeTabId: Binding(
+                        get: { registry.activeTabId },
+                        set: { registry.activeTabId = $0 }
+                    ),
+                    sessionPool: pool,
+                    onNewTab: { showTabEditor = true; editingTab = nil },
+                    onEdit: { tab in editingTab = tab; showTabEditor = true },
+                    onDuplicate: { tab in
+                        if let copy = registry.duplicate(tab.id) {
+                            registry.activeTabId = copy.id
+                        }
+                    },
+                    onReveal: { tab in
+                        if let url = tab.sourceURL {
+                            NSWorkspace.shared.activateFileViewerSelecting([url])
+                        } else {
+                            let url = registry.tabsDirectoryURL.appending(path: "\(tab.id).talkierc")
+                            NSWorkspace.shared.activateFileViewerSelecting([url])
+                        }
+                    },
+                    onDelete: { tab in
+                        pool.close(tabId: tab.id)
+                        registry.delete(tab.id)
+                    }
+                )
+
+                Rectangle()
+                    .fill(Theme.current.border.opacity(0.5))
+                    .frame(width: 1)
+            }
 
             tabContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(Theme.current.surfaceBase)
+        .background(isScope ? ScopeCanvas.canvas : Theme.current.surfaceBase)
         .task {
             guard !didBootstrap else { return }
             didBootstrap = true
@@ -169,6 +206,11 @@ struct ConsoleScreen: View {
                 .frame(width: geo.size.width, height: geo.size.height)
             }
             .id(tab.id)
+        } else if isScope {
+            ScopeConsoleZeroState(
+                onNewTab: { showTabEditor = true; editingTab = nil },
+                onSelectTab: { registry.activeTabId = $0 }
+            )
         } else {
             ConsoleEmptyState()
         }

@@ -205,98 +205,47 @@ struct ScopeLibraryView: View {
         .frame(maxHeight: .infinity, alignment: .top)
     }
 
-    // MARK: - Hero
+    // MARK: - Header strip
+    //
+    // Universal 44pt top band — title names the active filter, trailing
+    // chrome states totals, record button anchors the right edge.
+    // Baseline-aligned with the sidebar wordmark via `ScopeTopBand`.
 
     private var heroHeader: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                Eyebrow("Library")
-                Spacer()
-                Text("\(viewModel.totalCount) ON FILE")
-                    .font(ScopeType.chrome)
-                    .tracking(ScopeType.Tracking.wide)
-                    .foregroundStyle(ScopeInk.faint)
-            }
-
-            HStack(alignment: .top) {
-                heroHeadline
-                    .font(ScopeFont.display(size: 32))
-                    .foregroundStyle(ScopeInk.primary)
-                    .tracking(-0.6)
-                    .lineSpacing(-2)
-
-                Spacer()
-
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showingRecordingView = true
-                    }
-                } label: {
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(ScopeAmber.solid)
-                        .frame(width: 28, height: 28)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 4)
-                                .stroke(ScopeEdge.normal, lineWidth: 1)
-                        )
-                        .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(ScopeAmber.tintSubtle)
-                        )
+        ScopeTopBand(
+            title: filterEyebrow,
+            chrome: "\(viewModel.totalCount) ON FILE"
+        ) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showingRecordingView = true
                 }
-                .buttonStyle(.plain)
-                .help("New recording")
+            } label: {
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(ScopeAmber.solid)
+                    .frame(width: 24, height: 24)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(ScopeEdge.normal, lineWidth: 1)
+                    )
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(ScopeAmber.tintSubtle)
+                    )
             }
-
-            Text("CAPTURE · LISTEN · RETRIEVE")
-                .font(ScopeType.chrome)
-                .tracking(ScopeType.Tracking.extraWide)
-                .foregroundStyle(ScopeInk.subtle)
-                .padding(.top, 2)
-        }
-        .padding(.horizontal, 18)
-        .padding(.top, 22)
-        .padding(.bottom, 16)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(ScopeEdge.faint).frame(height: 1)
+            .buttonStyle(.plain)
+            .help("New recording")
         }
     }
 
-    /// Two-tone Cormorant headline. Verb stays primary, descriptor turns muted-italic.
-    @ViewBuilder
-    private var heroHeadline: some View {
+    private var filterEyebrow: String {
         switch typeFilter {
-        case .all:
-            (
-                Text("Everything ").foregroundColor(ScopeInk.primary)
-                +
-                Text("captured.").foregroundColor(ScopeInk.muted).italic()
-            )
-        case .memos:
-            (
-                Text("Voices ").foregroundColor(ScopeInk.primary)
-                +
-                Text("on file.").foregroundColor(ScopeInk.muted).italic()
-            )
-        case .dictations:
-            (
-                Text("Words ").foregroundColor(ScopeInk.primary)
-                +
-                Text("dispatched.").foregroundColor(ScopeInk.muted).italic()
-            )
-        case .notes:
-            (
-                Text("Thoughts ").foregroundColor(ScopeInk.primary)
-                +
-                Text("written down.").foregroundColor(ScopeInk.muted).italic()
-            )
-        case .captures:
-            (
-                Text("Moments ").foregroundColor(ScopeInk.primary)
-                +
-                Text("pinned.").foregroundColor(ScopeInk.muted).italic()
-            )
+        case .all:        return "Library"
+        case .memos:      return "Memos"
+        case .dictations: return "Dictations"
+        case .notes:      return "Notes"
+        case .captures:   return "Captures"
         }
     }
 
@@ -325,7 +274,7 @@ struct ScopeLibraryView: View {
             .padding(.horizontal, 14)
         }
         .frame(height: 56)
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 32)
         .padding(.top, 16)
     }
 
@@ -391,7 +340,7 @@ struct ScopeLibraryView: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 32)
         .padding(.top, 16)
         .padding(.bottom, 10)
     }
@@ -451,7 +400,7 @@ struct ScopeLibraryView: View {
             RoundedRectangle(cornerRadius: 4)
                 .stroke(ScopeEdge.normal, lineWidth: 0.5)
         )
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 32)
         .padding(.bottom, 12)
     }
 
@@ -495,7 +444,7 @@ struct ScopeLibraryView: View {
                                 .foregroundStyle(ScopeInk.faint)
                         }
                         .padding(.vertical, 16)
-                        .padding(.horizontal, 18)
+                        .padding(.horizontal, 32)
                     }
                 }
             }
@@ -522,11 +471,11 @@ struct ScopeLibraryView: View {
                 .tracking(ScopeType.Tracking.wide)
                 .foregroundStyle(ScopeInk.subtle)
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 32)
         .padding(.top, 14)
         .padding(.bottom, 8)
         .overlay(alignment: .bottom) {
-            ScopeDivider().padding(.horizontal, 18)
+            ScopeDivider().padding(.horizontal, 32)
         }
     }
 
@@ -612,7 +561,7 @@ struct ScopeLibraryView: View {
                     .foregroundStyle(ScopeAmber.solid)
             }
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 32)
         .padding(.vertical, 10)
         .overlay(alignment: .top) {
             Rectangle().fill(ScopeEdge.faint).frame(height: 1)
@@ -786,7 +735,7 @@ private struct ScopeLibraryRow: View {
                 }
                 .frame(width: 72, alignment: .trailing)
             }
-            .padding(.horizontal, 18)
+            .padding(.horizontal, 32)
             .padding(.vertical, 10)
             .background {
                 if isSelected {

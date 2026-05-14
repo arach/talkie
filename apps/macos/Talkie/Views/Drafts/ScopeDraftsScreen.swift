@@ -129,17 +129,21 @@ struct ScopeDraftsScreen: View {
     // MARK: - Body
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                hero
-                signalMonitor
-                editorBay
-                actionRail
-                ownershipStrip
+        VStack(spacing: 0) {
+            hero
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 28) {
+                    signalMonitor
+                    editorBay
+                    actionRail
+                    ownershipStrip
+                }
+                .padding(.horizontal, 32)
+                .padding(.top, 12)
+                .padding(.bottom, 28)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 36)
-            .padding(.vertical, 28)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
@@ -156,97 +160,37 @@ struct ScopeDraftsScreen: View {
         }
     }
 
-    // MARK: - Hero
+    // MARK: - Header strip
+    //
+    // Universal 44pt top band — title "Drafts", trailing chrome carries
+    // word count / readiness, optional ← SOURCE pill when navigated from
+    // a memo.
 
     private var hero: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline) {
-                Eyebrow("Compose", color: ScopeAmber.solid)
-                Spacer()
-                if let sourceId = sourceRecordingId {
-                    Button {
-                        NavigationState.shared.navigateToMemo(sourceId)
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text("←")
-                                .font(.system(size: 11))
-                            Text("SOURCE")
-                                .font(ScopeType.channel)
-                                .tracking(ScopeType.Tracking.wide)
-                        }
+        ScopeTopBand(
+            title: "Drafts",
+            chrome: headerChrome
+        ) {
+            if let sourceId = sourceRecordingId {
+                Button {
+                    NavigationState.shared.navigateToMemo(sourceId)
+                } label: {
+                    Text("← SOURCE")
+                        .font(ScopeType.chrome)
+                        .tracking(ScopeType.Tracking.wide)
                         .foregroundStyle(ScopeAmber.solid)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 2)
-                                .stroke(ScopeEdge.normal, lineWidth: 0.5)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .help("Open source recording")
                 }
+                .buttonStyle(.plain)
+                .help("Open source recording")
+                .accessibilityLabel("Open source recording \(sourceId.uuidString.prefix(8))")
             }
-
-            heroHeadline
-                .font(ScopeFont.display(size: 46))
-                .foregroundStyle(ScopeInk.primary)
-                .tracking(-0.8)
-                .lineSpacing(-2)
-
-            Text(heroSubhead)
-                .font(.system(size: 13))
-                .foregroundStyle(ScopeInk.muted)
-                .frame(maxWidth: 560, alignment: .leading)
-
-            ScopeDivider().padding(.top, 4)
         }
     }
 
-    /// Two-tone serif headline — the verb stays primary, the object
-    /// turns muted-italic. Reads like an instruction etched on glass.
-    @ViewBuilder
-    private var heroHeadline: some View {
-        if editorState.text.isEmpty {
-            (
-                Text("Speak it. ")
-                    .foregroundColor(ScopeInk.primary)
-                +
-                Text("Shape it.")
-                    .foregroundColor(ScopeInk.muted)
-                    .italic()
-            )
-        } else if editorState.isReviewing {
-            (
-                Text("Review the ")
-                    .foregroundColor(ScopeInk.primary)
-                +
-                Text("revision.")
-                    .foregroundColor(ScopeInk.muted)
-                    .italic()
-            )
-        } else {
-            (
-                Text("\(wordCount) ")
-                    .foregroundColor(ScopeInk.primary)
-                +
-                Text(wordCount == 1 ? "word on the table." : "words on the table.")
-                    .foregroundColor(ScopeInk.muted)
-                    .italic()
-            )
-        }
-    }
-
-    private var heroSubhead: String {
-        if editorState.text.isEmpty {
-            return "Dictate, type, or paste. Then steer with your voice — \"make it tighter,\" \"more formal,\" \"bullet it.\""
-        }
-        if editorState.isReviewing {
-            return "Accept the change with ⌘↩, reject with ⎋. Your text returns to its prior state if rejected."
-        }
-        if editorState.isProcessing {
-            return "Routing through the model. The diff will land here when it's ready."
-        }
-        return "Speak a command to revise. Use a smart action to one-shot a transform. Save as memo or copy out."
+    private var headerChrome: String {
+        if editorState.text.isEmpty { return "READY" }
+        if editorState.isReviewing { return "REVIEWING REVISION" }
+        return wordCount == 1 ? "1 WORD" : "\(wordCount) WORDS"
     }
 
     // MARK: - Signal monitor (dark bichromatic strip)
@@ -1224,9 +1168,13 @@ private struct ActionCell: View {
                     .fill(ScopeCanvas.surface)
                     .overlay(
                         RoundedRectangle(cornerRadius: 4)
-                            .stroke(isHovered ? ScopeEdge.strong : ScopeEdge.normal, lineWidth: 1)
+                            .stroke(strokeColor, lineWidth: 1)
                     )
-                GraticuleBackground(pitch: 18, color: ScopeTrace.faint, opacity: 0.35)
+                GraticuleBackground(
+                    pitch: 18,
+                    color: ScopeTrace.faint,
+                    opacity: disabled ? 0.20 : 0.35
+                )
                     .mask(RoundedRectangle(cornerRadius: 4))
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -1241,20 +1189,22 @@ private struct ActionCell: View {
 
                     Text(action.name)
                         .font(ScopeFont.display(size: 15))
-                        .foregroundStyle(ScopeInk.primary)
+                        .foregroundStyle(disabled ? ScopeInk.muted : ScopeInk.primary)
                         .lineLimit(1)
                         .tracking(-0.2)
 
                     Spacer(minLength: 0)
 
                     HStack(spacing: 4) {
-                        Text("APPLY")
+                        Text(disabled ? "OFFLINE" : "APPLY")
                             .font(ScopeType.chrome)
                             .tracking(ScopeType.Tracking.wide)
-                            .foregroundStyle(ScopeInk.faint)
-                        Text("→")
-                            .font(.system(size: 10))
-                            .foregroundStyle(ScopeInk.faint)
+                            .foregroundStyle(ScopeInk.subtle)
+                        if !disabled {
+                            Text("→")
+                                .font(.system(size: 10))
+                                .foregroundStyle(ScopeInk.faint)
+                        }
                     }
                 }
                 .padding(10)
@@ -1264,24 +1214,36 @@ private struct ActionCell: View {
         }
         .buttonStyle(.plain)
         .disabled(disabled)
-        .opacity(disabled ? 0.55 : 1)
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.14), value: isHovered)
     }
 
+    private var strokeColor: Color {
+        if disabled { return ScopeEdge.faint }
+        return isHovered ? ScopeEdge.strong : ScopeEdge.normal
+    }
+
     private var iconBadge: some View {
         RoundedRectangle(cornerRadius: 3)
-            .fill(ScopeAmber.tintSubtle)
+            .fill(disabled ? Color.clear : ScopeAmber.tintSubtle)
             .frame(width: 22, height: 22)
             .overlay(
                 RoundedRectangle(cornerRadius: 3)
-                    .stroke(ScopeEdge.normal, lineWidth: 0.5)
+                    .stroke(disabled ? ScopeEdge.subtle : ScopeEdge.normal, lineWidth: 0.5)
             )
             .overlay(
-                Image(systemName: action.icon)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(ScopeAmber.solid)
-                    .phosphorGlow(radius: 2, opacity: 0.28)
+                Group {
+                    if disabled {
+                        Image(systemName: action.icon)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(ScopeInk.faint)
+                    } else {
+                        Image(systemName: action.icon)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(ScopeAmber.solid)
+                            .phosphorGlow(radius: 2, opacity: 0.28)
+                    }
+                }
             )
     }
 }

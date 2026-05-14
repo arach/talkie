@@ -55,17 +55,22 @@ struct ScopeHomeView: View {
     private var todayTotal: Int { todayMemos + todayDictations }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 36) {
-                hero
-                captureModes
-                agentPanel
-                signalTable
-                ownershipStrip
+        VStack(spacing: 0) {
+            ScopeTopBand(title: "Today", chrome: heroTrailing)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 36) {
+                    hero
+                    captureModes
+                    agentPanel
+                    signalTable
+                    ownershipStrip
+                }
+                .padding(.horizontal, 32)
+                .padding(.top, 16)
+                .padding(.bottom, 32)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 40)
-            .padding(.vertical, 32)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // No solid bg fill — lets the root-level GraticuleBackground
@@ -73,41 +78,38 @@ struct ScopeHomeView: View {
     }
 
     // MARK: - Hero
+    //
+    // The top-row identity ("Today" + streak/word chrome) lives in the
+    // universal `ScopeTopBand` above. The in-page hero now carries only
+    // the editorial flourish: the big Cormorant capture count, no
+    // duplicate eyebrow.
 
     private var hero: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Eyebrow("Station", color: ScopeAmber.solid)
-            Text(headlineCopy)
-                .font(ScopeFont.display(size: 44))
-                .foregroundStyle(ScopeInk.primary)
-                .tracking(-0.8)
-                .lineSpacing(-2)
-            Text(subheadCopy)
-                .font(.system(size: 14))
-                .foregroundStyle(ScopeInk.muted)
-                .frame(maxWidth: 560, alignment: .leading)
-            ScopeDivider().padding(.top, 6)
-        }
+        ScopePageHero(
+            eyebrow: nil,
+            titleHead: heroTitleHead,
+            titleTail: nil,
+            trailing: nil,
+            size: .expanded
+        )
     }
 
-    private var headlineCopy: String {
-        if todayTotal == 0 {
-            return "Ready when you are."
-        } else if todayTotal == 1 {
-            return "One capture today. Keep going."
-        } else {
-            return "\(todayTotal) captures today."
-        }
+    private var heroTitleHead: String {
+        if todayTotal == 0 { return "No captures yet" }
+        if todayTotal == 1 { return "1 capture" }
+        return "\(todayTotal) captures"
     }
 
-    private var subheadCopy: String {
+    /// Streak + word count promoted to inline chrome — the longer
+    /// subhead copy lives in the agent-bay panel below.
+    private var heroTrailing: String {
         let totalWordsStr = totalWords > 1000
-            ? "\(totalWords / 1000)k words on file"
-            : "\(totalWords) words on file"
+            ? "\(totalWords / 1000)K WORDS"
+            : "\(totalWords) WORDS"
         if streak > 1 {
-            return "\(streak)-day streak · \(totalWordsStr)."
+            return "\(streak)-DAY STREAK · \(totalWordsStr)"
         }
-        return "\(totalWordsStr)."
+        return totalWordsStr
     }
 
     // MARK: - Capture modes

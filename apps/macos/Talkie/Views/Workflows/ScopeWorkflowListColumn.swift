@@ -73,66 +73,27 @@ struct ScopeWorkflowListColumn: View {
     // MARK: - Hero header
 
     private var heroHeader: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                Eyebrow("Workflows")
-                Spacer()
-                Text("\(workflowService.workflows.count) ON FILE")
-                    .font(ScopeType.chrome)
-                    .tracking(ScopeType.Tracking.wide)
-                    .foregroundStyle(ScopeInk.faint)
+        ScopeTopBand(
+            title: "Workflows",
+            chrome: "\(workflowService.workflows.count) ON FILE",
+            horizontalPadding: 16
+        ) {
+            Button(action: { showingTemplatePicker = true }) {
+                Image(systemName: "plus")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(ScopeAmber.solid)
+                    .frame(width: 24, height: 24)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(ScopeEdge.normal, lineWidth: 1)
+                    )
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(ScopeAmber.tintSubtle)
+                    )
             }
-
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Voice")
-                        .font(.system(size: 32, weight: .regular, design: .serif))
-                        .foregroundStyle(ScopeInk.primary)
-                        .tracking(-0.6)
-                    HStack(spacing: 6) {
-                        Text("→")
-                            .font(ScopeType.eyebrow)
-                            .tracking(ScopeType.Tracking.wide)
-                            .foregroundStyle(ScopeAmber.solid)
-                        Text("output")
-                            .font(.system(size: 32, weight: .regular, design: .serif))
-                            .foregroundStyle(ScopeInk.muted)
-                            .tracking(-0.6)
-                            .italic()
-                    }
-                }
-
-                Spacer()
-
-                Button(action: { showingTemplatePicker = true }) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(ScopeAmber.solid)
-                        .frame(width: 28, height: 28)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 4)
-                                .stroke(ScopeEdge.normal, lineWidth: 1)
-                        )
-                        .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(ScopeAmber.tintSubtle)
-                        )
-                }
-                .buttonStyle(.plain)
-                .help("New workflow")
-            }
-
-            Text("CAPTURE · TRANSFORM · DELIVER")
-                .font(ScopeType.chrome)
-                .tracking(ScopeType.Tracking.extraWide)
-                .foregroundStyle(ScopeInk.subtle)
-                .padding(.top, 2)
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 22)
-        .padding(.bottom, 18)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(ScopeEdge.faint).frame(height: 1)
+            .buttonStyle(.plain)
+            .help("New workflow")
         }
     }
 

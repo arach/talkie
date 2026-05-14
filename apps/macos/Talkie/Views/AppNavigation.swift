@@ -738,23 +738,37 @@ struct AppNavigation: View {
     private var generalSectionHeader: some View {
         // Outside the List (safeAreaInset) — full control over position.
         // Logo center-X = compactWidth / 2 in both modes → zero movement on toggle.
+        //
+        // Baseline anchoring: the inner HStack pins its first-text baseline
+        // to `ScopeTopBandLayout.baselineFromTop` from the top of the 44pt
+        // band. Every page's `ScopeTopBand` uses the same constant, so the
+        // bottom of TALKIE lines up with the bottom of the page title
+        // regardless of font metrics.
         Button {
             toggleSidebarRenderMode()
         } label: {
-            HStack(spacing: 0) {
-                talkieLogo
-                    .frame(width: Self.sidebarWidthCompact.ideal, alignment: .center)
+            ZStack(alignment: .topLeading) {
+                Color.clear
+                    .frame(height: PageLayout.headerHeight)
 
-                wordmarkText
-                    .opacity(sidebarIconsOnly ? 0 : 1)
-                    .offset(x: sidebarIconsOnly ? SidebarMotion.hiddenLabelOffset : 0)
-                    .blur(radius: sidebarIconsOnly ? SidebarMotion.hiddenLabelBlur : 0)
-                    .scaleEffect(sidebarIconsOnly ? 0.985 : 1, anchor: .leading)
-                    .accessibilityHidden(sidebarIconsOnly)
+                HStack(spacing: 0) {
+                    talkieLogo
+                        .frame(width: Self.sidebarWidthCompact.ideal, alignment: .center)
 
-                Spacer(minLength: 0)
+                    wordmarkText
+                        .opacity(sidebarIconsOnly ? 0 : 1)
+                        .offset(x: sidebarIconsOnly ? SidebarMotion.hiddenLabelOffset : 0)
+                        .blur(radius: sidebarIconsOnly ? SidebarMotion.hiddenLabelBlur : 0)
+                        .scaleEffect(sidebarIconsOnly ? 0.985 : 1, anchor: .leading)
+                        .accessibilityHidden(sidebarIconsOnly)
+
+                    Spacer(minLength: 0)
+                }
+                .alignmentGuide(.top) { dim in
+                    dim[.firstTextBaseline] - ScopeTopBandLayout.baselineFromTop
+                }
             }
-            .frame(height: PageLayout.headerHeight)
+            .frame(height: PageLayout.headerHeight, alignment: .topLeading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -889,8 +903,15 @@ struct AppNavigation: View {
                         RecordingsScreen(initialTypeFilter: RecordingTypeFilter.notes)
                     }
                 case .models:
-                    ModelsContentView()
-                        .wrapInTalkieSection("Models")
+                    if SettingsManager.shared.isScopeTheme {
+                        // Scope owns its own top band via ScopeTopBand —
+                        // no wrapInTalkieSection so we don't double-stack
+                        // 44pt chrome rows above the page.
+                        ScopeModelsView()
+                    } else {
+                        ModelsContentView()
+                            .wrapInTalkieSection("Models")
+                    }
                 case .allowedCommands:
                     AllowedCommandsView()
                         .wrapInTalkieSection("AllowedCommands")
@@ -911,10 +932,12 @@ struct AppNavigation: View {
                     }
                 case .liveDashboard:
                     if SettingsManager.shared.isScopeTheme {
+                        // Scope owns its own top band via ScopeTopBand
+                        // (title: "Recordings"). No wrapInTalkieSection
+                        // here — would otherwise stack a duplicate band.
                         ScopeStatsScreen(
                             onSelectDictation: { _ in selectedSection = .dictations }
                         )
-                        .wrapInTalkieSection("Stats")
                     } else {
                         StatsScreen(
                             onSelectDictation: { _ in selectedSection = .dictations }
@@ -931,8 +954,15 @@ struct AppNavigation: View {
                             .wrapInTalkieSection("Dictations", showHeader: false)
                     }
                 case .systemConsole:
-                    ConsoleScreen()
-                        .wrapInTalkieSection("Console")
+                    if SettingsManager.shared.isScopeTheme {
+                        // Scope console: rail owns the top-left identity
+                        // (PhosphorDot + CONSOLE eyebrow), so we drop the
+                        // universal header bar so the rail can bleed to the top.
+                        ConsoleScreen()
+                    } else {
+                        ConsoleScreen()
+                            .wrapInTalkieSection("Console")
+                    }
                 case .screenshots:
                     ScreenshotsScreen()
                         .wrapInTalkieSection("Screenshots")
@@ -1185,37 +1215,27 @@ private struct AppWideDropDelegate: DropDelegate {
     }
 }
 
-/// Sidebar toggle button overlay when sidebar is hidden
+/// Sidebar toggle in the window title bar, shown only while the
+/// sidebar is collapsed. Lives in the standard macOS toolbar leading
+/// slot — no floating chip overlay. When the sidebar is open the
+/// wordmark itself is the toggle, so the title-bar button hides.
 struct SidebarButtonOverlayModifier: ViewModifier {
     @Binding var columnVisibility: NavigationSplitViewVisibility
 
     func body(content: Content) -> some View {
         content
-            .overlay(alignment: .topLeading) {
+            .toolbar {
                 if columnVisibility == .detailOnly {
-                    Button(action: {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            columnVisibility = .all
+                    ToolbarItem(placement: .navigation) {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                columnVisibility = .all
+                            }
+                        } label: {
+                            Image(systemName: "sidebar.left")
                         }
-                    }) {
-                        Image(systemName: "sidebar.left")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(Theme.current.foregroundSecondary)
-                            .padding(8)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(.ultraThinMaterial)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .strokeBorder(Theme.current.border.opacity(0.2), lineWidth: 0.5)
-                            )
+                        .help("Show sidebar")
                     }
-                    .buttonStyle(.plain)
-                    .help("Show sidebar")
-                    .padding(.top, 8)
-                    .padding(.leading, 12)
-                    .transition(.opacity.combined(with: .move(edge: .leading)))
                 }
             }
     }
@@ -1302,9 +1322,23 @@ struct NavigationChangeHandlersModifier: ViewModifier {
                 }
             }
             // Local state → nav state (sidebar clicks)
-            .onChange(of: selectedSection) { _, newSection in
+            .onChange(of: selectedSection) { previous, newSection in
                 if newSection != nav.selectedSection {
                     nav.selectedSection = newSection
+                }
+                // Scope-only: Console is terminal-first. Collapse the outer
+                // app sidebar so the rail + tab content fill the canvas;
+                // SidebarButtonOverlayModifier leaves a small "show sidebar"
+                // affordance in the top-left as the hint.
+                guard SettingsManager.shared.isScopeTheme else { return }
+                if newSection == .systemConsole {
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        columnVisibility = .detailOnly
+                    }
+                } else if previous == .systemConsole {
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        columnVisibility = .all
+                    }
                 }
             }
             .onChange(of: selectedSettingsSection) { _, newSection in

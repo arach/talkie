@@ -78,18 +78,23 @@ struct ScopeStatsScreen: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 32) {
-                hero
-                sparklineStrip
-                instrumentBay
-                splitRow
-                recentDictationsTable
-                ownershipFooter
+        VStack(spacing: 0) {
+            ScopeTopBand(title: "Recordings", chrome: heroTrailing)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    hero
+                    sparklineStrip
+                    instrumentBay
+                    splitRow
+                    recentDictationsTable
+                    ownershipFooter
+                }
+                .padding(.horizontal, 32)
+                .padding(.top, 12)
+                .padding(.bottom, 24)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 40)
-            .padding(.vertical, 32)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task {
@@ -101,35 +106,36 @@ struct ScopeStatsScreen: View {
     }
 
     // MARK: - Hero
+    //
+    // The top-row identity ("Recordings" + words/streak chrome) lives in
+    // the universal `ScopeTopBand` above. The in-page hero now carries
+    // only the editorial flourish: the big Cormorant dictation count.
 
     private var hero: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Eyebrow("Signal · Recorded")
-            Text(headlineCopy)
-                .font(ScopeFont.display(size: 44))
-                .foregroundStyle(ScopeInk.primary)
-                .tracking(-0.8)
-                .lineSpacing(-2)
-            Text(subheadCopy)
-                .font(.system(size: 13, design: .monospaced))
-                .foregroundStyle(ScopeInk.muted)
-                .frame(maxWidth: 620, alignment: .leading)
-            ScopeDivider().padding(.top, 6)
-        }
+        ScopePageHero(
+            eyebrow: nil,
+            titleHead: heroTitleHead,
+            titleTail: nil,
+            trailing: nil,
+            size: .expanded
+        )
     }
 
-    private var headlineCopy: String {
-        if totalDictations == 0 {
-            return "Nothing on tape yet."
-        }
-        return "What you've said."
+    private var heroTitleHead: String {
+        if totalDictations == 0 { return "Nothing on tape" }
+        if totalDictations == 1 { return "1 dictation" }
+        return "\(formatNumber(totalDictations)) dictations"
     }
 
-    private var subheadCopy: String {
-        let total = formatNumber(totalDictations)
+    private var heroTrailing: String {
         let words = wordsFormatted(totalWords)
-        let streakStr = streak > 1 ? "\(streak)-day streak" : streak == 1 ? "1 day on the line" : "no active streak"
-        return "\(total) DICTATIONS · \(words) WORDS · \(streakStr.uppercased()) · LAST 30 DAYS · \(todayLabel)"
+        let streakStr = streak > 1 ? "\(streak)-DAY STREAK"
+            : streak == 1 ? "1 DAY ON THE LINE"
+            : nil
+        if let streakStr {
+            return "\(words) WORDS · \(streakStr) · LAST 30 DAYS"
+        }
+        return "\(words) WORDS · LAST 30 DAYS"
     }
 
     // MARK: - Sparkline strip (full bleed mono trace)
