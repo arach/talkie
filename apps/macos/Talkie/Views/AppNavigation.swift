@@ -2,25 +2,24 @@
 //  AppNavigation.swift
 //  Talkie macOS
 //
-//  Main app navigation using native NavigationSplitView
+//  Main app navigation with a custom self-sized sidebar rail.
 //
 //  Sidebar has 3 display states:
-//    State 0 — Hidden: NavigationSplitView fully collapsed (native behavior)
-//    State 1 — Compact: Icons only (52px), accent bar + fixed-position icons
-//    State 2 — Expanded: Icons + labels (200px), wordmark + section headers
+//    State 0 — Hidden: custom sidebar removed from the leading column
+//    State 1 — Compact: fixed icon rail, accent bar + fixed-position icons
+//    State 2 — Expanded: icon rail + independent label column, wordmark + section headers
 //
 //  Design principle: Icons stay at the SAME X position between State 1 and State 2.
 //  Only the label text area appears/disappears. The Talkie logo fills the accent+icon
 //  zone, and the wordmark aligns with section label text.
-//
-//  We use NavigationSplitView as the container — DO NOT replace it with custom
-//  HStack/VStack column management. Sidebar content is custom (List + SidebarRow).
 //
 
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 import TalkieKit
+
+private let appNavigationLog = Log(.ui)
 
 enum NavigationSection: Hashable {
     case home           // Main Talkie home/dashboard
@@ -77,13 +76,40 @@ struct AppNavigation: View {
     @State private var cachedErrorCount: Int = 0
     @State private var cachedWorkflowCount: Int = 0
 
-    // Column visibility (NavigationSplitView manages this for us)
+    // Column visibility for the content/detail NavigationSplitView.
     @State private var columnVisibility = NavigationSplitViewVisibility.all
 
     // Sidebar display mode
     @AppStorage("app.sidebar.iconsOnly") private var appSidebarIconsOnly = false
-    @State private var sidebarEdgeHovered = false
     @State private var didPrepareConsoleRegistry = false
+    @AppStorage("sidebar.isHidden") private var sidebarHidden = false
+    @AppStorage("sidebar.expandedLabelWidth") private var storedExpandedLabelWidth: Double = Double(SidebarLayout.labelWidth)
+    @State private var expandedLabelWidth: Double
+    @AppStorage(SidebarStyleStorage.surfaceKey) private var surfaceStyleRaw = SidebarSurfaceStyle.default.rawValue
+    @AppStorage(SidebarStyleStorage.indicatorKey) private var indicatorStyleRaw = SidebarIndicatorStyle.default.rawValue
+    @AppStorage(SidebarStyleStorage.iconKey) private var iconStyleRaw = SidebarIconStyle.default.rawValue
+    @AppStorage(SidebarStyleStorage.motionKey) private var motionStyleRaw = SidebarMotionStyle.default.rawValue
+    private static let sidebarMinLabelWidth: Double = 100
+    private static let sidebarMaxLabelWidth: Double = 220
+    private static let sidebarResizeActivationDistance: CGFloat = 6
+    private static let sidebarCollapseLabelWidth: Double = 44
+
+    private static func clampedSidebarLabelWidth(_ width: Double) -> Double {
+        min(sidebarMaxLabelWidth, max(sidebarMinLabelWidth, width))
+    }
+
+    private static func clampedSidebarResizeLabelWidth(_ width: Double) -> Double {
+        min(sidebarMaxLabelWidth, max(0, width))
+    }
+
+    private var sidebarStyle: SidebarStyle {
+        SidebarStyle(
+            surface: SidebarSurfaceStyle(rawValue: surfaceStyleRaw) ?? .default,
+            indicator: SidebarIndicatorStyle(rawValue: indicatorStyleRaw) ?? .default,
+            icon: SidebarIconStyle(rawValue: iconStyleRaw) ?? .default,
+            motion: SidebarMotionStyle(rawValue: motionStyleRaw) ?? .default
+        )
+    }
 
     // Responsive 3-column layout - when window is too narrow, middle column becomes a sheet
     @State private var isNarrowForThreeColumns = false
@@ -105,6 +131,11 @@ struct AppNavigation: View {
     init(initialSection: NavigationSection? = .home, initialSettingsSection: SettingsSection = .about) {
         _selectedSection = State(initialValue: Self.resolveInitialSection(initialSection))
         _selectedSettingsSection = State(initialValue: initialSettingsSection)
+        let defaults = UserDefaults.standard
+        let storedWidth = defaults.object(forKey: "sidebar.expandedLabelWidth") == nil
+            ? Double(SidebarLayout.labelWidth)
+            : defaults.double(forKey: "sidebar.expandedLabelWidth")
+        _expandedLabelWidth = State(initialValue: Self.clampedSidebarLabelWidth(storedWidth))
     }
 
     private static func resolveInitialSection(_ initialSection: NavigationSection?) -> NavigationSection? {
@@ -118,8 +149,51 @@ struct AppNavigation: View {
     }
 
     private func toggleSidebarRenderMode() {
-        withAnimation(SidebarMotion.toggleAnimation) {
+        let next = !appSidebarIconsOnly
+        appNavigationLog.info(
+            "[Sidebar] toggleRenderMode",
+            detail: "iconsOnly=\(appSidebarIconsOnly) → \(next)",
+            section: "SidebarState"
+        )
+        withAnimation(sidebarTransition.animation) {
             appSidebarIconsOnly.toggle()
+        }
+    }
+
+    private func collapseSidebarToCompact(restoring width: Double) {
+        let restoredWidth = Self.clampedSidebarLabelWidth(width)
+        expandedLabelWidth = restoredWidth
+        storedExpandedLabelWidth = restoredWidth
+
+        appNavigationLog.info(
+            "[Sidebar] collapseToCompact",
+            detail: "restoredWidth=\(Int(restoredWidth.rounded()))",
+            section: "SidebarState"
+        )
+
+        withAnimation(SidebarMotion.defaultSpring) {
+            appSidebarIconsOnly = true
+        }
+    }
+
+    /// Symmetric to `collapseSidebarToCompact` — used when the user
+    /// drags the edge handle rightward while in compact mode. Commits
+    /// the new label width and flips the icons-only flag off in one
+    /// animated transaction so the column springs out to the requested
+    /// width.
+    private func expandSidebarFromCompact(to width: Double) {
+        let clamped = Self.clampedSidebarLabelWidth(width)
+        expandedLabelWidth = clamped
+        storedExpandedLabelWidth = clamped
+
+        appNavigationLog.info(
+            "[Sidebar] expandFromCompact",
+            detail: "width=\(Int(clamped.rounded()))",
+            section: "SidebarState"
+        )
+
+        withAnimation(SidebarMotion.defaultSpring) {
+            appSidebarIconsOnly = false
         }
     }
 
@@ -157,10 +231,16 @@ struct AppNavigation: View {
         }
     }
 
-    // Sidebar width - fixed to prevent resizing when dragging content column divider
-    // Icons-only mode uses narrow fixed width, expanded mode uses standard fixed width
-    private static let sidebarWidthExpanded: (min: CGFloat, ideal: CGFloat, max: CGFloat) = (140, 170, 220)
-    private static let sidebarWidthCompact: (min: CGFloat, ideal: CGFloat, max: CGFloat) = (48, 48, 48)
+    private var sidebarWidthExpanded: (min: CGFloat, ideal: CGFloat, max: CGFloat) {
+        let total = SidebarLayout.railWidth + CGFloat(expandedLabelWidth)
+        return (total, total, total)
+    }
+
+    private static let sidebarWidthCompact: (min: CGFloat, ideal: CGFloat, max: CGFloat) = (
+        SidebarLayout.railWidth,
+        SidebarLayout.railWidth,
+        SidebarLayout.railWidth
+    )
     private static let workflowsColumnWidth: (min: CGFloat, ideal: CGFloat, max: CGFloat) = (260, 300, 400)
     private var contentColumnWidth: (min: CGFloat, ideal: CGFloat, max: CGFloat) {
         if selectedSection == .workflows { return Self.workflowsColumnWidth }
@@ -181,12 +261,27 @@ struct AppNavigation: View {
         return icon
     }()
 
-    private var sidebarWidth: (min: CGFloat, ideal: CGFloat, max: CGFloat) {
-        sidebarIconsOnly ? Self.sidebarWidthCompact : Self.sidebarWidthExpanded
-    }
-
     private var sidebarIconsOnly: Bool {
         appSidebarIconsOnly
+    }
+
+    private var sidebarTransition: SidebarTransition {
+        let animation: Animation = edgeHandleDragging ? .linear(duration: 0) : SidebarMotion.defaultSpring
+        return SidebarTransition.resolve(
+            isCompact: sidebarIconsOnly,
+            scrubOverride: nil,
+            expanded: SidebarTransition.WidthSpec(
+                min: sidebarWidthExpanded.min,
+                ideal: sidebarWidthExpanded.ideal,
+                max: sidebarWidthExpanded.max
+            ),
+            compact: SidebarTransition.WidthSpec(
+                min: Self.sidebarWidthCompact.min,
+                ideal: Self.sidebarWidthCompact.ideal,
+                max: Self.sidebarWidthCompact.max
+            ),
+            animation: animation
+        )
     }
 
     // Track if body has been accessed (for profiling)
@@ -199,9 +294,66 @@ struct AppNavigation: View {
         }
     }
 
+    /// Stable action wrapper for the View > Toggle Sidebar menu command.
+    /// Captured once (not rebuilt on every body invocation) so the
+    /// FocusedValue doesn't invalidate downstream menu consumers
+    /// whenever AppNavigation re-renders. Closure captures `self` —
+    /// which is fine because we only read `sidebarHidden` through the
+    /// AppStorage wrapper, and SwiftUI handles the write.
+    private var sidebarToggleAction: SidebarToggleAction {
+        SidebarToggleAction(toggle: {
+            // Capture-list assignment via DispatchQueue would defeat the
+            // animation; safe to call on the main actor since menu
+            // commands always fire there.
+            withAnimation(SidebarMotion.defaultSpring) {
+                self.sidebarHidden.toggle()
+            }
+        })
+    }
+
     var body: some View {
+        #if DEBUG
+        let _ = FrameRateMonitor.shared.recordBodyAccess("AppNavigation")
+        #endif
         let _ = logBodyAccessIfNeeded()
         mainLayout
+            .environment(\.sidebarTransition, sidebarTransition)
+            .environment(\.sidebarStyle, sidebarStyle)
+            .environment(\.sidebarShowMeasurements, false)
+            .focusedValue(\.sidebarToggle, sidebarToggleAction)
+            .transaction { transaction in
+                if edgeHandleDragging {
+                    transaction.animation = nil
+                    transaction.disablesAnimations = true
+                }
+            }
+            .onAppear {
+                columnVisibility = .all
+                #if DEBUG
+                FrameRateMonitor.shared.setSection(sectionName(for: selectedSection ?? .home))
+                FrameRateMonitor.shared.setSidebarMode(sidebarIconsOnly ? "compact" : "expanded")
+                #endif
+            }
+            .onChange(of: storedExpandedLabelWidth) { _, newValue in
+                guard !edgeHandleDragging else { return }
+                let clamped = Self.clampedSidebarLabelWidth(newValue)
+                if expandedLabelWidth != clamped {
+                    expandedLabelWidth = clamped
+                }
+            }
+            #if DEBUG
+            .onChange(of: selectedSection) { _, new in
+                if let new {
+                    FrameRateMonitor.shared.setSection(sectionName(for: new))
+                }
+            }
+            .onChange(of: sidebarIconsOnly) { _, new in
+                FrameRateMonitor.shared.setSidebarMode(new ? "compact" : "expanded")
+            }
+            .onChange(of: edgeHandleDragging) { _, dragging in
+                FrameRateMonitor.shared.setInteraction(dragging ? "handle-drag" : "")
+            }
+            #endif
     }
 
     @ViewBuilder
@@ -220,9 +372,7 @@ struct AppNavigation: View {
             .overlay(alignment: .top) {
                 GlobalActionBar()
                     .padding(.top, 7)
-                    // Offset right by half the sidebar width to center in content area
-                    // (moves from screen center to content area center)
-                    .offset(x: sidebarWidth.ideal / 2)
+                    .offset(x: (sidebarHidden ? 0 : sidebarTransition.width.ideal) / 2)
             }
             .overlay(alignment: .bottomTrailing) {
                 AgentHealthBanner()
@@ -267,7 +417,6 @@ struct AppNavigation: View {
                 audioDropOverlay: { audioDropOverlay },
                 handleAudioDrop: handleAudioDrop
             ))
-            .modifier(SidebarButtonOverlayModifier(columnVisibility: $columnVisibility))
             .modifier(DebugOverlaysModifier())
             .modifier(NavigationChangeHandlersModifier(
                 selectedSection: $selectedSection,
@@ -291,33 +440,35 @@ struct AppNavigation: View {
 
     @ViewBuilder
     private var navigationSplitViewCore: some View {
-        if usesTwoColumns || (isNarrowForThreeColumns && !usesTwoColumns) {
-            // 2-column layout: either for 2-column sections, or narrow 3-column sections
-            NavigationSplitView(columnVisibility: $columnVisibility) {
-                sidebarView
-                    .navigationSplitViewColumnWidth(
-                        min: sidebarWidth.min,
-                        ideal: sidebarWidth.ideal,
-                        max: sidebarWidth.max
-                    )
-            } detail: {
-                if isNarrowForThreeColumns && !usesTwoColumns {
-                    // Show content with navigation button for Settings/Workflows
-                    narrowThreeColumnContent
-                } else {
-                    mainContentView
+        SidebarColumns(isHidden: sidebarHidden) {
+            sidebarView
+        } trailing: {
+            trailingContent
+        }
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
+                        sidebarHidden.toggle()
+                    }
+                } label: {
+                    Image(systemName: "sidebar.left")
                 }
+                .help(sidebarHidden ? "Show sidebar" : "Hide sidebar")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var trailingContent: some View {
+        if usesTwoColumns || (isNarrowForThreeColumns && !usesTwoColumns) {
+            if isNarrowForThreeColumns && !usesTwoColumns {
+                narrowThreeColumnContent
+            } else {
+                mainContentView
             }
         } else {
-            // Full 3-column layout
             NavigationSplitView(columnVisibility: $columnVisibility) {
-                sidebarView
-                    .navigationSplitViewColumnWidth(
-                        min: sidebarWidth.min,
-                        ideal: sidebarWidth.ideal,
-                        max: sidebarWidth.max
-                    )
-            } content: {
                 contentView
                     .navigationSplitViewColumnWidth(
                         min: contentColumnWidth.min,
@@ -613,167 +764,126 @@ struct AppNavigation: View {
     // MARK: - Sidebar
 
     private var sidebarView: some View {
+        // Overlay with an alignment guide — NOT an HStack sibling and NOT
+        // `.offset`. The HStack approach gave the handle real layout
+        // width, which pushed everything 18pt rightward and made the
+        // handle look like a "floating" tab in a gap. `.offset` is
+        // render-only and breaks hit-testing.
+        //
+        // The trick: `.alignmentGuide(.trailing) { d in d[.trailing] - W/2 }`
+        // shifts the overlay's actual frame (and therefore its hit zone)
+        // outward by half its width, so the handle's CENTER sits exactly
+        // on the sidebar's trailing edge. The 12pt hit zone straddles the
+        // boundary — 6pt inside the rail (past the icon's trailing edge),
+        // 6pt outside (over the detail column's leading padding).
         sidebarList
             .overlay(alignment: .trailing) {
-                // Hover-reveal toggle tab at the sidebar edge
-                sidebarEdgeToggle
+                sidebarEdgeHandle
+                    .alignmentGuide(.trailing) { d in
+                        d[.trailing] - SidebarEdgeHandle.hitWidth / 2
+                    }
             }
+            .padding(.leading, SidebarLayout.leadingInset)
     }
 
-    @State private var edgeHandleHovered = false
+    @State private var edgeHandleDragging = false
 
-    private var sidebarEdgeToggle: some View {
-        // Subtle edge handle — thin pill that reveals on hover
-        Button {
-            toggleSidebarRenderMode()
-        } label: {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(Theme.current.foreground.opacity(edgeHandleHovered ? 0.2 : 0.06))
-                .frame(width: 4, height: 28)
-                .contentShape(Rectangle().inset(by: -6)) // Larger hit target
-        }
-        .buttonStyle(.plain)
-        .help(sidebarIconsOnly ? "Expand sidebar" : "Collapse sidebar")
-        .onHover { hovering in
-            withAnimation(.easeOut(duration: 0.15)) {
-                edgeHandleHovered = hovering
+    private var sidebarEdgeHandle: some View {
+        SidebarEdgeHandle(
+            isCompact: sidebarIconsOnly,
+            activationDistance: Self.sidebarResizeActivationDistance,
+            currentWidth: expandedLabelWidth,
+            minWidth: Self.sidebarMinLabelWidth,
+            maxWidth: Self.sidebarMaxLabelWidth,
+            collapseWidth: Self.sidebarCollapseLabelWidth,
+            isDragging: $edgeHandleDragging,
+            onToggle: toggleSidebarRenderMode,
+            onResize: { width in
+                expandedLabelWidth = Self.clampedSidebarResizeLabelWidth(width)
+            },
+            onResizeEnded: { width in
+                let clamped = Self.clampedSidebarLabelWidth(width)
+                expandedLabelWidth = clamped
+                storedExpandedLabelWidth = clamped
+            },
+            onCollapse: { restoreWidth in
+                collapseSidebarToCompact(restoring: restoreWidth)
+            },
+            onExpand: { width in
+                expandSidebarFromCompact(to: width)
             }
-        }
-        .offset(x: 4)
+        )
     }
 
     private var sidebarList: some View {
-        List(selection: $selectedSection) {
-            // General section
-            Section {
-                SidebarRow(section: .home, selectedSection: $selectedSection, title: "Home", icon: "house", iconsOnly: sidebarIconsOnly)
-                SidebarRow(section: .recordings, selectedSection: $selectedSection, title: "Library", icon: "rectangle.stack", iconsOnly: sidebarIconsOnly)
-
-                // Legacy screens (hidden by default, enable via DebugToolbar)
-                #if DEBUG
-                if showLegacyScreens {
-                    SidebarRow(section: .allMemos, selectedSection: $selectedSection, title: "Memos", icon: "square.stack", iconsOnly: sidebarIconsOnly)
-                    SidebarRow(section: .dictations, selectedSection: $selectedSection, title: "Dictations", icon: "waveform.badge.mic", iconsOnly: sidebarIconsOnly)
-                }
-                #endif
-                SidebarRow(section: .notes, selectedSection: $selectedSection, title: "Notes", icon: "note.text", iconsOnly: sidebarIconsOnly)
-
-                // Advanced features — unlock after 7 transcriptions or manual override
-                if settings.hasUnlockedAdvancedFeatures {
-                    SidebarRow(section: .drafts, selectedSection: $selectedSection, title: "Compose", icon: "square.and.pencil", iconsOnly: sidebarIconsOnly)
-                    SidebarRow(section: .contextRules, selectedSection: $selectedSection, title: "Context", icon: "square.stack.3d.forward.dottedline", iconsOnly: sidebarIconsOnly)
-                }
+        Sidebar(
+            selection: $selectedSection,
+            entries: sidebarEntries,
+            progress: sidebarTransition.progress,
+            accent: Theme.current.accent,
+            allCaps: settings.uiAllCaps,
+            labelWidth: CGFloat(expandedLabelWidth),
+            onHeaderTap: { toggleSidebarRenderMode() },
+            railHeader: { talkieLogo },
+            labelHeader: { baselineAnchoredWordmark },
+            footer: {
+                Image(systemName: selectedSection == .settings ? "gearshape.fill" : "gear")
+                    .font(.system(size: SidebarLayout.iconSize))
+                    .foregroundColor(selectedSection == .settings ? Theme.current.accent : Color.secondary)
+                    .frame(width: SidebarLayout.railWidth, height: SidebarLayout.rowHeight)
+                    .contentShape(Rectangle())
+                    .onTapGesture { selectedSection = .settings }
             }
-
-            // Activity — only visible when there's something to show
-            if pendingActionsManager.hasActiveActions || pendingActionsManager.recentActions.count > 0 {
-                Section {
-                    SidebarRow(section: .aiResults, selectedSection: $selectedSection, title: "Actions", icon: "chart.line.uptrend.xyaxis", iconsOnly: sidebarIconsOnly)
-
-                    // Only show Pending when there are active actions
-                    if pendingActionsManager.hasActiveActions {
-                        SidebarRow(section: .pendingActions, selectedSection: $selectedSection, title: "Pending", icon: "clock.arrow.circlepath", iconsOnly: sidebarIconsOnly)
-                    }
-                } header: {
-                    sidebarSectionHeader("Activity")
-                }
-            }
-
-            // Tools
-            Section {
-                SidebarRow(section: .liveDashboard, selectedSection: $selectedSection, title: "Stats", icon: "waveform.path.ecg", iconsOnly: sidebarIconsOnly)
-
-                SidebarRow(section: .models, selectedSection: $selectedSection, title: "Models", icon: "brain", iconsOnly: sidebarIconsOnly)
-
-                if settings.hasUnlockedAdvancedFeatures {
-                    SidebarRow(section: .workflows, selectedSection: $selectedSection, title: "Workflows", icon: "wand.and.stars", iconsOnly: sidebarIconsOnly)
-                    SidebarRow(section: .screenshots, selectedSection: $selectedSection, title: "Screenshots", icon: "camera.viewfinder", iconsOnly: sidebarIconsOnly)
-                }
-                if settings.isProToolsActive {
-                    SidebarRow(section: .systemConsole, selectedSection: $selectedSection, title: "Console", icon: "terminal", iconsOnly: sidebarIconsOnly)
-                }
-            } header: {
-                sidebarSectionHeader("Tools")
-            }
-
-            #if DEBUG
-            if DesignModeManager.shared.isEnabled {
-                Section {
-                    SidebarRow(section: .designHome, selectedSection: $selectedSection, title: "Design Home", icon: "paintbrush", iconsOnly: sidebarIconsOnly)
-
-                    SidebarRow(section: .designAudit, selectedSection: $selectedSection, title: "Audit", icon: "checkmark.seal", iconsOnly: sidebarIconsOnly)
-
-                    SidebarRow(section: .designComponents, selectedSection: $selectedSection, title: "Components", icon: "square.grid.2x2", iconsOnly: sidebarIconsOnly)
-                } header: {
-                    sidebarSectionHeader("Design")
-                }
-            }
-            #endif
-        }
-        .listStyle(.sidebar)
-        .animation(.easeInOut(duration: 0.15), value: selectedSection)
-        .safeAreaInset(edge: .top) {
-            generalSectionHeader
-        }
-        .safeAreaInset(edge: .bottom) {
-            VStack(spacing: 0) {
-                Rectangle()
-                    .fill(Theme.current.foreground.opacity(0.12))
-                    .frame(height: 0.5)
-                    .padding(.bottom, 12)
-
-                SidebarFooterRow(
-                    section: .settings,
-                    selectedSection: $selectedSection,
-                    title: "Settings",
-                    icon: "gear",
-                    iconsOnly: sidebarIconsOnly
-                )
-                .frame(height: 36)
-            }
-        }
+        )
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
-    @ViewBuilder
-    private var generalSectionHeader: some View {
-        // Outside the List (safeAreaInset) — full control over position.
-        // Logo center-X = compactWidth / 2 in both modes → zero movement on toggle.
-        //
-        // Baseline anchoring: the inner HStack pins its first-text baseline
-        // to `ScopeTopBandLayout.baselineFromTop` from the top of the 44pt
-        // band. Every page's `ScopeTopBand` uses the same constant, so the
-        // bottom of TALKIE lines up with the bottom of the page title
-        // regardless of font metrics.
-        Button {
-            toggleSidebarRenderMode()
-        } label: {
-            ZStack(alignment: .topLeading) {
-                Color.clear
-                    .frame(height: PageLayout.headerHeight)
+    private var sidebarEntries: [SidebarEntry<NavigationSection>] {
+        var entries: [SidebarEntry<NavigationSection>] = []
 
-                HStack(spacing: 0) {
-                    talkieLogo
-                        .frame(width: Self.sidebarWidthCompact.ideal, alignment: .center)
-
-                    wordmarkText
-                        .opacity(sidebarIconsOnly ? 0 : 1)
-                        .offset(x: sidebarIconsOnly ? SidebarMotion.hiddenLabelOffset : 0)
-                        .blur(radius: sidebarIconsOnly ? SidebarMotion.hiddenLabelBlur : 0)
-                        .scaleEffect(sidebarIconsOnly ? 0.985 : 1, anchor: .leading)
-                        .accessibilityHidden(sidebarIconsOnly)
-
-                    Spacer(minLength: 0)
-                }
-                .alignmentGuide(.top) { dim in
-                    dim[.firstTextBaseline] - ScopeTopBandLayout.baselineFromTop
-                }
-            }
-            .frame(height: PageLayout.headerHeight, alignment: .topLeading)
-            .contentShape(Rectangle())
+        entries.append(.item(SidebarItem(id: .home, title: "Home", icon: "house", selectedIcon: "house.fill")))
+        entries.append(.item(SidebarItem(id: .recordings, title: "Library", icon: "rectangle.stack", selectedIcon: "rectangle.stack.fill")))
+        #if DEBUG
+        if showLegacyScreens {
+            entries.append(.item(SidebarItem(id: .allMemos, title: "Memos", icon: "square.stack", selectedIcon: "square.stack.fill")))
+            entries.append(.item(SidebarItem(id: .dictations, title: "Dictations", icon: "waveform.badge.mic", selectedIcon: "mic.circle.fill")))
         }
-        .buttonStyle(.plain)
-        .help(sidebarIconsOnly ? "Expand sidebar" : "Collapse sidebar")
-        .animation(SidebarMotion.toggleAnimation, value: sidebarIconsOnly)
+        #endif
+        entries.append(.item(SidebarItem(id: .notes, title: "Notes", icon: "note.text", selectedIcon: "doc.text.fill")))
+        if settings.hasUnlockedAdvancedFeatures {
+            entries.append(.item(SidebarItem(id: .drafts, title: "Compose", icon: "square.and.pencil", selectedIcon: "square.and.pencil.circle.fill")))
+            entries.append(.item(SidebarItem(id: .contextRules, title: "Context", icon: "square.stack.3d.forward.dottedline", selectedIcon: "square.stack.3d.forward.dottedline.fill")))
+        }
+
+        if pendingActionsManager.hasActiveActions || pendingActionsManager.recentActions.count > 0 {
+            entries.append(.section(id: "activity", title: "Activity"))
+            entries.append(.item(SidebarItem(id: .aiResults, title: "Actions", icon: "chart.line.uptrend.xyaxis", selectedIcon: "chart.xyaxis.line")))
+            if pendingActionsManager.hasActiveActions {
+                entries.append(.item(SidebarItem(id: .pendingActions, title: "Pending", icon: "clock.arrow.circlepath", selectedIcon: "clock.fill")))
+            }
+        }
+
+        entries.append(.section(id: "tools", title: "Tools"))
+        entries.append(.item(SidebarItem(id: .liveDashboard, title: "Stats", icon: "waveform.path.ecg", selectedIcon: "chart.bar.fill")))
+        entries.append(.item(SidebarItem(id: .models, title: "Models", icon: "brain", selectedIcon: "brain.fill")))
+        if settings.hasUnlockedAdvancedFeatures {
+            entries.append(.item(SidebarItem(id: .workflows, title: "Workflows", icon: "wand.and.stars", selectedIcon: "wand.and.rays.inverse")))
+            entries.append(.item(SidebarItem(id: .screenshots, title: "Screenshots", icon: "camera.viewfinder", selectedIcon: "camera.fill")))
+        }
+        if settings.isProToolsActive {
+            entries.append(.item(SidebarItem(id: .systemConsole, title: "Console", icon: "terminal")))
+        }
+
+        #if DEBUG
+        if DesignModeManager.shared.isEnabled {
+            entries.append(.section(id: "design", title: "Design"))
+            entries.append(.item(SidebarItem(id: .designHome, title: "Design Home", icon: "paintbrush", selectedIcon: "paintbrush.fill")))
+            entries.append(.item(SidebarItem(id: .designAudit, title: "Audit", icon: "checkmark.seal", selectedIcon: "checkmark.seal.fill")))
+            entries.append(.item(SidebarItem(id: .designComponents, title: "Components", icon: "square.grid.2x2", selectedIcon: "square.grid.2x2.fill")))
+        }
+        #endif
+
+        return entries
     }
 
     private var talkieLogo: some View {
@@ -794,6 +904,25 @@ struct AppNavigation: View {
     private static let wordmarkTracking: CGFloat = 1.3
     private static let wordmarkGap: CGFloat = -6
     private static let wordmarkOffsetY: CGFloat = 0
+
+    /// Wordmark wrapped in a 44pt ZStack whose first-text-baseline is
+    /// pinned to `ScopeTopBandLayout.baselineFromTop` (30pt from top of
+    /// band). The donor sidebar handles compact/expanded by collapsing
+    /// the label column width to 0, so no opacity/blur is needed here —
+    /// just the baseline anchor so the bottom of TALKIE lines up with
+    /// every page title's bottom regardless of font metrics.
+    private var baselineAnchoredWordmark: some View {
+        ZStack(alignment: .topLeading) {
+            Color.clear
+                .frame(height: PageLayout.headerHeight)
+
+            wordmarkText
+                .alignmentGuide(.top) { dim in
+                    dim[.firstTextBaseline] - ScopeTopBandLayout.baselineFromTop
+                }
+        }
+        .frame(height: PageLayout.headerHeight, alignment: .topLeading)
+    }
 
     private var wordmarkText: some View {
         #if DEBUG
@@ -819,6 +948,8 @@ struct AppNavigation: View {
             .font(font)
             .tracking(tracking)
             .foregroundColor(Theme.current.foreground)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
             .offset(y: offsetY)
             .padding(.leading, gap)
         #else
@@ -826,31 +957,11 @@ struct AppNavigation: View {
             .font(Font.system(size: Self.wordmarkSize, weight: Self.wordmarkWeight, design: .monospaced))
             .tracking(Self.wordmarkTracking)
             .foregroundColor(Theme.current.foreground)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
             .offset(y: Self.wordmarkOffsetY)
             .padding(.leading, Self.wordmarkGap)
         #endif
-    }
-
-    @ViewBuilder
-    private func sidebarSectionHeader(_ baseTitle: String) -> some View {
-        // Single hierarchy — text slides out, height stays consistent
-        // Leading offset: 2pt icon padding + 20pt icon frame + 8pt gap = 30pt from row edge
-        HStack(spacing: 0) {
-            Text(settings.uiAllCaps ? baseTitle.uppercased() : baseTitle)
-                .font(Theme.current.fontXSBold)
-                .tracking(TechnicalStyle.isActive ? 0.4 : 0.8)
-                .foregroundColor(Theme.current.foregroundMuted)
-                .textCase(nil)
-                .padding(.leading, 2 + SidebarLayout.iconFrameWidth + SidebarLayout.iconToLabelGap)
-                .opacity(sidebarIconsOnly ? 0 : 1)
-                .offset(x: sidebarIconsOnly ? SidebarMotion.hiddenLabelOffset : 0)
-                .blur(radius: sidebarIconsOnly ? SidebarMotion.hiddenLabelBlur : 0)
-                .scaleEffect(sidebarIconsOnly ? 0.985 : 1, anchor: .leading)
-                .accessibilityHidden(sidebarIconsOnly)
-        }
-        .frame(height: SidebarLayout.sectionGapCompact)
-        .clipped()
-        .animation(SidebarMotion.toggleAnimation, value: sidebarIconsOnly)
     }
 
     // MARK: - Content (Middle Column)
@@ -1258,6 +1369,18 @@ struct DebugOverlaysModifier: ViewModifier {
                     .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .bottomTrailing)))
                 }
             }
+            .overlay(alignment: .bottomLeading) {
+                // FPS HUD — always-on in DEBUG. CVDisplayLink-driven, so
+                // the readout doubles as a main-thread responsiveness
+                // gauge (queued callbacks fall behind when the main
+                // thread blocks). Was originally gated by Design Mode
+                // but we want perf telemetry visible during every dev
+                // run, not just when explicitly inspecting design.
+                PerfHUD()
+                    .padding(.leading, Spacing.sm)
+                    .padding(.bottom, Spacing.sm)
+                    .onAppear { FrameRateMonitor.shared.start() }
+            }
             .overlay {
                 DesignToolsOverlay()
             }
@@ -1348,8 +1471,6 @@ struct NavigationChangeHandlersModifier: ViewModifier {
             }
     }
 }
-
-// MARK: - Sidebar Layout Constants
 
 // MARK: - Sidebar Tooltip State
 
@@ -1443,291 +1564,6 @@ struct SidebarTooltipOverlay: View {
                 .animation(.easeOut(duration: 0.08), value: label)
             }
         }
-    }
-}
-
-/// Shared layout constants for sidebar icon/label alignment.
-/// All values derive from the 8pt grid (Spacing system).
-///
-/// Expanded: left accent bar (3pt) + gap + icon + gap + label
-/// Compact:  centered icon + bottom accent bar (2pt)
-enum SidebarLayout {
-    // ── Accent Indicator ──
-    static let accentBarWidth: CGFloat = 3          // Left bar width (expanded)
-    static let accentBarHeight: CGFloat = Spacing.xxs  // 2pt — bottom bar height (compact)
-    static let accentBarLength: CGFloat = iconFrameWidth // Bottom bar matches icon width
-
-    // ── Gaps ──
-    static let accentToIconGap: CGFloat = Spacing.xs    // 4pt (expanded, between bar and icon)
-    static let iconToLabelGap: CGFloat = Spacing.sm     // 8pt (between icon and label text)
-    static let accentToIconVerticalGap: CGFloat = Spacing.xxs  // 2pt (compact, icon to bottom bar)
-
-    // ── Icon ──
-    static let iconFrameWidth: CGFloat = 20
-    static let iconSize: CGFloat = 15               // SF Symbol point size
-
-    // ── Icon Zone (expanded) ──
-    /// Total width: accent(3) + gap(4) + icon(20) = 27pt
-    static let iconZoneWidth: CGFloat = accentBarWidth + accentToIconGap + iconFrameWidth
-
-    // ── Header ──
-    static let headerTopPadding: CGFloat = Spacing.md   // 12pt — breathing room from window chrome
-    static let headerBottomPadding: CGFloat = Spacing.sm // 8pt — separation before first nav item
-    static let logoSize: CGFloat = 24
-
-    // ── Sidebar Width ──
-    static let compactWidth: CGFloat = 48
-
-    // ── Section Groups ──
-    static let sectionGapCompact: CGFloat = Spacing.sm   // 8pt — breathing room between icon groups
-}
-
-private enum SidebarMotion {
-    static let toggleAnimation = Animation.spring(response: 0.26, dampingFraction: 0.86, blendDuration: 0.1)
-    static let hiddenLabelOffset: CGFloat = -10
-    static let hiddenLabelBlur: CGFloat = 3
-}
-
-// MARK: - Sidebar Row with Selection Indicator
-
-/// Custom sidebar row with mode-aware selection indicator:
-/// - Expanded: vertical accent bar on the left edge
-/// - Compact: horizontal accent bar below the centered icon
-struct SidebarRow<Content: View>: View {
-    let section: NavigationSection
-    @Binding var selectedSection: NavigationSection?
-    var iconsOnly: Bool = false
-    var tooltipLabel: String? = nil
-    @ViewBuilder let content: (_ isSelected: Bool) -> Content
-
-    @State private var isHovering = false
-    @State private var rowFrame: CGRect = .zero
-
-    private var isSelected: Bool {
-        selectedSection == section
-    }
-
-    private var accentColor: Color {
-        SettingsManager.shared.accentColor.color ?? Color.accentColor
-    }
-
-    var body: some View {
-        NavigationLink(value: section) {
-            VStack(spacing: SidebarLayout.accentToIconVerticalGap) {
-                content(isSelected)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                // Bottom accent bar — only in compact
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(iconsOnly && isSelected ? accentColor : Color.clear)
-                    .frame(width: SidebarLayout.accentBarLength, height: iconsOnly ? SidebarLayout.accentBarHeight : 0)
-                    .animation(.easeOut(duration: 0.15), value: isSelected)
-            }
-        }
-        .listRowInsets(EdgeInsets(top: 0, leading: -4, bottom: 0, trailing: -4))
-        .background {
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear { rowFrame = geo.frame(in: .global) }
-                    .onChange(of: geo.frame(in: .global)) { _, newFrame in
-                        rowFrame = newFrame
-                    }
-            }
-        }
-        .onContinuousHover { phase in
-            guard iconsOnly, let label = tooltipLabel else { return }
-            let tooltip = SidebarTooltipState.shared
-            switch phase {
-            case .active:
-                isHovering = true
-                // Use row geometry for X (right edge), row midY for vertical center
-                let anchor = CGPoint(x: rowFrame.maxX, y: rowFrame.midY)
-                if tooltip.label == label {
-                    tooltip.updateAnchor(anchor)
-                } else {
-                    tooltip.show(label: label, anchor: anchor)
-                }
-            case .ended:
-                isHovering = false
-                tooltip.dismiss(matching: label)
-            }
-        }
-    }
-}
-
-/// Sidebar label — icon always at the same X position in both modes.
-/// In expanded mode, label text appears to the right.
-/// In compact mode, a hover tooltip shows the label.
-struct SidebarLabel: View {
-    let title: String
-    let icon: String
-    let isSelected: Bool
-    var iconsOnly: Bool = false
-
-    private var selectedIcon: String {
-        if icon.hasSuffix(".fill") { return icon }
-
-        let fillableMappings: [String: String] = [
-            // Core navigation
-            "house": "house.fill",
-            "square.and.pencil": "square.and.pencil.circle.fill",
-            "note.text": "doc.text.fill",
-            "doc.text": "doc.text.fill",
-            "square.stack": "square.stack.fill",
-            "gear": "gearshape.fill",
-            "brain": "brain.fill",
-            "paintbrush": "paintbrush.fill",
-            "checkmark.seal": "checkmark.seal.fill",
-            "square.grid.2x2": "square.grid.2x2.fill",
-            // Library & content
-            "rectangle.stack": "rectangle.stack.fill",
-            "waveform.badge.mic": "mic.circle.fill",
-            "square.stack.3d.forward.dottedline": "square.stack.3d.forward.dottedline.fill",
-            "chart.line.uptrend.xyaxis": "chart.xyaxis.line",
-            "clock.arrow.circlepath": "clock.fill",
-            // Stats & capture
-            "waveform.path.ecg": "chart.bar.fill",
-            "wand.and.stars": "wand.and.rays.inverse",
-            "camera.viewfinder": "camera.fill",
-        ]
-
-        return fillableMappings[icon] ?? icon
-    }
-
-    private var iconImage: some View {
-        Image(systemName: isSelected ? selectedIcon : icon)
-            .font(.system(size: SidebarLayout.iconSize))
-            .frame(width: SidebarLayout.iconFrameWidth, alignment: .center)
-            #if DEBUG
-            .background {
-                if isSelected {
-                    GeometryReader { geo in
-                        Color.clear.preference(
-                            key: DesignGuideFrameKey.self,
-                            value: ["iconBox": geo.frame(in: .named("designGuides"))]
-                        )
-                    }
-                }
-            }
-            #endif
-    }
-
-    var body: some View {
-        HStack(spacing: 0) {
-            iconImage
-                .padding(.leading, 2) // Align icon center-X with logo center-X (29pt → 32pt)
-                .padding(.trailing, iconsOnly ? 0 : SidebarLayout.iconToLabelGap)
-
-            Text(title)
-                .lineLimit(1)
-                .opacity(iconsOnly ? 0 : 1)
-                .offset(x: iconsOnly ? SidebarMotion.hiddenLabelOffset : 0)
-                .blur(radius: iconsOnly ? SidebarMotion.hiddenLabelBlur : 0)
-                .scaleEffect(iconsOnly ? 0.985 : 1, anchor: .leading)
-                .accessibilityHidden(iconsOnly)
-        }
-        .clipped()
-        .contentShape(Rectangle())
-        .animation(SidebarMotion.toggleAnimation, value: iconsOnly)
-    }
-}
-
-/// Convenience initializer for SidebarRow with just title and icon
-extension SidebarRow where Content == SidebarLabel {
-    init(section: NavigationSection, selectedSection: Binding<NavigationSection?>, title: String, icon: String, iconsOnly: Bool = false) {
-        self.section = section
-        self._selectedSection = selectedSection
-        self.iconsOnly = iconsOnly
-        self.tooltipLabel = title
-        self.content = { isSelected in
-            SidebarLabel(title: title, icon: icon, isSelected: isSelected, iconsOnly: iconsOnly)
-        }
-    }
-}
-
-/// Bottom-pinned sidebar item. This intentionally avoids nesting a second List
-/// inside the sidebar safe-area inset, which gives the footer different row
-/// metrics and selection behavior from the rest of the sidebar.
-struct SidebarFooterRow: View {
-    let section: NavigationSection
-    @Binding var selectedSection: NavigationSection?
-    let title: String
-    let icon: String
-    var iconsOnly: Bool = false
-
-    @State private var isHovering = false
-    @State private var rowFrame: CGRect = .zero
-
-    private var isSelected: Bool {
-        selectedSection == section
-    }
-
-    private var accentColor: Color {
-        SettingsManager.shared.accentColor.color ?? Color.accentColor
-    }
-
-    var body: some View {
-        Button {
-            selectedSection = section
-        } label: {
-            VStack(spacing: SidebarLayout.accentToIconVerticalGap) {
-                SidebarLabel(title: title, icon: icon, isSelected: isSelected, iconsOnly: iconsOnly)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(iconsOnly && isSelected ? accentColor : Color.clear)
-                    .frame(width: SidebarLayout.accentBarLength, height: iconsOnly ? SidebarLayout.accentBarHeight : 0)
-                    .animation(.easeOut(duration: 0.15), value: isSelected)
-            }
-            .padding(.horizontal, 8)
-            .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
-            .contentShape(Rectangle())
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(footerBackground)
-            )
-        }
-        .buttonStyle(.plain)
-        .background {
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear { rowFrame = geo.frame(in: .global) }
-                    .onChange(of: geo.frame(in: .global)) { _, newFrame in
-                        rowFrame = newFrame
-                    }
-            }
-        }
-        .onContinuousHover { phase in
-            guard iconsOnly else { return }
-            let tooltip = SidebarTooltipState.shared
-            switch phase {
-            case .active:
-                isHovering = true
-                let anchor = CGPoint(x: rowFrame.maxX, y: rowFrame.midY)
-                if tooltip.label == title {
-                    tooltip.updateAnchor(anchor)
-                } else {
-                    tooltip.show(label: title, anchor: anchor)
-                }
-            case .ended:
-                isHovering = false
-                tooltip.dismiss(matching: title)
-            }
-        }
-        .onHover { hovering in
-            isHovering = hovering
-        }
-        .accessibilityLabel(title)
-    }
-
-    private var footerBackground: Color {
-        if isSelected {
-            return accentColor.opacity(iconsOnly ? 0 : 0.14)
-        }
-        if isHovering {
-            return Theme.current.foreground.opacity(0.06)
-        }
-        return .clear
     }
 }
 
@@ -2068,6 +1904,263 @@ private struct RecordButtonContent: View {
         .onAppear {
             if isRecording { isPulsing = true }
         }
+    }
+}
+
+private struct SidebarEdgeHandle: View {
+    let isCompact: Bool
+    let activationDistance: CGFloat
+    let currentWidth: Double
+    let minWidth: Double
+    let maxWidth: Double
+    let collapseWidth: Double
+    @Binding var isDragging: Bool
+    let onToggle: () -> Void
+    let onResize: (Double) -> Void
+    let onResizeEnded: (Double) -> Void
+    let onCollapse: (Double) -> Void
+    /// Called when the user drags the handle right while the sidebar is
+    /// compact, past the activation distance. The argument is the final
+    /// label-column width to commit when leaving compact mode.
+    let onExpand: (Double) -> Void
+
+    @State private var isHovered = false
+    @State private var dragStartWidth: Double?
+    @State private var latestResizeWidth: Double?
+    @State private var latestRawWidth: Double?
+    @State private var lastLoggedResizeWidth: Double?
+    @State private var lastLoggedRawWidth: Double?
+    @State private var dragSequence = 0
+    @State private var didCommitResize = false
+    /// Timestamp of the last click on the handle. Used to detect a
+    /// double-click toggle so a single accidental brush past the
+    /// 3pt-wide pill doesn't flip the whole sidebar mode.
+    @State private var lastClickTime: Date?
+    /// 350ms window for double-click detection — matches the AppKit
+    /// default for `NSEvent.doubleClickInterval` close enough that the
+    /// gesture feels native without round-tripping through AppKit.
+    private static let doubleClickInterval: TimeInterval = 0.35
+
+    /// Total hit-zone width. The parent positions this so the handle's
+    /// CENTER sits at the sidebar's trailing edge — half the hit zone
+    /// straddles inside the rail (past the icon's right edge), half
+    /// outside (over the detail column's leading padding). 12pt total
+    /// keeps the handle invisible-in-layout while still forgiving to
+    /// imprecise clicks.
+    static let hitWidth: CGFloat = 12
+
+    var body: some View {
+        let isActive = isHovered || isDragging
+
+        let handleVisualWidth: CGFloat = 3
+        let pillHeight: CGFloat = isActive ? 64 : 56
+        let pillOpacity: CGFloat = isActive ? 0.42 : 0.20
+
+        Rectangle()
+            .fill(Color.clear)
+            .frame(width: Self.hitWidth)
+            .contentShape(Rectangle())
+            // Center-aligned pill: with the parent's alignment guide
+            // pushing this frame's center onto the rail's trailing edge,
+            // the pill renders EXACTLY on that edge — half inside, half
+            // outside the rail. No floating, no gap.
+            .overlay {
+                ZStack {
+                    // Soft outer glow on hover.
+                    if isActive {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Theme.current.foreground.opacity(0.08))
+                            .frame(width: handleVisualWidth + 8, height: pillHeight + 12)
+                            .blur(radius: 6)
+                    }
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Theme.current.foreground.opacity(pillOpacity))
+                        .frame(width: handleVisualWidth, height: pillHeight)
+                }
+                .animation(.easeOut(duration: 0.14), value: isActive)
+            }
+            .cursor(.resizeLeftRight)
+            .onHover { hovering in
+                isHovered = hovering
+            }
+            .gesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                    .onChanged(handleDragChanged)
+                    .onEnded(handleDragEnded)
+            )
+            .help(isCompact
+                  ? "Double-click to expand; drag right to size"
+                  : "Drag to resize; drag left past minimum to collapse")
+            // Parent (`sidebarView`) overlays this on the sidebar with an
+            // `.alignmentGuide(.trailing)` that shifts the frame so this
+            // 12pt hit zone's CENTER lands on the sidebar's trailing
+            // edge. Alignment guides DO move the layout frame (unlike
+            // `.offset`, which is render-only), so hit-testing tracks the
+            // visible pill position.
+    }
+
+    private func handleDragChanged(_ value: DragGesture.Value) {
+        if dragStartWidth == nil {
+            dragSequence += 1
+            // In compact mode the label column has zero width — treat
+            // that as the drag origin so rightward dragging measures the
+            // emerging width directly.
+            let startWidth = isCompact ? 0.0 : currentWidth
+            dragStartWidth = startWidth
+            latestResizeWidth = nil
+            latestRawWidth = nil
+            lastLoggedResizeWidth = startWidth
+            lastLoggedRawWidth = startWidth
+            didCommitResize = false
+            logResize(
+                "begin",
+                detail: "id=\(dragSequence) compact=\(isCompact) start=\(rounded(startWidth)) min=\(rounded(minWidth)) max=\(rounded(maxWidth)) collapse=\(rounded(collapseWidth))"
+            )
+        }
+
+        let horizontalDelta = value.location.x - value.startLocation.x
+        let verticalDelta = value.location.y - value.startLocation.y
+
+        guard abs(horizontalDelta) >= activationDistance,
+              abs(horizontalDelta) > abs(verticalDelta) * 1.5
+        else { return }
+
+        // In compact mode only treat rightward drag as a resize — left
+        // drag should fall through to the end handler (no-op / cancel).
+        if isCompact && horizontalDelta <= 0 { return }
+
+        if !didCommitResize {
+            logResize(
+                "activate",
+                detail: "id=\(dragSequence) dx=\(rounded(horizontalDelta)) dy=\(rounded(verticalDelta)) threshold=\(rounded(activationDistance))"
+            )
+        }
+
+        didCommitResize = true
+        isDragging = true
+
+        let rawProposed = (dragStartWidth ?? currentWidth) + Double(horizontalDelta)
+        let proposed = clampedWidth(rawProposed)
+        latestResizeWidth = proposed
+        latestRawWidth = rawProposed
+        logResizeUpdateIfNeeded(width: proposed, rawWidth: rawProposed, horizontalDelta: horizontalDelta)
+
+        // Compact-mode preview was removed for perf — the @Binding write
+        // on every drag tick invalidated the AppNavigation root body and
+        // caused random column resizes. Keep the actual resize gated to
+        // expanded mode; compact-mode drag commits only on drag-end via
+        // onExpand.
+        if !isCompact {
+            var transaction = Transaction(animation: nil)
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                onResize(proposed)
+            }
+        }
+    }
+
+    private func handleDragEnded(_ value: DragGesture.Value) {
+        let horizontalDelta = value.location.x - value.startLocation.x
+        let verticalDelta = value.location.y - value.startLocation.y
+
+        if didCommitResize {
+            let finalWidth = latestResizeWidth ?? currentWidth
+            let finalRawWidth = latestRawWidth ?? finalWidth
+            let startWidth = dragStartWidth ?? currentWidth
+            if isCompact {
+                // Compact mode → rightward drag commit. Expand to the
+                // proposed width (clamped to min so the sidebar always
+                // ends up usable, never a vestigial sliver).
+                let target = max(finalWidth, minWidth)
+                logResize(
+                    "expand",
+                    detail: "id=\(dragSequence) final=\(rounded(target)) raw=\(rounded(finalRawWidth)) dx=\(rounded(horizontalDelta)) dy=\(rounded(verticalDelta))"
+                )
+                onExpand(target)
+            } else if finalWidth <= collapseWidth, horizontalDelta < 0 {
+                logResize(
+                    "collapse",
+                    detail: "id=\(dragSequence) final=\(rounded(finalWidth)) raw=\(rounded(finalRawWidth)) restore=\(rounded(startWidth)) dx=\(rounded(horizontalDelta)) dy=\(rounded(verticalDelta))"
+                )
+                onCollapse(startWidth)
+            } else {
+                logResize(
+                    "end",
+                    detail: "id=\(dragSequence) final=\(rounded(finalWidth)) raw=\(rounded(finalRawWidth)) change=\(rounded(finalWidth - startWidth)) dx=\(rounded(horizontalDelta)) dy=\(rounded(verticalDelta))"
+                )
+                onResizeEnded(finalWidth)
+            }
+        } else if abs(horizontalDelta) < activationDistance,
+                  abs(verticalDelta) < activationDistance {
+            // Click on the handle. Require a DOUBLE click to toggle —
+            // the handle's hit area (28pt with 12pt offset) is wide
+            // enough that a single click is easy to fire accidentally
+            // when the user is reaching for an icon at the rail edge.
+            let now = Date()
+            if let last = lastClickTime,
+               now.timeIntervalSince(last) <= Self.doubleClickInterval {
+                logResize(
+                    "double-click-toggle",
+                    detail: "id=\(dragSequence) compact=\(isCompact) interval=\(Int(now.timeIntervalSince(last) * 1000))ms"
+                )
+                lastClickTime = nil
+                onToggle()
+            } else {
+                logResize(
+                    "click-ignored",
+                    detail: "id=\(dragSequence) compact=\(isCompact) (waiting for second click)"
+                )
+                lastClickTime = now
+            }
+        } else {
+            logResize(
+                "cancel",
+                detail: "id=\(dragSequence) dx=\(rounded(horizontalDelta)) dy=\(rounded(verticalDelta))"
+            )
+        }
+
+        dragStartWidth = nil
+        latestResizeWidth = nil
+        latestRawWidth = nil
+        lastLoggedResizeWidth = nil
+        lastLoggedRawWidth = nil
+        didCommitResize = false
+        isDragging = false
+    }
+
+    private func logResizeUpdateIfNeeded(width: Double, rawWidth: Double, horizontalDelta: CGFloat) {
+        let previousWidth = lastLoggedResizeWidth ?? width
+        let previousRawWidth = lastLoggedRawWidth ?? rawWidth
+
+        guard lastLoggedResizeWidth == nil
+            || abs(width - previousWidth) >= 8
+            || abs(rawWidth - previousRawWidth) >= 24
+        else {
+            return
+        }
+
+        lastLoggedResizeWidth = width
+        lastLoggedRawWidth = rawWidth
+        logResize(
+            "update",
+            detail: "id=\(dragSequence) width=\(rounded(width)) raw=\(rounded(rawWidth)) dx=\(rounded(horizontalDelta))"
+        )
+    }
+
+    private func clampedWidth(_ width: Double) -> Double {
+        min(maxWidth, max(0, width))
+    }
+
+    private func logResize(_ event: String, detail: String) {
+        appNavigationLog.info("[SidebarResize] \(event)", detail: detail, section: "SidebarResize")
+    }
+
+    private func rounded(_ value: Double) -> Int {
+        Int(value.rounded())
+    }
+
+    private func rounded(_ value: CGFloat) -> Int {
+        Int(value.rounded())
     }
 }
 

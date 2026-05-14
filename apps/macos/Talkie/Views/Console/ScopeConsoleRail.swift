@@ -98,9 +98,15 @@ struct ScopeConsoleRail: View {
         }
         .frame(width: isExpanded ? ScopeRailLayout.expandedWidth : ScopeRailLayout.collapsedWidth,
                alignment: .leading)
-        .background(ScopeCanvas.surface)
+        // When floating over the console content, the rail reads as a
+        // surface only while expanded. Collapsed (trigger) state keeps a
+        // minimal silhouette so the channel pins look like they're sitting
+        // on the terminal canvas itself.
+        .background(isExpanded ? ScopeCanvas.surface : Color.clear)
         .overlay(alignment: .trailing) {
-            Rectangle().fill(ScopeEdge.faint).frame(width: 1)
+            if isExpanded {
+                Rectangle().fill(ScopeEdge.faint).frame(width: 1)
+            }
         }
         .animation(ScopeMotion.placement, value: isExpanded)
     }

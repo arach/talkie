@@ -480,6 +480,13 @@ public enum ScopeTopBandLayout {
     /// top of the band. The wordmark anchors to the same value so the
     /// bottoms of the two glyph rows align across columns.
     public static let baselineFromTop: CGFloat = 30
+    /// 18pt — top inset applied above the page-title band to match the
+    /// donor sidebar's `headerTopPadding`. The sidebar wraps its label
+    /// header in 18pt of empty space at the top of the column, so any
+    /// page title rendered at Y=0 of the detail column would sit 18pt
+    /// HIGHER than the wordmark. We pad both layers identically so the
+    /// title bar reads as a single horizontal rail across the window.
+    public static let topInset: CGFloat = 18
 }
 
 public struct ScopeTopBand<Trailing: View>: View {
@@ -547,6 +554,12 @@ public struct ScopeTopBand<Trailing: View>: View {
             }
         }
         .frame(height: ScopeTopBandLayout.height, alignment: .topLeading)
+        // Push the band down so its baseline lines up with the donor
+        // sidebar's wordmark, which is itself offset by
+        // `SidebarLayout.headerTopPadding` (18pt) at the top of the
+        // sidebar column. Without this inset the page title sits 18pt
+        // above the wordmark — visible as the title "flying too high".
+        .padding(.top, ScopeTopBandLayout.topInset)
     }
 }
 

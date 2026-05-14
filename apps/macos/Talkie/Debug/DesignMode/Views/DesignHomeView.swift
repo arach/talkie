@@ -12,11 +12,21 @@ import SwiftUI
 #if DEBUG
 
 struct DesignHomeView: View {
+    // Sidebar style selectors — share UserDefaults keys with AppNavigation,
+    // so any change here propagates instantly into the live sidebar.
+    @AppStorage(SidebarStyleStorage.surfaceKey)   private var surfaceStyleRaw   = SidebarSurfaceStyle.default.rawValue
+    @AppStorage(SidebarStyleStorage.indicatorKey) private var indicatorStyleRaw = SidebarIndicatorStyle.default.rawValue
+    @AppStorage(SidebarStyleStorage.iconKey)      private var iconStyleRaw      = SidebarIconStyle.default.rawValue
+    @AppStorage(SidebarStyleStorage.motionKey)    private var motionStyleRaw    = SidebarMotionStyle.default.rawValue
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.xl) {
                 // Header
                 headerSection
+
+                // Sidebar style panel (full-width — most useful row)
+                sidebarStyleSection
 
                 // Main content grid
                 HStack(alignment: .top, spacing: Spacing.xl) {
@@ -39,6 +49,99 @@ struct DesignHomeView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.current.background)
+    }
+
+    // MARK: - Sidebar Style (Design Mode A/B)
+
+    private var sidebarStyleSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            sectionHeader(title: "Sidebar Style")
+
+            Text("Mix-and-match the four sidebar axes. Changes apply live to the rail.")
+                .font(Theme.current.fontSM)
+                .foregroundColor(Theme.current.foregroundSecondary)
+
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: Spacing.md),
+                    GridItem(.flexible(), spacing: Spacing.md)
+                ],
+                alignment: .leading,
+                spacing: Spacing.md
+            ) {
+                sidebarStylePicker(
+                    title: "Surface",
+                    selection: $surfaceStyleRaw,
+                    cases: SidebarSurfaceStyle.allCases,
+                    label: { $0.label }
+                )
+
+                sidebarStylePicker(
+                    title: "Indicator",
+                    selection: $indicatorStyleRaw,
+                    cases: SidebarIndicatorStyle.allCases,
+                    label: { $0.label }
+                )
+
+                sidebarStylePicker(
+                    title: "Icons",
+                    selection: $iconStyleRaw,
+                    cases: SidebarIconStyle.allCases,
+                    label: { $0.label }
+                )
+
+                sidebarStylePicker(
+                    title: "Motion",
+                    selection: $motionStyleRaw,
+                    cases: SidebarMotionStyle.allCases,
+                    label: { $0.label }
+                )
+            }
+
+            HStack(spacing: Spacing.sm) {
+                Button("Reset to defaults") {
+                    surfaceStyleRaw   = SidebarSurfaceStyle.default.rawValue
+                    indicatorStyleRaw = SidebarIndicatorStyle.default.rawValue
+                    iconStyleRaw      = SidebarIconStyle.default.rawValue
+                    motionStyleRaw    = SidebarMotionStyle.default.rawValue
+                }
+                .buttonStyle(.borderless)
+                .font(Theme.current.fontXS)
+                .foregroundColor(Theme.current.foregroundMuted)
+
+                Spacer()
+
+                Text("Active: \(surfaceStyleRaw) · \(indicatorStyleRaw) · \(iconStyleRaw) · \(motionStyleRaw)")
+                    .font(Theme.current.fontXS.monospaced())
+                    .foregroundColor(Theme.current.foregroundMuted)
+            }
+        }
+        .padding(Spacing.md)
+        .background(Theme.current.surface1)
+        .cornerRadius(CornerRadius.md)
+    }
+
+    private func sidebarStylePicker<C: RandomAccessCollection>(
+        title: String,
+        selection: Binding<String>,
+        cases: C,
+        label: @escaping (C.Element) -> String
+    ) -> some View where C.Element: Identifiable & RawRepresentable, C.Element.RawValue == String, C.Element.ID == String {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Text(title.uppercased())
+                .font(Theme.current.fontXS)
+                .foregroundColor(Theme.current.foregroundMuted)
+                .tracking(0.6)
+
+            Picker(title, selection: selection) {
+                ForEach(Array(cases), id: \.id) { item in
+                    Text(label(item)).tag(item.rawValue)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     // MARK: - Header
