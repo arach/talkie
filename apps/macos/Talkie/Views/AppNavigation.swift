@@ -845,10 +845,17 @@ struct AppNavigation: View {
     private var contentView: some View {
         switch selectedSection {
         case .workflows:
-            WorkflowListColumn(
-                selectedWorkflowID: $selectedWorkflowID,
-                editingWorkflow: $editingWorkflow
-            )
+            if SettingsManager.shared.isScopeTheme {
+                ScopeWorkflowListColumn(
+                    selectedWorkflowID: $selectedWorkflowID,
+                    editingWorkflow: $editingWorkflow
+                )
+            } else {
+                WorkflowListColumn(
+                    selectedWorkflowID: $selectedWorkflowID,
+                    editingWorkflow: $editingWorkflow
+                )
+            }
         case .contextRules:
             EmptyView()
         case .settings:
@@ -870,9 +877,17 @@ struct AppNavigation: View {
                 case .home:
                     HomeScreen()
                 case .drafts:
-                    DraftsScreen()
+                    if SettingsManager.shared.isScopeTheme {
+                        ScopeDraftsScreen()
+                    } else {
+                        DraftsScreen()
+                    }
                 case .notes:
-                    RecordingsScreen(initialTypeFilter: RecordingTypeFilter.notes)
+                    if SettingsManager.shared.isScopeTheme {
+                        ScopeLibraryView(initialTypeFilter: .notes)
+                    } else {
+                        RecordingsScreen(initialTypeFilter: RecordingTypeFilter.notes)
+                    }
                 case .models:
                     ModelsContentView()
                         .wrapInTalkieSection("Models")
@@ -883,19 +898,38 @@ struct AppNavigation: View {
                     ActivityLogFullView()
                         .wrapInTalkieSection("AIResults")
                 case .allMemos:
-                    RecordingsScreen()
+                    if SettingsManager.shared.isScopeTheme {
+                        ScopeLibraryView(initialTypeFilter: .memos)
+                    } else {
+                        RecordingsScreen()
+                    }
                 case .recordings:
-                    RecordingsScreen()
+                    if SettingsManager.shared.isScopeTheme {
+                        ScopeLibraryView()
+                    } else {
+                        RecordingsScreen()
+                    }
                 case .liveDashboard:
-                    StatsScreen(
-                        onSelectDictation: { _ in selectedSection = .dictations }
-                    )
-                    .wrapInTalkieSection("Stats")
+                    if SettingsManager.shared.isScopeTheme {
+                        ScopeStatsScreen(
+                            onSelectDictation: { _ in selectedSection = .dictations }
+                        )
+                        .wrapInTalkieSection("Stats")
+                    } else {
+                        StatsScreen(
+                            onSelectDictation: { _ in selectedSection = .dictations }
+                        )
+                        .wrapInTalkieSection("Stats")
+                    }
                 case .dictations:
-                    // RecordingsScreen already shows TalkieSection("Library"). Omit the outer
-                    // "Dictations" header so we don't stack two chrome rows.
-                    RecordingsScreen()
-                        .wrapInTalkieSection("Dictations", showHeader: false)
+                    if SettingsManager.shared.isScopeTheme {
+                        ScopeLibraryView(initialTypeFilter: .dictations)
+                    } else {
+                        // RecordingsScreen already shows TalkieSection("Library"). Omit the outer
+                        // "Dictations" header so we don't stack two chrome rows.
+                        RecordingsScreen()
+                            .wrapInTalkieSection("Dictations", showHeader: false)
+                    }
                 case .systemConsole:
                     ConsoleScreen()
                         .wrapInTalkieSection("Console")

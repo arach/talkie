@@ -1,0 +1,877 @@
+//
+//  ScopeStatsScreen.swift
+//  Talkie macOS
+//
+//  Cream-phosphor Stats — the surface most natively suited to the
+//  instrument-panel aesthetic. Big phosphor numbers in dark bichromatic
+//  bays, chrome headers/footers, graticule textures, channel-labeled
+//  signal tables. Every section a different instrument readout on the
+//  same console.
+//
+//  Only mounted when SettingsManager.shared.isScopeTheme is true.
+//  AppNavigation branches on theme and renders the existing StatsScreen
+//  for every other theme.
+//
+
+import SwiftUI
+import TalkieKit
+
+// MARK: - Scope display fonts
+// Cormorant Garamond is the homepage's `--font-display-modern`. Falls
+// back to system serif if the font isn't installed.
+private enum ScopeFont {
+    private static let regularCandidates = [
+        "CormorantGaramond-Regular",
+        "Cormorant Garamond",
+        "CormorantGaramond",
+    ]
+    private static let mediumCandidates = [
+        "CormorantGaramond-Medium",
+        "Cormorant Garamond Medium",
+    ]
+
+    static func display(size: CGFloat, medium: Bool = false) -> Font {
+        for name in (medium ? mediumCandidates : regularCandidates) {
+            if NSFont(name: name, size: size) != nil {
+                return .custom(name, size: size)
+            }
+        }
+        return .system(size: size, weight: medium ? .medium : .regular, design: .serif)
+    }
+}
+
+// MARK: - ScopeStatsScreen
+
+struct ScopeStatsScreen: View {
+    /// Callback when user wants to navigate to all dictations
+    var onSelectDictation: ((Dictation?) -> Void)?
+
+    private let dictationStore = DictationStore.shared
+    private let recordingRepo = TalkieObjectRepository()
+
+    // Hero / panel stats
+    @State private var todayCount = 0
+    @State private var weekCount = 0
+    @State private var totalWords = 0
+    @State private var streak = 0
+    @State private var totalDictations = 0
+
+    // Top apps
+    @State private var topApps: [(name: String, bundleID: String?, count: Int)] = []
+
+    // Storage / workflow
+    @State private var deviceStorageBytes: Int64 = 0
+    @State private var workflowRunsCount = 0
+
+    // Heatmap (last ~13 weeks, like Home)
+    @State private var activityData: [DayActivity] = []
+    @State private var maxDayCount: Int = 1
+    @State private var activityTask: Task<Void, Never>?
+
+    // Sparkline (last 30 days)
+    @State private var sparklineCounts: [Int] = []
+
+    private var todayLabel: String {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d yyyy"
+        return f.string(from: Date()).uppercased()
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 32) {
+                hero
+                sparklineStrip
+                instrumentBay
+                splitRow
+                recentDictationsTable
+                ownershipFooter
+            }
+            .padding(.horizontal, 40)
+            .padding(.vertical, 32)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task {
+            await loadAll()
+        }
+        .onAppear {
+            Task { await loadAll() }
+        }
+    }
+
+    // MARK: - Hero
+
+    private var hero: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Eyebrow("Signal · Recorded")
+            Text(headlineCopy)
+                .font(ScopeFont.display(size: 44))
+                .foregroundStyle(ScopeInk.primary)
+                .tracking(-0.8)
+                .lineSpacing(-2)
+            Text(subheadCopy)
+                .font(.system(size: 13, design: .monospaced))
+                .foregroundStyle(ScopeInk.muted)
+                .frame(maxWidth: 620, alignment: .leading)
+            ScopeDivider().padding(.top, 6)
+        }
+    }
+
+    private var headlineCopy: String {
+        if totalDictations == 0 {
+            return "Nothing on tape yet."
+        }
+        return "What you've said."
+    }
+
+    private var subheadCopy: String {
+        let total = formatNumber(totalDictations)
+        let words = wordsFormatted(totalWords)
+        let streakStr = streak > 1 ? "\(streak)-day streak" : streak == 1 ? "1 day on the line" : "no active streak"
+        return "\(total) DICTATIONS · \(words) WORDS · \(streakStr.uppercased()) · LAST 30 DAYS · \(todayLabel)"
+    }
+
+    // MARK: - Sparkline strip (full bleed mono trace)
+
+    private var sparklineStrip: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                ChannelLabel("CH-T")
+                Text("WORDS / DAY · LAST 30")
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.subtle)
+                Spacer()
+                Text(sparklinePeakLabel)
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.subtle)
+            }
+
+            ZStack(alignment: .bottomLeading) {
+                Rectangle()
+                    .fill(ScopeCanvas.surface)
+                    .overlay(
+                        Rectangle()
+                            .stroke(ScopeEdge.faint, lineWidth: 1)
+                    )
+
+                GraticuleBackground(pitch: 16, color: ScopeTrace.faint, opacity: 0.32)
+                    .allowsHitTesting(false)
+
+                SparklinePath(values: sparklineCounts)
+                    .stroke(ScopeAmber.solid, lineWidth: 1.2)
+                    .shadow(color: ScopeAmber.glow, radius: 3)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 8)
+            }
+            .frame(height: 64)
+        }
+    }
+
+    private var sparklinePeakLabel: String {
+        guard let peak = sparklineCounts.max(), peak > 0 else { return "NO SIGNAL" }
+        return "PEAK · \(peak)"
+    }
+
+    // MARK: - Instrument bay (the dark bichromatic centerpiece)
+
+    private var instrumentBay: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Eyebrow("Live Readout")
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(ScopePanel.bg)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(ScopePanel.Edge.normal, lineWidth: 1)
+                    )
+                GraticuleBackground(pitch: 24, color: ScopePanel.traceFaint, opacity: 0.55)
+                    .mask(RoundedRectangle(cornerRadius: 8))
+
+                VStack(alignment: .leading, spacing: 0) {
+                    panelHeader
+                    panelBody
+                    panelFooter
+                }
+            }
+            .frame(height: 240)
+            .shadow(color: .black.opacity(0.20), radius: 30, y: 18)
+        }
+    }
+
+    private var panelHeader: some View {
+        HStack(spacing: 8) {
+            PhosphorDot(color: ScopePanel.trace, size: 6)
+            Text("LIVE READOUT · ST-01 / DICTATION.STATS")
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopePanel.inkFaint)
+            Spacer()
+            Text("LOCAL ONLY · NO TELEMETRY")
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopePanel.inkSubtle)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(ScopePanel.Edge.faint).frame(height: 1)
+        }
+    }
+
+    private var panelBody: some View {
+        HStack(spacing: 0) {
+            statTile(value: wordsFormatted(totalWords), label: "TOTAL WORDS", pin: "T1")
+            tileDivider
+            statTile(value: formatNumber(totalDictations), label: "DICTATIONS · ALL TIME", pin: "T2")
+            tileDivider
+            statTile(value: "\(todayCount)", label: "TODAY", pin: "T3")
+            tileDivider
+            statTile(value: "\(weekCount)", label: "LAST 7 DAYS", pin: "T4")
+            tileDivider
+            statTile(value: streak > 0 ? "\(streak)d" : "0d", label: "STREAK", pin: "T5")
+        }
+        .frame(maxHeight: .infinity)
+        .padding(.horizontal, 16)
+    }
+
+    private var tileDivider: some View {
+        Rectangle()
+            .fill(ScopePanel.Edge.faint)
+            .frame(width: 1)
+            .padding(.vertical, 18)
+    }
+
+    private func statTile(value: String, label: String, pin: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text(pin)
+                    .font(ScopeType.channel)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopePanel.inkSubtle)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 2)
+                            .stroke(ScopePanel.Edge.faint, lineWidth: 0.5)
+                    )
+                Spacer()
+            }
+            Text(value)
+                .font(ScopeFont.display(size: 50))
+                .foregroundStyle(ScopePanel.trace)
+                .tracking(-0.8)
+                .shadow(color: ScopePanel.traceGlow, radius: 5)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Text(label)
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopePanel.inkFaint)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 14)
+    }
+
+    private var panelFooter: some View {
+        HStack(spacing: 12) {
+            Text("· TRIG · LIVE · SIGNAL PATH · LOCAL")
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopePanel.inkFaint)
+            Spacer()
+            Text(Date().formatted(date: .omitted, time: .shortened).uppercased())
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopePanel.inkSubtle)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .overlay(alignment: .top) {
+            Rectangle().fill(ScopePanel.Edge.faint).frame(height: 1)
+        }
+    }
+
+    // MARK: - Split row: heatmap + top apps
+
+    private var splitRow: some View {
+        HStack(alignment: .top, spacing: 16) {
+            heatmapBay
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            topAppsBay
+                .frame(width: 320, alignment: .topLeading)
+        }
+    }
+
+    // MARK: - Heatmap (cream surface, amber-toned cells)
+
+    private var heatmapBay: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Eyebrow("Activity")
+                Spacer()
+                Text("13 WEEKS · LOCAL")
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.subtle)
+            }
+
+            ZStack {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(ScopeCanvas.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(ScopeEdge.faint, lineWidth: 1)
+                    )
+
+                if activityData.isEmpty {
+                    HStack(spacing: 10) {
+                        PhosphorDot(color: ScopeAmber.solid.opacity(0.5), size: 5)
+                        Text("NO ACTIVITY ON TAPE")
+                            .font(ScopeType.eyebrow)
+                            .tracking(ScopeType.Tracking.wide)
+                            .foregroundStyle(ScopeInk.faint)
+                    }
+                    .padding(20)
+                } else {
+                    heatmapGrid
+                        .padding(16)
+                }
+            }
+        }
+    }
+
+    private var heatmapGrid: some View {
+        // Group days into 13 weeks (columns)
+        let weeks = Dictionary(grouping: activityData.enumerated().map { ($0.offset, $0.element) }) {
+            $0.0 / 7
+        }
+        let sortedWeeks = weeks.keys.sorted()
+
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 3) {
+                ForEach(sortedWeeks, id: \.self) { weekIdx in
+                    VStack(spacing: 3) {
+                        let days = (weeks[weekIdx] ?? []).map { $0.1 }
+                        ForEach(0..<7, id: \.self) { row in
+                            if row < days.count {
+                                heatmapCell(days[row])
+                            } else {
+                                Rectangle()
+                                    .fill(Color.clear)
+                                    .frame(width: 12, height: 12)
+                            }
+                        }
+                    }
+                }
+            }
+            HStack(spacing: 6) {
+                Text("LESS")
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.subtle)
+                ForEach(0..<5) { level in
+                    Rectangle()
+                        .fill(amberCell(level: level))
+                        .frame(width: 10, height: 10)
+                        .overlay(
+                            Rectangle()
+                                .stroke(ScopeEdge.subtle, lineWidth: 0.5)
+                        )
+                }
+                Text("MORE")
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.subtle)
+                Spacer()
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    private func heatmapCell(_ day: DayActivity) -> some View {
+        let levelIdx = activityLevelIndex(day)
+        return Rectangle()
+            .fill(amberCell(level: levelIdx))
+            .frame(width: 12, height: 12)
+            .overlay(
+                Rectangle()
+                    .stroke(ScopeEdge.subtle, lineWidth: 0.5)
+            )
+            .help(heatmapTooltip(day))
+    }
+
+    private func activityLevelIndex(_ day: DayActivity) -> Int {
+        switch day.level {
+        case .none: return 0
+        case .low: return 1
+        case .medium: return 2
+        case .high: return 3
+        case .max: return 4
+        }
+    }
+
+    private func amberCell(level: Int) -> Color {
+        switch level {
+        case 0: return ScopeAmber.tintSubtle
+        case 1: return ScopeAmber.solid.opacity(0.22)
+        case 2: return ScopeAmber.solid.opacity(0.45)
+        case 3: return ScopeAmber.solid.opacity(0.70)
+        default: return ScopeAmber.solid
+        }
+    }
+
+    private func heatmapTooltip(_ day: DayActivity) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d"
+        let dateStr = f.string(from: day.date)
+        if day.count == 0 { return "\(dateStr) · no activity" }
+        return "\(dateStr) · \(day.count) dictation\(day.count == 1 ? "" : "s")"
+    }
+
+    // MARK: - Top apps (channel-labeled bar rows)
+
+    private var topAppsBay: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Eyebrow("Top Apps")
+                Spacer()
+                Text("BY COUNT")
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.subtle)
+            }
+
+            VStack(spacing: 0) {
+                if topApps.isEmpty {
+                    HStack(spacing: 10) {
+                        PhosphorDot(color: ScopeAmber.solid.opacity(0.5), size: 5)
+                        Text("NO APPS LOGGED")
+                            .font(ScopeType.eyebrow)
+                            .tracking(ScopeType.Tracking.wide)
+                            .foregroundStyle(ScopeInk.faint)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 20)
+                } else {
+                    let maxCount = topApps.map { $0.count }.max() ?? 1
+                    ForEach(Array(topApps.enumerated()), id: \.offset) { idx, app in
+                        TopAppBarRow(
+                            channel: String(format: "A-%02d", idx + 1),
+                            name: app.name,
+                            bundleID: app.bundleID,
+                            count: app.count,
+                            maxCount: maxCount
+                        )
+                        .overlay(alignment: .top) {
+                            if idx > 0 {
+                                Rectangle().fill(ScopeEdge.subtle).frame(height: 1)
+                            }
+                        }
+                    }
+                }
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(ScopeEdge.faint, lineWidth: 1)
+            )
+        }
+    }
+
+    // MARK: - Recent dictations table
+
+    private var recentDictationsTable: some View {
+        let recent = Array(dictationStore.dictations.prefix(6))
+
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Eyebrow("Recent Captures")
+                Spacer()
+                Button {
+                    onSelectDictation?(nil)
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("LIBRARY")
+                            .font(ScopeType.channel)
+                            .tracking(ScopeType.Tracking.wide)
+                        Text("→")
+                            .font(.system(size: 11))
+                    }
+                    .foregroundStyle(ScopeInk.faint)
+                }
+                .buttonStyle(.plain)
+            }
+
+            if recent.isEmpty {
+                HStack(spacing: 10) {
+                    PhosphorDot(color: ScopeAmber.solid.opacity(0.6), size: 5)
+                    Text("NO SIGNAL · WAITING FOR INPUT")
+                        .font(ScopeType.eyebrow)
+                        .tracking(ScopeType.Tracking.wide)
+                        .foregroundStyle(ScopeInk.faint)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 24)
+                .padding(.horizontal, 16)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(ScopeEdge.faint, lineWidth: 1)
+                )
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(recent.enumerated()), id: \.offset) { idx, dictation in
+                        DictationSignalRow(
+                            channel: String(format: "D-%02d", idx + 1),
+                            dictation: dictation,
+                            action: { onSelectDictation?(dictation) }
+                        )
+                        .overlay(alignment: .top) {
+                            if idx > 0 {
+                                Rectangle().fill(ScopeEdge.subtle).frame(height: 1)
+                            }
+                        }
+                    }
+                }
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(ScopeEdge.faint, lineWidth: 1)
+                )
+            }
+        }
+    }
+
+    // MARK: - Ownership footer (storage + workflow)
+
+    private var ownershipFooter: some View {
+        HStack(spacing: 18) {
+            footerNode(pin: "S1", label: "Audio on disk", detail: formatBytes(deviceStorageBytes))
+            arrow
+            footerNode(pin: "S2", label: "Actions ran", detail: formatNumber(workflowRunsCount))
+            arrow
+            footerNode(pin: "S3", label: "Where it lives", detail: "Local · GRDB", dim: true)
+        }
+        .padding(.top, 6)
+    }
+
+    private func footerNode(pin: String, label: String, detail: String, dim: Bool = false) -> some View {
+        HStack(spacing: 10) {
+            ChannelLabel(pin)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(dim ? ScopeInk.faint : ScopeInk.primary)
+                Text(detail.uppercased())
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.subtle)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var arrow: some View {
+        SignalPath(color: ScopeAmber.solid, width: 28)
+    }
+
+    // MARK: - Data loading
+
+    private func loadAll() async {
+        await loadStats()
+        loadStorageStats()
+        dictationStore.refresh()
+        await buildActivity()
+    }
+
+    private func loadStats() async {
+        do {
+            async let today = recordingRepo.countRecordingsToday(type: .dictation)
+            async let week = recordingRepo.countDictationsThisWeek()
+            async let words = recordingRepo.totalDictationWords()
+            async let streakVal = recordingRepo.calculateDictationStreak()
+            async let apps = recordingRepo.topDictationApps(limit: 6)
+            async let total = recordingRepo.countDictations()
+
+            let results = try await (today, week, words, streakVal, apps, total)
+            await MainActor.run {
+                todayCount = results.0
+                weekCount = results.1
+                totalWords = results.2
+                streak = results.3
+                topApps = results.4
+                totalDictations = results.5
+            }
+        } catch {
+            print("ScopeStatsScreen.loadStats error: \(error)")
+        }
+    }
+
+    private func loadStorageStats() {
+        Task {
+            let bytes = await calculateStorageUsed()
+            await MainActor.run { deviceStorageBytes = bytes }
+        }
+        Task {
+            let count = await countWorkflowRuns()
+            await MainActor.run { workflowRunsCount = count }
+        }
+    }
+
+    private func buildActivity() async {
+        activityTask?.cancel()
+        activityTask = Task {
+            let result = await buildActivityData()
+            if !Task.isCancelled {
+                await MainActor.run {
+                    activityData = result.days
+                    maxDayCount = result.maxCount
+                    sparklineCounts = result.last30
+                }
+            }
+        }
+    }
+
+    private func buildActivityData() async -> (days: [DayActivity], maxCount: Int, last30: [Int]) {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let weeksToShow = 13
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+
+        var dayMap: [Date: Int] = [:]
+        if DatabaseManager.shared.isInitialized,
+           let dictationActivity = try? await recordingRepo.dictationActivityByDay(days: 365) {
+            for (dateString, count) in dictationActivity {
+                if let date = dateFormatter.date(from: dateString) {
+                    dayMap[calendar.startOfDay(for: date), default: 0] += count
+                }
+            }
+        }
+
+        let maxCount = max(dayMap.values.max() ?? 1, 1)
+
+        let todayWeekday = calendar.component(.weekday, from: today)
+        let daysBack = (weeksToShow - 1) * 7 + (todayWeekday - 1)
+        guard let startDate = calendar.date(byAdding: .day, value: -daysBack, to: today) else {
+            return ([], 1, [])
+        }
+
+        var days: [DayActivity] = []
+        var cursor = startDate
+        while cursor <= today {
+            let count = dayMap[cursor] ?? 0
+            let level = ActivityLevel.from(count: count, max: maxCount)
+            days.append(DayActivity(date: cursor, count: count, level: level))
+            cursor = calendar.date(byAdding: .day, value: 1, to: cursor) ?? cursor
+        }
+
+        // Last 30 days for sparkline
+        var last30: [Int] = []
+        for offset in stride(from: 29, through: 0, by: -1) {
+            if let d = calendar.date(byAdding: .day, value: -offset, to: today) {
+                last30.append(dayMap[calendar.startOfDay(for: d)] ?? 0)
+            }
+        }
+
+        return (days, maxCount, last30)
+    }
+
+    private func calculateStorageUsed() async -> Int64 {
+        guard let audioDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("Talkie")
+            .appendingPathComponent("Audio") else {
+            return 0
+        }
+        var totalSize: Int64 = 0
+        if let enumerator = FileManager.default.enumerator(at: audioDir, includingPropertiesForKeys: [.fileSizeKey]) {
+            for case let fileURL as URL in enumerator {
+                if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                    totalSize += Int64(size)
+                }
+            }
+        }
+        return totalSize
+    }
+
+    private func countWorkflowRuns() async -> Int {
+        do {
+            let db = try await DatabaseManager.shared.databaseWhenReady()
+            return try await db.read { db in
+                try WorkflowRunModel.fetchCount(db)
+            }
+        } catch {
+            return 0
+        }
+    }
+
+    // MARK: - Formatting
+
+    private func formatNumber(_ n: Int) -> String {
+        if n >= 1_000_000 {
+            return String(format: "%.1fM", Double(n) / 1_000_000)
+        } else if n >= 1000 {
+            return String(format: "%.1fk", Double(n) / 1000)
+        }
+        return "\(n)"
+    }
+
+    private func wordsFormatted(_ count: Int) -> String {
+        if count >= 1_000_000 {
+            return String(format: "%.1fM", Double(count) / 1_000_000)
+        } else if count >= 1000 {
+            return String(format: "%.1fk", Double(count) / 1000)
+        }
+        return "\(count)"
+    }
+
+    private func formatBytes(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
+    }
+}
+
+// MARK: - Sparkline path
+
+private struct SparklinePath: Shape {
+    let values: [Int]
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        guard values.count > 1 else { return path }
+        let maxVal = max(values.max() ?? 1, 1)
+        let stepX = rect.width / CGFloat(values.count - 1)
+
+        for (i, v) in values.enumerated() {
+            let x = CGFloat(i) * stepX
+            let ratio = CGFloat(v) / CGFloat(maxVal)
+            let y = rect.height - (ratio * rect.height)
+            if i == 0 {
+                path.move(to: CGPoint(x: x, y: y))
+            } else {
+                path.addLine(to: CGPoint(x: x, y: y))
+            }
+        }
+        return path
+    }
+}
+
+// MARK: - Top app bar row (horizontal amber bar fill)
+
+private struct TopAppBarRow: View {
+    let channel: String
+    let name: String
+    let bundleID: String?
+    let count: Int
+    let maxCount: Int
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ChannelLabel(channel)
+                .frame(width: 38, alignment: .leading)
+            appIcon
+                .frame(width: 16, height: 16)
+            Text(displayName)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(ScopeInk.primary)
+                .lineLimit(1)
+            Spacer()
+            Text("\(count)")
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.normal)
+                .foregroundStyle(ScopeInk.faint)
+                .frame(width: 32, alignment: .trailing)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(alignment: .leading) {
+            GeometryReader { geo in
+                Rectangle()
+                    .fill(ScopeAmber.solid.opacity(isHovered ? 0.18 : 0.12))
+                    .frame(width: barWidth(in: geo.size.width))
+            }
+        }
+        .onHover { isHovered = $0 }
+    }
+
+    private var displayName: String {
+        name.isEmpty ? "(unknown)" : name
+    }
+
+    private func barWidth(in total: CGFloat) -> CGFloat {
+        guard maxCount > 0 else { return 0 }
+        let ratio = CGFloat(count) / CGFloat(maxCount)
+        return max(2, total * ratio)
+    }
+
+    @ViewBuilder
+    private var appIcon: some View {
+        if let bundleID = bundleID,
+           let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            let icon = NSWorkspace.shared.icon(forFile: appURL.path)
+            Image(nsImage: icon)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+        } else {
+            Image(systemName: "app.fill")
+                .font(.system(size: 11))
+                .foregroundStyle(ScopeInk.subtle)
+        }
+    }
+}
+
+// MARK: - Dictation signal row (recent table)
+
+private struct DictationSignalRow: View {
+    let channel: String
+    let dictation: Dictation
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                ChannelLabel(channel, color: ScopeAmber.solid, strokeColor: ScopeEdge.normal)
+                    .frame(width: 42, alignment: .leading)
+
+                Text(dictation.text.isEmpty ? "(silent)" : dictation.text)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(ScopeInk.primary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                if let app = dictation.metadata.activeAppName, !app.isEmpty {
+                    Text(app.uppercased())
+                        .font(ScopeType.chrome)
+                        .tracking(ScopeType.Tracking.wide)
+                        .foregroundStyle(ScopeInk.subtle)
+                        .lineLimit(1)
+                        .frame(width: 110, alignment: .trailing)
+                }
+
+                Text(dictation.timestamp.formatted(date: .omitted, time: .shortened))
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.faint)
+                    .frame(width: 60, alignment: .trailing)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(isHovered ? ScopeCanvas.canvasAlt : Color.clear)
+            .overlay(alignment: .leading) {
+                if isHovered {
+                    Rectangle().fill(ScopeAmber.solid).frame(width: 2)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+    }
+}
