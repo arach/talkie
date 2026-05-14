@@ -12,8 +12,6 @@ import AVFoundation
 final class AIResponseSpeechRouter {
     static let shared = AIResponseSpeechRouter()
 
-    private let audioPlayer = AudioPlayerManager()
-
     private init() { }
 
     func speak(
@@ -35,7 +33,6 @@ final class AIResponseSpeechRouter {
             switch route {
             case .phone:
                 let playbackRate = Float(settings.ttsPlaybackRate)
-                audioPlayer.setPlaybackRate(playbackRate)
 
                 // Walkie bookend: opening kerchunk -> speech -> tail + closing
                 // kerchunk. Synthesized at runtime; failures are silent so the
@@ -43,7 +40,7 @@ final class AIResponseSpeechRouter {
                 WalkieFX.shared.playOpeningClick()
                 try? await Task.sleep(for: .milliseconds(60))
 
-                audioPlayer.playAudio(data: audioData)
+                await WalkieFX.shared.playVoiceAudio(data: audioData, playbackRate: playbackRate)
 
                 let rawDuration = aiAudioDuration(of: audioData)
                 let effectiveRate = playbackRate > 0 ? Double(playbackRate) : 1.0

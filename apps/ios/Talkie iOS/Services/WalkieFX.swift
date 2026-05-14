@@ -17,7 +17,12 @@ final class WalkieFX {
     private let sampleRate: Double = 44100
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
+    private let voicePlayer = AVAudioPlayerNode()
+    private let voiceVarispeed = AVAudioUnitVarispeed()
+    private let voiceEQ = AVAudioUnitEQ(numberOfBands: 3)
     private let format: AVAudioFormat
+    private let voiceFormat: AVAudioFormat
+    private let fallbackPlayer = AudioPlayerManager()
 
     private var engineStarted = false
     private var kerchunkBuffer: AVAudioPCMBuffer?
@@ -30,8 +35,44 @@ final class WalkieFX {
             standardFormatWithSampleRate: 44100,
             channels: 1
         ) ?? AVAudioFormat()
+        self.voiceFormat = AVAudioFormat(
+            standardFormatWithSampleRate: 44100,
+            channels: 2
+        ) ?? AVAudioFormat()
         engine.attach(player)
         engine.connect(player, to: engine.mainMixerNode, format: format)
+
+        configureVoiceChain()
+    }
+
+    private func configureVoiceChain() {
+        let highPass = voiceEQ.bands[0]
+        highPass.filterType = .highPass
+        highPass.frequency = 420
+        highPass.bandwidth = 1.6
+        highPass.bypass = false
+
+        let lowPass = voiceEQ.bands[1]
+        lowPass.filterType = .lowPass
+        lowPass.frequency = 2700
+        lowPass.bandwidth = 1.6
+        lowPass.bypass = false
+
+        let presence = voiceEQ.bands[2]
+        presence.filterType = .parametric
+        presence.frequency = 1600
+        presence.bandwidth = 1.0
+        presence.gain = 4.5
+        presence.bypass = false
+
+        voiceEQ.globalGain = 0
+
+        engine.attach(voicePlayer)
+        engine.attach(voiceVarispeed)
+        engine.attach(voiceEQ)
+        engine.connect(voicePlayer, to: voiceVarispeed, format: voiceFormat)
+        engine.connect(voiceVarispeed, to: voiceEQ, format: voiceFormat)
+        engine.connect(voiceEQ, to: engine.mainMixerNode, format: voiceFormat)
     }
 
     // MARK: - Public API
@@ -41,6 +82,60 @@ final class WalkieFX {
         player.scheduleBuffer(buffer, at: nil, options: [], completionHandler: nil)
         if !player.isPlaying {
             player.play()
+        }
+    }
+
+    /// Plays a chunk of TTS audio data through a fixed radio-voice filter
+    /// chain (high-pass + low-pass + presence peak). Returns immediately;
+    /// the caller is responsible for its own duration-based scheduling.
+    /// Falls back to plain `AudioPlayerManager` playback if anything fails.
+    func playVoiceAudio(data: Data, playbackRate: Float = 1.0) async {
+        voiceVarispeed.rate = playbackRate > 0 ? playbackRate : 1.0
+
+        guard ensureRunning() else {
+            AppLogger.ai.warning("WalkieFX voice engine unavailable; using unfiltered playback")
+            fallbackPlayer.setPlaybackRate(playbackRate)
+            fallbackPlayer.playAudio(data: data)
+            return
+        }
+
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("walkie-voice-\(UUID().uuidString).audio")
+
+        do {
+            try data.write(to: tempURL, options: .atomic)
+        } catch {
+            AppLogger.ai.warning("WalkieFX failed to stage TTS data: \(error.localizedDescription)")
+            fallbackPlayer.setPlaybackRate(playbackRate)
+            fallbackPlayer.playAudio(data: data)
+            return
+        }
+
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        do {
+            let file = try AVAudioFile(forReading: tempURL)
+            let processingFormat = file.processingFormat
+            let frameCount = AVAudioFrameCount(file.length)
+            guard frameCount > 0,
+                  let buffer = AVAudioPCMBuffer(pcmFormat: processingFormat, frameCapacity: frameCount) else {
+                throw NSError(domain: "WalkieFX", code: -1, userInfo: [
+                    NSLocalizedDescriptionKey: "Failed to allocate decode buffer"
+                ])
+            }
+            try file.read(into: buffer)
+
+            if voicePlayer.isPlaying {
+                voicePlayer.stop()
+            }
+            voicePlayer.scheduleBuffer(buffer, at: nil, options: [], completionHandler: nil)
+            if !voicePlayer.isPlaying {
+                voicePlayer.play()
+            }
+        } catch {
+            AppLogger.ai.warning("WalkieFX voice decode failed: \(error.localizedDescription); falling back to plain playback")
+            fallbackPlayer.setPlaybackRate(playbackRate)
+            fallbackPlayer.playAudio(data: data)
         }
     }
 
