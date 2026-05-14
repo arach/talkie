@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import AVFoundation
 
 @MainActor
 final class AIResponseSpeechRouter {
@@ -33,8 +34,22 @@ final class AIResponseSpeechRouter {
 
             switch route {
             case .phone:
-                audioPlayer.setPlaybackRate(Float(settings.ttsPlaybackRate))
+                let playbackRate = Float(settings.ttsPlaybackRate)
+                audioPlayer.setPlaybackRate(playbackRate)
+
+                // Walkie bookend: opening kerchunk -> speech -> tail + closing
+                // kerchunk. Synthesized at runtime; failures are silent so the
+                // FX never blocks speech playback.
+                WalkieFX.shared.playOpeningClick()
+                try? await Task.sleep(for: .milliseconds(60))
+
                 audioPlayer.playAudio(data: audioData)
+
+                let rawDuration = aiAudioDuration(of: audioData)
+                let effectiveRate = playbackRate > 0 ? Double(playbackRate) : 1.0
+                let speechDuration = rawDuration / effectiveRate
+                WalkieFX.shared.playClosingSequence(after: speechDuration)
+
                 return AIResponseSpeechResult(didSpeak: true, route: route)
 
             case .watch:
@@ -76,6 +91,17 @@ final class AIResponseSpeechRouter {
         }
 
         return try await TTSService.synthesizeConfigured(text: text, settings: settings)
+    }
+
+    /// Best-effort duration probe for the TTS audio payload. Returns 0 if the
+    /// data cannot be parsed; callers should treat that as a no-op for any
+    /// time-based scheduling.
+    private func aiAudioDuration(of data: Data) -> TimeInterval {
+        if let probe = try? AVAudioPlayer(data: data) {
+            let duration = probe.duration
+            return duration.isFinite ? duration : 0
+        }
+        return 0
     }
 }
 
