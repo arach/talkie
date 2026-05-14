@@ -383,6 +383,14 @@ struct HomeScreen: View {
         totalWords = dictationStore.dictations.reduce(0) { $0 + $1.wordCount }
             + memosVM.memos.reduce(0) { $0 + ($1.transcription?.split(separator: " ").count ?? 0) }
 
+        #if DEBUG
+        FrameRateMonitor.shared.markNavigationDataVisible(
+            section: NavigationSection.home.perfName,
+            source: "HomeScreen.loadData",
+            detail: "activity=\(unifiedActivity.count) memos=\(memosVM.totalCount) dictations=\(dictationStore.cachedCount)"
+        )
+        #endif
+
         guard refreshSecondaryInsights else {
             if settings.extensionsFrameworkEnabled {
                 ExtensionManager.shared.syncWithDatabaseCounts(

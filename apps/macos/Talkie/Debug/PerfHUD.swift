@@ -26,8 +26,10 @@ import Foundation
 import SwiftUI
 import QuartzCore
 import os
+import os.signpost
 
 private let perfLogger = Logger(subsystem: "to.talkie.app.performance", category: "FPS")
+private let navigationSignpostLog = OSLog(subsystem: "to.talkie.app.performance", category: "Navigation")
 
 @MainActor
 final class FrameRateMonitor: ObservableObject {
@@ -54,6 +56,33 @@ final class FrameRateMonitor: ObservableObject {
     private var lastTickTime: CFTimeInterval?
     private var minFrameInterval: Double = .infinity
     private var maxFrameInterval: Double = 0
+
+    // ── Navigation phase timing ──────────────────────────────────
+    private struct NavigationTrace {
+        let id: Int
+        let from: String
+        let to: String
+        let source: String
+        let startTime: CFTimeInterval
+        let shellSignpostID: OSSignpostID
+        let dataSignpostID: OSSignpostID
+        var shellEnded = false
+        var dataEnded = false
+    }
+
+    private struct RecordingsObservationTrace {
+        let id: Int
+        let filter: String
+        let sort: String
+        let limit: Int
+        let startTime: CFTimeInterval
+        let signpostID: OSSignpostID
+    }
+
+    private var nextNavigationTraceID = 0
+    private var activeNavigationTrace: NavigationTrace?
+    private var nextRecordingsObservationID = 0
+    private var activeRecordingsObservation: RecordingsObservationTrace?
 
     // ── Scene tags ────────────────────────────────────────────────
     /// Currently active section in the host. Updated by AppNavigation
@@ -103,6 +132,178 @@ final class FrameRateMonitor: ObservableObject {
         } else {
             perfLogger.info("event=\(name, privacy: .public) \(detail, privacy: .public)")
         }
+    }
+
+    /// Start a navigation phase trace. The trace owns two Instruments
+    /// intervals:
+    ///   • Navigation Shell: intent/click → destination shell visible
+    ///   • Navigation Data: intent/click → destination data visible
+    ///
+    /// The FPS stream also receives matching key=value events so
+    /// `talkie-dev logs` can be scrubbed alongside frame samples.
+    func beginNavigation(to target: String, source: String) {
+        let now = CACurrentMediaTime()
+        let normalizedTarget = normalizedTraceValue(target)
+
+        if let activeNavigationTrace,
+           normalizedTraceValue(activeNavigationTrace.to) == normalizedTarget,
+           now - activeNavigationTrace.startTime < 2 {
+            perfLogger.info("event=nav_intent_coalesced id=\(activeNavigationTrace.id, privacy: .public) source=\(source, privacy: .public) to=\(target, privacy: .public)")
+            return
+        }
+
+        finishActiveNavigation(reason: "superseded")
+
+        nextNavigationTraceID += 1
+        let id = nextNavigationTraceID
+        let from = currentSection
+        let shellID = OSSignpostID(log: navigationSignpostLog)
+        let dataID = OSSignpostID(log: navigationSignpostLog)
+
+        activeNavigationTrace = NavigationTrace(
+            id: id,
+            from: from,
+            to: target,
+            source: source,
+            startTime: now,
+            shellSignpostID: shellID,
+            dataSignpostID: dataID
+        )
+
+        os_signpost(.begin, log: navigationSignpostLog, name: "Navigation Shell", signpostID: shellID,
+                    "id=%d source=%{public}s from=%{public}s to=%{public}s", id, source, from, target)
+        os_signpost(.begin, log: navigationSignpostLog, name: "Navigation Data", signpostID: dataID,
+                    "id=%d source=%{public}s from=%{public}s to=%{public}s", id, source, from, target)
+
+        perfLogger.info("event=nav_click id=\(id, privacy: .public) source=\(source, privacy: .public) from=\(from, privacy: .public) to=\(target, privacy: .public)")
+    }
+
+    func markNavigationShellVisible(section: String, source: String) {
+        guard var trace = activeNavigationTrace,
+              !trace.shellEnded,
+              traceMatches(trace.to, section)
+        else { return }
+
+        let deltaMs = milliseconds(since: trace.startTime)
+        trace.shellEnded = true
+        activeNavigationTrace = trace
+
+        os_signpost(.end, log: navigationSignpostLog, name: "Navigation Shell", signpostID: trace.shellSignpostID,
+                    "id=%d source=%{public}s section=%{public}s deltaMs=%d", trace.id, source, section, deltaMs)
+        perfLogger.info("event=nav_shell_visible id=\(trace.id, privacy: .public) source=\(source, privacy: .public) section=\(section, privacy: .public) deltaMs=\(deltaMs, privacy: .public)")
+    }
+
+    func markNavigationDataVisible(section: String, source: String, detail: String = "") {
+        guard var trace = activeNavigationTrace,
+              !trace.dataEnded,
+              traceMatches(trace.to, section)
+        else { return }
+
+        let deltaMs = milliseconds(since: trace.startTime)
+        trace.dataEnded = true
+        activeNavigationTrace = trace
+
+        os_signpost(.end, log: navigationSignpostLog, name: "Navigation Data", signpostID: trace.dataSignpostID,
+                    "id=%d source=%{public}s section=%{public}s deltaMs=%d detail=%{public}s", trace.id, source, section, deltaMs, detail)
+
+        if detail.isEmpty {
+            perfLogger.info("event=nav_data_visible id=\(trace.id, privacy: .public) source=\(source, privacy: .public) section=\(section, privacy: .public) deltaMs=\(deltaMs, privacy: .public)")
+        } else {
+            perfLogger.info("event=nav_data_visible id=\(trace.id, privacy: .public) source=\(source, privacy: .public) section=\(section, privacy: .public) deltaMs=\(deltaMs, privacy: .public) \(detail, privacy: .public)")
+        }
+
+        activeNavigationTrace = nil
+    }
+
+    func beginRecordingsObservation(filter: String, sort: String, limit: Int) {
+        finishActiveRecordingsObservation(reason: "superseded")
+
+        nextRecordingsObservationID += 1
+        let id = nextRecordingsObservationID
+        let signpostID = OSSignpostID(log: navigationSignpostLog)
+        activeRecordingsObservation = RecordingsObservationTrace(
+            id: id,
+            filter: filter,
+            sort: sort,
+            limit: limit,
+            startTime: CACurrentMediaTime(),
+            signpostID: signpostID
+        )
+
+        os_signpost(.begin, log: navigationSignpostLog, name: "Recordings Observation", signpostID: signpostID,
+                    "id=%d filter=%{public}s sort=%{public}s limit=%d", id, filter, sort, limit)
+        perfLogger.info("event=recordings_observation_start id=\(id, privacy: .public) filter=\(filter, privacy: .public) sort=\(sort, privacy: .public) limit=\(limit, privacy: .public)")
+    }
+
+    func markRecordingsObservation(stage: String) {
+        guard let trace = activeRecordingsObservation else { return }
+        let deltaMs = milliseconds(since: trace.startTime)
+
+        os_signpost(.event, log: navigationSignpostLog, name: "Recordings Observation Mark", signpostID: trace.signpostID,
+                    "id=%d stage=%{public}s deltaMs=%d", trace.id, stage, deltaMs)
+        perfLogger.info("event=recordings_observation_stage id=\(trace.id, privacy: .public) stage=\(stage, privacy: .public) deltaMs=\(deltaMs, privacy: .public)")
+    }
+
+    func finishRecordingsObservation(displayed: Int, total: Int) {
+        guard let trace = activeRecordingsObservation else { return }
+        let deltaMs = milliseconds(since: trace.startTime)
+
+        os_signpost(.end, log: navigationSignpostLog, name: "Recordings Observation", signpostID: trace.signpostID,
+                    "id=%d status=ready displayed=%d total=%d deltaMs=%d", trace.id, displayed, total, deltaMs)
+        perfLogger.info("event=recordings_observation_ready id=\(trace.id, privacy: .public) displayed=\(displayed, privacy: .public) total=\(total, privacy: .public) deltaMs=\(deltaMs, privacy: .public)")
+
+        activeRecordingsObservation = nil
+    }
+
+    func failRecordingsObservation(_ message: String) {
+        guard let trace = activeRecordingsObservation else { return }
+        let deltaMs = milliseconds(since: trace.startTime)
+
+        os_signpost(.end, log: navigationSignpostLog, name: "Recordings Observation", signpostID: trace.signpostID,
+                    "id=%d status=error deltaMs=%d error=%{public}s", trace.id, deltaMs, message)
+        perfLogger.info("event=recordings_observation_error id=\(trace.id, privacy: .public) deltaMs=\(deltaMs, privacy: .public) error=\(message, privacy: .public)")
+
+        activeRecordingsObservation = nil
+    }
+
+    private func finishActiveNavigation(reason: String) {
+        guard let trace = activeNavigationTrace else { return }
+        let deltaMs = milliseconds(since: trace.startTime)
+
+        if !trace.shellEnded {
+            os_signpost(.end, log: navigationSignpostLog, name: "Navigation Shell", signpostID: trace.shellSignpostID,
+                        "id=%d status=%{public}s deltaMs=%d", trace.id, reason, deltaMs)
+        }
+        if !trace.dataEnded {
+            os_signpost(.end, log: navigationSignpostLog, name: "Navigation Data", signpostID: trace.dataSignpostID,
+                        "id=%d status=%{public}s deltaMs=%d", trace.id, reason, deltaMs)
+        }
+
+        perfLogger.info("event=nav_end id=\(trace.id, privacy: .public) status=\(reason, privacy: .public) deltaMs=\(deltaMs, privacy: .public)")
+        activeNavigationTrace = nil
+    }
+
+    private func finishActiveRecordingsObservation(reason: String) {
+        guard let trace = activeRecordingsObservation else { return }
+        let deltaMs = milliseconds(since: trace.startTime)
+
+        os_signpost(.end, log: navigationSignpostLog, name: "Recordings Observation", signpostID: trace.signpostID,
+                    "id=%d status=%{public}s deltaMs=%d", trace.id, reason, deltaMs)
+        perfLogger.info("event=recordings_observation_end id=\(trace.id, privacy: .public) status=\(reason, privacy: .public) deltaMs=\(deltaMs, privacy: .public)")
+
+        activeRecordingsObservation = nil
+    }
+
+    private func traceMatches(_ lhs: String, _ rhs: String) -> Bool {
+        normalizedTraceValue(lhs) == normalizedTraceValue(rhs)
+    }
+
+    private func normalizedTraceValue(_ value: String) -> String {
+        value.lowercased().filter { $0.isLetter || $0.isNumber }
+    }
+
+    private func milliseconds(since startTime: CFTimeInterval) -> Int {
+        Int(((CACurrentMediaTime() - startTime) * 1000).rounded())
     }
 
     private init() {}

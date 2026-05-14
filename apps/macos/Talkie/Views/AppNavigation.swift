@@ -52,6 +52,38 @@ enum NavigationSection: Hashable {
     #endif
 }
 
+extension NavigationSection {
+    var perfName: String {
+        switch self {
+        case .home: return "Home"
+        case .drafts: return "Compose"
+        case .notes: return "Notes"
+        case .allMemos: return "AllMemos"
+        case .recordings: return "Library"
+        case .liveDashboard: return "LiveDashboard"
+        case .dictations: return "Dictations"
+        case .aiResults: return "AIResults"
+        case .workflows: return "Workflows"
+        case .activityLog: return "ActivityLog"
+        case .systemConsole: return "Console"
+        case .screenshots: return "Screenshots"
+        case .pendingActions: return "PendingActions"
+        case .talkieService: return "TalkieService"
+        case .talkieLiveMonitor: return "TalkieAgentMonitor"
+        case .models: return "Models"
+        case .allowedCommands: return "AllowedCommands"
+        case .contextRules: return "Context"
+        case .smartFolder(let name): return "SmartFolder:\(name)"
+        case .settings: return "Settings"
+        #if DEBUG
+        case .designHome: return "DesignHome"
+        case .designAudit: return "DesignAudit"
+        case .designComponents: return "DesignComponents"
+        #endif
+        }
+    }
+}
+
 struct AppNavigation: View {
     // GRDB-backed ViewModel for memo data
     private var memosVM: MemosViewModel { MemosViewModel.shared }
@@ -202,33 +234,7 @@ struct AppNavigation: View {
     }
 
     private func sectionName(for section: NavigationSection) -> String {
-        switch section {
-        case .home: return "Home"
-        case .drafts: return "Compose"
-        case .notes: return "Notes"
-        case .allMemos: return "AllMemos"
-        case .recordings: return "Library"
-        case .liveDashboard: return "LiveDashboard"
-        case .dictations: return "Dictations"
-        case .aiResults: return "AIResults"
-        case .workflows: return "Workflows"
-        case .activityLog: return "ActivityLog"
-        case .systemConsole: return "Console"
-        case .screenshots: return "Screenshots"
-        case .pendingActions: return "PendingActions"
-        case .talkieService: return "TalkieService"
-        case .talkieLiveMonitor: return "TalkieAgentMonitor"
-        case .models: return "Models"
-        case .allowedCommands: return "AllowedCommands"
-        case .contextRules: return "Context"
-        case .smartFolder(let name): return "SmartFolder:\(name)"
-        case .settings: return "Settings"
-        #if DEBUG
-        case .designHome: return "DesignHome"
-        case .designAudit: return "DesignAudit"
-        case .designComponents: return "DesignComponents"
-        #endif
-        }
+        section.perfName
     }
 
     private var sidebarWidthExpanded: (min: CGFloat, ideal: CGFloat, max: CGFloat) {
@@ -817,7 +823,7 @@ struct AppNavigation: View {
 
     private var sidebarList: some View {
         Sidebar(
-            selection: $selectedSection,
+            selection: sidebarSelectionBinding,
             entries: sidebarEntries,
             progress: sidebarTransition.progress,
             accent: Theme.current.accent,
@@ -832,10 +838,29 @@ struct AppNavigation: View {
                     .foregroundColor(selectedSection == .settings ? Theme.current.accent : Color.secondary)
                     .frame(width: SidebarLayout.railWidth, height: SidebarLayout.rowHeight)
                     .contentShape(Rectangle())
-                    .onTapGesture { selectedSection = .settings }
+                    .onTapGesture {
+                        #if DEBUG
+                        FrameRateMonitor.shared.beginNavigation(to: sectionName(for: .settings), source: "sidebar-footer")
+                        #endif
+                        selectedSection = .settings
+                    }
             }
         )
         .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private var sidebarSelectionBinding: Binding<NavigationSection?> {
+        Binding(
+            get: { selectedSection },
+            set: { newValue in
+                #if DEBUG
+                if let newValue {
+                    FrameRateMonitor.shared.beginNavigation(to: sectionName(for: newValue), source: "sidebar")
+                }
+                #endif
+                selectedSection = newValue
+            }
+        )
     }
 
     private var sidebarEntries: [SidebarEntry<NavigationSection>] {
@@ -1117,8 +1142,33 @@ struct AppNavigation: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        #if DEBUG
+        .background(
+            NavigationShellTimingProbe(sectionName: selectedSection.map(sectionName(for:)) ?? "?")
+        )
+        #endif
     }
 }
+
+#if DEBUG
+private struct NavigationShellTimingProbe: View {
+    let sectionName: String
+
+    var body: some View {
+        Color.clear
+            .allowsHitTesting(false)
+            .task(id: sectionName) {
+                await Task.yield()
+                await MainActor.run {
+                    FrameRateMonitor.shared.markNavigationShellVisible(
+                        section: sectionName,
+                        source: "mainContent"
+                    )
+                }
+            }
+    }
+}
+#endif
 
 
 // MARK: - View Extensions
@@ -1431,6 +1481,9 @@ struct NavigationChangeHandlersModifier: ViewModifier {
             // Nav state → local state (programmatic navigation)
             .onChange(of: nav.selectedSection) { _, newSection in
                 if let section = newSection, section != selectedSection {
+                    #if DEBUG
+                    FrameRateMonitor.shared.beginNavigation(to: sectionName(section), source: "navigation-state")
+                    #endif
                     previousSection = selectedSection
                     selectedSection = section
                     // Ensure 3-column sections show all columns
@@ -1446,6 +1499,11 @@ struct NavigationChangeHandlersModifier: ViewModifier {
             }
             // Local state → nav state (sidebar clicks)
             .onChange(of: selectedSection) { previous, newSection in
+                #if DEBUG
+                if let newSection {
+                    FrameRateMonitor.shared.beginNavigation(to: sectionName(newSection), source: "selection-state")
+                }
+                #endif
                 if newSection != nav.selectedSection {
                     nav.selectedSection = newSection
                 }

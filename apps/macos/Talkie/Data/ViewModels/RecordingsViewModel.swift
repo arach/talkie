@@ -217,14 +217,27 @@ final class RecordingsViewModel {
         let limit = currentLimit
 
         log.debug("observation.start: \(filterState.description), sort=\(sortField), limit=\(limit)")
+        #if DEBUG
+        FrameRateMonitor.shared.beginRecordingsObservation(
+            filter: filterState.description,
+            sort: String(describing: sortField),
+            limit: limit
+        )
+        #endif
 
         let dbQueue: DatabaseQueue
         do {
             dbQueue = try await dbManager.databaseWhenReady()
+            #if DEBUG
+            FrameRateMonitor.shared.markRecordingsObservation(stage: "db_ready")
+            #endif
         } catch {
             self.error = error
             self.isLoading = false
             log.error("observation.start failed: \(error.localizedDescription)")
+            #if DEBUG
+            FrameRateMonitor.shared.failRecordingsObservation(error.localizedDescription)
+            #endif
             return
         }
 
@@ -243,6 +256,9 @@ final class RecordingsViewModel {
             let recordings = try TalkieObject.fetchAll(db, sql: fetchSQL)
             return (recordings, count)
         }
+        #if DEBUG
+        FrameRateMonitor.shared.markRecordingsObservation(stage: "tracking_created")
+        #endif
 
         observationCancellable = observation.start(
             in: dbQueue,
@@ -253,6 +269,9 @@ final class RecordingsViewModel {
                     self.error = error
                     self.isLoading = false
                     log.error("observation.error: \(error.localizedDescription)")
+                    #if DEBUG
+                    FrameRateMonitor.shared.failRecordingsObservation(error.localizedDescription)
+                    #endif
                 }
             },
             onChange: { [weak self] result in
@@ -262,9 +281,23 @@ final class RecordingsViewModel {
                     self.totalCount = result.count
                     self.isLoading = false
                     log.debug("observation.update: total=\(result.count), displayed=\(result.recordings.count)")
+                    #if DEBUG
+                    FrameRateMonitor.shared.finishRecordingsObservation(
+                        displayed: result.recordings.count,
+                        total: result.count
+                    )
+                    FrameRateMonitor.shared.markNavigationDataVisible(
+                        section: NavigationState.shared.selectedSection?.perfName ?? "Library",
+                        source: "RecordingsViewModel",
+                        detail: "displayed=\(result.recordings.count) total=\(result.count)"
+                    )
+                    #endif
                 }
             }
         )
+        #if DEBUG
+        FrameRateMonitor.shared.markRecordingsObservation(stage: "start_returned")
+        #endif
     }
 
     /// Build ORDER BY clause from current sort settings
