@@ -943,8 +943,13 @@ extension ComposeView {
             ),
             at: 0
         )
+        // Speak the revised draft excerpt — no separate AI explanation field exists.
+        let spokenText = String(pendingRevision.revisedText.prefix(280))
         self.pendingRevision = nil
         errorMessage = nil
+        Task { @MainActor in
+            _ = await AIResponseSpeechRouter.shared.speak(spokenText)
+        }
     }
 
     private func discardPendingRevision() {
