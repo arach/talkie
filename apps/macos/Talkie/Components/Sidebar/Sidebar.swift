@@ -80,6 +80,10 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
 
     @Environment(\.sidebarStyle) private var style
 
+    /// Currently hovered row id. Drives the full-row hover underlay
+    /// rendered alongside (and below) the selection underlay.
+    @State private var hoveredID: Selection? = nil
+
     public init(
         selection: Binding<Selection?>,
         entries: [SidebarEntry<Selection>],
@@ -181,6 +185,7 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
 
     private var sidebarBody: some View {
         ZStack(alignment: .topLeading) {
+            hoverUnderlay
             selectionUnderlay
             HStack(alignment: .top, spacing: 0) {
                 railColumn
@@ -246,7 +251,10 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
                 accent: accent,
                 progress: progress,
                 compactBarOpacity: compactBarOpacity,
-                onTap: { selection = item.id }
+                onTap: { selection = item.id },
+                onHoverChange: { hovering in
+                    updateHover(item.id, hovering: hovering)
+                }
             )
             .frame(width: SidebarLayout.railWidth, height: SidebarLayout.rowHeight)
         case .section:
@@ -301,6 +309,12 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
                 .frame(height: SidebarLayout.rowHeight, alignment: .leading)
                 .contentShape(Rectangle())
                 .onTapGesture { selection = item.id }
+                .onContinuousHover { phase in
+                    switch phase {
+                    case .active: updateHover(item.id, hovering: true)
+                    case .ended:  updateHover(item.id, hovering: false)
+                    }
+                }
         case .section(_, let title):
             VStack(alignment: .leading, spacing: 0) {
                 Spacer().frame(height: SidebarLayout.sectionTopGap)
@@ -328,7 +342,12 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
             .opacity(underlayOpacity)
             .animation(nil, value: labelsSettled)
             .offset(y: y)
-            .animation(style.motion.selectionSlide, value: y)
+            // No slide on selection change — the main content swaps
+            // instantly when selection flips, and animating the
+            // indicator y over ~200ms made the indicator lag behind
+            // the new content. Instant teleport keeps the indicator
+            // synchronized with what the user just clicked.
+            .animation(nil, value: y)
             .allowsHitTesting(false)
         }
     }
@@ -346,7 +365,7 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
             )
             .offset(y: y)
             .opacity(compactBarOpacity)
-            .animation(style.motion.selectionSlide, value: y)
+            .animation(nil, value: y)
             .animation(nil, value: compactSettled)
             .allowsHitTesting(false)
         }
@@ -356,20 +375,71 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
     /// top. Returns nil if nothing is selected. Computed from the entries
     /// list — no GeometryReader needed.
     private var selectionY: CGFloat? {
-        guard let selection else { return nil }
+        rowY(for: selection)
+    }
+
+    /// Y-offset of the hovered row's cell. Same machinery as `selectionY`.
+    private var hoveredY: CGFloat? {
+        guard let id = hoveredID, id != selection else { return nil }
+        return rowY(for: id)
+    }
+
+    /// Update the hovered row id from a hover phase. The `id == hoveredID`
+    /// guard on the `ended` branch prevents a stale "ended" from the
+    /// rail clearing hover state that the label just set (or vice versa)
+    /// when the mouse crosses the rail↔label boundary inside the same row.
+    private func updateHover(_ id: Selection, hovering: Bool) {
+        if hovering {
+            if hoveredID != id { hoveredID = id }
+        } else if hoveredID == id {
+            hoveredID = nil
+        }
+    }
+
+    private func rowY(for id: Selection?) -> CGFloat? {
+        guard let id else { return nil }
         var y: CGFloat = SidebarLayout.headerTopPadding
                        + SidebarLayout.headerHeight
                        + SidebarLayout.headerBottomPadding
         for entry in entries {
             switch entry {
             case .item(let item):
-                if item.id == selection { return y }
+                if item.id == id { return y }
                 y += SidebarLayout.rowHeight
             case .section:
                 y += SidebarLayout.sectionTopGap + SidebarLayout.sectionHeaderHeight
             }
         }
         return nil
+    }
+
+    /// Full-row hover underlay. Sits below the selection underlay in the
+    /// z-stack so a hover on the selected row doesn't paint over its
+    /// accent fill. `Color.primary` adapts to light/dark and reads on
+    /// the cream surface where the prior per-icon white-tint hover was
+    /// invisible.
+    ///
+    /// Speed feel: position is *not* animated (`.animation(nil, value:)`)
+    /// so the underlay teleports between rows under the cursor — any
+    /// slide here would read as lag. Appearance gets a fast 60ms fade
+    /// via `.transition(.opacity)`.
+    @ViewBuilder
+    private var hoverUnderlay: some View {
+        if let y = hoveredY {
+            RoundedRectangle(cornerRadius: SidebarLayout.selectionCornerRadius)
+                .fill(Color.primary.opacity(0.06))
+                .overlay(
+                    RoundedRectangle(cornerRadius: SidebarLayout.selectionCornerRadius)
+                        .strokeBorder(Color.primary.opacity(0.18), lineWidth: 0.75)
+                )
+                .frame(height: SidebarLayout.rowHeight - SidebarLayout.selectionVerticalInset * 2)
+                .padding(.horizontal, SidebarLayout.selectionHorizontalInset)
+                .padding(.vertical, SidebarLayout.selectionVerticalInset)
+                .offset(y: y)
+                .animation(nil, value: hoveredY)
+                .allowsHitTesting(false)
+                .transition(.opacity.animation(.easeOut(duration: 0.06)))
+        }
     }
 }
 
@@ -382,12 +452,12 @@ private struct RailIcon<Selection: Hashable>: View {
     let progress: Double
     let compactBarOpacity: Double
     let onTap: () -> Void
+    var onHoverChange: (Bool) -> Void = { _ in }
 
     @Environment(\.sidebarStyle) private var style
 
     @State private var isHovering = false
     @State private var isPressing = false
-    @State private var breathPhase: CGFloat = 1.0
     @State private var rowFrame: CGRect = .zero
 
     private var glyphName: String {
@@ -415,36 +485,20 @@ private struct RailIcon<Selection: Hashable>: View {
             .font(.system(size: SidebarLayout.iconSize))
             .foregroundColor(iconColor)
             .frame(width: SidebarLayout.railWidth, height: SidebarLayout.rowHeight)
-            // Hover affordance — switches per style.icon.
-            .background { hoverBackground }
-            .scaleEffect(iconScale)
-            .offset(y: iconYOffset)
-            .animation(hoverAnimation, value: isHovering)
-            .animation(.spring(response: 0.18, dampingFraction: 0.65), value: isPressing)
+            // Hover changes color only; the full-row underlay carries the
+            // background affordance. Tap gives a brief scale-down for
+            // click feedback — applies across all styles (was kinetic-
+            // only) so every click feels acknowledged.
+            .scaleEffect(isPressing ? 0.92 : 1.0)
+            .animation(.easeOut(duration: 0.08), value: isHovering)
+            .animation(.spring(response: 0.20, dampingFraction: 0.65), value: isPressing)
             .contentShape(Rectangle())
             .onTapGesture { onTap() }
             .simultaneousGesture(
-                style.icon == .kinetic
-                    ? DragGesture(minimumDistance: 0)
-                        .onChanged { _ in isPressing = true }
-                        .onEnded   { _ in isPressing = false }
-                    : nil
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in isPressing = true }
+                    .onEnded   { _ in isPressing = false }
             )
-            .onChange(of: isSelected) { _, nowSelected in
-                guard style.icon == .kinetic else { return }
-                if nowSelected {
-                    breathPhase = 1.10
-                    withAnimation(.spring(response: 0.34, dampingFraction: 0.55)) {
-                        breathPhase = 1.0
-                    }
-                    startBreathing()
-                } else {
-                    breathPhase = 1.0
-                }
-            }
-            .onAppear {
-                if style.icon == .kinetic, isSelected { startBreathing() }
-            }
         .background {
             GeometryReader { geo in
                 Color.clear
@@ -456,6 +510,7 @@ private struct RailIcon<Selection: Hashable>: View {
             switch phase {
             case .active:
                 isHovering = true
+                onHoverChange(true)
                 if isCompact, let label = tooltipLabel {
                     let tooltip = SidebarTooltipState.shared
                     let anchor = CGPoint(x: rowFrame.maxX, y: rowFrame.midY)
@@ -467,6 +522,7 @@ private struct RailIcon<Selection: Hashable>: View {
                 }
             case .ended:
                 isHovering = false
+                onHoverChange(false)
                 if isCompact, let label = tooltipLabel {
                     SidebarTooltipState.shared.dismiss(matching: label)
                 }
@@ -474,85 +530,6 @@ private struct RailIcon<Selection: Hashable>: View {
         }
     }
 
-    // MARK: Per-style helpers
-
-    @ViewBuilder
-    private var hoverBackground: some View {
-        if isHovering && !isSelected {
-            switch style.icon {
-            case .editorial:
-                EmptyView()
-            case .glass:
-                ZStack {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(
-                            RadialGradient(
-                                colors: [Color.white.opacity(0.10), Color.white.opacity(0)],
-                                center: .center, startRadius: 0, endRadius: 18
-                            )
-                        )
-                        .blur(radius: 2)
-                    RoundedRectangle(cornerRadius: 6)
-                        .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5)
-                }
-                .padding(.horizontal, 4)
-                .padding(.vertical, 3)
-                .transition(.opacity.combined(with: .scale(scale: 0.94)))
-            case .kinetic:
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(Color.white.opacity(0.06))
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 3)
-            case .default:
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(Color.white.opacity(0.05))
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 3)
-                    .transition(.opacity)
-            }
-        }
-    }
-
-    private var iconScale: CGFloat {
-        switch style.icon {
-        case .kinetic:
-            let breath = isSelected ? breathPhase : 1.0
-            let lift = (isHovering && !isSelected) ? 1.08 : 1.0
-            let press = isPressing ? 0.94 : 1.0
-            return breath * lift * press
-        case .glass:
-            return (isHovering && !isSelected) ? 1.04 : 1.0
-        default:
-            return 1.0
-        }
-    }
-
-    private var iconYOffset: CGFloat {
-        switch style.icon {
-        case .kinetic:
-            return (isHovering && !isSelected) ? -1 : 0
-        case .editorial:
-            return (isHovering && !isSelected) ? 0 : 0  // editorial uses x-shift on labels, not icons
-        default:
-            return 0
-        }
-    }
-
-    private var hoverAnimation: Animation {
-        switch style.icon {
-        case .kinetic: return .spring(response: 0.28, dampingFraction: 0.72)
-        case .glass:   return .spring(response: 0.22, dampingFraction: 0.85)
-        case .editorial: return .easeInOut(duration: 0.16)
-        case .default: return .easeOut(duration: 0.12)
-        }
-    }
-
-    private func startBreathing() {
-        guard style.icon == .kinetic, isSelected else { return }
-        withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
-            breathPhase = 1.04
-        }
-    }
 }
 
 // MARK: - Style variant views

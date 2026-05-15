@@ -111,7 +111,7 @@ final class RecordingsViewModel {
 
     /// Load next page (expands the observation window)
     func loadNextPage() async {
-        guard hasMorePages else { return }
+        guard hasMorePages, !isLoading else { return }
         currentLimit += pageSize
         await startObservation()
     }
@@ -127,7 +127,7 @@ final class RecordingsViewModel {
             case .notes: return .notes
             }
         }()
-        await toggleSemanticFilter(semanticFilter)
+        await selectSemanticFilter(semanticFilter)
     }
 
     /// Refresh (re-subscribes the observation)
@@ -167,6 +167,13 @@ final class RecordingsViewModel {
     }
 
     // MARK: - Semantic Filter Actions
+
+    /// Select a semantic filter without toggling it off when it is already active.
+    func selectSemanticFilter(_ filter: SemanticFilter) async {
+        filterState.select(filter)
+        currentLimit = pageSize
+        await startObservation()
+    }
 
     /// Toggle a semantic filter
     func toggleSemanticFilter(_ filter: SemanticFilter) async {
@@ -262,7 +269,7 @@ final class RecordingsViewModel {
 
         observationCancellable = observation.start(
             in: dbQueue,
-            scheduling: .immediate,
+            scheduling: .async(onQueue: .main),
             onError: { [weak self] error in
                 Task { @MainActor [weak self] in
                     guard let self else { return }

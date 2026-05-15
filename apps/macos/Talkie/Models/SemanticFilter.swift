@@ -148,6 +148,27 @@ class RecordingFilterState {
     /// Date filter — mutually exclusive with time group filters (.today, .thisWeek, .thisMonth)
     var dateFilter: Date? = nil
 
+    /// Select a filter without toggling it back off when it is already active.
+    /// Useful for navigation-driven state restoration where entering a screen
+    /// should be idempotent.
+    func select(_ filter: SemanticFilter) {
+        if filter.group.isExclusive {
+            activeFilters = activeFilters.filter { $0.group != filter.group }
+
+            // Time group filters are mutually exclusive with dateFilter.
+            if filter.group == .time {
+                dateFilter = nil
+            }
+
+            // "All" in type group means no type filter.
+            if filter.id != "all" || filter.group != .type {
+                activeFilters.insert(filter)
+            }
+        } else if !activeFilters.contains(filter) {
+            activeFilters.insert(filter)
+        }
+    }
+
     /// Toggle a filter on/off
     func toggle(_ filter: SemanticFilter) {
         if filter.group.isExclusive {

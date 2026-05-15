@@ -130,26 +130,44 @@ public struct SidebarRow<Selection: Hashable, Content: View>: View {
             // Compact: hover-only highlight constrained to the rail column
             // (rail width − 4 = 28pt) and centered on the icon. Selection is
             // conveyed by the bottom accent bar, so we skip the fill for
-            // selected rows to avoid double signaling. Snappy 80ms animation
-            // doubles as a perf proxy — the hover should feel instant.
+            // selected rows to avoid double signaling.
+            let borderOpacity: Double = isHovering ? 0.38 : 0.14
             RoundedRectangle(cornerRadius: 6)
                 .fill(Color.primary.opacity(isHovering ? 0.085 : 0))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(Color.primary.opacity(borderOpacity), lineWidth: isHovering ? 1 : 0.75)
+                )
                 .frame(width: SidebarLayout.railWidth - 4,
                        height: SidebarLayout.rowHeight - 2)
                 .frame(width: SidebarLayout.railWidth, alignment: .center)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .animation(.easeOut(duration: 0.08), value: isHovering)
         } else {
-            // Expanded: subtle fill spanning the full row for hover and
-            // selection.
-            let showFill = isSelected || isHovering
+            // Expanded: every row carries a soft resting border for
+            // structural definition; hover lifts it noticeably so the
+            // row reads as live. Selected uses accent fill and skips
+            // the border (the fill alone is enough signal).
+            //
+            // Color.primary adapts to light/dark, but on light cream
+            // surfaces the resting opacity needs to be ~15% with a
+            // 0.75pt line to register at all — 8%/0.5pt vanished.
+            let restingBorderOpacity: Double = 0.14
+            let hoverBorderOpacity: Double = 0.38
+            let borderOpacity: Double = isSelected
+                ? 0.0
+                : (isHovering ? hoverBorderOpacity : restingBorderOpacity)
+            let borderWidth: CGFloat = isHovering ? 1 : 0.75
             RoundedRectangle(cornerRadius: SidebarLayout.selectionCornerRadius)
                 .fill(
                     isSelected
                         ? accentColor.opacity(0.14)
                         : (isHovering ? Color.primary.opacity(0.06) : Color.clear)
                 )
-                .opacity(showFill ? 1 : 0)
+                .overlay(
+                    RoundedRectangle(cornerRadius: SidebarLayout.selectionCornerRadius)
+                        .strokeBorder(Color.primary.opacity(borderOpacity), lineWidth: borderWidth)
+                )
                 .padding(.horizontal, SidebarLayout.selectionHorizontalInset)
                 .animation(.easeOut(duration: 0.10), value: isSelected)
                 .animation(.easeOut(duration: 0.10), value: isHovering)

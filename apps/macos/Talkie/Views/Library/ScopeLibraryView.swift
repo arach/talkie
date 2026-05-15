@@ -159,7 +159,7 @@ struct ScopeLibraryView: View {
             if initialTypeFilter != .all {
                 suppressFilterReload = true
                 typeFilter = initialTypeFilter
-                viewModel.filterState.toggle(initialTypeFilter.semanticFilter)
+                viewModel.filterState.select(initialTypeFilter.semanticFilter)
             }
             await viewModel.loadWithSemanticFilters()
         }
@@ -427,25 +427,10 @@ struct ScopeLibraryView: View {
                                     Rectangle().fill(ScopeEdge.subtle).frame(height: 1)
                                 }
                             }
-                            .onAppear {
-                                if recording.id == viewModel.recordings.last?.id {
-                                    Task { await viewModel.loadNextPage() }
-                                }
-                            }
                         }
                     }
 
-                    if viewModel.isLoading && !viewModel.recordings.isEmpty {
-                        HStack(spacing: 8) {
-                            PhosphorDot(color: ScopeAmber.solid.opacity(0.6), size: 5)
-                            Text("LOADING MORE")
-                                .font(ScopeType.chrome)
-                                .tracking(ScopeType.Tracking.wide)
-                                .foregroundStyle(ScopeInk.faint)
-                        }
-                        .padding(.vertical, 16)
-                        .padding(.horizontal, 32)
-                    }
+                    paginationFooter
                 }
             }
             .onChange(of: pendingScrollID) { _, id in
@@ -455,6 +440,41 @@ struct ScopeLibraryView: View {
                     proxy.scrollTo(id, anchor: .center)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var paginationFooter: some View {
+        if viewModel.isLoading && !viewModel.recordings.isEmpty {
+            HStack(spacing: 8) {
+                PhosphorDot(color: ScopeAmber.solid.opacity(0.6), size: 5)
+                Text("LOADING MORE")
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.faint)
+            }
+            .padding(.vertical, 16)
+            .padding(.horizontal, 32)
+        } else if viewModel.hasMorePages {
+            Button {
+                Task { await viewModel.loadNextPage() }
+            } label: {
+                HStack(spacing: 8) {
+                    PhosphorDot(color: ScopeAmber.solid.opacity(0.45), size: 5)
+                    Text("LOAD MORE")
+                        .font(ScopeType.chrome)
+                        .tracking(ScopeType.Tracking.wide)
+                        .foregroundStyle(ScopeInk.faint)
+                    Text("\(viewModel.displayedCount) / \(viewModel.totalCount)")
+                        .font(ScopeType.chrome)
+                        .tracking(ScopeType.Tracking.wide)
+                        .foregroundStyle(ScopeInk.faint.opacity(0.7))
+                }
+                .padding(.vertical, 16)
+                .padding(.horizontal, 32)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
         }
     }
 

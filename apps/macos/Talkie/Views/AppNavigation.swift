@@ -1167,13 +1167,15 @@ private struct AppNavigationSidebar<RailHeader: View, LabelHeader: View, Footer:
         dragPreviewLabelWidth ?? committedLabelWidth
     }
 
-    /// Width reported to the parent `SidebarColumns` layout. During an
-    /// expanded drag this stays at the committed root width while the
-    /// sidebar content paints its local preview width inside/over that
-    /// stable slot. That keeps the detail column from receiving a new
-    /// width on every drag tick; it relayouts once when drag-end commits.
+    /// Width reported to the parent `SidebarColumns` layout. Tracks the
+    /// live preview width so the actual sidebar→detail boundary moves
+    /// with the cursor during a resize — the detail column relayouts
+    /// every tick. An earlier version pinned this at committed width
+    /// during drag (so detail wouldn't relayout) and painted a faked
+    /// preview overlay on top, but the gap between the "fake" moving
+    /// edge and the static slot read as weird/laggy.
     private var layoutWidth: CGFloat {
-        sidebarWidth(labelWidth: isDragging ? committedLabelWidth : effectiveLabelWidth)
+        sidebarWidth(labelWidth: effectiveLabelWidth)
     }
 
     var body: some View {
@@ -1198,6 +1200,17 @@ private struct AppNavigationSidebar<RailHeader: View, LabelHeader: View, Footer:
             }
             .padding(.leading, SidebarLayout.leadingInset)
             .frame(width: layoutWidth, alignment: .leading)
+            .overlay(alignment: .trailing) {
+                // Active-edge highlight during a resize drag. The slot
+                // width tracks the cursor, so this just rides the
+                // trailing edge as a 1pt accent stripe — fades in/out
+                // by isDragging.
+                Rectangle()
+                    .fill(accent.opacity(isDragging ? 0.42 : 0))
+                    .frame(width: 1)
+                    .allowsHitTesting(false)
+                    .animation(.easeOut(duration: 0.12), value: isDragging)
+            }
             .onChange(of: isDragging) { _, dragging in
                 if !dragging {
                     dragPreviewLabelWidth = nil
@@ -2078,6 +2091,11 @@ private struct SidebarEdgeHandle: View {
     let onExpand: (Double) -> Void
 
     @State private var isHovered = false
+    /// Whether we currently have an `NSCursor.resizeLeftRight` pushed.
+    /// Pushed when either hover or drag activates; popped only when
+    /// *both* are inactive. Prevents a stale resize cursor after a drag
+    /// release lands outside the hit zone.
+    @State private var cursorPushed = false
     @State private var dragStartWidth: Double?
     @State private var latestResizeWidth: Double?
     @State private var latestRawWidth: Double?
@@ -2132,9 +2150,22 @@ private struct SidebarEdgeHandle: View {
                 }
                 .animation(.easeOut(duration: 0.14), value: isActive)
             }
-            .cursor(.resizeLeftRight)
-            .onHover { hovering in
-                isHovered = hovering
+            // Cursor + hover via continuous-hover with paired push/pop.
+            // Pushing on enter and popping on leave keeps the cursor
+            // from getting stuck (which happened with `.set()` since
+            // it has no counterpart). Drag-start also pushes if needed
+            // (covered in handleDragChanged), and drag-end pops only
+            // when hover isn't holding it — so a release inside the
+            // hit zone keeps the resize cursor visible.
+            .onContinuousHover { phase in
+                switch phase {
+                case .active:
+                    if !isHovered { isHovered = true }
+                    acquireResizeCursor()
+                case .ended:
+                    isHovered = false
+                    releaseResizeCursorIfIdle()
+                }
             }
             .gesture(
                 DragGesture(minimumDistance: 0, coordinateSpace: .global)
@@ -2187,6 +2218,11 @@ private struct SidebarEdgeHandle: View {
                 "activate",
                 detail: "id=\(dragSequence) dx=\(rounded(horizontalDelta)) dy=\(rounded(verticalDelta)) threshold=\(rounded(activationDistance))"
             )
+            // Pin the resize cursor for the full duration of the drag.
+            // Hover may not have fired (drag can start from a click on
+            // the visible pill before hover settles), so guarantee a
+            // push here too. acquireResizeCursor is idempotent.
+            acquireResizeCursor()
         }
 
         didCommitResize = true
@@ -2281,6 +2317,24 @@ private struct SidebarEdgeHandle: View {
         lastLoggedRawWidth = nil
         didCommitResize = false
         isDragging = false
+        // Pop only if hover isn't currently holding the cursor — a
+        // release that lands inside the hit zone should still show
+        // the resize affordance.
+        releaseResizeCursorIfIdle()
+    }
+
+    /// Push the resize cursor if not already pushed.
+    private func acquireResizeCursor() {
+        guard !cursorPushed else { return }
+        NSCursor.resizeLeftRight.push()
+        cursorPushed = true
+    }
+
+    /// Pop the resize cursor only if neither hover nor drag wants it.
+    private func releaseResizeCursorIfIdle() {
+        guard cursorPushed, !isHovered, !isDragging else { return }
+        NSCursor.pop()
+        cursorPushed = false
     }
 
     private func logResizeUpdateIfNeeded(width: Double, rawWidth: Double, horizontalDelta: CGFloat) {
