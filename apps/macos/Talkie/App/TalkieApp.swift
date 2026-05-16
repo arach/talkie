@@ -14,57 +14,6 @@ import TalkieKit
 private let startupLogger = Logger(subsystem: "to.talkie.app.performance", category: "Startup")
 private let startupSignposter = OSSignposter(subsystem: "to.talkie.app.performance", category: "Startup")
 
-// MARK: - Sidebar Toggle Action
-
-struct SidebarToggleAction {
-    let toggle: () -> Void
-}
-
-struct SidebarToggleKey: FocusedValueKey {
-    typealias Value = SidebarToggleAction
-}
-
-extension FocusedValues {
-    var sidebarToggle: SidebarToggleAction? {
-        get { self[SidebarToggleKey.self] }
-        set { self[SidebarToggleKey.self] = newValue }
-    }
-}
-
-// MARK: - Settings Navigation Action
-
-struct SettingsNavigationAction {
-    let showSettings: () -> Void
-}
-
-struct SettingsNavigationKey: FocusedValueKey {
-    typealias Value = SettingsNavigationAction
-}
-
-extension FocusedValues {
-    var settingsNavigation: SettingsNavigationAction? {
-        get { self[SettingsNavigationKey.self] }
-        set { self[SettingsNavigationKey.self] = newValue }
-    }
-}
-
-// MARK: - Live Navigation Action
-
-struct LiveNavigationAction {
-    let showLive: () -> Void
-}
-
-struct LiveNavigationKey: FocusedValueKey {
-    typealias Value = LiveNavigationAction
-}
-
-extension FocusedValues {
-    var liveNavigation: LiveNavigationAction? {
-        get { self[LiveNavigationKey.self] }
-        set { self[LiveNavigationKey.self] = newValue }
-    }
-}
-
 /// Static initializer that runs BEFORE TalkieApp is created
 /// Used to set theme from CLI arguments before any views are created
 private enum EarlyThemeInit {
@@ -132,12 +81,6 @@ struct TalkieApp: App {
 
         StartupProfiler.shared.markEarly("app.init.end")
     }
-    // Remove @State from global singletons - they're already observable
-    // Reference singletons directly via .shared instead
-    @FocusedValue(\.sidebarToggle) var sidebarToggle
-    @FocusedValue(\.settingsNavigation) var settingsNavigation
-    @FocusedValue(\.liveNavigation) var liveNavigation
-
     // Command palette, keyboard help, report sheet, and voice command state
     @State private var settings = SettingsManager.shared
     @State private var showCommandPalette = false
@@ -228,6 +171,9 @@ struct TalkieApp: App {
                 .onReceive(NotificationCenter.default.publisher(for: .showCommandPalette)) { _ in
                     showCommandPalette = true
                 }
+                .onReceive(NotificationCenter.default.publisher(for: .toggleCommandPalette)) { _ in
+                    showCommandPalette.toggle()
+                }
                 // Sync voice command state with SettingsManager
                 .onChange(of: SettingsManager.shared.isVoiceCommandPresented) { _, newValue in
                     showVoiceCommand = newValue
@@ -237,6 +183,9 @@ struct TalkieApp: App {
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .showKeyboardHelp)) { _ in
                     showKeyboardHelp = true
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .showVoiceCommand)) { _ in
+                    showVoiceCommand = true
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .toggleKeyboardHintOverlay)) { _ in
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
@@ -253,46 +202,32 @@ struct TalkieApp: App {
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact(showsTitle: false))
         .commands {
-            TalkieCommands(
-                sidebarToggle: sidebarToggle,
-                showCommandPalette: $showCommandPalette,
-                showKeyboardHelp: $showKeyboardHelp,
-                showReportSheet: $showReportSheet,
-                showVoiceCommand: $showVoiceCommand,
-                settings: settings
-            )
+            TalkieCommands()
         }
     }
 
 }
 
 private struct TalkieCommands: Commands {
-    let sidebarToggle: SidebarToggleAction?
-    let showCommandPalette: Binding<Bool>
-    let showKeyboardHelp: Binding<Bool>
-    let showReportSheet: Binding<Bool>
-    let showVoiceCommand: Binding<Bool>
-    let settings: SettingsManager
-
     var body: some Commands {
         CommandGroup(replacing: .newItem) {}
 
         // Add sidebar toggle to View menu
         CommandGroup(after: .sidebar) {
             Button("Toggle Sidebar") {
-                sidebarToggle?.toggle()
+                NotificationCenter.default.post(name: .toggleAppSidebar, object: nil)
             }
             .keyboardShortcut("s", modifiers: [.command, .control])
 
             Divider()
 
             Button("Command Palette") {
-                showCommandPalette.wrappedValue.toggle()
+                NotificationCenter.default.post(name: .toggleCommandPalette, object: nil)
             }
             .keyboardShortcut("k", modifiers: .command)  // Cmd+K (standard)
 
             Button("Voice Command") {
-                showVoiceCommand.wrappedValue = true
+                NotificationCenter.default.post(name: .showVoiceCommand, object: nil)
             }
             .keyboardShortcut("v", modifiers: [.command, .shift])  // Cmd+Shift+V
         }
@@ -308,19 +243,17 @@ private struct TalkieCommands: Commands {
         // Help menu additions
         CommandGroup(after: .help) {
             Button("Send Feedback…") {
-                showReportSheet.wrappedValue = true
+                NotificationCenter.default.post(name: .showReportSheet, object: nil)
             }
             .keyboardShortcut("f", modifiers: [.command, .shift])  // Cmd+Shift+F
 
             Button("Keyboard Shortcuts") {
-                showKeyboardHelp.wrappedValue = true
+                NotificationCenter.default.post(name: .showKeyboardHelp, object: nil)
             }
             .keyboardShortcut("/", modifiers: .shift)  // ? key
 
             Button("Shortcut Hints") {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-                    settings.showInlineKeyboardHints.toggle()
-                }
+                NotificationCenter.default.post(name: .toggleKeyboardHintOverlay, object: nil)
             }
             .keyboardShortcut("/", modifiers: [.command, .shift])
 
