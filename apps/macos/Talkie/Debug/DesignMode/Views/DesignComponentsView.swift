@@ -31,24 +31,23 @@ struct DesignComponentsView: View {
     }
 }
 
-/// A/B switcher for the Library view's filter ribbon + inspector empty
-/// pane variants. State is `@AppStorage`-backed in `ScopeLibraryView`,
+/// A/B switcher for the Library view's readout body variant. The
+/// filter ribbon is locked to Patch Bay and the inspector empty state
+/// is locked to Library Readout; what flexes is the *content* inside
+/// the readout bay. State is `@AppStorage`-backed in `ScopeLibraryView`,
 /// so changes here propagate live to an open Library window.
 private struct LibraryVariantsPicker: View {
-    @AppStorage("scopeLibrary.filterRibbonVariant")
-    private var filterRibbonVariantRaw: String = LibraryFilterRibbonVariant.classic.rawValue
-
-    @AppStorage("scopeLibrary.inspectorEmptyVariant")
-    private var inspectorEmptyVariantRaw: String = LibraryInspectorEmptyVariant.simple.rawValue
+    @AppStorage("scopeLibrary.readoutBodyVariant")
+    private var readoutBodyVariantRaw: String = LibraryReadoutBodyVariant.stats.rawValue
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text("· LIBRARY VARIANTS")
+                Text("· LIBRARY READOUT")
                     .font(ScopeType.eyebrow)
                     .tracking(ScopeType.Tracking.wide)
                     .foregroundStyle(ScopeAmber.solid)
-                Text("Switch live · changes propagate to an open Library window")
+                Text("Switch live · the bay morphs to host each body")
                     .font(ScopeType.chrome)
                     .tracking(ScopeType.Tracking.wide)
                     .foregroundStyle(ScopeInk.subtle)
@@ -56,17 +55,9 @@ private struct LibraryVariantsPicker: View {
             }
 
             pickerRow(
-                label: "Filter Ribbon",
-                options: LibraryFilterRibbonVariant.allCases,
-                selection: $filterRibbonVariantRaw,
-                rawOf: { $0.rawValue },
-                nameOf: { $0.displayName }
-            )
-
-            pickerRow(
-                label: "Inspector Empty",
-                options: LibraryInspectorEmptyVariant.allCases,
-                selection: $inspectorEmptyVariantRaw,
+                label: "Body",
+                options: LibraryReadoutBodyVariant.allCases,
+                selection: $readoutBodyVariantRaw,
                 rawOf: { $0.rawValue },
                 nameOf: { $0.displayName }
             )

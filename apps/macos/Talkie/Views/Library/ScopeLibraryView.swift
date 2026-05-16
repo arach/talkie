@@ -112,20 +112,15 @@ struct ScopeLibraryView: View {
     @AppStorage("scopeLibrary.listColumnWidth")
     private var listColumnWidth: Double = 520
 
-    /// Active treatment for the filter ribbon. Pickable in DesignMode
-    /// (Debug → Components) so we can A/B different visual languages
-    /// without code edits. Default matches what shipped to master.
-    @AppStorage("scopeLibrary.filterRibbonVariant")
-    private var filterRibbonVariantRaw: String = LibraryFilterRibbonVariant.classic.rawValue
-    private var filterRibbonVariant: LibraryFilterRibbonVariant {
-        LibraryFilterRibbonVariant(rawValue: filterRibbonVariantRaw) ?? .classic
-    }
-
-    /// Active treatment for the empty inspector pane.
-    @AppStorage("scopeLibrary.inspectorEmptyVariant")
-    private var inspectorEmptyVariantRaw: String = LibraryInspectorEmptyVariant.simple.rawValue
-    private var inspectorEmptyVariant: LibraryInspectorEmptyVariant {
-        LibraryInspectorEmptyVariant(rawValue: inspectorEmptyVariantRaw) ?? .simple
+    /// Active treatment for the readout body. The filter ribbon is
+    /// locked to Patch Bay; the inspector empty state is locked to
+    /// Library Readout. What flexes is the *content* inside the readout
+    /// bay — different bodies render different "instruments" on the
+    /// same chrome.
+    @AppStorage("scopeLibrary.readoutBodyVariant")
+    private var readoutBodyVariantRaw: String = LibraryReadoutBodyVariant.stats.rawValue
+    private var readoutBodyVariant: LibraryReadoutBodyVariant {
+        LibraryReadoutBodyVariant(rawValue: readoutBodyVariantRaw) ?? .stats
     }
 
     private var selectedRecording: TalkieObject? {
@@ -320,94 +315,18 @@ struct ScopeLibraryView: View {
         )
     }
 
-    /// Dispatches the filter-ribbon presentation by the active variant
-    /// stored in `@AppStorage`. Each variant is responsible for its own
-    /// layout including the search field (some treatments fuse them
-    /// into one container, others keep them separate surfaces).
+    /// Filter ribbon — locked to Patch Bay. The other ribbon variants
+    /// have been removed; their treatments are preserved only in git
+    /// history. Patch Bay is the brass LED dot family above each label
+    /// with an inline count and an amber underline on the active option.
     @ViewBuilder
     private var topComponent: some View {
         let counts = filterCounts()
-        Group {
-            switch filterRibbonVariant {
-            case .classic:        classicRibbon(counts: counts, palette: .warm)
-            case .classicTepid:   classicRibbon(counts: counts, palette: .tepid)
-            case .classicSilver:  classicRibbon(counts: counts, palette: .silver)
-            case .classicSlate:   classicRibbon(counts: counts, palette: .slate)
-            case .patchBay:       patchBayRibbon(counts: counts)
-            case .instrumentBay:  instrumentBayRibbon(counts: counts)
-            case .indexTabs:      indexTabsRibbon(counts: counts)
-            case .etchedSelector: etchedSelectorRibbon(counts: counts)
-            }
-        }
-        .padding(.horizontal, 32)
-        .padding(.top, 18)
-        .padding(.bottom, 14)
-        .animation(.smooth(duration: 0.4), value: viewModel.recordings.count)
-    }
-
-    /// Palette for the Classic ribbon family. `warm` matches the
-    /// original cream + brown active state; `silver` and `slate` use
-    /// cool/metallic surfaces to step away from the warm direction.
-    private struct ClassicPalette {
-        let containerFill: Color
-        let containerStroke: Color
-        let activeFillTop: Color
-        let activeFillBottom: Color
-        let activeText: Color
-        let inactiveText: Color
-        let countOpacityActive: Double
-        let countOpacityInactive: Double
-
-        static let warm = ClassicPalette(
-            containerFill: ScopeCanvas.surface,
-            containerStroke: ScopeEdge.faint,
-            activeFillTop: Color.hex("4A4744"),
-            activeFillBottom: Color.hex("36343A"),
-            activeText: ScopeAmber.solid,
-            inactiveText: ScopeInk.muted,
-            countOpacityActive: 0.85,
-            countOpacityInactive: 0.55
-        )
-
-        /// Cool neutral graphite. Container stays cream so the page
-        /// doesn't feel half-converted to silver, but the active pill
-        /// drops its warm/brown bias — reads as a stamped slate plate.
-        static let tepid = ClassicPalette(
-            containerFill: ScopeCanvas.surface,
-            containerStroke: ScopeEdge.faint,
-            activeFillTop: Color.hex("525458"),
-            activeFillBottom: Color.hex("38393D"),
-            activeText: Color.hex("F2F1EE"),
-            inactiveText: ScopeInk.muted,
-            countOpacityActive: 0.7,
-            countOpacityInactive: 0.55
-        )
-
-        static let silver = ClassicPalette(
-            // Cool pale surface — barely-warm neutral, drops the cream.
-            containerFill: Color.hex("EFEFF1"),
-            containerStroke: Color.hex("D6D6DA"),
-            // Brushed steel active fill: light silver fading down.
-            activeFillTop: Color.hex("8E9098"),
-            activeFillBottom: Color.hex("5D6068"),
-            activeText: Color.hex("F2F2F4"),
-            inactiveText: Color.hex("6E6E73"),
-            countOpacityActive: 0.7,
-            countOpacityInactive: 0.55
-        )
-
-        static let slate = ClassicPalette(
-            // Slightly deeper cool gray — reads as architectural slate.
-            containerFill: Color.hex("DEDEE2"),
-            containerStroke: Color.hex("C3C3C8"),
-            // Deep steel active fill: charcoal with a hint of cool light.
-            activeFillTop: Color.hex("55585F"),
-            activeFillBottom: Color.hex("3A3C42"),
-            activeText: Color.hex("E8E8EC"),
-            inactiveText: Color.hex("5A5C62"),
-            countOpacityActive: 0.7,
-            countOpacityInactive: 0.6
-        )
+        patchBayRibbon(counts: counts)
+            .padding(.horizontal, 32)
+            .padding(.top, 18)
+            .padding(.bottom, 14)
+            .animation(.smooth(duration: 0.4), value: viewModel.recordings.count)
     }
 
     /// The text-field + magnifier + clear-button — shared by every
@@ -435,81 +354,7 @@ struct ScopeLibraryView: View {
         }
     }
 
-    // MARK: Variant — Classic family (cream / silver / slate palettes)
-
-    private func classicRibbon(counts: FilterCounts, palette: ClassicPalette) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                ForEach(RecordingTypeFilter.allCases, id: \.self) { option in
-                    classicSegment(option, count: counts.count(for: option), palette: palette)
-                        .frame(maxWidth: .infinity)
-                }
-            }
-            .padding(4)
-
-            Rectangle()
-                .fill(palette.containerStroke.opacity(0.6))
-                .frame(height: 0.5)
-
-            searchField
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 7)
-                .fill(palette.containerFill)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 7)
-                .stroke(palette.containerStroke, lineWidth: 0.5)
-        )
-    }
-
-    private func classicSegment(
-        _ option: RecordingTypeFilter,
-        count: Int,
-        palette: ClassicPalette
-    ) -> some View {
-        let isSelected = typeFilter == option
-        return Button {
-            typeFilter = option
-        } label: {
-            HStack(spacing: 6) {
-                Text(option.label.uppercased())
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .tracking(0.7)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                Text("\(count)")
-                    .font(.system(size: 10, weight: .regular, design: .monospaced))
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                    .frame(minWidth: 16, alignment: .trailing)
-                    .opacity(isSelected ? palette.countOpacityActive : palette.countOpacityInactive)
-            }
-            .foregroundStyle(isSelected ? palette.activeText : palette.inactiveText)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 7)
-            .background(
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(
-                        isSelected
-                            ? AnyShapeStyle(
-                                LinearGradient(
-                                    colors: [palette.activeFillTop, palette.activeFillBottom],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            : AnyShapeStyle(Color.clear)
-                    )
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 4))
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: Variant — Patch Bay (brass LED dots, no container)
+    // MARK: Filter ribbon — Patch Bay (brass LED dots, no container)
 
     private func patchBayRibbon(counts: FilterCounts) -> some View {
         VStack(spacing: 12) {
@@ -577,293 +422,6 @@ struct ScopeLibraryView: View {
                     .fill(isSelected ? ScopeAmber.solid : Color.clear)
                     .frame(height: 1)
             }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: Variant — Instrument Bay (dark panel, phosphor active state)
-
-    private func instrumentBayRibbon(counts: FilterCounts) -> some View {
-        VStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(ScopePanel.bg)
-                GraticuleBackground(pitch: 18, color: ScopePanel.traceFaint, opacity: 0.4)
-                    .mask(RoundedRectangle(cornerRadius: 6))
-                HStack(spacing: 0) {
-                    ForEach(RecordingTypeFilter.allCases, id: \.self) { option in
-                        instrumentBaySegment(option, count: counts.count(for: option))
-                            .frame(maxWidth: .infinity)
-                    }
-                }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 5)
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(ScopePanel.stripTop)
-                        .frame(height: 3)
-                        .clipShape(
-                            UnevenRoundedRectangle(
-                                topLeadingRadius: 6,
-                                bottomLeadingRadius: 0,
-                                bottomTrailingRadius: 0,
-                                topTrailingRadius: 6
-                            )
-                        )
-                }
-                .overlay(alignment: .bottom) {
-                    Rectangle()
-                        .fill(ScopePanel.stripBottom)
-                        .frame(height: 3)
-                        .clipShape(
-                            UnevenRoundedRectangle(
-                                topLeadingRadius: 0,
-                                bottomLeadingRadius: 6,
-                                bottomTrailingRadius: 6,
-                                topTrailingRadius: 0
-                            )
-                        )
-                }
-            }
-
-            searchField
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(ScopeCanvas.surface)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(ScopeEdge.faint, lineWidth: 0.5)
-                )
-        }
-    }
-
-    private func instrumentBaySegment(_ option: RecordingTypeFilter, count: Int) -> some View {
-        let isSelected = typeFilter == option
-        return Button {
-            typeFilter = option
-        } label: {
-            HStack(spacing: 6) {
-                Text(option.label.uppercased())
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .tracking(1.6)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                Text("\(count)")
-                    .font(.system(size: 9, weight: .regular, design: .monospaced))
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(ScopePanel.bgDeep)
-                    )
-                    .foregroundStyle(
-                        isSelected
-                            ? ScopePanel.trace.opacity(0.85)
-                            : ScopePanel.inkSubtle
-                    )
-            }
-            .foregroundStyle(isSelected ? ScopePanel.trace : ScopePanel.inkFaint)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 7)
-            .background(
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(isSelected ? ScopePanel.bgDeep : Color.clear)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 3)
-                            .stroke(
-                                isSelected ? ScopePanel.Edge.normal : Color.clear,
-                                lineWidth: 0.5
-                            )
-                    )
-                    .shadow(color: isSelected ? ScopeAmber.glow : .clear, radius: 4)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 3))
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: Variant — Index Tabs (card-catalog tabs fused to search)
-    //
-    // Tabs sit directly on top of the search row with zero gap between
-    // them. The active tab "owns" the search row visually: its bottom
-    // border drops out so the two surfaces read as one drawer. Inactive
-    // tabs sit on a recessed lower plane (a 1pt baseline runs across
-    // the row of inactive tabs). Inter-tab gap is hairline only, not
-    // padding — keeps the row tight and unified.
-
-    private func indexTabsRibbon(counts: FilterCounts) -> some View {
-        let surface = Color.hex("EFEFF1")
-        let recessed = Color.hex("E0E0E4")
-        let edge = Color.hex("CDCDD2")
-
-        return VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                ForEach(Array(RecordingTypeFilter.allCases.enumerated()), id: \.offset) { idx, option in
-                    indexTabsSegment(
-                        option,
-                        count: counts.count(for: option),
-                        surface: surface,
-                        recessed: recessed,
-                        edge: edge
-                    )
-                    .frame(maxWidth: .infinity)
-                    if idx < RecordingTypeFilter.allCases.count - 1 {
-                        Rectangle()
-                            .fill(edge.opacity(0.6))
-                            .frame(width: 0.5, height: 18)
-                            .frame(maxHeight: .infinity, alignment: .bottom)
-                            .padding(.bottom, 6)
-                    }
-                }
-            }
-            .frame(height: 30, alignment: .bottom)
-            .overlay(alignment: .bottom) {
-                // Baseline that runs UNDER inactive tabs but breaks for
-                // the active one — implemented as a full-width hairline
-                // that the active tab's surface visually overrides.
-                Rectangle().fill(edge).frame(height: 0.5)
-            }
-
-            // Search row — surface continues from the active tab
-            searchField
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .background(surface)
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 5)
-                .fill(surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 5)
-                .stroke(edge, lineWidth: 0.5)
-        )
-    }
-
-    private func indexTabsSegment(
-        _ option: RecordingTypeFilter,
-        count: Int,
-        surface: Color,
-        recessed: Color,
-        edge: Color
-    ) -> some View {
-        let isSelected = typeFilter == option
-        return Button {
-            typeFilter = option
-        } label: {
-            HStack(spacing: 5) {
-                Text(option.label.uppercased())
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .tracking(1.0)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                Text("\(count)")
-                    .font(.system(size: 9, weight: .regular, design: .monospaced))
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                    .foregroundStyle(
-                        isSelected
-                            ? ScopeAmber.solid.opacity(0.8)
-                            : Color.hex("8A8A90")
-                    )
-            }
-            .foregroundStyle(isSelected ? Color.hex("1A1612") : Color.hex("6E6E73"))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(isSelected ? surface : recessed)
-            .overlay(alignment: .top) {
-                // Top amber edge only on active tab.
-                Rectangle()
-                    .fill(isSelected ? ScopeAmber.solid : Color.clear)
-                    .frame(height: 1.5)
-            }
-            .padding(.top, isSelected ? 0 : 4) // inactive tabs sit lower
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: Variant — Etched Selector (drafting-paper, left-aligned)
-    //
-    // Labels group from the left with full-height vertical separators
-    // between each, so the gap between MEMOS · DICTATIONS · CAPTURES
-    // reads as deliberate joinery (not gutters). Active label gets an
-    // amber underline; the row hugs its content, with a trailing
-    // Spacer pushing the whole bank against the left edge.
-
-    private func etchedSelectorRibbon(counts: FilterCounts) -> some View {
-        let separator = Color.hex("BFBCB1")  // warm hairline (not too amber)
-        return VStack(spacing: 14) {
-            HStack(spacing: 0) {
-                // Leading bracket
-                Rectangle()
-                    .fill(separator)
-                    .frame(width: 0.5, height: 22)
-
-                ForEach(Array(RecordingTypeFilter.allCases.enumerated()), id: \.offset) { idx, option in
-                    etchedSelectorSegment(option, count: counts.count(for: option))
-                    if idx < RecordingTypeFilter.allCases.count - 1 {
-                        Rectangle()
-                            .fill(separator)
-                            .frame(width: 0.5, height: 22)
-                    }
-                }
-
-                // Trailing bracket — closes the bank
-                Rectangle()
-                    .fill(separator)
-                    .frame(width: 0.5, height: 22)
-
-                Spacer(minLength: 0)
-            }
-            .padding(.vertical, 6)
-
-            searchField
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .overlay(alignment: .top) {
-                    Rectangle().fill(ScopeEdge.faint).frame(height: 0.5)
-                }
-                .overlay(alignment: .bottom) {
-                    Rectangle().fill(ScopeEdge.faint).frame(height: 0.5)
-                }
-        }
-    }
-
-    private func etchedSelectorSegment(_ option: RecordingTypeFilter, count: Int) -> some View {
-        let isSelected = typeFilter == option
-        return Button {
-            typeFilter = option
-        } label: {
-            VStack(spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(option.label.uppercased())
-                        .font(.system(
-                            size: 11,
-                            weight: isSelected ? .bold : .medium,
-                            design: .monospaced
-                        ))
-                        .tracking(1.2)
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .foregroundStyle(isSelected ? ScopeInk.primary : ScopeInk.muted)
-                    Text("\(count)")
-                        .font(.system(size: 9, weight: .regular, design: .monospaced))
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
-                        .foregroundStyle(ScopeInk.subtle)
-                }
-                Rectangle()
-                    .fill(isSelected ? ScopeAmber.solid : Color.clear)
-                    .frame(height: 1.5)
-                    .shadow(color: isSelected ? ScopeAmber.glow : .clear, radius: 3)
-            }
-            .padding(.horizontal, 14)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -1036,21 +594,40 @@ struct ScopeLibraryView: View {
     @ViewBuilder
     private var variantSwitcherStrip: some View {
         if DesignModeManager.shared.isEnabled {
-            VStack(alignment: .leading, spacing: 6) {
-                variantRow(
-                    label: "RIBBON",
-                    options: LibraryFilterRibbonVariant.allCases,
-                    raw: $filterRibbonVariantRaw,
-                    rawOf: { $0.rawValue },
-                    nameOf: { $0.displayName }
-                )
-                variantRow(
-                    label: "EMPTY",
-                    options: LibraryInspectorEmptyVariant.allCases,
-                    raw: $inspectorEmptyVariantRaw,
-                    rawOf: { $0.rawValue },
-                    nameOf: { $0.displayName }
-                )
+            HStack(spacing: 6) {
+                Text("· READOUT")
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopePanel.inkFaint)
+                    .frame(width: 64, alignment: .leading)
+                ForEach(LibraryReadoutBodyVariant.allCases, id: \.self) { option in
+                    let raw = option.rawValue
+                    let isActive = readoutBodyVariantRaw == raw
+                    Button {
+                        readoutBodyVariantRaw = raw
+                    } label: {
+                        Text(option.displayName.uppercased())
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .tracking(0.8)
+                            .foregroundStyle(isActive ? ScopePanel.bg : ScopePanel.inkMuted)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(isActive ? ScopeAmber.solid : Color.clear)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 3)
+                                    .stroke(
+                                        isActive ? ScopeAmber.solid : ScopePanel.Edge.normal,
+                                        lineWidth: 0.5
+                                    )
+                            )
+                            .contentShape(RoundedRectangle(cornerRadius: 3))
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, 32)
             .padding(.vertical, 8)
@@ -1063,50 +640,6 @@ struct ScopeLibraryView: View {
                     .fill(ScopeAmber.solid.opacity(0.6))
                     .frame(width: 2)
             }
-        }
-    }
-
-    private func variantRow<Option: Hashable>(
-        label: String,
-        options: [Option],
-        raw: Binding<String>,
-        rawOf: @escaping (Option) -> String,
-        nameOf: @escaping (Option) -> String
-    ) -> some View {
-        HStack(spacing: 6) {
-            Text("· \(label)")
-                .font(ScopeType.chrome)
-                .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(ScopePanel.inkFaint)
-                .frame(width: 60, alignment: .leading)
-            ForEach(options, id: \.self) { option in
-                let rawValue = rawOf(option)
-                let isActive = raw.wrappedValue == rawValue
-                Button {
-                    raw.wrappedValue = rawValue
-                } label: {
-                    Text(nameOf(option).uppercased())
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                        .tracking(0.8)
-                        .foregroundStyle(isActive ? ScopePanel.bg : ScopePanel.inkMuted)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(isActive ? ScopeAmber.solid : Color.clear)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 3)
-                                .stroke(
-                                    isActive ? ScopeAmber.solid : ScopePanel.Edge.normal,
-                                    lineWidth: 0.5
-                                )
-                        )
-                        .contentShape(RoundedRectangle(cornerRadius: 3))
-                }
-                .buttonStyle(.plain)
-            }
-            Spacer(minLength: 0)
         }
     }
     #endif
@@ -1136,21 +669,21 @@ struct ScopeLibraryView: View {
 
     // MARK: - Inspector column
     //
-    // For the `.libraryReadout` variant the readout panel sits as a
-    // permanent header above whatever the rest of the column shows —
-    // selection detail, multi-select hint, or empty hint. The panel
-    // doesn't reflow or move when selection changes; it's a stable
-    // shelf with the row detail rendered below it.
+    // The readout panel sits as a permanent header above whatever the
+    // rest of the column shows — selection detail, multi-select hint,
+    // or an empty hint. The panel doesn't reflow or move when selection
+    // changes; it's a stable shelf with the row detail rendered below.
+    // The body *content* of the readout (stats grid vs. phase plot vs.
+    // reference monitor vs. transit console) is dispatched on
+    // `readoutBodyVariant` — same chrome, different instruments.
 
     private var inspectorColumn: some View {
         VStack(spacing: 0) {
-            if inspectorEmptyVariant == .readout {
-                libraryReadoutPanel
-                    .padding(.horizontal, 24)
-                    .padding(.top, 24)
-                    .padding(.bottom, 18)
-                Rectangle().fill(ScopeEdge.faint).frame(height: 0.5)
-            }
+            libraryReadoutPanel
+                .padding(.horizontal, 24)
+                .padding(.top, 24)
+                .padding(.bottom, 18)
+            Rectangle().fill(ScopeEdge.faint).frame(height: 0.5)
 
             Group {
                 if selectedRecordingIDs.count > 1 {
@@ -1174,13 +707,31 @@ struct ScopeLibraryView: View {
         }
     }
 
-    /// The readout panel extracted so it can render both as the empty
-    /// state of the `.libraryReadout` variant AND as the permanent
-    /// header above selection-driven detail. Same dark graphite bay
-    /// with stripTop header, 4-tile grid, stripBottom footer.
+    /// Dispatches the readout body by the active variant and wraps it
+    /// in the universal bay chrome (frame, top strip, bottom strip,
+    /// drop shadow). The bay shape stays constant across variants; only
+    /// the body content and the variant's `ReadoutSurface` palette change.
     private var libraryReadoutPanel: some View {
-        let stats = readoutStats()
-        return VStack(alignment: .leading, spacing: 12) {
+        let surface: ReadoutSurface = {
+            switch readoutBodyVariant {
+            case .stats:     return .stats
+            case .phasePlot: return .phasePlot
+            case .broadcast: return .broadcast
+            }
+        }()
+        return readoutBay(surface: surface) {
+            readoutBody(surface: surface)
+        }
+    }
+
+    /// Universal bay wrapper: eyebrow above, framed bay below with top
+    /// strip + body + bottom strip + drop shadow. Variant-agnostic.
+    @ViewBuilder
+    private func readoutBay<Body: View>(
+        surface: ReadoutSurface,
+        @ViewBuilder body: () -> Body
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 Text("· LIBRARY")
                     .font(ScopeType.eyebrow)
@@ -1195,42 +746,108 @@ struct ScopeLibraryView: View {
 
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(ScopePanel.bg)
+                    .fill(surface.bg)
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .stroke(ScopePanel.Edge.normal, lineWidth: 1)
+                            .stroke(surface.edgeFaint, lineWidth: 1)
                     )
-                GraticuleBackground(pitch: 20, color: ScopePanel.traceFaint, opacity: 0.5)
-                    .mask(RoundedRectangle(cornerRadius: 8))
 
                 VStack(spacing: 0) {
-                    readoutHeader(stats: stats)
-                    readoutGrid(stats: stats)
-                    readoutFooter(stats: stats)
+                    readoutChromeStrip(
+                        surface: surface,
+                        leading: surface.topStripLeading,
+                        trailing: surface.topStripTrailing,
+                        fill: AnyView(surface.topStripFill),
+                        isTop: true
+                    )
+                    body()
+                        .frame(maxHeight: .infinity)
+                    readoutChromeStrip(
+                        surface: surface,
+                        leading: surface.bottomStripLeading,
+                        trailing: Date().formatted(date: .omitted, time: .shortened).uppercased(),
+                        fill: AnyView(surface.bottomStripFill),
+                        isTop: false
+                    )
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
             .frame(height: 200)
-            .shadow(color: .black.opacity(0.18), radius: 22, y: 12)
+            .shadow(color: .black.opacity(0.22), radius: 22, y: 12)
         }
     }
 
+    /// Universal top/bottom chrome strip. Pulled out so variants share
+    /// the same dot + leading + trailing rhythm.
+    private func readoutChromeStrip(
+        surface: ReadoutSurface,
+        leading: String,
+        trailing: String,
+        fill: AnyView,
+        isTop: Bool
+    ) -> some View {
+        HStack(spacing: 8) {
+            if isTop {
+                PhosphorDot(color: surface.signal, size: 5)
+            }
+            Text(leading)
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(surface.inkMuted)
+            Spacer()
+            Text(trailing)
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(surface.inkSubtle)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(fill)
+        .overlay(alignment: isTop ? .bottom : .top) {
+            Rectangle()
+                .fill(surface.edgeFaint)
+                .frame(height: 1)
+                .padding(.horizontal, 14)
+        }
+    }
+
+    /// Dispatch to the active body. Each body takes the surface palette
+    /// and the currently selected recording (nil → idle state).
     @ViewBuilder
-    private var inspectorEmpty: some View {
-        switch inspectorEmptyVariant {
-        case .simple, .readout:
-            // For `.readout` the panel renders permanently above this
-            // body in `inspectorColumn`. The empty body itself is the
-            // same minimal "NO TRACK SELECTED" hint as `.simple`.
-            inspectorEmptySimple
-        case .cassette:
-            inspectorEmptyCassette
-        case .idleTrace:
-            inspectorEmptyIdleTrace
+    private func readoutBody(surface: ReadoutSurface) -> some View {
+        switch readoutBodyVariant {
+        case .stats:
+            readoutBodyStats(surface: surface)
+        case .phasePlot:
+            readoutBodyPhasePlot(surface: surface, recording: selectedRecording)
+        case .broadcast:
+            readoutBodyBroadcast(surface: surface, recording: selectedRecording)
         }
     }
 
-    // MARK: Variant — Simple (the original centered eyebrow)
+    /// Daily activity counts for the last `days` days, oldest → newest.
+    /// Used by readout body variants (Reference Monitor's sparkline,
+    /// Phase Plot's idle telemetry) so the panel always has a
+    /// continuous "library pulse" signal to derive renderings from.
+    private func pulseSeries(days: Int) -> [Int] {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        var counts = Array(repeating: 0, count: days)
+        for r in viewModel.recordings {
+            let day = cal.startOfDay(for: r.createdAt)
+            guard let diff = cal.dateComponents([.day], from: day, to: today).day else { continue }
+            let idx = days - 1 - diff
+            if idx >= 0 && idx < days { counts[idx] += 1 }
+        }
+        return counts
+    }
+
+    /// Single fallback rendered below the readout panel when there's
+    /// no selection. The readout panel above always shows the variant
+    /// body, so this is intentionally minimal.
+    private var inspectorEmpty: some View {
+        inspectorEmptySimple
+    }
 
     private var inspectorEmptySimple: some View {
         VStack(spacing: 10) {
@@ -1253,98 +870,497 @@ struct ScopeLibraryView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: Variant — Library Readout (mini instrument bay, permanent header)
-    //
-    // The readout view is `libraryReadoutPanel` defined alongside
-    // `inspectorColumn` above — when the variant is `.readout` the
-    // panel renders permanently at the top of the inspector and the
-    // empty-state body below it is the same simple hint as `.simple`.
+    // MARK: Body — Stats (the original 4-tile grid, retinted for surface)
 
-    private func readoutHeader(stats: ReadoutStats) -> some View {
-        HStack(spacing: 8) {
-            PhosphorDot(color: ScopePanel.trace, size: 5)
-            Text("LIBRARY · IDLE")
-                .font(ScopeType.chrome)
-                .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(ScopePanel.inkFaint)
-            Spacer()
-            Text("LOCAL ONLY")
-                .font(ScopeType.chrome)
-                .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(ScopePanel.inkSubtle)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(ScopePanel.stripTop)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(ScopePanel.Edge.faint)
-                .frame(height: 1)
-                .padding(.horizontal, 14)
+    private func readoutBodyStats(surface: ReadoutSurface) -> some View {
+        let stats = readoutStats()
+        return ZStack {
+            GraticuleBackground(pitch: 20, color: surface.signal.opacity(0.06), opacity: 0.5)
+            HStack(spacing: 0) {
+                statsTile(value: "\(stats.total)",      label: "TRACKS",      surface: surface)
+                statsDivider(surface: surface)
+                statsTile(value: "\(stats.thisWeek)",    label: "THIS WEEK",   surface: surface)
+                statsDivider(surface: surface)
+                statsTile(value: stats.topChannel,       label: "TOP CHANNEL", surface: surface)
+                statsDivider(surface: surface)
+                statsTile(value: stats.avgDuration,      label: "AVG LENGTH",  surface: surface)
+            }
+            .padding(.horizontal, 14)
         }
     }
 
-    private func readoutGrid(stats: ReadoutStats) -> some View {
-        HStack(spacing: 0) {
-            readoutTile(value: "\(stats.total)", label: "TRACKS")
-            readoutDivider
-            readoutTile(value: "\(stats.thisWeek)", label: "THIS WEEK")
-            readoutDivider
-            readoutTile(value: stats.topChannel, label: "TOP CHANNEL")
-            readoutDivider
-            readoutTile(value: stats.avgDuration, label: "AVG LENGTH")
-        }
-        .frame(maxHeight: .infinity)
-        .padding(.horizontal, 14)
-    }
-
-    private var readoutDivider: some View {
+    private func statsDivider(surface: ReadoutSurface) -> some View {
         Rectangle()
-            .fill(ScopePanel.Edge.faint)
+            .fill(surface.edgeFaint)
             .frame(width: 1)
             .padding(.vertical, 18)
     }
 
-    private func readoutTile(value: String, label: String) -> some View {
+    private func statsTile(value: String, label: String, surface: ReadoutSurface) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(value)
                 .font(ScopeFont.display(size: 28))
-                .foregroundStyle(ScopePanel.trace)
+                .foregroundStyle(surface.signal)
                 .tracking(-0.4)
-                .shadow(color: ScopePanel.traceGlow, radius: 4)
+                .shadow(color: surface.signalGlow, radius: 4)
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
             Text(label)
                 .font(ScopeType.chrome)
                 .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(ScopePanel.inkFaint)
+                .foregroundStyle(surface.inkMuted)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)
         .padding(.vertical, 12)
     }
 
-    private func readoutFooter(stats: ReadoutStats) -> some View {
-        HStack(spacing: 12) {
-            Text("· 30D · SIGNAL PATH · LOCAL")
-                .font(ScopeType.chrome)
-                .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(ScopePanel.inkFaint)
-            Spacer()
-            Text(Date().formatted(date: .omitted, time: .shortened).uppercased())
-                .font(ScopeType.chrome)
-                .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(ScopePanel.inkSubtle)
+    // MARK: Body — Phase Plot (Lissajous at idle, amplitude band on select)
+
+    /// Animated Lissajous curl. Idle: figure-eight breathing on a 14s
+    /// cycle in aqua-mint phosphor. Selected: trace unwraps into a
+    /// horizontal amplitude band and the recording title floats above.
+    private func readoutBodyPhasePlot(surface: ReadoutSurface, recording: TalkieObject?) -> some View {
+        let selected = recording != nil
+        return ZStack {
+            // Soft grid behind the trace — keeps the phosphor anchored.
+            GraticuleBackground(pitch: 24, color: surface.signal.opacity(0.05), opacity: 0.5)
+
+            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: false)) { ctx in
+                Canvas { context, size in
+                    let t = ctx.date.timeIntervalSinceReferenceDate
+                    let w = size.width
+                    let h = size.height
+                    let cx = w / 2
+                    let cy = h / 2
+
+                    // Two phase-locked sines: figure-eight at idle. On
+                    // selection, the Y-axis amplitude collapses so the
+                    // curl "unwraps" into a horizontal band.
+                    let unwrap: CGFloat = selected ? 0.85 : 0.0
+                    let ampX: CGFloat = (w * 0.36)
+                    let ampY: CGFloat = (h * 0.34) * (1.0 - unwrap)
+                    let phase = t * 0.45  // slow drift
+                    let steps = 240
+
+                    var path = Path()
+                    for i in 0...steps {
+                        let u = Double(i) / Double(steps)
+                        let angle = u * .pi * 2
+                        // X-axis: linear sweep when "unwrapped"; pure sin at idle.
+                        let xIdle = sin(angle * 3 + phase)
+                        let xSel = (u * 2 - 1)
+                        let x = cx + ampX * CGFloat(xIdle * (1 - Double(unwrap)) + xSel * Double(unwrap))
+                        // Y-axis: cos(2θ) gives the figure-eight; collapses on select.
+                        let y = cy + ampY * CGFloat(cos(angle * 2 + phase * 1.2))
+                        if i == 0 {
+                            path.move(to: CGPoint(x: x, y: y))
+                        } else {
+                            path.addLine(to: CGPoint(x: x, y: y))
+                        }
+                    }
+
+                    // Trailing afterglow — dimmer, slightly thicker.
+                    context.stroke(
+                        path,
+                        with: .color(surface.signal.opacity(selected ? 0.18 : 0.35)),
+                        lineWidth: selected ? 1.2 : 2.4
+                    )
+                    // Main trace.
+                    context.stroke(
+                        path,
+                        with: .color(surface.signal.opacity(selected ? 0.55 : 0.9)),
+                        lineWidth: 1.0
+                    )
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+
+            // Overlay: title + meta on selection; ambient whisper at idle.
+            VStack(alignment: .leading, spacing: 6) {
+                if let r = recording {
+                    Text(phaseTitle(for: r))
+                        .font(.system(size: 17, weight: .regular, design: .default))
+                        .foregroundStyle(surface.inkPrimary)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                        .shadow(color: surface.signalGlow.opacity(0.4), radius: 6)
+                    Text(phaseMeta(for: r))
+                        .font(ScopeType.chrome)
+                        .tracking(ScopeType.Tracking.wide)
+                        .foregroundStyle(surface.inkMuted)
+                } else {
+                    Text(phaseIdleHint)
+                        .font(ScopeType.chrome)
+                        .tracking(ScopeType.Tracking.wide)
+                        .foregroundStyle(surface.inkSubtle)
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(ScopePanel.stripBottom)
-        .overlay(alignment: .top) {
+        .animation(.easeInOut(duration: 0.6), value: selected)
+    }
+
+    private var phaseIdleHint: String {
+        let count = viewModel.totalCount
+        if count == 0 { return "PHOSPHOR · STANDBY" }
+        return "\(count) ON FILE · CURL · 14S/CYCLE"
+    }
+
+    private func phaseTitle(for r: TalkieObject) -> String {
+        if let t = r.title, !t.isEmpty { return t }
+        if let p = r.transcriptPreview, !p.isEmpty { return p }
+        return "Untitled"
+    }
+
+    private func phaseMeta(for r: TalkieObject) -> String {
+        var parts: [String] = []
+        if let app = r.appContext?.name, !app.isEmpty {
+            parts.append(app.uppercased())
+        } else {
+            parts.append(r.source.displayName.uppercased())
+        }
+        if r.duration > 0 {
+            parts.append(formatDuration(r.duration))
+        }
+        parts.append(r.type.rawValue.uppercased())
+        return parts.joined(separator: "  ·  ")
+    }
+
+    // MARK: Body — Broadcast (polymorphic canvas, per-type presentation)
+    //
+    // The merged design: Transit Console's source-coded accent bar +
+    // Reference Monitor's clean SF Pro typography. Amber is reserved
+    // for the chrome eyebrow dot — body text is neutral cream. The
+    // distinguishing move: each record `type` declares its own
+    // "core presentation" in the bottom slot of the canvas (memo →
+    // waveform, dictation → word count + target, note → content
+    // type, capture → context).
+
+    private func readoutBodyBroadcast(surface: ReadoutSurface, recording: TalkieObject?) -> some View {
+        let tint = recording.map { broadcastSourceTint(for: $0) }
+        return VStack(spacing: 0) {
+            // Source accent bar — top edge. Dim hairline at idle, lit
+            // in the source color when something's selected.
             Rectangle()
-                .fill(ScopePanel.Edge.faint)
-                .frame(height: 1)
-                .padding(.horizontal, 14)
+                .fill(tint ?? surface.edgeFaint)
+                .frame(height: 2)
+                .animation(.easeInOut(duration: 0.32), value: tint?.description ?? "")
+
+            if let r = recording {
+                broadcastForRecording(r, surface: surface)
+            } else {
+                broadcastIdle(surface: surface)
+            }
         }
+        .animation(.easeInOut(duration: 0.28), value: recording?.id)
+    }
+
+    // MARK: - Broadcast: idle state
+
+    private func broadcastIdle(surface: ReadoutSurface) -> some View {
+        let week = pulseSeries(days: 7).reduce(0, +)
+        let total = viewModel.totalCount
+        let lastAgo = lastRecordingTimeAgo()
+
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                PhosphorDot(color: surface.signal, size: 5)
+                Text("LIBRARY")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .tracking(1.6)
+                    .foregroundStyle(surface.inkMuted)
+                Spacer()
+            }
+            .padding(.bottom, 10)
+
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("\(total)")
+                    .font(.system(size: 40, weight: .light, design: .default))
+                    .foregroundStyle(surface.inkPrimary)
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .tracking(-0.6)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("on file")
+                        .font(.system(size: 13, weight: .regular, design: .default))
+                        .foregroundStyle(surface.inkMuted)
+                    if total > 0 {
+                        Text(broadcastIdleSubtitle(week: week, lastAgo: lastAgo))
+                            .font(.system(size: 11, weight: .regular, design: .default))
+                            .foregroundStyle(surface.inkSubtle)
+                    }
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func broadcastIdleSubtitle(week: Int, lastAgo: String?) -> String {
+        var parts: [String] = []
+        if week > 0 { parts.append("\(week) this week") }
+        if let ago = lastAgo { parts.append("last \(ago)") }
+        if parts.isEmpty { return "awaiting first signal" }
+        return parts.joined(separator: " · ")
+    }
+
+    private func lastRecordingTimeAgo() -> String? {
+        guard let latest = viewModel.recordings.max(by: { $0.createdAt < $1.createdAt }) else { return nil }
+        return RelativeTimeFormatter.format(latest.createdAt).lowercased()
+    }
+
+    // MARK: - Broadcast: per-record presentation
+
+    /// The selected-state canvas. Top: chrome row with type + context.
+    /// Middle: title. Bottom: type-specific accent — the "core
+    /// presentation" each record type declares for this surface.
+    private func broadcastForRecording(_ r: TalkieObject, surface: ReadoutSurface) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            broadcastChromeRow(r, surface: surface)
+                .padding(.bottom, 8)
+
+            Text(broadcastTitle(for: r))
+                .font(.system(size: 22, weight: .regular, design: .default))
+                .foregroundStyle(surface.inkPrimary)
+                .tracking(-0.2)
+                .lineLimit(2)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Spacer(minLength: 0)
+
+            broadcastTypeAccent(r, surface: surface)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    /// Common chrome row at the top of any selected presentation —
+    /// channel type · context · time-ago.
+    private func broadcastChromeRow(_ r: TalkieObject, surface: ReadoutSurface) -> some View {
+        HStack(spacing: 8) {
+            PhosphorDot(color: surface.signal, size: 5)
+            Text(broadcastChromeLine(for: r))
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .tracking(1.4)
+                .foregroundStyle(surface.inkMuted)
+                .lineLimit(1)
+            Spacer()
+        }
+    }
+
+    private func broadcastChromeLine(for r: TalkieObject) -> String {
+        var parts: [String] = [r.type.rawValue.uppercased()]
+        if let app = r.appContext?.name, !app.isEmpty {
+            parts.append("IN \(app.uppercased())")
+        } else if r.source.displayName.uppercased() != r.type.rawValue.uppercased() {
+            parts.append(r.source.displayName.uppercased())
+        }
+        parts.append(RelativeTimeFormatter.format(r.createdAt).uppercased())
+        return parts.joined(separator: " · ")
+    }
+
+    private func broadcastTitle(for r: TalkieObject) -> String {
+        if let t = r.title, !t.isEmpty { return t }
+        if let p = r.transcriptPreview, !p.isEmpty { return p }
+        return r.displayTitle
+    }
+
+    /// Each record type declares its own presentation in this slot —
+    /// the "core presentation thing" that's the design constraint of
+    /// this canvas. Adding a new `TalkieObjectType` means filling in
+    /// the corresponding case here.
+    @ViewBuilder
+    private func broadcastTypeAccent(_ r: TalkieObject, surface: ReadoutSurface) -> some View {
+        switch r.type {
+        case .memo:      memoBroadcastAccent(r, surface: surface)
+        case .dictation: dictationBroadcastAccent(r, surface: surface)
+        case .note:      noteBroadcastAccent(r, surface: surface)
+        case .capture:   captureBroadcastAccent(r, surface: surface)
+        default:         genericBroadcastAccent(r, surface: surface)
+        }
+    }
+
+    // Memo → bottom waveform + duration ruler. Audio is the point.
+    private func memoBroadcastAccent(_ r: TalkieObject, surface: ReadoutSurface) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            TraceSparkline(seed: r.id.uuidString.hashValue)
+                .frame(height: 22)
+                .opacity(0.85)
+            HStack {
+                Text("0:00")
+                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                    .tracking(0.6)
+                    .foregroundStyle(surface.inkSubtle)
+                Spacer()
+                if r.wordCount > 0 {
+                    Text("\(r.wordCount.formattedWithSeparator) WORDS")
+                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                        .tracking(0.6)
+                        .foregroundStyle(surface.inkSubtle)
+                    Text("·")
+                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                        .foregroundStyle(surface.inkSubtle.opacity(0.6))
+                }
+                Text(r.duration > 0 ? formatDuration(r.duration) : "—")
+                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                    .tracking(0.6)
+                    .foregroundStyle(surface.inkSubtle)
+            }
+        }
+    }
+
+    // Dictation → word count + target arrow. Text-first, audio transient.
+    private func dictationBroadcastAccent(_ r: TalkieObject, surface: ReadoutSurface) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text("\(r.wordCount.formattedWithSeparator)")
+                .font(.system(size: 22, weight: .light, design: .default))
+                .foregroundStyle(surface.inkPrimary)
+                .monospacedDigit()
+                .tracking(-0.3)
+            Text("words")
+                .font(.system(size: 12, weight: .regular, design: .default))
+                .foregroundStyle(surface.inkMuted)
+            Spacer()
+            if let target = r.appContext?.name, !target.isEmpty {
+                Text("→  \(target.uppercased())")
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .tracking(1.0)
+                    .foregroundStyle(surface.inkMuted)
+            } else if r.duration > 0 {
+                Text(formatDuration(r.duration))
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .tracking(1.0)
+                    .foregroundStyle(surface.inkSubtle)
+            }
+        }
+    }
+
+    // Note → content composition (text + screenshots + clips).
+    private func noteBroadcastAccent(_ r: TalkieObject, surface: ReadoutSurface) -> some View {
+        let shots = r.screenshots.count
+        let clips = r.clips.count
+        let attachments = r.attachments.count
+        var bits: [String] = []
+        if r.wordCount > 0 { bits.append("\(r.wordCount.formattedWithSeparator) WORDS") }
+        if shots > 0       { bits.append("\(shots) \(shots == 1 ? "SHOT" : "SHOTS")") }
+        if clips > 0       { bits.append("\(clips) \(clips == 1 ? "CLIP" : "CLIPS")") }
+        if attachments > 0 { bits.append("\(attachments) \(attachments == 1 ? "FILE" : "FILES")") }
+        if bits.isEmpty    { bits.append("TYPED NOTE") }
+
+        return HStack(spacing: 10) {
+            Image(systemName: noteSymbol(shots: shots, clips: clips, attachments: attachments))
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(surface.inkMuted)
+            Text(bits.joined(separator: "  ·  "))
+                .font(.system(size: 11, weight: .regular, design: .monospaced))
+                .tracking(1.0)
+                .foregroundStyle(surface.inkMuted)
+            Spacer()
+        }
+    }
+
+    private func noteSymbol(shots: Int, clips: Int, attachments: Int) -> String {
+        if clips > 0           { return "play.rectangle" }
+        if shots > 0           { return "photo.on.rectangle" }
+        if attachments > 0     { return "paperclip" }
+        return "text.alignleft"
+    }
+
+    // Capture → context source + dimensions if we have a screenshot.
+    private func captureBroadcastAccent(_ r: TalkieObject, surface: ReadoutSurface) -> some View {
+        let firstShot = r.screenshots.first
+        return HStack(spacing: 10) {
+            Image(systemName: "rectangle.dashed")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(surface.inkMuted)
+            if let shot = firstShot {
+                Text(captureMetaLine(for: r, shot: shot))
+                    .font(.system(size: 11, weight: .regular, design: .monospaced))
+                    .tracking(1.0)
+                    .foregroundStyle(surface.inkMuted)
+            } else {
+                Text("CAPTURE  ·  \(r.source.displayName.uppercased())")
+                    .font(.system(size: 11, weight: .regular, design: .monospaced))
+                    .tracking(1.0)
+                    .foregroundStyle(surface.inkMuted)
+            }
+            Spacer()
+        }
+    }
+
+    private func captureMetaLine(for r: TalkieObject, shot: RecordingScreenshot) -> String {
+        var parts: [String] = []
+        if let w = shot.width, let h = shot.height, w > 0, h > 0 {
+            parts.append("\(w) × \(h)")
+        }
+        if !shot.captureMode.isEmpty {
+            parts.append(shot.captureMode.uppercased())
+        }
+        if let app = shot.appName, !app.isEmpty {
+            parts.append("FROM \(app.uppercased())")
+        }
+        if parts.isEmpty { parts.append("CAPTURE") }
+        return parts.joined(separator: "  ·  ")
+    }
+
+    // Anything else (selection, segment) → minimal generic accent.
+    private func genericBroadcastAccent(_ r: TalkieObject, surface: ReadoutSurface) -> some View {
+        HStack {
+            Text(r.source.displayName.uppercased())
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .tracking(1.0)
+                .foregroundStyle(surface.inkMuted)
+            if r.duration > 0 {
+                Text("·")
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .foregroundStyle(surface.inkSubtle.opacity(0.6))
+                Text(formatDuration(r.duration))
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .tracking(0.6)
+                    .foregroundStyle(surface.inkSubtle)
+            }
+            Spacer()
+        }
+    }
+
+    /// Source-color "line" for the top accent bar — Slack purple,
+    /// Notes yellow, etc. Falls back to a quiet neutral when the
+    /// source isn't recognized.
+    private func broadcastSourceTint(for r: TalkieObject) -> Color {
+        let name = (r.appContext?.name ?? r.source.displayName).lowercased()
+        switch name {
+        case let s where s.contains("slack"):    return Color.hex("6B4FBB")
+        case let s where s.contains("notes"):    return Color.hex("FFD400")
+        case let s where s.contains("mic"):      return Color.hex("34D1B7")
+        case let s where s.contains("meeting"),
+             let s where s.contains("zoom"):     return Color.hex("FF5E5B")
+        case let s where s.contains("cursor"),
+             let s where s.contains("vscode"),
+             let s where s.contains("code"):     return Color.hex("4FC3FF")
+        case let s where s.contains("mail"):     return Color.hex("48A8E0")
+        case let s where s.contains("safari"),
+             let s where s.contains("chrome"),
+             let s where s.contains("arc"):      return Color.hex("8E7CC9")
+        default:                                  return Color.hex("9AA8A4")
+        }
+    }
+
+    private func formatDuration(_ seconds: Double) -> String {
+        let mins = Int(seconds) / 60
+        let secs = Int(seconds) % 60
+        if mins > 0 {
+            return "\(mins):\(String(format: "%02d", secs))"
+        }
+        return "0:\(String(format: "%02d", secs))"
     }
 
     private struct ReadoutStats {
@@ -1387,121 +1403,6 @@ struct ScopeLibraryView: View {
         )
     }
 
-    // MARK: Variant — Cassette Carriage (hairline scaffold of the filled state)
-
-    private var inspectorEmptyCassette: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 8) {
-                PhosphorDot(color: ScopeAmber.solid.opacity(0.7), size: 5)
-                Text("AWAITING SELECT · CH —")
-                    .font(ScopeType.chrome)
-                    .tracking(ScopeType.Tracking.wide)
-                    .foregroundStyle(ScopeInk.faint)
-                Spacer()
-                Text("—:—")
-                    .font(ScopeType.chrome)
-                    .tracking(ScopeType.Tracking.wide)
-                    .foregroundStyle(ScopeInk.subtle)
-            }
-            .padding(.bottom, 6)
-            .overlay(alignment: .bottom) {
-                Rectangle().fill(ScopeEdge.faint).frame(height: 0.5)
-            }
-
-            // Sparkline well — outlined slot where the trace would render
-            RoundedRectangle(cornerRadius: 4)
-                .stroke(ScopeEdge.subtle, lineWidth: 0.5)
-                .frame(height: 56)
-
-            // Transcript ghost lines — varied widths suggest text flow
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach([0.92, 0.78, 0.85, 0.40], id: \.self) { width in
-                    Capsule()
-                        .fill(ScopeAmber.tintSubtle)
-                        .frame(height: 6)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .scaleEffect(x: width, anchor: .leading)
-                }
-            }
-
-            // Metadata grid — 4 ghost label/value pairs
-            HStack(spacing: 16) {
-                ForEach(0..<4, id: \.self) { _ in
-                    VStack(alignment: .leading, spacing: 6) {
-                        Capsule()
-                            .fill(ScopeEdge.subtle)
-                            .frame(width: 28, height: 4)
-                        Capsule()
-                            .fill(ScopeEdge.faint)
-                            .frame(width: 52, height: 8)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(28)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    // MARK: Variant — Idle Trace (oscilloscope baseline waiting for a trigger)
-
-    private var inspectorEmptyIdleTrace: some View {
-        ZStack {
-            GraticuleBackground(pitch: 24, color: ScopeTrace.faint, opacity: 0.55)
-                .allowsHitTesting(false)
-
-            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: false)) { ctx in
-                Canvas { context, size in
-                    let t = ctx.date.timeIntervalSinceReferenceDate
-                    let y = size.height / 2
-                    var path = Path()
-                    path.move(to: CGPoint(x: 0, y: y))
-                    let blipPhase = (t.truncatingRemainder(dividingBy: 4.0)) / 4.0
-                    let blipActive = blipPhase > 0.92
-                    let stride: CGFloat = 2
-                    var x: CGFloat = 0
-                    while x <= size.width {
-                        let phase = Double(x / size.width)
-                        var dy: CGFloat = 0
-                        if blipActive {
-                            let envelope = pow(sin(blipPhase * .pi * 12), 2)
-                            dy = CGFloat(sin(phase * 70 + t * 4) * 4 * envelope)
-                        }
-                        path.addLine(to: CGPoint(x: x, y: y + dy))
-                        x += stride
-                    }
-                    context.stroke(
-                        path,
-                        with: .color(ScopeAmber.solid.opacity(0.5)),
-                        lineWidth: 1
-                    )
-                }
-                .blur(radius: 0.4)
-            }
-
-            VStack {
-                HStack {
-                    Text("CH — · IDLE · 1.00 V/DIV")
-                        .font(ScopeType.chrome)
-                        .tracking(ScopeType.Tracking.wide)
-                        .foregroundStyle(ScopeInk.faint)
-                    Spacer()
-                }
-                Spacer()
-                HStack {
-                    Spacer()
-                    Text("NO TRIGGER")
-                        .font(ScopeType.chrome)
-                        .tracking(ScopeType.Tracking.wide)
-                        .foregroundStyle(ScopeInk.subtle)
-                }
-            }
-            .padding(20)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
 }
 
 // MARK: - Row
@@ -1795,67 +1696,166 @@ private struct LibrarySplitLayout<List: View, Inspector: View>: View {
     }
 }
 
-// MARK: - Library variants
+// MARK: - Readout body variants
 //
-// All variant treatments live in dedicated structs (below) so the
-// switch at each call site stays compact and individual variants can
-// be iterated on without disturbing the rest of the view. Variants
-// are selected at runtime via `@AppStorage`-backed enum values, with
-// the picker UI living in `DesignComponentsView` (DEBUG-only).
+// The Library inspector header is a permanent "instrument bay" that
+// renders one of several body variants. Each body owns its own
+// palette (see `ReadoutSurface` below), so the bay chrome can host
+// a Phase Plot in abyssal teal *or* a Reference Monitor in slate *or*
+// a Transit Console in pixel black without forking the wrapper. Same
+// envelope, different instruments.
+//
+// Adding a new variant: add a case + displayName here, declare a
+// `ReadoutSurface` static for its palette, write the body view, dispatch
+// it from `libraryReadoutPanel`. No other code changes required.
 
-enum LibraryFilterRibbonVariant: String, CaseIterable, Hashable {
-    /// Cream-surface bordered container with warm brown active fill
-    /// — the treatment that shipped to master.
-    case classic
-    /// Classic structure, **cool-neutral** active state — sits halfway
-    /// between the warm Classic and the full Silver. Cream container
-    /// stays put; just the selected pill's fill loses its brown bias.
-    case classicTepid
-    /// Pale silver container with brushed-steel active fill — full
-    /// step toward metallic.
-    case classicSilver
-    /// Cool light-gray container with charcoal active fill.
-    case classicSlate
-    /// Pinned brass LED dot above each label; no container.
-    case patchBay
-    /// Dark graphite strip with graticule grid; phosphor active state.
-    case instrumentBay
-    /// Card-catalog paper tabs that dock into the search row.
-    case indexTabs
-    /// Bare labels on cream with graduation ticks; amber underline.
-    case etchedSelector
+enum LibraryReadoutBodyVariant: String, CaseIterable, Hashable {
+    /// The original 4-tile grid: TRACKS · THIS WEEK · TOP CHANNEL · AVG LENGTH.
+    /// Baseline / control surface.
+    case stats
+    /// Living Lissajous curl — pure aesthetic. Idle: hypnotic figure-eight
+    /// in aqua-mint phosphor. Selected: trace unwraps to a horizontal
+    /// amplitude band, recording title overlays in cream.
+    case phasePlot
+    /// Polymorphic broadcast canvas. Slate surface, SF Pro typography,
+    /// source-colored accent bar at the top edge. Each record type owns
+    /// its own "core presentation" in the canvas — memo gets a waveform,
+    /// dictation gets word count + target, note gets content type, etc.
+    /// The constraint: every new record type has to declare how it
+    /// presents itself here.
+    case broadcast
 
     var displayName: String {
         switch self {
-        case .classic:        return "Classic"
-        case .classicTepid:   return "Classic · Tepid"
-        case .classicSilver:  return "Classic · Silver"
-        case .classicSlate:   return "Classic · Slate"
-        case .patchBay:       return "Patch Bay"
-        case .instrumentBay:  return "Instrument Bay"
-        case .indexTabs:      return "Index Tabs"
-        case .etchedSelector: return "Etched Selector"
+        case .stats:     return "Stats"
+        case .phasePlot: return "Phase Plot"
+        case .broadcast: return "Broadcast"
         }
     }
 }
 
-enum LibraryInspectorEmptyVariant: String, CaseIterable, Hashable {
-    /// Centered eyebrow text (`NO TRACK SELECTED`) — what shipped.
-    case simple
-    /// Mini Home-style stat panel with sparkline + top sources list.
-    case readout
-    /// Hairline wireframe of the inspector's filled state — a ghost
-    /// of where transcript / sparkline / metadata will land.
-    case cassette
-    /// Full-pane graticule with an idling amber oscilloscope trace.
-    case idleTrace
+/// Palette + chrome configuration for one readout body variant. The
+/// bay wrapper (top strip, body, bottom strip, drop shadow) is universal
+/// — variants only declare their colors and the labels that flank their
+/// body. New variants get instant chrome by defining a `ReadoutSurface`.
+struct ReadoutSurface {
+    /// Primary bay fill.
+    let bg: Color
+    /// Sub-recess — used for the top + bottom strips when they're solid.
+    let bgSecondary: Color
+    /// Optional metallic gradient for the top strip; falls back to `bgSecondary`.
+    let stripTop: AnyShapeStyle?
+    /// Optional metallic gradient for the bottom strip; falls back to `bgSecondary`.
+    let stripBottom: AnyShapeStyle?
+    /// Body / focal text.
+    let inkPrimary: Color
+    /// Section / mid-weight labels.
+    let inkMuted: Color
+    /// Tertiary metadata.
+    let inkSubtle: Color
+    /// The "lit pixel" / phosphor color — the variant's signature.
+    let signal: Color
+    /// Glow halo for the signal.
+    let signalGlow: Color
+    /// Frame hairline.
+    let edgeFaint: Color
+    /// Top strip leading label (left side).
+    let topStripLeading: String
+    /// Top strip trailing label (right side).
+    let topStripTrailing: String
+    /// Bottom strip leading label.
+    let bottomStripLeading: String
+}
 
-    var displayName: String {
-        switch self {
-        case .simple:    return "Simple"
-        case .readout:   return "Library Readout"
-        case .cassette:  return "Cassette Carriage"
-        case .idleTrace: return "Idle Trace"
+extension ReadoutSurface {
+    /// Current default — matches the global panel tokens, so existing
+    /// stats grid continues to render on cool gunmetal without forking.
+    static let stats = ReadoutSurface(
+        bg: ScopePanel.bg,
+        bgSecondary: ScopePanel.bg,
+        stripTop: AnyShapeStyle(ScopePanel.stripTop),
+        stripBottom: AnyShapeStyle(ScopePanel.stripBottom),
+        inkPrimary: ScopePanel.ink,
+        inkMuted: ScopePanel.inkMuted,
+        inkSubtle: ScopePanel.inkSubtle,
+        signal: ScopePanel.trace,
+        signalGlow: ScopePanel.traceGlow,
+        edgeFaint: ScopePanel.Edge.faint,
+        topStripLeading: "LIBRARY · IDLE",
+        topStripTrailing: "LOCAL ONLY",
+        bottomStripLeading: "· 30D · SIGNAL PATH · LOCAL"
+    )
+
+    /// Abyssal teal-black with aqua-mint phosphor — the Lissajous bay.
+    static let phasePlot = ReadoutSurface(
+        bg: Color.hex("0B1418"),
+        bgSecondary: Color.hex("0F1C22"),
+        stripTop: nil,
+        stripBottom: nil,
+        inkPrimary: Color.hex("F2F6F4"),
+        inkMuted: Color.hex("9FB3AE"),
+        inkSubtle: Color.hex("6A7E7A"),
+        signal: Color.hex("5FE3C9"),
+        signalGlow: Color.hex("5FE3C9").opacity(0.45),
+        edgeFaint: Color.hex("5FE3C9").opacity(0.12),
+        topStripLeading: "PHASE · LIVE",
+        topStripTrailing: "X/Y · LOCAL",
+        bottomStripLeading: "· LISSAJOUS · 14S/CYCLE"
+    )
+
+    /// Slate canvas with neutral cream ink — the merged Broadcast.
+    /// Borrows Transit Console's source-coded accent bar idea (the bar
+    /// at the top lights up in the source color when something is
+    /// selected) and Reference Monitor's calm SF Pro typography (no
+    /// amber title text, amber reserved for the eyebrow dot). The body
+    /// is a polymorphic canvas — each `TalkieObjectType` declares its
+    /// own presentation inside it.
+    static let broadcast = ReadoutSurface(
+        bg: Color.hex("15191E"),
+        bgSecondary: Color.hex("1A1F25"),
+        stripTop: nil,
+        stripBottom: nil,
+        inkPrimary: Color.hex("E8ECEA"),
+        inkMuted: Color.hex("9AA8A4"),
+        inkSubtle: Color.hex("6B7A75"),
+        signal: Color.hex("C47D1C"),
+        signalGlow: Color.hex("C47D1C").opacity(0.32),
+        edgeFaint: Color.hex("2A3138"),
+        topStripLeading: "BROADCAST",
+        topStripTrailing: "LOCAL",
+        bottomStripLeading: "· LIVE · LOCAL"
+    )
+
+    /// Resolved top-strip fill — either the variant's custom gradient
+    /// or its `bgSecondary` solid fill.
+    @ViewBuilder
+    var topStripFill: some View {
+        if let style = stripTop {
+            Rectangle().fill(style)
+        } else {
+            Rectangle().fill(bgSecondary)
         }
+    }
+
+    /// Resolved bottom-strip fill.
+    @ViewBuilder
+    var bottomStripFill: some View {
+        if let style = stripBottom {
+            Rectangle().fill(style)
+        } else {
+            Rectangle().fill(bgSecondary)
+        }
+    }
+}
+
+// MARK: - Number helpers
+
+private extension Int {
+    /// "12345" → "12,345" using the user's locale. Used by Broadcast
+    /// presentations where big word counts read better with a separator.
+    var formattedWithSeparator: String {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        return f.string(from: NSNumber(value: self)) ?? "\(self)"
     }
 }
