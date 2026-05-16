@@ -219,6 +219,9 @@ struct ScopeLibraryView: View {
             } else {
                 recordingsList
             }
+            #if DEBUG
+            variantSwitcherStrip
+            #endif
             footerBar
         }
         .frame(maxHeight: .infinity, alignment: .top)
@@ -921,6 +924,87 @@ struct ScopeLibraryView: View {
         case .captures: return "Hyper+S to clip the screen alongside what you say."
         }
     }
+
+    // MARK: - Debug variant switcher (Design God Mode only)
+
+    #if DEBUG
+    @ViewBuilder
+    private var variantSwitcherStrip: some View {
+        if DesignModeManager.shared.isEnabled {
+            VStack(alignment: .leading, spacing: 6) {
+                variantRow(
+                    label: "RIBBON",
+                    options: LibraryFilterRibbonVariant.allCases,
+                    raw: $filterRibbonVariantRaw,
+                    rawOf: { $0.rawValue },
+                    nameOf: { $0.displayName }
+                )
+                variantRow(
+                    label: "EMPTY",
+                    options: LibraryInspectorEmptyVariant.allCases,
+                    raw: $inspectorEmptyVariantRaw,
+                    rawOf: { $0.rawValue },
+                    nameOf: { $0.displayName }
+                )
+            }
+            .padding(.horizontal, 32)
+            .padding(.vertical, 8)
+            .background(ScopePanel.bg.opacity(0.92))
+            .overlay(alignment: .top) {
+                Rectangle().fill(ScopePanel.Edge.normal).frame(height: 1)
+            }
+            .overlay(alignment: .leading) {
+                Rectangle()
+                    .fill(ScopeAmber.solid.opacity(0.6))
+                    .frame(width: 2)
+            }
+        }
+    }
+
+    private func variantRow<Option: Hashable>(
+        label: String,
+        options: [Option],
+        raw: Binding<String>,
+        rawOf: @escaping (Option) -> String,
+        nameOf: @escaping (Option) -> String
+    ) -> some View {
+        HStack(spacing: 6) {
+            Text("· \(label)")
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopePanel.inkFaint)
+                .frame(width: 60, alignment: .leading)
+            ForEach(options, id: \.self) { option in
+                let rawValue = rawOf(option)
+                let isActive = raw.wrappedValue == rawValue
+                Button {
+                    raw.wrappedValue = rawValue
+                } label: {
+                    Text(nameOf(option).uppercased())
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .tracking(0.8)
+                        .foregroundStyle(isActive ? ScopePanel.bg : ScopePanel.inkMuted)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(isActive ? ScopeAmber.solid : Color.clear)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 3)
+                                .stroke(
+                                    isActive ? ScopeAmber.solid : ScopePanel.Edge.normal,
+                                    lineWidth: 0.5
+                                )
+                        )
+                        .contentShape(RoundedRectangle(cornerRadius: 3))
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+    #endif
 
     // MARK: - Footer bar
 
