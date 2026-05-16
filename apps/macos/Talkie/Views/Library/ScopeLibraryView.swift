@@ -330,6 +330,7 @@ struct ScopeLibraryView: View {
         Group {
             switch filterRibbonVariant {
             case .classic:        classicRibbon(counts: counts, palette: .warm)
+            case .classicTepid:   classicRibbon(counts: counts, palette: .tepid)
             case .classicSilver:  classicRibbon(counts: counts, palette: .silver)
             case .classicSlate:   classicRibbon(counts: counts, palette: .slate)
             case .patchBay:       patchBayRibbon(counts: counts)
@@ -365,6 +366,20 @@ struct ScopeLibraryView: View {
             activeText: ScopeAmber.solid,
             inactiveText: ScopeInk.muted,
             countOpacityActive: 0.85,
+            countOpacityInactive: 0.55
+        )
+
+        /// Cool neutral graphite. Container stays cream so the page
+        /// doesn't feel half-converted to silver, but the active pill
+        /// drops its warm/brown bias — reads as a stamped slate plate.
+        static let tepid = ClassicPalette(
+            containerFill: ScopeCanvas.surface,
+            containerStroke: ScopeEdge.faint,
+            activeFillTop: Color.hex("525458"),
+            activeFillBottom: Color.hex("38393D"),
+            activeText: Color.hex("F2F1EE"),
+            inactiveText: ScopeInk.muted,
+            countOpacityActive: 0.7,
             countOpacityInactive: 0.55
         )
 
@@ -529,7 +544,7 @@ struct ScopeLibraryView: View {
         return Button {
             typeFilter = option
         } label: {
-            VStack(spacing: 4) {
+            VStack(spacing: 6) {
                 Circle()
                     .fill(isSelected ? ScopeAmber.solid : Color.clear)
                     .frame(width: 4, height: 4)
@@ -541,18 +556,18 @@ struct ScopeLibraryView: View {
                             )
                     )
                     .shadow(color: isSelected ? ScopeAmber.glow : .clear, radius: 3)
-                HStack(spacing: 5) {
+                HStack(spacing: 6) {
                     Text(option.label.uppercased())
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .tracking(1.2)
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
                     Text("\(count)")
-                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
                         .monospacedDigit()
                         .contentTransition(.numericText())
-                        .baselineOffset(4)
-                        .foregroundStyle(isSelected ? ScopeAmber.solid.opacity(0.7) : ScopeInk.subtle)
+                        .frame(minWidth: 14, alignment: .trailing)
+                        .foregroundStyle(isSelected ? ScopeAmber.solid.opacity(0.75) : ScopeInk.subtle)
                 }
                 .foregroundStyle(isSelected ? ScopeAmber.solid : ScopeInk.faint)
             }
@@ -773,23 +788,40 @@ struct ScopeLibraryView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: Variant — Etched Selector (drafting-paper graduations)
+    // MARK: Variant — Etched Selector (drafting-paper, left-aligned)
+    //
+    // Labels group from the left with full-height vertical separators
+    // between each, so the gap between MEMOS · DICTATIONS · CAPTURES
+    // reads as deliberate joinery (not gutters). Active label gets an
+    // amber underline; the row hugs its content, with a trailing
+    // Spacer pushing the whole bank against the left edge.
 
     private func etchedSelectorRibbon(counts: FilterCounts) -> some View {
-        VStack(spacing: 14) {
+        let separator = Color.hex("BFBCB1")  // warm hairline (not too amber)
+        return VStack(spacing: 14) {
             HStack(spacing: 0) {
+                // Leading bracket
                 Rectangle()
-                    .fill(ScopeEdge.normal)
-                    .frame(width: 0.5, height: 10)
-                ForEach(RecordingTypeFilter.allCases, id: \.self) { option in
+                    .fill(separator)
+                    .frame(width: 0.5, height: 22)
+
+                ForEach(Array(RecordingTypeFilter.allCases.enumerated()), id: \.offset) { idx, option in
                     etchedSelectorSegment(option, count: counts.count(for: option))
-                        .frame(maxWidth: .infinity)
-                    Rectangle()
-                        .fill(ScopeEdge.normal)
-                        .frame(width: 0.5, height: 10)
+                    if idx < RecordingTypeFilter.allCases.count - 1 {
+                        Rectangle()
+                            .fill(separator)
+                            .frame(width: 0.5, height: 22)
+                    }
                 }
+
+                // Trailing bracket — closes the bank
+                Rectangle()
+                    .fill(separator)
+                    .frame(width: 0.5, height: 22)
+
+                Spacer(minLength: 0)
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, 6)
 
             searchField
                 .padding(.horizontal, 10)
@@ -809,16 +841,16 @@ struct ScopeLibraryView: View {
             typeFilter = option
         } label: {
             VStack(spacing: 4) {
-                HStack(spacing: 5) {
+                HStack(spacing: 6) {
                     Text(option.label.uppercased())
                         .font(.system(
                             size: 11,
                             weight: isSelected ? .bold : .medium,
                             design: .monospaced
                         ))
-                        .tracking(1.4)
+                        .tracking(1.2)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.85)
+                        .fixedSize(horizontal: true, vertical: false)
                         .foregroundStyle(isSelected ? ScopeInk.primary : ScopeInk.muted)
                     Text("\(count)")
                         .font(.system(size: 9, weight: .regular, design: .monospaced))
@@ -828,9 +860,10 @@ struct ScopeLibraryView: View {
                 }
                 Rectangle()
                     .fill(isSelected ? ScopeAmber.solid : Color.clear)
-                    .frame(width: 32, height: 1.5)
+                    .frame(height: 1.5)
                     .shadow(color: isSelected ? ScopeAmber.glow : .clear, radius: 3)
             }
+            .padding(.horizontal, 14)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -1771,14 +1804,17 @@ private struct LibrarySplitLayout<List: View, Inspector: View>: View {
 // the picker UI living in `DesignComponentsView` (DEBUG-only).
 
 enum LibraryFilterRibbonVariant: String, CaseIterable, Hashable {
-    /// Cream-surface bordered container with metallic-gray active fill
+    /// Cream-surface bordered container with warm brown active fill
     /// — the treatment that shipped to master.
     case classic
-    /// Classic structure, cooler palette: pale silver container with
-    /// brushed-steel active fill. Same architecture, less brown heat.
+    /// Classic structure, **cool-neutral** active state — sits halfway
+    /// between the warm Classic and the full Silver. Cream container
+    /// stays put; just the selected pill's fill loses its brown bias.
+    case classicTepid
+    /// Pale silver container with brushed-steel active fill — full
+    /// step toward metallic.
     case classicSilver
-    /// Classic structure, slate/graphite palette: cool light-gray
-    /// container with a darker steel active fill. More architectural.
+    /// Cool light-gray container with charcoal active fill.
     case classicSlate
     /// Pinned brass LED dot above each label; no container.
     case patchBay
@@ -1792,6 +1828,7 @@ enum LibraryFilterRibbonVariant: String, CaseIterable, Hashable {
     var displayName: String {
         switch self {
         case .classic:        return "Classic"
+        case .classicTepid:   return "Classic · Tepid"
         case .classicSilver:  return "Classic · Silver"
         case .classicSlate:   return "Classic · Slate"
         case .patchBay:       return "Patch Bay"
