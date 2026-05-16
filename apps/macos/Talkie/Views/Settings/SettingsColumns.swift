@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import TalkieKit
 
 // MARK: - Settings Section Enum
 
@@ -239,15 +240,38 @@ struct SettingsSidebarSection<Content: View>: View {
     var iconsOnly: Bool = false
     @ViewBuilder let content: Content
 
+    private var isScope: Bool { SettingsManager.shared.isScopeTheme }
+
     var body: some View {
-        VStack(alignment: iconsOnly ? .center : .leading, spacing: 2) {
+        VStack(alignment: iconsOnly ? .center : .leading, spacing: isScope ? 4 : 2) {
             if !iconsOnly {
-                Text(title)
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundColor(isActive ? Theme.current.foregroundSecondary : Theme.current.foregroundSecondary.opacity(0.6))
+                if isScope {
+                    HStack(spacing: 6) {
+                        PhosphorDot(
+                            color: isActive ? ScopeAmber.solid : ScopeAmber.solid.opacity(0.55),
+                            size: 4
+                        )
+                        Text(title.uppercased())
+                            .font(ScopeType.channel)
+                            .tracking(ScopeType.Tracking.wide)
+                            .foregroundStyle(isActive ? ScopeAmber.solid : ScopeInk.subtle)
+                            .phosphorGlow(
+                                color: ScopeAmber.solid,
+                                radius: 3,
+                                opacity: isActive ? 0.32 : 0.12
+                            )
+                    }
                     .padding(.leading, 6)
-                    .padding(.bottom, 2)
+                    .padding(.bottom, 4)
                     .transition(.move(edge: .leading).combined(with: .opacity))
+                } else {
+                    Text(title)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(isActive ? Theme.current.foregroundSecondary : Theme.current.foregroundSecondary.opacity(0.6))
+                        .padding(.leading, 6)
+                        .padding(.bottom, 2)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                }
             }
 
             content
@@ -272,30 +296,63 @@ struct SettingsSidebarItem: View {
         SettingsManager.shared.accentColor.color ?? Color.accentColor
     }
 
+    private var isScope: Bool { SettingsManager.shared.isScopeTheme }
+
+    // Scope-mode foreground colors
+    private var scopeIconColor: Color {
+        isSelected ? ScopeInk.primary : ScopeInk.faint
+    }
+    private var scopeTextColor: Color {
+        isSelected ? ScopeInk.primary : ScopeInk.dim
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             if !iconsOnly {
-                // Left accent bar (expanded mode)
-                RoundedRectangle(cornerRadius: 1.5)
-                    .fill(isSelected ? accentColor : Color.clear)
-                    .frame(width: 3)
-                    .padding(.vertical, 2)
-                    .animation(.easeOut(duration: 0.15), value: isSelected)
+                if isScope {
+                    // Amber inset stripe (left edge) — armed channel
+                    Rectangle()
+                        .fill(isSelected ? ScopeAmber.solid : Color.clear)
+                        .frame(width: 2)
+                        .padding(.vertical, 1)
+                        .animation(.easeOut(duration: 0.15), value: isSelected)
+                } else {
+                    // Left accent bar (expanded mode)
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .fill(isSelected ? accentColor : Color.clear)
+                        .frame(width: 3)
+                        .padding(.vertical, 2)
+                        .animation(.easeOut(duration: 0.15), value: isSelected)
+                }
             }
 
             HStack(spacing: iconsOnly ? 0 : 8) {
                 Image(systemName: icon)
                     .font(.system(size: iconsOnly ? 10 : 11))
-                    .foregroundColor(isSelected ? Theme.current.foreground : Theme.current.foregroundSecondary)
+                    .foregroundColor(isScope ? scopeIconColor : (isSelected ? Theme.current.foreground : Theme.current.foregroundSecondary))
                     .frame(width: iconsOnly ? 18 : 20, height: iconsOnly ? 18 : nil, alignment: .center)
 
                 if !iconsOnly {
-                    Text(title.uppercased())
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(isSelected ? Theme.current.foreground : Theme.current.foregroundSecondary.opacity(0.85))
-                        .transition(.move(edge: .leading).combined(with: .opacity))
+                    if isScope {
+                        Text(title.uppercased())
+                            .font(ScopeType.channel)
+                            .tracking(ScopeType.Tracking.normal)
+                            .foregroundStyle(scopeTextColor)
+                            .transition(.move(edge: .leading).combined(with: .opacity))
+                    } else {
+                        Text(title.uppercased())
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(isSelected ? Theme.current.foreground : Theme.current.foregroundSecondary.opacity(0.85))
+                            .transition(.move(edge: .leading).combined(with: .opacity))
+                    }
 
                     Spacer(minLength: 0)
+
+                    if isScope && isSelected {
+                        // Phosphor dot pin — armed/active indicator
+                        PhosphorDot(color: ScopeAmber.solid, size: 4)
+                            .padding(.trailing, 2)
+                    }
                 }
             }
             .padding(.leading, iconsOnly ? 0 : 4)
@@ -304,21 +361,43 @@ struct SettingsSidebarItem: View {
         .padding(.vertical, iconsOnly ? 4 : 5)
         .frame(maxWidth: .infinity, alignment: iconsOnly ? .center : .leading)
         .background(
-            RoundedRectangle(cornerRadius: CornerRadius.xs)
-                .fill(isSelected ? Theme.current.backgroundTertiary : (isHovered ? Theme.current.backgroundTertiary.opacity(0.5) : Color.clear))
+            Group {
+                if isScope {
+                    Rectangle()
+                        .fill(
+                            isSelected
+                                ? ScopeAmber.tintSubtle
+                                : (isHovered ? ScopeCanvas.canvasOverlay : Color.clear)
+                        )
+                } else {
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
+                        .fill(isSelected ? Theme.current.backgroundTertiary : (isHovered ? Theme.current.backgroundTertiary.opacity(0.5) : Color.clear))
+                }
+            }
         )
         .overlay(
-            RoundedRectangle(cornerRadius: CornerRadius.xs)
-                .strokeBorder(
-                    isSelected ? accentColor.opacity(0.24) : Theme.current.divider.opacity(isHovered ? 0.45 : 0),
-                    lineWidth: 1
-                )
+            Group {
+                if isScope {
+                    // Scope: hairline only on hover; selection is carried by the inset stripe + tint
+                    Rectangle()
+                        .strokeBorder(
+                            ScopeEdge.faint.opacity(isHovered && !isSelected ? 1.0 : 0),
+                            lineWidth: 0.5
+                        )
+                } else {
+                    RoundedRectangle(cornerRadius: CornerRadius.xs)
+                        .strokeBorder(
+                            isSelected ? accentColor.opacity(0.24) : Theme.current.divider.opacity(isHovered ? 0.45 : 0),
+                            lineWidth: 1
+                        )
+                }
+            }
         )
         // Bottom accent bar (compact mode only)
         .overlay(alignment: .bottom) {
             if iconsOnly {
                 RoundedRectangle(cornerRadius: 1)
-                    .fill(isSelected ? accentColor : Color.clear)
+                    .fill(isSelected ? (isScope ? ScopeAmber.solid : accentColor) : Color.clear)
                     .frame(width: 16, height: 2)
                     .padding(.bottom, 1)
                     .animation(.easeOut(duration: 0.15), value: isSelected)
@@ -394,6 +473,62 @@ struct SettingsSidebarColumn: View {
         SettingsManager.shared.accentColor.color ?? Color.accentColor
     }
 
+    private var isScope: Bool { settingsManager.isScopeTheme }
+
+    @ViewBuilder
+    private var headerLabel: some View {
+        if isScope {
+            HStack(spacing: 0) {
+                // Phosphor dot doubles as the "armed" mark for the sidebar
+                PhosphorDot(color: ScopeAmber.solid, size: 5)
+                    .frame(width: 24, alignment: .center)
+                    .padding(.leading, 4)
+                    .padding(.trailing, compact ? 0 : 6)
+
+                if !compact {
+                    Text("· SETTINGS")
+                        .font(ScopeType.eyebrow)
+                        .tracking(ScopeType.Tracking.wide)
+                        .foregroundStyle(ScopeAmber.solid)
+                        .phosphorGlow(radius: 3, opacity: 0.28)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+
+                    Spacer(minLength: 0)
+
+                    Image(systemName: "sidebar.left")
+                        .font(.system(size: 10))
+                        .foregroundStyle(ScopeInk.faint)
+                        .padding(.trailing, 4)
+                        .transition(.opacity)
+                }
+            }
+        } else {
+            HStack(spacing: 0) {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(Theme.current.foregroundSecondary)
+                    .frame(width: 24, alignment: .center)
+                    .padding(.leading, 4)
+                    .padding(.trailing, compact ? 0 : 6)
+
+                if !compact {
+                    Text("Settings")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Theme.current.foreground)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+
+                    Spacer(minLength: 0)
+
+                    Image(systemName: "sidebar.left")
+                        .font(.system(size: 10))
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(0.5))
+                        .padding(.trailing, 4)
+                        .transition(.opacity)
+                }
+            }
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Settings Header — click to toggle compact/expanded
@@ -402,35 +537,13 @@ struct SettingsSidebarColumn: View {
                     settingsManager.settingsSidebarIconsOnly.toggle()
                 }
             } label: {
-                HStack(spacing: 0) {
-                    Image(systemName: "gearshape.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(Theme.current.foregroundSecondary)
-                        .frame(width: 24, alignment: .center)
-                        .padding(.leading, 4)
-                        .padding(.trailing, compact ? 0 : 6)
-
-                    if !compact {
-                        Text("Settings")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(Theme.current.foreground)
-                            .transition(.move(edge: .leading).combined(with: .opacity))
-
-                        Spacer(minLength: 0)
-
-                        Image(systemName: "sidebar.left")
-                            .font(.system(size: 10))
-                            .foregroundColor(Theme.current.foregroundSecondary.opacity(0.5))
-                            .padding(.trailing, 4)
-                            .transition(.opacity)
-                    }
-                }
-                .frame(height: SettingsHeaderLayout.primaryLineHeight)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, Spacing.sm)
-                .padding(.top, SettingsHeaderLayout.topPadding)
-                .padding(.bottom, SettingsHeaderLayout.bottomPadding)
-                .contentShape(Rectangle())
+                headerLabel
+                    .frame(height: SettingsHeaderLayout.primaryLineHeight)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.top, SettingsHeaderLayout.topPadding)
+                    .padding(.bottom, SettingsHeaderLayout.bottomPadding)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help(compact ? "Expand settings menu" : "Collapse settings menu")
@@ -484,15 +597,15 @@ struct SettingsSidebarColumn: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Theme.current.background)
+        .background(isScope ? ScopeCanvas.canvasAlt : Theme.current.background)
         .overlay(alignment: .trailing) {
             Rectangle()
-                .fill(Theme.current.border.opacity(0.7))
-                .frame(width: 0.5)
+                .fill(isScope ? ScopeEdge.faint : Theme.current.border.opacity(0.7))
+                .frame(width: isScope ? 1 : 0.5)
         }
         .overlay(alignment: .leading) {
             Rectangle()
-                .fill(Theme.current.border.opacity(0.45))
+                .fill(isScope ? ScopeEdge.subtle : Theme.current.border.opacity(0.45))
                 .frame(width: 0.5)
         }
         .overlay(alignment: .trailing) {
@@ -503,7 +616,11 @@ struct SettingsSidebarColumn: View {
                 }
             } label: {
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(Theme.current.foreground.opacity(edgeHandleHovered ? 0.2 : 0.06))
+                    .fill(
+                        isScope
+                            ? ScopeInk.faint.opacity(edgeHandleHovered ? 0.45 : 0.15)
+                            : Theme.current.foreground.opacity(edgeHandleHovered ? 0.2 : 0.06)
+                    )
                     .frame(width: 4, height: 28)
                     .contentShape(Rectangle().inset(by: -6))
             }
@@ -530,6 +647,7 @@ struct SettingsContentColumn: View {
     var body: some View {
         contentView
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Theme.current.background)
             .overlay(alignment: .leading) {
                 Rectangle()
                     .fill(Theme.current.border.opacity(0.18))

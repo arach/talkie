@@ -20,12 +20,15 @@ function buildService(service: TalkieService, projectRoot: string): BuildResult 
     : ["-project", `${projectRoot}/${service.xcodeProject}`];
   const start = Date.now();
 
+  // `-destination 'platform=macOS'` ensures xcodebuild filters to a macOS-
+  // capable scheme. See rebuild.ts for the same rationale.
   const result = Bun.spawnSync(
     [
       "xcodebuild",
       ...containerArgs,
       "-scheme", service.xcodeScheme,
       "-configuration", "Debug",
+      "-destination", "platform=macOS",
       "build",
     ],
     {

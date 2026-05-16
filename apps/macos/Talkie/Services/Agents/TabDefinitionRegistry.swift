@@ -107,8 +107,12 @@ final class TabDefinitionRegistry {
         do {
             try fileManager.removeItem(at: url)
             loadAllTabs()
-            if activeTabId == id, let first = tabs.first {
-                activeTabId = first.id
+            if activeTabId == id {
+                // Reassign — falling back to "" when the registry is
+                // now empty, so a phantom id doesn't linger in
+                // UserDefaults and the starter shows correctly on
+                // next launch.
+                activeTabId = tabs.first?.id ?? ""
             }
             log.info("Deleted tab definition", detail: id)
         } catch {

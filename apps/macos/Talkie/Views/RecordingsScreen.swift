@@ -256,7 +256,7 @@ struct RecordingsScreen: View {
             if initialTypeFilter != .all {
                 suppressFilterReload = true
                 typeFilter = initialTypeFilter
-                viewModel.filterState.toggle(initialTypeFilter.semanticFilter)
+                viewModel.filterState.select(initialTypeFilter.semanticFilter)
             }
 
             // Apply pending navigation params BEFORE initial load
@@ -265,7 +265,7 @@ struct RecordingsScreen: View {
                let filter = RecordingTypeFilter(rawValue: filterValue) {
                 suppressFilterReload = true
                 typeFilter = filter
-                viewModel.filterState.toggle(filter.semanticFilter)
+                viewModel.filterState.select(filter.semanticFilter)
             }
             if let date = pendingParams["dateFilter"] as? Date {
                 viewModel.filterState.setDateFilter(date)
@@ -1090,7 +1090,7 @@ struct RecordingsScreen: View {
             if let filterValue, let filter = RecordingTypeFilter(rawValue: filterValue) {
                 suppressFilterReload = true
                 typeFilter = filter
-                await viewModel.toggleSemanticFilter(filter.semanticFilter)
+                await viewModel.selectSemanticFilter(filter.semanticFilter)
             }
 
             if let dateFilter {

@@ -33,7 +33,12 @@ export const SERVICES: TalkieService[] = [
     bridgePort: null,
     xcodeWorkspace: "TalkieSuite.xcworkspace",
     xcodeProject: "apps/macos/Talkie/Talkie.xcodeproj",
-    xcodeScheme: "Talkie",
+    // Disambiguated scheme name. TalkieSuite.xcworkspace contains two
+    // schemes named "Talkie" (macOS and iOS); a bare `-scheme Talkie`
+    // resolves to the iOS one and silently builds Debug-iphoneos,
+    // leaving the macOS Talkie.app stale. Always use the project-
+    // qualified form for builds invoked through this CLI.
+    xcodeScheme: "Talkie (Talkie project)",
     derivedDataPrefix: ["Talkie-", "TalkieSuite-"],
     preferredDerivedDataPrefix: "TalkieSuite-",
     appName: "Talkie.app",

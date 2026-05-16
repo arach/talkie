@@ -528,6 +528,7 @@ public enum GlassConfig {
     private struct State {
         var enableGlassEffects = true
         var debugRenderMode: DebugRenderMode = .automatic
+        var themeFlatOverride = false
     }
 
     private static let storage = LockedBox(State())
@@ -536,6 +537,15 @@ public enum GlassConfig {
     public static var enableGlassEffects: Bool {
         get { storage.read(\.enableGlassEffects) }
         set { storage.withValue { $0.enableGlassEffects = newValue } }
+    }
+
+    /// When true, force-disables glass rendering regardless of the user
+    /// setting. Used by themes whose aesthetic is fundamentally flat
+    /// (Scope cream-phosphor). Runtime-only — does not persist; snaps
+    /// back when the override is cleared.
+    public static var themeFlatOverride: Bool {
+        get { storage.read(\.themeFlatOverride) }
+        set { storage.withValue { $0.themeFlatOverride = newValue } }
     }
 
     /// Debug: Force a specific render path for testing. Set via launch argument.
@@ -576,6 +586,7 @@ public enum GlassConfig {
     /// Returns true if we should use native glass (macOS 26+ and not forcing fallback)
     @available(macOS 26.0, *)
     public static var shouldUseNativeGlass: Bool {
+        if themeFlatOverride { return false }
         switch debugRenderMode {
         case .automatic: return enableGlassEffects
         case .native: return true
@@ -585,6 +596,7 @@ public enum GlassConfig {
 
     /// Returns true if we should use simple mode (disabled or forcing simple)
     public static var shouldUseSimpleMode: Bool {
+        if themeFlatOverride { return true }
         switch debugRenderMode {
         case .automatic: return !enableGlassEffects
         case .simple: return true

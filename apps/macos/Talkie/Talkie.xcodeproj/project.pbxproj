@@ -7,7 +7,25 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		3B47C66D2CB84A25B993E6B1 /* PerfHUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D92E08CFCD64597A45A0D38 /* PerfHUD.swift */; };
+		D8D87BF5A63A4F54847C08E8 /* ScopeModelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CF18791AA274FECA0D00E07 /* ScopeModelsView.swift */; };
+		F85C0120CF164EFE94283C33 /* ScopeContextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71CD7FC165C34D5BAF3E366B /* ScopeContextView.swift */; };
+		75F8183FCB2E47F58FBE6385 /* ScopeLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACE6C6FDCE0E434D86206FB6 /* ScopeLibraryView.swift */; };
+		F4747F36A4AC429ABD84A7F1 /* ScopeStatsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8E906378B5E425D8377541F /* ScopeStatsScreen.swift */; };
+		2323D610E7C24439A3447FBE /* StatsCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01725996407D448FB38A9BD2 /* StatsCache.swift */; };
+		B00AD33E59874ED29D2233B0 /* ScopeWorkflowStepCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19E80E0B71394B66BEF56B71 /* ScopeWorkflowStepCard.swift */; };
+		A977D907A9F344DAB208C424 /* ScopeDraftsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 409F048DACD9412483B4B67C /* ScopeDraftsScreen.swift */; };
+		EB1E5CD3E80648249ED16FCD /* ScopeWorkflowListColumn.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1CE4B10EA624D4FB32A7D57 /* ScopeWorkflowListColumn.swift */; };
+		57597A361A5748F3BE1CCE18 /* ScopeHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D2D162EB3F404990A08A40 /* ScopeHomeView.swift */; };
 		000B06752659571E4EA8208D /* ClaudeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA2846DC98F2A0A65B237633 /* ClaudeView.swift */; };
+		D60100112233445566778811 /* Sidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D60100112233445566778801 /* Sidebar.swift */; };
+		D60100112233445566778812 /* SidebarColumns.swift in Sources */ = {isa = PBXBuildFile; fileRef = D60100112233445566778802 /* SidebarColumns.swift */; };
+		D60100112233445566778813 /* SidebarLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D60100112233445566778803 /* SidebarLabel.swift */; };
+		D60100112233445566778814 /* SidebarLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = D60100112233445566778804 /* SidebarLayout.swift */; };
+		D60100112233445566778815 /* SidebarMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = D60100112233445566778805 /* SidebarMotion.swift */; };
+		D60100112233445566778816 /* SidebarRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = D60100112233445566778806 /* SidebarRow.swift */; };
+		D60100112233445566778817 /* SidebarStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = D60100112233445566778807 /* SidebarStyle.swift */; };
+		D60100112233445566778818 /* SidebarTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = D60100112233445566778808 /* SidebarTransition.swift */; };
 		002E40F62A1545B7D7AE2CD9 /* CaptureRadialPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E46A5885BA07F1A04FDD14B /* CaptureRadialPanel.swift */; };
 		003E46C586EEA89FF2196307 /* NotchRecordingPillView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 559904F06C63DF1AC81FC2B5 /* NotchRecordingPillView.swift */; };
 		0042119489E020046688F029 /* QuickOpenBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8B99BF40592ACAE5392D78 /* QuickOpenBar.swift */; };
@@ -489,6 +507,16 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		9D92E08CFCD64597A45A0D38 /* PerfHUD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerfHUD.swift; sourceTree = "<group>"; };
+		5CF18791AA274FECA0D00E07 /* ScopeModelsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeModelsView.swift; sourceTree = "<group>"; };
+		71CD7FC165C34D5BAF3E366B /* ScopeContextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeContextView.swift; sourceTree = "<group>"; };
+		ACE6C6FDCE0E434D86206FB6 /* ScopeLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeLibraryView.swift; sourceTree = "<group>"; };
+		F8E906378B5E425D8377541F /* ScopeStatsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeStatsScreen.swift; sourceTree = "<group>"; };
+		01725996407D448FB38A9BD2 /* StatsCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsCache.swift; sourceTree = "<group>"; };
+		19E80E0B71394B66BEF56B71 /* ScopeWorkflowStepCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeWorkflowStepCard.swift; sourceTree = "<group>"; };
+		409F048DACD9412483B4B67C /* ScopeDraftsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeDraftsScreen.swift; sourceTree = "<group>"; };
+		E1CE4B10EA624D4FB32A7D57 /* ScopeWorkflowListColumn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeWorkflowListColumn.swift; sourceTree = "<group>"; };
+		04D2D162EB3F404990A08A40 /* ScopeHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeHomeView.swift; sourceTree = "<group>"; };
 		0005DBD402FA866318CD2439 /* WorkflowListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowListView.swift; sourceTree = "<group>"; };
 		0015AD90597F690662A7F1D3 /* SyncClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncClient.swift; sourceTree = "<group>"; };
 		01985189454C04D200B36B2E /* WorkflowControlPlaneClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowControlPlaneClient.swift; sourceTree = "<group>"; };
@@ -518,6 +546,14 @@
 		127AF7C6648C219143527F52 /* HomeGridCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeGridCards.swift; sourceTree = "<group>"; };
 		128364D7894F3C7E48F7F0BA /* CoreComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreComponents.swift; sourceTree = "<group>"; };
 		12BE5C3A611FC72B699E25FD /* ModelStatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelStatusBadge.swift; sourceTree = "<group>"; };
+		D60100112233445566778801 /* Sidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sidebar.swift; sourceTree = "<group>"; };
+		D60100112233445566778802 /* SidebarColumns.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarColumns.swift; sourceTree = "<group>"; };
+		D60100112233445566778803 /* SidebarLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarLabel.swift; sourceTree = "<group>"; };
+		D60100112233445566778804 /* SidebarLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarLayout.swift; sourceTree = "<group>"; };
+		D60100112233445566778805 /* SidebarMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarMotion.swift; sourceTree = "<group>"; };
+		D60100112233445566778806 /* SidebarRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRow.swift; sourceTree = "<group>"; };
+		D60100112233445566778807 /* SidebarStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarStyle.swift; sourceTree = "<group>"; };
+		D60100112233445566778808 /* SidebarTransition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarTransition.swift; sourceTree = "<group>"; };
 		12CC2B44BD5528C92CC62F86 /* IngestWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IngestWatcher.swift; sourceTree = "<group>"; };
 		12E79447467D812BC3318418 /* SyncProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncProvider.swift; sourceTree = "<group>"; };
 		13041CAD1AC3A8FF6B47DD65 /* settings-04-quick-open.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "settings-04-quick-open.png"; sourceTree = "<group>"; };
@@ -986,6 +1022,31 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		906F2CC473F44082A66EF380 /* Library */ = {
+			isa = PBXGroup;
+			children = (
+				ACE6C6FDCE0E434D86206FB6 /* ScopeLibraryView.swift */,
+			);
+			path = Library;
+			sourceTree = "<group>";
+		};
+		6ED596180D474DFB8250F60C /* Stats */ = {
+			isa = PBXGroup;
+			children = (
+				F8E906378B5E425D8377541F /* ScopeStatsScreen.swift */,
+				01725996407D448FB38A9BD2 /* StatsCache.swift */,
+			);
+			path = Stats;
+			sourceTree = "<group>";
+		};
+		07F14E9974574A7AB6ADAC8E /* Drafts */ = {
+			isa = PBXGroup;
+			children = (
+				409F048DACD9412483B4B67C /* ScopeDraftsScreen.swift */,
+			);
+			path = Drafts;
+			sourceTree = "<group>";
+		};
 		06958D87321BB4B18D1C1FD8 /* Apps */ = {
 			isa = PBXGroup;
 			children = (
@@ -999,6 +1060,7 @@
 		07EC6608E6DA26A94F36034F /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				5CF18791AA274FECA0D00E07 /* ScopeModelsView.swift */,
 				9019DB15700738177DC54D19 /* CloudProviderViews.swift */,
 				C00DBA02942A8A7926AC9AC6 /* LegacyModelCards.swift */,
 				478B8969CCF8329C0038C831 /* LLMModelCards.swift */,
@@ -1146,6 +1208,7 @@
 		3CB63CA63DE037B0AD57EA6F /* Home */ = {
 			isa = PBXGroup;
 			children = (
+				04D2D162EB3F404990A08A40 /* ScopeHomeView.swift */,
 				DF09271641E02C38A5C4A3A1 /* ContentSearchOverlay.swift */,
 				A0A7F28290FD6E23A24DA5DA /* ContentSearchView.swift */,
 				C90ECB98009A0DA116C86AB5 /* HomeActivityWidget.swift */,
@@ -1242,6 +1305,9 @@
 		5CC7B1BEDA8719A80E0BFD4C /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				906F2CC473F44082A66EF380 /* Library */,
+				6ED596180D474DFB8250F60C /* Stats */,
+				07F14E9974574A7AB6ADAC8E /* Drafts */,
 				A2EDA2E38649627130FC8C77 /* AppNavigation.swift */,
 				BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */,
 				ECF1124572A3283EFFF6087C /* DraftsScreen.swift */,
@@ -1502,6 +1568,7 @@
 		9A4651765758DD61801D03CA /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				71CD7FC165C34D5BAF3E366B /* ScopeContextView.swift */,
 				5E73B3D0BFC4EC4245B12B8F /* AboutSettingsView.swift */,
 				17C04A23DED106F02CC55C09 /* AccountSettings.swift */,
 				8AEDF572189FD04145A6A9F5 /* ActionEditorSheet.swift */,
@@ -1592,6 +1659,8 @@
 		A467CE2E477CD03D3FDDE965 /* Workflows */ = {
 			isa = PBXGroup;
 			children = (
+				19E80E0B71394B66BEF56B71 /* ScopeWorkflowStepCard.swift */,
+				E1CE4B10EA624D4FB32A7D57 /* ScopeWorkflowListColumn.swift */,
 				CB56E334D880A89D96C5F7FD /* WorkflowColumnViews.swift */,
 				6004FB1AB3BD3324B0E0F903 /* WorkflowContentViews.swift */,
 			);
@@ -1667,6 +1736,7 @@
 				D288BDB498C7462158DA3BD8 /* RelativeTimeLabel.swift */,
 				F84318C9CACF5907F066188D /* RelativeTimeTicker.swift */,
 				BAE4EAB04189037E2A5BE4FC /* ServiceHealthCard.swift */,
+				D60100112233445566778809 /* Sidebar */,
 				7B87026AAEF2A2B1A5E49227 /* TalkieComponents.swift */,
 				986E82F3E8D9C03EDB440B34 /* TalkiePage.swift */,
 				2DDB2AB87A1AD55688CAF2DB /* TalkieText.swift */,
@@ -1676,6 +1746,21 @@
 				2AFC374F8AC3712E94F023C2 /* Conversation */,
 			);
 			path = Components;
+			sourceTree = "<group>";
+		};
+		D60100112233445566778809 /* Sidebar */ = {
+			isa = PBXGroup;
+			children = (
+				D60100112233445566778801 /* Sidebar.swift */,
+				D60100112233445566778802 /* SidebarColumns.swift */,
+				D60100112233445566778803 /* SidebarLabel.swift */,
+				D60100112233445566778804 /* SidebarLayout.swift */,
+				D60100112233445566778805 /* SidebarMotion.swift */,
+				D60100112233445566778806 /* SidebarRow.swift */,
+				D60100112233445566778807 /* SidebarStyle.swift */,
+				D60100112233445566778808 /* SidebarTransition.swift */,
+			);
+			path = Sidebar;
 			sourceTree = "<group>";
 		};
 		BB8E0E84A742E3E3EBC749AB /* Audio */ = {
@@ -1820,6 +1905,7 @@
 		CF255B7C16461CF1674389DB /* Debug */ = {
 			isa = PBXGroup;
 			children = (
+				9D92E08CFCD64597A45A0D38 /* PerfHUD.swift */,
 				CEE3B188D3D0A98406055A46 /* AuditStore.swift */,
 				B056DA4E0FD92CED9782F9AF /* ConsoleScreenshotGenerator.swift */,
 				E0CEC1D425A68FF0A280F2CE /* DebugCommandHandler.swift */,
@@ -2118,6 +2204,16 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3B47C66D2CB84A25B993E6B1 /* PerfHUD.swift in Sources */,
+				D8D87BF5A63A4F54847C08E8 /* ScopeModelsView.swift in Sources */,
+				F85C0120CF164EFE94283C33 /* ScopeContextView.swift in Sources */,
+				75F8183FCB2E47F58FBE6385 /* ScopeLibraryView.swift in Sources */,
+				F4747F36A4AC429ABD84A7F1 /* ScopeStatsScreen.swift in Sources */,
+				2323D610E7C24439A3447FBE /* StatsCache.swift in Sources */,
+				B00AD33E59874ED29D2233B0 /* ScopeWorkflowStepCard.swift in Sources */,
+				A977D907A9F344DAB208C424 /* ScopeDraftsScreen.swift in Sources */,
+				EB1E5CD3E80648249ED16FCD /* ScopeWorkflowListColumn.swift in Sources */,
+				57597A361A5748F3BE1CCE18 /* ScopeHomeView.swift in Sources */,
 				46BCB0361A074CFCE3C32252 /* AIResultsViews.swift in Sources */,
 				FF50DD21DD6B6C2C95BE8EBD /* APIKeyStore.swift in Sources */,
 				A99F74DC6D3F9B3A38A11425 /* APISettings.swift in Sources */,
@@ -2498,6 +2594,14 @@
 				CAF291BCD5A177D76F343D3E /* TalkieTooltip.swift in Sources */,
 				7D755ADC05A6E3D6D28B8D27 /* TalkieView.swift in Sources */,
 				6CAC8A54F962964E455196A2 /* TalkieViewHeader.swift in Sources */,
+				D60100112233445566778811 /* Sidebar.swift in Sources */,
+				D60100112233445566778812 /* SidebarColumns.swift in Sources */,
+				D60100112233445566778813 /* SidebarLabel.swift in Sources */,
+				D60100112233445566778814 /* SidebarLayout.swift in Sources */,
+				D60100112233445566778815 /* SidebarMotion.swift in Sources */,
+				D60100112233445566778816 /* SidebarRow.swift in Sources */,
+				D60100112233445566778817 /* SidebarStyle.swift in Sources */,
+				D60100112233445566778818 /* SidebarTransition.swift in Sources */,
 				57F39427625881128938A813 /* TalkieWorkflowConverter.swift in Sources */,
 				EFDB9037C949557D2EA24D12 /* TalkieWorkflowSchema.swift in Sources */,
 				A79FE8133765A6077437DD17 /* TerminalSetupView.swift in Sources */,

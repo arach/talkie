@@ -267,9 +267,17 @@ final class BootSequence {
         AgentServiceBridge.shared.start()
         record("AgentServiceBridge")
 
-        // TalkieSpeech (Kokoro TTS) — start before TalkieServer so token is available
-        await TalkieSpeechSupervisor.shared.start()
-        record("TalkieSpeechSupervisor")
+        // TalkieSpeech (Kokoro TTS): not auto-started. The Kokoro models add
+        // boot cost, the binary may not exist in a fresh checkout, and TTS
+        // is opt-in. Token is still generated at `shared` init so any
+        // future caller (settings toggle, first /tts request) can call
+        // `TalkieSpeechSupervisor.shared.start()` to bring it up. We call
+        // `stop()` rather than just touching `.shared` so any orphaned
+        // TalkieSpeech on :8780 (from a previous agent that crashed before
+        // SIGTERM-ing its child) gets killed — otherwise it lingers with
+        // Kokoro models in RAM and no parent.
+        await TalkieSpeechSupervisor.shared.stop()
+        record("TalkieSpeechSupervisor[dormant]")
 
         // TalkieServer (Bun sidecar) supervision
         await TalkieAgentServerSupervisor.shared.start()
