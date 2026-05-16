@@ -9,6 +9,7 @@
 import Foundation
 import Network
 import AppKit
+import CryptoKit
 import IOKit.hid
 import TalkieKit
 
@@ -174,6 +175,70 @@ private struct CompanionActivateAppRequest: Codable {
     let bundleIdentifier: String?
 }
 
+private enum LocalBridgeCapability {
+    static let companionRuntimeState = "companion.runtimeState"
+    static let companionTrigger = "companion.trigger"
+    static let companionActivateApp = "companion.activateApp"
+    static let companionTrackpad = "companion.trackpad"
+    static let companionPasteImage = "companion.pasteImage"
+    static let desktopWindowsRead = "desktop.windows.read"
+    static let desktopScreenshotRead = "desktop.screenshot.read"
+    static let messageInject = "message.inject"
+    static let workflowExecute = "workflow.execute"
+
+    static let supported: Set<String> = [
+        companionRuntimeState,
+        companionTrigger,
+        companionActivateApp,
+        companionTrackpad,
+        companionPasteImage,
+        desktopWindowsRead,
+        desktopScreenshotRead,
+        messageInject,
+        workflowExecute,
+    ]
+
+    static func grantedCapabilities(for requested: [String]?) -> [String] {
+        let cleaned = Set((requested ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })
+        let desired = cleaned.isEmpty ? supported : cleaned
+        return desired.intersection(supported).sorted()
+    }
+}
+
+private struct LocalClientAccessRequest: Codable {
+    let clientId: String
+    let displayName: String
+    let publicKey: String
+    let requestedCapabilities: [String]?
+}
+
+private struct LocalClientAccessResponse: Codable {
+    let ok: Bool
+    let status: String
+    let clientId: String?
+    let grantedCapabilities: [String]
+    let fingerprint: String?
+    let message: String?
+}
+
+private struct TrustedLocalClientRecord: Codable {
+    var id: String
+    var displayName: String
+    var publicKey: String
+    var fingerprint: String
+    var capabilities: [String]
+    var isEnabled: Bool
+    var pairedAt: Date
+    var lastSeenAt: Date
+}
+
+private struct LocalClientAuthorizationErrorResponse: Codable {
+    let ok: Bool
+    let error: String
+    let serverTime: String
+    let requiredCapability: String?
+}
+
 /// Local HTTP server for Bridge communication
 /// Receives message requests and forwards to TalkieAgent via XPC
 @MainActor
@@ -191,6 +256,29 @@ final class TalkieServer {
     private var companionAppSwitcherReleaseTask: Task<Void, Never>?
     private var companionAppActivationOrder: [Int32] = []
     private var companionWorkspaceActivationObserver: NSObjectProtocol?
+    private var trustedLocalClients: [String: TrustedLocalClientRecord]
+    private var localClientSeenNonces: [String: Date] = [:]
+    private var localClientDeniedUntil: [String: Date] = [:]
+
+    private let localClientTimeSkewAllowance: TimeInterval = 300
+    private let localClientReplayWindow: TimeInterval = 600
+
+    private enum LocalClientDefaultsKey {
+        static let trustedClients = "talkie.localBridge.trustedClients.v1"
+    }
+
+    private enum LocalClientHeader {
+        static let clientID = "x-talkie-client-id"
+        static let timestamp = "x-talkie-timestamp"
+        static let nonce = "x-talkie-nonce"
+        static let bodySHA256 = "x-talkie-body-sha256"
+        static let signature = "x-talkie-signature"
+    }
+
+    private enum LocalClientAuthorizationResult {
+        case authorized(TrustedLocalClientRecord)
+        case rejected(statusCode: Int, error: String, requiredCapability: String?)
+    }
 
     // Get XPC manager dynamically from ServiceManager (handles reconnection)
     private var xpcManager: XPCServiceManager<TalkieAgentXPCServiceProtocol>? {
@@ -201,7 +289,9 @@ final class TalkieServer {
         listener?.state == .ready || isUsingExternalRelay
     }
 
-    private init() {}
+    private init() {
+        self.trustedLocalClients = Self.loadTrustedLocalClients()
+    }
 
     // MARK: - Public API
 
@@ -285,6 +375,12 @@ final class TalkieServer {
     }
 
     private func handleConnection(_ connection: NWConnection) {
+        guard isLoopbackConnection(connection) else {
+            log.warning("Rejected non-loopback TalkieServer connection: \(String(describing: connection.endpoint))")
+            connection.cancel()
+            return
+        }
+
         connection.stateUpdateHandler = { [weak self] state in
             Task { @MainActor in
                 guard let self else { return }
@@ -429,6 +525,174 @@ final class TalkieServer {
         return 0
     }
 
+    private func parseHeaders(from lines: [String]) -> [String: String] {
+        var headers: [String: String] = [:]
+        for line in lines.dropFirst() {
+            if line.isEmpty { break }
+            let parts = line.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+            guard parts.count == 2 else { continue }
+            let name = parts[0].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let value = parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
+            headers[name] = value
+        }
+        return headers
+    }
+
+    private func isLoopbackConnection(_ connection: NWConnection) -> Bool {
+        switch connection.endpoint {
+        case .hostPort(let host, _):
+            switch host {
+            case .name(let name, _):
+                let lower = name.lowercased()
+                return lower == "localhost" || lower == "127.0.0.1" || lower == "::1"
+            case .ipv4(let address):
+                return "\(address)" == "127.0.0.1"
+            case .ipv6(let address):
+                let value = "\(address)"
+                return value == "::1" || value == "0:0:0:0:0:0:0:1" || value == "::ffff:127.0.0.1"
+            @unknown default:
+                return false
+            }
+        default:
+            return false
+        }
+    }
+
+    private func authorizeLocalClientIfNeeded(
+        connection: NWConnection,
+        method: String,
+        rawPath: String,
+        path: String,
+        headers: [String: String],
+        body: Data
+    ) -> Bool {
+        guard let requiredCapability = requiredLocalClientCapability(method: method, path: path) else {
+            return true
+        }
+
+        switch authorizeLocalClient(
+            method: method,
+            rawPath: rawPath,
+            headers: headers,
+            body: body,
+            requiredCapability: requiredCapability
+        ) {
+        case .authorized:
+            return true
+        case .rejected(let statusCode, let error, let requiredCapability):
+            log.warning("Rejected TalkieServer local client request: \(error)")
+            sendJSONResponse(
+                connection,
+                statusCode: statusCode,
+                body: LocalClientAuthorizationErrorResponse(
+                    ok: false,
+                    error: error,
+                    serverTime: String(Int(Date().timeIntervalSince1970)),
+                    requiredCapability: requiredCapability
+                )
+            )
+            return false
+        }
+    }
+
+    private func requiredLocalClientCapability(method: String, path: String) -> String? {
+        switch (method, path) {
+        case ("GET", "/companion/runtime-state"):
+            return LocalBridgeCapability.companionRuntimeState
+        case ("POST", "/companion/trigger"):
+            return LocalBridgeCapability.companionTrigger
+        case ("POST", "/companion/activate-app"):
+            return LocalBridgeCapability.companionActivateApp
+        case ("POST", "/companion/trackpad"):
+            return LocalBridgeCapability.companionTrackpad
+        case ("POST", "/companion/paste-image"):
+            return LocalBridgeCapability.companionPasteImage
+        case ("GET", "/windows/claude"):
+            return LocalBridgeCapability.desktopWindowsRead
+        case ("GET", "/screenshot/terminals"), ("GET", "/screenshot/display"):
+            return LocalBridgeCapability.desktopScreenshotRead
+        case ("POST", "/message"), ("POST", "/inject"):
+            return LocalBridgeCapability.messageInject
+        case ("POST", "/workflows/host/execute-step"):
+            return LocalBridgeCapability.workflowExecute
+        default:
+            if method == "GET" && path.hasPrefix("/screenshot/window/") {
+                return LocalBridgeCapability.desktopScreenshotRead
+            }
+            return nil
+        }
+    }
+
+    private func authorizeLocalClient(
+        method: String,
+        rawPath: String,
+        headers: [String: String],
+        body: Data,
+        requiredCapability: String
+    ) -> LocalClientAuthorizationResult {
+        guard let clientID = headers[LocalClientHeader.clientID], !clientID.isEmpty else {
+            return .rejected(statusCode: 401, error: "Missing trusted local client header: \(LocalClientHeader.clientID)", requiredCapability: requiredCapability)
+        }
+        guard let timestamp = headers[LocalClientHeader.timestamp], let timestampSeconds = TimeInterval(timestamp) else {
+            return .rejected(statusCode: 401, error: "Missing or invalid trusted local client timestamp", requiredCapability: requiredCapability)
+        }
+        guard let nonce = headers[LocalClientHeader.nonce], !nonce.isEmpty else {
+            return .rejected(statusCode: 401, error: "Missing trusted local client nonce", requiredCapability: requiredCapability)
+        }
+        guard let suppliedBodyHash = headers[LocalClientHeader.bodySHA256]?.lowercased(), !suppliedBodyHash.isEmpty else {
+            return .rejected(statusCode: 401, error: "Missing trusted local client body hash", requiredCapability: requiredCapability)
+        }
+        guard let signatureValue = headers[LocalClientHeader.signature], !signatureValue.isEmpty else {
+            return .rejected(statusCode: 401, error: "Missing trusted local client signature", requiredCapability: requiredCapability)
+        }
+        guard var record = trustedLocalClients[clientID], record.isEnabled else {
+            return .rejected(statusCode: 401, error: "Local client is not trusted by Talkie", requiredCapability: requiredCapability)
+        }
+        guard record.capabilities.contains(requiredCapability) else {
+            return .rejected(statusCode: 403, error: "Local client is missing required capability", requiredCapability: requiredCapability)
+        }
+
+        let now = Date()
+        guard abs(now.timeIntervalSince1970 - timestampSeconds) <= localClientTimeSkewAllowance else {
+            return .rejected(statusCode: 401, error: "Trusted local client request timestamp is stale", requiredCapability: requiredCapability)
+        }
+
+        purgeExpiredLocalClientNonces(now: now)
+        let nonceKey = "\(clientID):\(nonce)"
+        guard localClientSeenNonces[nonceKey] == nil else {
+            return .rejected(statusCode: 401, error: "Trusted local client nonce was already used", requiredCapability: requiredCapability)
+        }
+
+        let computedBodyHash = Self.sha256Hex(body)
+        guard Self.constantTimeEqual(suppliedBodyHash, computedBodyHash) else {
+            return .rejected(statusCode: 401, error: "Trusted local client body hash mismatch", requiredCapability: requiredCapability)
+        }
+
+        guard let publicKey = Self.localClientPublicKey(from: record.publicKey),
+              let signatureData = Data(base64Encoded: signatureValue),
+              let signature = try? P256.Signing.ECDSASignature(derRepresentation: signatureData)
+        else {
+            return .rejected(statusCode: 401, error: "Trusted local client key or signature is invalid", requiredCapability: requiredCapability)
+        }
+
+        let canonical = "\(method)\n\(rawPath)\n\(timestamp)\n\(nonce)\n\(computedBodyHash)"
+        guard publicKey.isValidSignature(signature, for: Data(canonical.utf8)) else {
+            return .rejected(statusCode: 401, error: "Trusted local client signature verification failed", requiredCapability: requiredCapability)
+        }
+
+        localClientSeenNonces[nonceKey] = now
+        record.lastSeenAt = now
+        trustedLocalClients[clientID] = record
+        persistTrustedLocalClients()
+        return .authorized(record)
+    }
+
+    private func purgeExpiredLocalClientNonces(now: Date = Date()) {
+        localClientSeenNonces = localClientSeenNonces.filter { _, seenAt in
+            now.timeIntervalSince(seenAt) <= localClientReplayWindow
+        }
+    }
+
     private func processRequest(_ data: Data, connection: NWConnection) async {
         guard let requestString = String(data: data, encoding: .utf8) else {
             sendResponse(connection, statusCode: 400, body: "Invalid request")
@@ -452,6 +716,7 @@ final class TalkieServer {
         let rawPath = parts[1]
         let requestURL = URLComponents(string: "http://localhost\(rawPath)")
         let path = requestURL?.path ?? rawPath
+        let headers = parseHeaders(from: lines)
 
         log.info("TalkieServer received: \(method) '\(rawPath)'")
 
@@ -462,6 +727,7 @@ final class TalkieServer {
             let bodyString = bodyLines.joined(separator: "\r\n")
             body = bodyString.data(using: .utf8)
         }
+        let bodyData = body ?? Data()
 
         // Route request
         if path == "/health" && method == "GET" {
@@ -469,32 +735,122 @@ final class TalkieServer {
             sendJSONResponse(connection, statusCode: 200, body: response)
         } else if path == "/doctor" && method == "GET" {
             await handleDoctor(connection)
+        } else if path == "/local-clients/request-access" && method == "POST" {
+            await handleLocalClientAccessRequest(connection, body: body)
         } else if path == "/companion/runtime-state" && method == "GET" {
+            guard authorizeLocalClientIfNeeded(
+                connection: connection,
+                method: method,
+                rawPath: rawPath,
+                path: path,
+                headers: headers,
+                body: bodyData
+            ) else { return }
             let runtimeState = await currentCompanionRuntimeState()
             sendJSONResponse(connection, statusCode: 200, body: runtimeState)
         } else if path == "/companion/activate-app" && method == "POST" {
+            guard authorizeLocalClientIfNeeded(
+                connection: connection,
+                method: method,
+                rawPath: rawPath,
+                path: path,
+                headers: headers,
+                body: bodyData
+            ) else { return }
             await handleCompanionActivateApp(connection, body: body)
         } else if path == "/workflows/host/execute-step" && method == "POST" {
+            guard authorizeLocalClientIfNeeded(
+                connection: connection,
+                method: method,
+                rawPath: rawPath,
+                path: path,
+                headers: headers,
+                body: bodyData
+            ) else { return }
             await handleWorkflowHostExecuteStep(connection, body: body)
         } else if (path == "/message" || path == "/inject") && method == "POST" {
+            guard authorizeLocalClientIfNeeded(
+                connection: connection,
+                method: method,
+                rawPath: rawPath,
+                path: path,
+                headers: headers,
+                body: bodyData
+            ) else { return }
             // /message is preferred, /inject for backwards compat
             // Empty text = force enter (just press Enter without inserting)
             await handleMessage(connection, body: body)
         } else if path == "/companion/trigger" && method == "POST" {
+            guard authorizeLocalClientIfNeeded(
+                connection: connection,
+                method: method,
+                rawPath: rawPath,
+                path: path,
+                headers: headers,
+                body: bodyData
+            ) else { return }
             await handleCompanionTrigger(connection, body: body)
         } else if path == "/companion/trackpad" && method == "POST" {
+            guard authorizeLocalClientIfNeeded(
+                connection: connection,
+                method: method,
+                rawPath: rawPath,
+                path: path,
+                headers: headers,
+                body: bodyData
+            ) else { return }
             await handleCompanionTrackpad(connection, body: body)
         } else if path == "/companion/paste-image" && method == "POST" {
+            guard authorizeLocalClientIfNeeded(
+                connection: connection,
+                method: method,
+                rawPath: rawPath,
+                path: path,
+                headers: headers,
+                body: bodyData
+            ) else { return }
             await handleCompanionPasteImage(connection, body: body)
         } else if path == "/windows/claude" && method == "GET" {
+            guard authorizeLocalClientIfNeeded(
+                connection: connection,
+                method: method,
+                rawPath: rawPath,
+                path: path,
+                headers: headers,
+                body: bodyData
+            ) else { return }
             await handleListClaudeWindows(connection)
         } else if path == "/screenshot/terminals" && method == "GET" {
+            guard authorizeLocalClientIfNeeded(
+                connection: connection,
+                method: method,
+                rawPath: rawPath,
+                path: path,
+                headers: headers,
+                body: bodyData
+            ) else { return }
             await handleCaptureTerminals(connection)
         } else if path == "/screenshot/display" && method == "GET" {
+            guard authorizeLocalClientIfNeeded(
+                connection: connection,
+                method: method,
+                rawPath: rawPath,
+                path: path,
+                headers: headers,
+                body: bodyData
+            ) else { return }
             let maxDimension = requestURL?.queryItems?.first(where: { $0.name == "maxDimension" })?.value.flatMap(Int.init) ?? 1600
             let quality = requestURL?.queryItems?.first(where: { $0.name == "quality" })?.value.flatMap(Double.init) ?? 0.7
             await handleCaptureMainDisplay(connection, maxDimension: maxDimension, quality: quality)
         } else if path.hasPrefix("/screenshot/window/") && method == "GET" {
+            guard authorizeLocalClientIfNeeded(
+                connection: connection,
+                method: method,
+                rawPath: rawPath,
+                path: path,
+                headers: headers,
+                body: bodyData
+            ) else { return }
             let windowIdStr = String(path.dropFirst("/screenshot/window/".count))
             if let windowId = UInt32(windowIdStr) {
                 await handleCaptureWindow(connection, windowID: windowId)
@@ -507,6 +863,219 @@ final class TalkieServer {
             log.warning("TalkieServer 404: method='\(method)' path='\(path)'")
             sendResponse(connection, statusCode: 404, body: "Not found")
         }
+    }
+
+    private func handleLocalClientAccessRequest(_ connection: NWConnection, body: Data?) async {
+        guard let body else {
+            sendJSONResponse(
+                connection,
+                statusCode: 400,
+                body: LocalClientAccessResponse(
+                    ok: false,
+                    status: "invalid",
+                    clientId: nil,
+                    grantedCapabilities: [],
+                    fingerprint: nil,
+                    message: "No request body"
+                )
+            )
+            return
+        }
+
+        let request: LocalClientAccessRequest
+        do {
+            request = try JSONDecoder().decode(LocalClientAccessRequest.self, from: body)
+        } catch {
+            sendJSONResponse(
+                connection,
+                statusCode: 400,
+                body: LocalClientAccessResponse(
+                    ok: false,
+                    status: "invalid",
+                    clientId: nil,
+                    grantedCapabilities: [],
+                    fingerprint: nil,
+                    message: "Invalid JSON: \(error.localizedDescription)"
+                )
+            )
+            return
+        }
+
+        let clientID = request.clientId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let displayName = request.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let publicKey = request.publicKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let grantedCapabilities = LocalBridgeCapability.grantedCapabilities(for: request.requestedCapabilities)
+        let fingerprint = Self.fingerprint(forPublicKeyBase64: publicKey)
+
+        guard !clientID.isEmpty, !displayName.isEmpty, !publicKey.isEmpty else {
+            sendJSONResponse(
+                connection,
+                statusCode: 400,
+                body: LocalClientAccessResponse(
+                    ok: false,
+                    status: "invalid",
+                    clientId: clientID.isEmpty ? nil : clientID,
+                    grantedCapabilities: [],
+                    fingerprint: fingerprint,
+                    message: "Client id, display name, and public key are required"
+                )
+            )
+            return
+        }
+
+        guard !grantedCapabilities.isEmpty else {
+            sendJSONResponse(
+                connection,
+                statusCode: 403,
+                body: LocalClientAccessResponse(
+                    ok: false,
+                    status: "denied",
+                    clientId: clientID,
+                    grantedCapabilities: [],
+                    fingerprint: fingerprint,
+                    message: "No supported capabilities were requested"
+                )
+            )
+            return
+        }
+
+        guard Self.localClientPublicKey(from: publicKey) != nil else {
+            sendJSONResponse(
+                connection,
+                statusCode: 400,
+                body: LocalClientAccessResponse(
+                    ok: false,
+                    status: "invalid",
+                    clientId: clientID,
+                    grantedCapabilities: [],
+                    fingerprint: fingerprint,
+                    message: "Public key is not a supported P-256 key"
+                )
+            )
+            return
+        }
+
+        if
+            let existing = trustedLocalClients[clientID],
+            existing.publicKey == publicKey,
+            existing.isEnabled
+        {
+            var updated = existing
+            updated.displayName = displayName
+            updated.capabilities = grantedCapabilities
+            updated.lastSeenAt = Date()
+            trustedLocalClients[clientID] = updated
+            persistTrustedLocalClients()
+            sendJSONResponse(
+                connection,
+                statusCode: 200,
+                body: LocalClientAccessResponse(
+                    ok: true,
+                    status: "approved",
+                    clientId: clientID,
+                    grantedCapabilities: grantedCapabilities,
+                    fingerprint: fingerprint,
+                    message: "Local client is already trusted"
+                )
+            )
+            return
+        }
+
+        if let deniedUntil = localClientDeniedUntil[clientID], deniedUntil > Date() {
+            sendJSONResponse(
+                connection,
+                statusCode: 403,
+                body: LocalClientAccessResponse(
+                    ok: false,
+                    status: "denied",
+                    clientId: clientID,
+                    grantedCapabilities: [],
+                    fingerprint: fingerprint,
+                    message: "Local client access was recently denied"
+                )
+            )
+            return
+        }
+
+        let isKeyRotation = trustedLocalClients[clientID] != nil
+        let approved = promptForLocalClientAccess(
+            displayName: displayName,
+            fingerprint: fingerprint,
+            capabilities: grantedCapabilities,
+            isKeyRotation: isKeyRotation
+        )
+
+        guard approved else {
+            localClientDeniedUntil[clientID] = Date().addingTimeInterval(600)
+            sendJSONResponse(
+                connection,
+                statusCode: 403,
+                body: LocalClientAccessResponse(
+                    ok: false,
+                    status: "denied",
+                    clientId: clientID,
+                    grantedCapabilities: [],
+                    fingerprint: fingerprint,
+                    message: "Access denied in Talkie"
+                )
+            )
+            return
+        }
+
+        let now = Date()
+        let record = TrustedLocalClientRecord(
+            id: clientID,
+            displayName: displayName,
+            publicKey: publicKey,
+            fingerprint: fingerprint,
+            capabilities: grantedCapabilities,
+            isEnabled: true,
+            pairedAt: trustedLocalClients[clientID]?.pairedAt ?? now,
+            lastSeenAt: now
+        )
+        trustedLocalClients[clientID] = record
+        localClientDeniedUntil.removeValue(forKey: clientID)
+        persistTrustedLocalClients()
+
+        sendJSONResponse(
+            connection,
+            statusCode: 200,
+            body: LocalClientAccessResponse(
+                ok: true,
+                status: "approved",
+                clientId: clientID,
+                grantedCapabilities: grantedCapabilities,
+                fingerprint: fingerprint,
+                message: "Local client access approved"
+            )
+        )
+    }
+
+    private func promptForLocalClientAccess(
+        displayName: String,
+        fingerprint: String,
+        capabilities: [String],
+        isKeyRotation: Bool
+    ) -> Bool {
+        NSApp.activate(ignoringOtherApps: true)
+
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = isKeyRotation
+            ? "Allow \(displayName) to update its Talkie access key?"
+            : "Allow \(displayName) to control Talkie locally?"
+        alert.informativeText = """
+        \(displayName) wants to call Talkie's local bridge from this Mac.
+
+        Capabilities:
+        \(capabilities.joined(separator: "\n"))
+
+        Key fingerprint: \(fingerprint)
+        """
+        alert.addButton(withTitle: "Allow")
+        alert.addButton(withTitle: "Deny")
+
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     private func handleCompanionTrigger(_ connection: NWConnection, body: Data?) async {
@@ -2739,6 +3308,57 @@ final class TalkieServer {
         return state.rawValue
     }
 
+    private static func loadTrustedLocalClients() -> [String: TrustedLocalClientRecord] {
+        guard
+            let data = UserDefaults.standard.data(forKey: LocalClientDefaultsKey.trustedClients),
+            let clients = try? JSONDecoder().decode([TrustedLocalClientRecord].self, from: data)
+        else {
+            return [:]
+        }
+        return Dictionary(uniqueKeysWithValues: clients.map { ($0.id, $0) })
+    }
+
+    private func persistTrustedLocalClients() {
+        let clients = trustedLocalClients.values.sorted { lhs, rhs in
+            lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+        }
+        guard let data = try? JSONEncoder().encode(clients) else { return }
+        UserDefaults.standard.set(data, forKey: LocalClientDefaultsKey.trustedClients)
+    }
+
+    private static func localClientPublicKey(from base64Value: String) -> P256.Signing.PublicKey? {
+        guard let keyData = Data(base64Encoded: base64Value) else { return nil }
+        if let key = try? P256.Signing.PublicKey(x963Representation: keyData) {
+            return key
+        }
+        if let key = try? P256.Signing.PublicKey(derRepresentation: keyData) {
+            return key
+        }
+        return nil
+    }
+
+    private static func sha256Hex(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func fingerprint(forPublicKeyBase64 value: String) -> String {
+        let digest = SHA256.hash(data: Data(value.utf8))
+        let hex = digest.map { String(format: "%02x", $0) }.joined()
+        let compact = String(hex.prefix(16)).uppercased()
+        return compact.chunked(into: 4).joined(separator: "-")
+    }
+
+    private static func constantTimeEqual(_ lhs: String, _ rhs: String) -> Bool {
+        let lhsData = Array(lhs.utf8)
+        let rhsData = Array(rhs.utf8)
+        guard lhsData.count == rhsData.count else { return false }
+        var diff: UInt8 = 0
+        for index in lhsData.indices {
+            diff |= lhsData[index] ^ rhsData[index]
+        }
+        return diff == 0
+    }
+
     private func sendJSONResponse<T: Encodable>(_ connection: NWConnection, statusCode: Int, body: T) {
         let statusText = statusCode == 200 ? "OK" : "Error"
 
@@ -2761,5 +3381,19 @@ final class TalkieServer {
         } catch {
             sendResponse(connection, statusCode: 500, body: "JSON encoding error")
         }
+    }
+}
+
+private extension String {
+    func chunked(into size: Int) -> [String] {
+        guard size > 0, !isEmpty else { return [self] }
+        var chunks: [String] = []
+        var index = startIndex
+        while index < endIndex {
+            let next = self.index(index, offsetBy: size, limitedBy: endIndex) ?? endIndex
+            chunks.append(String(self[index..<next]))
+            index = next
+        }
+        return chunks
     }
 }
