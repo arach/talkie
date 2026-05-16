@@ -9,8 +9,6 @@
 /* Begin PBXBuildFile section */
 		3B47C66D2CB84A25B993E6B1 /* PerfHUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D92E08CFCD64597A45A0D38 /* PerfHUD.swift */; };
 		D8D87BF5A63A4F54847C08E8 /* ScopeModelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CF18791AA274FECA0D00E07 /* ScopeModelsView.swift */; };
-		07D280FD181645EABE46827D /* ScopeConsoleZeroState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 925230A83637408A9D2BCAD5 /* ScopeConsoleZeroState.swift */; };
-		097E3E289DF94D48A9D1C3EA /* ScopeConsoleRail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33BD31F63B794BC581222BDE /* ScopeConsoleRail.swift */; };
 		F85C0120CF164EFE94283C33 /* ScopeContextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71CD7FC165C34D5BAF3E366B /* ScopeContextView.swift */; };
 		75F8183FCB2E47F58FBE6385 /* ScopeLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACE6C6FDCE0E434D86206FB6 /* ScopeLibraryView.swift */; };
 		F4747F36A4AC429ABD84A7F1 /* ScopeStatsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8E906378B5E425D8377541F /* ScopeStatsScreen.swift */; };
@@ -511,8 +509,6 @@
 /* Begin PBXFileReference section */
 		9D92E08CFCD64597A45A0D38 /* PerfHUD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerfHUD.swift; sourceTree = "<group>"; };
 		5CF18791AA274FECA0D00E07 /* ScopeModelsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeModelsView.swift; sourceTree = "<group>"; };
-		925230A83637408A9D2BCAD5 /* ScopeConsoleZeroState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeConsoleZeroState.swift; sourceTree = "<group>"; };
-		33BD31F63B794BC581222BDE /* ScopeConsoleRail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeConsoleRail.swift; sourceTree = "<group>"; };
 		71CD7FC165C34D5BAF3E366B /* ScopeContextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeContextView.swift; sourceTree = "<group>"; };
 		ACE6C6FDCE0E434D86206FB6 /* ScopeLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeLibraryView.swift; sourceTree = "<group>"; };
 		F8E906378B5E425D8377541F /* ScopeStatsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeStatsScreen.swift; sourceTree = "<group>"; };
@@ -1117,8 +1113,6 @@
 		23C45A9B8E33019D3B22E18C /* Console */ = {
 			isa = PBXGroup;
 			children = (
-				925230A83637408A9D2BCAD5 /* ScopeConsoleZeroState.swift */,
-				33BD31F63B794BC581222BDE /* ScopeConsoleRail.swift */,
 				629FF19A580099A081894049 /* ConsolePopoutManager.swift */,
 				D0A68AB14C01B1376AFACC53 /* ConsoleScreen.swift */,
 				CF527A524858B4E6AA7F5E26 /* ConsoleTabEditor.swift */,
@@ -2212,8 +2206,6 @@
 			files = (
 				3B47C66D2CB84A25B993E6B1 /* PerfHUD.swift in Sources */,
 				D8D87BF5A63A4F54847C08E8 /* ScopeModelsView.swift in Sources */,
-				07D280FD181645EABE46827D /* ScopeConsoleZeroState.swift in Sources */,
-				097E3E289DF94D48A9D1C3EA /* ScopeConsoleRail.swift in Sources */,
 				F85C0120CF164EFE94283C33 /* ScopeContextView.swift in Sources */,
 				75F8183FCB2E47F58FBE6385 /* ScopeLibraryView.swift in Sources */,
 				F4747F36A4AC429ABD84A7F1 /* ScopeStatsScreen.swift in Sources */,

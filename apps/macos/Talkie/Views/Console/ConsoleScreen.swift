@@ -215,7 +215,12 @@ struct ConsoleScreen: View {
     /// (tabs are now created on demand, numbered sequentially).
     private func createTabFromTemplate(_ template: TabDefinition) {
         let nextNumber = registry.tabs.count + 1
-        let newId = "\(template.harness.rawValue)-\(Int(Date().timeIntervalSince1970))"
+        // UUID prefix instead of a second-resolution timestamp — two
+        // quick clicks on the same card within one second were
+        // colliding under the old `Int(timeIntervalSince1970)` scheme,
+        // which silently overwrote the `.talkierc` file and tore down
+        // the first tab's session on the second `pool.launch`.
+        let newId = "\(template.harness.rawValue)-\(UUID().uuidString.prefix(8).lowercased())"
         let newTab = TabDefinition(
             id: newId,
             label: "\(nextNumber)",
@@ -255,12 +260,21 @@ struct ConsoleScreen: View {
     /// is the canonical "no session running" surface. It replaces the
     /// older un-themed ConsoleTabReadyView hero for tabs that exist but
     /// haven't been launched yet.
+    ///
+    /// Crucially, this does NOT swallow launch failures: when the
+    /// active tab's state carries a `launchError`, fall through to
+    /// `ConsoleTabLaunchFailureView` (and the Pi-install onboarding it
+    /// routes to) instead of bouncing the user back to the picker
+    /// with no indication of what went wrong.
     private var shouldShowScopeStarter: Bool {
         guard isScope else { return false }
         if isPickingNewTab { return true }
         if registry.tabs.isEmpty { return true }
-        if let tab = registry.activeTab, pool.session(for: tab.id) == nil {
-            return true
+        if let tab = registry.activeTab {
+            let state = pool.state(for: tab.id)
+            if state.session == nil && state.launchError == nil {
+                return true
+            }
         }
         return false
     }
