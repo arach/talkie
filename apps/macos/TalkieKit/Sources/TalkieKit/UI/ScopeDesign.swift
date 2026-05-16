@@ -14,9 +14,9 @@
 
 import SwiftUI
 
-// MARK: - Hex helper (file-local)
+// MARK: - Hex helper
 
-private extension Color {
+public extension Color {
     /// Build a Color from a 6-digit hex string. No validation — this is
     /// an internal token helper, the strings are checked at write time.
     static func hex(_ hex: String) -> Color {
@@ -147,8 +147,13 @@ public enum ScopePanel {
     public static let ink       = Color.hex("F0EAD8")
     public static let inkDim    = Color.hex("D8D2C0")
     public static let inkMuted  = Color.hex("B8B0A0")
-    public static let inkFaint  = Color.hex("80786A")
-    public static let inkSubtle = Color.hex("6E675B")
+    /// Lifted from `#80786A` so chrome labels (channel ids, status text)
+    /// still read as muted but actually meet readability on the warm
+    /// graphite bg.
+    public static let inkFaint  = Color.hex("ADA294")
+    /// Lifted from `#6E675B` for the same reason — secondary metadata
+    /// (timestamps, model names) needs to be subdued, not invisible.
+    public static let inkSubtle = Color.hex("948A7C")
 
     /// Amber phosphor trace inside dark panels.
     public static let trace      = Color.hex("E89A3C")
@@ -165,6 +170,37 @@ public enum ScopePanel {
 
     /// CRT scanline tint (very low alpha — overlay).
     public static let scanline = Color.hex("E89A3C").opacity(0.04)
+
+    /// Opaque metallic-strip gradient for the panel's TOP control rail
+    /// — lit-from-above brushed metal cover. Stops are solid colors
+    /// (slightly lighter than the panel bg up top, slightly darker at
+    /// the bottom) so the strip fully masks the graticule grid that
+    /// runs through the rest of the panel — strips vs. body now read
+    /// as different surfaces without needing a border.
+    public static let stripTop = LinearGradient(
+        stops: [
+            .init(color: Color.hex("463E33"), location: 0.0),
+            .init(color: Color.hex("3F3830"), location: 0.35),
+            .init(color: Color.hex("2D2820"), location: 1.0)
+        ],
+        startPoint: .top,
+        endPoint: .bottom
+    )
+
+    /// Opaque metallic-strip gradient for the panel's BOTTOM rail —
+    /// recessed feel: shadow at the top edge, gentle catch-light at
+    /// the bottom. Asymmetric with `stripTop` on purpose so the two
+    /// rails feel like different physical surfaces (top cover vs.
+    /// bottom rail).
+    public static let stripBottom = LinearGradient(
+        stops: [
+            .init(color: Color.hex("2A2419"), location: 0.0),
+            .init(color: Color.hex("352E26"), location: 0.55),
+            .init(color: Color.hex("433C31"), location: 1.0)
+        ],
+        startPoint: .top,
+        endPoint: .bottom
+    )
 }
 
 // MARK: - Typography presets

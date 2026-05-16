@@ -840,7 +840,6 @@ struct AppNavigation: View {
             entries.append(.item(SidebarItem(id: .dictations, title: "Dictations", icon: "waveform.badge.mic", selectedIcon: "mic.circle.fill")))
         }
         #endif
-        entries.append(.item(SidebarItem(id: .notes, title: "Notes", icon: "note.text", selectedIcon: "doc.text.fill")))
         if settings.hasUnlockedAdvancedFeatures {
             entries.append(.item(SidebarItem(id: .drafts, title: "Compose", icon: "square.and.pencil", selectedIcon: "square.and.pencil.circle.fill")))
             entries.append(.item(SidebarItem(id: .contextRules, title: "Context", icon: "square.stack.3d.forward.dottedline", selectedIcon: "square.stack.3d.forward.dottedline.fill")))

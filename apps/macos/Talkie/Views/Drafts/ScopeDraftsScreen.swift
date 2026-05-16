@@ -230,6 +230,7 @@ struct ScopeDraftsScreen: View {
                 monitorHeader
                 monitorPipeline
             }
+            .clipShape(RoundedRectangle(cornerRadius: 6))
         }
         .frame(height: 78)
         .shadow(color: .black.opacity(0.16), radius: 18, y: 8)
@@ -263,8 +264,12 @@ struct ScopeDraftsScreen: View {
         .padding(.horizontal, 14)
         .padding(.top, 8)
         .padding(.bottom, 6)
+        .background(ScopePanel.stripTop)
         .overlay(alignment: .bottom) {
-            Rectangle().fill(ScopePanel.Edge.subtle).frame(height: 1)
+            Rectangle()
+                .fill(ScopePanel.Edge.subtle)
+                .frame(height: 1)
+                .padding(.horizontal, 14)
         }
     }
 

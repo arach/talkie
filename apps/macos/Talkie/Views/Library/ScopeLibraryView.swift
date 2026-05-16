@@ -106,6 +106,28 @@ struct ScopeLibraryView: View {
     /// Show the recording overlay (start a new memo).
     @State private var showingRecordingView = false
 
+    /// User-resizable width of the list column. Drags on the divider
+    /// between list + inspector persist this value so the chosen
+    /// proportion survives navigation and relaunch.
+    @AppStorage("scopeLibrary.listColumnWidth")
+    private var listColumnWidth: Double = 520
+
+    /// Active treatment for the filter ribbon. Pickable in DesignMode
+    /// (Debug → Components) so we can A/B different visual languages
+    /// without code edits. Default matches what shipped to master.
+    @AppStorage("scopeLibrary.filterRibbonVariant")
+    private var filterRibbonVariantRaw: String = LibraryFilterRibbonVariant.classic.rawValue
+    private var filterRibbonVariant: LibraryFilterRibbonVariant {
+        LibraryFilterRibbonVariant(rawValue: filterRibbonVariantRaw) ?? .classic
+    }
+
+    /// Active treatment for the empty inspector pane.
+    @AppStorage("scopeLibrary.inspectorEmptyVariant")
+    private var inspectorEmptyVariantRaw: String = LibraryInspectorEmptyVariant.simple.rawValue
+    private var inspectorEmptyVariant: LibraryInspectorEmptyVariant {
+        LibraryInspectorEmptyVariant(rawValue: inspectorEmptyVariantRaw) ?? .simple
+    }
+
     private var selectedRecording: TalkieObject? {
         guard selectedRecordingIDs.count == 1, let id = selectedRecordingIDs.first else { return nil }
         return viewModel.recordings.first { $0.id == id }
@@ -122,15 +144,14 @@ struct ScopeLibraryView: View {
                     listColumn
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    HStack(spacing: 0) {
-                        listColumn
-                            .frame(width: max(420, geo.size.width * 0.46))
-                        Rectangle()
-                            .fill(ScopeEdge.faint)
-                            .frame(width: 1)
-                        inspectorColumn
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
+                    LibrarySplitLayout(
+                        committedListWidth: $listColumnWidth,
+                        availableWidth: geo.size.width,
+                        minListWidth: 460,
+                        inspectorMinWidth: 280,
+                        list: { listColumn },
+                        inspector: { inspectorColumn }
+                    )
                 }
             }
 
@@ -190,9 +211,7 @@ struct ScopeLibraryView: View {
     private var listColumn: some View {
         VStack(spacing: 0) {
             heroHeader
-            statStrip
-            filterRibbon
-            searchBar
+            topComponent
             if viewModel.isLoading && viewModel.recordings.isEmpty {
                 loadingState
             } else if viewModel.recordings.isEmpty {
@@ -213,7 +232,8 @@ struct ScopeLibraryView: View {
 
     private var heroHeader: some View {
         ScopeTopBand(
-            title: filterEyebrow,
+            title: "Library",
+            breadcrumb: filterBreadcrumb,
             chrome: "\(viewModel.totalCount) ON FILE"
         ) {
             Button {
@@ -239,9 +259,12 @@ struct ScopeLibraryView: View {
         }
     }
 
-    private var filterEyebrow: String {
+    /// Secondary title shown after the "›" chevron embellishment when a
+    /// specific filter is active. On `.all` we return nil so just the
+    /// section name "Library" reads — no breadcrumb noise.
+    private var filterBreadcrumb: String? {
         switch typeFilter {
-        case .all:        return "Library"
+        case .all:        return nil
         case .memos:      return "Memos"
         case .dictations: return "Dictations"
         case .notes:      return "Notes"
@@ -249,130 +272,77 @@ struct ScopeLibraryView: View {
         }
     }
 
-    // MARK: - Stat strip (bichromatic dark bay)
+    // MARK: - Filter ribbon
+    //
+    // The library's primary selector + at-a-glance count. Each pill
+    // pairs the type label with its current count, so the user gets
+    // both the filter affordance and the metric in one component —
+    // no separate stat strip needed.
 
-    private var statStrip: some View {
-        let stats = computeStats()
-        return ZStack {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(ScopeCanvas.surface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(ScopeEdge.faint, lineWidth: 0.5)
-                )
-            GraticuleBackground(pitch: 18, color: ScopeTrace.faint, opacity: 0.35)
-                .mask(RoundedRectangle(cornerRadius: 8))
-                .allowsHitTesting(false)
-
-            HStack(spacing: 0) {
-                statTile(value: "\(stats.memos)", label: "MEMOS")
-                tileDivider
-                statTile(value: "\(stats.dictations)", label: "DICTATIONS")
-                tileDivider
-                statTile(value: "\(stats.notes)", label: "NOTES")
-                tileDivider
-                statTile(value: stats.wordsFormatted, label: "WORDS")
-            }
-            .padding(.horizontal, 14)
-        }
-        .frame(height: 56)
-        .padding(.horizontal, 32)
-        .padding(.top, 16)
-    }
-
-    private var tileDivider: some View {
-        Rectangle()
-            .fill(ScopeEdge.faint)
-            .frame(width: 1)
-            .padding(.vertical, 12)
-    }
-
-    private func statTile(value: String, label: String) -> some View {
-        HStack(spacing: 10) {
-            Text(value)
-                .font(ScopeFont.display(size: 20))
-                .foregroundStyle(ScopeAmber.solid)
-                .tracking(-0.4)
-                .shadow(color: ScopeAmber.glow, radius: 3)
-            Text(label)
-                .font(ScopeType.chrome)
-                .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(ScopeInk.subtle)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 10)
-    }
-
-    private struct LibraryStats {
+    private struct FilterCounts {
+        let all: Int
         let memos: Int
         let dictations: Int
+        let captures: Int
         let notes: Int
-        let words: Int
-        var wordsFormatted: String {
-            if words >= 1000 {
-                return String(format: "%.1fk", Double(words) / 1000)
+
+        func count(for option: RecordingTypeFilter) -> Int {
+            switch option {
+            case .all:        return all
+            case .memos:      return memos
+            case .dictations: return dictations
+            case .captures:   return captures
+            case .notes:      return notes
             }
-            return "\(words)"
         }
     }
 
-    private func computeStats() -> LibraryStats {
-        var memos = 0
-        var dictations = 0
-        var notes = 0
-        var words = 0
+    private func filterCounts() -> FilterCounts {
+        var memos = 0, dictations = 0, notes = 0, captures = 0
         for r in viewModel.recordings {
             switch r.type {
-            case .memo: memos += 1
+            case .memo:      memos += 1
             case .dictation: dictations += 1
-            case .note: notes += 1
+            case .note:      notes += 1
+            case .capture:   captures += 1
             default: break
             }
-            words += r.wordCount
         }
-        return LibraryStats(memos: memos, dictations: dictations, notes: notes, words: words)
+        return FilterCounts(
+            all: memos + dictations + notes + captures,
+            memos: memos,
+            dictations: dictations,
+            captures: captures,
+            notes: notes
+        )
     }
 
-    // MARK: - Filter ribbon
-
-    private var filterRibbon: some View {
-        HStack(spacing: 6) {
-            ForEach(RecordingTypeFilter.allCases, id: \.self) { option in
-                filterChip(option)
+    /// Dispatches the filter-ribbon presentation by the active variant
+    /// stored in `@AppStorage`. Each variant is responsible for its own
+    /// layout including the search field (some treatments fuse them
+    /// into one container, others keep them separate surfaces).
+    @ViewBuilder
+    private var topComponent: some View {
+        let counts = filterCounts()
+        Group {
+            switch filterRibbonVariant {
+            case .classic:        classicRibbon(counts: counts)
+            case .patchBay:       patchBayRibbon(counts: counts)
+            case .instrumentBay:  instrumentBayRibbon(counts: counts)
+            case .indexTabs:      indexTabsRibbon(counts: counts)
+            case .etchedSelector: etchedSelectorRibbon(counts: counts)
             }
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, 32)
-        .padding(.top, 16)
-        .padding(.bottom, 10)
+        .padding(.top, 18)
+        .padding(.bottom, 14)
+        .animation(.smooth(duration: 0.4), value: viewModel.recordings.count)
     }
 
-    private func filterChip(_ option: RecordingTypeFilter) -> some View {
-        let isSelected = typeFilter == option
-        return Button {
-            withAnimation(.easeOut(duration: 0.15)) { typeFilter = option }
-        } label: {
-            Text(option.label.uppercased())
-                .font(ScopeType.channel)
-                .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(isSelected ? ScopePanel.bg : ScopeInk.faint)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(isSelected ? ScopeAmber.solid : Color.clear)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 2)
-                        .stroke(isSelected ? ScopeAmber.solid : ScopeEdge.normal, lineWidth: 0.5)
-                )
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Search bar
-
-    private var searchBar: some View {
+    /// The text-field + magnifier + clear-button — shared by every
+    /// variant so search styling stays consistent regardless of which
+    /// filter treatment is in use.
+    private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 11, weight: .medium))
@@ -392,18 +362,403 @@ struct ScopeLibraryView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+    }
+
+    // MARK: Variant — Classic (the original bordered container)
+
+    private func classicRibbon(counts: FilterCounts) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                ForEach(RecordingTypeFilter.allCases, id: \.self) { option in
+                    classicSegment(option, count: counts.count(for: option))
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(4)
+
+            Rectangle()
+                .fill(ScopeEdge.faint)
+                .frame(height: 0.5)
+
+            searchField
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+        }
         .background(
-            RoundedRectangle(cornerRadius: 4)
+            RoundedRectangle(cornerRadius: 7)
                 .fill(ScopeCanvas.surface)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 4)
-                .stroke(ScopeEdge.normal, lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: 7)
+                .stroke(ScopeEdge.faint, lineWidth: 0.5)
         )
-        .padding(.horizontal, 32)
-        .padding(.bottom, 12)
+    }
+
+    private func classicSegment(_ option: RecordingTypeFilter, count: Int) -> some View {
+        let isSelected = typeFilter == option
+        return Button {
+            typeFilter = option
+        } label: {
+            HStack(spacing: 6) {
+                Text(option.label.uppercased())
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .tracking(0.7)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                Text("\(count)")
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .frame(minWidth: 16, alignment: .trailing)
+                    .opacity(isSelected ? 0.85 : 0.55)
+            }
+            .foregroundStyle(isSelected ? ScopeAmber.solid : ScopeInk.muted)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(
+                        isSelected
+                            ? AnyShapeStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color.hex("4A4744"),
+                                        Color.hex("36343A")
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            : AnyShapeStyle(Color.clear)
+                    )
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 4))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Variant — Patch Bay (brass LED dots, no container)
+
+    private func patchBayRibbon(counts: FilterCounts) -> some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 0) {
+                ForEach(RecordingTypeFilter.allCases, id: \.self) { option in
+                    patchBaySegment(option, count: counts.count(for: option))
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(ScopeEdge.faint)
+                    .frame(height: 0.5)
+            }
+
+            searchField
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(ScopeCanvas.surface)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(ScopeEdge.faint, lineWidth: 0.5)
+                )
+        }
+    }
+
+    private func patchBaySegment(_ option: RecordingTypeFilter, count: Int) -> some View {
+        let isSelected = typeFilter == option
+        return Button {
+            typeFilter = option
+        } label: {
+            VStack(spacing: 4) {
+                Circle()
+                    .fill(isSelected ? ScopeAmber.solid : Color.clear)
+                    .frame(width: 4, height: 4)
+                    .overlay(
+                        Circle()
+                            .stroke(
+                                isSelected ? Color.clear : ScopeAmber.solid.opacity(0.35),
+                                lineWidth: 0.5
+                            )
+                    )
+                    .shadow(color: isSelected ? ScopeAmber.glow : .clear, radius: 3)
+                HStack(spacing: 5) {
+                    Text(option.label.uppercased())
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .tracking(1.2)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                    Text("\(count)")
+                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .baselineOffset(4)
+                        .foregroundStyle(isSelected ? ScopeAmber.solid.opacity(0.7) : ScopeInk.subtle)
+                }
+                .foregroundStyle(isSelected ? ScopeAmber.solid : ScopeInk.faint)
+            }
+            .padding(.vertical, 8)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(isSelected ? ScopeAmber.solid : Color.clear)
+                    .frame(height: 1)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Variant — Instrument Bay (dark panel, phosphor active state)
+
+    private func instrumentBayRibbon(counts: FilterCounts) -> some View {
+        VStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(ScopePanel.bg)
+                GraticuleBackground(pitch: 18, color: ScopePanel.traceFaint, opacity: 0.4)
+                    .mask(RoundedRectangle(cornerRadius: 6))
+                HStack(spacing: 0) {
+                    ForEach(RecordingTypeFilter.allCases, id: \.self) { option in
+                        instrumentBaySegment(option, count: counts.count(for: option))
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 5)
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(ScopePanel.stripTop)
+                        .frame(height: 3)
+                        .clipShape(
+                            UnevenRoundedRectangle(
+                                topLeadingRadius: 6,
+                                bottomLeadingRadius: 0,
+                                bottomTrailingRadius: 0,
+                                topTrailingRadius: 6
+                            )
+                        )
+                }
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(ScopePanel.stripBottom)
+                        .frame(height: 3)
+                        .clipShape(
+                            UnevenRoundedRectangle(
+                                topLeadingRadius: 0,
+                                bottomLeadingRadius: 6,
+                                bottomTrailingRadius: 6,
+                                topTrailingRadius: 0
+                            )
+                        )
+                }
+            }
+
+            searchField
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(ScopeCanvas.surface)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(ScopeEdge.faint, lineWidth: 0.5)
+                )
+        }
+    }
+
+    private func instrumentBaySegment(_ option: RecordingTypeFilter, count: Int) -> some View {
+        let isSelected = typeFilter == option
+        return Button {
+            typeFilter = option
+        } label: {
+            HStack(spacing: 6) {
+                Text(option.label.uppercased())
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .tracking(1.6)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                Text("\(count)")
+                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(ScopePanel.bgDeep)
+                    )
+                    .foregroundStyle(
+                        isSelected
+                            ? ScopePanel.trace.opacity(0.85)
+                            : ScopePanel.inkSubtle
+                    )
+            }
+            .foregroundStyle(isSelected ? ScopePanel.trace : ScopePanel.inkFaint)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(isSelected ? ScopePanel.bgDeep : Color.clear)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 3)
+                            .stroke(
+                                isSelected ? ScopePanel.Edge.normal : Color.clear,
+                                lineWidth: 0.5
+                            )
+                    )
+                    .shadow(color: isSelected ? ScopeAmber.glow : .clear, radius: 4)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 3))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Variant — Index Tabs (card-catalog paper tabs)
+
+    private func indexTabsRibbon(counts: FilterCounts) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 4) {
+                ForEach(RecordingTypeFilter.allCases, id: \.self) { option in
+                    indexTabsSegment(option, count: counts.count(for: option))
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(.horizontal, 4)
+            .frame(height: 34, alignment: .bottom)
+
+            // Search row — visually fused with the active tab above
+            searchField
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(ScopeCanvas.canvas)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(ScopeEdge.faint, lineWidth: 0.5)
+                )
+                .clipShape(
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: 0,
+                        bottomLeadingRadius: 4,
+                        bottomTrailingRadius: 4,
+                        topTrailingRadius: 4
+                    )
+                )
+        }
+    }
+
+    private func indexTabsSegment(_ option: RecordingTypeFilter, count: Int) -> some View {
+        let isSelected = typeFilter == option
+        return Button {
+            typeFilter = option
+        } label: {
+            HStack(spacing: 5) {
+                Text(option.label.uppercased())
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .tracking(1.2)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                Text("(\(count))")
+                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .foregroundStyle(isSelected ? ScopeAmber.solid : ScopeInk.subtle)
+            }
+            .foregroundStyle(isSelected ? ScopeInk.primary : ScopeInk.faint)
+            .padding(.horizontal, 10)
+            .frame(maxHeight: .infinity)
+            .background(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 4,
+                    bottomLeadingRadius: 0,
+                    bottomTrailingRadius: 0,
+                    topTrailingRadius: 4
+                )
+                .fill(isSelected ? ScopeCanvas.canvas : ScopeCanvas.surface.opacity(0.7))
+            )
+            .overlay(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 4,
+                    bottomLeadingRadius: 0,
+                    bottomTrailingRadius: 0,
+                    topTrailingRadius: 4
+                )
+                .stroke(ScopeEdge.faint, lineWidth: 0.5)
+            )
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(isSelected ? ScopeAmber.solid : Color.clear)
+                    .frame(height: 2)
+            }
+            .padding(.top, isSelected ? 0 : 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Variant — Etched Selector (drafting-paper graduations)
+
+    private func etchedSelectorRibbon(counts: FilterCounts) -> some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 0) {
+                Rectangle()
+                    .fill(ScopeEdge.normal)
+                    .frame(width: 0.5, height: 10)
+                ForEach(RecordingTypeFilter.allCases, id: \.self) { option in
+                    etchedSelectorSegment(option, count: counts.count(for: option))
+                        .frame(maxWidth: .infinity)
+                    Rectangle()
+                        .fill(ScopeEdge.normal)
+                        .frame(width: 0.5, height: 10)
+                }
+            }
+            .padding(.vertical, 8)
+
+            searchField
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .overlay(alignment: .top) {
+                    Rectangle().fill(ScopeEdge.faint).frame(height: 0.5)
+                }
+                .overlay(alignment: .bottom) {
+                    Rectangle().fill(ScopeEdge.faint).frame(height: 0.5)
+                }
+        }
+    }
+
+    private func etchedSelectorSegment(_ option: RecordingTypeFilter, count: Int) -> some View {
+        let isSelected = typeFilter == option
+        return Button {
+            typeFilter = option
+        } label: {
+            VStack(spacing: 4) {
+                HStack(spacing: 5) {
+                    Text(option.label.uppercased())
+                        .font(.system(
+                            size: 11,
+                            weight: isSelected ? .bold : .medium,
+                            design: .monospaced
+                        ))
+                        .tracking(1.4)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                        .foregroundStyle(isSelected ? ScopeInk.primary : ScopeInk.muted)
+                    Text("\(count)")
+                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .foregroundStyle(ScopeInk.subtle)
+                }
+                Rectangle()
+                    .fill(isSelected ? ScopeAmber.solid : Color.clear)
+                    .frame(width: 32, height: 1.5)
+                    .shadow(color: isSelected ? ScopeAmber.glow : .clear, radius: 3)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Recordings list
@@ -742,17 +1097,25 @@ private struct ScopeLibraryRow: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                // Trailing: time-ago, plus tiny sparkline for memos with duration.
+                // Trailing: time-ago, plus a fixed-height trace slot. The
+                // slot stays reserved (Color.clear) on non-memo rows so the
+                // row height is identical across all filter types — the
+                // list doesn't visually jolt when toggling between Memos
+                // and Notes/Dictations.
                 VStack(alignment: .trailing, spacing: 4) {
                     Text(timeAgo)
                         .font(ScopeType.chrome)
                         .tracking(ScopeType.Tracking.wide)
                         .foregroundStyle(ScopeInk.faint)
-                    if recording.isMemo && recording.duration > 0 {
-                        TraceSparkline(seed: recording.id.uuidString.hashValue)
-                            .frame(width: 56, height: 10)
-                            .opacity(isHovered || isSelected ? 1.0 : 0.65)
+                    Group {
+                        if recording.isMemo && recording.duration > 0 {
+                            TraceSparkline(seed: recording.id.uuidString.hashValue)
+                                .opacity(isHovered || isSelected ? 1.0 : 0.65)
+                        } else {
+                            Color.clear
+                        }
                     }
+                    .frame(width: 56, height: 10)
                 }
                 .frame(width: 72, alignment: .trailing)
             }
@@ -823,6 +1186,150 @@ private struct TraceSparkline: View {
             z = (z ^ (z >> 27)) &* 0x94D049BB133111EB
             z = z ^ (z >> 31)
             return Double(z >> 11) / Double(UInt64(1) << 53)
+        }
+    }
+}
+
+// MARK: - Resizable split layout
+//
+// During an active drag the list keeps its committed width — the list,
+// LazyVStack rows, and inspector never relayout per drag tick. A ghost
+// indicator line floats at the drag position to preview where the
+// boundary will land; on release the committed width snaps to the
+// preview and the list redraws exactly once.
+//
+// Drag state lives in this dedicated subview so the parent
+// `ScopeLibraryView.body` (and its captures) doesn't re-evaluate on
+// every drag tick either — same isolation as the sidebar resize work.
+
+private struct LibrarySplitLayout<List: View, Inspector: View>: View {
+    @Binding var committedListWidth: Double
+    let availableWidth: CGFloat
+    let minListWidth: CGFloat
+    let inspectorMinWidth: CGFloat
+    @ViewBuilder let list: () -> List
+    @ViewBuilder let inspector: () -> Inspector
+
+    /// Cursor x-position during an active drag (measured from leading
+    /// edge of the split). `nil` when not dragging. The ghost indicator
+    /// reads this; the list/inspector frames intentionally do not.
+    @State private var dragX: CGFloat?
+    @State private var isHovering = false
+
+    private var committedWidth: CGFloat {
+        let maxList = max(minListWidth, availableWidth - inspectorMinWidth)
+        return min(maxList, max(minListWidth, CGFloat(committedListWidth)))
+    }
+
+    private var clampedDragX: CGFloat? {
+        guard let dragX else { return nil }
+        let maxList = max(minListWidth, availableWidth - inspectorMinWidth)
+        return min(maxList, max(minListWidth, dragX))
+    }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            HStack(spacing: 0) {
+                list()
+                    .frame(width: committedWidth)
+                divider
+                inspector()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+            if let ghostX = clampedDragX {
+                Rectangle()
+                    .fill(ScopeAmber.solid.opacity(0.55))
+                    .frame(width: 2)
+                    .offset(x: ghostX - 1)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+        }
+    }
+
+    private var divider: some View {
+        ZStack {
+            Color.clear
+            Rectangle()
+                .fill(isHovering || dragX != nil ? ScopeEdge.normal : ScopeEdge.faint)
+                .frame(width: 1)
+                .animation(.easeOut(duration: 0.12), value: isHovering)
+        }
+        .frame(width: 6)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovering = hovering
+            if hovering {
+                NSCursor.resizeLeftRight.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    dragX = committedWidth + value.translation.width
+                }
+                .onEnded { _ in
+                    if let final = clampedDragX {
+                        committedListWidth = Double(final)
+                    }
+                    dragX = nil
+                }
+        )
+    }
+}
+
+// MARK: - Library variants
+//
+// All variant treatments live in dedicated structs (below) so the
+// switch at each call site stays compact and individual variants can
+// be iterated on without disturbing the rest of the view. Variants
+// are selected at runtime via `@AppStorage`-backed enum values, with
+// the picker UI living in `DesignComponentsView` (DEBUG-only).
+
+enum LibraryFilterRibbonVariant: String, CaseIterable, Hashable {
+    /// Cream-surface bordered container with metallic-gray active fill
+    /// — the treatment that shipped to master.
+    case classic
+    /// Pinned brass LED dot above each label; no container.
+    case patchBay
+    /// Dark graphite strip with graticule grid; phosphor active state.
+    case instrumentBay
+    /// Card-catalog paper tabs that dock into the search row.
+    case indexTabs
+    /// Bare labels on cream with graduation ticks; amber underline.
+    case etchedSelector
+
+    var displayName: String {
+        switch self {
+        case .classic:        return "Classic"
+        case .patchBay:       return "Patch Bay"
+        case .instrumentBay:  return "Instrument Bay"
+        case .indexTabs:      return "Index Tabs"
+        case .etchedSelector: return "Etched Selector"
+        }
+    }
+}
+
+enum LibraryInspectorEmptyVariant: String, CaseIterable, Hashable {
+    /// Centered eyebrow text (`NO TRACK SELECTED`) — what shipped.
+    case simple
+    /// Mini Home-style stat panel with sparkline + top sources list.
+    case readout
+    /// Hairline wireframe of the inspector's filled state — a ghost
+    /// of where transcript / sparkline / metadata will land.
+    case cassette
+    /// Full-pane graticule with an idling amber oscilloscope trace.
+    case idleTrace
+
+    var displayName: String {
+        switch self {
+        case .simple:    return "Simple"
+        case .readout:   return "Library Readout"
+        case .cassette:  return "Cassette Carriage"
+        case .idleTrace: return "Idle Trace"
         }
     }
 }

@@ -366,6 +366,7 @@ private struct ScopeOverviewSection: View {
                 panelBody
                 panelFooter
             }
+            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .frame(height: 196)
         .shadow(color: .black.opacity(0.20), radius: 24, y: 14)
@@ -386,6 +387,7 @@ private struct ScopeOverviewSection: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+        .background(ScopePanel.stripTop)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(ScopePanel.Edge.faint)
@@ -458,6 +460,7 @@ private struct ScopeOverviewSection: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+        .background(ScopePanel.stripBottom)
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(ScopePanel.Edge.faint)
