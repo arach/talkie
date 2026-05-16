@@ -968,7 +968,19 @@ struct ScopeLibraryView: View {
         }
     }
 
+    @ViewBuilder
     private var inspectorEmpty: some View {
+        switch inspectorEmptyVariant {
+        case .simple:    inspectorEmptySimple
+        case .readout:   inspectorEmptyReadout
+        case .cassette:  inspectorEmptyCassette
+        case .idleTrace: inspectorEmptyIdleTrace
+        }
+    }
+
+    // MARK: Variant — Simple (the original centered eyebrow)
+
+    private var inspectorEmptySimple: some View {
         VStack(spacing: 10) {
             ZStack {
                 Circle()
@@ -985,6 +997,299 @@ struct ScopeLibraryView: View {
             Text("Pick a row to inspect its trace.")
                 .font(.system(size: 12))
                 .foregroundStyle(ScopeInk.subtle)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: Variant — Library Readout (mini Home-style instrument bay)
+
+    private var inspectorEmptyReadout: some View {
+        let stats = readoutStats()
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("· LIBRARY")
+                    .font(ScopeType.eyebrow)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeAmber.solid)
+                Spacer()
+                Text("\(viewModel.totalCount) ON FILE")
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.subtle)
+            }
+
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(ScopePanel.bg)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(ScopePanel.Edge.normal, lineWidth: 1)
+                    )
+                GraticuleBackground(pitch: 20, color: ScopePanel.traceFaint, opacity: 0.5)
+                    .mask(RoundedRectangle(cornerRadius: 8))
+
+                VStack(spacing: 0) {
+                    readoutHeader(stats: stats)
+                    readoutGrid(stats: stats)
+                    readoutFooter(stats: stats)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .frame(height: 220)
+            .shadow(color: .black.opacity(0.18), radius: 24, y: 14)
+
+            Spacer(minLength: 0)
+
+            Text("PICK A ROW TO INSPECT")
+                .font(ScopeType.eyebrow)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopeInk.subtle)
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 24)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func readoutHeader(stats: ReadoutStats) -> some View {
+        HStack(spacing: 8) {
+            PhosphorDot(color: ScopePanel.trace, size: 5)
+            Text("LIBRARY · IDLE")
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopePanel.inkFaint)
+            Spacer()
+            Text("LOCAL ONLY")
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopePanel.inkSubtle)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(ScopePanel.stripTop)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(ScopePanel.Edge.faint)
+                .frame(height: 1)
+                .padding(.horizontal, 14)
+        }
+    }
+
+    private func readoutGrid(stats: ReadoutStats) -> some View {
+        HStack(spacing: 0) {
+            readoutTile(value: "\(stats.total)", label: "TRACKS")
+            readoutDivider
+            readoutTile(value: "\(stats.thisWeek)", label: "THIS WEEK")
+            readoutDivider
+            readoutTile(value: stats.topChannel, label: "TOP CHANNEL")
+            readoutDivider
+            readoutTile(value: stats.avgDuration, label: "AVG LENGTH")
+        }
+        .frame(maxHeight: .infinity)
+        .padding(.horizontal, 14)
+    }
+
+    private var readoutDivider: some View {
+        Rectangle()
+            .fill(ScopePanel.Edge.faint)
+            .frame(width: 1)
+            .padding(.vertical, 18)
+    }
+
+    private func readoutTile(value: String, label: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(value)
+                .font(ScopeFont.display(size: 28))
+                .foregroundStyle(ScopePanel.trace)
+                .tracking(-0.4)
+                .shadow(color: ScopePanel.traceGlow, radius: 4)
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+            Text(label)
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopePanel.inkFaint)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+    }
+
+    private func readoutFooter(stats: ReadoutStats) -> some View {
+        HStack(spacing: 12) {
+            Text("· 30D · SIGNAL PATH · LOCAL")
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopePanel.inkFaint)
+            Spacer()
+            Text(Date().formatted(date: .omitted, time: .shortened).uppercased())
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopePanel.inkSubtle)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(ScopePanel.stripBottom)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(ScopePanel.Edge.faint)
+                .frame(height: 1)
+                .padding(.horizontal, 14)
+        }
+    }
+
+    private struct ReadoutStats {
+        let total: Int
+        let thisWeek: Int
+        let topChannel: String
+        let avgDuration: String
+    }
+
+    private func readoutStats() -> ReadoutStats {
+        let week = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        var thisWeek = 0
+        var totalDuration: Double = 0
+        var withDuration = 0
+        var channelCounts: [String: Int] = [:]
+        for r in viewModel.recordings {
+            if r.createdAt >= week { thisWeek += 1 }
+            if r.duration > 0 {
+                totalDuration += r.duration
+                withDuration += 1
+            }
+            let channel = r.appContext?.name ?? r.source.displayName
+            channelCounts[channel, default: 0] += 1
+        }
+        let top = channelCounts.max { $0.value < $1.value }?.key ?? "—"
+        let avg: String
+        if withDuration > 0 {
+            let avgSecs = totalDuration / Double(withDuration)
+            let mins = Int(avgSecs) / 60
+            let secs = Int(avgSecs) % 60
+            avg = mins > 0 ? "\(mins):\(String(format: "%02d", secs))" : "0:\(String(format: "%02d", secs))"
+        } else {
+            avg = "—"
+        }
+        return ReadoutStats(
+            total: viewModel.recordings.count,
+            thisWeek: thisWeek,
+            topChannel: top.uppercased(),
+            avgDuration: avg
+        )
+    }
+
+    // MARK: Variant — Cassette Carriage (hairline scaffold of the filled state)
+
+    private var inspectorEmptyCassette: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 8) {
+                PhosphorDot(color: ScopeAmber.solid.opacity(0.7), size: 5)
+                Text("AWAITING SELECT · CH —")
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.faint)
+                Spacer()
+                Text("—:—")
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.subtle)
+            }
+            .padding(.bottom, 6)
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(ScopeEdge.faint).frame(height: 0.5)
+            }
+
+            // Sparkline well — outlined slot where the trace would render
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(ScopeEdge.subtle, lineWidth: 0.5)
+                .frame(height: 56)
+
+            // Transcript ghost lines — varied widths suggest text flow
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach([0.92, 0.78, 0.85, 0.40], id: \.self) { width in
+                    Capsule()
+                        .fill(ScopeAmber.tintSubtle)
+                        .frame(height: 6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .scaleEffect(x: width, anchor: .leading)
+                }
+            }
+
+            // Metadata grid — 4 ghost label/value pairs
+            HStack(spacing: 16) {
+                ForEach(0..<4, id: \.self) { _ in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Capsule()
+                            .fill(ScopeEdge.subtle)
+                            .frame(width: 28, height: 4)
+                        Capsule()
+                            .fill(ScopeEdge.faint)
+                            .frame(width: 52, height: 8)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(28)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    // MARK: Variant — Idle Trace (oscilloscope baseline waiting for a trigger)
+
+    private var inspectorEmptyIdleTrace: some View {
+        ZStack {
+            GraticuleBackground(pitch: 24, color: ScopeTrace.faint, opacity: 0.55)
+                .allowsHitTesting(false)
+
+            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: false)) { ctx in
+                Canvas { context, size in
+                    let t = ctx.date.timeIntervalSinceReferenceDate
+                    let y = size.height / 2
+                    var path = Path()
+                    path.move(to: CGPoint(x: 0, y: y))
+                    let blipPhase = (t.truncatingRemainder(dividingBy: 4.0)) / 4.0
+                    let blipActive = blipPhase > 0.92
+                    let stride: CGFloat = 2
+                    var x: CGFloat = 0
+                    while x <= size.width {
+                        let phase = Double(x / size.width)
+                        var dy: CGFloat = 0
+                        if blipActive {
+                            let envelope = pow(sin(blipPhase * .pi * 12), 2)
+                            dy = CGFloat(sin(phase * 70 + t * 4) * 4 * envelope)
+                        }
+                        path.addLine(to: CGPoint(x: x, y: y + dy))
+                        x += stride
+                    }
+                    context.stroke(
+                        path,
+                        with: .color(ScopeAmber.solid.opacity(0.5)),
+                        lineWidth: 1
+                    )
+                }
+                .blur(radius: 0.4)
+            }
+
+            VStack {
+                HStack {
+                    Text("CH — · IDLE · 1.00 V/DIV")
+                        .font(ScopeType.chrome)
+                        .tracking(ScopeType.Tracking.wide)
+                        .foregroundStyle(ScopeInk.faint)
+                    Spacer()
+                }
+                Spacer()
+                HStack {
+                    Spacer()
+                    Text("NO TRIGGER")
+                        .font(ScopeType.chrome)
+                        .tracking(ScopeType.Tracking.wide)
+                        .foregroundStyle(ScopeInk.subtle)
+                }
+            }
+            .padding(20)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
