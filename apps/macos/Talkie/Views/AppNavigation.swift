@@ -121,6 +121,7 @@ struct AppNavigation: View {
     @AppStorage(SidebarStyleStorage.indicatorKey) private var indicatorStyleRaw = SidebarIndicatorStyle.default.rawValue
     @AppStorage(SidebarStyleStorage.iconKey) private var iconStyleRaw = SidebarIconStyle.default.rawValue
     @AppStorage(SidebarStyleStorage.motionKey) private var motionStyleRaw = SidebarMotionStyle.default.rawValue
+    @AppStorage(SidebarStyleStorage.effectKey) private var effectStyleRaw = SidebarEffectStyle.flush.rawValue
     private static let sidebarMinLabelWidth: Double = 100
     private static let sidebarMaxLabelWidth: Double = 220
     private static let sidebarResizeActivationDistance: CGFloat = 6
@@ -139,7 +140,8 @@ struct AppNavigation: View {
             surface: SidebarSurfaceStyle(rawValue: surfaceStyleRaw) ?? .default,
             indicator: SidebarIndicatorStyle(rawValue: indicatorStyleRaw) ?? .default,
             icon: SidebarIconStyle(rawValue: iconStyleRaw) ?? .default,
-            motion: SidebarMotionStyle(rawValue: motionStyleRaw) ?? .default
+            motion: SidebarMotionStyle(rawValue: motionStyleRaw) ?? .default,
+            effect: SidebarEffectStyle(rawValue: effectStyleRaw) ?? .flush
         )
     }
 
