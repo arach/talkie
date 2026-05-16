@@ -12,7 +12,16 @@ enum TabPresets {
         "ANTHROPIC_API_KEY": "${env:ANTHROPIC_API_KEY}",
     ]
 
-    static let bundled: [TabDefinition] = [claude, pi, talkieShell]
+    /// Tab presets are now created on demand from the starter picker —
+    /// the registry no longer seeds Claude/Pi/Shell as bare tabs on
+    /// first launch. The static templates below stay as the source of
+    /// truth that the picker clones from (preserving harness/model/cwd
+    /// defaults), but a fresh user starts with an empty tab list.
+    static let bundled: [TabDefinition] = []
+
+    /// Templates exposed to the picker. Each entry's id is treated as
+    /// a *family* name; clones get a unique id with a numeric suffix.
+    static let templates: [TabDefinition] = [claude, pi, talkieShell]
 
     static let claude = TabDefinition(
         id: "claude",

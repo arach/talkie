@@ -17,6 +17,10 @@ struct ConsoleScreen: View {
     @State private var showTabEditor = false
     @State private var editingTab: TabDefinition?
     @State private var didBootstrap = false
+    /// When true, the starter picker is shown regardless of the active
+    /// tab. Toggled by the `+` button in the tab strip — lets the user
+    /// pick a fresh harness for the next tab. Resets after the pick.
+    @State private var isPickingNewTab = false
     #if DEBUG
     @State private var debugShowLoader = false
     @State private var debugLoaderReplayToken = UUID()
@@ -129,7 +133,22 @@ struct ConsoleScreen: View {
 
     @ViewBuilder
     private var tabContent: some View {
-        if let tab = registry.activeTab {
+        if isScope && shouldShowScopeStarter {
+            // Starter shows whenever no session is currently running —
+            // covers empty registry, the `+` picker flag, and the
+            // "tab exists but not launched" case (which would otherwise
+            // fall into the un-themed ConsoleTabReadyView hero).
+            ScopeConsoleStarter(
+                registry: registry,
+                onLaunch: { template in
+                    createTabFromTemplate(template)
+                    isPickingNewTab = false
+                },
+                bezelChrome: .newSession(),
+                onNewTab: { isPickingNewTab = true },
+                inlineTabs: AnyView(scopeInlineTabs)
+            )
+        } else if let tab = registry.activeTab {
             let state = pool.state(for: tab.id)
 
             GeometryReader { geo in
@@ -142,7 +161,9 @@ struct ConsoleScreen: View {
                                 openSettings: { showSettings = true },
                                 quitSession: { pool.close(tabId: tab.id) },
                                 debugShowLoader: debugShowLoader,
-                                debugLoaderReplayToken: debugLoaderReplayToken
+                                debugLoaderReplayToken: debugLoaderReplayToken,
+                                newTab: isScope ? { isPickingNewTab = true } : nil,
+                                inlineTabs: isScope ? AnyView(scopeInlineTabs) : nil
                             )
                             #else
                             ConsoleTerminalSurface(
@@ -150,7 +171,9 @@ struct ConsoleScreen: View {
                                 openSettings: { showSettings = true },
                                 quitSession: { pool.close(tabId: tab.id) },
                                 debugShowLoader: false,
-                                debugLoaderReplayToken: UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+                                debugLoaderReplayToken: UUID(uuidString: "00000000-0000-0000-0000-000000000000")!,
+                                newTab: isScope ? { isPickingNewTab = true } : nil,
+                                inlineTabs: isScope ? AnyView(scopeInlineTabs) : nil
                             )
                             #endif
 
@@ -172,82 +195,141 @@ struct ConsoleScreen: View {
                             retry: { pool.launch(tab: tab, registry: registry) }
                         )
                     } else {
-                        if isScope {
-                            ScopeConsoleStarter(
-                                registry: registry,
-                                onLaunch: { presetTab in
-                                    registry.activeTabId = presetTab.id
-                                    pool.launch(tab: presetTab, registry: registry)
-                                },
-                                tabStrip: AnyView(scopeTabStrip),
-                                bezelChrome: .from(tab: tab)
-                            )
-                        } else {
-                            ConsoleTabReadyView(
-                                tab: tab,
-                                openSettings: { showSettings = true },
-                                launch: { launchIfNeeded(tab) }
-                            )
-                        }
+                        ConsoleTabReadyView(
+                            tab: tab,
+                            openSettings: { showSettings = true },
+                            launch: { launchIfNeeded(tab) }
+                        )
                     }
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
             }
             .id(tab.id)
-        } else if isScope {
-            ScopeConsoleZeroState(
-                onNewTab: { showTabEditor = true; editingTab = nil },
-                onSelectTab: { registry.activeTabId = $0 }
-            )
         } else {
             ConsoleEmptyState()
         }
+    }
+
+    /// Build a fresh tab from a harness template and launch it. Called
+    /// from the starter cards — replaces the old seeded-tab approach
+    /// (tabs are now created on demand, numbered sequentially).
+    private func createTabFromTemplate(_ template: TabDefinition) {
+        let nextNumber = registry.tabs.count + 1
+        let newId = "\(template.harness.rawValue)-\(Int(Date().timeIntervalSince1970))"
+        let newTab = TabDefinition(
+            id: newId,
+            label: "\(nextNumber)",
+            icon: template.icon,
+            order: (registry.tabs.map(\.order).max() ?? 0) + 10,
+            harness: template.harness,
+            model: template.model,
+            provider: template.provider,
+            systemPrompt: template.systemPrompt,
+            cwd: template.cwd,
+            launchArgs: template.launchArgs,
+            readOnly: template.readOnly,
+            useTmux: template.useTmux,
+            tmuxSessionName: template.tmuxSessionName,
+            env: template.env,
+            shell: template.shell,
+            sourceURL: nil
+        )
+        registry.create(newTab)
+        registry.activeTabId = newId
+        pool.launch(tab: newTab, registry: registry)
+    }
+
+    /// `+` action: clone the active tab's style (same harness/template)
+    /// with the next numeric label. Lets the user spin up "3x Claude"
+    /// fast.
+    private func cloneActiveTabStyle() {
+        guard let active = registry.activeTab else { return }
+        createTabFromTemplate(active)
     }
 
     private func launchIfNeeded(_ tab: TabDefinition) {
         pool.launch(tab: tab, registry: registry)
     }
 
-    // MARK: - Horizontal tab strip (Scope)
-
-    private var scopeTabStrip: some View {
-        HStack(spacing: 6) {
-            ForEach(registry.tabs) { tab in
-                scopeTabChip(tab)
-            }
-
-            Button(action: { editingTab = nil; showTabEditor = true }) {
-                Image(systemName: "plus")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(ScopeInk.muted)
-                    .frame(width: 22, height: 22)
-                    .background(
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(Color.clear)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 3)
-                            .stroke(ScopeEdge.normal, lineWidth: 0.5)
-                    )
-            }
-            .buttonStyle(.plain)
-            .help("New tab")
-
-            Spacer()
+    /// In Scope mode, the starter (cards + tab strip + `+` in title bar)
+    /// is the canonical "no session running" surface. It replaces the
+    /// older un-themed ConsoleTabReadyView hero for tabs that exist but
+    /// haven't been launched yet.
+    private var shouldShowScopeStarter: Bool {
+        guard isScope else { return false }
+        if isPickingNewTab { return true }
+        if registry.tabs.isEmpty { return true }
+        if let tab = registry.activeTab, pool.session(for: tab.id) == nil {
+            return true
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(ScopeCanvas.canvas)
+        return false
     }
 
-    private func scopeTabChip(_ tab: TabDefinition) -> some View {
+    // MARK: - Horizontal tab strip (Scope)
+
+    /// Inline tab chips rendered INSIDE the bezel title bar. The
+    /// title bar replaces the "CONSOLE / Title" path with this chip
+    /// row when tabs exist; an active tab's chip is highlighted, so
+    /// the chrome itself becomes the tab switcher (no separate row
+    /// of chips below the bar).
+    @ViewBuilder
+    private var scopeInlineTabs: some View {
+        if !registry.tabs.isEmpty {
+            HStack(spacing: 4) {
+                Text("/")
+                    .font(.geistMono(size: 11, weight: .regular))
+                    .foregroundStyle(Theme.current.foregroundMuted)
+                ForEach(Array(registry.tabs.enumerated()), id: \.element.id) { idx, tab in
+                    scopeInlineTabChip(tab, number: idx + 1)
+                }
+            }
+        }
+    }
+
+    private func scopeInlineTabChip(_ tab: TabDefinition, number: Int) -> some View {
         let isActive = tab.id == registry.activeTabId
-        return Button(action: { registry.activeTabId = tab.id }) {
+        return Button(action: {
+            registry.activeTabId = tab.id
+            isPickingNewTab = false
+            if pool.session(for: tab.id) == nil {
+                pool.launch(tab: tab, registry: registry)
+            }
+        }) {
+            Text("\(number)")
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .foregroundStyle(isActive ? ScopeInk.primary : ScopeInk.faint)
+                .frame(minWidth: 18, minHeight: 18)
+                .padding(.horizontal, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(isActive ? ScopeAmber.tint : Color.clear)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(isActive ? ScopeAmber.solid.opacity(0.55) : ScopeEdge.faint, lineWidth: 0.5)
+                )
+        }
+        .buttonStyle(.plain)
+        .help("Switch to tab \(number)")
+    }
+
+    private func scopeTabChip(_ tab: TabDefinition, number: Int) -> some View {
+        let isActive = tab.id == registry.activeTabId
+        return Button(action: {
+            registry.activeTabId = tab.id
+            isPickingNewTab = false
+            // Tap-to-launch: a chip whose session isn't running launches
+            // on tap so the user goes straight to the terminal instead
+            // of bouncing through a "ready" intermediate.
+            if pool.session(for: tab.id) == nil {
+                pool.launch(tab: tab, registry: registry)
+            }
+        }) {
             HStack(spacing: 6) {
                 Image(systemName: tab.symbolName)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(isActive ? ScopeAmber.solid : ScopeInk.faint)
-                Text(tab.label)
+                Text("\(number)")
                     .font(ScopeType.channel)
                     .tracking(ScopeType.Tracking.wide)
                     .foregroundStyle(isActive ? ScopeInk.primary : ScopeInk.muted)
@@ -326,20 +408,20 @@ private struct ScopeConsoleStarter: View {
     let onLaunch: (TabDefinition) -> Void
 
     private var presets: [(TabDefinition, String, String)] {
-        // Tuple: (preset tab, blurb, channel pin)
-        let map: [(id: String, blurb: String, ch: String)] = [
-            ("claude",       "Persistent Claude Code runtime with shared workspace + tools.", "CH-01"),
-            ("pi",           "Persistent Pi session with mounted workspace and prompt context.", "CH-02"),
-            ("talkie-shell", "Interactive zsh session in this Console workspace.", "CH-03"),
+        // Tuple: (template, blurb, channel pin). Pulls from
+        // TabPresets.templates rather than the registry — the registry
+        // no longer pre-seeds these, they live as static templates the
+        // picker clones on demand.
+        [
+            (TabPresets.claude,       "Persistent Claude Code runtime with shared workspace + tools.", "CH-01"),
+            (TabPresets.pi,           "Persistent Pi session with mounted workspace and prompt context.", "CH-02"),
+            (TabPresets.talkieShell,  "Interactive zsh session in this Console workspace.", "CH-03"),
         ]
-        return map.compactMap { entry in
-            guard let tab = registry.tab(for: entry.id) else { return nil }
-            return (tab, entry.blurb, entry.ch)
-        }
     }
 
-    let tabStrip: AnyView
     let bezelChrome: ConsoleBezelChrome
+    var onNewTab: (() -> Void)? = nil
+    var inlineTabs: AnyView? = nil
 
     var body: some View {
         ConsoleTerminalBezel(
@@ -354,12 +436,11 @@ private struct ScopeConsoleStarter: View {
                 trailing: nil
             ),
             openSettings: {},
-            quitSession: nil
+            quitSession: nil,
+            newTab: onNewTab,
+            inlineTabs: inlineTabs
         ) {
             VStack(spacing: 0) {
-                tabStrip
-                Rectangle().fill(ScopeEdge.faint).frame(height: 1)
-
                 VStack(spacing: 22) {
                     Spacer(minLength: 12)
 
@@ -2035,6 +2116,8 @@ private struct ConsoleTerminalSurface: View {
     let quitSession: () -> Void
     let debugShowLoader: Bool
     let debugLoaderReplayToken: UUID
+    var newTab: (() -> Void)? = nil
+    var inlineTabs: AnyView? = nil
     @Environment(SettingsManager.self) private var settingsManager
     @State private var terminalReady = false
     @State private var popoutManager = ConsolePopoutManager.shared
@@ -2063,7 +2146,9 @@ private struct ConsoleTerminalSurface: View {
                     session: session,
                     settingsManager: settingsManager
                 )
-            }
+            },
+            newTab: newTab,
+            inlineTabs: inlineTabs
         ) {
             if isPoppedOut {
                 ConsolePopoutPlaceholder(
@@ -2193,6 +2278,18 @@ private struct ConsoleBezelChrome {
             guideBadges: []
         )
     }
+
+    /// Generic chrome for the "no tab yet" / starter state — used when
+    /// the registry has zero tabs and the picker is on screen.
+    static func newSession() -> ConsoleBezelChrome {
+        ConsoleBezelChrome(
+            title: "New Session",
+            icon: .symbol("terminal"),
+            showsSparkles: false,
+            guideText: nil,
+            guideBadges: []
+        )
+    }
 }
 
 private struct ConsoleBezelFooter {
@@ -2211,6 +2308,8 @@ private struct ConsoleTerminalBezel<Content: View>: View {
     let openSettings: () -> Void
     let quitSession: (() -> Void)?
     var popout: (() -> Void)? = nil
+    var newTab: (() -> Void)? = nil
+    var inlineTabs: AnyView? = nil
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -2221,7 +2320,9 @@ private struct ConsoleTerminalBezel<Content: View>: View {
                 statusColor: statusColor,
                 openSettings: openSettings,
                 quitSession: quitSession,
-                popout: popout
+                popout: popout,
+                newTab: newTab,
+                inlineTabs: inlineTabs
             )
 
             Rectangle()
@@ -2469,25 +2570,48 @@ private struct ConsoleTerminalTitleBar: View {
     let openSettings: () -> Void
     let quitSession: (() -> Void)?
     var popout: (() -> Void)? = nil
+    /// Optional `+` action surfaced in the title bar chrome. Used by
+    /// Scope to expose a stable new-tab affordance — the tab strip
+    /// hides when empty, so the title-bar `+` is always reachable.
+    var newTab: (() -> Void)? = nil
+    /// Optional inline tab chips rendered after the CONSOLE label.
+    /// When provided, the chip strip *replaces* the "/Title" path so
+    /// the active tab is visible via its highlighted chip — the chrome
+    /// becomes the tab switcher.
+    var inlineTabs: AnyView? = nil
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             HStack(alignment: .center, spacing: 8) {
                 pathIcon
 
-                HStack(spacing: 5) {
-                    Text("CONSOLE")
-                        .font(.geistMono(size: 11, weight: .semibold))
-                        .foregroundStyle(Theme.current.foreground)
-                        .tracking(0.6)
+                Text("CONSOLE")
+                    .font(.geistMono(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.current.foreground)
+                    .tracking(0.6)
 
-                    Text("/")
-                        .font(.geistMono(size: 11, weight: .regular))
-                        .foregroundStyle(Theme.current.foregroundMuted)
+                if let inlineTabs {
+                    inlineTabs
+                } else {
+                    HStack(spacing: 5) {
+                        Text("/")
+                            .font(.geistMono(size: 11, weight: .regular))
+                            .foregroundStyle(Theme.current.foregroundMuted)
+                        Text(chrome.title)
+                            .font(.geistMono(size: 11, weight: .regular))
+                            .foregroundStyle(Theme.current.foregroundSecondary)
+                    }
+                }
 
-                    Text(chrome.title)
-                        .font(.geistMono(size: 11, weight: .regular))
-                        .foregroundStyle(Theme.current.foregroundSecondary)
+                // Stable `+` anchor — sits right after the chips so the
+                // new-tab affordance reads as part of the tab row.
+                if let newTab {
+                    ConsoleChromeButton(
+                        icon: "plus",
+                        label: "New tab",
+                        iconOnly: true,
+                        action: newTab
+                    )
                 }
 
                 if chrome.showsSparkles {
