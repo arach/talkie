@@ -253,66 +253,85 @@ struct TalkieApp: App {
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact(showsTitle: false))
         .commands {
-            CommandGroup(replacing: .newItem) {}
-
-            // Add sidebar toggle to View menu
-            CommandGroup(after: .sidebar) {
-                Button("Toggle Sidebar") {
-                    sidebarToggle?.toggle()
-                }
-                .keyboardShortcut("s", modifiers: [.command, .control])
-
-                Divider()
-
-                Button("Command Palette") {
-                    showCommandPalette.toggle()
-                }
-                .keyboardShortcut("k", modifiers: .command)  // Cmd+K (standard)
-
-                Button("Voice Command") {
-                    showVoiceCommand = true
-                }
-                .keyboardShortcut("v", modifiers: [.command, .shift])  // Cmd+Shift+V
-
-            }
-
-            // Replace default Settings menu item with inline navigation
-            CommandGroup(replacing: .appSettings) {
-                Button("Settings…") {
-                    NavigationState.shared.navigate(to: .settings)
-                }
-                .keyboardShortcut(",", modifiers: .command)
-            }
-
-            // Help menu additions
-            CommandGroup(after: .help) {
-                Button("Send Feedback…") {
-                    showReportSheet = true
-                }
-                .keyboardShortcut("f", modifiers: [.command, .shift])  // Cmd+Shift+F
-
-                Button("Keyboard Shortcuts") {
-                    showKeyboardHelp = true
-                }
-                .keyboardShortcut("/", modifiers: .shift)  // ? key
-
-                Button("Shortcut Hints") {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-                        settings.showInlineKeyboardHints.toggle()
-                    }
-                }
-                .keyboardShortcut("/", modifiers: [.command, .shift])
-
-                #if DEBUG
-                Divider()
-
-                Button("Settings Inspector…") {
-                    showSettingsInspector()
-                }
-                .keyboardShortcut("l", modifiers: [.command, .option])
-                #endif
-            }
+            TalkieCommands(
+                sidebarToggle: sidebarToggle,
+                showCommandPalette: $showCommandPalette,
+                showKeyboardHelp: $showKeyboardHelp,
+                showReportSheet: $showReportSheet,
+                showVoiceCommand: $showVoiceCommand,
+                settings: settings
+            )
         }
     }
 
+}
+
+private struct TalkieCommands: Commands {
+    let sidebarToggle: SidebarToggleAction?
+    let showCommandPalette: Binding<Bool>
+    let showKeyboardHelp: Binding<Bool>
+    let showReportSheet: Binding<Bool>
+    let showVoiceCommand: Binding<Bool>
+    let settings: SettingsManager
+
+    var body: some Commands {
+        CommandGroup(replacing: .newItem) {}
+
+        // Add sidebar toggle to View menu
+        CommandGroup(after: .sidebar) {
+            Button("Toggle Sidebar") {
+                sidebarToggle?.toggle()
+            }
+            .keyboardShortcut("s", modifiers: [.command, .control])
+
+            Divider()
+
+            Button("Command Palette") {
+                showCommandPalette.wrappedValue.toggle()
+            }
+            .keyboardShortcut("k", modifiers: .command)  // Cmd+K (standard)
+
+            Button("Voice Command") {
+                showVoiceCommand.wrappedValue = true
+            }
+            .keyboardShortcut("v", modifiers: [.command, .shift])  // Cmd+Shift+V
+        }
+
+        // Replace default Settings menu item with inline navigation
+        CommandGroup(replacing: .appSettings) {
+            Button("Settings…") {
+                NavigationState.shared.navigate(to: .settings)
+            }
+            .keyboardShortcut(",", modifiers: .command)
+        }
+
+        // Help menu additions
+        CommandGroup(after: .help) {
+            Button("Send Feedback…") {
+                showReportSheet.wrappedValue = true
+            }
+            .keyboardShortcut("f", modifiers: [.command, .shift])  // Cmd+Shift+F
+
+            Button("Keyboard Shortcuts") {
+                showKeyboardHelp.wrappedValue = true
+            }
+            .keyboardShortcut("/", modifiers: .shift)  // ? key
+
+            Button("Shortcut Hints") {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                    settings.showInlineKeyboardHints.toggle()
+                }
+            }
+            .keyboardShortcut("/", modifiers: [.command, .shift])
+
+            #if DEBUG
+            Divider()
+
+            Button("Settings Inspector…") {
+                showSettingsInspector()
+            }
+            .keyboardShortcut("l", modifiers: [.command, .option])
+            #endif
+        }
+    }
 }
