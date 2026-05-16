@@ -81,13 +81,6 @@ struct TalkieApp: App {
 
         StartupProfiler.shared.markEarly("app.init.end")
     }
-    // Command palette, keyboard help, report sheet, and voice command state
-    @State private var settings = SettingsManager.shared
-    @State private var showCommandPalette = false
-    @State private var showKeyboardHelp = false
-    @State private var showReportSheet = false
-    @State private var showVoiceCommand = false
-
     var body: some Scene {
         // Log time to first body access (once)
         if !StartupTimer.bodyAccessed {
@@ -96,107 +89,7 @@ struct TalkieApp: App {
         }
 
         return WindowGroup(id: "main") {
-            // Show UI immediately - GRDB is source of truth
-            // CoreData + CloudKit sync layer initializes in background
-            AppNavigation()
-                .environment(SettingsManager.shared)
-                .environment(EngineClient.shared)
-                .environment(AgentSettings.shared)
-                .environment(CloudKitSyncManager.shared)
-                .environment(SystemEventManager.shared)
-                .environment(RelativeTimeTicker.shared)
-                .frame(minWidth: 900, minHeight: 600)
-                .tint(SettingsManager.shared.accentColor.color)
-                .refreshThemeOnAppearanceChange()
-                // NOTE: URL handling is done via Apple Events in AppDelegate.handleGetURLEvent
-                // Do NOT add .onOpenURL here - it causes SwiftUI to spawn new windows
-                // DB init now starts in TalkieApp.init() for faster startup
-                .sheet(isPresented: Binding(
-                    get: { OnboardingManager.shared.shouldShowOnboarding },
-                    set: { OnboardingManager.shared.shouldShowOnboarding = $0 }
-                )) {
-                    OnboardingView()
-                        .environment(SettingsManager.shared)
-                        .environment(AgentSettings.shared)
-                }
-                // Pro Tools onboarding — triggered from Settings → Mode
-                // or via talkie://onboarding/pro (CLI: `talkie pro`).
-                .sheet(isPresented: Binding(
-                    get: { ProOnboardingManager.shared.shouldShowProOnboarding },
-                    set: { ProOnboardingManager.shared.shouldShowProOnboarding = $0 }
-                )) {
-                    ProOnboardingView()
-                        .environment(SettingsManager.shared)
-                }
-                // Keyboard shortcuts help
-                .sheet(isPresented: $showKeyboardHelp) {
-                    KeyboardShortcutsHelpView()
-                        .onAppear { SettingsManager.shared.isKeyboardHelpPresented = true }
-                        .onDisappear { SettingsManager.shared.isKeyboardHelpPresented = false }
-                }
-                // Command palette overlay
-                .overlay {
-                    CommandPaletteOverlay(isPresented: $showCommandPalette)
-                }
-                // Report sheet overlay
-                .overlay {
-                    ReportSheetOverlay(isPresented: $showReportSheet)
-                }
-                // Extension toasts (milestones, celebrations)
-                .overlay {
-                    if settings.extensionsFrameworkEnabled {
-                        ExtensionToastOverlay()
-                    }
-                }
-                // Voice command overlay
-                .overlay {
-                    if showVoiceCommand {
-                        VoiceCommandOverlay()
-                    }
-                }
-                // Non-modal shortcut hints (⌘⇧? / ⌃⇧?)
-                .overlay(alignment: .topTrailing) {
-                    if settings.showInlineKeyboardHints {
-                        KeyboardHintOverlay {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-                                settings.showInlineKeyboardHints = false
-                            }
-                        }
-                        .padding(Spacing.lg)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
-                    }
-                }
-                .animation(.spring(response: 0.35, dampingFraction: 0.82), value: settings.showInlineKeyboardHints)
-                // Listen for command palette trigger from anywhere
-                .onReceive(NotificationCenter.default.publisher(for: .showCommandPalette)) { _ in
-                    showCommandPalette = true
-                }
-                .onReceive(NotificationCenter.default.publisher(for: .toggleCommandPalette)) { _ in
-                    showCommandPalette.toggle()
-                }
-                // Sync voice command state with SettingsManager
-                .onChange(of: SettingsManager.shared.isVoiceCommandPresented) { _, newValue in
-                    showVoiceCommand = newValue
-                }
-                .onChange(of: showVoiceCommand) { _, newValue in
-                    SettingsManager.shared.isVoiceCommandPresented = newValue
-                }
-                .onReceive(NotificationCenter.default.publisher(for: .showKeyboardHelp)) { _ in
-                    showKeyboardHelp = true
-                }
-                .onReceive(NotificationCenter.default.publisher(for: .showVoiceCommand)) { _ in
-                    showVoiceCommand = true
-                }
-                .onReceive(NotificationCenter.default.publisher(for: .toggleKeyboardHintOverlay)) { _ in
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-                        settings.showInlineKeyboardHints.toggle()
-                    }
-                }
-                .onReceive(NotificationCenter.default.publisher(for: .showReportSheet)) { _ in
-                    showReportSheet = true
-                }
-                // NOTE: Interstitial cold launch handling moved to main.swift
-                // In full mode (this file), we always show the main window normally
+            TalkieRootWindow()
         }
         .handlesExternalEvents(matching: [])  // IMPORTANT: Empty set = never create new window for URLs
         .windowStyle(.hiddenTitleBar)
@@ -206,6 +99,119 @@ struct TalkieApp: App {
         }
     }
 
+}
+
+private struct TalkieRootWindow: View {
+    // Command palette, keyboard help, report sheet, and voice command state
+    @State private var settings = SettingsManager.shared
+    @State private var showCommandPalette = false
+    @State private var showKeyboardHelp = false
+    @State private var showReportSheet = false
+    @State private var showVoiceCommand = SettingsManager.shared.isVoiceCommandPresented
+
+    var body: some View {
+        // Show UI immediately - GRDB is source of truth
+        // CoreData + CloudKit sync layer initializes in background
+        AppNavigation()
+            .environment(SettingsManager.shared)
+            .environment(EngineClient.shared)
+            .environment(AgentSettings.shared)
+            .environment(CloudKitSyncManager.shared)
+            .environment(SystemEventManager.shared)
+            .environment(RelativeTimeTicker.shared)
+            .frame(minWidth: 900, minHeight: 600)
+            .tint(SettingsManager.shared.accentColor.color)
+            .refreshThemeOnAppearanceChange()
+            // NOTE: URL handling is done via Apple Events in AppDelegate.handleGetURLEvent
+            // Do NOT add .onOpenURL here - it causes SwiftUI to spawn new windows
+            // DB init now starts in TalkieApp.init() for faster startup
+            .sheet(isPresented: Binding(
+                get: { OnboardingManager.shared.shouldShowOnboarding },
+                set: { OnboardingManager.shared.shouldShowOnboarding = $0 }
+            )) {
+                OnboardingView()
+                    .environment(SettingsManager.shared)
+                    .environment(AgentSettings.shared)
+            }
+            // Pro Tools onboarding — triggered from Settings → Mode
+            // or via talkie://onboarding/pro (CLI: `talkie pro`).
+            .sheet(isPresented: Binding(
+                get: { ProOnboardingManager.shared.shouldShowProOnboarding },
+                set: { ProOnboardingManager.shared.shouldShowProOnboarding = $0 }
+            )) {
+                ProOnboardingView()
+                    .environment(SettingsManager.shared)
+            }
+            // Keyboard shortcuts help
+            .sheet(isPresented: $showKeyboardHelp) {
+                KeyboardShortcutsHelpView()
+                    .onAppear { SettingsManager.shared.isKeyboardHelpPresented = true }
+                    .onDisappear { SettingsManager.shared.isKeyboardHelpPresented = false }
+            }
+            // Command palette overlay
+            .overlay {
+                CommandPaletteOverlay(isPresented: $showCommandPalette)
+            }
+            // Report sheet overlay
+            .overlay {
+                ReportSheetOverlay(isPresented: $showReportSheet)
+            }
+            // Extension toasts (milestones, celebrations)
+            .overlay {
+                if settings.extensionsFrameworkEnabled {
+                    ExtensionToastOverlay()
+                }
+            }
+            // Voice command overlay
+            .overlay {
+                if showVoiceCommand {
+                    VoiceCommandOverlay()
+                }
+            }
+            // Non-modal shortcut hints (⌘⇧? / ⌃⇧?)
+            .overlay(alignment: .topTrailing) {
+                if settings.showInlineKeyboardHints {
+                    KeyboardHintOverlay {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                            settings.showInlineKeyboardHints = false
+                        }
+                    }
+                    .padding(Spacing.lg)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(response: 0.35, dampingFraction: 0.82), value: settings.showInlineKeyboardHints)
+            // Listen for command palette trigger from anywhere
+            .onReceive(NotificationCenter.default.publisher(for: .showCommandPalette)) { _ in
+                showCommandPalette = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .toggleCommandPalette)) { _ in
+                showCommandPalette.toggle()
+            }
+            // Sync voice command state with SettingsManager
+            .onChange(of: SettingsManager.shared.isVoiceCommandPresented) { _, newValue in
+                showVoiceCommand = newValue
+            }
+            .onChange(of: showVoiceCommand) { _, newValue in
+                SettingsManager.shared.isVoiceCommandPresented = newValue
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .showKeyboardHelp)) { _ in
+                showKeyboardHelp = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .showVoiceCommand)) { _ in
+                showVoiceCommand = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .toggleKeyboardHintOverlay)) { _ in
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                    settings.showInlineKeyboardHints.toggle()
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .showReportSheet)) { _ in
+                showReportSheet = true
+            }
+            // NOTE: Interstitial cold launch handling moved to main.swift
+            // In full mode (this file), we always show the main window normally
+    }
 }
 
 private struct TalkieCommands: Commands {
