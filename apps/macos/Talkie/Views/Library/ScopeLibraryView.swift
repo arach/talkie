@@ -329,7 +329,9 @@ struct ScopeLibraryView: View {
         let counts = filterCounts()
         Group {
             switch filterRibbonVariant {
-            case .classic:        classicRibbon(counts: counts)
+            case .classic:        classicRibbon(counts: counts, palette: .warm)
+            case .classicSilver:  classicRibbon(counts: counts, palette: .silver)
+            case .classicSlate:   classicRibbon(counts: counts, palette: .slate)
             case .patchBay:       patchBayRibbon(counts: counts)
             case .instrumentBay:  instrumentBayRibbon(counts: counts)
             case .indexTabs:      indexTabsRibbon(counts: counts)
@@ -340,6 +342,57 @@ struct ScopeLibraryView: View {
         .padding(.top, 18)
         .padding(.bottom, 14)
         .animation(.smooth(duration: 0.4), value: viewModel.recordings.count)
+    }
+
+    /// Palette for the Classic ribbon family. `warm` matches the
+    /// original cream + brown active state; `silver` and `slate` use
+    /// cool/metallic surfaces to step away from the warm direction.
+    private struct ClassicPalette {
+        let containerFill: Color
+        let containerStroke: Color
+        let activeFillTop: Color
+        let activeFillBottom: Color
+        let activeText: Color
+        let inactiveText: Color
+        let countOpacityActive: Double
+        let countOpacityInactive: Double
+
+        static let warm = ClassicPalette(
+            containerFill: ScopeCanvas.surface,
+            containerStroke: ScopeEdge.faint,
+            activeFillTop: Color.hex("4A4744"),
+            activeFillBottom: Color.hex("36343A"),
+            activeText: ScopeAmber.solid,
+            inactiveText: ScopeInk.muted,
+            countOpacityActive: 0.85,
+            countOpacityInactive: 0.55
+        )
+
+        static let silver = ClassicPalette(
+            // Cool pale surface — barely-warm neutral, drops the cream.
+            containerFill: Color.hex("EFEFF1"),
+            containerStroke: Color.hex("D6D6DA"),
+            // Brushed steel active fill: light silver fading down.
+            activeFillTop: Color.hex("8E9098"),
+            activeFillBottom: Color.hex("5D6068"),
+            activeText: Color.hex("F2F2F4"),
+            inactiveText: Color.hex("6E6E73"),
+            countOpacityActive: 0.7,
+            countOpacityInactive: 0.55
+        )
+
+        static let slate = ClassicPalette(
+            // Slightly deeper cool gray — reads as architectural slate.
+            containerFill: Color.hex("DEDEE2"),
+            containerStroke: Color.hex("C3C3C8"),
+            // Deep steel active fill: charcoal with a hint of cool light.
+            activeFillTop: Color.hex("55585F"),
+            activeFillBottom: Color.hex("3A3C42"),
+            activeText: Color.hex("E8E8EC"),
+            inactiveText: Color.hex("5A5C62"),
+            countOpacityActive: 0.7,
+            countOpacityInactive: 0.6
+        )
     }
 
     /// The text-field + magnifier + clear-button — shared by every
@@ -367,20 +420,20 @@ struct ScopeLibraryView: View {
         }
     }
 
-    // MARK: Variant — Classic (the original bordered container)
+    // MARK: Variant — Classic family (cream / silver / slate palettes)
 
-    private func classicRibbon(counts: FilterCounts) -> some View {
+    private func classicRibbon(counts: FilterCounts, palette: ClassicPalette) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 ForEach(RecordingTypeFilter.allCases, id: \.self) { option in
-                    classicSegment(option, count: counts.count(for: option))
+                    classicSegment(option, count: counts.count(for: option), palette: palette)
                         .frame(maxWidth: .infinity)
                 }
             }
             .padding(4)
 
             Rectangle()
-                .fill(ScopeEdge.faint)
+                .fill(palette.containerStroke.opacity(0.6))
                 .frame(height: 0.5)
 
             searchField
@@ -389,15 +442,19 @@ struct ScopeLibraryView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 7)
-                .fill(ScopeCanvas.surface)
+                .fill(palette.containerFill)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 7)
-                .stroke(ScopeEdge.faint, lineWidth: 0.5)
+                .stroke(palette.containerStroke, lineWidth: 0.5)
         )
     }
 
-    private func classicSegment(_ option: RecordingTypeFilter, count: Int) -> some View {
+    private func classicSegment(
+        _ option: RecordingTypeFilter,
+        count: Int,
+        palette: ClassicPalette
+    ) -> some View {
         let isSelected = typeFilter == option
         return Button {
             typeFilter = option
@@ -413,9 +470,9 @@ struct ScopeLibraryView: View {
                     .monospacedDigit()
                     .contentTransition(.numericText())
                     .frame(minWidth: 16, alignment: .trailing)
-                    .opacity(isSelected ? 0.85 : 0.55)
+                    .opacity(isSelected ? palette.countOpacityActive : palette.countOpacityInactive)
             }
-            .foregroundStyle(isSelected ? ScopeAmber.solid : ScopeInk.muted)
+            .foregroundStyle(isSelected ? palette.activeText : palette.inactiveText)
             .padding(.horizontal, 8)
             .padding(.vertical, 7)
             .background(
@@ -424,10 +481,7 @@ struct ScopeLibraryView: View {
                         isSelected
                             ? AnyShapeStyle(
                                 LinearGradient(
-                                    colors: [
-                                        Color.hex("4A4744"),
-                                        Color.hex("36343A")
-                                    ],
+                                    colors: [palette.activeFillTop, palette.activeFillBottom],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
@@ -619,40 +673,71 @@ struct ScopeLibraryView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: Variant — Index Tabs (card-catalog paper tabs)
+    // MARK: Variant — Index Tabs (card-catalog tabs fused to search)
+    //
+    // Tabs sit directly on top of the search row with zero gap between
+    // them. The active tab "owns" the search row visually: its bottom
+    // border drops out so the two surfaces read as one drawer. Inactive
+    // tabs sit on a recessed lower plane (a 1pt baseline runs across
+    // the row of inactive tabs). Inter-tab gap is hairline only, not
+    // padding — keeps the row tight and unified.
 
     private func indexTabsRibbon(counts: FilterCounts) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 4) {
-                ForEach(RecordingTypeFilter.allCases, id: \.self) { option in
-                    indexTabsSegment(option, count: counts.count(for: option))
-                        .frame(maxWidth: .infinity)
+        let surface = Color.hex("EFEFF1")
+        let recessed = Color.hex("E0E0E4")
+        let edge = Color.hex("CDCDD2")
+
+        return VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                ForEach(Array(RecordingTypeFilter.allCases.enumerated()), id: \.offset) { idx, option in
+                    indexTabsSegment(
+                        option,
+                        count: counts.count(for: option),
+                        surface: surface,
+                        recessed: recessed,
+                        edge: edge
+                    )
+                    .frame(maxWidth: .infinity)
+                    if idx < RecordingTypeFilter.allCases.count - 1 {
+                        Rectangle()
+                            .fill(edge.opacity(0.6))
+                            .frame(width: 0.5, height: 18)
+                            .frame(maxHeight: .infinity, alignment: .bottom)
+                            .padding(.bottom, 6)
+                    }
                 }
             }
-            .padding(.horizontal, 4)
-            .frame(height: 34, alignment: .bottom)
+            .frame(height: 30, alignment: .bottom)
+            .overlay(alignment: .bottom) {
+                // Baseline that runs UNDER inactive tabs but breaks for
+                // the active one — implemented as a full-width hairline
+                // that the active tab's surface visually overrides.
+                Rectangle().fill(edge).frame(height: 0.5)
+            }
 
-            // Search row — visually fused with the active tab above
+            // Search row — surface continues from the active tab
             searchField
                 .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(ScopeCanvas.canvas)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(ScopeEdge.faint, lineWidth: 0.5)
-                )
-                .clipShape(
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: 0,
-                        bottomLeadingRadius: 4,
-                        bottomTrailingRadius: 4,
-                        topTrailingRadius: 4
-                    )
-                )
+                .padding(.vertical, 7)
+                .background(surface)
         }
+        .background(
+            RoundedRectangle(cornerRadius: 5)
+                .fill(surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 5)
+                .stroke(edge, lineWidth: 0.5)
+        )
     }
 
-    private func indexTabsSegment(_ option: RecordingTypeFilter, count: Int) -> some View {
+    private func indexTabsSegment(
+        _ option: RecordingTypeFilter,
+        count: Int,
+        surface: Color,
+        recessed: Color,
+        edge: Color
+    ) -> some View {
         let isSelected = typeFilter == option
         return Button {
             typeFilter = option
@@ -660,42 +745,29 @@ struct ScopeLibraryView: View {
             HStack(spacing: 5) {
                 Text(option.label.uppercased())
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .tracking(1.2)
+                    .tracking(1.0)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
-                Text("(\(count))")
+                Text("\(count)")
                     .font(.system(size: 9, weight: .regular, design: .monospaced))
                     .monospacedDigit()
                     .contentTransition(.numericText())
-                    .foregroundStyle(isSelected ? ScopeAmber.solid : ScopeInk.subtle)
+                    .foregroundStyle(
+                        isSelected
+                            ? ScopeAmber.solid.opacity(0.8)
+                            : Color.hex("8A8A90")
+                    )
             }
-            .foregroundStyle(isSelected ? ScopeInk.primary : ScopeInk.faint)
-            .padding(.horizontal, 10)
-            .frame(maxHeight: .infinity)
-            .background(
-                UnevenRoundedRectangle(
-                    topLeadingRadius: 4,
-                    bottomLeadingRadius: 0,
-                    bottomTrailingRadius: 0,
-                    topTrailingRadius: 4
-                )
-                .fill(isSelected ? ScopeCanvas.canvas : ScopeCanvas.surface.opacity(0.7))
-            )
-            .overlay(
-                UnevenRoundedRectangle(
-                    topLeadingRadius: 4,
-                    bottomLeadingRadius: 0,
-                    bottomTrailingRadius: 0,
-                    topTrailingRadius: 4
-                )
-                .stroke(ScopeEdge.faint, lineWidth: 0.5)
-            )
+            .foregroundStyle(isSelected ? Color.hex("1A1612") : Color.hex("6E6E73"))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(isSelected ? surface : recessed)
             .overlay(alignment: .top) {
+                // Top amber edge only on active tab.
                 Rectangle()
                     .fill(isSelected ? ScopeAmber.solid : Color.clear)
-                    .frame(height: 2)
+                    .frame(height: 1.5)
             }
-            .padding(.top, isSelected ? 0 : 4)
+            .padding(.top, isSelected ? 0 : 4) // inactive tabs sit lower
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -1030,66 +1102,52 @@ struct ScopeLibraryView: View {
     }
 
     // MARK: - Inspector column
+    //
+    // For the `.libraryReadout` variant the readout panel sits as a
+    // permanent header above whatever the rest of the column shows —
+    // selection detail, multi-select hint, or empty hint. The panel
+    // doesn't reflow or move when selection changes; it's a stable
+    // shelf with the row detail rendered below it.
 
     private var inspectorColumn: some View {
-        Group {
-            if selectedRecordingIDs.count > 1 {
-                MultiSelectInspector(
-                    count: selectedRecordingIDs.count,
-                    itemName: "recordings",
-                    onClearSelection: { selectedRecordingIDs.removeAll() }
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let recording = selectedRecording {
-                TalkieView(recording: recording, onDelete: {
-                    Task { await viewModel.deleteRecording(recording) }
-                    selectedRecordingIDs.remove(recording.id)
-                })
-                .id(recording.id)
-            } else {
-                inspectorEmpty
+        VStack(spacing: 0) {
+            if inspectorEmptyVariant == .readout {
+                libraryReadoutPanel
+                    .padding(.horizontal, 24)
+                    .padding(.top, 24)
+                    .padding(.bottom, 18)
+                Rectangle().fill(ScopeEdge.faint).frame(height: 0.5)
             }
-        }
-    }
 
-    @ViewBuilder
-    private var inspectorEmpty: some View {
-        switch inspectorEmptyVariant {
-        case .simple:    inspectorEmptySimple
-        case .readout:   inspectorEmptyReadout
-        case .cassette:  inspectorEmptyCassette
-        case .idleTrace: inspectorEmptyIdleTrace
-        }
-    }
-
-    // MARK: Variant — Simple (the original centered eyebrow)
-
-    private var inspectorEmptySimple: some View {
-        VStack(spacing: 10) {
-            ZStack {
-                Circle()
-                    .stroke(ScopeEdge.normal, lineWidth: 0.5)
-                    .frame(width: 40, height: 40)
-                Image(systemName: "rectangle.stack")
-                    .font(.system(size: 14))
-                    .foregroundStyle(ScopeInk.subtle)
+            Group {
+                if selectedRecordingIDs.count > 1 {
+                    MultiSelectInspector(
+                        count: selectedRecordingIDs.count,
+                        itemName: "recordings",
+                        onClearSelection: { selectedRecordingIDs.removeAll() }
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let recording = selectedRecording {
+                    TalkieView(recording: recording, onDelete: {
+                        Task { await viewModel.deleteRecording(recording) }
+                        selectedRecordingIDs.remove(recording.id)
+                    })
+                    .id(recording.id)
+                } else {
+                    inspectorEmpty
+                }
             }
-            Text("NO TRACK SELECTED")
-                .font(ScopeType.eyebrow)
-                .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(ScopeInk.faint)
-            Text("Pick a row to inspect its trace.")
-                .font(.system(size: 12))
-                .foregroundStyle(ScopeInk.subtle)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: Variant — Library Readout (mini Home-style instrument bay)
-
-    private var inspectorEmptyReadout: some View {
+    /// The readout panel extracted so it can render both as the empty
+    /// state of the `.libraryReadout` variant AND as the permanent
+    /// header above selection-driven detail. Same dark graphite bay
+    /// with stripTop header, 4-tile grid, stripBottom footer.
+    private var libraryReadoutPanel: some View {
         let stats = readoutStats()
-        return VStack(alignment: .leading, spacing: 14) {
+        return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 Text("· LIBRARY")
                     .font(ScopeType.eyebrow)
@@ -1119,21 +1177,55 @@ struct ScopeLibraryView: View {
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
-            .frame(height: 220)
-            .shadow(color: .black.opacity(0.18), radius: 24, y: 14)
+            .frame(height: 200)
+            .shadow(color: .black.opacity(0.18), radius: 22, y: 12)
+        }
+    }
 
-            Spacer(minLength: 0)
+    @ViewBuilder
+    private var inspectorEmpty: some View {
+        switch inspectorEmptyVariant {
+        case .simple, .readout:
+            // For `.readout` the panel renders permanently above this
+            // body in `inspectorColumn`. The empty body itself is the
+            // same minimal "NO TRACK SELECTED" hint as `.simple`.
+            inspectorEmptySimple
+        case .cassette:
+            inspectorEmptyCassette
+        case .idleTrace:
+            inspectorEmptyIdleTrace
+        }
+    }
 
-            Text("PICK A ROW TO INSPECT")
+    // MARK: Variant — Simple (the original centered eyebrow)
+
+    private var inspectorEmptySimple: some View {
+        VStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .stroke(ScopeEdge.normal, lineWidth: 0.5)
+                    .frame(width: 40, height: 40)
+                Image(systemName: "rectangle.stack")
+                    .font(.system(size: 14))
+                    .foregroundStyle(ScopeInk.subtle)
+            }
+            Text("NO TRACK SELECTED")
                 .font(ScopeType.eyebrow)
                 .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopeInk.faint)
+            Text("Pick a row to inspect its trace.")
+                .font(.system(size: 12))
                 .foregroundStyle(ScopeInk.subtle)
-                .frame(maxWidth: .infinity)
-                .padding(.bottom, 24)
         }
-        .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+
+    // MARK: Variant — Library Readout (mini instrument bay, permanent header)
+    //
+    // The readout view is `libraryReadoutPanel` defined alongside
+    // `inspectorColumn` above — when the variant is `.readout` the
+    // panel renders permanently at the top of the inspector and the
+    // empty-state body below it is the same simple hint as `.simple`.
 
     private func readoutHeader(stats: ReadoutStats) -> some View {
         HStack(spacing: 8) {
@@ -1682,6 +1774,12 @@ enum LibraryFilterRibbonVariant: String, CaseIterable, Hashable {
     /// Cream-surface bordered container with metallic-gray active fill
     /// — the treatment that shipped to master.
     case classic
+    /// Classic structure, cooler palette: pale silver container with
+    /// brushed-steel active fill. Same architecture, less brown heat.
+    case classicSilver
+    /// Classic structure, slate/graphite palette: cool light-gray
+    /// container with a darker steel active fill. More architectural.
+    case classicSlate
     /// Pinned brass LED dot above each label; no container.
     case patchBay
     /// Dark graphite strip with graticule grid; phosphor active state.
@@ -1694,6 +1792,8 @@ enum LibraryFilterRibbonVariant: String, CaseIterable, Hashable {
     var displayName: String {
         switch self {
         case .classic:        return "Classic"
+        case .classicSilver:  return "Classic · Silver"
+        case .classicSlate:   return "Classic · Slate"
         case .patchBay:       return "Patch Bay"
         case .instrumentBay:  return "Instrument Bay"
         case .indexTabs:      return "Index Tabs"
