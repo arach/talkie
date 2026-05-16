@@ -56,10 +56,11 @@ public enum SidebarLayout {
     /// Height of the header (logo + wordmark) row at the top of the sidebar.
     public static let headerHeight: CGFloat = 44
 
-    /// Vertical padding above the header. Generous on purpose — gives the
-    /// logo + wordmark room to breathe and keeps the first row off the
-    /// window's traffic-light cluster.
-    public static let headerTopPadding: CGFloat = 18
+    /// Vertical padding above the header. Pulls the logo/wordmark up onto
+    /// the same horizontal rail as the persistent GlobalActionBar overlay
+    /// (which sits at `.padding(.top, 7)` in AppNavigation), so the brand
+    /// row, page title, and record control all read as one top band.
+    public static let headerTopPadding: CGFloat = 4
 
     /// Vertical padding below the header before first row.
     public static let headerBottomPadding: CGFloat = Spacing.xs  // 4pt
