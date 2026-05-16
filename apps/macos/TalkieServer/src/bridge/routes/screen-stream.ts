@@ -1,4 +1,5 @@
 import { log } from "../../log";
+import { talkieServerFetch } from "../talkie-local-client";
 
 const TALKIESERVER_PORT = 8766;
 const TALKIESERVER_URL = `http://127.0.0.1:${TALKIESERVER_PORT}`;
@@ -212,7 +213,7 @@ async function fetchDisplayFrame(config: ScreenStreamConfig): Promise<FrameFetch
     log.debug(`Companion screen stream agent route failed, falling back to Talkie.app: ${error}`);
   }
 
-  const response = await fetch(`${TALKIESERVER_URL}/screenshot/display?${query}`, {
+  const response = await talkieServerFetch(`${TALKIESERVER_URL}/screenshot/display?${query}`, {
     signal: AbortSignal.timeout(8000),
   });
   return { response, source: "talkie" };
