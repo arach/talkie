@@ -137,7 +137,7 @@ public enum ScopePanel {
     /// near-black (`#1C1814`) toward something softer that still
     /// reads as a dark instrument bay sunk into the cream page, but
     /// no longer feels stark against the surrounding warmth.
-    public static let bg     = Color.hex("2A241D")
+    public static let bg     = Color.hex("3A332A")
     /// Panel background — slightly lifted (for stat tiles, etc.).
     public static let bgAlt  = Color.hex("302921")
     /// Panel background — deep recess (for the most-inset surfaces).

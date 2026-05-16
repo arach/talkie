@@ -480,13 +480,11 @@ public enum ScopeTopBandLayout {
     /// top of the band. The wordmark anchors to the same value so the
     /// bottoms of the two glyph rows align across columns.
     public static let baselineFromTop: CGFloat = 30
-    /// 18pt — top inset applied above the page-title band to match the
-    /// donor sidebar's `headerTopPadding`. The sidebar wraps its label
-    /// header in 18pt of empty space at the top of the column, so any
-    /// page title rendered at Y=0 of the detail column would sit 18pt
-    /// HIGHER than the wordmark. We pad both layers identically so the
-    /// title bar reads as a single horizontal rail across the window.
-    public static let topInset: CGFloat = 18
+    /// 7pt — top inset applied above the page-title band. Locked to
+    /// `SidebarLayout.headerTopPadding` so the page title, sidebar
+    /// wordmark, and the persistent GlobalActionBar overlay (also at
+    /// `.padding(.top, 7)`) share one horizontal rail across the window.
+    public static let topInset: CGFloat = 4
 }
 
 public struct ScopeTopBand<Trailing: View>: View {

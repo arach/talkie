@@ -387,7 +387,10 @@ private struct ScopeOverviewSection: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .overlay(alignment: .bottom) {
-            Rectangle().fill(ScopePanel.Edge.faint).frame(height: 1)
+            Rectangle()
+                .fill(ScopePanel.Edge.faint)
+                .frame(height: 1)
+                .padding(.horizontal, 16)
         }
     }
 
@@ -456,7 +459,10 @@ private struct ScopeOverviewSection: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .overlay(alignment: .top) {
-            Rectangle().fill(ScopePanel.Edge.faint).frame(height: 1)
+            Rectangle()
+                .fill(ScopePanel.Edge.faint)
+                .frame(height: 1)
+                .padding(.horizontal, 16)
         }
     }
 
