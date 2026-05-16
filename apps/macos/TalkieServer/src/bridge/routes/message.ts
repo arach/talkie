@@ -11,6 +11,7 @@
 
 import { log } from "../../log";
 import { getSession, type ClaudeSession } from "../../discovery/sessions";
+import { talkieServerFetch } from "../talkie-local-client";
 import { badRequest, serverError, serviceUnavailable } from "./responses";
 import { spawn } from "bun";
 
@@ -218,7 +219,7 @@ async function fetchWithRetry(
     const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
     try {
-      const response = await fetch(url, {
+      const response = await talkieServerFetch(url, {
         ...options,
         signal: controller.signal,
       });
