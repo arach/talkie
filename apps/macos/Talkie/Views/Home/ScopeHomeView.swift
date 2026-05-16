@@ -73,8 +73,7 @@ struct ScopeHomeView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // No solid bg fill — lets the root-level GraticuleBackground
-        // from TalkieApp show through behind everything.
+        .background(ScopeCanvas.canvas)
     }
 
     // MARK: - Hero

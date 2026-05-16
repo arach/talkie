@@ -27,40 +27,12 @@ struct ConsoleScreen: View {
     var body: some View {
         Group {
             if isScope {
-                // Scope: rail floats over the content as a left-edge overlay,
-                // so toggling its expanded width never reflows the terminal.
+                // Scope: tab chips live INSIDE the bezel, so we just let
+                // tabContent render itself — the bezel + tab strip get
+                // composed downstream in each state (starter / ready /
+                // running / failure).
                 tabContent
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .overlay(alignment: .topLeading) {
-                        ScopeConsoleRail(
-                            tabs: registry.tabs,
-                            errors: registry.errors,
-                            activeTabId: Binding(
-                                get: { registry.activeTabId },
-                                set: { registry.activeTabId = $0 }
-                            ),
-                            sessionPool: pool,
-                            onNewTab: { showTabEditor = true; editingTab = nil },
-                            onEdit: { tab in editingTab = tab; showTabEditor = true },
-                            onDuplicate: { tab in
-                                if let copy = registry.duplicate(tab.id) {
-                                    registry.activeTabId = copy.id
-                                }
-                            },
-                            onReveal: { tab in
-                                if let url = tab.sourceURL {
-                                    NSWorkspace.shared.activateFileViewerSelecting([url])
-                                } else {
-                                    let url = registry.tabsDirectoryURL.appending(path: "\(tab.id).talkierc")
-                                    NSWorkspace.shared.activateFileViewerSelecting([url])
-                                }
-                            },
-                            onDelete: { tab in
-                                pool.close(tabId: tab.id)
-                                registry.delete(tab.id)
-                            }
-                        )
-                    }
             } else {
                 HStack(spacing: 0) {
                     ConsoleTabRail(
@@ -200,11 +172,23 @@ struct ConsoleScreen: View {
                             retry: { pool.launch(tab: tab, registry: registry) }
                         )
                     } else {
-                        ConsoleTabReadyView(
-                            tab: tab,
-                            openSettings: { showSettings = true },
-                            launch: { launchIfNeeded(tab) }
-                        )
+                        if isScope {
+                            ScopeConsoleStarter(
+                                registry: registry,
+                                onLaunch: { presetTab in
+                                    registry.activeTabId = presetTab.id
+                                    pool.launch(tab: presetTab, registry: registry)
+                                },
+                                tabStrip: AnyView(scopeTabStrip),
+                                bezelChrome: .from(tab: tab)
+                            )
+                        } else {
+                            ConsoleTabReadyView(
+                                tab: tab,
+                                openSettings: { showSettings = true },
+                                launch: { launchIfNeeded(tab) }
+                            )
+                        }
                     }
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
@@ -222,6 +206,66 @@ struct ConsoleScreen: View {
 
     private func launchIfNeeded(_ tab: TabDefinition) {
         pool.launch(tab: tab, registry: registry)
+    }
+
+    // MARK: - Horizontal tab strip (Scope)
+
+    private var scopeTabStrip: some View {
+        HStack(spacing: 6) {
+            ForEach(registry.tabs) { tab in
+                scopeTabChip(tab)
+            }
+
+            Button(action: { editingTab = nil; showTabEditor = true }) {
+                Image(systemName: "plus")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(ScopeInk.muted)
+                    .frame(width: 22, height: 22)
+                    .background(
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.clear)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 3)
+                            .stroke(ScopeEdge.normal, lineWidth: 0.5)
+                    )
+            }
+            .buttonStyle(.plain)
+            .help("New tab")
+
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(ScopeCanvas.canvas)
+    }
+
+    private func scopeTabChip(_ tab: TabDefinition) -> some View {
+        let isActive = tab.id == registry.activeTabId
+        return Button(action: { registry.activeTabId = tab.id }) {
+            HStack(spacing: 6) {
+                Image(systemName: tab.symbolName)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(isActive ? ScopeAmber.solid : ScopeInk.faint)
+                Text(tab.label)
+                    .font(ScopeType.channel)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(isActive ? ScopeInk.primary : ScopeInk.muted)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(isActive ? ScopeAmber.tint : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 3)
+                    .stroke(isActive ? ScopeAmber.solid.opacity(0.55) : ScopeEdge.faint, lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+        .help(tab.label)
     }
 }
 
@@ -268,6 +312,170 @@ private struct ConsoleEmptyState: View {
         }
         .stageCentered()
         .background(Theme.current.surfaceBase)
+    }
+}
+
+// MARK: - Scope 3-card starter
+
+/// Three hero-style cards (Claude / Pi / Shell) shown when the user
+/// enters the Console without a running session. Each card calls
+/// `onLaunch` with the matching seeded preset; the parent switches the
+/// active tab and launches it.
+private struct ScopeConsoleStarter: View {
+    let registry: TabDefinitionRegistry
+    let onLaunch: (TabDefinition) -> Void
+
+    private var presets: [(TabDefinition, String, String)] {
+        // Tuple: (preset tab, blurb, channel pin)
+        let map: [(id: String, blurb: String, ch: String)] = [
+            ("claude",       "Persistent Claude Code runtime with shared workspace + tools.", "CH-01"),
+            ("pi",           "Persistent Pi session with mounted workspace and prompt context.", "CH-02"),
+            ("talkie-shell", "Interactive zsh session in this Console workspace.", "CH-03"),
+        ]
+        return map.compactMap { entry in
+            guard let tab = registry.tab(for: entry.id) else { return nil }
+            return (tab, entry.blurb, entry.ch)
+        }
+    }
+
+    let tabStrip: AnyView
+    let bezelChrome: ConsoleBezelChrome
+
+    var body: some View {
+        ConsoleTerminalBezel(
+            chrome: bezelChrome,
+            statusText: "Idle",
+            statusColor: ScopeInk.faint,
+            footer: ConsoleBezelFooter(
+                statusLabel: "Idle",
+                statusColor: ScopeInk.faint,
+                primary: nil,
+                secondary: nil,
+                trailing: nil
+            ),
+            openSettings: {},
+            quitSession: nil
+        ) {
+            VStack(spacing: 0) {
+                tabStrip
+                Rectangle().fill(ScopeEdge.faint).frame(height: 1)
+
+                VStack(spacing: 22) {
+                    Spacer(minLength: 12)
+
+                    VStack(spacing: 4) {
+                        Eyebrow("New Session", color: ScopeAmber.solid)
+                        Text("Pick a starting point")
+                            .font(.system(size: 22, weight: .regular, design: .serif))
+                            .foregroundStyle(ScopeInk.primary)
+                    }
+
+                    HStack(alignment: .top, spacing: 14) {
+                        ForEach(presets, id: \.0.id) { tab, blurb, channel in
+                            ScopeStarterCard(
+                                tab: tab,
+                                blurb: blurb,
+                                channel: channel,
+                                onLaunch: { onLaunch(tab) }
+                            )
+                        }
+                    }
+                    .frame(maxWidth: 920)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer(minLength: 12)
+                }
+                .padding(.horizontal, 32)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .padding(.horizontal, Spacing.sm)
+        .padding(.top, Spacing.lg)
+        .padding(.bottom, Spacing.sm)
+        .background(ScopeCanvas.canvas)
+    }
+}
+
+private struct ScopeStarterCard: View {
+    let tab: TabDefinition
+    let blurb: String
+    let channel: String
+    let onLaunch: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                ChannelLabel(channel)
+                Spacer()
+                Image(systemName: tab.symbolName)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(ScopeAmber.solid)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(ScopeAmber.tint)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(ScopeAmber.solid.opacity(0.45), lineWidth: 0.5)
+                    )
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(tab.label)
+                    .font(.system(size: 18, weight: .regular, design: .serif))
+                    .foregroundStyle(ScopeInk.primary)
+                Text(tab.harness.displayName.uppercased())
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.subtle)
+            }
+
+            Text(blurb)
+                .font(.system(size: 12))
+                .foregroundStyle(ScopeInk.muted)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
+
+            HStack {
+                Spacer()
+                Button(action: onLaunch) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("LAUNCH")
+                            .font(ScopeType.channel)
+                            .tracking(ScopeType.Tracking.wide)
+                    }
+                    .foregroundStyle(ScopePanel.ink)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(ScopeAmber.solid)
+                    )
+                    .shadow(color: isHovered ? ScopeAmber.glow : .clear, radius: 4)
+                }
+                .buttonStyle(.plain)
+                .onHover { isHovered = $0 }
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(ScopeCanvas.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(ScopeEdge.faint, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(isHovered ? 0.10 : 0.04), radius: isHovered ? 12 : 6, y: 4)
+        .animation(ScopeMotion.snap, value: isHovered)
     }
 }
 

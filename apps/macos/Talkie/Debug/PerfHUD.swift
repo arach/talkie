@@ -52,7 +52,16 @@ final class FrameRateMonitor: ObservableObject {
     private var displayLink: CVDisplayLink?
     private var frameCount: Int = 0
     private var windowStartTime: CFTimeInterval = CACurrentMediaTime()
-    private var bodyAccumulator: [String: Int] = [:]
+    /// Body-access counts, accumulated lock-protected so `recordBodyAccess`
+    /// can be called nonisolated, synchronously, from any thread —
+    /// including from inside `body` re-evals — without a `Task { @MainActor }`
+    /// hop per call. The old approach allocated and scheduled an unstructured
+    /// task on every body access; AppNavigation alone hits ~60 calls/sec at
+    /// baseline, and typing into the editor pushes that into the hundreds.
+    /// Each Task allocation isn't free, and the MainActor queue gets so
+    /// backed up that the main thread starves on actual UI work (typing).
+    /// An os_unfair_lock-backed dictionary makes the increment ~nanoseconds.
+    private let bodyAccumulator = OSAllocatedUnfairLock<[String: Int]>(initialState: [:])
     private var lastTickTime: CFTimeInterval?
     private var minFrameInterval: Double = .infinity
     private var maxFrameInterval: Double = 0
@@ -338,9 +347,13 @@ final class FrameRateMonitor: ObservableObject {
     /// Called by a view's body to attribute a body invalidation. The
     /// counter rolls up into `bodyInvalidationsPerSec` at the end of
     /// each sampling window.
+    ///
+    /// Synchronous + lock-protected — must be cheap because hot views
+    /// (AppNavigation, ScopeDraftsScreen) can call this hundreds of
+    /// times per second. No Task allocation, no actor hop.
     nonisolated func recordBodyAccess(_ name: String) {
-        Task { @MainActor in
-            self.bodyAccumulator[name, default: 0] += 1
+        bodyAccumulator.withLock { dict in
+            dict[name, default: 0] += 1
         }
     }
 
@@ -366,8 +379,16 @@ final class FrameRateMonitor: ObservableObject {
         worstFrameMs = maxFrameInterval
 
         // Snapshot + rescale body invalidations to per-second rate.
+        // Drains the lock-protected accumulator in one short critical
+        // section — keeping the lock contention with `recordBodyAccess`
+        // (called from any thread) negligible.
+        let raw = bodyAccumulator.withLock { dict -> [String: Int] in
+            let copy = dict
+            dict.removeAll(keepingCapacity: true)
+            return copy
+        }
         var snapshot: [String: Int] = [:]
-        for (name, count) in bodyAccumulator {
+        for (name, count) in raw {
             snapshot[name] = Int(Double(count) / elapsed)
         }
         bodyInvalidationsPerSec = snapshot
@@ -392,7 +413,6 @@ final class FrameRateMonitor: ObservableObject {
         perfLogger.info("fps=\(fpsStr, privacy: .public) minMs=\(minMsStr, privacy: .public) maxMs=\(maxMsStr, privacy: .public) frames=\(self.frameCount, privacy: .public) section=\(self.currentSection, privacy: .public) sidebar=\(self.sidebarMode, privacy: .public)\(interactionField, privacy: .public)\(hottestField, privacy: .public)")
 
         frameCount = 0
-        bodyAccumulator.removeAll(keepingCapacity: true)
         windowStartTime = now
         minFrameInterval = .infinity
         maxFrameInterval = 0

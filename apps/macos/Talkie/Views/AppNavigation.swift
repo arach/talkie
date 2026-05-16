@@ -1201,10 +1201,23 @@ private struct AppNavigationSidebar<RailHeader: View, LabelHeader: View, Footer:
             .padding(.leading, SidebarLayout.leadingInset)
             .frame(width: layoutWidth, alignment: .leading)
             .overlay(alignment: .trailing) {
-                // Active-edge highlight during a resize drag. The slot
-                // width tracks the cursor, so this just rides the
-                // trailing edge as a 1pt accent stripe — fades in/out
-                // by isDragging.
+                // Permanent trailing separator. Renders on top of the
+                // handle so the resize pill never visually hides it.
+                // `Color.primary` adapts to light/dark; very low opacity
+                // — should read as a discrete hairline, not assert itself.
+                // Vertical padding gives the line breathing room from
+                // the title-bar above and the window bottom edge below,
+                // so it doesn't feel like it's running window-to-window.
+                Rectangle()
+                    .fill(Color.primary.opacity(0.09))
+                    .frame(width: 0.5)
+                    .padding(.vertical, 3)
+                    .allowsHitTesting(false)
+            }
+            .overlay(alignment: .trailing) {
+                // Active-edge highlight during a resize drag. Sits on
+                // top of the permanent separator so it visually
+                // replaces it while dragging.
                 Rectangle()
                     .fill(accent.opacity(isDragging ? 0.42 : 0))
                     .frame(width: 1)
@@ -2073,6 +2086,41 @@ private struct RecordButtonContent: View {
     }
 }
 
+/// Hit shape for the sidebar edge handle. A union of two rectangles:
+///   • A narrow band, full height, centered horizontally — precise
+///     hit zone along the visible trailing line.
+///   • A wider rectangle, centered vertically, spanning the middle of
+///     the edge — generous hit zone where the user naturally reaches
+///     for the resize handle (and where the pill renders on hover).
+///
+/// Result: the user can't accidentally trigger resize by brushing past
+/// the line, but the actual handle still feels easy to grab.
+private struct EdgeHandleHitShape: Shape {
+    let narrowWidth: CGFloat
+    let wideWidth: CGFloat
+    let wideHeight: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        // Full-height narrow band.
+        path.addRect(CGRect(
+            x: (rect.width - narrowWidth) / 2,
+            y: 0,
+            width: narrowWidth,
+            height: rect.height
+        ))
+        // Center wide bulge (clamped so it never overflows the frame).
+        let h = min(wideHeight, rect.height)
+        path.addRect(CGRect(
+            x: (rect.width - wideWidth) / 2,
+            y: (rect.height - h) / 2,
+            width: wideWidth,
+            height: h
+        ))
+        return path
+    }
+}
+
 private struct SidebarEdgeHandle: View {
     let isCompact: Bool
     let activationDistance: CGFloat
@@ -2096,6 +2144,16 @@ private struct SidebarEdgeHandle: View {
     /// *both* are inactive. Prevents a stale resize cursor after a drag
     /// release lands outside the hit zone.
     @State private var cursorPushed = false
+    /// Mach time of the last drag-tick commit. Used to throttle drag
+    /// updates to ~60Hz — mouse events can fire at 200–1000Hz, and
+    /// without throttling each event invalidates the sidebar layout
+    /// and forces a relayout cascade through the detail column. We
+    /// saw `AppNavigation: 386/s` body re-evals and frame intervals
+    /// up to 674ms during drag. The display can only present 60Hz
+    /// anyway, so updates faster than that are wasted work AND starve
+    /// gesture events.
+    @State private var lastDragCommitTime: CFTimeInterval = 0
+    private static let dragCommitInterval: CFTimeInterval = 1.0 / 60.0
     @State private var dragStartWidth: Double?
     @State private var latestResizeWidth: Double?
     @State private var latestRawWidth: Double?
@@ -2112,42 +2170,57 @@ private struct SidebarEdgeHandle: View {
     /// gesture feels native without round-tripping through AppKit.
     private static let doubleClickInterval: TimeInterval = 0.35
 
-    /// Total hit-zone width. The parent positions this so the handle's
-    /// CENTER sits at the sidebar's trailing edge — half the hit zone
-    /// straddles inside the rail (past the icon's right edge), half
-    /// outside (over the detail column's leading padding). 12pt total
-    /// keeps the handle invisible-in-layout while still forgiving to
-    /// imprecise clicks.
-    static let hitWidth: CGFloat = 12
+    /// Total hit-zone frame width. The parent positions this so the
+    /// handle's CENTER sits at the sidebar's trailing edge — half
+    /// straddles inside the rail, half outside. The actual hit shape
+    /// inside this frame is a "narrow-band-with-center-bulge" (see
+    /// `EdgeHandleHitShape`) — precise along most of the edge,
+    /// generous near the middle where the user reaches for the handle.
+    static let hitWidth: CGFloat = 14
 
     var body: some View {
         let isActive = isHovered || isDragging
 
         let handleVisualWidth: CGFloat = 3
         let pillHeight: CGFloat = isActive ? 64 : 56
-        let pillOpacity: CGFloat = isActive ? 0.42 : 0.20
 
         Rectangle()
             .fill(Color.clear)
             .frame(width: Self.hitWidth)
-            .contentShape(Rectangle())
-            // Center-aligned pill: with the parent's alignment guide
-            // pushing this frame's center onto the rail's trailing edge,
-            // the pill renders EXACTLY on that edge — half inside, half
-            // outside the rail. No floating, no gap.
+            // Hit shape: ±3pt around the trailing edge for the full
+            // height (precise edge), with a wider ±7pt bulge in the
+            // middle 88pt (lenient around the visible handle area).
+            // The narrow band keeps casual mouse-overs on the line
+            // from triggering hover; the bulge makes the actual
+            // grab-the-handle gesture forgiving.
+            .contentShape(EdgeHandleHitShape(
+                narrowWidth: 6,
+                wideWidth: Self.hitWidth,
+                wideHeight: 88
+            ))
             .overlay {
+                // Pill is hidden at rest — line is the only resting
+                // affordance. Appears on hover/drag, then fades back.
+                //
+                // The 0.25pt leftward offset centers the pill on the
+                // *visible separator line* rather than the geometric
+                // trailing edge. Because the line (0.5pt wide) sits at
+                // [trailing-0.5, trailing], its visual center is at
+                // trailing - 0.25; centering the pill there makes it
+                // sit on the line instead of straddling it asymmetrically.
                 ZStack {
-                    // Soft outer glow on hover.
                     if isActive {
+                        // Soft outer glow only when active.
                         RoundedRectangle(cornerRadius: 6)
                             .fill(Theme.current.foreground.opacity(0.08))
                             .frame(width: handleVisualWidth + 8, height: pillHeight + 12)
                             .blur(radius: 6)
                     }
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(Theme.current.foreground.opacity(pillOpacity))
+                        .fill(Theme.current.foreground.opacity(isActive ? 0.42 : 0))
                         .frame(width: handleVisualWidth, height: pillHeight)
                 }
+                .offset(x: -0.25)
                 .animation(.easeOut(duration: 0.14), value: isActive)
             }
             // Cursor + hover via continuous-hover with paired push/pop.
@@ -2232,9 +2305,25 @@ private struct SidebarEdgeHandle: View {
 
         let rawProposed = (dragStartWidth ?? currentWidth) + Double(horizontalDelta)
         let proposed = clampedWidth(rawProposed)
+        // Always update the "latest" values — drag-end reads these to
+        // commit the final position even if the very last tick is
+        // throttled. Cheap state writes.
         latestResizeWidth = proposed
         latestRawWidth = rawProposed
         logResizeUpdateIfNeeded(width: proposed, rawWidth: rawProposed, horizontalDelta: horizontalDelta)
+
+        // Throttle the actual `onResize` write to display refresh rate.
+        // The mouse fires events at 200–1000Hz; committing each one
+        // invalidates the sidebar layout and triggers a detail-column
+        // relayout. At 200+/s that saturates the main thread and the
+        // gesture itself stalls (frame intervals up to 674ms observed).
+        // Display refresh is 60Hz, so anything faster is invisible
+        // anyway.
+        let now = CACurrentMediaTime()
+        if now - lastDragCommitTime < Self.dragCommitInterval {
+            return
+        }
+        lastDragCommitTime = now
 
         // Compact-mode preview was removed for perf — the @Binding write
         // on every drag tick invalidated the AppNavigation root body and

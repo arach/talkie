@@ -254,12 +254,14 @@ struct ScopeLibraryView: View {
     private var statStrip: some View {
         let stats = computeStats()
         return ZStack {
-            Rectangle()
-                .fill(ScopePanel.bg)
+            RoundedRectangle(cornerRadius: 8)
+                .fill(ScopeCanvas.surface)
                 .overlay(
-                    Rectangle().stroke(ScopePanel.Edge.normal, lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(ScopeEdge.faint, lineWidth: 0.5)
                 )
-            GraticuleBackground(pitch: 18, color: ScopePanel.traceFaint, opacity: 0.45)
+            GraticuleBackground(pitch: 18, color: ScopeTrace.faint, opacity: 0.35)
+                .mask(RoundedRectangle(cornerRadius: 8))
                 .allowsHitTesting(false)
 
             HStack(spacing: 0) {
@@ -280,7 +282,7 @@ struct ScopeLibraryView: View {
 
     private var tileDivider: some View {
         Rectangle()
-            .fill(ScopePanel.Edge.faint)
+            .fill(ScopeEdge.faint)
             .frame(width: 1)
             .padding(.vertical, 12)
     }
@@ -289,13 +291,13 @@ struct ScopeLibraryView: View {
         HStack(spacing: 10) {
             Text(value)
                 .font(ScopeFont.display(size: 20))
-                .foregroundStyle(ScopePanel.trace)
+                .foregroundStyle(ScopeAmber.solid)
                 .tracking(-0.4)
-                .shadow(color: ScopePanel.traceGlow, radius: 3)
+                .shadow(color: ScopeAmber.glow, radius: 3)
             Text(label)
                 .font(ScopeType.chrome)
                 .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(ScopePanel.inkFaint)
+                .foregroundStyle(ScopeInk.subtle)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 10)
@@ -609,7 +611,6 @@ struct ScopeLibraryView: View {
                 inspectorEmpty
             }
         }
-        .background(ScopeCanvas.surface)
     }
 
     private var inspectorEmpty: some View {

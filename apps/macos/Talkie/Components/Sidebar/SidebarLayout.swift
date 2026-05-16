@@ -25,17 +25,23 @@ import SwiftUI
 public enum SidebarLayout {
     // ── Columns ──
     /// Fixed icon column at the leading edge. Never animates.
-    public static let railWidth: CGFloat = 32
+    /// Widened from 32 → 36 so the 15pt SF Symbol icons (and the
+    /// logo, accent bar, hover pill) have ~10pt of margin per side
+    /// instead of 8.5pt — keeps the compact rail from feeling tight,
+    /// especially against the trailing separator line.
+    public static let railWidth: CGFloat = 36
 
     /// Maximum width of the label column when fully expanded.
     public static let labelWidth: CGFloat = 200
 
-    /// Static breathing room between the window's leading edge and the
-    /// rail's leading edge. Applied at the host level (outside the
-    /// Sidebar view) so the rail's internal geometry — including icon
-    /// x-positions — stays exactly the same. Only the rail-as-a-whole
-    /// shifts inward by this amount, once, statically.
-    public static let leadingInset: CGFloat = 6
+    /// Inset between the window's leading edge and the rail's leading
+    /// edge. Kept at 0 so the sidebar surface is flush against the
+    /// window edge — any positive value exposes a strip of the window
+    /// base color to the left of the sidebar (visible when the sidebar
+    /// surface is tinted away from the window base, e.g. on the cream
+    /// theme) and also shifts the compact-mode icon off-center
+    /// relative to the visible sidebar.
+    public static let leadingInset: CGFloat = 0
 
     // ── Cells ──
     /// Height of a row cell (icon row, label row).

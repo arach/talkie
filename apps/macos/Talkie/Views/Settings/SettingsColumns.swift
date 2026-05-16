@@ -647,6 +647,7 @@ struct SettingsContentColumn: View {
     var body: some View {
         contentView
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Theme.current.background)
             .overlay(alignment: .leading) {
                 Rectangle()
                     .fill(Theme.current.border.opacity(0.18))

@@ -541,18 +541,22 @@ struct SidebarSurfaceBackground: View {
     var body: some View {
         switch style {
         case .default:
-            // Gentle upgrade from a flat tint: a vertical gradient that
-            // reads slightly brighter at the top (under the title bar)
-            // and a touch darker at the bottom. Combined with a hairline
-            // at the top edge in `body`'s overlay, this gives the rail a
-            // soft, layered surface without crossing into Glass/Editorial
-            // territory.
+            // Theme-adaptive surface: Color.primary at very low opacity
+            // shifts the sidebar a few shades off the window background
+            // — on light/cream themes this reads as a subtly darker
+            // panel, on dark themes as a subtly lifted one. Either way
+            // the sidebar is unambiguously a *different surface* than
+            // the main content area, which is what a thin border alone
+            // couldn't reliably deliver (white-on-white invisibility).
+            //
+            // Gradient (top brighter, bottom slightly darker) preserves
+            // the existing depth feel.
             ZStack {
                 LinearGradient(
                     colors: [
-                        Color.white.opacity(0.045),
-                        Color.white.opacity(0.030),
-                        Color.white.opacity(0.020)
+                        Color.primary.opacity(0.055),
+                        Color.primary.opacity(0.040),
+                        Color.primary.opacity(0.030)
                     ],
                     startPoint: .top, endPoint: .bottom
                 )
@@ -560,7 +564,7 @@ struct SidebarSurfaceBackground: View {
                     // Top hairline — sits under the title bar, defines the
                     // surface boundary without being loud.
                     Rectangle()
-                        .fill(Color.white.opacity(0.06))
+                        .fill(Color.primary.opacity(0.08))
                         .frame(height: 0.5)
                     Spacer(minLength: 0)
                 }
@@ -609,6 +613,7 @@ struct SidebarTrailingSeparator: View {
     var body: some View {
         switch style {
         case .glass:
+            // Glass is dark by design — white gradient reads against it.
             LinearGradient(
                 colors: [
                     Color.white.opacity(0.02),
@@ -618,13 +623,12 @@ struct SidebarTrailingSeparator: View {
                 startPoint: .top, endPoint: .bottom
             )
             .frame(width: 0.5)
-        case .editorial:
+        case .editorial, .default:
+            // Color.primary so the line is visible on both the cream
+            // light theme and the dark theme. The prior `Color.white`
+            // value vanished on light surfaces (white-on-white).
             Rectangle()
-                .fill(Color.white.opacity(0.06))
-                .frame(width: 0.5)
-        case .default:
-            Rectangle()
-                .fill(Color.white.opacity(0.06))
+                .fill(Color.primary.opacity(0.12))
                 .frame(width: 0.5)
         }
     }

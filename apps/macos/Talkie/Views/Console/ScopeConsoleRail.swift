@@ -18,7 +18,7 @@ import TalkieKit
 
 // MARK: - Layout constants
 
-private enum ScopeRailLayout {
+enum ScopeRailLayout {
     static let collapsedWidth: CGFloat = 40
     static let expandedWidth: CGFloat = 200
     static let rowHeight: CGFloat = 44
@@ -108,7 +108,7 @@ struct ScopeConsoleRail: View {
                 Rectangle().fill(ScopeEdge.faint).frame(width: 1)
             }
         }
-        .animation(ScopeMotion.placement, value: isExpanded)
+        .animation(ScopeMotion.snap, value: isExpanded)
     }
 
     /// Expand only when the pointer enters an actual interactive cell

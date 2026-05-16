@@ -38,18 +38,22 @@ private extension Color {
 /// a dense app (lists, sidebars, packed panels). Pulled toward neutral
 /// — character stays, warmth dialed back.
 public enum ScopeCanvas {
-    /// Primary page background — lightest tone in the stack.
-    public static let canvas = Color.hex("EBECE5")
-    /// "Bay" — sidebar / embedded structural surface. Distinctly darker
-    /// than `canvas` so the sidebar reads as a recessed contrasting
-    /// rail (homepage's bichromatic move). Mapped to
+    /// Primary page background — near-white with a barely-there warm
+    /// uplift. The arc: `#EBECE5` (~92% L, "yellow paper") → `#F7F6F1`
+    /// (~97% L, "creamy uplift") → `#FBFAF7` (~98% L, "white paper").
+    /// The amber stays the focal point; the canvas reads as paper-white,
+    /// not cream.
+    public static let canvas = Color.hex("FBFAF7")
+    /// "Bay" — sidebar / embedded structural surface. One clear step
+    /// darker than `canvas` so the sidebar reads as a distinct surface
+    /// without dropping into gray. Mapped to
     /// `tacticalBackgroundSecondary` in SettingsManager.
-    public static let canvasAlt = Color.hex("D2D3C9")
+    public static let canvasAlt = Color.hex("EDECE6")
     /// Card surface — subtle step below canvas so cards read as paper,
-    /// not gray panels. Cooler-leaning to keep continuity with canvas.
-    public static let surface = Color.hex("E5E6DD")
+    /// not gray panels.
+    public static let surface = Color.hex("F5F4EF")
     /// 85% canvas — for floating overlays / pill chrome.
-    public static let canvasOverlay = Color.hex("EBECE5").opacity(0.85)
+    public static let canvasOverlay = Color.hex("FBFAF7").opacity(0.85)
 }
 
 // MARK: - Ink (text)
@@ -108,16 +112,19 @@ public enum ScopeTrace {
 /// pricing, accent strokes. Brass / copper in cream mode; warmer
 /// `FFB84D` in dark phosphor (not yet ported here).
 public enum ScopeAmber {
-    /// Solid amber.
-    public static let solid = Color.hex("C47D1C")
-    /// 8% tint — button background washes.
-    public static let tint = Color.hex("C47D1C").opacity(0.08)
-    /// 5% tint — even quieter background.
-    public static let tintSubtle = Color.hex("C47D1C").opacity(0.05)
+    /// Solid amber — soft brass. Pulled from the saturated copper
+    /// `#C47D1C` toward a quieter `#B5823A`: same brass family, lower
+    /// chroma, sits on a whiter canvas without shouting.
+    public static let solid = Color.hex("B5823A")
+    /// 6% tint — button background washes. One notch quieter than the
+    /// old 8% to match the softer solid.
+    public static let tint = Color.hex("B5823A").opacity(0.06)
+    /// 4% tint — even quieter background.
+    public static let tintSubtle = Color.hex("B5823A").opacity(0.04)
     /// Glow halo for amber text / dots (use as shadow color).
-    public static let glow = Color.hex("C47D1C").opacity(0.32)
+    public static let glow = Color.hex("B5823A").opacity(0.22)
     /// Brighter glow for dots / focal points.
-    public static let glowStrong = Color.hex("C47D1C").opacity(0.45)
+    public static let glowStrong = Color.hex("B5823A").opacity(0.32)
 }
 
 // MARK: - Panel (dark instrument bay on cream desk)
@@ -126,12 +133,15 @@ public enum ScopeAmber {
 /// like an instrument bay sunk into a wooden console. Amber phosphor
 /// trace on near-black background.
 public enum ScopePanel {
-    /// Panel background.
-    public static let bg     = Color.hex("1C1814")
-    /// Panel background — slightly lifted.
-    public static let bgAlt  = Color.hex("221D18")
-    /// Panel background — deep recess.
-    public static let bgDeep = Color.hex("14110D")
+    /// Panel background — warm graphite. Lifted from the original
+    /// near-black (`#1C1814`) toward something softer that still
+    /// reads as a dark instrument bay sunk into the cream page, but
+    /// no longer feels stark against the surrounding warmth.
+    public static let bg     = Color.hex("2A241D")
+    /// Panel background — slightly lifted (for stat tiles, etc.).
+    public static let bgAlt  = Color.hex("302921")
+    /// Panel background — deep recess (for the most-inset surfaces).
+    public static let bgDeep = Color.hex("1F1B15")
 
     /// Panel text — light cream against the dark.
     public static let ink       = Color.hex("F0EAD8")
