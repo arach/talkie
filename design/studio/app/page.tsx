@@ -9,18 +9,32 @@ const STUDIES = [
       "The 4 iOS themes (Scope / Midnight / Tactical / Ghost) — typography spec, palette swatches, behavior flags, identity. Read first.",
   },
   {
+    slug: "home",
+    name: "Home",
+    kind: "Theme study",
+    blurb:
+      "Talkie's canonical home — STATION card, Live Action Bus, Recent list, ambient voice button. The screen where the voice-pivot pattern lives at rest.",
+  },
+  {
     slug: "library",
     name: "Library",
     kind: "Theme study",
     blurb:
-      "Library screen mocked across all 4 themes. Incorporates mira's critique: variant leading icons, transcript preview line, anchored search.",
+      "Library screen mocked across all 4 themes. Soft underline tabs, transcript preview line, integrated search, variant leading icons by source.",
   },
   {
     slug: "compose",
     name: "Compose",
-    kind: "Theme study",
+    kind: "Theme + state study",
     blurb:
-      "Compose screen across all 4 themes. Pre-selected default model, brass mic on empty textarea, labeled cursor pad, hint copy.",
+      "Text-editing turns on existing content (a conference bio). State machine: idle / dictating / voice command / generating / diff.",
+  },
+  {
+    slug: "complications",
+    name: "Complications",
+    kind: "Layout study",
+    blurb:
+      "Action-placement language for iPhone. Compare the current 4-corners-plus-FAB pattern against a 3-slot liquid-glass tray and a hybrid — across all themes.",
   },
   {
     slug: "recording-sheet",

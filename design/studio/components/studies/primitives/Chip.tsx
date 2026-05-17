@@ -26,30 +26,30 @@ export function Chip({
   className,
 }: ChipProps) {
   if (variant === "tab") {
+    // Softer iOS-segmented-control feel: active = brass text + 2px
+    // brass underline (no full amber fill — that read as signage-y).
     return (
       <button
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium transition-colors",
+          "relative inline-flex items-center gap-1.5 px-2.5 pb-2 pt-1 text-[13px] font-medium transition-colors",
           className
         )}
-        style={
-          active
-            ? {
-                background: "var(--theme-amber)",
-                color: "var(--theme-paper)",
-                fontFamily: "var(--theme-font-body)",
-                letterSpacing: "-0.005em",
-              }
-            : {
-                background: "transparent",
-                color: "var(--theme-ink-faint)",
-                fontFamily: "var(--theme-font-body)",
-                letterSpacing: "-0.005em",
-              }
-        }
+        style={{
+          background: "transparent",
+          color: active ? "var(--theme-amber)" : "var(--theme-ink-faint)",
+          fontFamily: "var(--theme-font-body)",
+          letterSpacing: "-0.005em",
+        }}
       >
         {glyph}
         {children}
+        {active ? (
+          <span
+            aria-hidden
+            className="absolute bottom-0 left-2.5 right-2.5 h-[2px] rounded-full"
+            style={{ background: "var(--theme-amber)" }}
+          />
+        ) : null}
       </button>
     );
   }

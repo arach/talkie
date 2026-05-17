@@ -6,8 +6,6 @@
  * a wall of identical mics.
  */
 
-import { cn } from "@/lib/utils";
-
 export type ListRowSource = "dictation" | "typed" | "link" | "scan";
 
 interface ListRowProps {
@@ -27,24 +25,36 @@ export function ListRow({
   meta,
   divider = true,
 }: ListRowProps) {
+  // Two-line iOS-Notes-style: source glyph as small left rail · title
+  // with inline right-aligned time on row 1 · preview on row 2. The
+  // divider is inset under the title so the icon column reads as a
+  // connected rail. The meta string is split — only the first segment
+  // (the time) appears inline; the rest is dropped to keep the row
+  // tight. If a row needs all of its meta visible, pass it via the
+  // preview prop instead.
+  const inlineTime = meta.split("·")[0]?.trim() ?? meta;
+
   return (
-    <div
-      className={cn(
-        "flex items-start gap-3 px-3 py-2.5",
-        divider && "border-t"
-      )}
-      style={divider ? { borderColor: "var(--theme-edge-subtle)" } : undefined}
-    >
+    <div className="relative pl-9 pr-3.5 py-2.5">
+      {divider ? (
+        <span
+          aria-hidden
+          className="absolute left-9 right-3.5 top-0 h-px"
+          style={{ background: "var(--theme-edge-subtle)" }}
+        />
+      ) : null}
+
       <span
         aria-hidden
-        className="mt-0.5 inline-flex h-4 w-4 flex-none items-center justify-center"
+        className="absolute left-3.5 top-3 inline-flex h-4 w-4 items-center justify-center"
         style={{ color: "var(--theme-ink-faint)" }}
       >
         <SourceGlyph source={source} />
       </span>
-      <div className="min-w-0 flex-1">
-        <div
-          className="truncate text-[15px] font-medium leading-tight"
+
+      <div className="flex items-baseline gap-2">
+        <span
+          className="min-w-0 flex-1 truncate text-[15px] font-medium leading-tight"
           style={{
             color: "var(--theme-ink)",
             fontFamily: "var(--theme-font-body)",
@@ -52,28 +62,29 @@ export function ListRow({
           }}
         >
           {title}
-        </div>
-        {preview ? (
-          <div
-            className="mt-1 truncate text-[12px] leading-snug"
-            style={{
-              color: "var(--theme-ink-muted)",
-              fontFamily: "var(--theme-font-body)",
-            }}
-          >
-            {preview}
-          </div>
-        ) : null}
-        <div
-          className="mt-1.5 text-[9px] font-semibold uppercase tracking-[0.18em]"
+        </span>
+        <span
+          className="flex-none text-[10px] font-medium tabular-nums"
           style={{
             color: "var(--theme-ink-faint)",
             fontFamily: "var(--theme-font-mono)",
           }}
         >
-          {meta}
-        </div>
+          {inlineTime}
+        </span>
       </div>
+
+      {preview ? (
+        <div
+          className="mt-1 truncate text-[12.5px] leading-snug"
+          style={{
+            color: "var(--theme-ink-muted)",
+            fontFamily: "var(--theme-font-body)",
+          }}
+        >
+          {preview}
+        </div>
+      ) : null}
     </div>
   );
 }

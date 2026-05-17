@@ -106,37 +106,36 @@ export function Library() {
           />
         ))}
 
-        {/* fill the void with a section divider + empty-state hint
-            (mira's #1) — replaces the previous huge white space. */}
+        {/* Earlier divider — quieter; just the smallcap, no leader-dots
+            empty-state hint underneath. The white space below reads
+            as breathing room, not a placeholder. */}
         <div
-          className="px-3 pt-4 pb-2"
+          className="flex items-center gap-2 px-3 pt-4 pb-2"
           style={{ borderTop: "0.5px solid var(--theme-edge-subtle)" }}
         >
           <ChannelLabel tier="status">Earlier · this week</ChannelLabel>
-        </div>
-        <div className="flex flex-1 items-end justify-center px-3 pb-5">
           <span
-            className="text-[10px]"
+            className="ml-auto text-[10px]"
             style={{
               color: "var(--theme-ink-subtle)",
               fontFamily: "var(--theme-font-mono)",
             }}
           >
-            ·  ·  ·   nothing else clipped today
+            12 more
           </span>
         </div>
+        <div className="flex-1" />
       </div>
 
-      {/* anchored search */}
+      {/* Search integrated tight under the list — drops the canvas
+          gap + extra hairline so it reads as the list's footer rather
+          than a floating bar. */}
       <div
-        className="px-3 pt-3 pb-4"
-        style={{
-          background: "var(--theme-canvas)",
-          borderTop: "0.5px solid var(--theme-edge-faint)",
-        }}
+        className="px-3 pb-3 pt-2"
+        style={{ background: "var(--theme-canvas)" }}
       >
         <div
-          className="flex items-center gap-2 rounded-full px-3 py-2"
+          className="flex items-center gap-2 rounded-full px-3.5 py-2"
           style={{
             background: "var(--theme-paper)",
             border: "0.5px solid var(--theme-edge-faint)",

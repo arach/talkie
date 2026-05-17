@@ -6,10 +6,12 @@ import { cn } from "@/lib/utils";
 
 const LINKS = [
   { href: "/themes", label: "Themes" },
-  { href: "/agent-bay", label: "Agent Bay" },
-  { href: "/recording-sheet", label: "Recording Sheet" },
+  { href: "/complications", label: "Complications" },
+  { href: "/home", label: "Home" },
   { href: "/library", label: "Library" },
   { href: "/compose", label: "Compose" },
+  { href: "/recording-sheet", label: "Recording Sheet" },
+  { href: "/agent-bay", label: "Agent Bay" },
   { href: "/iphone-themes", label: "iPhone Themes" },
 ];
 
