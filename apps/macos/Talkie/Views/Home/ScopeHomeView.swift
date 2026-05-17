@@ -65,8 +65,14 @@ struct ScopeHomeView: View {
     @AppStorage("scopeAgentBay.heatmap")   private var bayHeatmap: Bool = false
     @AppStorage("scopeAgentBay.timeline")  private var bayTimeline: Bool = false
     @AppStorage("scopeAgentBay.brackets")  private var bayBrackets: Bool = false
-    @AppStorage("scopeAgentBay.scheme")    private var bayScheme: String = BayScheme.amber.rawValue
-    private var currentScheme: BayScheme { BayScheme(rawValue: bayScheme) ?? .amber }
+    // Default to CHIFFON — the Scope theme's canonical bay per the
+    // studio decision (2026-05-17). See BayScheme.canonical(for:) and
+    // design/studio/app/mac-home/NOTES.md.
+    @AppStorage("scopeAgentBay.scheme")    private var bayScheme: String = BayScheme.chiffon.rawValue
+    // Migration fallback: users with deprecated stored values
+    // (graphite/pewter/ash/stone — dropped 2026-05-17) decode to nil
+    // and should land on the Scope canonical, not the original amber.
+    private var currentScheme: BayScheme { BayScheme(rawValue: bayScheme) ?? .chiffon }
 
     private var todayTotal: Int { todayMemos + todayDictations }
 
@@ -82,7 +88,10 @@ struct ScopeHomeView: View {
                     hero
                     captureModes
                     agentPanel
+                    routinesStrip
                     signalTable
+                    discoveryRow
+                    systemStatusRail
                     ownershipStrip
                 }
                 .padding(.horizontal, 32)
@@ -144,31 +153,124 @@ struct ScopeHomeView: View {
                 spacing: 16
             ) {
                 CaptureModeCard(
-                    icon: "mic.fill",
+                    glyph: .dot,
                     eyebrow: "Memo",
                     channel: "CH-01",
-                    title: "Catch it before it changes.",
-                    copy: "Record what you’re thinking. The transcript lands here.",
-                    action: onStartRecording
+                    state: captureStateMemo,
+                    action: "START RECORDING",
+                    hint: "·",
+                    onTap: onStartRecording
                 )
                 CaptureModeCard(
-                    icon: "keyboard",
+                    glyph: .ring,
                     eyebrow: "Dictation",
                     channel: "CH-02",
-                    title: "Speak straight into the work.",
-                    copy: "Hotkey on Mac. Dictate into whatever app you’re already in.",
-                    action: {}
+                    state: captureStateDictation,
+                    action: "DICTATE",
+                    hint: "⌃⇧⌘ D",
+                    onTap: {}
                 )
                 CaptureModeCard(
-                    icon: "camera.viewfinder",
+                    glyph: .crosshair,
                     eyebrow: "Capture",
                     channel: "CH-03",
-                    title: "Pin the screen, not just the words.",
-                    copy: "Hyper+S to grab the moment alongside what you say.",
-                    action: {}
+                    state: "Hyper+S armed",       // TODO: wire to TrayState
+                    action: "CAPTURE",
+                    hint: "⌃⇧⌘ S",
+                    onTap: {}
                 )
             }
         }
+    }
+
+    /// Stub state lines for the capture cards. Stays factual (counts /
+    /// last-time) rather than editorial. TODO: wire to MemoStats /
+    /// DictationStore / TrayBadge live state.
+    private var captureStateMemo: String {
+        if todayMemos == 0 { return "Ready" }
+        if todayMemos == 1 { return "1 today" }
+        return "\(todayMemos) today"
+    }
+    private var captureStateDictation: String {
+        if todayDictations == 0 { return "Ready" }
+        if todayDictations == 1 { return "1 today" }
+        return "\(todayDictations) today"
+    }
+
+    // MARK: - Routines strip (Workflows · Console)
+    //
+    // RESTORED from the original HomeGrid taxonomy (actionWorkflows +
+    // actionHelpers + featureAgentConsole). Two light panels on the
+    // cream canvas so they read as cousins of the Capture Mode cards,
+    // not as competing dark slabs with the bay.
+    //
+    // Data is stubbed at this stage. TODO: wire Workflows to
+    // WorkflowRunsStore (or equivalent); wire Console to the active
+    // ConsoleRegistry tabs.
+
+    private var routinesStrip: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Eyebrow("Routines")
+            HStack(spacing: 16) {
+                RoutinesPanel(
+                    title: "Workflows",
+                    trailing: "3 ran today",
+                    rows: [
+                        .init(leading: .filled, label: "Summarize standup",  trailing: "9:31 AM"),
+                        .init(leading: .filled, label: "Dictation → Linear", trailing: "9:14 AM"),
+                        .init(leading: .hollow, label: "Compose draft",      trailing: "Yesterday"),
+                    ],
+                    footer: "MANAGE WORKFLOWS"
+                )
+                RoutinesPanel(
+                    title: "Console",
+                    trailing: "2 tabs",
+                    rows: [
+                        .init(leading: .filled, label: "iTerm2", trailing: "ACTIVE"),
+                        .init(leading: .filled, label: "Codex",  trailing: "IDLE"),
+                        .init(leading: .hollow, label: "Claude", trailing: "OFF"),
+                    ],
+                    footer: "OPEN CONSOLE"
+                )
+            }
+        }
+    }
+
+    // MARK: - Discovery row (Today · Shortcuts · Trending)
+    //
+    // RESTORED from widgetActivity + widgetShortcuts + widgetTrending.
+    // Three discovery surfaces at the same density as the Capture Modes
+    // row. Each widget gets a tailored visual so they read as distinct,
+    // not as three flat lists.
+    //
+    // TODO: wire Today to Calendar/Reminders; Trending to a real
+    // recurring-theme aggregator. Shortcuts is the only one mostly
+    // real today (HotkeyManager registrations).
+
+    private var discoveryRow: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Eyebrow("Discovery")
+            HStack(spacing: 16) {
+                TodayWidget()
+                ShortcutsWidget()
+                TrendingWidget()
+            }
+        }
+    }
+
+    // MARK: - System status rail (scheme-aware)
+    //
+    // RESTORED from the systemStatus + devicesBridge cards. The rail
+    // wears the same scheme as the bay above so the two read as the
+    // top + bottom of one instrument body. On AMBER it's a gunmetal
+    // recessed footer; on CHIFFON (Scope canonical) it's a barely-
+    // there cream strip.
+    //
+    // TODO: wire phosphor dots to live service state
+    // (ServiceManager.agent / .sync / .updater).
+
+    private var systemStatusRail: some View {
+        SystemStatusRail(scheme: currentScheme)
     }
 
     // MARK: - Agent panel (dark instrument bay in the cream)
@@ -424,7 +526,7 @@ struct ScopeHomeView: View {
                         bayHeatmap = false
                         bayTimeline = false
                         bayBrackets = false
-                        bayScheme = BayScheme.amber.rawValue
+                        bayScheme = BayScheme.chiffon.rawValue
                     } label: {
                         Text("RESET")
                             .font(.system(size: 9, weight: .semibold, design: .monospaced))
@@ -613,13 +715,27 @@ struct ScopeHomeView: View {
 
 // MARK: - Capture mode card
 
+/// Capture mode card — three thin rows on a cream tile.
+///
+///   ▌ glyph    eyebrow                channel
+///   ──────────────────────────────────────
+///   state · single factual line
+///   ──────────────────────────────────────
+///   ACTION →                         hint
+///
+/// No editorial title or sub-copy. The card is the affordance; the
+/// glyph + label + action + hint together communicate enough. Per the
+/// no-marketing-copy preference (2026-05-17).
 private struct CaptureModeCard: View {
-    let icon: String
+    enum Glyph { case dot, ring, crosshair }
+
+    let glyph: Glyph
     let eyebrow: String
     let channel: String
-    let title: String
-    let copy: String
-    let action: () -> Void
+    let state: String
+    let action: String
+    let hint: String
+    let onTap: () -> Void
 
     @State private var isHovered = false
 
@@ -627,67 +743,30 @@ private struct CaptureModeCard: View {
         #if DEBUG
         let _ = FrameRateMonitor.shared.recordBodyAccess("CaptureModeCard")
         #endif
-        return Button(action: action) {
-            ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(ScopeCanvas.surface)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(isHovered ? ScopeEdge.normal : ScopeEdge.faint, lineWidth: 0.5)
-                    )
-                // Graticule was clashing with content on the cool palette
-                // — dropped opacity from 0.45 → 0.15 and widened pitch
-                // from 24 → 32 so it reads as faint drafting paper, not
-                // a grid pattern competing for attention.
-                GraticuleBackground(pitch: 32, color: ScopeTrace.faint, opacity: 0.15)
-                    .mask(RoundedRectangle(cornerRadius: 6))
-
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        HStack(spacing: 10) {
-                            iconBadge
-                            Text(eyebrow.uppercased())
-                                .font(ScopeType.channel)
-                                .tracking(ScopeType.Tracking.wide)
-                                .foregroundStyle(ScopeInk.faint)
-                        }
-                        Spacer()
-                        Text(channel)
-                            .font(ScopeType.channel)
-                            .tracking(ScopeType.Tracking.wide)
-                            .foregroundStyle(ScopeInk.subtle)
-                    }
-
-                    Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
-
-                    Text(title)
-                        .font(ScopeFont.display(size: 19))
-                        .foregroundStyle(ScopeInk.primary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                        .tracking(-0.3)
-
-                    Text(copy)
-                        .font(.system(size: 12))
-                        .foregroundStyle(ScopeInk.muted)
-                        .lineLimit(3)
-                        .multilineTextAlignment(.leading)
-
-                    Spacer(minLength: 0)
-
-                    HStack(spacing: 4) {
-                        Text("EXPLORE")
-                            .font(ScopeType.channel)
-                            .tracking(ScopeType.Tracking.wide)
-                            .foregroundStyle(ScopeInk.faint)
-                        Text("→")
-                            .font(.system(size: 11))
-                            .foregroundStyle(ScopeInk.faint)
-                    }
-                }
-                .padding(16)
+        return Button(action: onTap) {
+            VStack(spacing: 0) {
+                identityRow
+                Divider()
+                    .frame(height: 0.5)
+                    .overlay(ScopeEdge.subtle)
+                stateRow
+                Divider()
+                    .frame(height: 0.5)
+                    .overlay(ScopeEdge.subtle)
+                actionRow
             }
-            .frame(minHeight: 200, alignment: .topLeading)
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(ScopeCanvas.surface)
+                    GraticuleBackground(pitch: 32, color: ScopeTrace.faint, opacity: 0.12)
+                        .mask(RoundedRectangle(cornerRadius: 6))
+                }
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(isHovered ? ScopeEdge.normal : ScopeEdge.faint, lineWidth: 0.5)
+            )
             .offset(y: isHovered ? -2 : 0)
         }
         .buttonStyle(.plain)
@@ -695,20 +774,119 @@ private struct CaptureModeCard: View {
         .animation(.easeOut(duration: 0.16), value: isHovered)
     }
 
-    private var iconBadge: some View {
-        RoundedRectangle(cornerRadius: 4)
-            .fill(ScopeAmber.tintSubtle)
-            .frame(width: 28, height: 28)
-            .overlay(
-                RoundedRectangle(cornerRadius: 4)
-                    .stroke(ScopeEdge.faint, lineWidth: 0.5)
-            )
-            .overlay(
-                Image(systemName: icon)
-                    .font(.system(size: 12))
-                    .foregroundStyle(ScopeAmber.solid)
-                    .phosphorGlow(radius: 3, opacity: 0.32)
-            )
+    private var identityRow: some View {
+        HStack(spacing: 10) {
+            CaptureGlyph(kind: glyph)
+                .frame(width: 22, height: 22)
+            Text(eyebrow.uppercased())
+                .font(ScopeType.channel)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopeInk.primary)
+            Spacer()
+            Text(channel)
+                .font(ScopeType.channel)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopeInk.subtle)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+    }
+
+    private var stateRow: some View {
+        HStack {
+            Text(state.uppercased())
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopeInk.faint)
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+    }
+
+    private var actionRow: some View {
+        HStack(spacing: 4) {
+            Text(action)
+                .font(ScopeType.channel)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(isHovered ? ScopeAmber.solid : Color.hex("9A6A22"))
+            Text("→")
+                .font(.system(size: 11))
+                .foregroundStyle(isHovered ? ScopeAmber.solid : Color.hex("9A6A22"))
+            Spacer()
+            Text(hint)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundStyle(ScopeInk.subtle)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+    }
+}
+
+/// Per-card amber identity. Three distinct treatments so the cards
+/// read as siblings, not clones. All within the amber/copper family
+/// per the design language.
+private struct CaptureGlyph: View {
+    let kind: CaptureModeCard.Glyph
+
+    var body: some View {
+        switch kind {
+        case .dot:
+            ZStack {
+                Circle()
+                    .stroke(ScopeAmber.solid.opacity(0.18), lineWidth: 1)
+                Circle()
+                    .fill(ScopeAmber.solid)
+                    .frame(width: 9, height: 9)
+                    .shadow(color: ScopeAmber.solid.opacity(0.45), radius: 3)
+            }
+        case .ring:
+            ZStack {
+                Circle()
+                    .stroke(ScopeAmber.solid, lineWidth: 1.5)
+                    .frame(width: 14, height: 14)
+                Circle()
+                    .fill(ScopeAmber.solid)
+                    .frame(width: 3.5, height: 3.5)
+            }
+        case .crosshair:
+            ZStack {
+                CornerBracketsMark()
+                    .stroke(ScopeAmber.solid, lineWidth: 1.2)
+                Circle()
+                    .fill(ScopeAmber.solid)
+                    .frame(width: 5, height: 5)
+            }
+        }
+    }
+}
+
+/// Four corner L-marks inscribed in the glyph frame. Used by the
+/// "Capture" mode glyph to evoke a viewfinder.
+private struct CornerBracketsMark: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let inset: CGFloat = 1
+        let len: CGFloat = 5
+        let minX = rect.minX + inset, maxX = rect.maxX - inset
+        let minY = rect.minY + inset, maxY = rect.maxY - inset
+        // top-left
+        p.move(to: CGPoint(x: minX, y: minY + len))
+        p.addLine(to: CGPoint(x: minX, y: minY))
+        p.addLine(to: CGPoint(x: minX + len, y: minY))
+        // top-right
+        p.move(to: CGPoint(x: maxX - len, y: minY))
+        p.addLine(to: CGPoint(x: maxX, y: minY))
+        p.addLine(to: CGPoint(x: maxX, y: minY + len))
+        // bottom-left
+        p.move(to: CGPoint(x: minX, y: maxY - len))
+        p.addLine(to: CGPoint(x: minX, y: maxY))
+        p.addLine(to: CGPoint(x: minX + len, y: maxY))
+        // bottom-right
+        p.move(to: CGPoint(x: maxX - len, y: maxY))
+        p.addLine(to: CGPoint(x: maxX, y: maxY))
+        p.addLine(to: CGPoint(x: maxX, y: maxY - len))
+        return p
     }
 }
 
@@ -900,44 +1078,54 @@ private struct AmbientScanline: View {
 // is fitted.
 
 enum BayScheme: String, CaseIterable {
-    // Ordered darkest → lightest so the picker reads as a continuous
-    // gradient. Dark schemes (amber/graphite/pewter) use a phosphor
-    // accent for stat numbers and a halo glow. Light schemes
-    // (ash/stone/paper) use a graphite ink for numbers and no glow —
-    // printed surfaces don't emit.
-    case amber, graphite, pewter, ash, stone, paper
+    // Aligned with `design/studio/lib/schemes.ts` as of 2026-05-17.
+    // The intermediate gray gradient (graphite/pewter/ash/stone) was
+    // dropped after the studio review — read as "filtered" rather
+    // than designed. New light-mode canonicals from the studio's
+    // light-touch sibling work:
+    //
+    //   Modern theme → PEARL    (cool family, canonical = lightest)
+    //   Scope theme  → CHIFFON  (warm family, canonical = lightest)
+    //
+    // Sibling ladder within each family for fine-tuning bay presence.
+    // AMBER kept as the reference for the original lit-electronics
+    // identity. See design/studio/app/mac-home/NOTES.md for rationale.
+    case amber       // Reference dark (original electronics bay)
+    case pearl       // Modern canonical — cool lightest
+    case porcelain   // Cool mid
+    case aluminum    // Cool saturated
+    case chiffon     // Scope canonical — warm lightest
+    case vellum      // Warm mid
+    case paper       // Warm saturated
 
     var displayName: String {
         switch self {
-        case .amber:    return "AMBER"
-        case .graphite: return "GRAPHITE"
-        case .pewter:   return "PEWTER"
-        case .ash:      return "ASH"
-        case .stone:    return "STONE"
-        case .paper:    return "PAPER"
+        case .amber:     return "AMBER"
+        case .pearl:     return "PEARL"
+        case .porcelain: return "PORCELAIN"
+        case .aluminum:  return "ALUMINUM"
+        case .chiffon:   return "CHIFFON"
+        case .vellum:    return "VELLUM"
+        case .paper:     return "PAPER"
         }
     }
 
     /// True when the surface is light enough to need dark text on it.
     /// Toggles glow off, switches stat numbers to graphite ink, and
-    /// bumps edge contrast.
-    var isLight: Bool {
-        switch self {
-        case .ash, .stone, .paper: return true
-        default:                   return false
-        }
-    }
+    /// bumps edge contrast. All current non-AMBER schemes are light.
+    var isLight: Bool { self != .amber }
 
-    /// Canonical accent. On dark schemes (amber/graphite/pewter) this
-    /// is the phosphor used for stat numbers + dot + sparkline. On
-    /// light schemes this is the edge/sparkline accent — stat numbers
-    /// use `statInk` instead.
+    /// Canonical accent. Dark schemes use it as the phosphor for stat
+    /// numbers + dot + sparkline; light schemes use it as the edge /
+    /// sparkline accent only (stat numbers fall back to `statInk`).
+    /// Cool-family accents pull slightly cooler (#D49236); warm-family
+    /// stays at the canonical copper (#9A6A22). AMBER is the original
+    /// phosphor.
     var trace: Color {
         switch self {
-        case .amber, .graphite, .pewter: return Color.hex("E89A3C")  // phosphor
-        case .ash:    return Color.hex("8C5E1E")   // burnt amber on industrial gray
-        case .stone:  return Color.hex("9A6A22")   // deep copper on warm gray
-        case .paper:  return Color.hex("9A6A22")   // deep copper on cream
+        case .amber:                              return Color.hex("E89A3C")
+        case .pearl, .porcelain, .aluminum:       return Color.hex("D49236")
+        case .chiffon, .vellum, .paper:           return Color.hex("9A6A22")
         }
     }
 
@@ -949,10 +1137,25 @@ enum BayScheme: String, CaseIterable {
     var traceFaint: Color { trace.opacity(isLight ? 0.06 : 0.08) }
 
     /// Edge / divider color — same hue as trace, very low alpha.
-    var edge: Color { trace.opacity(isLight ? 0.18 : 0.10) }
+    /// Lighter schemes need slightly more contrast to read.
+    var edge: Color {
+        switch self {
+        case .amber:                 return trace.opacity(0.10)
+        case .pearl, .chiffon:       return trace.opacity(0.10)   // lightest — kept restrained
+        case .porcelain, .vellum:    return trace.opacity(0.12)
+        case .aluminum, .paper:      return trace.opacity(0.18)   // most saturated of the light family
+        }
+    }
 
     /// Edge for crisper marks (corner brackets).
-    var edgeStrong: Color { trace.opacity(isLight ? 0.40 : 0.28) }
+    var edgeStrong: Color {
+        switch self {
+        case .amber:                 return trace.opacity(0.28)
+        case .pearl, .chiffon:       return trace.opacity(0.28)
+        case .porcelain, .vellum:    return trace.opacity(0.34)
+        case .aluminum, .paper:      return trace.opacity(0.40)
+        }
+    }
 
     /// Cell color for the activity heatmap. Intensity-scaled at call site.
     func cell(intensity: Double) -> Color {
@@ -961,75 +1164,77 @@ enum BayScheme: String, CaseIterable {
         return trace.opacity(base + span * intensity)
     }
 
-    // MARK: Surface tokens (overrideable per scheme)
+    // MARK: Surface tokens
 
-    /// Bay panel base fill, ordered darkest → lightest. AMBER is the
-    /// canonical gunmetal; intermediate grays bridge to PAPER cream.
+    /// Bay panel base fill. Mirrors `--scheme-bg` from studio.
     var panelBg: Color {
         switch self {
-        case .amber:    return Color.hex("14181A")   // gunmetal (ScopePanel.bg)
-        case .graphite: return Color.hex("3A3D40")   // softened dark
-        case .pewter:   return Color.hex("7A7C7E")   // mid-dark gray
-        case .ash:      return Color.hex("B8B6B3")   // industrial mid
-        case .stone:    return Color.hex("D8D5D0")   // warm light gray
-        case .paper:    return Color.hex("EEE7D6")   // warm cream
+        case .amber:      return Color.hex("14181A")
+        case .pearl:      return Color.hex("F5F8FA")
+        case .porcelain:  return Color.hex("EAEEF1")
+        case .aluminum:   return Color.hex("D6DBE0")
+        case .chiffon:    return Color.hex("FAF5E8")
+        case .vellum:     return Color.hex("F4EFE0")
+        case .paper:      return Color.hex("EEE7D6")
         }
     }
 
-    /// Stat number color. Dark surface → phosphor (trace); light
-    /// surface → deep neutral ink.
+    /// Stat number color. Dark → phosphor; light → deep neutral ink
+    /// tuned to the scheme's warmth.
     var statInk: Color {
         switch self {
-        case .ash:   return Color.hex("2A2A28")
-        case .stone: return Color.hex("2A2622")
-        case .paper: return Color.hex("2A2117")
-        default:     return trace
+        case .amber:                                    return trace
+        case .pearl, .porcelain, .aluminum:             return Color.hex("2A2E32")   // cool charcoal
+        case .chiffon, .vellum, .paper:                 return Color.hex("2A2520")   // warm espresso
         }
     }
 
     /// Chrome label color (status text, captions).
     var inkFaint: Color {
         switch self {
-        case .amber:    return Color.hex("7A8B85")   // ScopePanel.inkFaint
-        case .graphite: return Color.hex("9AA0A4")   // lifted on softer dark
-        case .pewter:   return Color.hex("D8D6D2")   // light chrome on mid-dark
-        case .ash:      return Color.hex("4E4C49")
-        case .stone:    return Color.hex("5A5550")
-        case .paper:    return Color.hex("6E5F46")
+        case .amber:      return Color.hex("7A8B85")
+        case .pearl:      return Color.hex("6E737B")
+        case .porcelain:  return Color.hex("5C6168")
+        case .aluminum:   return Color.hex("5C6168")
+        case .chiffon:    return Color.hex("7B6E60")
+        case .vellum:     return Color.hex("6B5D4F")
+        case .paper:      return Color.hex("6B5D4F")
         }
     }
 
     /// Subtle chrome (timestamps, secondary metadata).
     var inkSubtle: Color {
         switch self {
-        case .amber:    return Color.hex("6B7A75")   // ScopePanel.inkSubtle
-        case .graphite: return Color.hex("868C90")
-        case .pewter:   return Color.hex("BEBDBA")
-        case .ash:      return Color.hex("6E6C68")
-        case .stone:    return Color.hex("7A7570")
-        case .paper:    return Color.hex("8A7C66")
+        case .amber:      return Color.hex("6B7A75")
+        case .pearl:      return Color.hex("8A8F96")
+        case .porcelain:  return Color.hex("787D84")
+        case .aluminum:   return Color.hex("4F545B")
+        case .chiffon:    return Color.hex("928576")
+        case .vellum:     return Color.hex("857664")
+        case .paper:      return Color.hex("5C4F42")
         }
     }
 
-    /// Top control rail — brushed cover. Each scheme's rail is a band
-    /// tuned to its surface; the rail should always read as a
-    /// separately-fabricated piece, slightly lighter at top + darker
-    /// into the body.
+    /// Top control rail — brushed cover. Tuned per scheme; lightest
+    /// at top, darker into the body so the strip reads as a separate
+    /// fabricated piece.
     var stripTopFill: LinearGradient {
         let stops: [(String, Double)] = {
             switch self {
             case .amber:
                 return [("1F2426", 0.0), ("1A1F22", 0.35), ("0F1416", 1.0)]
-            case .graphite:
-                return [("464A4D", 0.0), ("3D4143", 0.45), ("32363A", 1.0)]
-            case .pewter:
-                return [("8C8E90", 0.0), ("808284", 0.45), ("6E7072", 1.0)]
-            case .ash:
-                return [("C6C4C1", 0.0), ("BEBCB9", 0.45), ("B0AEAB", 1.0)]
-            case .stone:
-                return [("E2DFDA", 0.0), ("D6D2CC", 0.45), ("CAC6BF", 1.0)]
+            case .pearl:
+                return [("FBFCFE", 0.0), ("F2F5F7", 0.60), ("E5E9ED", 1.0)]
+            case .porcelain:
+                return [("F2F5F7", 0.0), ("E8ECEF", 0.60), ("DCE0E4", 1.0)]
+            case .aluminum:
+                return [("DFE3E8", 0.0), ("D4D8DD", 0.60), ("C8CDD2", 1.0)]
+            case .chiffon:
+                return [("FDF8EB", 0.0), ("F5F0E2", 0.60), ("ECE7D6", 1.0)]
+            case .vellum:
+                return [("F8F3E5", 0.0), ("F0EBDB", 0.60), ("E8E2D0", 1.0)]
             case .paper:
-                return [("F5EFE2", 0.0), ("EDE6D4", 0.45), ("E5DDCA", 1.0)]
+                return [("F2ECDB", 0.0), ("EAE3D0", 0.60), ("E2DBC6", 1.0)]
             }
         }()
         return LinearGradient(
@@ -1038,21 +1243,22 @@ enum BayScheme: String, CaseIterable {
         )
     }
 
-    /// Bottom rail — recessed feel. Asymmetric with stripTop so the
-    /// two rails read as different physical surfaces.
+    /// Bottom rail — recessed feel. Asymmetric with stripTop.
     var stripBottomFill: LinearGradient {
         let stops: [(String, Double)] = {
             switch self {
             case .amber:
                 return [("0D1113", 0.0), ("161B1E", 0.55), ("1E2528", 1.0)]
-            case .graphite:
-                return [("2E3134", 0.0), ("383C3F", 0.55), ("424649", 1.0)]
-            case .pewter:
-                return [("66686A", 0.0), ("75777A", 0.55), ("84868A", 1.0)]
-            case .ash:
-                return [("A8A6A3", 0.0), ("B2B0AD", 0.55), ("BCBAB7", 1.0)]
-            case .stone:
-                return [("C4C0BA", 0.0), ("CECABF", 0.55), ("D8D4CC", 1.0)]
+            case .pearl:
+                return [("ECEFF2", 0.0), ("F5F8FA", 0.55), ("FBFDFE", 1.0)]
+            case .porcelain:
+                return [("E0E4E8", 0.0), ("EAEEF1", 0.55), ("F0F3F6", 1.0)]
+            case .aluminum:
+                return [("CFD4D9", 0.0), ("D6DBE0", 0.55), ("DDE2E7", 1.0)]
+            case .chiffon:
+                return [("F0ECDE", 0.0), ("F8F3E6", 0.55), ("FDF9EC", 1.0)]
+            case .vellum:
+                return [("ECE6D6", 0.0), ("F4EFE0", 0.55), ("F9F4E6", 1.0)]
             case .paper:
                 return [("E2DAC4", 0.0), ("EBE3CD", 0.55), ("F3ECD8", 1.0)]
             }
@@ -1061,6 +1267,18 @@ enum BayScheme: String, CaseIterable {
             stops: stops.map { .init(color: Color.hex($0.0), location: $0.1) },
             startPoint: .top, endPoint: .bottom
         )
+    }
+
+    // MARK: Theme bindings
+
+    /// Canonical scheme for a given Talkie theme. Used by the bay's
+    /// default state when no user-set value is stored.
+    static func canonical(for theme: ThemePreset?) -> BayScheme {
+        switch theme {
+        case .scope:       return .chiffon
+        // case .modern:   return .pearl     // future — when modern theme lands
+        default:           return .amber
+        }
     }
 }
 
@@ -1248,5 +1466,352 @@ struct BayCornerBrackets: View {
             .stroke(color, lineWidth: 1)
         }
         .allowsHitTesting(false)
+    }
+}
+
+// MARK: - Routines panel
+//
+// Light cream panel with header rail (title + trailing chrome), a
+// short list of rows, and a footer link. Used for both Workflows and
+// Console quick-entries in the Routines strip.
+
+private struct RoutinesPanel: View {
+    enum Dot { case filled, hollow }
+    struct Row { let leading: Dot; let label: String; let trailing: String }
+
+    let title: String
+    let trailing: String
+    let rows: [Row]
+    let footer: String
+
+    @State private var isHovered = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(ScopeFont.display(size: 14, medium: true))
+                    .foregroundStyle(ScopeInk.primary)
+                Spacer()
+                Text(trailing.uppercased())
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.faint)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
+            }
+
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { idx, row in
+                    HStack(spacing: 10) {
+                        Circle()
+                            .fill(row.leading == .filled ? Color.hex("9A6A22") : Color.clear)
+                            .overlay(
+                                Circle().stroke(Color.hex("9A6A22"), lineWidth: row.leading == .hollow ? 1 : 0)
+                            )
+                            .frame(width: 5, height: 5)
+                        Text(row.label)
+                            .font(.system(size: 12))
+                            .foregroundStyle(ScopeInk.primary)
+                        Spacer()
+                        Text(row.trailing.uppercased())
+                            .font(ScopeType.chrome)
+                            .tracking(ScopeType.Tracking.wide)
+                            .foregroundStyle(ScopeInk.subtle)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    if idx < rows.count - 1 {
+                        Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
+                    }
+                }
+            }
+
+            Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
+
+            HStack(spacing: 4) {
+                Spacer()
+                Text(footer)
+                    .font(ScopeType.channel)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(isHovered ? ScopeAmber.solid : Color.hex("9A6A22"))
+                Text("→")
+                    .font(.system(size: 11))
+                    .foregroundStyle(isHovered ? ScopeAmber.solid : Color.hex("9A6A22"))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+        }
+        .background(ScopeCanvas.surface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(isHovered ? ScopeEdge.normal : ScopeEdge.faint, lineWidth: 0.5)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .frame(maxWidth: .infinity)
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.16), value: isHovered)
+    }
+}
+
+// MARK: - Discovery widgets
+
+/// Today — small 24h timeline with event dots. Reads as a day-at-a-
+/// glance map, not a list. Sample events for now.
+private struct TodayWidget: View {
+    private struct Event { let hour: Double; let label: String }
+    private let events: [Event] = [
+        .init(hour: 9.5,  label: "09:30 · Design review"),
+        .init(hour: 11.0, label: "11:00 · Standup"),
+        .init(hour: 14.0, label: "14:00 · Bay polish merge"),
+    ]
+
+    var body: some View {
+        DiscoveryWidgetCard(title: "Today", eyebrow: "Calendar") {
+            VStack(alignment: .leading, spacing: 10) {
+                GeometryReader { geo in
+                    ZStack(alignment: .topLeading) {
+                        Rectangle()
+                            .fill(ScopeEdge.faint)
+                            .frame(height: 0.5)
+                            .offset(y: 10)
+                        ForEach([0, 4, 8, 12, 16, 20, 24], id: \.self) { h in
+                            let x = CGFloat(h) / 24.0 * geo.size.width
+                            VStack(spacing: 2) {
+                                Rectangle()
+                                    .fill(ScopeEdge.faint)
+                                    .frame(width: 1, height: 4)
+                                Text(String(format: "%02d", h))
+                                    .font(.system(size: 7, weight: .semibold, design: .monospaced))
+                                    .tracking(0.6)
+                                    .foregroundStyle(ScopeInk.subtle)
+                            }
+                            .offset(x: x - 6, y: 6)
+                        }
+                        ForEach(Array(events.enumerated()), id: \.offset) { _, event in
+                            let x = CGFloat(event.hour) / 24.0 * geo.size.width
+                            Circle()
+                                .fill(Color.hex("9A6A22"))
+                                .frame(width: 10, height: 10)
+                                .overlay(
+                                    Circle().stroke(ScopeCanvas.surface, lineWidth: 2)
+                                )
+                                .offset(x: x - 5, y: 5)
+                        }
+                    }
+                }
+                .frame(height: 26)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(Array(events.enumerated()), id: \.offset) { _, event in
+                        HStack {
+                            let parts = event.label.split(separator: " · ", maxSplits: 1).map(String.init)
+                            Text(parts.first ?? event.label)
+                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(ScopeInk.primary)
+                            Spacer()
+                            Text(parts.count > 1 ? parts[1] : "")
+                                .font(.system(size: 11))
+                                .foregroundStyle(ScopeInk.faint)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Shortcuts — proper key-cap glyphs grouped vertically.
+private struct ShortcutsWidget: View {
+    private struct Shortcut { let keys: [String]; let label: String }
+    private let shortcuts: [Shortcut] = [
+        .init(keys: ["⌃", "⇧", "⌘", "M"], label: "New Memo"),
+        .init(keys: ["⌃", "⇧", "⌘", "D"], label: "Dictate"),
+        .init(keys: ["⌃", "⇧", "⌘", "S"], label: "Capture screen"),
+        .init(keys: ["⌃", "⇧", "⌘", "L"], label: "Library"),
+    ]
+
+    var body: some View {
+        DiscoveryWidgetCard(title: "Shortcuts", eyebrow: "Keyboard") {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Array(shortcuts.enumerated()), id: \.offset) { _, s in
+                    HStack(spacing: 8) {
+                        HStack(spacing: 3) {
+                            ForEach(s.keys, id: \.self) { key in
+                                Text(key)
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundStyle(ScopeInk.primary)
+                                    .frame(minWidth: 18, minHeight: 18)
+                                    .background(ScopeCanvas.surface)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 3)
+                                            .stroke(ScopeEdge.normal, lineWidth: 0.5)
+                                    )
+                            }
+                        }
+                        Text(s.label)
+                            .font(.system(size: 11))
+                            .foregroundStyle(ScopeInk.faint)
+                        Spacer()
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Trending — tag + horizontal bar + count. Mini histogram, not a list.
+private struct TrendingWidget: View {
+    private struct Trend { let tag: String; let count: Int }
+    private let trends: [Trend] = [
+        .init(tag: "Standups",       count: 8),
+        .init(tag: "Compose drafts", count: 5),
+        .init(tag: "Code review",    count: 3),
+        .init(tag: "Design notes",   count: 2),
+    ]
+    private var maxCount: Int { trends.map(\.count).max() ?? 1 }
+
+    var body: some View {
+        DiscoveryWidgetCard(title: "Trending", eyebrow: "This week") {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(trends.enumerated()), id: \.offset) { _, t in
+                    HStack(spacing: 10) {
+                        Text(t.tag)
+                            .font(.system(size: 11))
+                            .foregroundStyle(ScopeInk.primary)
+                            .frame(width: 110, alignment: .leading)
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Rectangle().fill(ScopeEdge.faint)
+                                Rectangle()
+                                    .fill(Color.hex("9A6A22"))
+                                    .frame(width: geo.size.width * CGFloat(t.count) / CGFloat(maxCount))
+                            }
+                        }
+                        .frame(height: 6)
+                        .clipShape(RoundedRectangle(cornerRadius: 1))
+                        Text("\(t.count)")
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundStyle(ScopeInk.subtle)
+                            .frame(width: 16, alignment: .trailing)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Shared discovery widget chrome — title + trailing eyebrow + content.
+/// Named `DiscoveryWidgetCard` to avoid colliding with `WidgetCard` in
+/// `HomeWidgets.swift`, which serves the original (non-Scope) Home grid.
+private struct DiscoveryWidgetCard<Content: View>: View {
+    let title: String
+    let eyebrow: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(ScopeFont.display(size: 13, medium: true))
+                    .foregroundStyle(ScopeInk.primary)
+                Spacer()
+                Text(eyebrow.uppercased())
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.faint)
+            }
+            .padding(.bottom, 6)
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
+            }
+            content
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ScopeCanvas.surface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(ScopeEdge.faint, lineWidth: 0.5)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+// MARK: - System status rail
+//
+// Scheme-aware footer rail. Inherits the bay's scheme so the bay and
+// rail read as the two ends of the same instrument body, with the
+// editorial light surfaces between them. On dark schemes (AMBER) it's
+// a gunmetal recessed strip; on light (PEARL/CHIFFON/etc.) it's a
+// barely-there chrome rail.
+
+private struct SystemStatusRail: View {
+    let scheme: BayScheme
+
+    var body: some View {
+        HStack(spacing: 18) {
+            phosphor(label: "AGENT",   detail: "AG-01 · RUNNING", state: .ok)
+            divider
+            phosphor(label: "BRIDGE",  detail: "LOCAL · CONNECTED", state: .ok)
+            divider
+            phosphor(label: "ICLOUD",  detail: "SYNCED", state: .ok)
+            divider
+            phosphor(label: "UPDATES", detail: "CURRENT", state: .muted)
+            Spacer()
+            Text(uptimeChrome)
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(scheme.inkSubtle)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(scheme.stripBottomFill)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(scheme.edge, lineWidth: 0.5)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
+    private enum DotState { case ok, warn, muted }
+
+    private func phosphor(label: String, detail: String, state: DotState) -> some View {
+        HStack(spacing: 6) {
+            let dotColor: Color = {
+                switch state {
+                case .ok:    return scheme.trace
+                case .warn:  return Color.hex("C77F2E")
+                case .muted: return scheme.inkSubtle
+                }
+            }()
+            Circle()
+                .fill(dotColor)
+                .frame(width: 6, height: 6)
+                .shadow(color: scheme.isLight ? .clear : dotColor.opacity(0.55), radius: 3)
+            Text(label)
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(scheme.inkFaint)
+            Text(detail)
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(scheme.inkSubtle)
+        }
+    }
+
+    private var divider: some View {
+        Rectangle()
+            .fill(scheme.edge)
+            .frame(width: 0.5, height: 12)
+    }
+
+    private var uptimeChrome: String {
+        // TODO: wire to ProcessInfo / launchd state. Stub matches
+        // Mac Home study.
+        "PID \(ProcessInfo.processInfo.processIdentifier) · UPTIME 4H"
     }
 }

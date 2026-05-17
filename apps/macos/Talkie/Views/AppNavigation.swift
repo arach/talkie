@@ -856,7 +856,15 @@ struct AppNavigation: View {
         }
 
         entries.append(.section(id: "tools", title: "Tools"))
-        entries.append(.item(SidebarItem(id: .liveDashboard, title: "Stats", icon: "waveform.path.ecg", selectedIcon: "chart.bar.fill")))
+        // Scope theme renames this slot from "Stats" to "Learn" — the
+        // screen for that theme is `ScopeLearnScreen`, an agent-powered
+        // discovery interstitial that replaces the data-listing Stats
+        // page. Standard themes keep "Stats" → `StatsScreen`.
+        if settings.isScopeTheme {
+            entries.append(.item(SidebarItem(id: .liveDashboard, title: "Learn", icon: "sparkles", selectedIcon: "sparkles")))
+        } else {
+            entries.append(.item(SidebarItem(id: .liveDashboard, title: "Stats", icon: "waveform.path.ecg", selectedIcon: "chart.bar.fill")))
+        }
         entries.append(.item(SidebarItem(id: .models, title: "Models", icon: "brain", selectedIcon: "brain.fill")))
         if settings.hasUnlockedAdvancedFeatures {
             entries.append(.item(SidebarItem(id: .workflows, title: "Workflows", icon: "wand.and.stars", selectedIcon: "wand.and.rays.inverse")))
@@ -1035,12 +1043,13 @@ struct AppNavigation: View {
                     }
                 case .liveDashboard:
                     if SettingsManager.shared.isScopeTheme {
-                        // Scope owns its own top band via ScopeTopBand
-                        // (title: "Recordings"). No wrapInTalkieSection
-                        // here — would otherwise stack a duplicate band.
-                        ScopeStatsScreen(
-                            onSelectDictation: { _ in selectedSection = .dictations }
-                        )
+                        // Scope theme renders Learn — the agent-powered
+                        // discovery interstitial — in place of the
+                        // data-listing Stats page. Scope owns its own
+                        // top band via ScopeTopBand; no wrapInTalkieSection
+                        // here. ScopeStatsScreen kept in source but no
+                        // longer mounted on this branch.
+                        ScopeLearnScreen()
                     } else {
                         StatsScreen(
                             onSelectDictation: { _ in selectedSection = .dictations }
