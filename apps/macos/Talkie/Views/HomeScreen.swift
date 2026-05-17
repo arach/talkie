@@ -146,9 +146,16 @@ struct HomeScreen: View {
                 todayDictations: todayDictations,
                 totalWords: totalWords,
                 streak: streak,
-                onStartRecording: { showingRecordingView = true },
-                onOpenLibrary: { /* TODO: wire library nav */ },
-                onOpenItem: { _ in /* TODO: wire item nav */ }
+                onStartRecording: {
+                    // Match HomeGrid: nav to Recordings (which hosts the
+                    // overlay) and post the notification it listens for.
+                    NavigationState.shared.navigate(to: .recordings)
+                    NotificationCenter.default.post(name: .init("ShowRecordingView"), object: nil)
+                },
+                onOpenLibrary: { NavigationState.shared.navigate(to: .recordings) },
+                // Item-specific deep-linking is a follow-up — for now, opening
+                // any row in the captures table routes to the Recordings list.
+                onOpenItem: { _ in NavigationState.shared.navigate(to: .recordings) }
             )
             .task {
                 if !hasPerformedInitialLoad {
