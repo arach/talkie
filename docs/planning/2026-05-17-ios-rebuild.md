@@ -177,14 +177,88 @@ In rough priority order:
 Eventually: delete the existing views that are no longer routed
 to. NOT done until after the decision point + full parity.
 
-## Build process — division of labor
+## Spec artifacts (committed)
 
-**Claude writes presentation, Codex writes plumbing.** The studio
-is Claude's work; handing SwiftUI implementation to Codex risks
-silent design drift (margins, weights, glyph treatments, gesture
-semantics all encode reasoning that lives in the studio + this
-session's history). Codex is excellent at architecture and wiring;
-that's what it handles.
+| Path | What lives there |
+|---|---|
+| `docs/planning/2026-05-17-ios-rebuild.md` | This master plan |
+| `design/studio/app/<study>/SWIFT_PORT.md` | One spec per screen-port. The contract Codex builds against + the visual reference Claude paints from. |
+
+## Scratch coordination (not committed)
+
+Claude and Codex coordinate operationally via a throwaway shared
+workspace at `/tmp/talkie-coord/`:
+
+- `notes.md` — shared rolling notes (substantive events only; no chatter)
+- `briefs/` — per-task Codex briefs (operational, not lasting artifacts)
+- `drafts/` — Swift code Claude pre-writes ahead of moving it into `Views/Next/`
+
+These are throwaway by design. They don't enter git. If the local
+scratch is lost, nothing in the actual project is at risk — the
+spec artifacts above are the canonical record of what we're
+building.
+
+## Build process — contract-driven cascade
+
+**The pattern**: Claude declares contracts + paint. Codex builds
+infrastructure that fulfills the contracts. Codex hands back a
+working harness; Claude paints into it.
+
+| Claude owns | Codex owns |
+|---|---|
+| The **architecture contract** for each screen — entry-point signature, state shape, props in, mutators exposed, navigation hooks, gesture semantics | The **infrastructure that fulfills it** — state machines, ObservableObjects, environment plumbing, navigation glue, service bridges, gesture wiring, build verification, screenshot loop |
+| The **paint** — every SwiftUI view body, layout, typography, color application, animation timing, transition feel | The empty shells + scaffolding to compile against, fix narrow plumbing bugs (typos, imports, theme-accessor mismatches), report visual anomalies (don't fix them) |
+
+### What Phase 0 taught us
+
+Claude wrote `ShellChrome` (state machine), the long-press gesture
+wiring, the `@StateObject` orchestration — all infrastructure. That
+should have been Codex's. Claude should have specified the contract
+("the shell exposes chrome state I can read; mutators `tap` /
+`longPressBegan` / `longPressEnded` / `dismiss`; long-press fires
+at 0.35s; let me instantiate with `AppShellNext { content }`") and
+let Codex build the state machine + gesture wiring against that
+contract. Then Claude only paints `VoicePivotButton` /
+`ChromeOverlay` / `ListeningBubble` (props in, no internal state).
+
+### What this means in practice
+
+**Old, wrong workflow** (Phase 0):
+- Claude: writes full SwiftUI files including state machines, gesture handlers, ObservableObjects
+- Codex: scaffolds empty stubs + fixes compile errors
+
+**New, right workflow** (M1 onward):
+- Claude: writes contract spec (`design/studio/app/<study>/SWIFT_PORT.md`) that declares: what the screen accepts, what state shape it reads, what mutators it can call, what service bridge Codex must implement
+- Codex: builds the state objects + service bridges + scaffolding so the screen is instantiable with mocked data; returns a working harness
+- Claude: paints the SwiftUI view bodies that consume the harness — pure visual + interaction-as-design, no internal state plumbing
+- Codex: builds + screenshots + reports anomalies
+- Claude: iterates paint based on screenshots
+
+### Contract sharpness
+
+A SWIFT_PORT spec must say:
+
+1. **Entry point** — how does Claude call this screen?
+   (`HomeNextView()` with no args, or `ComposeNextView(documentID:)`)
+2. **Data shape** — what `ObservableObject` does the view consume?
+   What `@Published` properties + methods does it expose?
+3. **Mutator contract** — what methods does the view call on the
+   store, and what should they do?
+4. **Service bridge** — which existing services does the store
+   bridge to? (`Persistence`, `AudioRecorderManager`, AI providers)
+5. **Mock-mode** — what's the contract for instantiation without
+   real data (so paint work isn't blocked on service wiring)?
+
+If those 5 are precise, Codex returns infrastructure Claude can
+paint into immediately.
+
+### Hard rule going forward
+
+Claude does NOT write infrastructure code in the iOS app. If a
+SwiftUI view body needs an `@StateObject` / `@EnvironmentObject`,
+the contract spec includes a stubbed protocol or a mock instance
+Codex provides; Claude consumes it as a prop or environment value
+and writes only the visual layer.
 
 | Owned by **Claude** | Owned by **Codex** |
 |---|---|
