@@ -41,12 +41,6 @@ picker together.
   mid-tones lose intent. Commit to a real material identity with
   strong contrast or don't ship the scheme.*
 
-> **Swift is one iteration behind HTML.** The studio explores 9
-> schemes (below); the shipping Swift bay still carries the earlier
-> 6-scheme gray gradient (amber · graphite · pewter · ash · stone ·
-> paper). The HTML winners will be ported to Swift on a follow-up
-> branch. Do not assume the Swift `BayScheme` enum matches this list.
-
 ## Current scheme lineup (9, ordered dark → light)
 
 | Scheme | Surface | Accent | Identity |

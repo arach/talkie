@@ -66,8 +66,10 @@ struct ActionDock: View {
     @ObservedObject private var layoutSettings = DockLayoutSettings.shared
     #endif
 
-    private var themeColors: ThemeColors { ThemeManager.shared.colors }
-    @State private var showingModePicker = false
+    @ObservedObject private var themeManager = ThemeManager.shared
+    private var themeColors: ThemeColors { themeManager.colors }
+    private var chrome: ChromeTokens { themeManager.chrome }
+    private var isScopeTheme: Bool { themeManager.currentTheme.isScope }
 
     // MARK: - Bindings
     @Binding var showingRecordingView: Bool
@@ -75,6 +77,7 @@ struct ActionDock: View {
     @Binding var showingSSHTerminal: Bool
     @Binding var showingCaptureLauncher: Bool
     @Binding var showingCaptureCompose: Bool
+    @Binding var showingCompose: Bool
     @Binding var contentFilter: ContentFilter
 
     // MARK: - Entry state
@@ -91,6 +94,7 @@ struct ActionDock: View {
         showingSSHTerminal: Binding<Bool>,
         showingCaptureLauncher: Binding<Bool>,
         showingCaptureCompose: Binding<Bool>,
+        showingCompose: Binding<Bool>,
         contentFilter: Binding<ContentFilter>,
         terminalState: ActionDockTerminalState,
         onTerminalTapped: (() -> Void)? = nil
@@ -100,49 +104,47 @@ struct ActionDock: View {
         self._showingSSHTerminal = showingSSHTerminal
         self._showingCaptureLauncher = showingCaptureLauncher
         self._showingCaptureCompose = showingCaptureCompose
+        self._showingCompose = showingCompose
         self._contentFilter = contentFilter
         self.terminalState = terminalState
         self.onTerminalTapped = onTerminalTapped
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            if showingModePicker {
-                dockModePicker
-                    .padding(.top, 12)
-                    .padding(.bottom, 4)
-                    .transition(
-                        .move(edge: .bottom)
-                        .combined(with: .scale(scale: 0.9))
-                        .combined(with: .opacity)
-                    )
-            }
-            buttonRow
-        }
+        buttonRow
         .frame(maxWidth: .infinity)
         .contentShape(Rectangle())
-        .onTapGesture {
-            if showingModePicker {
-                withAnimation(.spring(response: 0.24, dampingFraction: 0.88)) {
-                    showingModePicker = false
-                }
-            }
-        }
         .background {
-            if #available(iOS 26.0, *) {
+            if isScopeTheme {
+                ZStack {
+                    ScopeMobile.canvas.opacity(0.94)
+                    ScopeMobileGraticuleBackground(
+                        pitch: 32,
+                        color: ScopeMobile.edgeSubtle,
+                        opacity: 0.58
+                    )
+                }
+                .ignoresSafeArea(edges: .bottom)
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(ScopeMobile.edgeFaint)
+                        .frame(height: 1)
+                }
+            } else if #available(iOS 26.0, *) {
                 Color.clear
                     .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 0))
                     .ignoresSafeArea(edges: .bottom)
             } else {
                 themeColors.cardBackground.opacity(0.95)
+                    .ignoresSafeArea(edges: .bottom)
             }
         }
         .background {
-            if #unavailable(iOS 26.0) {
+            if #unavailable(iOS 26.0), !isScopeTheme {
                 VStack(spacing: 0) {
                     Rectangle()
-                        .fill(themeColors.tableBorder)
-                        .frame(height: 0.5)
+                        .fill(chrome.edgeFaint)
+                        .frame(height: chrome.hairlineWidth)
                     Spacer(minLength: 0)
                 }
             }
@@ -163,7 +165,7 @@ struct ActionDock: View {
 
             Spacer()
 
-            keyboardButton
+            composeButton
                 .frame(width: DockLayout.sideButtonSize, height: DockLayout.sideButtonSize)
         }
         .padding(.horizontal, DockLayout.horizontalPadding)
@@ -190,18 +192,18 @@ struct ActionDock: View {
         .accessibilityHint(terminalAccessibilityHint)
     }
 
-    // MARK: - Keyboard Button
+    // MARK: - Compose Button
 
-    private var keyboardButton: some View {
+    private var composeButton: some View {
         BottomCircleButton(
-            icon: "plus.viewfinder",
+            icon: "square.and.pencil",
             isActive: false
         ) {
-            showingCaptureLauncher = true
+            showingCompose = true
         }
-        .accessibilityIdentifier("dock.captureHub")
-        .accessibilityLabel("Open shortcuts")
-        .accessibilityHint("Browse memo, dictation, capture, and Mac actions.")
+        .accessibilityIdentifier("dock.compose")
+        .accessibilityLabel("Open compose")
+        .accessibilityHint("Opens the compose tool for drafting, editing, and revising text with AI.")
     }
 
     // MARK: - Center Button (context-aware)
@@ -228,9 +230,7 @@ struct ActionDock: View {
                 .onEnded { _ in
                     let impact = UIImpactFeedbackGenerator(style: .rigid)
                     impact.impactOccurred()
-                    withAnimation(.spring(response: 0.24, dampingFraction: 0.84)) {
-                        showingModePicker.toggle()
-                    }
+                    showingCaptureCompose = true
                 }
                 .exclusively(
                     before: TapGesture()
@@ -241,46 +241,7 @@ struct ActionDock: View {
         )
         .accessibilityIdentifier("dock.center")
         .accessibilityAddTraits(.isButton)
-        .accessibilityHint("Tap to start the selected input mode. Long press to choose a different mode.")
-    }
-
-    private var dockModePicker: some View {
-        HStack(spacing: 6) {
-            ForEach(ContentFilter.allCases, id: \.self) { filter in
-                Button {
-                    let impact = UIImpactFeedbackGenerator(style: .light)
-                    impact.impactOccurred()
-                    contentFilter = filter
-                    withAnimation(.spring(response: 0.24, dampingFraction: 0.9)) {
-                        showingModePicker = false
-                    }
-                } label: {
-                    VStack(spacing: 3) {
-                        Image(systemName: icon(for: filter))
-                            .font(.system(size: 12, weight: .semibold))
-                        Text(shortLabel(for: filter))
-                            .font(.system(size: 9, weight: .semibold))
-                    }
-                    .foregroundStyle(filter == contentFilter ? Color.white : Color.textSecondary)
-                    .frame(width: 48, height: 44)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(filter == contentFilter ? color(for: filter) : Color.clear)
-                    )
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(6)
-        .background {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.clear)
-                .glassEffect(.regular.interactive())
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
-        }
+        .accessibilityHint("Tap to start the selected input mode. Long press to open Capture.")
     }
 
     private func triggerCurrentMode() {
@@ -303,6 +264,10 @@ struct ActionDock: View {
     }
 
     private var centerButtonColor: Color {
+        if isScopeTheme {
+            return ScopeMobile.amber
+        }
+
         switch contentFilter {
         case .memos: return .memoAccent
         case .dictations: return .brandAccent
@@ -311,6 +276,10 @@ struct ActionDock: View {
     }
 
     private var centerButtonGlowColor: Color {
+        if isScopeTheme {
+            return ScopeMobile.amberGlow
+        }
+
         switch contentFilter {
         case .memos: return .memoAccentGlow
         case .dictations: return .brandAccent
@@ -339,38 +308,6 @@ struct ActionDock: View {
         }
     }
 
-    private func icon(for filter: ContentFilter) -> String {
-        switch filter {
-        case .memos:
-            "mic.fill"
-        case .dictations:
-            "character.cursor.ibeam"
-        case .captures:
-            "plus.viewfinder"
-        }
-    }
-
-    private func shortLabel(for filter: ContentFilter) -> String {
-        switch filter {
-        case .memos:
-            "Memo"
-        case .dictations:
-            "Type"
-        case .captures:
-            "Grab"
-        }
-    }
-
-    private func color(for filter: ContentFilter) -> Color {
-        switch filter {
-        case .memos:
-            .memoAccent
-        case .dictations:
-            .brandAccent
-        case .captures:
-            .accentColor
-        }
-    }
 }
 
 // MARK: - Bottom Circle Button
@@ -381,19 +318,47 @@ struct BottomCircleButton: View {
     let isActive: Bool
     let action: () -> Void
 
+    @ObservedObject private var themeManager = ThemeManager.shared
+    private var chrome: ChromeTokens { themeManager.chrome }
+    private var isScopeTheme: Bool { themeManager.currentTheme.isScope }
+
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 16, weight: .medium))
-                .foregroundColor(isActive ? Color.textPrimary : Color.textSecondary)
+                .foregroundStyle(buttonForeground)
                 .frame(width: 44, height: 44)
                 .background {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(.clear)
-                        .glassEffect(.regular.interactive())
+                    if isScopeTheme {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(ScopeMobile.surface.opacity(0.84))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .strokeBorder(ScopeMobile.edgeFaint, lineWidth: 0.75)
+                            }
+                    } else {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(isActive ? chrome.accentTint : Color.clear)
+                            .glassEffect(.regular.interactive())
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .strokeBorder(
+                                        isActive ? chrome.accent.opacity(0.40) : chrome.edgeFaint,
+                                        lineWidth: chrome.hairlineWidth
+                                    )
+                            }
+                    }
                 }
         }
         .buttonStyle(.plain)
+    }
+
+    private var buttonForeground: Color {
+        if isScopeTheme {
+            return isActive ? ScopeMobile.amber : ScopeMobile.inkMuted
+        }
+
+        return isActive ? chrome.accent : themeManager.colors.textSecondary
     }
 }
 
@@ -562,6 +527,7 @@ struct DebugSlider: View {
             showingSSHTerminal: .constant(false),
             showingCaptureLauncher: .constant(false),
             showingCaptureCompose: .constant(false),
+            showingCompose: .constant(false),
             contentFilter: .constant(.memos),
             terminalState: .open
         )

@@ -73,7 +73,10 @@ final class AIResponseSpeechRouter {
     ) async throws -> Data {
         let hasDirectTTS = settings.ttsMode == "direct"
             && settings.ttsProvider != "local"
-            && !settings.ttsApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && (
+                !settings.ttsApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || TalkieAIProviderResolver.shared.provider(providerId: settings.ttsProvider) != nil
+            )
 
         if hasDirectTTS {
             return try await TTSService.synthesizeConfigured(text: text, settings: settings)

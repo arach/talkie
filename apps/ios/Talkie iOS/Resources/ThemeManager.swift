@@ -47,6 +47,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
     case midnight = "midnight"
     case tactical = "tactical"
     case ghost = "ghost"
+    case scope = "scope"
 
     var id: String { rawValue }
 
@@ -55,6 +56,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .midnight: return "Midnight"
         case .tactical: return "Tactical"
         case .ghost: return "Ghost"
+        case .scope: return "Scope"
         }
     }
 
@@ -63,6 +65,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .midnight: return "Deep black with subtle highlights"
         case .tactical: return "High contrast, sharp edges"
         case .ghost: return "Soft, muted elegance"
+        case .scope: return "Paper chassis with brass instrument chrome"
         }
     }
 }
@@ -138,6 +141,25 @@ private let cachedGhostColors = ThemeColors(
     success: Color(hex: "10B981")
 )
 
+// Scope: black-and-gold instrument chassis. Paper-white canvas, warm-graphite
+// instrument panels, brass-amber accent. Mirrors the latest direction on
+// `ui/instrument-bay-polish` — softer brass over emerald, paper over pure
+// white. Dividers/borders derive from ink and auto-flip with mode.
+private let cachedScopeColors = ThemeColors(
+    tableHeaderBackground: Color(hex: "F5F3EE", darkHex: "1A1714"),
+    tableCellBackground: Color(hex: "F8F6F1", darkHex: "13110E"),
+    tableDivider: ScopeMobile.ink.opacity(0.06),
+    tableBorder: ScopeMobile.ink.opacity(0.10),
+    background: Color(hex: "FBFAF7", darkHex: "0A0907"),
+    cardBackground: Color(hex: "F8F6F1", darkHex: "13110E"),
+    searchBackground: Color(hex: "F2F0EA", darkHex: "151310"),
+    textPrimary: Color(hex: "1A1612", darkHex: "F5F3EE"),
+    textSecondary: Color(hex: "5A5045", darkHex: "A8A096"),
+    textTertiary: Color(hex: "A39989", darkHex: "7D6E5E"),
+    accent: Color(hex: "B5823A", darkHex: "E89A3C"),
+    success: Color(hex: "6F7D3E", darkHex: "9CB35A")
+)
+
 // MARK: - Theme Color Access (O(1) lookup, no parsing)
 
 extension AppTheme {
@@ -146,7 +168,12 @@ extension AppTheme {
         case .midnight: return cachedMidnightColors
         case .tactical: return cachedTacticalColors
         case .ghost: return cachedGhostColors
+        case .scope: return cachedScopeColors
         }
+    }
+
+    var isScope: Bool {
+        self == .scope
     }
 }
 
@@ -175,7 +202,7 @@ class ThemeManager: ObservableObject {
 
     private init() {
         let configuration = TalkieAppConfigurationStore.shared.configuration
-        self.currentTheme = AppTheme(rawValue: configuration.appearance.theme) ?? .midnight
+        self.currentTheme = AppTheme(rawValue: configuration.appearance.theme) ?? .scope
         self.appearanceMode = AppearanceMode(rawValue: configuration.appearance.mode) ?? .system
     }
 }

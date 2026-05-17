@@ -17,6 +17,7 @@ struct RecordingView: View {
     @Environment(\.dismiss) private var dismiss
 
     @StateObject private var recorder = AudioRecorderManager()
+    @ObservedObject private var theme = ThemeManager.shared
     @State private var recordingTitle = ""
     @State private var defaultTitle = ""
     @State private var recPulse = false
@@ -106,6 +107,23 @@ struct RecordingView: View {
                 }
             }
         }
+        .onDisappear {
+            // Safety net: if the sheet is dismissed while still actively
+            // recording (e.g. dismissAllSheets flips the binding, or some other
+            // path bypasses cancel/save/delete), make sure we stop the recorder
+            // and release the AVAudioSession so the iOS mic indicator turns
+            // off. We do NOT touch the file in the paused/ready-to-save state
+            // since saveRecording keeps the file on disk for playback; finalize
+            // is idempotent in that branch (audioRecorder is already nil).
+            if recorder.isRecording {
+                let leakedURL = recorder.currentRecordingURL
+                recorder.finalizeRecording()
+                if let url = leakedURL {
+                    try? FileManager.default.removeItem(at: url)
+                    AppLogger.recording.info("RecordingView disappeared mid-recording; discarded \(url.lastPathComponent)")
+                }
+            }
+        }
         .onChange(of: sheetDetent) { _, newValue in
             if newValue == .height(expandedHeight) {
                 loadRecentVisualsIfNeeded()
@@ -138,11 +156,12 @@ struct RecordingView: View {
 
                 Spacer()
 
-                // REC indicator
+                // REC indicator (universal red, with theme-aware glow)
                 HStack(spacing: Spacing.xs) {
                     Circle()
                         .fill(Color.recording)
                         .frame(width: 6, height: 6)
+                        .shadow(color: Color.recording.opacity(0.55), radius: theme.chrome.glowRadius)
                         .scaleEffect(recPulse ? 1.2 : 0.8)
                         .animation(
                             .easeInOut(duration: 0.6)
@@ -173,11 +192,11 @@ struct RecordingView: View {
                 waveformStyleSwitcher
             }
 
-            // Live waveform
+            // Live waveform (recording red on particles, theme accent otherwise)
             LiveWaveformView(
                 levels: recorder.audioLevels,
                 height: isExpandedDetailsMode ? 120 : 60,
-                color: waveformStyle == .particles ? .recording : .memoAccent,
+                color: waveformStyle == .particles ? .recording : theme.chrome.accent,
                 style: waveformStyle
             )
             .padding(.horizontal, Spacing.sm)
@@ -201,26 +220,23 @@ struct RecordingView: View {
 
             Spacer(minLength: Spacing.sm)
 
-            // Stop button centered - matches ActionDock record button size
+            // Stop button — theme-aware accent ring + glow
             Button(action: {
                 recorder.stopRecording()
             }) {
                 ZStack {
-                    // Subtle glow while recording
                     Circle()
-                        .fill(Color.memoAccentGlow)
+                        .fill(theme.chrome.accentGlow)
                         .frame(width: 76, height: 76)
                         .blur(radius: 20)
                         .opacity(0.5)
 
-                    // Outer ring
                     Circle()
-                        .strokeBorder(Color.memoAccent, lineWidth: 3)
+                        .strokeBorder(theme.chrome.accent, lineWidth: 3)
                         .frame(width: 70, height: 70)
 
-                    // Stop icon
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.memoAccent)
+                        .fill(theme.chrome.accent)
                         .frame(width: 22, height: 22)
                 }
             }
@@ -260,16 +276,14 @@ struct RecordingView: View {
                             .strokeBorder(Color.borderPrimary.opacity(0.5), lineWidth: 0.5)
                     )
 
-                // READY indicator
+                // READY indicator — theme accent + phosphor glow
                 HStack(spacing: 4) {
-                    Circle()
-                        .fill(Color.memoAccent)
-                        .frame(width: 6, height: 6)
+                    TalkieStatusDot(diameter: 6, pulses: true)
 
                     Text("READY")
                         .font(.techLabelSmall)
                         .tracking(1)
-                        .foregroundColor(.memoAccent)
+                        .foregroundColor(theme.chrome.accent)
                 }
                 .frame(width: 70, alignment: .trailing)
             }
@@ -302,40 +316,40 @@ struct RecordingView: View {
 
             // Action buttons - Resume left, Save center
             HStack(spacing: Spacing.lg) {
-                // Resume button - subtle, secondary action
+                // Resume button — secondary, theme-aware
                 Button(action: {
                     resumeRecording()
                 }) {
                     Image(systemName: "mic.fill")
                         .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(.memoAccent.opacity(0.7))
+                        .foregroundColor(theme.chrome.accent.opacity(0.7))
                         .frame(width: 48, height: 48)
-                        .background(Color.surfaceSecondary.opacity(0.6))
+                        .background(theme.colors.cardBackground.opacity(0.6))
                         .clipShape(Circle())
                         .overlay(
                             Circle()
-                                .strokeBorder(Color.memoAccent.opacity(0.3), lineWidth: 1)
+                                .strokeBorder(theme.chrome.accent.opacity(0.3), lineWidth: 1)
                         )
                 }
 
-                // Save button - primary action, centered (matches ActionDock button size)
+                // Save button — primary action, theme accent
                 Button(action: {
                     saveRecording()
                     dismiss()
                 }) {
                     ZStack {
                         Circle()
-                            .fill(Color.memoAccent)
+                            .fill(theme.chrome.accent)
                             .frame(width: 70, height: 70)
                             .overlay(
                                 Circle()
-                                    .strokeBorder(Color.white.opacity(0.3), lineWidth: 1)
+                                    .strokeBorder(theme.chrome.panelInk.opacity(0.3), lineWidth: 1)
                             )
-                            .shadow(color: Color.memoAccentGlow.opacity(0.35), radius: 8, x: 0, y: 4)
+                            .shadow(color: theme.chrome.accentGlow.opacity(0.45), radius: 8, x: 0, y: 4)
 
                         Image(systemName: "checkmark")
                             .font(.system(size: 26, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(theme.chrome.panelInk)
                     }
                 }
                 .accessibilityIdentifier("recording.save")
@@ -358,12 +372,9 @@ struct RecordingView: View {
         VStack(spacing: Spacing.lg) {
             Spacer()
 
-            BrailleSpinner(color: .memoAccent)
+            BrailleSpinner(color: theme.chrome.accent)
 
-            Text("STARTING...")
-                .font(.techLabel)
-                .tracking(2)
-                .foregroundColor(.textSecondary)
+            TalkieEyebrow(text: "Starting", showLeader: false)
 
             Spacer()
         }
@@ -378,10 +389,10 @@ struct RecordingView: View {
                     Text(styleName(style))
                         .font(.techLabelSmall)
                         .tracking(0.5)
-                        .foregroundColor(waveformStyle == style ? .white : .textTertiary)
+                        .foregroundColor(waveformStyle == style ? theme.chrome.panelInk : .textTertiary)
                         .padding(.horizontal, Spacing.sm)
                         .padding(.vertical, Spacing.xs)
-                        .background(waveformStyle == style ? Color.memoAccent.opacity(0.85) : Color.clear)
+                        .background(waveformStyle == style ? theme.chrome.accent.opacity(0.85) : Color.clear)
                         .cornerRadius(CornerRadius.sm)
                 }
             }
@@ -525,11 +536,7 @@ struct RecordingView: View {
 
     private var detailsPanelHeader: some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
-            Text("DETAIL MODE")
-                .font(.techLabel)
-                .tracking(2)
-                .foregroundColor(.textSecondary)
-
+            TalkieEyebrow(text: "Detail Mode")
             Spacer()
         }
     }

@@ -67,6 +67,8 @@ struct CaptureComposeView: View {
                         dictationResetTrigger: $dictationResetTrigger
                     ) {
                         EmptyView()
+                    } footerContent: {
+                        EmptyView()
                     }
                     .animation(.easeInOut(duration: 0.25), value: isComposing)
 
@@ -84,14 +86,7 @@ struct CaptureComposeView: View {
             .navigationTitle("New Capture")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { saveCapture() }
-                        .fontWeight(.semibold)
-                        .disabled(trimmedText.isEmpty)
-                }
+                captureToolbar
             }
             .sheet(isPresented: $showingCamera) {
                 if supportsDocumentScanner {
@@ -132,9 +127,7 @@ struct CaptureComposeView: View {
                 }
             }
             .onChange(of: dictationState) { _, state in
-                if state == .recording && !isComposing {
-                    withAnimation { isComposing = true }
-                }
+                handleDictationStateChange(state)
             }
             .fullScreenCover(isPresented: $showingWebBrowser) {
                 WebCaptureBrowser(initialURL: webBrowserURL) { result in
@@ -150,6 +143,28 @@ struct CaptureComposeView: View {
                 }
             }
         }
+    }
+
+    @ToolbarContentBuilder
+    private var captureToolbar: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) {
+            Button("Cancel", action: cancelCapture)
+        }
+
+        ToolbarItem(placement: .confirmationAction) {
+            Button("Save", action: saveCapture)
+                .fontWeight(.semibold)
+                .disabled(trimmedText.isEmpty)
+        }
+    }
+
+    private func cancelCapture() {
+        dismiss()
+    }
+
+    private func handleDictationStateChange(_ state: InlineDictationController.State) {
+        guard state == .recording, !isComposing else { return }
+        withAnimation { isComposing = true }
     }
 
     // MARK: - Import Options

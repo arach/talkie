@@ -38,17 +38,23 @@ final class InlineDictationController: NSObject {
 
     private var recorder: AVAudioRecorder?
     private var recordingURL: URL?
+    private var activeStartToken: UUID?
     private var activeTranscriptionToken: UUID?
 
     func start() async {
         guard state == .idle else { return }
 
+        let startToken = UUID()
+        activeStartToken = startToken
         state = .transcribing
 
         let speechAuthorized = await requestSpeechPermission()
         let microphoneAuthorized = await requestMicrophonePermission()
 
+        guard activeStartToken == startToken else { return }
+
         guard speechAuthorized, microphoneAuthorized else {
+            activeStartToken = nil
             state = .idle
             onError?("Allow microphone and speech access to use dictation.")
             return
@@ -67,10 +73,19 @@ final class InlineDictationController: NSObject {
                 ])
             }
 
+            guard activeStartToken == startToken else {
+                recorder.stop()
+                deactivateAudioSession()
+                try? FileManager.default.removeItem(at: outputURL)
+                return
+            }
+
+            activeStartToken = nil
             self.recorder = recorder
             self.recordingURL = outputURL
             state = .recording
         } catch {
+            activeStartToken = nil
             cleanupRecording(discardFile: true)
             state = .idle
             onError?(error.localizedDescription)
@@ -78,6 +93,8 @@ final class InlineDictationController: NSObject {
     }
 
     func stop(insertTranscript: Bool) {
+        activeStartToken = nil
+
         guard let recorder, let recordingURL else {
             cancel()
             return
@@ -132,6 +149,7 @@ final class InlineDictationController: NSObject {
     }
 
     func cancel() {
+        activeStartToken = nil
         activeTranscriptionToken = nil
         recorder?.stop()
         recorder = nil

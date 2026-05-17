@@ -59,10 +59,7 @@ struct OCRPreviewSheet: View {
                         } else {
                             VStack(alignment: .leading, spacing: Spacing.sm) {
                                 HStack {
-                                    Text("EXTRACTED TEXT")
-                                        .font(.system(size: 10, weight: .medium))
-                                        .tracking(1)
-                                        .foregroundColor(.textTertiary)
+                                    TalkieEyebrow(text: "Extracted Text")
                                     Spacer()
                                     Text("\(preview.wordCount) words")
                                         .font(.system(size: 10))

@@ -16,7 +16,7 @@ struct TalkieAIProviderCredentialValidator {
         guard TalkieAIProviderCredentialValidationPolicy.allowsProviderValidation else {
             AppLogger.ai.warning(
                 "Provider credential validation blocked",
-                detail: "provider=\(payload.providerId) reason=local_credential_tests"
+                detail: "provider=\(payload.providerId) reason=debug_override"
             )
             throw TalkieAIProviderCredentialValidationError.providerValidationDisabled
         }
@@ -102,11 +102,21 @@ struct TalkieAIProviderCredentialValidator {
 }
 
 enum TalkieAIProviderCredentialValidationPolicy {
-    #if DEBUG
-    static let allowsProviderValidation = false
-    #else
-    static let allowsProviderValidation = true
-    #endif
+    private static let persistedDebugDisableKey = "TalkieDisableAIProviderCredentialValidation"
+
+    static var allowsProviderValidation: Bool {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["TALKIE_DISABLE_AI_PROVIDER_CREDENTIAL_VALIDATION"] == "1" {
+            return false
+        }
+
+        if UserDefaults.standard.object(forKey: persistedDebugDisableKey) != nil {
+            UserDefaults.standard.removeObject(forKey: persistedDebugDisableKey)
+        }
+        #endif
+
+        return true
+    }
 }
 
 private struct AIProviderValidationErrorEnvelope: Decodable {
@@ -127,7 +137,7 @@ enum TalkieAIProviderCredentialValidationError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .providerValidationDisabled:
-            return "Provider validation is disabled for local credential capture tests."
+            return "Provider validation is disabled for this debug credential capture run."
         case .unsupportedProvider(let providerName):
             return "\(providerName) is not supported for iPhone AI credentials."
         case .invalidResponse(let providerName):

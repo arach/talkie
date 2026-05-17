@@ -203,13 +203,7 @@ struct CaptureAICommandsSheet: View {
     private var selectedDirectModel: ComposeDirectModelOption? {
         guard let selectedDirectProvider else { return nil }
 
-        if let matchingModel = selectedDirectProvider.models.first(where: {
-            $0.id == appSettings.composeDirectModelId
-        }) {
-            return matchingModel
-        }
-
-        return selectedDirectProvider.models.first
+        return resolvedDirectModel(for: selectedDirectProvider)
     }
 
     private var phoneAIProvider: ComposeBorrowedProvider? {
@@ -284,9 +278,7 @@ struct CaptureAICommandsSheet: View {
 
     private var quickPromptsSection: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            Text("QUICK COMMANDS")
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .foregroundStyle(Color.textTertiary)
+            TalkieEyebrow(text: "Quick Commands")
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Spacing.xs) {
@@ -315,9 +307,7 @@ struct CaptureAICommandsSheet: View {
 
     private var commandInputCard: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("COMMAND")
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .foregroundStyle(Color.textTertiary)
+            TalkieEyebrow(text: "Command")
 
             HStack(alignment: .bottom, spacing: Spacing.sm) {
                 commandField
@@ -772,11 +762,11 @@ struct CaptureAICommandsSheet: View {
             $0.providerId == options.selectedProviderId
         }) ?? options.providers[0]
 
-        let selectedModel = selectedProvider.models.first(where: {
-            $0.id == appSettings.composeDirectModelId
-        }) ?? selectedProvider.models.first(where: {
-            $0.id == options.selectedModelId
-        }) ?? selectedProvider.models.first
+        let selectedModel = resolvedDirectModel(
+            for: selectedProvider,
+            savedModelId: appSettings.composeDirectModelId,
+            serverSelectedModelId: options.selectedModelId
+        )
 
         appSettings.composeDirectProviderId = selectedProvider.providerId
         appSettings.composeDirectModelId = selectedModel?.id ?? ""
@@ -786,8 +776,15 @@ struct CaptureAICommandsSheet: View {
         guard let provider = availableDirectProviders.first(where: { $0.providerId == providerId }) else { return }
         appSettings.composeDirectProviderId = provider.providerId
 
-        if !provider.models.contains(where: { $0.id == appSettings.composeDirectModelId }) {
-            appSettings.composeDirectModelId = provider.models.first?.id ?? ""
+        let savedModelId = appSettings.composeDirectModelId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let shouldKeepSavedModel = shouldKeepSavedDirectModel(savedModelId, providerId: provider.providerId)
+            && provider.models.contains(where: { $0.id == savedModelId })
+
+        if !shouldKeepSavedModel {
+            appSettings.composeDirectModelId = resolvedDirectModel(
+                for: provider,
+                savedModelId: savedModelId
+            )?.id ?? ""
         }
     }
 
@@ -795,6 +792,45 @@ struct CaptureAICommandsSheet: View {
         guard let selectedDirectProvider else { return }
         guard selectedDirectProvider.models.contains(where: { $0.id == modelId }) else { return }
         appSettings.composeDirectModelId = modelId
+    }
+
+    private func resolvedDirectModel(
+        for provider: ComposeDirectProviderOption,
+        savedModelId: String? = nil,
+        serverSelectedModelId: String? = nil
+    ) -> ComposeDirectModelOption? {
+        let savedModelId = (savedModelId ?? appSettings.composeDirectModelId)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if shouldKeepSavedDirectModel(savedModelId, providerId: provider.providerId),
+           let matchingModel = provider.models.first(where: { $0.id == savedModelId }) {
+            return matchingModel
+        }
+
+        if let preferredModel = preferredDirectModel(in: provider) {
+            return preferredModel
+        }
+
+        if let serverSelectedModelId,
+           let serverModel = provider.models.first(where: { $0.id == serverSelectedModelId }) {
+            return serverModel
+        }
+
+        if let legacyModel = provider.models.first(where: { $0.id == savedModelId }) {
+            return legacyModel
+        }
+
+        return provider.models.first
+    }
+
+    private func preferredDirectModel(in provider: ComposeDirectProviderOption) -> ComposeDirectModelOption? {
+        let preferredModelId = TalkieAIProviderCredentialPayload.defaultModel(for: provider.providerId)
+        return provider.models.first { $0.id == preferredModelId }
+    }
+
+    private func shouldKeepSavedDirectModel(_ modelId: String, providerId: String) -> Bool {
+        guard !modelId.isEmpty else { return false }
+        return !TalkieAIProviderCredentialPayload.isLegacyDefaultModel(modelId, for: providerId)
     }
 
     private var canGenerateSpeech: Bool {

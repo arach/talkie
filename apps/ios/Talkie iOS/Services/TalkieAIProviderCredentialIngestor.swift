@@ -79,5 +79,13 @@ struct TalkieAIProviderCredentialIngestor {
         }
         TalkieAppSettings.shared.composeDirectProviderId = payload.providerId
         TalkieAppSettings.shared.composeDirectModelId = payload.modelId
+
+        if payload.providerId == "openai" {
+            TalkieAppSettings.shared.ttsProvider = "openai"
+            TalkieAppSettings.shared.ttsMode = "direct"
+            if TalkieAppSettings.shared.ttsVoice.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                TalkieAppSettings.shared.ttsVoice = "echo"
+            }
+        }
     }
 }

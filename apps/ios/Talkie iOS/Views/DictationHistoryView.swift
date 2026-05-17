@@ -297,10 +297,7 @@ struct DictationListSection: View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Text("DICTATIONS")
-                    .font(.system(size: 10, weight: .medium))
-                    .tracking(1)
-                    .foregroundColor(themeManager.colors.textTertiary)
+                TalkieEyebrow(text: "Dictations")
 
                 Spacer()
             }
@@ -316,10 +313,7 @@ struct DictationListSection: View {
                         Image(systemName: "keyboard")
                             .font(.system(size: 32, weight: .light))
                             .foregroundColor(.textTertiary)
-                        Text("NO DICTATIONS")
-                            .font(.techLabel)
-                            .tracking(2)
-                            .foregroundColor(.textSecondary)
+                        TalkieEyebrow(text: "No Dictations", tint: .ink, showLeader: false)
                         Text("Use the keyboard to add dictations")
                             .font(.bodySmall)
                             .foregroundColor(.textTertiary)

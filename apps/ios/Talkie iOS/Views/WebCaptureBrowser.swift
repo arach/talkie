@@ -287,9 +287,7 @@ struct WebCaptureBrowser: View {
                     .padding(.top, 60)
                 } else {
                     HStack {
-                        Text("RECENT")
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(Color.textTertiary)
+                        TalkieEyebrow(text: "Recent")
                         Spacer()
                     }
                     .padding(.horizontal, 14)

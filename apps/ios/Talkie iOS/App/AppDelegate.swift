@@ -43,7 +43,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         let manager = iCloudStatusManager.shared
 
         // If already available, set up now
-        if manager.status.isAvailable {
+        if manager.canUseCloudKitContainer {
             setupCloudKitSubscription()
             return
         }
@@ -55,7 +55,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             .sink { [weak self] status in
                 guard let self = self else { return }
 
-                if status.isAvailable && !self.cloudKitSubscriptionSetUp {
+                if status.isAvailable && manager.canUseCloudKitContainer && !self.cloudKitSubscriptionSetUp {
                     self.setupCloudKitSubscription()
                     self.cancellables.removeAll() // Only need to set up once
                 }
@@ -392,6 +392,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
     /// Fetch the PushNotification record to get memoId for deep linking
     private func fetchPushNotificationRecord(recordID: CKRecord.ID) {
+        #if targetEnvironment(simulator)
+        AppLogger.app.info("[Push] Skipping CloudKit notification fetch on simulator")
+        return
+        #else
         let container = CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier)
         let privateDB = container.privateCloudDatabase
 
@@ -414,6 +418,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                 }
             }
         }
+        #endif
     }
 
     /// Memo ID from the most recent push notification (for deep linking on tap)
@@ -423,6 +428,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         cloudKitSubscriptionSetUp = true
         AppLogger.app.info("[Push] Setting up CloudKit subscriptions...")
 
+        #if targetEnvironment(simulator)
+        AppLogger.app.info("[Push] Skipping CloudKit subscriptions on simulator")
+        return
+        #else
         let container = CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier)
         let privateDB = container.privateCloudDatabase
 
@@ -437,6 +446,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         // Set up query subscription for PushNotification records (visible push notification from macOS)
         let pushNotificationSubscriptionID = "talkie-ios-push-notification"
         setupPushNotificationSubscription(database: privateDB, subscriptionID: pushNotificationSubscriptionID, zoneID: zoneID)
+        #endif
     }
 
     private func setupZoneSubscription(database: CKDatabase, subscriptionID: String, zoneID: CKRecordZone.ID) {
@@ -576,6 +586,11 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
            let recordID = ckNotification.recordID {
             AppLogger.app.info("[Push] CloudKit notification tapped, fetching memoId...")
 
+            #if targetEnvironment(simulator)
+            AppLogger.app.info("[Push] Skipping CloudKit notification tap fetch on simulator")
+            completionHandler()
+            return
+            #else
             // Fetch the record to get memoId
             let container = CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier)
             let privateDB = container.privateCloudDatabase
@@ -592,6 +607,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                     }
                 }
             }
+            #endif
         } else if let memoId = pendingNotificationMemoId {
             // Fallback to cached memoId
             AppLogger.app.info("[Push] Deep linking to memo (cached): \(memoId)")

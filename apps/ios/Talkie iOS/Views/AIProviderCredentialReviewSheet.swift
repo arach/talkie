@@ -141,10 +141,7 @@ struct AIProviderCredentialReviewSheet: View {
 
     private var credentialEditor: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("DETECTED CREDENTIAL")
-                .font(.system(size: 10, weight: .medium))
-                .tracking(1)
-                .foregroundStyle(Color.textTertiary)
+            TalkieEyebrow(text: "Detected Credential")
 
             Picker("", selection: $providerId) {
                 Text("OpenAI").tag("openai")
@@ -191,10 +188,7 @@ struct AIProviderCredentialReviewSheet: View {
 
     private var detectedCandidates: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("POSSIBLE MATCHES")
-                .font(.system(size: 10, weight: .medium))
-                .tracking(1)
-                .foregroundStyle(Color.textTertiary)
+            TalkieEyebrow(text: "Possible Matches")
 
             ForEach(currentCandidates) { candidate in
                 Button {

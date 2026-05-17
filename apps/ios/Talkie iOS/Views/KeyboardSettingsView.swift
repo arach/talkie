@@ -70,10 +70,7 @@ struct KeyboardSettingsView: View {
 
     private var setupSection: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("SETUP INSTRUCTIONS")
-                .font(.system(size: 10, weight: .regular))
-                .tracking(1.5)
-                .foregroundColor(.textTertiary.opacity(0.6))
+            TalkieEyebrow(text: "Setup Instructions")
                 .padding(.horizontal, Spacing.md)
 
             VStack(spacing: 0) {
@@ -164,10 +161,7 @@ struct KeyboardSettingsView: View {
 
     private var preferencesSection: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("PREFERENCES")
-                .font(.system(size: 10, weight: .regular))
-                .tracking(1.5)
-                .foregroundColor(.textTertiary.opacity(0.6))
+            TalkieEyebrow(text: "Preferences")
                 .padding(.horizontal, Spacing.md)
 
             VStack(spacing: 0) {
@@ -279,10 +273,7 @@ struct KeyboardSettingsView: View {
 
     private var customizeSection: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("CUSTOMIZE")
-                .font(.system(size: 10, weight: .regular))
-                .tracking(1.5)
-                .foregroundColor(.textTertiary.opacity(0.6))
+            TalkieEyebrow(text: "Customize")
                 .padding(.horizontal, Spacing.md)
 
             NavigationLink(destination: KeyboardConfiguratorView()) {
@@ -325,10 +316,7 @@ struct KeyboardSettingsView: View {
 
     private var testingSection: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("TESTING")
-                .font(.system(size: 10, weight: .regular))
-                .tracking(1.5)
-                .foregroundColor(.textTertiary.opacity(0.6))
+            TalkieEyebrow(text: "Testing")
                 .padding(.horizontal, Spacing.md)
 
             VStack(spacing: 0) {

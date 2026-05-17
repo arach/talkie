@@ -27,7 +27,7 @@ const PROVIDERS = {
     name: "OpenAI",
     env: "OPENAI_API_KEY",
     keyUrl: "https://platform.openai.com/api-keys",
-    defaultModel: "gpt-5.2-chat-latest",
+    defaultModel: "gpt-5.5",
   },
   groq: {
     id: "groq",
@@ -54,7 +54,18 @@ function parseArgs(argv) {
 
     const [rawName, inlineValue] = arg.slice(2).split("=", 2);
     const name = rawName.replace(/-([a-z])/g, (_, char) => char.toUpperCase());
-    const takesValue = !["help", "noQr", "json", "link", "openKeyUrl", "keyUrl"].includes(name);
+    const takesValue = ![
+      "help",
+      "noQr",
+      "json",
+      "link",
+      "openKeyUrl",
+      "keyUrl",
+      "keyStdin",
+      "stdin",
+      "yes",
+      "nonInteractive",
+    ].includes(name);
     const value = inlineValue ?? (takesValue ? args[++index] : "true");
     if (takesValue && (value == null || value.startsWith("--"))) {
       throw new Error(`Missing value for --${rawName}`);
@@ -76,10 +87,13 @@ Options:
   --provider <openai|groq>   AI provider to send to iPhone
   --model <id>               Model to save with the provider
   --key <key>                API key to share over the encrypted transaction
+  --key-stdin                Read the API key from stdin (--stdin also works)
   --host <ip-or-host>        Hostname/IP your iPhone can reach over local Wi-Fi
   --port <port>              Local port to listen on (default: random)
   --timeout <seconds>        How long the one-time setup stays open (default: 180)
   --prompt <text>            Assistant system prompt saved on iPhone
+  --yes                      Use defaults and do not prompt
+  --non-interactive          Alias for --yes
   --open-key-url             Open the provider API-key page before prompting
   --key-url                  Print the provider API-key page URL and exit
   --credential-source <name>  browser, paste, 1password, keychain, or auto
@@ -94,6 +108,7 @@ Options:
 Examples:
   npx @talkie/ai qr
   OPENAI_API_KEY=sk-... npx @talkie/ai qr --provider openai
+  secret get OPENAI_KEY | npx @talkie/ai qr --key-stdin
   npx @talkie/ai qr --provider groq --open-key-url
   npx @talkie/ai qr --op-item "OpenAI API key" --op-field credential
   npx @talkie/ai qr --credential-source keychain
@@ -370,6 +385,14 @@ function isNo(answer) {
   return answer.toLowerCase() === "n" || answer.toLowerCase() === "no";
 }
 
+function wantsKeyStdin(opts) {
+  return opts.keyStdin === "true" || opts.stdin === "true";
+}
+
+function wantsDefaults(opts) {
+  return opts.yes === "true" || opts.nonInteractive === "true" || wantsKeyStdin(opts);
+}
+
 function normalizeCredentialSource(value) {
   const normalized = value?.trim().toLowerCase();
   if (!normalized) return null;
@@ -427,9 +450,27 @@ async function promptSecret(label) {
   });
 }
 
-async function chooseProvider(readline, requestedProvider) {
+async function readKeyFromStdin(provider) {
+  const chunks = [];
+  for await (const chunk of input) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+  }
+
+  const key = Buffer.concat(chunks).toString("utf8").trim();
+  if (!key) {
+    throw new Error(`No ${provider.name} API key read from stdin.`);
+  }
+  validateApiKey(provider, key);
+  return key;
+}
+
+async function chooseProvider(readline, requestedProvider, useDefaults = false) {
   const normalized = normalizeProvider(requestedProvider);
   if (normalized) return PROVIDERS[normalized];
+  if (useDefaults) return PROVIDERS.openai;
+  if (!readline) {
+    throw new Error("Choose a provider with --provider <openai|groq>.");
+  }
 
   console.log(`${BOLD}Provider${RESET}`);
   console.log(`  1. OpenAI ${process.env.OPENAI_API_KEY ? DIM + "(OPENAI_API_KEY found)" + RESET : ""}`);
@@ -611,20 +652,33 @@ async function chooseCredentialSource(readline, provider, requestedSource) {
   return "browser";
 }
 
-async function resolveKey({ readline, provider, providedKey, opts }) {
+async function resolveKey({ readline, provider, providedKey, opts, useDefaults = false }) {
   if (providedKey?.trim()) {
     const key = providedKey.trim();
     validateApiKey(provider, key);
     return key;
   }
 
+  if (wantsKeyStdin(opts)) {
+    return readKeyFromStdin(provider);
+  }
+
   const envKey = process.env[provider.env]?.trim();
   if (envKey) {
+    if (useDefaults || !readline) {
+      validateApiKey(provider, envKey);
+      return envKey;
+    }
+
     const answer = await promptLine(readline, `Use ${provider.env} from this shell`, "Y");
     if (!isNo(answer)) {
       validateApiKey(provider, envKey);
       return envKey;
     }
+  }
+
+  if (useDefaults || !readline) {
+    throw new Error(`No ${provider.name} API key found. Pipe one with --key-stdin, pass --key, or set ${provider.env}.`);
   }
 
   const source =
@@ -644,9 +698,14 @@ async function resolveKey({ readline, provider, providedKey, opts }) {
 }
 
 async function runQr(opts) {
-  const readline = createInterface({ input, output });
+  let readline;
+  const useDefaults = wantsDefaults(opts);
+  const getReadline = () => {
+    readline ??= createInterface({ input, output });
+    return readline;
+  };
   try {
-    const provider = await chooseProvider(readline, opts.provider);
+    const provider = await chooseProvider(useDefaults ? null : getReadline(), opts.provider, useDefaults);
     if (opts.keyUrl === "true") {
       console.log(provider.keyUrl);
       return;
@@ -656,8 +715,14 @@ async function runQr(opts) {
         console.log(provider.keyUrl);
       }
     }
-    const model = opts.model?.trim() || await promptLine(readline, "Model", provider.defaultModel);
-    const apiKey = await resolveKey({ readline, provider, providedKey: opts.key, opts });
+    const model = opts.model?.trim() || (useDefaults ? provider.defaultModel : await promptLine(getReadline(), "Model", provider.defaultModel));
+    const apiKey = await resolveKey({
+      readline: useDefaults ? null : getReadline(),
+      provider,
+      providedKey: opts.key,
+      opts,
+      useDefaults,
+    });
     const host = opts.host?.trim() || defaultHost();
     const port = opts.port ? Number.parseInt(opts.port, 10) : 0;
     const timeoutSeconds = opts.timeout ? Number.parseInt(opts.timeout, 10) : 180;
@@ -753,7 +818,7 @@ async function runQr(opts) {
     }
   } finally {
     try {
-      readline.close();
+      readline?.close();
     } catch {
       // The hidden API-key prompt closes the readline interface before taking over stdin.
     }

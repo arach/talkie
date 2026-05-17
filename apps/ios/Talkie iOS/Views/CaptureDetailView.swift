@@ -11,6 +11,7 @@ import TalkieMobileKit
 struct CaptureDetailView: View {
     @State var capture: Capture
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var theme = ThemeManager.shared
     @State private var showCopiedFeedback = false
     @StateObject private var audioPlayer = AudioPlayerManager()
     @State private var captureImage: UIImage?
@@ -20,11 +21,12 @@ struct CaptureDetailView: View {
     @State private var syncError: String?
     @State private var isShowingImageViewer = false
     @State private var isShowingAICommands = false
+    @State private var isShowingCompose = false
 
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.surfacePrimary
+                theme.colors.background
                     .ignoresSafeArea()
 
                 ScrollView {
@@ -39,17 +41,28 @@ struct CaptureDetailView: View {
                         }
 
                         // Main text
-                        Text(capture.text)
-                            .font(.body)
-                            .foregroundColor(.textPrimary)
-                            .textSelection(.enabled)
-                            .padding(Spacing.md)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.surfaceSecondary)
-                            .cornerRadius(12)
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            TalkieEyebrow(text: "Content")
+
+                            Text(capture.text)
+                                .font(.body)
+                                .foregroundColor(theme.colors.textPrimary)
+                                .textSelection(.enabled)
+                        }
+                        .padding(Spacing.md)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(theme.colors.cardBackground)
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(theme.chrome.edgeFaint, lineWidth: 0.5)
+                        )
 
                         // Metadata
                         VStack(alignment: .leading, spacing: Spacing.xs) {
+                            TalkieEyebrow(text: "Details")
+                                .padding(.bottom, 4)
+
                             metadataRow(icon: "tray.and.arrow.down", label: "Type", value: capture.sourceType.capitalized)
                             metadataRow(icon: "text.word.spacing", label: "Words", value: "\(capture.wordCount)")
                             metadataRow(icon: "clock", label: "Captured", value: formatFullDate(capture.timestamp))
@@ -111,8 +124,12 @@ struct CaptureDetailView: View {
                             }
                         }
                         .padding(Spacing.md)
-                        .background(Color.surfaceSecondary)
+                        .background(theme.colors.cardBackground)
                         .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(theme.chrome.edgeFaint, lineWidth: 0.5)
+                        )
 
                         Spacer()
                     }
@@ -137,7 +154,8 @@ struct CaptureDetailView: View {
                         audioURL: audioURL,
                         isLoadingTTS: isLoadingTTS,
                         onRequestTTS: requestTTS,
-                        onOpenAICommands: openAICommands
+                        onOpenAICommands: openAICommands,
+                        onOpenCompose: openCompose
                     )
                 }
             }
@@ -160,7 +178,7 @@ struct CaptureDetailView: View {
                             Text(showCopiedFeedback ? "Copied" : "Copy")
                         }
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(showCopiedFeedback ? .success : .accentColor)
+                        .foregroundColor(showCopiedFeedback ? theme.colors.success : theme.chrome.accent)
                     }
                 }
             }
@@ -176,6 +194,9 @@ struct CaptureDetailView: View {
             }
             .sheet(isPresented: $isShowingAICommands) {
                 CaptureAICommandsSheet(capture: capture)
+            }
+            .navigationDestination(isPresented: $isShowingCompose) {
+                ComposeView(presentationStyle: .embedded, initialContext: ComposeInitialContext(capture: capture))
             }
             .onReceive(NotificationCenter.default.publisher(for: .capturesDidChange)) { _ in
                 // Refresh sync status and audio availability
@@ -285,6 +306,12 @@ struct CaptureDetailView: View {
         audioPlayer.stopPlayback()
         SpeechSynthesisService.shared.stop()
         isShowingAICommands = true
+    }
+
+    private func openCompose() {
+        audioPlayer.stopPlayback()
+        SpeechSynthesisService.shared.stop()
+        isShowingCompose = true
     }
 
     // MARK: - Helpers
@@ -590,6 +617,7 @@ struct CaptureActionTray: View {
     let isLoadingTTS: Bool
     let onRequestTTS: () -> Void
     let onOpenAICommands: () -> Void
+    let onOpenCompose: () -> Void
     @State private var appSettings = TalkieAppSettings.shared
     @State private var speechService = SpeechSynthesisService.shared
 
@@ -604,7 +632,7 @@ struct CaptureActionTray: View {
 
     var body: some View {
         VStack(spacing: Spacing.sm) {
-            aiCommandsButton
+            primaryActionsRow
 
             if hasCloudAudio {
                 cloudPlaybackBar
@@ -627,31 +655,55 @@ struct CaptureActionTray: View {
         }
     }
 
-    private var aiCommandsButton: some View {
-        Button(action: onOpenAICommands) {
-            HStack(spacing: 8) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
+    private var primaryActionsRow: some View {
+        HStack(spacing: Spacing.sm) {
+            captureActionButton(
+                title: "Compose",
+                subtitle: "Edit with voice",
+                icon: "square.and.pencil",
+                tint: Color.brandAccent,
+                action: onOpenCompose
+            )
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("AI Commands")
+            captureActionButton(
+                title: "Ask",
+                subtitle: "Run AI",
+                icon: "sparkles",
+                tint: Color.accentColor,
+                action: onOpenAICommands
+            )
+        }
+    }
+
+    private func captureActionButton(
+        title: String,
+        subtitle: String,
+        icon: String,
+        tint: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 20)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Color.textPrimary)
+                        .lineLimit(1)
 
-                    Text("Summarize, explain, or ask something about this capture.")
+                    Text(subtitle)
                         .font(.system(size: 11))
                         .foregroundStyle(Color.textSecondary)
+                        .lineLimit(1)
                 }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.textTertiary)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.surfaceSecondary)
             .clipShape(.rect(cornerRadius: CornerRadius.md))
             .overlay {

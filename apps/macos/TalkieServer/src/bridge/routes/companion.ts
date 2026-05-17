@@ -631,6 +631,10 @@ function resolveLegacySlotId(tile: ShortcutBoardTile): string {
     case "talkie-devices":
     case "devices":
       return "talkie-devices";
+    case "mac-paste-image":
+    case "paste-image":
+    case "share-image":
+      return "mac-paste-image";
     default:
       return "";
   }
@@ -661,7 +665,7 @@ function defaultShortcutPages(): CompanionShortcutPage[] {
         "talkie-pending",
         "talkie-recent",
         "talkie-home",
-        "talkie-devices",
+        "mac-paste-image",
       ],
     },
     {
@@ -669,6 +673,7 @@ function defaultShortcutPages(): CompanionShortcutPage[] {
       title: "Mac",
       shortcutSlots: [
         "mac-windows",
+        "mac-paste-image",
         "talkie-keyboard",
         "iterm-dictate",
         "mac-sessions",
@@ -682,7 +687,6 @@ function defaultShortcutPages(): CompanionShortcutPage[] {
         "talkie-devices",
         "talkie-home",
         "talkie-pending",
-        "",
         "",
       ],
     },

@@ -203,7 +203,7 @@ const app = new Elysia()
   })
   .onAfterHandle(({ request, response, set, store }) => {
     const url = new URL(request.url);
-    const status = set.status || 200;
+    const status = response instanceof Response ? response.status : (set.status || 200);
     // @ts-ignore - store timing
     const elapsed = Date.now() - (store.requestStart || Date.now());
     const timeStr = elapsed > 1000 ? `⚠️ ${elapsed}ms` : `${elapsed}ms`;

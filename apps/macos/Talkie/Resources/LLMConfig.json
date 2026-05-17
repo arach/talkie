@@ -81,8 +81,15 @@
     "openai": {
       "id": "openai",
       "name": "OpenAI",
-      "defaultModel": "gpt-5.4-mini",
+      "defaultModel": "gpt-5.5",
       "models": [
+        {
+          "id": "gpt-5.5",
+          "displayName": "GPT-5.5",
+          "description": "Default OpenAI model for direct Talkie AI workflows",
+          "recommended": true,
+          "workflowCostTier": "capable"
+        },
         {
           "id": "gpt-5.4",
           "displayName": "GPT-5.4",

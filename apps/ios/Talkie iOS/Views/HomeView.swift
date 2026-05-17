@@ -143,6 +143,10 @@ struct HomeView: View {
         bridgeManager.hasPairedMacs
     }
 
+    private var isScopeTheme: Bool {
+        themeManager.currentTheme == .scope
+    }
+
     private var latestSecurityEvent: BridgeSecurityEvent? {
         bridgeManager.companionState?.securityEvents?.first
     }
@@ -163,26 +167,38 @@ struct HomeView: View {
         let hasMore = filteredMemos.count > displayLimit
 
         return NavigationStack {
-            if showingCompanionHelper && showsDeckButton {
-                CompanionShortcutModeView(
-                    showingSettings: $showingSettings,
-                    showingHelper: $showingCompanionHelper
-                )
-            } else {
-                standardHomeContent(
-                    filteredMemos: filteredMemos,
-                    voiceMemos: voiceMemos,
-                    hasMore: hasMore,
-                    companionShortcutAvailable: showsDeckButton
-                )
-                .overlay {
-                    if showsDeckButton && UIDevice.current.userInterfaceIdiom == .pad {
-                        ThreeFingerSwipeCapture(
-                            onSwipeUp: { showingCompanionHelper = true },
-                            onSwipeDown: { showingCompanionHelper = true }
-                        )
+            Group {
+                if showingCompanionHelper && showsDeckButton {
+                    CompanionShortcutModeView(
+                        showingSettings: $showingSettings,
+                        showingHelper: $showingCompanionHelper
+                    )
+                } else {
+                    standardHomeContent(
+                        filteredMemos: filteredMemos,
+                        voiceMemos: voiceMemos,
+                        hasMore: hasMore,
+                        companionShortcutAvailable: showsDeckButton
+                    )
+                    .overlay {
+                        if showsDeckButton && UIDevice.current.userInterfaceIdiom == .pad {
+                            ThreeFingerSwipeCapture(
+                                onSwipeUp: { showingCompanionHelper = true },
+                                onSwipeDown: { showingCompanionHelper = true }
+                            )
+                        }
+                    }
+                    // The home action dock lives on the home screen only.
+                    // Putting it here (instead of on the NavigationStack) means
+                    // pushed destinations like ComposeView never inherit it,
+                    // so its safeAreaInset can't interfere with their taps.
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        homeActionDock
                     }
                 }
+            }
+            .navigationDestination(isPresented: $showingCompose) {
+                ComposeView(presentationStyle: .embedded)
             }
         }
         .sheet(isPresented: $showingSettings) {
@@ -216,9 +232,6 @@ struct HomeView: View {
             macPastePhotoPickerItems = []
             loadMacPastePhotoPickerItem(item)
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            homeActionDock
-        }
         .fullScreenCover(isPresented: $showingKeyboard) {
             KeyboardView()
         }
@@ -238,9 +251,6 @@ struct HomeView: View {
             CaptureComposeView { capture in
                 saveAndShowCapture(capture)
             }
-        }
-        .sheet(isPresented: $showingCompose) {
-            ComposeView()
         }
         .sheet(isPresented: $showingHyperScan) {
             HyperScanCaptureView()
@@ -462,8 +472,7 @@ struct HomeView: View {
         ZStack {
             // Main content layer
             ZStack(alignment: .bottom) {
-                Color.surfacePrimary
-                    .ignoresSafeArea()
+                homeCanvasBackground
 
                 VStack(spacing: 0) {
                     if contentFilter == .memos && !searchText.isEmpty {
@@ -651,7 +660,7 @@ struct HomeView: View {
         }
         .navigationTitle("TALKIE")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color.surfacePrimary, for: .navigationBar)
+        .toolbarBackground(themeManager.colors.background, for: .navigationBar)
         .navigationDestination(isPresented: $showingSSHTerminal) {
             SSHTerminalView()
         }
@@ -760,6 +769,17 @@ struct HomeView: View {
         }
     }
 
+    @ViewBuilder
+    private var homeCanvasBackground: some View {
+        themeManager.colors.background
+            .ignoresSafeArea()
+
+        if isScopeTheme {
+            ScopeMobileGraticuleBackground(pitch: 44, opacity: 0.38)
+                .ignoresSafeArea()
+        }
+    }
+
     private var showsPhoneHomeDashboard: Bool {
         searchText.isEmpty
     }
@@ -810,6 +830,17 @@ struct HomeView: View {
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
 
+                if isScopeTheme {
+                    ScopeMobileHomeHero(
+                        totalCount: homeRecentTotalCount,
+                        todayCount: scopeTodayTotal,
+                        pairedStatus: bridgeManager.hasPairedMacs ? "paired Mac standing by" : "local capture armed",
+                        memoCount: allVoiceMemos.count,
+                        dictationCount: homeDictations.count,
+                        captureCount: homeCaptures.count
+                    )
+                }
+
                 if homeRecentTotalCount == 0 {
                     EmptyStateView(
                         onRecordTapped: {
@@ -856,6 +887,18 @@ struct HomeView: View {
             .padding(.bottom, 110)
         }
         .scrollDismissesKeyboard(.interactively)
+    }
+
+    private var scopeTodayTotal: Int {
+        let today = Date()
+        let calendar = Calendar.current
+        let memos = allVoiceMemos.filter { memo in
+            guard let createdAt = memo.createdAt else { return false }
+            return calendar.isDate(createdAt, inSameDayAs: today)
+        }.count
+        let dictations = homeDictations.filter { calendar.isDate($0.timestamp, inSameDayAs: today) }.count
+        let captures = homeCaptures.filter { calendar.isDate($0.timestamp, inSameDayAs: today) }.count
+        return memos + dictations + captures
     }
 
     @ViewBuilder
@@ -1256,6 +1299,7 @@ struct HomeView: View {
             showingSSHTerminal: $showingSSHTerminal,
             showingCaptureLauncher: $showingCaptureLauncher,
             showingCaptureCompose: $showingCaptureCompose,
+            showingCompose: $showingCompose,
             contentFilter: showsPhoneHomeDashboard ? $dockContentFilter : $contentFilter,
             terminalState: terminalDockState,
             onTerminalTapped: openTerminalPicker
@@ -1757,6 +1801,10 @@ struct HomeView: View {
     private func refreshMemos() async {
         AppLogger.persistence.info("📲 Pull-to-refresh - fetching latest 10 memos from CloudKit")
 
+        #if targetEnvironment(simulator)
+        AppLogger.persistence.info("Skipping CloudKit pull-to-refresh on simulator")
+        return
+        #else
         let container = CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier)
         let privateDB = container.privateCloudDatabase
         let zoneID = CKRecordZone.ID(zoneName: "com.apple.coredata.cloudkit.zone", ownerName: CKCurrentUserDefaultName)
@@ -1893,6 +1941,7 @@ struct HomeView: View {
         }
 
         try? await Task.sleep(nanoseconds: 300_000_000)
+        #endif
     }
 
     private func importWorkflowRuns(_ records: [CKRecord]) {
@@ -2496,6 +2545,119 @@ enum ContentFilter: String, CaseIterable {
     }
 }
 
+private struct ScopeMobileHomeHero: View {
+    let totalCount: Int
+    let todayCount: Int
+    let pairedStatus: String
+    let memoCount: Int
+    let dictationCount: Int
+    let captureCount: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            ScopeMobileEyebrow(text: "Station")
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(headline)
+                    .font(.system(size: 34, weight: .regular, design: .serif))
+                    .foregroundStyle(ScopeMobile.ink)
+                    .lineSpacing(-2)
+
+                Text("\(todayCount) today · \(pairedStatus)")
+                    .font(.system(size: 13))
+                    .foregroundStyle(ScopeMobile.inkMuted)
+            }
+
+            statusPanel
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 18)
+        .background(ScopeMobile.surface.opacity(0.92))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(ScopeMobile.edge, lineWidth: 0.75)
+        }
+    }
+
+    private var headline: String {
+        if totalCount == 0 {
+            return "Ready when you are."
+        }
+        if totalCount == 1 {
+            return "One signal on deck."
+        }
+        return "\(totalCount) signals on deck."
+    }
+
+    private var statusPanel: some View {
+        ZStack {
+            ScopeMobileGraticuleBackground(
+                pitch: 24,
+                color: ScopeMobile.panelTraceFaint,
+                opacity: 0.35
+            )
+
+            VStack(spacing: 0) {
+                HStack(spacing: 7) {
+                    Circle()
+                        .fill(ScopeMobile.panelTrace)
+                        .frame(width: 5, height: 5)
+                        .shadow(color: ScopeMobile.panelTrace.opacity(0.30), radius: 2)
+
+                    Text("LIVE · ACTION BUS")
+                        .font(.system(size: 8, weight: .regular, design: .monospaced))
+                        .tracking(2)
+                        .foregroundStyle(ScopeMobile.panelInkFaint)
+
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+
+                Rectangle()
+                    .fill(ScopeMobile.panelEdge)
+                    .frame(height: 0.5)
+
+                HStack(spacing: 0) {
+                    statusTile(value: "\(memoCount)", label: "MEMOS")
+                    panelDivider
+                    statusTile(value: "\(dictationCount)", label: "TYPE")
+                    panelDivider
+                    statusTile(value: "\(captureCount)", label: "GRAB")
+                }
+                .padding(.vertical, 12)
+            }
+        }
+        .frame(height: 112)
+        .screenRecess(padding: 0, corner: 8)
+        .shadow(color: Color.black.opacity(0.06), radius: 14, y: 6)
+    }
+
+    private func statusTile(value: String, label: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(.system(size: 26, weight: .regular, design: .serif))
+                .foregroundStyle(ScopeMobile.panelTrace)
+
+            Text(label)
+                .font(.system(size: 8, weight: .regular, design: .monospaced))
+                .tracking(2)
+                .foregroundStyle(ScopeMobile.panelInkFaint)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+    }
+
+    private var panelDivider: some View {
+        Rectangle()
+            .fill(ScopeMobile.panelEdge)
+            .frame(width: 1)
+            .padding(.vertical, 4)
+    }
+}
+
 private struct HomePreviewSection<Content: View>: View {
     let title: String
     var itemCount: Int? = nil
@@ -2503,23 +2665,21 @@ private struct HomePreviewSection<Content: View>: View {
     var trailingAction: (() -> Void)? = nil
     @ViewBuilder var content: () -> Content
 
-    @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
 
     var body: some View {
+        let chrome = themeManager.chrome
         VStack(spacing: 0) {
             HStack {
-                Text(title)
-                    .font(.system(size: 10, weight: .medium))
-                    .tracking(1)
-                    .foregroundColor(themeManager.colors.textTertiary)
+                TalkieEyebrow(text: title)
 
                 if let itemCount {
                     Text("\(itemCount)")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(themeManager.colors.textSecondary)
+                        .foregroundColor(chrome.accent)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.surfaceSecondary)
+                        .background(chrome.accentTint)
                         .clipShape(Capsule())
                 }
 
@@ -2528,7 +2688,7 @@ private struct HomePreviewSection<Content: View>: View {
                 if let trailingTitle, let trailingAction {
                     Button(trailingTitle, action: trailingAction)
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(.accentColor)
+                        .foregroundColor(chrome.accent)
                 }
             }
             .padding(.horizontal, 16)
@@ -2541,7 +2701,7 @@ private struct HomePreviewSection<Content: View>: View {
         .cornerRadius(CornerRadius.sm)
         .overlay(
             RoundedRectangle(cornerRadius: CornerRadius.sm)
-                .strokeBorder(themeManager.colors.tableBorder, lineWidth: 0.5)
+                .strokeBorder(chrome.edgeFaint, lineWidth: 0.5)
         )
     }
 }
@@ -3133,34 +3293,50 @@ private struct HomeBigTile: View {
     let tint: Color
     let action: () -> Void
 
+    @ObservedObject private var themeManager = ThemeManager.shared
+    private var isScopeTheme: Bool { themeManager.currentTheme.isScope }
+
     var body: some View {
-        Button(action: action) {
+        let chrome = themeManager.chrome
+        // Scope keeps its signature bichromatic amber override; other themes use the
+        // per-tile categorical tint for the icon but adopt the active theme's chrome
+        // for the surrounding surface + border so the tile feels coordinated.
+        let iconForeground: Color = isScopeTheme ? ScopeMobile.amber : tint
+        let iconBackground: Color = isScopeTheme ? ScopeMobile.amberTint : tint.opacity(0.14)
+        let titleColor: Color = isScopeTheme ? ScopeMobile.ink : .textPrimary
+        let subtitleColor: Color = isScopeTheme ? ScopeMobile.inkMuted : .textSecondary
+        let surfaceColor: Color = isScopeTheme
+            ? ScopeMobile.surface.opacity(0.92)
+            : themeManager.colors.cardBackground
+        let borderColor: Color = isScopeTheme ? ScopeMobile.edge : chrome.edge
+
+        return Button(action: action) {
             VStack(alignment: .leading, spacing: 10) {
                 Image(systemName: icon)
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(tint)
+                    .foregroundColor(iconForeground)
                     .frame(width: 40, height: 40)
-                    .background(tint.opacity(0.14))
+                    .background(iconBackground)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(.textPrimary)
+                        .foregroundColor(titleColor)
 
                     Text(subtitle)
                         .font(.system(size: 12, weight: .regular))
-                        .foregroundColor(.textSecondary)
+                        .foregroundColor(subtitleColor)
                         .lineLimit(1)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
-            .background(Color.surfaceSecondary)
+            .background(surfaceColor)
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(tint.opacity(0.18), lineWidth: 0.5)
+                    .strokeBorder(borderColor, lineWidth: 0.5)
             )
         }
         .buttonStyle(.plain)
@@ -3228,9 +3404,15 @@ private struct HomeWorkflowRunPreviewRow: View {
 
 struct ContentFilterToggle: View {
     @Binding var selection: ContentFilter
+    @ObservedObject private var themeManager = ThemeManager.shared
+    private var isScopeTheme: Bool { themeManager.currentTheme.isScope }
 
     var body: some View {
-        HStack {
+        let chrome = themeManager.chrome
+        let trackBackground: Color = isScopeTheme ? ScopeMobile.surface : themeManager.colors.cardBackground
+        let trackBorder: Color = isScopeTheme ? ScopeMobile.edgeFaint : chrome.edgeFaint
+
+        return HStack {
             Spacer()
 
             HStack(spacing: 2) {
@@ -3248,21 +3430,41 @@ struct ContentFilterToggle: View {
                             Text(filter.rawValue)
                                 .font(.system(size: 11, weight: .semibold))
                         }
-                        .foregroundColor(selection == filter ? .white : .textSecondary)
+                        .foregroundColor(filterForeground(filter))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(selection == filter ? Color.accentColor : Color.clear)
+                        .background(filterBackground(filter))
                         .cornerRadius(6)
                     }
                     .buttonStyle(.plain)
                 }
             }
             .padding(3)
-            .background(Color.surfaceSecondary)
+            .background(trackBackground)
             .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(trackBorder, lineWidth: 0.5)
+            )
 
             Spacer()
         }
+    }
+
+    private func filterForeground(_ filter: ContentFilter) -> Color {
+        let selected = selection == filter
+        if isScopeTheme {
+            return selected ? ScopeMobile.panelInk : ScopeMobile.inkMuted
+        }
+        return selected ? themeManager.chrome.panelInk : .textSecondary
+    }
+
+    private func filterBackground(_ filter: ContentFilter) -> Color {
+        let selected = selection == filter
+        if isScopeTheme {
+            return selected ? ScopeMobile.amber : .clear
+        }
+        return selected ? themeManager.chrome.accent : .clear
     }
 }
 

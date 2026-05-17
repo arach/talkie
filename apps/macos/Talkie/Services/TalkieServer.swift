@@ -1282,45 +1282,47 @@ final class TalkieServer {
             self.sendJSONResponse(connection, statusCode: statusCode, body: response)
         }
 
-        guard let proxy = xpcManager?.remoteObjectProxy(errorHandler: { error in
-            log.error("XPC error: \(error)")
-            Task { @MainActor in
-                let durationMs = Int(Date().timeIntervalSince(xpcStartTime) * 1000)
-                let errorMsg = "\(TalkieServerError.xpcConnectionFailed)\n\nTechnical: \(error.localizedDescription)"
-                MessageQueue.shared.updateStatus(messageId, status: .failed, error: errorMsg, xpcDurationMs: durationMs)
-                respondOnce(503, MessageResponse(success: false, error: errorMsg, transcript: transcript), false)
+        let appendResult: (success: Bool, error: String?)? = await callAgent(
+            label: "appendMessage",
+            timeoutSeconds: 10
+        ) { service, reply in
+            service.appendMessage(
+                textToSend,
+                sessionId: request.sessionId,
+                projectPath: request.projectPath,
+                submit: true
+            ) { success, error in
+                reply((success: success, error: error))
             }
-        }) else {
+        }
+
+        guard let appendResult else {
+            let durationMs = Int(Date().timeIntervalSince(xpcStartTime) * 1000)
             log.error("TalkieAgent not connected")
-            MessageQueue.shared.updateStatus(messageId, status: .failed, error: TalkieServerError.talkieLiveNotConnected)
-            sendJSONResponse(connection, statusCode: 503, body: MessageResponse(
+            respondOnce(503, MessageResponse(
                 success: false,
                 error: TalkieServerError.talkieLiveNotConnected,
                 transcript: transcript
-            ))
+            ), false)
+            MessageQueue.shared.updateStatus(messageId, status: .failed, error: TalkieServerError.talkieLiveNotConnected, xpcDurationMs: durationMs)
             return
         }
 
-        // Call the XPC method (submit: true to press Enter and send to Claude)
-        proxy.appendMessage(textToSend, sessionId: request.sessionId, projectPath: request.projectPath, submit: true) { success, error in
-            Task { @MainActor in
-                let durationMs = Int(Date().timeIntervalSince(xpcStartTime) * 1000)
-                if success {
-                    log.info("Message sent via XPC in \(durationMs)ms")
-                    let deliveredAt = Date().iso8601
-                    respondOnce(200, MessageResponse(
-                        success: true,
-                        error: nil,
-                        transcript: transcript,
-                        deliveredAt: deliveredAt,
-                        insertedText: textToSend
-                    ), true)
-                } else {
-                    log.error("Message failed: \(error ?? "unknown error")")
-                    MessageQueue.shared.updateStatus(messageId, status: .failed, error: error, xpcDurationMs: durationMs)
-                    respondOnce(500, MessageResponse(success: false, error: error, transcript: transcript), false)
-                }
-            }
+        let durationMs = Int(Date().timeIntervalSince(xpcStartTime) * 1000)
+        if appendResult.success {
+            log.info("Message sent via XPC in \(durationMs)ms")
+            let deliveredAt = Date().iso8601
+            respondOnce(200, MessageResponse(
+                success: true,
+                error: nil,
+                transcript: transcript,
+                deliveredAt: deliveredAt,
+                insertedText: textToSend
+            ), true)
+        } else {
+            log.error("Message failed: \(appendResult.error ?? "unknown error")")
+            MessageQueue.shared.updateStatus(messageId, status: .failed, error: appendResult.error, xpcDurationMs: durationMs)
+            respondOnce(500, MessageResponse(success: false, error: appendResult.error, transcript: transcript), false)
         }
     }
 
@@ -2325,6 +2327,17 @@ final class TalkieServer {
         let autoPaste: Bool?
     }
 
+    private struct CompanionTerminalImagePasteTarget {
+        let bundleIdentifier: String
+        let displayName: String
+    }
+
+    private struct CompanionTerminalImagePastePayload {
+        let fileURL: URL
+        let pasteText: String
+        let pngData: Data
+    }
+
     private func handleCompanionPasteImage(_ connection: NWConnection, body: Data?) async {
         guard let body else {
             sendJSONResponse(
@@ -2353,6 +2366,58 @@ final class TalkieServer {
                 connection,
                 statusCode: 400,
                 body: CompanionShortcutTriggerResponse(ok: false, error: "Invalid image payload")
+            )
+            return
+        }
+
+        if let terminalTarget = currentCompanionTerminalImagePasteTarget(),
+           let terminalPayload = makeCompanionTerminalImagePastePayload(
+               from: image
+           ) {
+            let clipboardWritten = await MainActor.run { () -> Bool in
+                writeCompanionTerminalImagePasteboard(terminalPayload)
+            }
+
+            guard clipboardWritten else {
+                sendJSONResponse(
+                    connection,
+                    statusCode: 500,
+                    body: CompanionShortcutTriggerResponse(ok: false, error: "Failed to write image path to clipboard")
+                )
+                return
+            }
+
+            if request.autoPaste ?? true {
+                try? await Task.sleep(for: .milliseconds(80))
+
+                let inserted = insertCompanionTerminalImageReference(
+                    terminalPayload.pasteText,
+                    into: terminalTarget
+                ) || performCompanionShortcutKeyPress(keyCode: 9, modifiers: .maskCommand)
+
+                guard inserted else {
+                    sendJSONResponse(
+                        connection,
+                        statusCode: 500,
+                        body: CompanionShortcutTriggerResponse(
+                            ok: false,
+                            error: "Image saved and copied, but paste into \(terminalTarget.displayName) failed"
+                        )
+                    )
+                    return
+                }
+            }
+
+            sendJSONResponse(
+                connection,
+                statusCode: 200,
+                body: CompanionShortcutTriggerResponse(
+                    ok: true,
+                    handledShortcutId: "companion-paste-image",
+                    message: request.autoPaste ?? true
+                        ? "Image path pasted into \(terminalTarget.displayName)"
+                        : "Image path copied to clipboard"
+                )
             )
             return
         }
@@ -2394,6 +2459,129 @@ final class TalkieServer {
                 message: request.autoPaste ?? true ? "Image pasted" : "Image copied to clipboard"
             )
         )
+    }
+
+    private func currentCompanionTerminalImagePasteTarget() -> CompanionTerminalImagePasteTarget? {
+        guard let app = NSWorkspace.shared.frontmostApplication,
+              let bundleIdentifier = app.bundleIdentifier?.lowercased() else {
+            return nil
+        }
+
+        let terminalBundleIdentifiers: Set<String> = [
+            "com.googlecode.iterm2",
+            "com.apple.terminal",
+            "com.github.wez.wezterm",
+            "com.mitchellh.ghostty",
+            "dev.warp.warp-stable",
+            "net.kovidgoyal.kitty",
+            "org.alacritty",
+            "io.alacritty",
+        ]
+
+        guard terminalBundleIdentifiers.contains(bundleIdentifier) else {
+            return nil
+        }
+
+        return CompanionTerminalImagePasteTarget(
+            bundleIdentifier: bundleIdentifier,
+            displayName: app.localizedName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "terminal"
+        )
+    }
+
+    private func makeCompanionTerminalImagePastePayload(from image: NSImage) -> CompanionTerminalImagePastePayload? {
+        guard let pngData = pngData(from: image) else {
+            return nil
+        }
+
+        let imageSize = companionImagePixelSize(image)
+        guard let fileURL = ScreenshotStorage.saveStandalone(
+            pngData,
+            capturedAt: Date(),
+            captureMode: "devices/companion",
+            width: imageSize.width,
+            height: imageSize.height,
+            appName: "iPhone",
+            displayName: "Shared Image",
+            relativeDirectory: "devices/companion"
+        ) else {
+            return nil
+        }
+
+        return CompanionTerminalImagePastePayload(
+            fileURL: fileURL,
+            pasteText: fileURL.path,
+            pngData: pngData
+        )
+    }
+
+    private func writeCompanionTerminalImagePasteboard(
+        _ payload: CompanionTerminalImagePastePayload
+    ) -> Bool {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+
+        let wroteText = pasteboard.setString(payload.pasteText, forType: .string)
+        pasteboard.setString(payload.fileURL.absoluteString, forType: .fileURL)
+        pasteboard.setData(payload.pngData, forType: .png)
+        return wroteText
+    }
+
+    private func insertCompanionTerminalImageReference(
+        _ text: String,
+        into target: CompanionTerminalImagePasteTarget
+    ) -> Bool {
+        guard target.bundleIdentifier == "com.googlecode.iterm2" else {
+            return false
+        }
+        guard text.count <= 120_000 else {
+            log.info("Companion iTerm image path using clipboard paste", detail: "chars=\(text.count)")
+            return false
+        }
+
+        let escaped = appleScriptStringLiteral(text)
+        let script = """
+        tell application id "com.googlecode.iterm2"
+            tell current session of current window
+                write text "\(escaped)" newline NO
+            end tell
+        end tell
+        """
+
+        return runAppleScript(script, failurePrefix: "Companion iTerm image path paste failed")
+    }
+
+    private func pngData(from image: NSImage) -> Data? {
+        guard let tiffData = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData) else {
+            return nil
+        }
+
+        return bitmap.representation(using: .png, properties: [:])
+    }
+
+    private func companionImagePixelSize(_ image: NSImage) -> (width: Int, height: Int) {
+        let bestRepresentation = image.representations.max { lhs, rhs in
+            (lhs.pixelsWide * lhs.pixelsHigh) < (rhs.pixelsWide * rhs.pixelsHigh)
+        }
+
+        if let bestRepresentation,
+           bestRepresentation.pixelsWide > 0,
+           bestRepresentation.pixelsHigh > 0 {
+            return (bestRepresentation.pixelsWide, bestRepresentation.pixelsHigh)
+        }
+
+        return (
+            max(1, Int(image.size.width.rounded(.up))),
+            max(1, Int(image.size.height.rounded(.up)))
+        )
+    }
+
+    private func appleScriptStringLiteral(_ value: String) -> String {
+        value
+            .replacing("\\", with: "\\\\")
+            .replacing("\"", with: "\\\"")
+            .replacing("\r", with: " ")
+            .replacing("\n", with: " ")
     }
 
     // MARK: - Trackpad handler
@@ -2931,64 +3119,69 @@ final class TalkieServer {
     // MARK: - Screenshot Handlers
 
     private func handleListClaudeWindows(_ connection: NWConnection) async {
-        guard let proxy = xpcManager?.remoteObjectProxy(errorHandler: { error in
-            log.error("XPC error: \(error)")
-        }) else {
+        let windowsJSON: Data? = await callAgent(label: "listClaudeWindows") { service, reply in
+            service.listClaudeWindows { data in
+                reply(data)
+            }
+        }
+
+        guard let windowsJSON else {
             sendErrorResponse(connection, statusCode: 503, error: TalkieServerError.talkieLiveNotConnected)
             return
         }
 
-        proxy.listClaudeWindows { windowsJSON in
-            Task { @MainActor in
-                if let data = windowsJSON,
-                   let windows = try? JSONSerialization.jsonObject(with: data),
-                   let wrapped = try? JSONSerialization.data(withJSONObject: ["windows": windows]) {
-                    self.sendRawJSONResponse(connection, statusCode: 200, jsonData: wrapped)
-                } else {
-                    self.sendErrorResponse(connection, statusCode: 500, error: "Failed to list windows")
-                }
-            }
+        if let windows = try? JSONSerialization.jsonObject(with: windowsJSON),
+           let wrapped = try? JSONSerialization.data(withJSONObject: ["windows": windows]) {
+            sendRawJSONResponse(connection, statusCode: 200, jsonData: wrapped)
+        } else {
+            sendErrorResponse(connection, statusCode: 500, error: "Failed to list windows")
         }
     }
 
     private func handleCaptureWindow(_ connection: NWConnection, windowID: UInt32) async {
-        guard let proxy = xpcManager?.remoteObjectProxy(errorHandler: { error in
-            log.error("XPC error: \(error)")
-        }) else {
+        let result: (imageData: Data?, error: String?)? = await callAgent(
+            label: "captureWindow",
+            timeoutSeconds: 8
+        ) { service, reply in
+            service.captureWindow(windowID: windowID) { imageData, error in
+                reply((imageData: imageData, error: error))
+            }
+        }
+
+        guard let result else {
             sendErrorResponse(connection, statusCode: 503, error: TalkieServerError.talkieLiveNotConnected)
             return
         }
 
-        proxy.captureWindow(windowID: windowID) { imageData, error in
-            Task { @MainActor in
-                if let data = imageData {
-                    self.sendImageResponse(connection, data: data, contentType: "image/jpeg")
-                } else {
-                    self.sendErrorResponse(connection, statusCode: 500, error: error ?? "Failed to capture window")
-                }
-            }
+        if let data = result.imageData {
+            sendImageResponse(connection, data: data, contentType: "image/jpeg")
+        } else {
+            sendErrorResponse(connection, statusCode: 500, error: result.error ?? "Failed to capture window")
         }
     }
 
     private func handleCaptureMainDisplay(_ connection: NWConnection, maxDimension: Int, quality: Double) async {
-        guard let proxy = xpcManager?.remoteObjectProxy(errorHandler: { error in
-            log.error("XPC error: \(error)")
-        }) else {
+        let requestedDimension = UInt32(max(maxDimension, 0))
+        let requestedQuality = min(max(quality, 0.1), 1.0)
+
+        let result: (imageData: Data?, error: String?)? = await callAgent(
+            label: "captureMainDisplay",
+            timeoutSeconds: 8
+        ) { service, reply in
+            service.captureMainDisplay(maxDimension: requestedDimension, quality: requestedQuality) { imageData, error in
+                reply((imageData: imageData, error: error))
+            }
+        }
+
+        guard let result else {
             sendErrorResponse(connection, statusCode: 503, error: TalkieServerError.talkieLiveNotConnected)
             return
         }
 
-        let requestedDimension = UInt32(max(maxDimension, 0))
-        let requestedQuality = min(max(quality, 0.1), 1.0)
-
-        proxy.captureMainDisplay(maxDimension: requestedDimension, quality: requestedQuality) { imageData, error in
-            Task { @MainActor in
-                if let data = imageData {
-                    self.sendImageResponse(connection, data: data, contentType: "image/jpeg")
-                } else {
-                    self.sendErrorResponse(connection, statusCode: 500, error: error ?? "Failed to capture display")
-                }
-            }
+        if let data = result.imageData {
+            sendImageResponse(connection, data: data, contentType: "image/jpeg")
+        } else {
+            sendErrorResponse(connection, statusCode: 500, error: result.error ?? "Failed to capture display")
         }
     }
 
@@ -3011,22 +3204,24 @@ final class TalkieServer {
     }
 
     private func handleCaptureTerminals(_ connection: NWConnection) async {
-        guard let proxy = xpcManager?.remoteObjectProxy(errorHandler: { error in
-            log.error("XPC error: \(error)")
-        }) else {
+        let result: (screenshotsJSON: Data?, error: String?)? = await callAgent(
+            label: "captureTerminalWindows",
+            timeoutSeconds: 8
+        ) { service, reply in
+            service.captureTerminalWindows { screenshotsJSON, error in
+                reply((screenshotsJSON: screenshotsJSON, error: error))
+            }
+        }
+
+        guard let result else {
             sendErrorResponse(connection, statusCode: 503, error: TalkieServerError.talkieLiveNotConnected)
             return
         }
 
-        proxy.captureTerminalWindows { screenshotsJSON, error in
-            Task { @MainActor in
-                if let data = screenshotsJSON {
-                    // Forward the raw JSON directly
-                    self.sendRawJSONResponse(connection, statusCode: 200, jsonData: data)
-                } else {
-                    self.sendErrorResponse(connection, statusCode: 500, error: error ?? "Failed to capture terminals")
-                }
-            }
+        if let data = result.screenshotsJSON {
+            sendRawJSONResponse(connection, statusCode: 200, jsonData: data)
+        } else {
+            sendErrorResponse(connection, statusCode: 500, error: result.error ?? "Failed to capture terminals")
         }
     }
 
@@ -3240,7 +3435,10 @@ final class TalkieServer {
         _ call: @escaping (TalkieAgentXPCServiceProtocol, @escaping (T?) -> Void) -> Void
     ) async -> T? {
         let xpcLog = Log(.xpc)
-        let connection = NSXPCConnection(machServiceName: kTalkieAgentXPCServiceName)
+        let serviceName = TalkieHelper.agent.xpcServiceName(
+            for: ServiceManager.shared.effectiveHelperEnvironment
+        )
+        let connection = NSXPCConnection(machServiceName: serviceName)
         connection.remoteObjectInterface = NSXPCInterface(with: TalkieAgentXPCServiceProtocol.self)
         connection.resume()
 
@@ -3267,7 +3465,7 @@ final class TalkieServer {
             }
 
             Task {
-                try? await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
+                try? await Task.sleep(for: .milliseconds(Int(timeoutSeconds * 1_000)))
                 resumeOnce(nil)
             }
         }

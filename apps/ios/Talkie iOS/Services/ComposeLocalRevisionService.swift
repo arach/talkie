@@ -20,7 +20,10 @@ actor ComposeLocalRevisionService {
     func revise(
         text: String,
         instruction: String,
-        provider: ComposeBorrowedProvider
+        provider: ComposeBorrowedProvider,
+        fullDocument: String? = nil,
+        editingScope: String = "Entire document.",
+        revisionHistory: String = "No prior revisions."
     ) async throws -> ComposeLocalRevisionResult {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else {
@@ -37,6 +40,9 @@ actor ComposeLocalRevisionService {
             let revisedText = try await callOpenAI(
                 text: trimmedText,
                 instruction: trimmedInstruction,
+                fullDocument: fullDocument ?? text,
+                editingScope: editingScope,
+                revisionHistory: revisionHistory,
                 provider: provider
             )
             return ComposeLocalRevisionResult(
@@ -50,6 +56,9 @@ actor ComposeLocalRevisionService {
             let revisedText = try await callGroq(
                 text: trimmedText,
                 instruction: trimmedInstruction,
+                fullDocument: fullDocument ?? text,
+                editingScope: editingScope,
+                revisionHistory: revisionHistory,
                 provider: provider
             )
             return ComposeLocalRevisionResult(
@@ -67,6 +76,9 @@ actor ComposeLocalRevisionService {
     private func callOpenAI(
         text: String,
         instruction: String,
+        fullDocument: String,
+        editingScope: String,
+        revisionHistory: String,
         provider: ComposeBorrowedProvider
     ) async throws -> String {
         let model = provider.modelId
@@ -77,6 +89,9 @@ actor ComposeLocalRevisionService {
             messages: makeMessages(
                 text: text,
                 instruction: instruction,
+                fullDocument: fullDocument,
+                editingScope: editingScope,
+                revisionHistory: revisionHistory,
                 assistantPrompt: provider.assistantPrompt,
                 usesDeveloperRole: isReasoningModel
             ),
@@ -104,11 +119,21 @@ actor ComposeLocalRevisionService {
     private func callGroq(
         text: String,
         instruction: String,
+        fullDocument: String,
+        editingScope: String,
+        revisionHistory: String,
         provider: ComposeBorrowedProvider
     ) async throws -> String {
         let requestBody = GroqChatRequest(
             model: provider.modelId,
-            messages: makeMessages(text: text, instruction: instruction, assistantPrompt: provider.assistantPrompt),
+            messages: makeMessages(
+                text: text,
+                instruction: instruction,
+                fullDocument: fullDocument,
+                editingScope: editingScope,
+                revisionHistory: revisionHistory,
+                assistantPrompt: provider.assistantPrompt
+            ),
             temperature: temperature,
             maxTokens: maxTokens,
             stream: false
@@ -132,12 +157,24 @@ actor ComposeLocalRevisionService {
     private func makeMessages(
         text: String,
         instruction: String,
+        fullDocument: String,
+        editingScope: String,
+        revisionHistory: String,
         assistantPrompt: String,
         usesDeveloperRole: Bool = false
     ) -> [ChatMessage] {
         [
             ChatMessage(role: usesDeveloperRole ? "developer" : "system", content: assistantPrompt),
-            ChatMessage(role: "user", content: buildComposePrompt(text: text, instruction: instruction)),
+            ChatMessage(
+                role: "user",
+                content: buildComposePrompt(
+                    text: text,
+                    instruction: instruction,
+                    fullDocument: fullDocument,
+                    editingScope: editingScope,
+                    revisionHistory: revisionHistory
+                )
+            ),
         ]
     }
 
@@ -148,22 +185,28 @@ actor ComposeLocalRevisionService {
             || model.hasPrefix("gpt-5")
     }
 
-    private func buildComposePrompt(text: String, instruction: String) -> String {
+    private func buildComposePrompt(
+        text: String,
+        instruction: String,
+        fullDocument: String,
+        editingScope: String,
+        revisionHistory: String
+    ) -> String {
         [
             "User instruction:",
             instruction,
             "",
             "Editing scope:",
-            "Entire document.",
+            editingScope,
             "",
             "Current target text:",
             text,
             "",
             "Current full document:",
-            text,
+            fullDocument,
             "",
             "Revision history (oldest to newest):",
-            "No prior revisions.",
+            revisionHistory,
             "",
             "Return only the revised text for the current target text.",
         ].joined(separator: "\n")

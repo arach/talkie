@@ -134,9 +134,7 @@ struct MemoAICommandsSheet: View {
 
     private var quickPromptsSection: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            Text("QUICK COMMANDS")
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .foregroundStyle(Color.textTertiary)
+            TalkieEyebrow(text: "Quick Commands")
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Spacing.xs) {
@@ -165,9 +163,7 @@ struct MemoAICommandsSheet: View {
 
     private var commandInputCard: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("COMMAND")
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .foregroundStyle(Color.textTertiary)
+            TalkieEyebrow(text: "Command")
 
             HStack(alignment: .bottom, spacing: Spacing.sm) {
                 commandField

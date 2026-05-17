@@ -19,7 +19,7 @@ extension Notification.Name {
 final class BridgeManager {
     typealias PairedMac = TalkieAppConfiguration.Bridge.PairedMac
 
-    enum PairingResult {
+    enum PairingResult: Equatable {
         case approved
         case pendingApproval
     }
@@ -33,11 +33,14 @@ final class BridgeManager {
 
     private enum PairingExecutionError: LocalizedError {
         case rejected
+        case pendingApproval
 
         var errorDescription: String? {
             switch self {
             case .rejected:
                 return "Pairing rejected by Mac"
+            case .pendingApproval:
+                return "Approve this iPhone on your Mac, then try importing credentials again."
             }
         }
     }
@@ -74,6 +77,31 @@ final class BridgeManager {
         }
     }
 
+    struct CredentialImportEvent: Identifiable, Equatable {
+        enum Level: Equatable {
+            case info
+            case warning
+            case success
+        }
+
+        let id: UUID
+        let date: Date
+        let level: Level
+        let message: String
+
+        init(
+            message: String,
+            level: Level = .info,
+            date: Date = .now,
+            id: UUID = UUID()
+        ) {
+            self.id = id
+            self.date = date
+            self.level = level
+            self.message = message
+        }
+    }
+
     // MARK: - Properties
 
     private(set) var status: ConnectionStatus = .disconnected {
@@ -94,6 +122,7 @@ final class BridgeManager {
     private(set) var lastSuccessfulContactAt: Date?
     private(set) var retryCount = 0
     private(set) var awaitingPairingApproval = false
+    private(set) var credentialImportEvents: [CredentialImportEvent] = []
 
     /// Set to true when pairing completes, UI should consume and reset
     var justCompletedPairing = false
@@ -109,6 +138,7 @@ final class BridgeManager {
     private var isCompanionDeckVisible = false
     private var isCompanionRuntimeActive = false
     private var isCompanionEventStreamConnected = false
+    private var lastConnectionAuthFailed = false
 
     // Retry configuration
     private let maxRetries = 3
@@ -225,6 +255,7 @@ final class BridgeManager {
             return nil
         }
 
+        let hadPairedMacsBeforePairing = hasPairedMacs
         status = .connecting
         errorMessage = nil
         awaitingPairingApproval = false
@@ -289,17 +320,30 @@ final class BridgeManager {
                 throw lastError ?? BridgeError.connectionFailed
             }.value
 
-            upsertPairedMac(
-                deviceId: localDeviceId,
-                hostname: result.connectionHost,
-                port: port,
-                pairedMacName: result.pairedMacName,
-                serverPublicKey: serverPublicKeyBase64,
-                privateKey: result.privateKeyBase64,
-                activate: true
-            )
+            let shouldStorePairing =
+                result.pairingResult == .approved ||
+                !hadPairedMacsBeforePairing ||
+                isRefreshingActivePairing(
+                    hostname: result.connectionHost,
+                    port: port,
+                    serverPublicKey: serverPublicKeyBase64
+                )
+            if shouldStorePairing {
+                upsertPairedMac(
+                    deviceId: localDeviceId,
+                    hostname: result.connectionHost,
+                    port: port,
+                    pairedMacName: result.pairedMacName,
+                    serverPublicKey: serverPublicKeyBase64,
+                    privateKey: result.privateKeyBase64,
+                    activate: true
+                )
 
-            TalkieAppSettings.shared.reloadFromDisk()
+                TalkieAppSettings.shared.reloadFromDisk()
+            } else {
+                await client.clearAuth()
+                loadPairing()
+            }
 
             switch result.pairingResult {
             case .approved:
@@ -318,9 +362,14 @@ final class BridgeManager {
 
             case .pendingApproval:
                 awaitingPairingApproval = true
-                lastSuccessfulContactAt = nil
                 justCompletedPairing = false
                 status = .disconnected
+                if shouldStorePairing {
+                    lastSuccessfulContactAt = nil
+                    errorMessage = "Approve this iPhone on your Mac to finish pairing."
+                } else {
+                    errorMessage = "Approve this iPhone on your Mac to refresh pairing. Your current pairing is still saved."
+                }
             }
             return result.pairingResult
         } catch {
@@ -366,9 +415,11 @@ final class BridgeManager {
         let configuredDeviceId = deviceId
         let privateKeyBase64 = bridgeConfiguration.privateKey
         let serverPublicKeyBase64 = bridgeConfiguration.serverPublicKey
+        let deviceClass = currentDeviceClass
 
         status = .connecting
         errorMessage = nil
+        lastConnectionAuthFailed = false
 
         do {
             let health = try await Task.detached(priority: .userInitiated) { [client] in
@@ -380,6 +431,10 @@ final class BridgeManager {
                     serverPublicKeyBase64: serverPublicKeyBase64
                 )
                 try await client.connect()
+                _ = try await client.companionState(
+                    deviceId: configuredDeviceId,
+                    deviceClass: deviceClass
+                )
                 return try await client.health()
             }.value
 
@@ -403,9 +458,14 @@ final class BridgeManager {
             status = .error
             errorMessage = "Auth keys missing - please re-pair"
             retryCount = maxRetries
-        } catch BridgeError.httpError(401) where awaitingPairingApproval {
+        } catch BridgeError.httpError(401) {
+            lastConnectionAuthFailed = true
             status = .disconnected
-            errorMessage = "Approve this iPhone on your Mac to finish pairing."
+            if awaitingPairingApproval {
+                errorMessage = "Approve this iPhone on your Mac to finish pairing."
+            } else {
+                errorMessage = "Mac pairing needs to be refreshed."
+            }
             retryCount = 0
         } catch {
             status = .error
@@ -766,6 +826,82 @@ final class BridgeManager {
         let provider = try await client.composeBorrowedProvider(providerId: providerId, modelId: modelId)
         lastSuccessfulContactAt = .now
         return provider
+    }
+
+    func importAIProviderCredentialsFromMac() async throws -> TalkieAIProviderCredentialIngestor.ImportResult {
+        credentialImportEvents = []
+        recordCredentialImportEvent("Starting secure import from \(pairedMacDisplayName ?? "paired Mac").")
+
+        do {
+            let result = try await importAIProviderCredentialsFromMacOnce()
+            recordCredentialImportEvent(
+                "Saved \(result.providerName) credentials for \(result.modelId).",
+                level: .success
+            )
+            return result
+        } catch BridgeError.httpError(401) {
+            recordCredentialImportEvent(
+                "The Mac rejected this iPhone's stored bridge signature.",
+                level: .warning
+            )
+            return try await refreshPairingAndRetryAIProviderImport()
+        } catch BridgeError.connectionFailed where lastConnectionAuthFailed {
+            recordCredentialImportEvent(
+                "The saved Mac pairing could not prove its bridge signature.",
+                level: .warning
+            )
+            return try await refreshPairingAndRetryAIProviderImport()
+        } catch {
+            recordCredentialImportEvent(credentialImportDiagnosticMessage(for: error), level: .warning)
+            throw error
+        }
+    }
+
+    private func refreshPairingAndRetryAIProviderImport() async throws -> TalkieAIProviderCredentialIngestor.ImportResult {
+        recordCredentialImportEvent("Sending a fresh pairing request to the Mac.")
+        let repairResult: PairingResult
+        do {
+            repairResult = try await refreshActivePairingForCredentialImport()
+        } catch {
+            recordCredentialImportEvent(credentialImportDiagnosticMessage(for: error), level: .warning)
+            throw error
+        }
+
+        guard repairResult == .approved else {
+            recordCredentialImportEvent(
+                "Waiting for approval in Talkie on the Mac.",
+                level: .warning
+            )
+            throw PairingExecutionError.pendingApproval
+        }
+
+        recordCredentialImportEvent("Pairing refreshed. Retrying credential import.")
+        do {
+            let result = try await importAIProviderCredentialsFromMacOnce()
+            recordCredentialImportEvent(
+                "Saved \(result.providerName) credentials for \(result.modelId).",
+                level: .success
+            )
+            return result
+        } catch {
+            recordCredentialImportEvent(credentialImportDiagnosticMessage(for: error), level: .warning)
+            throw error
+        }
+    }
+
+    private func importAIProviderCredentialsFromMacOnce() async throws -> TalkieAIProviderCredentialIngestor.ImportResult {
+        recordCredentialImportEvent("Asking the Mac for its configured AI provider.")
+        let provider = try await composeBorrowedProvider(providerId: nil, modelId: nil)
+        recordCredentialImportEvent("Received encrypted \(provider.providerName) provider payload.")
+
+        let payload = TalkieAIProviderCredentialPayload(
+            providerId: provider.providerId,
+            providerName: provider.providerName,
+            modelId: provider.modelId,
+            apiKey: provider.apiKey,
+            assistantPrompt: provider.assistantPrompt
+        )
+        return try await TalkieAIProviderCredentialIngestor.shared.ingest(.directCredential(payload))
     }
 
     func refreshWindows() async {
@@ -1160,6 +1296,153 @@ final class BridgeManager {
         return hosts
     }
 
+    private func isRefreshingActivePairing(
+        hostname: String,
+        port: Int,
+        serverPublicKey: String
+    ) -> Bool {
+        guard let activePairedMac else { return false }
+
+        if !serverPublicKey.isEmpty, activePairedMac.serverPublicKey == serverPublicKey {
+            return true
+        }
+
+        return activePairedMac.hostname == hostname && activePairedMac.port == port
+    }
+
+    private func refreshActivePairingForCredentialImport() async throws -> PairingResult {
+        guard let activePairedMac else {
+            throw BridgeError.notConfigured
+        }
+
+        let hostname = activePairedMac.hostname
+        let port = activePairedMac.port
+        let serverPublicKeyBase64 = activePairedMac.serverPublicKey
+        let currentName = sanitizedMacName(activePairedMac.pairedMacName) ?? activePairedMac.hostname
+
+        guard !hostname.isEmpty, port > 0, !serverPublicKeyBase64.isEmpty else {
+            throw BridgeError.notConfigured
+        }
+
+        status = .connecting
+        errorMessage = nil
+        awaitingPairingApproval = false
+
+        let localDeviceId = deviceId
+        let localDeviceName = deviceName
+
+        recordCredentialImportEvent("Preparing a new device key for \(currentName).")
+        let result = try await Task.detached(priority: .userInitiated) { [client] in
+            guard let serverPublicKeyData = Data(base64Encoded: serverPublicKeyBase64) else {
+                throw BridgeError.invalidResponse
+            }
+
+            let serverPublicKey = try P256.KeyAgreement.PublicKey(x963Representation: serverPublicKeyData)
+            await client.configure(hostname: hostname, port: port)
+
+            let privateKey = P256.KeyAgreement.PrivateKey()
+            let publicKeyBase64 = privateKey.publicKey.x963Representation.base64EncodedString()
+            let sharedSecret = try privateKey.sharedSecretFromKeyAgreement(with: serverPublicKey)
+
+            await client.configureAuth(deviceId: localDeviceId, sharedSecret: sharedSecret)
+            try await client.connect()
+
+            let response = try await client.pair(
+                deviceId: localDeviceId,
+                publicKey: publicKeyBase64,
+                name: localDeviceName
+            )
+
+            switch response.status {
+            case "approved":
+                let health = try await client.health()
+                return PairingExecutionResult(
+                    privateKeyBase64: privateKey.rawRepresentation.base64EncodedString(),
+                    connectionHost: hostname,
+                    pairedMacName: health.hostname,
+                    pairingResult: .approved
+                )
+
+            case "pending_approval":
+                return PairingExecutionResult(
+                    privateKeyBase64: privateKey.rawRepresentation.base64EncodedString(),
+                    connectionHost: hostname,
+                    pairedMacName: currentName,
+                    pairingResult: .pendingApproval
+                )
+
+            default:
+                throw PairingExecutionError.rejected
+            }
+        }.value
+
+        upsertPairedMac(
+            deviceId: localDeviceId,
+            hostname: result.connectionHost,
+            port: port,
+            pairedMacName: result.pairedMacName,
+            serverPublicKey: serverPublicKeyBase64,
+            privateKey: result.privateKeyBase64,
+            activate: true
+        )
+        TalkieAppSettings.shared.reloadFromDisk()
+
+        switch result.pairingResult {
+        case .approved:
+            recordCredentialImportEvent("The Mac approved the refreshed pairing.", level: .success)
+            awaitingPairingApproval = false
+            errorMessage = nil
+            await connect()
+
+        case .pendingApproval:
+            await client.clearAuth()
+            loadPairing()
+            awaitingPairingApproval = true
+            justCompletedPairing = false
+            lastSuccessfulContactAt = nil
+            status = .disconnected
+            errorMessage = "Approve this iPhone on your Mac, then try importing credentials again."
+            recordCredentialImportEvent(
+                "Open Talkie on the Mac, then approve this iPhone under Settings > iOS > Pending Pairings.",
+                level: .warning
+            )
+        }
+
+        return result.pairingResult
+    }
+
+    private func recordCredentialImportEvent(
+        _ message: String,
+        level: CredentialImportEvent.Level = .info
+    ) {
+        credentialImportEvents.append(CredentialImportEvent(message: message, level: level))
+        if credentialImportEvents.count > 8 {
+            credentialImportEvents.removeFirst(credentialImportEvents.count - 8)
+        }
+        log.info("AI credential import: \(message)")
+    }
+
+    private func credentialImportDiagnosticMessage(for error: Error) -> String {
+        if let bridgeError = error as? BridgeError {
+            switch bridgeError {
+            case .messageFailed(let reason):
+                return reason
+            case .httpError(let code):
+                return "The Mac bridge returned HTTP \(code)."
+            case .connectionFailed:
+                return "Could not connect to the Mac bridge."
+            case .notConfigured:
+                return "No paired Mac is configured on this iPhone."
+            case .invalidResponse:
+                return "The Mac returned an invalid credential response."
+            case .pairingRejected:
+                return "The Mac rejected this iPhone's pairing request."
+            }
+        }
+
+        return error.localizedDescription
+    }
+
     private func resolvedPairedMacName(from candidate: String?) -> String {
         if let candidate = sanitizedMacName(candidate) {
             return candidate
@@ -1197,9 +1480,15 @@ final class BridgeManager {
         configurationStore.update { configuration in
             configuration.bridge.deviceId = deviceId
 
-            let existingIndex = configuration.bridge.pairedMacs.firstIndex(where: {
+            let matchingHostIndex = configuration.bridge.pairedMacs.firstIndex(where: {
                 $0.hostname == hostname && $0.port == port
             })
+            let matchingActiveKeyIndex = configuration.bridge.pairedMacs.firstIndex(where: {
+                $0.id == configuration.bridge.activePairedMacID &&
+                !serverPublicKey.isEmpty &&
+                $0.serverPublicKey == serverPublicKey
+            })
+            let existingIndex = matchingHostIndex ?? matchingActiveKeyIndex
 
             if let existingIndex {
                 configuration.bridge.pairedMacs[existingIndex].hostname = hostname

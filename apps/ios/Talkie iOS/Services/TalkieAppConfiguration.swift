@@ -16,7 +16,7 @@ struct TalkieAppConfiguration: Codable {
     }
 
     struct Appearance: Codable {
-        var theme: String = "midnight"
+        var theme: String = "scope"
         var mode: String = "system"
     }
 
@@ -159,7 +159,7 @@ struct TalkieAppConfiguration: Codable {
     struct Compose: Codable {
         var revisionPath = "direct"
         var directProviderId = "openai"
-        var directModelId = ""
+        var directModelId = TalkieAIProviderCredentialPayload.defaultOpenAIModel
     }
 
     struct HyperScan: Codable {

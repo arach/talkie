@@ -17,7 +17,7 @@ final class TalkieAppSettings {
     private let store = TalkieAppConfigurationStore.shared
     private var isApplyingConfiguration = false
 
-    var theme: AppTheme = .midnight { didSet { persistIfNeeded() } }
+    var theme: AppTheme = .scope { didSet { persistIfNeeded() } }
     var appearanceMode: AppearanceMode = .system { didSet { persistIfNeeded() } }
     var tagLocationEnabled = false { didSet { persistIfNeeded() } }
     var locationTipDismissed = false { didSet { persistIfNeeded() } }
@@ -48,7 +48,7 @@ final class TalkieAppSettings {
 
     var composeRevisionPath = "direct" { didSet { persistIfNeeded() } }
     var composeDirectProviderId = "openai" { didSet { persistIfNeeded() } }
-    var composeDirectModelId = "" { didSet { persistIfNeeded() } }
+    var composeDirectModelId = TalkieAIProviderCredentialPayload.defaultOpenAIModel { didSet { persistIfNeeded() } }
     /// When false (default) HyperScan uploads are ephemeral on the Mac and auto-deleted
     /// after a short TTL. When true the user has opted in to keep them indefinitely.
     var hyperScanRetainCaptures = false { didSet { persistIfNeeded() } }
@@ -76,7 +76,7 @@ final class TalkieAppSettings {
     private func apply(_ configuration: TalkieAppConfiguration) {
         isApplyingConfiguration = true
 
-        theme = AppTheme(rawValue: configuration.appearance.theme) ?? .midnight
+        theme = AppTheme(rawValue: configuration.appearance.theme) ?? .scope
         appearanceMode = AppearanceMode(rawValue: configuration.appearance.mode) ?? .system
         tagLocationEnabled = configuration.recording.tagLocationEnabled
         locationTipDismissed = configuration.recording.locationTipDismissed

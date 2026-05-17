@@ -98,7 +98,7 @@ struct TalkieWorkflowSchema: WFSchemaProvider {
                     id: "modelId",
                     displayName: "Model",
                     type: .string,
-                    placeholder: "e.g., gpt-5.2-chat-latest, claude-sonnet-4-20250514",
+                    placeholder: "e.g., gpt-5.5, claude-sonnet-4-20250514",
                     isRequired: true,
                     group: "Model Settings",
                     order: 1

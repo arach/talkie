@@ -28,7 +28,7 @@ struct RecordingView: View {
                 // Duration
                 Text(formatDuration(recorder.recordingDuration))
                     .font(.system(.body, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(WatchTheme.current.panelInk.opacity(0.85))
             }
 
             Spacer(minLength: 4)
@@ -44,6 +44,7 @@ struct RecordingView: View {
 
     private var recIndicator: some View {
         HStack(spacing: 4) {
+            // .red is universally semantic for recording — keep it across themes.
             Circle()
                 .fill(Color.red)
                 .frame(width: 6, height: 6)
@@ -55,9 +56,9 @@ struct RecordingView: View {
                 )
 
             Text("REC")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
                 .foregroundColor(.red)
-                .tracking(1)
+                .tracking(1.5)
         }
         .onAppear { recPulse = true }
         .onDisappear { recPulse = false }
@@ -68,13 +69,16 @@ struct RecordingView: View {
     @ViewBuilder
     private var statusView: some View {
         if !recorder.isRecording {
+            let chrome = WatchTheme.current
             switch sessionManager.lastSentStatus {
             case .idle:
                 if sessionManager.isReachable {
+                    // .green is universal "good/ready" — keep semantic.
                     Label("Ready", systemImage: "checkmark.circle.fill")
                         .font(.system(size: 11))
                         .foregroundColor(.green)
                 } else {
+                    // .orange is universal "warning/queued" — keep semantic.
                     Label("Will queue", systemImage: "clock.fill")
                         .font(.system(size: 11))
                         .foregroundColor(.orange)
@@ -82,18 +86,20 @@ struct RecordingView: View {
 
             case .sending:
                 HStack(spacing: 4) {
-                    BrailleSpinner(size: 12, color: .blue)
+                    BrailleSpinner(size: 12, color: chrome.accent)
                     Text("Sending...")
                         .font(.system(size: 11))
                 }
-                .foregroundColor(.blue)
+                .foregroundColor(chrome.accent)
 
             case .sent:
+                // .green is universal "success" — keep semantic.
                 Label("Sent!", systemImage: "checkmark.circle.fill")
                     .font(.system(size: 11))
                     .foregroundColor(.green)
 
             case .failed(let error):
+                // .red is universal "error" — keep semantic.
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 10))
                     .foregroundColor(.red)

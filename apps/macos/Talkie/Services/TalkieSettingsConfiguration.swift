@@ -974,7 +974,7 @@ struct TalkieSettingsConfiguration: Codable {
         "talkie-devices",
     ]
 
-    static let defaultLegacyShortcutSlots: [String] = [
+    static let defaultLegacyShortcutSlotsBeforeImageSharing: [String] = [
         "talkie-dictate",
         "talkie-record",
         "talkie-settings",
@@ -991,6 +991,25 @@ struct TalkieSettingsConfiguration: Codable {
         "talkie-recent",
         "talkie-home",
         "talkie-devices",
+    ]
+
+    static let defaultLegacyShortcutSlots: [String] = [
+        "talkie-dictate",
+        "talkie-record",
+        "talkie-settings",
+        "talkie-search",
+        "mac-claude",
+        "talkie-agent",
+        "talkie-ssh",
+        "mac-sessions",
+        "mac-windows",
+        "talkie-keyboard",
+        "talkie-memos",
+        "talkie-command",
+        "talkie-pending",
+        "talkie-recent",
+        "talkie-home",
+        "mac-paste-image",
     ]
 
     static func defaultDeviceShortcutBoard() -> ShortcutBoard {
@@ -1023,7 +1042,7 @@ struct TalkieSettingsConfiguration: Codable {
 
     mutating func refreshDefaultDeviceShortcutBoardCatalog() {
         let normalizedBridgeSlots = Self.normalizedLegacyShortcutSlots(bridge.companionShortcutSlots)
-        bridge.companionShortcutSlots = normalizedBridgeSlots == Self.originalLegacyShortcutSlots
+        bridge.companionShortcutSlots = Self.shouldRefreshStarterShortcutSlots(normalizedBridgeSlots)
             ? Self.defaultLegacyShortcutSlots
             : normalizedBridgeSlots
 
@@ -1035,7 +1054,7 @@ struct TalkieSettingsConfiguration: Codable {
         let currentSlots = Self.normalizedLegacyShortcutSlots(
             Array(board.spaces[talkieIndex].tiles.prefix(16).map(\.resolvedLegacySlotID))
         )
-        let targetSlots = currentSlots == Self.originalLegacyShortcutSlots
+        let targetSlots = Self.shouldRefreshStarterShortcutSlots(currentSlots)
             ? Self.defaultLegacyShortcutSlots
             : currentSlots
         let spaceID = board.spaces[talkieIndex].id
@@ -1054,6 +1073,11 @@ struct TalkieSettingsConfiguration: Codable {
             return trimmed
         }
         return trimmed + Array(repeating: "", count: 16 - trimmed.count)
+    }
+
+    private static func shouldRefreshStarterShortcutSlots(_ slots: [String]) -> Bool {
+        slots == Self.originalLegacyShortcutSlots ||
+        slots == Self.defaultLegacyShortcutSlotsBeforeImageSharing
     }
 
     static func shortcutBoardTile(for slotID: String, fallbackIndex: Int, spaceID: String) -> ShortcutBoard.Space.Tile {
@@ -1177,6 +1201,13 @@ struct TalkieSettingsConfiguration: Codable {
             accentColor = "cyan"
             type = "action"
             action = .init(target: "talkie", kind: "devices")
+        case "mac-paste-image":
+            title = "Share Image"
+            subtitle = "Send a screenshot or photo from your iPhone to the Mac."
+            icon = "photo.on.rectangle.angled"
+            accentColor = "cyan"
+            type = "action"
+            action = .init(target: "talkie", kind: "paste-image")
         default:
             title = "Empty"
             subtitle = "Define this key from Talkie on your Mac."

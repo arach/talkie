@@ -13,6 +13,8 @@ import TalkieMobileKit
 struct CaptureCard: View {
     let capture: Capture
 
+    @ObservedObject private var theme = ThemeManager.shared
+
     private static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "h:mm a"
@@ -25,14 +27,27 @@ struct CaptureCard: View {
         return f
     }()
 
+    private var channelCode: String {
+        switch capture.sourceType {
+        case "photo": return "P"
+        case "url":   return "U"
+        case "text":  return "T"
+        default:      return "C"
+        }
+    }
+
     var body: some View {
+        let chrome = theme.chrome
         VStack(alignment: .leading, spacing: 0) {
-            // Title
-            Text(capture.title ?? capture.text)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.textPrimary)
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            // Channel + title
+            HStack(alignment: .top, spacing: 6) {
+                TalkieChannelLabel(code: channelCode)
+                Text(capture.title ?? capture.text)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundColor(theme.colors.textPrimary)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             Spacer(minLength: 8)
 
@@ -42,32 +57,27 @@ struct CaptureCard: View {
                     Image(systemName: sourceIcon)
                         .font(.system(size: 9, weight: .medium))
                     Text(capture.sourceType)
-                    Text("·")
-                        .foregroundColor(.textTertiary.opacity(0.5))
+                    Text(chrome.eyebrowLeader)
+                        .foregroundColor(theme.colors.textTertiary.opacity(0.5))
                     Text("\(capture.wordCount)w")
                 }
                 .font(.system(size: 10))
-                .foregroundColor(.textTertiary)
+                .foregroundColor(theme.colors.textTertiary)
 
                 HStack(spacing: 5) {
                     Image(systemName: capture.syncedToMac ? "checkmark.circle.fill" : "circle.dotted")
                         .font(.system(size: 8))
-                        .foregroundColor(capture.syncedToMac ? .success : .textTertiary.opacity(0.5))
+                        .foregroundColor(capture.syncedToMac ? theme.colors.success : theme.colors.textTertiary.opacity(0.5))
 
                     Text(formatTimestamp(capture.timestamp))
                         .font(.system(size: 10))
-                        .foregroundColor(.textTertiary)
+                        .foregroundColor(theme.colors.textTertiary)
                 }
             }
         }
         .padding(12)
         .frame(width: 164, height: 112, alignment: .topLeading)
-        .background(Color.surfaceSecondary)
-        .clipShape(RoundedRectangle(cornerRadius: CornerRadius.md))
-        .overlay(
-            RoundedRectangle(cornerRadius: CornerRadius.md)
-                .strokeBorder(Color.borderPrimary.opacity(0.5), lineWidth: 0.5)
-        )
+        .bezelChassis(padding: 0, corner: CornerRadius.md)
     }
 
     private var sourceIcon: String {
@@ -170,16 +180,14 @@ struct CaptureListSection: View {
     @Binding var selectedCapture: Capture?
     @State private var captures: [Capture] = []
     @State private var isSyncing = false
-    @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
+        let chrome = theme.chrome
         VStack(spacing: 0) {
             // Header
             HStack {
-                Text("CAPTURES")
-                    .font(.system(size: 10, weight: .medium))
-                    .tracking(1)
-                    .foregroundColor(themeManager.colors.textTertiary)
+                TalkieEyebrow(text: "Captures")
 
                 Spacer()
 
@@ -201,7 +209,7 @@ struct CaptureListSection: View {
                                 Text(isSyncing ? "Syncing…" : "\(unsyncedCount) pending")
                                     .font(.system(size: 10))
                             }
-                            .foregroundColor(.orange)
+                            .foregroundColor(chrome.accent)
                         }
                         .disabled(isSyncing)
                     }
@@ -214,14 +222,11 @@ struct CaptureListSection: View {
                 VStack(spacing: Spacing.md) {
                     Image(systemName: "tray")
                         .font(.system(size: 32, weight: .light))
-                        .foregroundColor(.textTertiary)
-                    Text("NO CAPTURES")
-                        .font(.techLabel)
-                        .tracking(2)
-                        .foregroundColor(.textSecondary)
+                        .foregroundColor(theme.colors.textTertiary)
+                    TalkieEyebrow(text: "No Captures", tint: .ink, showLeader: false)
                     Text("Share content from other apps")
                         .font(.bodySmall)
-                        .foregroundColor(.textTertiary)
+                        .foregroundColor(theme.colors.textTertiary)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, Spacing.xl)

@@ -104,10 +104,7 @@ struct MacAvailabilityCoachView: View {
     private var directMacsSection: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             if !directRegistry.macs.isEmpty {
-                Text(directRegistry.macs.count == 1 ? "YOUR MAC" : "YOUR MACS")
-                    .font(.techLabel)
-                    .tracking(2)
-                    .foregroundColor(.textTertiary)
+                TalkieEyebrow(text: directRegistry.macs.count == 1 ? "Your Mac" : "Your Macs")
                     .padding(.horizontal, Spacing.md)
             }
 
@@ -159,10 +156,7 @@ struct MacAvailabilityCoachView: View {
 
     private var nearbyMacsSection: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("NEARBY")
-                .font(.techLabel)
-                .tracking(2)
-                .foregroundColor(.textTertiary)
+            TalkieEyebrow(text: "Nearby")
                 .padding(.horizontal, Spacing.md)
 
             VStack(spacing: Spacing.xs) {
@@ -195,10 +189,13 @@ struct MacAvailabilityCoachView: View {
                     }
                 } else {
                     ForEach(nearbyBrowser.macs) { mac in
+                        let isSaved = bridgeManager.pairedHostname == mac.connectionHost
+                        let isConnected = isSaved && bridgeManager.status == .connected
                         NearbyBridgePairCard(
                             mac: mac,
                             isPairing: pairingNearbyMacID == mac.id,
-                            isActive: bridgeManager.pairedHostname == mac.connectionHost,
+                            isSaved: isSaved,
+                            isConnected: isConnected,
                             onPair: {
                                 pairNearbyMac(mac)
                             }
@@ -219,10 +216,7 @@ struct MacAvailabilityCoachView: View {
 
     private var connectionActionsSection: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("ADD")
-                .font(.techLabel)
-                .tracking(2)
-                .foregroundColor(.textTertiary)
+            TalkieEyebrow(text: "Add")
                 .padding(.horizontal, Spacing.md)
 
             AddMacActionCard(title: "Scan QR Code", systemImage: "qrcode.viewfinder") {
@@ -234,10 +228,7 @@ struct MacAvailabilityCoachView: View {
 
     private var availabilityHelpSection: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("AVAILABILITY")
-                .font(.techLabel)
-                .tracking(2)
-                .foregroundColor(.textTertiary)
+            TalkieEyebrow(text: "Availability")
                 .padding(.horizontal, Spacing.md)
 
             DisclosureGroup(isExpanded: $showingAvailabilityTips) {
@@ -297,10 +288,7 @@ struct MacAvailabilityCoachView: View {
 
     private var cloudSignalsSection: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("BACKGROUND PROCESSING")
-                .font(.techLabel)
-                .tracking(2)
-                .foregroundColor(.textTertiary)
+            TalkieEyebrow(text: "Background Processing")
                 .padding(.horizontal, Spacing.md)
 
             DisclosureGroup(isExpanded: $showingBackgroundSignals) {
@@ -411,9 +399,9 @@ struct MacAvailabilityCoachView: View {
 
             switch result {
             case .approved:
-                nearbyPairingMessage = "Paired with \(mac.name)."
+                nearbyPairingMessage = "Connected to \(mac.name)."
             case .pendingApproval:
-                nearbyPairingMessage = "Pairing request sent. Approve this iPhone on the Mac."
+                nearbyPairingMessage = "Pairing request sent. Approve this iPhone in Talkie on the Mac."
             case nil:
                 nearbyPairingMessage = bridgeManager.errorMessage ?? "Could not pair with \(mac.name)."
             }
@@ -426,7 +414,8 @@ struct MacAvailabilityCoachView: View {
 private struct NearbyBridgePairCard: View {
     let mac: NearbyMacBrowser.NearbyMac
     let isPairing: Bool
-    let isActive: Bool
+    let isSaved: Bool
+    let isConnected: Bool
     let onPair: () -> Void
 
     var body: some View {
@@ -451,18 +440,18 @@ private struct NearbyBridgePairCard: View {
                             .foregroundStyle(Color.textPrimary)
                             .lineLimit(1)
 
-                        if isActive {
-                            Text("ACTIVE")
+                        if isConnected || isSaved {
+                            Text(isConnected ? "CONNECTED" : "SAVED")
                                 .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                .foregroundStyle(Color.success)
+                                .foregroundStyle(isConnected ? Color.success : Color.textSecondary)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 3)
-                                .background(Color.success.opacity(0.12))
+                                .background((isConnected ? Color.success : Color.textSecondary).opacity(0.12))
                                 .clipShape(.capsule)
                         }
                     }
 
-                    Text("\(mac.connectionHost):\(mac.port) · \(mac.routeLabel)")
+                    Text(secondaryText)
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
                         .foregroundStyle(Color.textTertiary)
                         .lineLimit(1)
@@ -471,9 +460,9 @@ private struct NearbyBridgePairCard: View {
 
                 Spacer(minLength: 0)
 
-                Image(systemName: isActive ? "checkmark.circle.fill" : "arrow.right.circle")
+                Image(systemName: trailingIcon)
                     .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(isActive ? Color.success : Color.active)
+                    .foregroundStyle(isConnected ? Color.success : Color.active)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 14)
@@ -488,7 +477,27 @@ private struct NearbyBridgePairCard: View {
             }
         }
         .buttonStyle(.plain)
-        .disabled(isPairing || isActive)
+        .disabled(isPairing || isConnected)
+    }
+
+    private var secondaryText: String {
+        if isSaved && !isConnected {
+            return "Saved pair · tap to verify or refresh"
+        }
+
+        return "\(mac.connectionHost):\(mac.port) · \(mac.routeLabel)"
+    }
+
+    private var trailingIcon: String {
+        if isConnected {
+            return "checkmark.circle.fill"
+        }
+
+        if isSaved {
+            return "arrow.clockwise.circle"
+        }
+
+        return "arrow.right.circle"
     }
 }
 

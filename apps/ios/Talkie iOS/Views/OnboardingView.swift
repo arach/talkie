@@ -2,7 +2,10 @@
 //  OnboardingView.swift
 //  Talkie iOS
 //
-//  First-launch onboarding experience
+//  First-launch onboarding experience.
+//  Theme-aware: every surface, accent, and chrome detail reads from the
+//  active theme. Scope users see cream paper + amber chrome; tactical users
+//  see gunmetal + orange; ghost sees frost + indigo; midnight sees jet + blue.
 //
 
 import SwiftUI
@@ -10,34 +13,32 @@ import CloudKit
 import UIKit
 import TalkieMobileKit
 
-private let onboardingAccent = Color.brandAccent
-private let onboardingAccentGlow = Color.activeGlow
-
 struct OnboardingView: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var hasSeenOnboarding: Bool
-    var onStartRecording: (() -> Void)? = nil  // Optional callback to start recording
+    var onStartRecording: (() -> Void)? = nil
 
     @State private var currentPage = 0
     @State private var iCloudStatus: CKAccountStatus = .couldNotDetermine
+    @ObservedObject private var theme = ThemeManager.shared
 
     private let totalPages = 4
 
     var body: some View {
+        let chrome = theme.chrome
+
         ZStack {
-            // Dark tactical background for all pages
-            Color(hex: "0A0A0A")
+            theme.colors.background
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Skip button
                 HStack {
                     Spacer()
                     Button(action: completeOnboarding) {
                         Text("SKIP")
                             .font(.techLabel)
                             .tracking(1)
-                            .foregroundColor(Color(hex: "6A6A6A"))
+                            .foregroundColor(theme.colors.textTertiary)
                             .padding(.horizontal, Spacing.md)
                             .padding(.vertical, Spacing.xs)
                     }
@@ -45,23 +46,15 @@ struct OnboardingView: View {
                 .padding(.horizontal, Spacing.md)
                 .padding(.top, Spacing.sm)
 
-                // Page content
                 TabView(selection: $currentPage) {
-                    WelcomePage()
-                        .tag(0)
-
-                    CapturePage()
-                        .tag(1)
-
-                    SyncPage()
-                        .tag(2)
-
+                    WelcomePage().tag(0)
+                    CapturePage().tag(1)
+                    SyncPage().tag(2)
                     GetStartedPage(
                         iCloudStatus: iCloudStatus,
                         onComplete: completeOnboarding,
                         onTryRecord: {
                             completeOnboarding()
-                            // Trigger recording after a brief delay to let dismiss complete
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                 onStartRecording?()
                             }
@@ -72,14 +65,12 @@ struct OnboardingView: View {
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .animation(.easeInOut(duration: 0.3), value: currentPage)
 
-                // Custom page indicator + navigation
-                let accentColor = onboardingAccent
+                // Page indicator + navigation
                 HStack(spacing: Spacing.lg) {
-                    // Back button (hidden on first page)
                     Button(action: { currentPage -= 1 }) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(Color(hex: "6A6A6A"))
+                            .foregroundColor(theme.colors.textTertiary)
                             .frame(width: 44, height: 44)
                     }
                     .opacity(currentPage > 0 ? 1 : 0)
@@ -87,11 +78,10 @@ struct OnboardingView: View {
 
                     Spacer()
 
-                    // Page dots
                     HStack(spacing: Spacing.xs) {
                         ForEach(0..<totalPages, id: \.self) { index in
                             Circle()
-                                .fill(index == currentPage ? accentColor : Color(hex: "3A3A3A"))
+                                .fill(index == currentPage ? chrome.accent : chrome.edge)
                                 .frame(width: index == currentPage ? 8 : 6, height: index == currentPage ? 8 : 6)
                                 .animation(.spring(response: 0.3), value: currentPage)
                         }
@@ -99,7 +89,6 @@ struct OnboardingView: View {
 
                     Spacer()
 
-                    // Next/Done button
                     Button(action: {
                         if currentPage < totalPages - 1 {
                             currentPage += 1
@@ -109,10 +98,11 @@ struct OnboardingView: View {
                     }) {
                         Image(systemName: currentPage < totalPages - 1 ? "chevron.right" : "checkmark")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(chrome.panelInk)
                             .frame(width: 44, height: 44)
-                            .background(accentColor)
+                            .background(chrome.accent)
                             .clipShape(Circle())
+                            .talkieAccentGlow()
                     }
                 }
                 .padding(.horizontal, Spacing.xl)
@@ -130,36 +120,41 @@ struct OnboardingView: View {
     }
 
     private func checkiCloudStatus() {
+        #if targetEnvironment(simulator)
+        iCloudStatus = .couldNotDetermine
+        return
+        #else
         CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier).accountStatus { status, _ in
             DispatchQueue.main.async {
                 self.iCloudStatus = status
             }
         }
+        #endif
     }
 }
 
-// MARK: - Welcome Page (OG Image Style)
+// MARK: - Welcome Page
 
 private struct WelcomePage: View {
+    @ObservedObject private var theme = ThemeManager.shared
+
     var body: some View {
+        let chrome = theme.chrome
+
         ZStack {
-            // Dark tactical background
-            Color(hex: "0A0A0A")
+            theme.colors.background
                 .ignoresSafeArea()
 
-            // Grid pattern overlay
-            GridPatternView()
-                .opacity(0.4)
+            GridPatternView(color: chrome.edgeSubtle)
+                .opacity(0.6)
 
-            // Corner brackets
-            CornerBrackets()
+            CornerBrackets(color: chrome.edge)
 
-            // Content
             VStack(spacing: Spacing.xs) {
                 Spacer()
                 Spacer()
 
-                // App logo with angled badge ribbon
+                // Logo with ribbon
                 ZStack(alignment: .topTrailing) {
                     Image("TalkieLogo")
                         .resizable()
@@ -168,59 +163,44 @@ private struct WelcomePage: View {
                         .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 32, style: .continuous)
-                                .stroke(Color(hex: "2A2A2A"), lineWidth: 1)
+                                .stroke(chrome.edge, lineWidth: 1)
                         )
 
-                    TalkieLogo()
+                    TalkieLogoRibbon()
                         .offset(x: 48, y: -28)
                 }
 
-                // Main headline — single line, matching splash
+                // VOICE + AI
                 HStack(spacing: 8) {
                     Text("VOICE")
                         .font(.system(size: 36, weight: .black, design: .default))
-                        .foregroundColor(.white)
+                        .foregroundColor(theme.colors.textPrimary)
 
                     Text("+ AI")
                         .font(.system(size: 36, weight: .black, design: .default))
-                        .foregroundColor(onboardingAccent)
+                        .foregroundColor(chrome.accent)
+                        .talkieAccentGlow()
                 }
                 .padding(.top, Spacing.sm)
 
-                // Tagline — pulled closer to headline
+                // Tagline
                 VStack(spacing: Spacing.sm) {
                     HStack(spacing: Spacing.sm) {
-                        Text("RECORD")
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .tracking(1)
-                            .foregroundColor(Color(hex: "9A9A9A"))
-
-                        Text("·")
-                            .foregroundColor(Color(hex: "4A4A4A"))
-
-                        Text("DICTATE")
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .tracking(1)
-                            .foregroundColor(Color(hex: "9A9A9A"))
-
-                        Text("·")
-                            .foregroundColor(Color(hex: "4A4A4A"))
-
-                        Text("TRANSCRIBE")
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .tracking(1)
-                            .foregroundColor(Color(hex: "9A9A9A"))
+                        TaglineWord("Record")
+                        TaglineSeparator()
+                        TaglineWord("Dictate")
+                        TaglineSeparator()
+                        TaglineWord("Transcribe")
                     }
 
-                    // Privacy line
                     HStack(spacing: Spacing.xs) {
                         Image(systemName: "lock.fill")
                             .font(.system(size: 9))
-                            .foregroundColor(Color(hex: "6A6A6A"))
+                            .foregroundColor(theme.colors.textTertiary)
 
                         Text("On-device. Private. Yours.")
                             .font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .foregroundColor(Color(hex: "6A6A6A"))
+                            .foregroundColor(theme.colors.textTertiary)
                     }
                 }
                 .padding(.top, Spacing.md)
@@ -228,15 +208,14 @@ private struct WelcomePage: View {
                 Spacer()
                 Spacer()
 
-                // Footer
                 VStack(spacing: 4) {
                     Text("usetalkie.com")
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(Color(hex: "5A5A5A"))
+                        .foregroundColor(theme.colors.textTertiary)
 
                     Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")")
                         .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(Color(hex: "3A3A3A"))
+                        .foregroundColor(theme.colors.textTertiary.opacity(0.7))
                 }
                 .padding(.bottom, Spacing.xl)
             }
@@ -244,59 +223,73 @@ private struct WelcomePage: View {
     }
 }
 
-// MARK: - Tactical UI Components
+private struct TaglineWord: View {
+    @ObservedObject private var theme = ThemeManager.shared
+    let text: String
+    init(_ text: String) { self.text = text }
+    var body: some View {
+        Text(text.uppercased())
+            .font(.system(size: 11, weight: .bold, design: .monospaced))
+            .tracking(1)
+            .foregroundColor(theme.colors.textSecondary)
+    }
+}
+
+private struct TaglineSeparator: View {
+    @ObservedObject private var theme = ThemeManager.shared
+    var body: some View {
+        Text(theme.chrome.eyebrowLeader)
+            .font(.system(size: 11, weight: .bold, design: .monospaced))
+            .foregroundColor(theme.colors.textTertiary)
+    }
+}
+
+// MARK: - Pattern + Frame Components
 
 private struct GridPatternView: View {
+    let color: Color
+
     var body: some View {
         Canvas { context, size in
             let gridSize: CGFloat = 40
-            let lineColor = Color(hex: "1A1A1A")
-
-            // Vertical lines
             for x in stride(from: 0, to: size.width, by: gridSize) {
                 var path = Path()
                 path.move(to: CGPoint(x: x, y: 0))
                 path.addLine(to: CGPoint(x: x, y: size.height))
-                context.stroke(path, with: .color(lineColor), lineWidth: 1)
+                context.stroke(path, with: .color(color), lineWidth: 1)
             }
-
-            // Horizontal lines
             for y in stride(from: 0, to: size.height, by: gridSize) {
                 var path = Path()
                 path.move(to: CGPoint(x: 0, y: y))
                 path.addLine(to: CGPoint(x: size.width, y: y))
-                context.stroke(path, with: .color(lineColor), lineWidth: 1)
+                context.stroke(path, with: .color(color), lineWidth: 1)
             }
         }
     }
 }
 
 private struct CornerBrackets: View {
+    let color: Color
     private let bracketSize: CGFloat = 40
     private let strokeWidth: CGFloat = 2
-    private let color = Color(hex: "3A3A3A")
 
     var body: some View {
         GeometryReader { geo in
-            // Top-left
             BracketShape(corner: .topLeft)
                 .stroke(color, lineWidth: strokeWidth)
                 .frame(width: bracketSize, height: bracketSize)
                 .position(x: bracketSize / 2 + 20, y: bracketSize / 2 + 60)
 
-            // Top-right
             BracketShape(corner: .topRight)
                 .stroke(color, lineWidth: strokeWidth)
                 .frame(width: bracketSize, height: bracketSize)
                 .position(x: geo.size.width - bracketSize / 2 - 20, y: bracketSize / 2 + 60)
 
-            // Bottom-left
             BracketShape(corner: .bottomLeft)
                 .stroke(color, lineWidth: strokeWidth)
                 .frame(width: bracketSize, height: bracketSize)
                 .position(x: bracketSize / 2 + 20, y: geo.size.height - bracketSize / 2 - 120)
 
-            // Bottom-right
             BracketShape(corner: .bottomRight)
                 .stroke(color, lineWidth: strokeWidth)
                 .frame(width: bracketSize, height: bracketSize)
@@ -339,28 +332,31 @@ private struct BracketShape: Shape {
     }
 }
 
-private struct TalkieLogo: View {
+private struct TalkieLogoRibbon: View {
+    @ObservedObject private var theme = ThemeManager.shared
+
     var body: some View {
+        let chrome = theme.chrome
         HStack(spacing: 4) {
             Text(";)")
                 .font(.system(size: 14, weight: .bold, design: .monospaced))
-                .foregroundColor(onboardingAccent)
+                .foregroundColor(chrome.accent)
 
             Text("Talkie")
                 .font(.system(size: 14, weight: .bold, design: .monospaced))
-                .foregroundColor(.white)
+                .foregroundColor(theme.colors.textPrimary)
         }
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.xs)
         .background(
             RoundedRectangle(cornerRadius: 4)
-                .strokeBorder(onboardingAccent, lineWidth: 2)
+                .strokeBorder(chrome.accent, lineWidth: 2)
                 .background(
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(Color(hex: "0A0A0A"))
+                        .fill(theme.colors.background)
                 )
         )
-        .rotationEffect(.degrees(12)) // Ribbon-style tilt — right side lower
+        .rotationEffect(.degrees(12))
     }
 }
 
@@ -368,58 +364,54 @@ private struct TalkieLogo: View {
 
 private struct CapturePage: View {
     @State private var isRecordingPulse = false
+    @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
+        let chrome = theme.chrome
+
         ZStack {
-            // Dark background
-            Color(hex: "0A0A0A")
+            theme.colors.background
                 .ignoresSafeArea()
 
-            // Subtle grid
-            GridPatternView()
-                .opacity(0.15)
+            GridPatternView(color: chrome.edgeSubtle)
+                .opacity(0.30)
 
             VStack(spacing: Spacing.lg) {
                 Spacer()
 
-                // Illustration - dark themed
+                // Phone illustration on embedded panel
                 ZStack {
                     RoundedRectangle(cornerRadius: CornerRadius.lg)
-                        .fill(Color(hex: "151515"))
+                        .fill(chrome.panel)
                         .frame(width: 200, height: 160)
                         .overlay(
                             RoundedRectangle(cornerRadius: CornerRadius.lg)
-                                .strokeBorder(Color(hex: "2A2A2A"), lineWidth: 1)
+                                .strokeBorder(chrome.panelEdge, lineWidth: 1)
                         )
 
                     VStack(spacing: Spacing.md) {
-                        // Phone icon with mic
                         ZStack {
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color(hex: "3A3A3A"), lineWidth: 2)
+                                .stroke(chrome.panelInkFaint.opacity(0.4), lineWidth: 2)
                                 .frame(width: 60, height: 100)
 
-                            // Pulsing glow
                             Circle()
-                                .fill(onboardingAccent.opacity(0.2))
+                                .fill(chrome.panelAccent.opacity(0.20))
                                 .frame(width: 40, height: 40)
                                 .scaleEffect(isRecordingPulse ? 1.3 : 1.0)
                                 .opacity(isRecordingPulse ? 0.1 : 0.3)
 
                             Image(systemName: "mic.fill")
                                 .font(.system(size: 20))
-                                .foregroundColor(onboardingAccent)
+                                .foregroundColor(chrome.panelAccent)
+                                .shadow(color: chrome.panelAccent.opacity(0.5), radius: chrome.glowRadius)
                         }
 
-                        // Recording indicator
                         HStack(spacing: 4) {
-                            Circle()
-                                .fill(onboardingAccent)
-                                .frame(width: 6, height: 6)
-                                .scaleEffect(isRecordingPulse ? 1.2 : 0.8)
+                            TalkieStatusDot(diameter: 6, pulses: true, color: chrome.panelAccent)
                             Text("REC")
                                 .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                .foregroundColor(onboardingAccent)
+                                .foregroundColor(chrome.panelAccent)
                         }
                     }
                 }
@@ -432,16 +424,15 @@ private struct CapturePage: View {
                 VStack(spacing: Spacing.sm) {
                     Text("Capture Your Voice")
                         .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(theme.colors.textPrimary)
 
                     Text("Record memos, dictate into any app,\nor let the keyboard type as you speak.\nAll on-device. Always ready.")
                         .font(.system(size: 14))
-                        .foregroundColor(Color(hex: "8A8A8A"))
+                        .foregroundColor(theme.colors.textSecondary)
                         .multilineTextAlignment(.center)
                         .lineSpacing(4)
                 }
 
-                // Feature hints
                 VStack(alignment: .leading, spacing: Spacing.sm) {
                     FeatureHint(icon: "mic.fill", text: "Voice memos with instant transcription")
                     FeatureHint(icon: "keyboard", text: "Talkie keyboard — dictate anywhere you type")
@@ -457,27 +448,26 @@ private struct CapturePage: View {
     }
 }
 
-// MARK: - Feature Hint Row
-
 private struct FeatureHint: View {
     let icon: String
     let text: String
+    @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.system(size: 12))
-                .foregroundColor(onboardingAccent)
+                .foregroundColor(theme.chrome.accent)
                 .frame(width: 20)
 
             Text(text)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(Color(hex: "9A9A9A"))
+                .foregroundColor(theme.colors.textSecondary)
         }
     }
 }
 
-// MARK: - Sync Page (Simple with optional deep dive)
+// MARK: - Sync Page
 
 private enum SyncTooltip: String, CaseIterable {
     case iphone = "iphone"
@@ -513,25 +503,24 @@ private struct SyncPage: View {
     @State private var animateSync = false
     @State private var showArchitectureDetail = false
     @State private var activeTooltip: SyncTooltip? = nil
+    @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
+        let chrome = theme.chrome
+
         ZStack {
-            // Dark background
-            Color(hex: "0A0A0A")
+            theme.colors.background
                 .ignoresSafeArea()
 
-            // Subtle grid
-            GridPatternView()
-                .opacity(0.15)
+            GridPatternView(color: chrome.edgeSubtle)
+                .opacity(0.30)
 
             VStack(spacing: Spacing.lg) {
                 Spacer()
 
-                // Simple diagram container with overlayed label
+                // Diagram container with overlayed USER OWNED DATA label
                 VStack(spacing: 12) {
-                    // Icons row with arrows
                     HStack(spacing: 0) {
-                        // iPhone - tappable
                         SyncIconButton(
                             icon: "iphone",
                             label: "iPhone",
@@ -543,16 +532,8 @@ private struct SyncPage: View {
                             }
                         }
 
-                        // Arrows left
-                        VStack(spacing: 2) {
-                            Image(systemName: "arrow.right")
-                            Image(systemName: "arrow.left")
-                        }
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(onboardingAccent)
-                        .opacity(animateSync ? 0.8 : 0.3)
+                        SyncArrows(animateSync: animateSync)
 
-                        // iCloud - tappable
                         SyncIconButton(
                             icon: "icloud.fill",
                             label: "iCloud",
@@ -564,16 +545,8 @@ private struct SyncPage: View {
                             }
                         }
 
-                        // Arrows right
-                        VStack(spacing: 2) {
-                            Image(systemName: "arrow.right")
-                            Image(systemName: "arrow.left")
-                        }
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(onboardingAccent)
-                        .opacity(animateSync ? 0.8 : 0.3)
+                        SyncArrows(animateSync: animateSync)
 
-                        // Mac - tappable
                         SyncIconButton(
                             icon: "macbook",
                             label: "Mac",
@@ -588,20 +561,19 @@ private struct SyncPage: View {
                     .padding(.vertical, 20)
                 }
                 .padding(16)
-                .padding(.top, 8) // Extra top padding for the label
+                .padding(.top, 8)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(Color(hex: "0D0D0D"))
+                        .fill(theme.colors.cardBackground)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(
                             style: StrokeStyle(lineWidth: 1, dash: [3, 3])
                         )
-                        .foregroundColor(onboardingAccent.opacity(0.5))
+                        .foregroundColor(chrome.accent.opacity(0.5))
                 )
                 .overlay(alignment: .top) {
-                    // USER OWNED DATA label on top border
                     HStack(spacing: 6) {
                         Image(systemName: "lock.fill")
                             .font(.system(size: 8))
@@ -609,25 +581,23 @@ private struct SyncPage: View {
                             .font(.system(size: 9, weight: .bold, design: .monospaced))
                             .tracking(2)
                     }
-                    .foregroundColor(onboardingAccent)
+                    .foregroundColor(chrome.accent)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 5)
-                    .background(Color(hex: "0A0A0A"))
+                    .background(theme.colors.background)
                     .overlay(
                         Capsule()
                             .strokeBorder(
                                 style: StrokeStyle(lineWidth: 1, dash: [3, 3])
                             )
-                            .foregroundColor(onboardingAccent.opacity(0.5))
+                            .foregroundColor(chrome.accent.opacity(0.5))
                     )
                     .clipShape(Capsule())
                     .offset(y: -12)
                 }
                 .padding(.horizontal, Spacing.md)
 
-                // Tooltip or Title/description
                 if let tooltip = activeTooltip {
-                    // Tooltip card
                     SyncTooltipCard(tooltip: tooltip) {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             activeTooltip = nil
@@ -638,22 +608,20 @@ private struct SyncPage: View {
                         removal: .opacity
                     ))
                 } else {
-                    // Default title and description
                     VStack(spacing: Spacing.sm) {
                         Text("The Magic of Sync")
                             .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(theme.colors.textPrimary)
 
                         Text("Record anywhere on your iPhone.\nSync locally, via iCloud, or direct to Mac.\nMac processes with on-device AI.\nAll encrypted, all yours.")
                             .font(.system(size: 14))
-                            .foregroundColor(Color(hex: "8A8A8A"))
+                            .foregroundColor(theme.colors.textSecondary)
                             .multilineTextAlignment(.center)
                             .lineSpacing(4)
                     }
                     .transition(.opacity)
                 }
 
-                // "How it works" button
                 Button(action: { showArchitectureDetail = true }) {
                     HStack(spacing: 6) {
                         Text("SEE HOW IT WORKS")
@@ -662,23 +630,22 @@ private struct SyncPage: View {
                         Image(systemName: "chevron.right")
                             .font(.system(size: 9, weight: .bold))
                     }
-                    .foregroundColor(onboardingAccent)
+                    .foregroundColor(chrome.accent)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
                     .background(
                         Capsule()
-                            .strokeBorder(onboardingAccent.opacity(0.4), lineWidth: 1)
+                            .strokeBorder(chrome.accent.opacity(0.4), lineWidth: 1)
                     )
                 }
 
-                // Note
                 HStack(spacing: 6) {
                     Image(systemName: "info.circle")
                         .font(.system(size: 10))
                     Text("Works perfectly fine locally without iCloud")
                         .font(.system(size: 10, design: .monospaced))
                 }
-                .foregroundColor(Color(hex: "4A4A4A"))
+                .foregroundColor(theme.colors.textTertiary)
 
                 Spacer()
                 Spacer()
@@ -695,7 +662,20 @@ private struct SyncPage: View {
     }
 }
 
-// MARK: - Sync Icon Button
+private struct SyncArrows: View {
+    let animateSync: Bool
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Image(systemName: "arrow.right")
+            Image(systemName: "arrow.left")
+        }
+        .font(.system(size: 10, weight: .bold))
+        .foregroundColor(theme.chrome.accent)
+        .opacity(animateSync ? 0.8 : 0.3)
+    }
+}
 
 private struct SyncIconButton: View {
     let icon: String
@@ -704,49 +684,48 @@ private struct SyncIconButton: View {
     let isSelected: Bool
     let onTap: () -> Void
 
+    @ObservedObject private var theme = ThemeManager.shared
+
     var body: some View {
+        let chrome = theme.chrome
         Button(action: onTap) {
             VStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.system(size: 32))
-                    .foregroundColor(isSelected ? onboardingAccent : .white)
+                    .foregroundColor(isSelected ? chrome.accent : theme.colors.textPrimary)
                 Text(label)
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(isSelected ? onboardingAccent : Color(hex: "6A6A6A"))
+                    .foregroundColor(isSelected ? chrome.accent : theme.colors.textTertiary)
                 Text(action)
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .foregroundColor(onboardingAccent)
+                    .foregroundColor(chrome.accent)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? onboardingAccent.opacity(0.1) : Color.clear)
+                    .fill(isSelected ? chrome.accentTint : Color.clear)
             )
         }
         .buttonStyle(.plain)
     }
 }
 
-// MARK: - Sync Tooltip Card
-
 private struct SyncTooltipCard: View {
     let tooltip: SyncTooltip
     let onDismiss: () -> Void
+    @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
+        let chrome = theme.chrome
         VStack(alignment: .leading, spacing: 8) {
-            // Header with close button
             HStack {
                 HStack(spacing: 6) {
-                    Circle()
-                        .fill(onboardingAccent)
-                        .frame(width: 6, height: 6)
-
+                    TalkieStatusDot(diameter: 6)
                     Text(tooltip.subtitle)
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
                         .tracking(1)
-                        .foregroundColor(onboardingAccent)
+                        .foregroundColor(chrome.accent)
                 }
 
                 Spacer()
@@ -754,22 +733,20 @@ private struct SyncTooltipCard: View {
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(Color(hex: "6A6A6A"))
+                        .foregroundColor(theme.colors.textTertiary)
                         .frame(width: 24, height: 24)
-                        .background(Color(hex: "2A2A2A"))
+                        .background(chrome.edge.opacity(0.6))
                         .clipShape(Circle())
                 }
             }
 
-            // Title
             Text(tooltip.title)
                 .font(.system(size: 16, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(theme.colors.textPrimary)
 
-            // Description
             Text(tooltip.description)
                 .font(.system(size: 12))
-                .foregroundColor(Color(hex: "8A8A8A"))
+                .foregroundColor(theme.colors.textSecondary)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -777,22 +754,23 @@ private struct SyncTooltipCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color(hex: "151515"))
+                .fill(theme.colors.cardBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(onboardingAccent.opacity(0.3), lineWidth: 1)
+                        .strokeBorder(chrome.accent.opacity(0.3), lineWidth: 1)
                 )
         )
         .padding(.horizontal, Spacing.md)
     }
 }
 
-// MARK: - Architecture Walkthrough (Full Screen Detail View)
+// MARK: - Architecture Walkthrough
 
 private struct ArchitectureWalkthrough: View {
     @Environment(\.dismiss) private var dismiss
     @State private var currentStep = 0
     @State private var pulseComplete = false
+    @ObservedObject private var theme = ThemeManager.shared
     private let totalSteps = 4
 
     private let steps: [(title: String, subtitle: String, description: String)] = [
@@ -803,83 +781,75 @@ private struct ArchitectureWalkthrough: View {
     ]
 
     var body: some View {
+        let chrome = theme.chrome
+
         ZStack {
-            // Dark background
-            Color(hex: "0A0A0A")
+            theme.colors.background
                 .ignoresSafeArea()
 
-            // Subtle grid
-            GridPatternView()
-                .opacity(0.15)
+            GridPatternView(color: chrome.edgeSubtle)
+                .opacity(0.30)
 
             VStack(spacing: 0) {
-                // Close button
                 HStack {
                     Spacer()
                     Button(action: { dismiss() }) {
                         Image(systemName: "xmark")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(Color(hex: "6A6A6A"))
+                            .foregroundColor(theme.colors.textTertiary)
                             .frame(width: 32, height: 32)
-                            .background(Color(hex: "1A1A1A"))
+                            .background(chrome.edge.opacity(0.5))
                             .clipShape(Circle())
                     }
                 }
                 .padding(.horizontal, Spacing.md)
                 .padding(.top, Spacing.md)
 
-                Spacer()
-                    .frame(height: 12)
+                Spacer().frame(height: 12)
 
-                // Architecture Diagram
                 ArchitectureDiagram(currentStep: currentStep)
                     .padding(.horizontal, Spacing.md)
 
-                Spacer()
-                    .frame(height: 24)
+                Spacer().frame(height: 24)
 
-                // Step info
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Text(String(format: "%02d", currentStep + 1))
                             .font(.system(size: 12, weight: .bold, design: .monospaced))
-                            .foregroundColor(onboardingAccent)
+                            .foregroundColor(chrome.accent)
 
                         Text("//")
                             .font(.system(size: 12, weight: .bold, design: .monospaced))
-                            .foregroundColor(Color(hex: "3A3A3A"))
+                            .foregroundColor(theme.colors.textTertiary)
 
                         Text(steps[currentStep].title)
                             .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(theme.colors.textPrimary)
                     }
 
                     HStack(spacing: 8) {
                         Rectangle()
-                            .fill(onboardingAccent)
+                            .fill(chrome.accent)
                             .frame(width: 2, height: 12)
 
                         Text(steps[currentStep].subtitle)
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
                             .tracking(2)
-                            .foregroundColor(Color(hex: "6A6A6A"))
+                            .foregroundColor(theme.colors.textTertiary)
                     }
 
                     Text(steps[currentStep].description)
                         .font(.system(size: 13))
-                        .foregroundColor(Color(hex: "8A8A8A"))
+                        .foregroundColor(theme.colors.textSecondary)
                         .lineSpacing(4)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, Spacing.lg)
 
-                Spacer()
-                    .frame(height: 24)
+                Spacer().frame(height: 24)
 
-                // Navigation: back button, centered dots, forward/continue
                 HStack {
-                    // Back button
                     Button {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             currentStep -= 1
@@ -887,7 +857,7 @@ private struct ArchitectureWalkthrough: View {
                     } label: {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(Color(hex: "6A6A6A"))
+                            .foregroundColor(theme.colors.textTertiary)
                             .frame(width: 44, height: 44)
                     }
                     .opacity(currentStep > 0 ? 1 : 0)
@@ -895,18 +865,16 @@ private struct ArchitectureWalkthrough: View {
 
                     Spacer()
 
-                    // Centered dots
                     HStack(spacing: 8) {
                         ForEach(0..<totalSteps, id: \.self) { index in
                             Circle()
-                                .fill(index == currentStep ? onboardingAccent : Color(hex: "3A3A3A"))
+                                .fill(index == currentStep ? chrome.accent : chrome.edge)
                                 .frame(width: index == currentStep ? 8 : 6, height: index == currentStep ? 8 : 6)
                         }
                     }
 
                     Spacer()
 
-                    // Forward / Continue button
                     if currentStep < totalSteps - 1 {
                         Button {
                             withAnimation(.easeInOut(duration: 0.3)) {
@@ -915,26 +883,27 @@ private struct ArchitectureWalkthrough: View {
                         } label: {
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.white)
+                                .foregroundColor(chrome.panelInk)
                                 .frame(width: 44, height: 44)
-                                .background(onboardingAccent)
+                                .background(chrome.accent)
                                 .clipShape(Circle())
+                                .talkieAccentGlow()
                         }
                     } else {
                         Button(action: { dismiss() }) {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.white)
+                                .foregroundColor(chrome.panelInk)
                                 .frame(width: 44, height: 44)
-                                .background(onboardingAccent)
+                                .background(chrome.accent)
                                 .clipShape(Circle())
+                                .talkieAccentGlow()
                         }
                     }
                 }
                 .padding(.horizontal, Spacing.lg)
 
-                Spacer()
-                    .frame(height: 40)
+                Spacer().frame(height: 40)
             }
         }
         .contentShape(Rectangle())
@@ -953,27 +922,19 @@ private struct ArchitectureWalkthrough: View {
     }
 }
 
-// MARK: - Architecture Diagram
-
 private struct ArchitectureDiagram: View {
     let currentStep: Int
-
-    private let dimColor = Color(hex: "3A3A3A")
-    private let bgColor = Color(hex: "111111")
+    @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
+        let chrome = theme.chrome
         VStack(spacing: 12) {
-            // USER OWNED DATA header
             UserOwnedDataHeader()
 
-            // Main container with dashed border
             VStack(spacing: 12) {
-                // iCloud panel
                 iCloudPanel(isActive: currentStep == 1 || currentStep == 3)
 
-                // Device panels row
                 HStack(spacing: 12) {
-                    // iPhone panel
                     DevicePanel(
                         icon: "iphone",
                         title: "IPHONE",
@@ -986,7 +947,6 @@ private struct ArchitectureDiagram: View {
                         isActive: currentStep == 0 || currentStep == 3
                     )
 
-                    // Mac panel
                     DevicePanel(
                         icon: "macbook",
                         title: "MAC",
@@ -1003,23 +963,24 @@ private struct ArchitectureDiagram: View {
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(hex: "0D0D0D"))
+                    .fill(theme.colors.cardBackground)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
                     .strokeBorder(
                         style: StrokeStyle(lineWidth: 1, dash: [4, 4])
                     )
-                    .foregroundColor(Color(hex: "2A2A2A"))
+                    .foregroundColor(chrome.edge)
             )
         }
     }
 }
 
-// MARK: - User Owned Data Header
-
 private struct UserOwnedDataHeader: View {
+    @ObservedObject private var theme = ThemeManager.shared
+
     var body: some View {
+        let chrome = theme.chrome
         HStack(spacing: 6) {
             Image(systemName: "lock.fill")
                 .font(.system(size: 8))
@@ -1027,7 +988,7 @@ private struct UserOwnedDataHeader: View {
                 .font(.system(size: 9, weight: .bold, design: .monospaced))
                 .tracking(2)
         }
-        .foregroundColor(onboardingAccent)
+        .foregroundColor(chrome.accent)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(
@@ -1035,35 +996,33 @@ private struct UserOwnedDataHeader: View {
                 .strokeBorder(
                     style: StrokeStyle(lineWidth: 1, dash: [3, 3])
                 )
-                .foregroundColor(onboardingAccent.opacity(0.5))
+                .foregroundColor(chrome.accent.opacity(0.5))
         )
     }
 }
 
-// MARK: - iCloud Panel
-
 private struct iCloudPanel: View {
     let isActive: Bool
+    @ObservedObject private var theme = ThemeManager.shared
 
     private var opacity: Double { isActive ? 1.0 : 0.3 }
 
     var body: some View {
+        let chrome = theme.chrome
         VStack(spacing: 8) {
-            // Header
             HStack(spacing: 6) {
                 Image(systemName: "icloud")
                     .font(.system(size: 12, weight: .medium))
                 Text("ICLOUD")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                 Text("–")
-                    .foregroundColor(Color(hex: "3A3A3A"))
+                    .foregroundColor(theme.colors.textTertiary)
                 Text("Sync")
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(Color(hex: "6A6A6A"))
+                    .foregroundColor(theme.colors.textTertiary)
             }
-            .foregroundColor(.white)
+            .foregroundColor(theme.colors.textPrimary)
 
-            // Properties row
             HStack(spacing: 16) {
                 iCloudProperty(icon: "server.rack", label: "PRIVATE DB")
                 iCloudProperty(icon: "key", label: "USER KEYS")
@@ -1075,11 +1034,11 @@ private struct iCloudPanel: View {
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(Color(hex: "151515"))
+                .fill(theme.colors.cardBackground)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(isActive ? onboardingAccent.opacity(0.5) : Color(hex: "2A2A2A"), lineWidth: 1)
+                .strokeBorder(isActive ? chrome.accent.opacity(0.5) : chrome.edge, lineWidth: 1)
         )
         .opacity(opacity)
     }
@@ -1088,15 +1047,13 @@ private struct iCloudPanel: View {
         HStack(spacing: 4) {
             Image(systemName: icon)
                 .font(.system(size: 8))
-                .foregroundColor(onboardingAccent)
+                .foregroundColor(theme.chrome.accent)
             Text(label)
                 .font(.system(size: 8, weight: .medium, design: .monospaced))
-                .foregroundColor(Color(hex: "6A6A6A"))
+                .foregroundColor(theme.colors.textTertiary)
         }
     }
 }
-
-// MARK: - Device Panel
 
 private struct DevicePanel: View {
     let icon: String
@@ -1105,25 +1062,26 @@ private struct DevicePanel: View {
     let steps: [(label: String, icon: String)]
     let isActive: Bool
 
+    @ObservedObject private var theme = ThemeManager.shared
+
     private var opacity: Double { isActive ? 1.0 : 0.3 }
 
     var body: some View {
+        let chrome = theme.chrome
         VStack(alignment: .leading, spacing: 8) {
-            // Header
             HStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.system(size: 12, weight: .medium))
                 Text(title)
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                 Text("–")
-                    .foregroundColor(Color(hex: "3A3A3A"))
+                    .foregroundColor(theme.colors.textTertiary)
                 Text(subtitle)
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(Color(hex: "6A6A6A"))
+                    .foregroundColor(theme.colors.textTertiary)
             }
-            .foregroundColor(.white)
+            .foregroundColor(theme.colors.textPrimary)
 
-            // Steps
             VStack(spacing: 4) {
                 ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
                     StepRow(number: index + 1, label: step.label, icon: step.icon, isActive: isActive)
@@ -1134,17 +1092,15 @@ private struct DevicePanel: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(Color(hex: "151515"))
+                .fill(theme.colors.cardBackground)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(isActive ? onboardingAccent.opacity(0.5) : Color(hex: "2A2A2A"), lineWidth: 1)
+                .strokeBorder(isActive ? chrome.accent.opacity(0.5) : chrome.edge, lineWidth: 1)
         )
         .opacity(opacity)
     }
 }
-
-// MARK: - Step Row
 
 private struct StepRow: View {
     let number: Int
@@ -1152,71 +1108,66 @@ private struct StepRow: View {
     let icon: String
     let isActive: Bool
 
+    @ObservedObject private var theme = ThemeManager.shared
+
     var body: some View {
         HStack {
             Text("\(number).")
                 .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundColor(Color(hex: "6A6A6A"))
+                .foregroundColor(theme.colors.textTertiary)
                 .frame(width: 16, alignment: .leading)
 
             Text(label)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.white)
+                .foregroundColor(theme.colors.textPrimary)
 
             Spacer()
 
             Image(systemName: icon)
                 .font(.system(size: 10))
-                .foregroundColor(isActive ? onboardingAccent : Color(hex: "4A4A4A"))
+                .foregroundColor(isActive ? theme.chrome.accent : theme.colors.textTertiary.opacity(0.6))
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 4)
-                .fill(Color(hex: "1A1A1A"))
+                .fill(theme.colors.searchBackground.opacity(0.6))
         )
     }
 }
 
-// MARK: - Get Started Page (Tactical Style)
+// MARK: - Get Started Page
 
 private struct GetStartedPage: View {
     let iCloudStatus: CKAccountStatus
     let onComplete: () -> Void
-    var onTryRecord: (() -> Void)? = nil  // Separate action for "tap to try"
+    var onTryRecord: (() -> Void)? = nil
     @State private var pulseRecord = false
 
-    // Staggered status animation states
     @State private var showHeader = false
     @State private var statusChecks: [Bool] = [false, false, false, false]
     @State private var showRecordButton = false
 
-    private var deviceName: String {
-        UIDevice.current.name
-    }
+    @ObservedObject private var theme = ThemeManager.shared
 
-    private var allChecksComplete: Bool {
-        statusChecks.allSatisfy { $0 }
-    }
+    private var deviceName: String { UIDevice.current.name }
+
+    private var allChecksComplete: Bool { statusChecks.allSatisfy { $0 } }
 
     var body: some View {
+        let chrome = theme.chrome
+
         ZStack {
-            // Dark tactical background
-            Color(hex: "0A0A0A")
+            theme.colors.background
                 .ignoresSafeArea()
 
-            // Grid pattern (subtle)
-            GridPatternView()
-                .opacity(0.2)
+            GridPatternView(color: chrome.edgeSubtle)
+                .opacity(0.40)
 
             VStack(spacing: Spacing.lg) {
                 Spacer()
 
-                // System status header
-                Text("SYSTEM STATUS")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .tracking(3)
-                    .foregroundColor(Color(hex: "6A6A6A"))
+                TalkieEyebrow(text: "System Status", showLeader: false)
                     .opacity(showHeader ? 1 : 0)
                     .offset(y: showHeader ? 0 : 10)
 
@@ -1251,22 +1202,21 @@ private struct GetStartedPage: View {
                 .padding(Spacing.md)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(Color(hex: "111111"))
+                        .fill(theme.colors.cardBackground)
                         .overlay(
                             RoundedRectangle(cornerRadius: 8)
-                                .strokeBorder(Color(hex: "2A2A2A"), lineWidth: 1)
+                                .strokeBorder(chrome.edge, lineWidth: 1)
                         )
                 )
                 .padding(.horizontal, Spacing.xl)
                 .opacity(showHeader ? 1 : 0)
 
-                // Record button preview - tap to start recording
+                // Record preview button
                 Button(action: { onTryRecord?() ?? onComplete() }) {
                     VStack(spacing: Spacing.sm) {
                         ZStack {
-                            // Subtle pulse ring
                             Circle()
-                                .stroke(onboardingAccentGlow.opacity(0.4), lineWidth: 1.5)
+                                .stroke(chrome.accentStrong.opacity(0.4), lineWidth: 1.5)
                                 .frame(width: 52, height: 52)
                                 .scaleEffect(pulseRecord ? 1.35 : 1.0)
                                 .opacity(pulseRecord ? 0 : 0.6)
@@ -1275,21 +1225,21 @@ private struct GetStartedPage: View {
                                     value: pulseRecord
                                 )
 
-                            // Main button
                             Circle()
-                                .fill(onboardingAccent)
+                                .fill(chrome.accent)
                                 .frame(width: 52, height: 52)
                                 .overlay(
                                     Image(systemName: "mic.fill")
                                         .font(.system(size: 20, weight: .medium))
-                                        .foregroundColor(.white)
+                                        .foregroundColor(chrome.panelInk)
                                 )
+                                .talkieAccentGlow()
                         }
 
                         Text("TAP TO TRY")
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
                             .tracking(2)
-                            .foregroundColor(Color(hex: "6A6A6A"))
+                            .foregroundColor(theme.colors.textTertiary)
                     }
                 }
                 .buttonStyle(.plain)
@@ -1300,7 +1250,6 @@ private struct GetStartedPage: View {
 
                 Spacer()
 
-                // iCloud note if not connected
                 if iCloudStatus != .available {
                     Button(action: openSettings) {
                         HStack(spacing: Spacing.xs) {
@@ -1311,11 +1260,10 @@ private struct GetStartedPage: View {
                             Image(systemName: "arrow.up.right")
                                 .font(.system(size: 9, weight: .bold))
                         }
-                        .foregroundColor(Color(hex: "6A6A6A"))
+                        .foregroundColor(theme.colors.textTertiary)
                     }
                 }
 
-                // Get started button
                 Button(action: onComplete) {
                     HStack(spacing: Spacing.sm) {
                         Text("GET STARTED")
@@ -1325,10 +1273,10 @@ private struct GetStartedPage: View {
                         Image(systemName: "arrow.right")
                             .font(.system(size: 12, weight: .bold))
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(chrome.panelInk)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, Spacing.md)
-                    .background(onboardingAccent)
+                    .background(chrome.accent)
                     .cornerRadius(8)
                 }
                 .padding(.horizontal, Spacing.xl)
@@ -1336,19 +1284,17 @@ private struct GetStartedPage: View {
                 .opacity(showRecordButton ? 1 : 0)
                 .offset(y: showRecordButton ? 0 : 20)
 
-                // Device identifier
                 HStack(spacing: 6) {
                     Image(systemName: "iphone")
                         .font(.system(size: 9))
                     Text(deviceName)
                         .font(.system(size: 9, design: .monospaced))
                 }
-                .foregroundColor(Color(hex: "3A3A3A"))
+                .foregroundColor(theme.colors.textTertiary.opacity(0.6))
                 .padding(.top, Spacing.sm)
                 .opacity(showRecordButton ? 1 : 0)
 
-                Spacer()
-                    .frame(height: Spacing.lg)
+                Spacer().frame(height: Spacing.lg)
             }
         }
         .onAppear {
@@ -1357,12 +1303,10 @@ private struct GetStartedPage: View {
     }
 
     private func startStatusAnimation() {
-        // Show header first
         withAnimation(.easeOut(duration: 0.4)) {
             showHeader = true
         }
 
-        // Stagger each status check with delays
         let checkDelays: [Double] = [0.5, 0.9, 1.3, 1.7]
         for (index, delay) in checkDelays.enumerated() {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
@@ -1372,10 +1316,8 @@ private struct GetStartedPage: View {
             }
         }
 
-        // Show record button after all checks complete
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
             showRecordButton = true
-            // Start pulse animation (animation is defined on the view)
             pulseRecord = true
         }
     }
@@ -1387,36 +1329,6 @@ private struct GetStartedPage: View {
     }
 }
 
-private struct StatusRow: View {
-    let label: String
-    let value: String
-    var isHighlight: Bool = false
-    var isActive: Bool = true
-
-    var body: some View {
-        HStack {
-            // Status indicator
-            Circle()
-                .fill(isActive ? onboardingAccent : Color(hex: "6A6A6A"))
-                .frame(width: 6, height: 6)
-
-            Text(label.uppercased())
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .tracking(1)
-                .foregroundColor(Color(hex: "6A6A6A"))
-
-            Spacer()
-
-            Text(value.uppercased())
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .tracking(1)
-                .foregroundColor(isHighlight && isActive ? onboardingAccent : Color(hex: "9A9A9A"))
-        }
-    }
-}
-
-// MARK: - Animated Status Row
-
 private struct AnimatedStatusRow: View {
     let label: String
     let value: String
@@ -1424,34 +1336,36 @@ private struct AnimatedStatusRow: View {
     var isActive: Bool = true
     var isChecked: Bool
 
+    @ObservedObject private var theme = ThemeManager.shared
+
     var body: some View {
+        let chrome = theme.chrome
         HStack {
-            // Status indicator - gray dot that turns accent-colored when checked
             Circle()
-                .fill(isChecked ? (isActive ? onboardingAccent : Color(hex: "6A6A6A")) : Color(hex: "3A3A3A"))
+                .fill(isChecked ? (isActive ? chrome.accent : theme.colors.textTertiary) : chrome.edge)
                 .frame(width: 6, height: 6)
                 .animation(.easeOut(duration: 0.3), value: isChecked)
+                .shadow(color: isChecked && isActive ? chrome.accentGlow : .clear, radius: chrome.glowRadius)
 
             Text(label.uppercased())
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
                 .tracking(1)
-                .foregroundColor(Color(hex: "6A6A6A"))
+                .foregroundColor(theme.colors.textTertiary)
 
             Spacer()
 
-            // Value - shows "CHECKING..." then actual value
             ZStack(alignment: .trailing) {
                 Text("CHECKING...")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .tracking(1)
-                    .foregroundColor(Color(hex: "4A4A4A"))
+                    .foregroundColor(theme.colors.textTertiary.opacity(0.6))
                     .opacity(isChecked ? 0 : 1)
                     .offset(x: isChecked ? 10 : 0)
 
                 Text(value.uppercased())
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .tracking(1)
-                    .foregroundColor(isHighlight && isActive ? onboardingAccent : Color(hex: "9A9A9A"))
+                    .foregroundColor(isHighlight && isActive ? chrome.accent : theme.colors.textSecondary)
                     .opacity(isChecked ? 1 : 0)
                     .offset(x: isChecked ? 0 : -10)
             }
@@ -1472,18 +1386,16 @@ private struct AnimatedStatusRow: View {
 
 #Preview("Capture") {
     CapturePage()
-        .preferredColorScheme(.dark)
 }
 
-#Preview("Sync - Architecture") {
+#Preview("Sync") {
     SyncPage()
-        .preferredColorScheme(.dark)
 }
 
-#Preview("Get Started - Connected") {
+#Preview("Get Started — Connected") {
     GetStartedPage(iCloudStatus: .available, onComplete: {})
 }
 
-#Preview("Get Started - No Account") {
+#Preview("Get Started — No Account") {
     GetStartedPage(iCloudStatus: .noAccount, onComplete: {})
 }

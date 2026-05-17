@@ -127,6 +127,11 @@ struct TalkieAIProviderCredentialPayload: Codable, Equatable {
     """
 
     static let supportedProviderIds: Set<String> = ["openai", "groq"]
+    static let defaultOpenAIModel = "gpt-5.5"
+    static let legacyDefaultOpenAIModels: Set<String> = [
+        "gpt-5.2-chat-latest",
+        "gpt-5.4-mini",
+    ]
 
     static func displayName(for providerId: String) -> String {
         switch providerId {
@@ -142,7 +147,16 @@ struct TalkieAIProviderCredentialPayload: Codable, Equatable {
         case "groq":
             return "llama-3.3-70b-versatile"
         default:
-            return "gpt-5.2-chat-latest"
+            return defaultOpenAIModel
+        }
+    }
+
+    static func isLegacyDefaultModel(_ modelId: String, for providerId: String) -> Bool {
+        switch providerId {
+        case "openai":
+            return legacyDefaultOpenAIModels.contains(modelId)
+        default:
+            return false
         }
     }
 
