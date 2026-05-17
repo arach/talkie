@@ -200,12 +200,17 @@ struct SSHPrivateKeyQRCodePayload: Codable, Equatable {
 private actor SSHTerminalPairingWrapKeyStore {
     static let shared = SSHTerminalPairingWrapKeyStore()
 
-    private let container = CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier)
     private var cachedKeyDataByRecordName: [String: Data] = [:]
 
     func wrapKeyData(recordName: String) async throws -> Data {
         if let cachedKeyData = cachedKeyDataByRecordName[recordName] {
             return cachedKeyData
+        }
+
+        guard let container = CloudKitContainerProvider.container() else {
+            let reason = CloudKitContainerProvider.unavailableReason ?? "CloudKit unavailable"
+            AppLogger.sync.error("Secure SSH pairing unavailable: \(reason)", detail: "record=\(recordName)")
+            throw SSHClientError.securePairingUnavailable
         }
 
         do {

@@ -153,7 +153,14 @@ class iCloudStatusManager: ObservableObject {
     /// Async initial check - non-blocking, for UI feedback only
     /// PersistenceController uses CloudKit container regardless; this is just for banner display
     private func checkStatusAsync() {
-        let container = CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier)
+        guard let container = CloudKitContainerProvider.container() else {
+            let reason = CloudKitContainerProvider.unavailableReason ?? "CloudKit unavailable"
+            realStatus = .couldNotDetermine
+            status = realStatus
+            initialCheckComplete = true
+            AppLogger.persistence.info("CloudKit status check skipped: \(reason)")
+            return
+        }
 
         container.accountStatus { [weak self] accountStatus, error in
             DispatchQueue.main.async {
@@ -204,7 +211,13 @@ class iCloudStatusManager: ObservableObject {
         if simulatedStatus != nil { return }
         #endif
 
-        let container = CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier)
+        guard let container = CloudKitContainerProvider.container() else {
+            let reason = CloudKitContainerProvider.unavailableReason ?? "CloudKit unavailable"
+            realStatus = .couldNotDetermine
+            status = realStatus
+            AppLogger.persistence.info("CloudKit status check skipped: \(reason)")
+            return
+        }
 
         container.accountStatus { [weak self] accountStatus, error in
             DispatchQueue.main.async {

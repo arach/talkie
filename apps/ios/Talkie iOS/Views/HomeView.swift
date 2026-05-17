@@ -1754,7 +1754,12 @@ struct HomeView: View {
     private func refreshMemos() async {
         AppLogger.persistence.info("📲 Pull-to-refresh - fetching latest 10 memos from CloudKit")
 
-        let container = CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier)
+        guard let container = CloudKitContainerProvider.container() else {
+            let reason = CloudKitContainerProvider.unavailableReason ?? "CloudKit unavailable"
+            AppLogger.persistence.warning("Pull-to-refresh CloudKit fetch skipped: \(reason)")
+            return
+        }
+
         let privateDB = container.privateCloudDatabase
         let zoneID = CKRecordZone.ID(zoneName: "com.apple.coredata.cloudkit.zone", ownerName: CKCurrentUserDefaultName)
 

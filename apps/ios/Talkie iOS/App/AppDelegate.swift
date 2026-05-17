@@ -251,7 +251,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
     /// Fetch the PushNotification record to get memoId for deep linking
     private func fetchPushNotificationRecord(recordID: CKRecord.ID) {
-        let container = CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier)
+        guard let container = CloudKitContainerProvider.container() else {
+            let reason = CloudKitContainerProvider.unavailableReason ?? "CloudKit unavailable"
+            AppLogger.app.warning("[Push] Skipping notification record fetch: \(reason)")
+            return
+        }
+
         let privateDB = container.privateCloudDatabase
 
         privateDB.fetch(withRecordID: recordID) { record, error in
@@ -282,7 +287,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         cloudKitSubscriptionSetUp = true
         AppLogger.app.info("[Push] Setting up CloudKit subscriptions...")
 
-        let container = CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier)
+        guard let container = CloudKitContainerProvider.container() else {
+            let reason = CloudKitContainerProvider.unavailableReason ?? "CloudKit unavailable"
+            AppLogger.app.warning("[Push] Skipping CloudKit subscription setup: \(reason)")
+            return
+        }
+
         let privateDB = container.privateCloudDatabase
 
         // Create a subscription to the Core Data CloudKit zone
@@ -436,7 +446,13 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             AppLogger.app.info("[Push] CloudKit notification tapped, fetching memoId...")
 
             // Fetch the record to get memoId
-            let container = CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier)
+            guard let container = CloudKitContainerProvider.container() else {
+                let reason = CloudKitContainerProvider.unavailableReason ?? "CloudKit unavailable"
+                AppLogger.app.warning("[Push] Skipping tapped notification fetch: \(reason)")
+                completionHandler()
+                return
+            }
+
             let privateDB = container.privateCloudDatabase
 
             privateDB.fetch(withRecordID: recordID) { [weak self] record, error in

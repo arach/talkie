@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <pattern id="litgrid" width="36" height="36" patternUnits="userSpaceOnUse">
+      <circle cx="18" cy="18" r="12" fill="white"/>
+    </pattern>
+    <pattern id="unlitgrid" width="36" height="36" patternUnits="userSpaceOnUse">
+      <circle cx="18" cy="18" r="11" fill="#3A372F" opacity="0.3"/>
+    </pattern>
+    <mask id="dotmask">
+      <rect width="1024" height="1024" fill="url(#litgrid)"/>
+    </mask>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1024" height="1024" fill="#0E0D0A"/>
+
+  <!-- Unlit dot grid -->
+  <rect width="1024" height="1024" fill="url(#unlitgrid)"/>
+
+  <!-- Lit text through dot mask -->
+  <g transform="translate(194.56, 0)">
+    <text
+      x="317.44"
+      y="880.64"
+      font-family="'JetBrains Mono', ui-monospace, monospace"
+      font-size="798.72"
+      font-weight="500"
+      text-anchor="middle"
+      fill="#E8B547"
+      mask="url(#dotmask)"
+    >t</text>
+  </g>
+</svg>

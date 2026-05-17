@@ -295,7 +295,7 @@ final class OnboardingManager {
     }
 
     func refreshAgentAccessibilityPermission() async {
-        if let permissions = await ServiceManager.shared.live.checkPermissions() {
+        if let permissions = await ServiceManager.shared.live.refreshPermissionsNow() {
             hasAgentAccessibilityPermission = permissions.accessibility
             hasAgentMicrophonePermission = permissions.microphone
         } else {
@@ -304,10 +304,6 @@ final class OnboardingManager {
     }
 
     func requestAccessibilityPermission() {
-        // Use system prompt — shows a dialog explaining which app needs access
-        // and pre-adds it to the Accessibility list in System Settings
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        AXIsProcessTrustedWithOptions(options)
         PermissionsManager.shared.openAccessibilitySettings()
         startAccessibilityPolling()
     }
@@ -316,14 +312,32 @@ final class OnboardingManager {
         guard !isRequestingAgentAccessibilityPermission else { return }
 
         isRequestingAgentAccessibilityPermission = true
-        let granted = await ServiceManager.shared.requestAgentAccessibilityPermission()
-        hasAgentAccessibilityPermission = granted == true
+        let result = await ServiceManager.shared.requestAgentAccessibilityPermission()
+        hasAgentAccessibilityPermission = result == .granted
         isRequestingAgentAccessibilityPermission = false
 
-        if granted != true {
-            PermissionsManager.shared.openAccessibilitySettings()
+        if result == .waitingForUserAction {
+            PermissionsManager.shared.openAccessibilityInstallAssistant(for: .agent)
             startAgentAccessibilityPolling()
+        } else if result == .agentUnavailable {
+            PermissionsManager.shared.openAccessibilityInstallAssistant(for: .agent)
         }
+    }
+
+    func waitForAgentAccessibilityPermission(timeout: TimeInterval = 90) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+
+        while Date() < deadline {
+            await refreshAgentAccessibilityPermission()
+            if hasAgentAccessibilityPermission {
+                return true
+            }
+
+            try? await Task.sleep(for: .milliseconds(500))
+        }
+
+        await refreshAgentAccessibilityPermission()
+        return hasAgentAccessibilityPermission
     }
 
     func startPermissionPolling() {
@@ -704,11 +718,11 @@ final class OnboardingManager {
             await updateCheck(.liveService, status: .inProgress("Checking permissions..."))
             try? await Task.sleep(for: .milliseconds(500))
 
-            if let permissions = await ServiceManager.shared.live.checkPermissions() {
+            if let permissions = await ServiceManager.shared.live.refreshPermissionsNow() {
                 if !permissions.microphone {
                     await updateCheck(.liveService, status: .inProgress("Requesting microphone..."))
                     await requestAgentMicrophonePermission()
-                    if let refreshed = await ServiceManager.shared.live.checkPermissions(), refreshed.microphone {
+                    if let refreshed = await ServiceManager.shared.live.refreshPermissionsNow(), refreshed.microphone {
                         hasAgentMicrophonePermission = true
                     } else {
                         await updateCheck(.liveService, status: .error("Grant Agent Microphone permission"))
@@ -718,7 +732,7 @@ final class OnboardingManager {
                 if !permissions.accessibility {
                     await updateCheck(.liveService, status: .inProgress("Requesting Accessibility..."))
                     await requestAgentAccessibilityPermission()
-                    if let refreshed = await ServiceManager.shared.live.checkPermissions(), refreshed.accessibility {
+                    if await waitForAgentAccessibilityPermission(timeout: 90) {
                         hasAgentAccessibilityPermission = true
                     } else {
                         await updateCheck(.liveService, status: .error("Grant Agent Accessibility permission"))

@@ -27,8 +27,22 @@ enum VisualTheme: String, CaseIterable, Codable {
     case midnight = "midnight"  // Maps to talkiePro (legacy)
     case technical = "linear"
     case terminal = "terminal"
-    case minimal = "minimal"
+    case darkMatte = "darkMatte"
     case warm = "warm"          // Maps to warm theme
+    case light = "light"
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = VisualTheme(rawValue: raw) ?? VisualTheme.legacyMapping(for: raw)
+    }
+
+    private static func legacyMapping(for raw: String) -> VisualTheme {
+        switch raw {
+        case "minimal": return .light
+        case "liquidGlass": return .midnight
+        default: return .midnight
+        }
+    }
 
     var displayName: String {
         switch self {
@@ -36,8 +50,9 @@ enum VisualTheme: String, CaseIterable, Codable {
         case .midnight: return "Pro"
         case .technical: return "Technical"
         case .terminal: return "Terminal"
-        case .minimal: return "Minimal"
+        case .darkMatte: return "Dark Matte"
         case .warm: return "Warm"
+        case .light: return "Light"
         }
     }
 
@@ -47,8 +62,9 @@ enum VisualTheme: String, CaseIterable, Codable {
         case .midnight: return "Professional dark theme"
         case .technical: return "True black, Vercel-inspired"
         case .terminal: return "Clean monospace, sharp corners"
-        case .minimal: return "Light and subtle"
+        case .darkMatte: return "Dark with warm matte undertones"
         case .warm: return "Cozy dark mode with orange tones"
+        case .light: return "Clean light mode with neutral surfaces"
         }
     }
 
@@ -59,8 +75,9 @@ enum VisualTheme: String, CaseIterable, Codable {
         case .midnight: return .blue
         case .technical: return .blue
         case .terminal: return .gray    // No gimmicks
-        case .minimal: return .gray
+        case .darkMatte: return .orange
         case .warm: return .orange
+        case .light: return .orange
         }
     }
 
@@ -71,8 +88,9 @@ enum VisualTheme: String, CaseIterable, Codable {
         case .midnight: return .dark
         case .technical: return .dark
         case .terminal: return .dark
-        case .minimal: return .system
+        case .darkMatte: return .dark
         case .warm: return .dark
+        case .light: return .light
         }
     }
 
@@ -88,10 +106,20 @@ enum VisualTheme: String, CaseIterable, Codable {
         case .terminal:
             // Ghostty-style: black bg, light gray text, subtle gray accent
             return (Color.black, Color(white: 0.85), Color(white: 0.5))
-        case .minimal:
-            return (Color(white: 0.96), Color(white: 0.2), Color.gray)
+        case .darkMatte:
+            return (
+                Color(red: 0.0449, green: 0.0333, blue: 0.0242),
+                Color(red: 0.8603, green: 0.8416, blue: 0.8171),
+                Color(red: 0.8326, green: 0.5895, blue: 0.2837)
+            )
         case .warm:
             return (Color(red: 0.1, green: 0.08, blue: 0.06), Color(white: 0.9), Color.orange)
+        case .light:
+            return (
+                Color(red: 0.9737, green: 0.9737, blue: 0.9737),
+                Color(red: 0.0625, green: 0.0697, blue: 0.0774),
+                Color(red: 0.8961, green: 0.5104, blue: 0.0706)
+            )
         }
     }
 }
@@ -470,10 +498,10 @@ final class AgentSettings {
             case .talkiePro: return .midnight
             case .technical: return .technical
             case .terminal: return .terminal
-            case .minimal: return .minimal
+            case .darkMatte: return .darkMatte
             case .classic: return .live
             case .warm: return .warm
-            case .liquidGlass: return .midnight  // Deep dark for glass to pop
+            case .light: return .light
             }
         }
         set {
@@ -483,8 +511,9 @@ final class AgentSettings {
             case .midnight: preset = .talkiePro
             case .technical: preset = .technical
             case .terminal: preset = .terminal
-            case .minimal: preset = .minimal
+            case .darkMatte: preset = .darkMatte
             case .warm: preset = .warm
+            case .light: preset = .light
             }
             SettingsManager.shared.applyTheme(preset)
         }

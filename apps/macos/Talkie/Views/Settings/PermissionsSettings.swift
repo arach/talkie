@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AppKit
 import AVFoundation
 import ScreenCaptureKit
 import CoreServices
@@ -118,8 +119,11 @@ class PermissionsManager {
     var automationStatus: PermissionStatus = .unknown
     var screenRecordingStatus: PermissionStatus = .unknown
     var isRequestingAgentMicrophonePermission = false
+    var isRequestingAgentAccessibilityPermission = false
     private var accessibilityCheckTimer: Timer?
     private var accessibilityPollingDeadline: Date?
+    private var agentAccessibilityCheckTimer: Timer?
+    private var agentAccessibilityPollingDeadline: Date?
     private var automationTargetStatuses: [AutomationTarget: PermissionStatus] =
         Dictionary(uniqueKeysWithValues: AutomationTarget.allCases.map { ($0, .unknown) })
 
@@ -192,7 +196,7 @@ class PermissionsManager {
         guard ServiceManager.shared.live.isXPCConnected else { return }
 
         Task { [weak self] in
-            guard let permissions = await ServiceManager.shared.live.checkPermissions() else { return }
+            guard let permissions = await ServiceManager.shared.live.refreshPermissionsNow() else { return }
 
             await MainActor.run {
                 self?.agentMicrophoneStatus = permissions.microphone ? .granted : .denied
@@ -239,10 +243,39 @@ class PermissionsManager {
     }
 
     func requestAccessibilityPermission() {
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        AXIsProcessTrustedWithOptions(options)
-        openAccessibilitySettings()
+        openAccessibilityInstallAssistant(for: .talkie)
         startAccessibilityPermissionPolling()
+    }
+
+    func requestAgentAccessibilityPermission() {
+        guard !isRequestingAgentAccessibilityPermission else { return }
+
+        isRequestingAgentAccessibilityPermission = true
+
+        let env = ServiceManager.shared.effectiveHelperEnvironment
+        logger.info(
+            "Requesting Agent accessibility permission",
+            detail: "env=\(env.displayName), bundle=\(TalkieHelper.agent.bundleId(for: env))"
+        )
+
+        Task { [weak self] in
+            let result = await ServiceManager.shared.requestAgentAccessibilityPermission()
+
+            await MainActor.run {
+                self?.isRequestingAgentAccessibilityPermission = false
+
+                switch result {
+                case .granted:
+                    self?.stopAgentAccessibilityPermissionPolling()
+                case .waitingForUserAction:
+                    self?.openAccessibilityInstallAssistant(for: .agent)
+                    self?.startAgentAccessibilityPermissionPolling()
+                case .agentUnavailable:
+                    self?.openAccessibilityInstallAssistant(for: .agent)
+                    self?.stopAgentAccessibilityPermissionPolling()
+                }
+            }
+        }
     }
 
     // MARK: - Automation (AppleScript)
@@ -312,11 +345,19 @@ class PermissionsManager {
         }
     }
 
-    func openAccessibilitySettings() {
+    func openAccessibilitySettingsPane() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)
         }
+    }
+
+    func openAccessibilitySettings() {
+        openAccessibilityInstallAssistant(for: .talkie)
         startAccessibilityPermissionPolling()
+    }
+
+    func openAccessibilityInstallAssistant(for target: AccessibilityInstallTarget) {
+        AccessibilityInstallAssistant.shared.present(target: target)
     }
 
     func openAutomationSettings() {
@@ -489,6 +530,34 @@ class PermissionsManager {
         accessibilityCheckTimer?.invalidate()
         accessibilityCheckTimer = nil
         accessibilityPollingDeadline = nil
+    }
+
+    private func startAgentAccessibilityPermissionPolling() {
+        agentAccessibilityCheckTimer?.invalidate()
+        agentAccessibilityPollingDeadline = Date().addingTimeInterval(90)
+        agentAccessibilityCheckTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                await self?.pollAgentAccessibilityPermission()
+            }
+        }
+
+        if let agentAccessibilityCheckTimer {
+            RunLoop.main.add(agentAccessibilityCheckTimer, forMode: .common)
+        }
+    }
+
+    private func pollAgentAccessibilityPermission() async {
+        let permissions = await ServiceManager.shared.live.refreshPermissionsNow()
+
+        if permissions?.accessibility == true || Date() >= (agentAccessibilityPollingDeadline ?? .distantPast) {
+            stopAgentAccessibilityPermissionPolling()
+        }
+    }
+
+    private func stopAgentAccessibilityPermissionPolling() {
+        agentAccessibilityCheckTimer?.invalidate()
+        agentAccessibilityCheckTimer = nil
+        agentAccessibilityPollingDeadline = nil
     }
 }
 

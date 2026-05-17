@@ -68,6 +68,14 @@ public enum TalkieHelperRuntimeStateStore {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
         try encoder.encode(state).write(to: url, options: .atomic)
+
+        if let component = TalkieRuntimeComponent(rawValue: helper.rawValue) {
+            try? TalkieRuntimeIdentityStore.writeCurrentProcess(
+                component: component,
+                environment: environment,
+                processId: processId
+            )
+        }
     }
 
     public static func clear(

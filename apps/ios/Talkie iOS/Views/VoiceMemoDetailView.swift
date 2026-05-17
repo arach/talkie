@@ -2147,7 +2147,12 @@ struct VoiceMemoDetailView: View {
     private func fetchLatestFromCloudKit() {
         guard let memoId = memo.id else { return }
 
-        let container = CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier)
+        guard let container = CloudKitContainerProvider.container() else {
+            let reason = CloudKitContainerProvider.unavailableReason ?? "CloudKit unavailable"
+            AppLogger.persistence.warning("Memo CloudKit fetch skipped: \(reason)")
+            return
+        }
+
         let privateDB = container.privateCloudDatabase
         let zoneID = CKRecordZone.ID(zoneName: "com.apple.coredata.cloudkit.zone", ownerName: CKCurrentUserDefaultName)
 

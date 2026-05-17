@@ -1603,8 +1603,16 @@ struct SidebarFooterRow: View {
             selectedSection = section
         } label: {
             VStack(spacing: SidebarLayout.accentToIconVerticalGap) {
-                SidebarLabel(title: title, icon: icon, isSelected: isSelected, iconsOnly: iconsOnly)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                if iconsOnly {
+                    // Render the icon directly so it isn't pushed off-center by
+                    // SidebarLabel's hidden Text occupying layout width.
+                    Image(systemName: isSelected ? "gearshape.fill" : "gear")
+                        .font(.system(size: SidebarLayout.iconSize))
+                        .frame(maxWidth: .infinity, alignment: .center)
+                } else {
+                    SidebarLabel(title: title, icon: icon, isSelected: isSelected, iconsOnly: iconsOnly)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
 
                 RoundedRectangle(cornerRadius: 1)
                     .fill(iconsOnly && isSelected ? accentColor : Color.clear)

@@ -13,6 +13,8 @@
 	<string>$(TALKIE_IOS_APP_BUNDLE_ID)</string>
 	<key>TalkieCloudKitContainerIdentifier</key>
 	<string>$(TALKIE_IOS_CLOUDKIT_CONTAINER)</string>
+	<key>TalkieCodeSigningAllowed</key>
+	<string>$(CODE_SIGNING_ALLOWED)</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
