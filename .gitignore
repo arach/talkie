@@ -91,6 +91,7 @@ output/
 logs/
 *.log
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
 packaging/macos/staging/
 packaging/macos/packages/
 packaging/macos/*.pkg
