@@ -56,7 +56,7 @@ struct AgentHealthBanner: View {
             guard case .missingPermissions = issue else { return }
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(3))
-                sm.live.refreshPermissions()
+                _ = await sm.live.refreshPermissionsNow()
             }
         }
         .onAppear {
@@ -142,6 +142,20 @@ struct AgentHealthBanner: View {
             }
         case .openSettings:
             NavigationState.shared.navigate(to: .settings)
+        case .requestAgentAccessibilityPermission:
+            Task {
+                let result = await sm.requestAgentAccessibilityPermission()
+                await MainActor.run {
+                    switch result {
+                    case .granted:
+                        break
+                    case .waitingForUserAction:
+                        PermissionsManager.shared.openAccessibilityInstallAssistant(for: .agent)
+                    case .agentUnavailable:
+                        PermissionsManager.shared.openAccessibilityInstallAssistant(for: .agent)
+                    }
+                }
+            }
         case .openSystemPreferences(let pane):
             // NOTE: Pane identifiers (Privacy_Microphone, Privacy_Accessibility) are macOS 13+.
             // Apple may change these across OS versions — no public API for this.
@@ -208,7 +222,7 @@ private enum HealthIssue: Identifiable {
         case .agentNotRunning:
             return HealthAction(label: "Launch", kind: .launchAgent)
         case .missingPermissions:
-            return HealthAction(label: "Fix", kind: .openSystemPreferences(pane: "Privacy_Accessibility"))
+            return HealthAction(label: "Fix", kind: .requestAgentAccessibilityPermission)
         }
     }
 }
@@ -222,5 +236,6 @@ private enum HealthActionKind {
     case launchAgent
     case fixMicrophonePermission
     case openSettings
+    case requestAgentAccessibilityPermission
     case openSystemPreferences(pane: String)
 }

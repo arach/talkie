@@ -350,6 +350,7 @@
 		AA2464695252852A49D8CBD7 /* ExtensionToastOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = B533E79B172CA37245144B98 /* ExtensionToastOverlay.swift */; };
 		AA75F17818D76889AA3C4371 /* IngestWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12CC2B44BD5528C92CC62F86 /* IngestWatcher.swift */; };
 		AAD83E8B0554313E0E5B46BD /* PermissionsSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5055A80B989BF64EDB1299CF /* PermissionsSettings.swift */; };
+		B1C2D3E4F5061728394A5B6C /* AccessibilityInstallAssistant.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* AccessibilityInstallAssistant.swift */; };
 		AB23CC2060860E94499A1919 /* ImportPayloadConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F73CCDFECA3D7A46C0132431 /* ImportPayloadConverter.swift */; };
 		ABAAAE8C3A95529AFFB4E546 /* OnboardingSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07826AE2BBCA9FAD1F663024 /* OnboardingSettings.swift */; };
 		AC3CA013906723835202D212 /* WorkflowRunModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DB876A29F7F55B18465450A /* WorkflowRunModel.swift */; };
@@ -669,6 +670,7 @@
 		4E46A5885BA07F1A04FDD14B /* CaptureRadialPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureRadialPanel.swift; sourceTree = "<group>"; };
 		4E669BA8831BCB459CDFFDA7 /* AppManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppManager.swift; sourceTree = "<group>"; };
 		4F4992B45B1A31E2B8AF4B8A /* OverlayStylePreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayStylePreviews.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B5C /* AccessibilityInstallAssistant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityInstallAssistant.swift; sourceTree = "<group>"; };
 		5055A80B989BF64EDB1299CF /* PermissionsSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsSettings.swift; sourceTree = "<group>"; };
 		50B29D65C38BFB0A50E1DC0F /* MemoRecordingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoRecordingController.swift; sourceTree = "<group>"; };
 		5119499741D6595812AB1D5B /* SemanticFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SemanticFilter.swift; sourceTree = "<group>"; };
@@ -1609,6 +1611,7 @@
 				D6071BA445AB04C3F3127A0C /* NotchSettingsView.swift */,
 				07826AE2BBCA9FAD1F663024 /* OnboardingSettings.swift */,
 				7E79F058BAA2B67146EE791D /* OutputSettings.swift */,
+				A1B2C3D4E5F60718293A4B5C /* AccessibilityInstallAssistant.swift */,
 				5055A80B989BF64EDB1299CF /* PermissionsSettings.swift */,
 				FDDE4E10FB667DA80E5BD1E5 /* QuickActionsSettings.swift */,
 				B6A2AA3D0376EDA1A44A3C31 /* QuickOpenSettings.swift */,
@@ -2467,6 +2470,7 @@
 				96021A8ACFAE0D35CCF24EB8 /* PendingActionsManager.swift in Sources */,
 				D8D3E2EF1A316C3EB4590B14 /* PendingActionsScreen.swift in Sources */,
 				96612B2E80986C017E8F0481 /* PerformanceInstrumentation.swift in Sources */,
+				B1C2D3E4F5061728394A5B6C /* AccessibilityInstallAssistant.swift in Sources */,
 				AAD83E8B0554313E0E5B46BD /* PermissionsSettings.swift in Sources */,
 				519BBE720E920B03F91C4DE5 /* PermissionsSetupView.swift in Sources */,
 				795E5A9E2D74DCDD5DD2D468 /* Persistence.swift in Sources */,

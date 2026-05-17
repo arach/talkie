@@ -337,14 +337,14 @@ public final class HelperLaunchManager {
 
     // MARK: - Dev Plist Generation
 
-    /// Generate a launchd plist for a dev build, pointing at the actual DerivedData binary.
+    /// Generate a launchd plist for a dev build, pointing at the stable dev install.
     ///
     /// The generated plist includes the correct MachServices entry so launchd
     /// registers the XPC service name. The `mode` parameter controls whether
     /// launchd keeps the helper alive (`RunAtLoad`/`KeepAlive` set for `.alwaysOn`,
     /// cleared for `.attached`).
     public func generateDevPlist(for kind: TalkieHelper, env: TalkieEnvironment = .dev, mode: HelperLifecycleMode = .alwaysOn) throws -> URL {
-        guard let appURL = resolveDebugBuild(for: kind) else {
+        guard let appURL = resolveDebugBuild(for: kind, env: env) else {
             throw HelperLaunchError.debugBuildNotFound(kind.appName)
         }
 
@@ -472,8 +472,9 @@ public final class HelperLaunchManager {
     }
 
     /// Resolve the debug build path for a helper.
-    /// Picks the most recently modified executable in DerivedData.
-    private func resolveDebugBuild(for kind: TalkieHelper) -> URL? {
+    /// Prefers the stable dev install path written by run.sh, then repo-local
+    /// build products. DerivedData is opt-in for one-off Xcode-only debugging.
+    private func resolveDebugBuild(for kind: TalkieHelper, env: TalkieEnvironment) -> URL? {
         if let explicitApp = explicitHelperAppURL(for: kind) {
             let executableURL = explicitApp
                 .appendingPathComponent("Contents/MacOS")
@@ -488,9 +489,22 @@ public final class HelperLaunchManager {
             log.warning("[\(kind.displayName)] Explicit helper path missing executable: \(executableURL.path)")
         }
 
+        let installedApp = kind.userInstalledAppURL(for: env)
+        let installedExecutable = installedApp
+            .appendingPathComponent("Contents/MacOS")
+            .appendingPathComponent(kind.executableName)
+        if FileManager.default.fileExists(atPath: installedExecutable.path) {
+            if resolvedDebugPaths[kind] != installedApp {
+                log.info("[\(kind.displayName)] Using stable dev install: \(installedApp.path)")
+            }
+            resolvedDebugPaths[kind] = installedApp
+            return installedApp
+        }
+
         guard let found = findDebugBuild(
             appName: kind.appName,
-            executableName: kind.executableName
+            executableName: kind.executableName,
+            environment: env
         ) else { return nil }
 
         if resolvedDebugPaths[kind] != found {
@@ -539,17 +553,14 @@ public final class HelperLaunchManager {
         return nil
     }
 
-    /// Find the most recently built debug .app in DerivedData.
+    /// Find a debug .app in deterministic locations.
     ///
-    /// First prefers the same Build/Products directory as the currently running
-    /// Talkie app (keeps app/helper builds in lockstep and avoids cross-branch mismatches).
-    ///
-    /// Instead of recursively walking all of DerivedData (which can be huge),
-    /// we enumerate top-level project directories and check each one's
-    /// `Build/Products/Debug/` directly.
+    /// First checks the stable dev install and repo-local build output. Legacy
+    /// DerivedData scanning is only enabled when explicitly requested.
     private func findDebugBuild(
         appName: String,
-        executableName: String? = nil
+        executableName: String? = nil,
+        environment: TalkieEnvironment = .dev
     ) -> URL? {
         let resolvedExecutableName: String = executableName ?? {
             if appName.hasSuffix(".app") {
@@ -557,6 +568,15 @@ public final class HelperLaunchManager {
             }
             return appName
         }()
+
+        let installedAppURL = environment.userInstalledAppURL(named: appName)
+        let installedExecutableURL = installedAppURL
+            .appendingPathComponent("Contents/MacOS")
+            .appendingPathComponent(resolvedExecutableName)
+        if FileManager.default.fileExists(atPath: installedExecutableURL.path) {
+            log.debug("[HelperLaunchManager] Using stable dev install for \(appName): \(installedAppURL.path)")
+            return installedAppURL
+        }
 
         if let repoRoot = LocalCheckoutLocator.talkieRepositoryRootURL(compileTimeFilePath: #filePath) {
             let repoBuildRoots = [
@@ -584,6 +604,10 @@ public final class HelperLaunchManager {
                 log.debug("[HelperLaunchManager] Using preferred debug build for \(appName): \(preferredAppURL.path)")
                 return preferredAppURL
             }
+        }
+
+        guard allowsDerivedDataFallback else {
+            return nil
         }
 
         let derivedDataPath = FileManager.default.homeDirectoryForCurrentUser
@@ -619,6 +643,14 @@ public final class HelperLaunchManager {
         return best?.url
     }
 
+    private var allowsDerivedDataFallback: Bool {
+        if ProcessInfo.processInfo.environment["TALKIE_ALLOW_DERIVEDDATA_FALLBACK"] == "1" {
+            return true
+        }
+
+        return UserDefaults.standard.bool(forKey: "HelperLaunchManager.allowDerivedDataFallback")
+    }
+
     /// Preferred debug product roots (highest priority first).
     /// 1) Explicitly configured path via env/defaults
     /// 2) Colocated path of the currently running Talkie build
@@ -646,7 +678,8 @@ public final class HelperLaunchManager {
         //                        -> /.../DerivedData/<Project>/Build/Products/Debug
         let bundleURL = Bundle.main.bundleURL
         let productsDir = bundleURL.deletingLastPathComponent()
-        if productsDir.lastPathComponent.hasPrefix("Debug"),
+        if allowsDerivedDataFallback,
+           productsDir.lastPathComponent.hasPrefix("Debug"),
            productsDir.path.contains("/DerivedData/") {
             results.append(productsDir)
         }
@@ -698,10 +731,10 @@ public final class HelperLaunchManager {
             appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId)
         }
 
-        // 3. DerivedData
+        // 3. Debug products
         #if DEBUG
         if appURL == nil {
-            appURL = findDebugBuild(appName: appName)
+            appURL = findDebugBuild(appName: appName, environment: ServiceManager.shared.effectiveHelperEnvironment)
         }
         #endif
 
@@ -739,7 +772,7 @@ public enum HelperLaunchError: Error, LocalizedError {
         case .plistNotFound(let label):
             return "Bundled plist not found for \(label)"
         case .debugBuildNotFound(let appName):
-            return "Debug build not found for \(appName) in DerivedData"
+            return "Debug build not found for \(appName)"
         case .executableNotFound(let path):
             return "Executable not found at \(path)"
         }

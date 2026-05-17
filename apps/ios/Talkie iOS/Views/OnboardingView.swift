@@ -124,7 +124,12 @@ struct OnboardingView: View {
         iCloudStatus = .couldNotDetermine
         return
         #else
-        CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier).accountStatus { status, _ in
+        guard let container = CloudKitContainerProvider.container() else {
+            iCloudStatus = .couldNotDetermine
+            return
+        }
+
+        container.accountStatus { status, _ in
             DispatchQueue.main.async {
                 self.iCloudStatus = status
             }

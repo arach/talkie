@@ -814,20 +814,36 @@ enum ThemePreset: String, CaseIterable, Codable {
     case talkiePro = "talkiePro"    // Professional dark theme (default)
     case technical = "linear"        // Technical, Vercel-inspired (raw value kept for compat)
     case terminal = "terminal"      // Ghostty-style: clean, monospace, sharp
-    case minimal = "minimal"        // Light mode, system-adaptive
+    case darkMatte = "darkMatte"    // Deterministic dark + warm hue-65 undertones
     case classic = "classic"        // Comfortable defaults with blue accents
     case warm = "warm"              // Cozy dark mode with orange tones
+    case light = "light"            // Deterministic light mode, designed palette
     case liquidGlass = "liquidGlass" // Experimental glass effects
     case scope = "scope"            // Cream-phosphor oscilloscope (homepage parity)
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        // Migrate retired rawValues so existing user settings don't wipe on load
+        switch raw {
+        case "minimal": self = .light
+        default:
+            guard let preset = ThemePreset(rawValue: raw) else {
+                self = .talkiePro
+                return
+            }
+            self = preset
+        }
+    }
 
     var displayName: String {
         switch self {
         case .talkiePro: return "Pro"
         case .technical: return "Technical"
         case .terminal: return "Terminal"
-        case .minimal: return "Minimal"
+        case .darkMatte: return "Dark Matte"
         case .classic: return "Classic"
         case .warm: return "Warm"
+        case .light: return "Light"
         case .liquidGlass: return "Liquid Glass"
         case .scope: return "Scope"
         }
@@ -838,9 +854,10 @@ enum ThemePreset: String, CaseIterable, Codable {
         case .talkiePro: return "Professional dark theme with balanced contrast"
         case .technical: return "Technical, dense, V0-inspired"
         case .terminal: return "Clean monospace, sharp corners, no frills"
-        case .minimal: return "Light and subtle, adapts to system"
+        case .darkMatte: return "Dark with warm matte undertones and amber accents"
         case .classic: return "Comfortable defaults with blue accents"
         case .warm: return "Cozy dark mode with orange tones"
+        case .light: return "Clean light mode with neutral surfaces"
         case .liquidGlass: return "Experimental: maximum glass effects"
         case .scope: return "Cream-paper canvas with brass amber chrome — instrument panel"
         }
@@ -851,9 +868,10 @@ enum ThemePreset: String, CaseIterable, Codable {
         case .talkiePro: return "waveform"
         case .technical: return "square.stack.3d.up"
         case .terminal: return "terminal"
-        case .minimal: return "circle"
+        case .darkMatte: return "moon.stars"
         case .classic: return "star"
         case .warm: return "flame"
+        case .light: return "sun.max"
         case .liquidGlass: return "drop.fill"
         case .scope: return "waveform.path.ecg"
         }
@@ -873,12 +891,24 @@ enum ThemePreset: String, CaseIterable, Codable {
         case .terminal:
             // Ghostty-style: black bg, light gray text, subtle gray accent
             return (Color.black, Color(white: 0.85), Color(white: 0.5))
-        case .minimal:
-            return (Color(white: 0.96), Color(white: 0.2), Color.gray)
+        case .darkMatte:
+            // Dark warm: oklch(0.14 0.008 65) bg, oklch(0.88 0.01 75) fg, oklch(0.72 0.12 70) amber
+            return (
+                Color(red: 0.0449, green: 0.0333, blue: 0.0242),
+                Color(red: 0.8603, green: 0.8416, blue: 0.8171),
+                Color(red: 0.8326, green: 0.5895, blue: 0.2837)
+            )
         case .classic:
             return (Color(white: 0.15), Color(white: 0.9), Color.blue)
         case .warm:
             return (Color(red: 0.1, green: 0.08, blue: 0.06), Color(white: 0.9), Color.orange)
+        case .light:
+            // Clean light: oklch(0.98 0 0) bg, oklch(0.18 0.005 250) fg, oklch(0.7 0.16 60) accent
+            return (
+                Color(red: 0.9737, green: 0.9737, blue: 0.9737),
+                Color(red: 0.0625, green: 0.0697, blue: 0.0774),
+                Color(red: 0.8961, green: 0.5104, blue: 0.0706)
+            )
         case .liquidGlass:
             return (Color(white: 0.05), Color.white, Color.cyan)
         case .scope:
@@ -886,15 +916,16 @@ enum ThemePreset: String, CaseIterable, Codable {
         }
     }
 
-    // Theme preset values
+    // Theme preset values — each preset is deterministic (no .system)
     var appearanceMode: AppearanceMode {
         switch self {
         case .talkiePro: return .dark
-        case .technical: return .system
+        case .technical: return .dark
         case .terminal: return .dark
-        case .minimal: return .system
+        case .darkMatte: return .dark
         case .classic: return .dark
         case .warm: return .dark
+        case .light: return .light
         case .liquidGlass: return .dark
         case .scope: return .light          // Cream-phosphor — forced light
         }
@@ -906,9 +937,10 @@ enum ThemePreset: String, CaseIterable, Codable {
         case .talkiePro: return .system
         case .technical: return .system            // Technical, but smoother than full mono
         case .terminal: return .jetbrainsMono   // JetBrains Mono throughout
-        case .minimal: return .system
+        case .darkMatte: return .system
         case .classic: return .system
         case .warm: return .system
+        case .light: return .system
         case .liquidGlass: return .system
         case .scope: return .monospace          // Instrument-panel labels — mono chrome
         }
@@ -920,9 +952,10 @@ enum ThemePreset: String, CaseIterable, Codable {
         case .talkiePro: return .system
         case .technical: return .system            // Keep readable/elegant in Technical theme
         case .terminal: return .jetbrainsMono   // JetBrains Mono throughout
-        case .minimal: return .system
+        case .darkMatte: return .system
         case .classic: return .system
         case .warm: return .monospace           // Monospace content for warm theme
+        case .light: return .system
         case .liquidGlass: return .system
         case .scope: return .system
         }
@@ -933,9 +966,10 @@ enum ThemePreset: String, CaseIterable, Codable {
         case .talkiePro: return .blue
         case .technical: return .blue
         case .terminal: return .gray        // No gimmicks, just gray
-        case .minimal: return .gray
+        case .darkMatte: return .orange     // Amber accent from designed palette
         case .classic: return .blue
         case .warm: return .orange
+        case .light: return .orange         // Warm amber accent
         case .liquidGlass: return .blue
         case .scope: return .orange         // Closest stock match for amber/brass
         }
@@ -947,9 +981,10 @@ enum ThemePreset: String, CaseIterable, Codable {
         case .talkiePro: return .medium
         case .technical: return .small         // Dense, information-rich
         case .terminal: return .small       // Condensed, information-dense
-        case .minimal: return .medium
+        case .darkMatte: return .medium
         case .classic: return .medium
         case .warm: return .medium
+        case .light: return .medium
         case .liquidGlass: return .medium
         case .scope: return .medium
         }
@@ -966,13 +1001,14 @@ enum ThemePreset: String, CaseIterable, Codable {
     /// Glass depth level for this theme
     var glassDepth: GlassDepth {
         switch self {
-        case .liquidGlass: return .extreme
         case .talkiePro: return .standard
         case .classic: return .standard
         case .warm: return .standard
-        case .minimal: return .subtle
+        case .darkMatte: return .subtle        // Matte: minimal glass, deliberate surfaces
+        case .light: return .subtle            // Light: minimal glass for clarity
         case .technical: return .subtle        // Flat, technical aesthetic
         case .terminal: return .subtle      // Flat, minimal glass
+        case .liquidGlass: return .extreme
         case .scope: return .subtle         // Flat — instrument aesthetic
         }
     }
@@ -982,8 +1018,8 @@ enum ThemePreset: String, CaseIterable, Codable {
         switch self {
         case .terminal: return 0            // Sharp corners - no rounding
         case .technical: return 0.5            // Tight corners - technical aesthetic
-        case .minimal: return 0.75          // Slightly reduced
         case .scope: return 0.5             // Sharper instrument feel — md=6pt, sm=4pt, xs=2pt
+        case .light: return 0.75            // Slightly reduced
         default: return 1.0                 // Standard
         }
     }
@@ -1204,11 +1240,6 @@ final class SettingsManager {
         currentTheme == .talkiePro
     }
 
-    /// Check if minimal theme is active
-    var isMinimalTheme: Bool {
-        currentTheme == .minimal
-    }
-
     /// Check if linear theme is active (Vercel/Linear-inspired)
     var isTechnicalTheme: Bool {
         currentTheme == .technical
@@ -1219,9 +1250,14 @@ final class SettingsManager {
         currentTheme == .terminal
     }
 
-    /// Check if liquid glass theme is active
-    var isLiquidGlassTheme: Bool {
-        currentTheme == .liquidGlass
+    /// Check if dark-matte theme is active
+    var isDarkMatteTheme: Bool {
+        currentTheme == .darkMatte
+    }
+
+    /// Check if light theme is active
+    var isLightTheme: Bool {
+        currentTheme == .light
     }
 
     /// Check if classic theme is active
@@ -1572,8 +1608,11 @@ final class SettingsManager {
         if isTechnicalTheme {
             return isDarkMode ? Color.black : Color.white
         }
-        if isMinimalTheme {
-            return isDarkMode ? Color(white: 0.11) : Color(white: 0.97)
+        if isDarkMatteTheme {
+            return Color(red: 0.0449, green: 0.0333, blue: 0.0242)
+        }
+        if isLightTheme {
+            return Color(red: 0.9737, green: 0.9737, blue: 0.9737)
         }
         if isTerminalTheme {
             // Terminal: True black - Ghostty style
@@ -1591,8 +1630,11 @@ final class SettingsManager {
         if isTechnicalTheme {
             return isDarkMode ? Color(white: 0.04) : Color(white: 0.98)
         }
-        if isMinimalTheme {
-            return isDarkMode ? Color(white: 0.14) : Color(white: 0.94)
+        if isDarkMatteTheme {
+            return Color(red: 0.0702, green: 0.0578, blue: 0.0463)
+        }
+        if isLightTheme {
+            return Color(red: 1.0, green: 1.0, blue: 1.0)
         }
         if isTerminalTheme {
             // Terminal: Very subtle elevation
@@ -1610,8 +1652,11 @@ final class SettingsManager {
         if isTechnicalTheme {
             return isDarkMode ? Color(white: 0.067) : Color(white: 0.96)
         }
-        if isMinimalTheme {
-            return isDarkMode ? Color(white: 0.18) : Color(white: 0.91)
+        if isDarkMatteTheme {
+            return Color(red: 0.0966, green: 0.0837, blue: 0.0717)
+        }
+        if isLightTheme {
+            return Color(red: 0.9803, green: 0.9803, blue: 0.9803)
         }
         if isTerminalTheme {
             // Terminal: Subtle card surface
@@ -1629,8 +1674,11 @@ final class SettingsManager {
         if isTechnicalTheme {
             return isDarkMode ? Color.white : Color(white: 0.06)
         }
-        if isMinimalTheme {
-            return isDarkMode ? Color(white: 0.92) : Color(white: 0.12)
+        if isDarkMatteTheme {
+            return Color(red: 0.8603, green: 0.8416, blue: 0.8171)
+        }
+        if isLightTheme {
+            return Color(red: 0.0625, green: 0.0697, blue: 0.0774)
         }
         if isTerminalTheme {
             // Terminal: Light gray - clean, no gimmicks (Ghostty style)
@@ -1648,8 +1696,12 @@ final class SettingsManager {
         if isTechnicalTheme {
             return isDarkMode ? Color(white: 0.65) : Color(white: 0.35)
         }
-        if isMinimalTheme {
-            return isDarkMode ? Color(white: 0.72) : Color(white: 0.35)
+        if isDarkMatteTheme {
+            // Midpoint between foreground and muted foreground
+            return Color(red: 0.6694, green: 0.6462, blue: 0.6234)
+        }
+        if isLightTheme {
+            return Color(red: 0.2176, green: 0.2305, blue: 0.2443)
         }
         if isTerminalTheme {
             // Terminal: Secondary gray - readable but subdued
@@ -1667,8 +1719,11 @@ final class SettingsManager {
         if isTechnicalTheme {
             return isDarkMode ? Color(white: 0.50) : Color(white: 0.50)
         }
-        if isMinimalTheme {
-            return isDarkMode ? Color(white: 0.55) : Color(white: 0.48)
+        if isDarkMatteTheme {
+            return Color(red: 0.4784, green: 0.4507, blue: 0.4296)
+        }
+        if isLightTheme {
+            return Color(red: 0.3727, green: 0.3912, blue: 0.4112)
         }
         if isTerminalTheme {
             // Terminal: Subtle gray - still readable
@@ -1686,8 +1741,11 @@ final class SettingsManager {
         if isTechnicalTheme {
             return isDarkMode ? Color.white.opacity(0.10) : Color.black.opacity(0.08)
         }
-        if isMinimalTheme {
-            return isDarkMode ? Color(white: 0.22) : Color(white: 0.88)
+        if isDarkMatteTheme {
+            return Color(red: 0.1522, green: 0.1383, blue: 0.1256)
+        }
+        if isLightTheme {
+            return Color(red: 0.8901, green: 0.8966, blue: 0.9035)
         }
         if isTerminalTheme {
             // Terminal: Thin gray border - minimal separation
@@ -1724,8 +1782,11 @@ final class SettingsManager {
         if isTechnicalTheme {
             return isDarkMode ? Color.black : Color.white
         }
-        if isMinimalTheme {
-            return isDarkMode ? Color(white: 0.11) : Color(white: 0.97)
+        if isDarkMatteTheme {
+            return Color(red: 0.0449, green: 0.0333, blue: 0.0242)
+        }
+        if isLightTheme {
+            return Color(red: 0.9737, green: 0.9737, blue: 0.9737)
         }
         return isDarkMode ? Color(white: 0.05) : Color(white: 0.98)
     }
@@ -1736,8 +1797,11 @@ final class SettingsManager {
         if isTechnicalTheme {
             return isDarkMode ? Color(white: 0.04) : Color(white: 0.98)
         }
-        if isMinimalTheme {
-            return isDarkMode ? Color(white: 0.14) : Color(white: 0.95)
+        if isDarkMatteTheme {
+            return Color(red: 0.0702, green: 0.0578, blue: 0.0463)
+        }
+        if isLightTheme {
+            return Color(red: 1.0, green: 1.0, blue: 1.0)
         }
         return isDarkMode ? Color(white: 0.08) : Color(white: 0.95)
     }
@@ -1748,8 +1812,11 @@ final class SettingsManager {
         if isTechnicalTheme {
             return isDarkMode ? Color(white: 0.067) : Color(white: 0.96)
         }
-        if isMinimalTheme {
-            return isDarkMode ? Color(white: 0.16) : Color(white: 0.93)
+        if isDarkMatteTheme {
+            return Color(red: 0.0966, green: 0.0837, blue: 0.0717)
+        }
+        if isLightTheme {
+            return Color(red: 0.9803, green: 0.9803, blue: 0.9803)
         }
         return isDarkMode ? Color(white: 0.12) : Color(white: 0.92)
     }
@@ -1760,8 +1827,11 @@ final class SettingsManager {
         if isTechnicalTheme {
             return isDarkMode ? Color(white: 0.10) : Color(white: 0.94)
         }
-        if isMinimalTheme {
-            return isDarkMode ? Color(white: 0.18) : Color(white: 0.91)
+        if isDarkMatteTheme {
+            return Color(red: 0.1333, green: 0.1197, blue: 0.1072)
+        }
+        if isLightTheme {
+            return Color(red: 0.9355, green: 0.942, blue: 0.949)
         }
         return isDarkMode ? Color(white: 0.16) : Color(white: 0.88)
     }
@@ -1800,8 +1870,11 @@ final class SettingsManager {
         if isTechnicalTheme {
             return isDarkMode ? Color(white: 0.05) : Color(white: 0.97)
         }
-        if isMinimalTheme {
-            return isDarkMode ? Color(white: 0.15) : Color(white: 0.96)
+        if isDarkMatteTheme {
+            return Color(red: 0.0702, green: 0.0578, blue: 0.0463)
+        }
+        if isLightTheme {
+            return Color(red: 1.0, green: 1.0, blue: 1.0)
         }
         return isDarkMode ? Color(white: 0.08) : Color(white: 0.95)
     }
@@ -1815,8 +1888,11 @@ final class SettingsManager {
         if isTechnicalTheme {
             return isDarkMode ? Color(white: 0.08) : Color(white: 0.95)
         }
-        if isMinimalTheme {
-            return isDarkMode ? Color(white: 0.17) : Color(white: 0.94)
+        if isDarkMatteTheme {
+            return Color(red: 0.0966, green: 0.0837, blue: 0.0717)
+        }
+        if isLightTheme {
+            return Color(red: 0.9485, green: 0.955, blue: 0.9621)
         }
         return isDarkMode ? Color(white: 0.10) : Color(white: 0.90)
     }
@@ -1827,8 +1903,11 @@ final class SettingsManager {
         if isTechnicalTheme {
             return isDarkMode ? Color(white: 0.10) : Color(white: 0.92)
         }
-        if isMinimalTheme {
-            return isDarkMode ? Color(white: 0.19) : Color(white: 0.92)
+        if isDarkMatteTheme {
+            return Color(red: 0.1148, green: 0.1015, blue: 0.0893)
+        }
+        if isLightTheme {
+            return Color(red: 0.9355, green: 0.942, blue: 0.949)
         }
         return isDarkMode ? Color(white: 0.13) : Color(white: 0.87)
     }
@@ -1839,8 +1918,11 @@ final class SettingsManager {
         if isTechnicalTheme {
             return isDarkMode ? Color(white: 0.12) : Color(white: 0.90)
         }
-        if isMinimalTheme {
-            return isDarkMode ? Color(white: 0.21) : Color(white: 0.90)
+        if isDarkMatteTheme {
+            return Color(red: 0.1333, green: 0.1197, blue: 0.1072)
+        }
+        if isLightTheme {
+            return Color(red: 0.8993, green: 0.9101, blue: 0.9218)
         }
         return isDarkMode ? Color(white: 0.15) : Color(white: 0.85)
     }
@@ -1851,8 +1933,11 @@ final class SettingsManager {
         if isTechnicalTheme {
             return isDarkMode ? Color(white: 0.03) : Color(white: 0.98)
         }
-        if isMinimalTheme {
-            return isDarkMode ? Color(white: 0.13) : Color(white: 0.96)
+        if isDarkMatteTheme {
+            return Color(red: 0.0578, green: 0.0455, blue: 0.0351)
+        }
+        if isLightTheme {
+            return Color(red: 0.9620, green: 0.9620, blue: 0.9620)
         }
         return isDarkMode ? Color(white: 0.07) : Color(white: 0.93)
     }
