@@ -69,7 +69,10 @@ struct ScopeHomeView: View {
     // studio decision (2026-05-17). See BayScheme.canonical(for:) and
     // design/studio/app/mac-home/NOTES.md.
     @AppStorage("scopeAgentBay.scheme")    private var bayScheme: String = BayScheme.chiffon.rawValue
-    private var currentScheme: BayScheme { BayScheme(rawValue: bayScheme) ?? .amber }
+    // Migration fallback: users with deprecated stored values
+    // (graphite/pewter/ash/stone — dropped 2026-05-17) decode to nil
+    // and should land on the Scope canonical, not the original amber.
+    private var currentScheme: BayScheme { BayScheme(rawValue: bayScheme) ?? .chiffon }
 
     private var todayTotal: Int { todayMemos + todayDictations }
 
