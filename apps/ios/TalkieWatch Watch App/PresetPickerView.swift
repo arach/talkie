@@ -14,24 +14,27 @@ struct PresetPickerView: View {
     @Binding var isRecording: Bool
 
     private var goPreset: WatchPreset { .go }
+    private var aiPreset: WatchPreset { .ai }
     private var otherPresets: [WatchPreset] {
-        WatchPreset.presets.filter { $0.id != "go" }
+        WatchPreset.presets.filter { $0.id != "go" && $0.id != "ai" }
     }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 8) {
-                // Title
-                Text("TALKIE")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .tracking(2)
-                    .foregroundColor(.white)
+                // Title — themed eyebrow, accent tint
+                WatchEyebrow(text: "Talkie", tint: .accent, showLeader: false)
                     .padding(.top, 6)
 
                 // Big GO button
                 GoButton {
                     selectAndRecord(goPreset)
                 }
+
+                TalkToAIButton {
+                    selectAndRecord(aiPreset)
+                }
+                .padding(.horizontal, 4)
 
                 // Other presets in a row
                 HStack(spacing: 6) {
@@ -52,6 +55,39 @@ struct PresetPickerView: View {
         WKInterfaceDevice.current().play(.click)
         selectedPreset = preset
         isRecording = true
+    }
+}
+
+// MARK: - Talk to AI Button
+
+struct TalkToAIButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        let chrome = WatchTheme.current
+        Button(action: action) {
+            HStack(spacing: 6) {
+                // sparkles stays cyan — it's the AI signal across platforms
+                Image(systemName: "sparkles")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.cyan)
+
+                Text("Talk to AI")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(chrome.panelInk)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 7)
+            .background(chrome.panel.opacity(0.55))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(chrome.panelEdge, lineWidth: chrome.hairlineWidth)
+            )
+            .clipShape(.rect(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -92,15 +128,17 @@ struct SmallPresetButton: View {
     let action: () -> Void
 
     var body: some View {
+        let chrome = WatchTheme.current
         Button(action: action) {
             VStack(spacing: 4) {
+                // preset.color is each preset's own identity — keep.
                 Image(systemName: preset.icon)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(preset.color)
 
                 Text(preset.name)
                     .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(chrome.panelInk.opacity(0.85))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
@@ -118,6 +156,7 @@ struct PresetButton: View {
     let action: () -> Void
 
     var body: some View {
+        let chrome = WatchTheme.current
         Button(action: action) {
             VStack(spacing: 6) {
                 ZStack {
@@ -132,11 +171,11 @@ struct PresetButton: View {
 
                 Text(preset.name)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white)
+                    .foregroundColor(chrome.panelInk)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
-            .background(Color.white.opacity(0.08))
+            .background(chrome.panel.opacity(0.40))
             .cornerRadius(12)
         }
         .buttonStyle(.plain)

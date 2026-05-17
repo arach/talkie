@@ -297,77 +297,25 @@ struct TalkieAppCard: View {
 
     private func launchTalkie() {
         #if DEBUG
-        // Dev mode: Find the most recent Talkie.app in DerivedData
         if let devAppURL = findDevTalkieApp() {
             NSWorkspace.shared.open(devAppURL)
             return
         }
         #endif
 
-        // Production: Try /Applications/Talkie.app first
-        let prodPath = "/Applications/Talkie.app"
-        if FileManager.default.fileExists(atPath: prodPath) {
-            NSWorkspace.shared.open(URL(fileURLWithPath: prodPath))
-            return
-        }
-
-        // Fall back to opening by bundle ID
-        let bundleID = TalkieEnvironment.current == .production
-            ? "to.talkie.app"
-            : "to.talkie.app.dev"
-
-        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: TalkieEnvironment.current.talkieBundleId) {
             NSWorkspace.shared.open(url)
         }
     }
 
     #if DEBUG
-    /// Find the most recent Talkie.app dev build in DerivedData
     private func findDevTalkieApp() -> URL? {
-        // Get our own bundle path to find DerivedData
-        guard let myBundlePath = Bundle.main.bundlePath as NSString? else { return nil }
-
-        // Navigate up from our path to find DerivedData root
-        // e.g., .../DerivedData/TalkieAgent-xxx/Build/Products/Debug/TalkieAgent.app
-        //       -> .../DerivedData/
-        var path = myBundlePath as String
-        while !path.isEmpty && !path.hasSuffix("DerivedData") {
-            path = (path as NSString).deletingLastPathComponent
+        let stableURL = TalkieEnvironment.current.userInstalledAppURL(named: "Talkie.app")
+        if FileManager.default.fileExists(atPath: stableURL.path) {
+            return stableURL
         }
 
-        guard !path.isEmpty else { return nil }
-
-        let derivedDataURL = URL(fileURLWithPath: path)
-        let fm = FileManager.default
-
-        // Search for Talkie.app in all project folders
-        var candidates: [(url: URL, modified: Date)] = []
-
-        if let projectFolders = try? fm.contentsOfDirectory(at: derivedDataURL, includingPropertiesForKeys: nil) {
-            for folder in projectFolders {
-                // Look for Talkie-* folders (not TalkieAgent, TalkieEngine, etc.)
-                let folderName = folder.lastPathComponent
-                guard folderName.hasPrefix("Talkie-") && !folderName.hasPrefix("TalkieAgent") && !folderName.hasPrefix("TalkieEngine") else {
-                    continue
-                }
-
-                // Check Debug build path
-                let appPath = folder
-                    .appendingPathComponent("Build/Products/Debug/Talkie.app")
-
-                if fm.fileExists(atPath: appPath.path) {
-                    if let attrs = try? fm.attributesOfItem(atPath: appPath.path),
-                       let modified = attrs[.modificationDate] as? Date {
-                        candidates.append((url: appPath, modified: modified))
-                    }
-                }
-            }
-        }
-
-        // Return the most recently modified
-        return candidates
-            .sorted { $0.modified > $1.modified }
-            .first?.url
+        return nil
     }
     #endif
 }

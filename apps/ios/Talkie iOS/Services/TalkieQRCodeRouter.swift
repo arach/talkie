@@ -11,6 +11,8 @@ import Foundation
 enum TalkieQRCodeRoute {
     case bridge(QRCodeData)
     case sshPayload(rawCode: String, payload: SSHPrivateKeyQRCodePayload)
+    case aiProviderCredential(TalkieAIProviderCredentialPayload)
+    case aiProviderCredentialSetup(TalkieAIProviderCredentialSetupInvite)
     case talkieURL(URL)
 }
 
@@ -19,7 +21,20 @@ enum TalkieQRCodeRouter {
         let trimmedCode = scannedCode.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if let url = URL(string: trimmedCode), url.scheme == "talkie" {
+            if let payload = TalkieAIProviderCredentialPayload.from(url: url) {
+                return .aiProviderCredential(payload)
+            }
             return .talkieURL(url)
+        }
+
+        if let data = trimmedCode.data(using: .utf8),
+           let payload = try? JSONDecoder().decode(TalkieAIProviderCredentialPayload.self, from: data) {
+            return .aiProviderCredential(payload)
+        }
+
+        if let data = trimmedCode.data(using: .utf8),
+           let invite = try? JSONDecoder().decode(TalkieAIProviderCredentialSetupInvite.self, from: data) {
+            return .aiProviderCredentialSetup(invite)
         }
 
         if let data = trimmedCode.data(using: .utf8),

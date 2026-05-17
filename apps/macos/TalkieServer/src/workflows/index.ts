@@ -8,6 +8,7 @@ import {
 } from "@talkie/workflow-core";
 
 import { log } from "../log";
+import { talkieServerFetch } from "../bridge/talkie-local-client";
 
 type WorkflowRouteBody = {
   memoId?: string;
@@ -170,7 +171,7 @@ export const workflows = new Elysia({ name: "workflows" })
         continueOnUnsupported: body.options?.continueOnUnsupported ?? false,
         runHostStep: async ({ step, context }) => {
           try {
-            const response = await fetch(swiftWorkflowHostURL, {
+            const response = await talkieServerFetch(swiftWorkflowHostURL, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",

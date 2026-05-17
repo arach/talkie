@@ -8,6 +8,7 @@
 
 import SwiftUI
 import UIKit
+import PhotosUI
 
 struct CompanionShortcutModeView: View {
     @Binding var showingSettings: Bool
@@ -32,13 +33,17 @@ struct CompanionShortcutModeView: View {
     @State private var displayedShortcutPages = CompanionDeckPage.resolvedPages(from: nil)
     @State private var isSwitchingMac = false
     @State private var isTrackpadInteracting = false
+    @State private var showingMacPastePhotoPicker = false
+    @State private var macPastePhotoPickerItems: [PhotosPickerItem] = []
+    @State private var isPastingImageToMac = false
     @State private var optimisticRuntimeState: CompanionShortcutRuntimeState?
     @State private var optimisticRuntimeToken = UUID()
     @State private var idleResetToken = UUID()
     @State private var activatingAppSwitcherAppID: String?
     @State private var appSwitcherPresentationDetent: PresentationDetent = .large
 
-    private let postActionIdleResetDelay: Duration = .seconds(5)
+    private let transientIdleResetDelay: Duration = .seconds(5)
+    private let recentResultIdleResetDelay: Duration = .seconds(30)
     private let recentShortcutContextLifetime: TimeInterval = 10
 
     init(showingSettings: Binding<Bool>, showingHelper: Binding<Bool>) {
@@ -68,6 +73,7 @@ struct CompanionShortcutModeView: View {
                 syncCompanionDeckLiveness(refreshImmediately: scenePhase == .active)
             }
             .onChange(of: bridgeManager.activePairedMacID) { _, _ in
+                dismissRecentResult(animated: true)
                 withAnimation(.easeOut(duration: 0.18)) {
                     showingMacPicker = false
                     showingAppSwitcher = false
@@ -90,6 +96,7 @@ struct CompanionShortcutModeView: View {
                 scheduleIdleReset()
             }
             .onChange(of: selectedPageID) { _, _ in
+                dismissRecentResult(animated: true)
                 guard showingPageSwitcher else { return }
                 withAnimation(.easeOut(duration: 0.18)) {
                     showingPageSwitcher = false
@@ -97,9 +104,20 @@ struct CompanionShortcutModeView: View {
             }
             .task(id: recentCompanionResult?.completedAt) {
                 guard recentCompanionResult != nil else { return }
-                try? await Task.sleep(for: postActionIdleResetDelay)
+                try? await Task.sleep(for: recentResultIdleResetDelay)
                 guard recentCompanionResult != nil else { return }
                 resetIdlePresentation(animated: true)
+            }
+            .photosPicker(
+                isPresented: $showingMacPastePhotoPicker,
+                selection: $macPastePhotoPickerItems,
+                maxSelectionCount: 1,
+                matching: .images
+            )
+            .onChange(of: macPastePhotoPickerItems) { _, newItems in
+                guard let item = newItems.first else { return }
+                macPastePhotoPickerItems = []
+                loadMacPastePhotoPickerItem(item)
             }
             .sheet(isPresented: $showingScreenPreview) {
                 CompanionScreenPreviewView(macName: activeMacName)
@@ -160,6 +178,16 @@ struct CompanionShortcutModeView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup(placement: .topBarLeading) {
+            Button(action: returnToApp) {
+                Image(systemName: "rectangle.grid.2x2.fill")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.textSecondary)
+            }
+            .accessibilityLabel("Return to Talkie")
+            .accessibilityHint("Go back to the main app view")
+        }
+
+        ToolbarItemGroup(placement: .topBarTrailing) {
             if canSwitchPages {
                 Button {
                     togglePageSwitcher()
@@ -170,14 +198,6 @@ struct CompanionShortcutModeView: View {
                 }
                 .accessibilityLabel("Switch command deck space")
             }
-        }
-
-        ToolbarItemGroup(placement: .topBarTrailing) {
-            Button(action: returnToApp) {
-                TalkieToolbarGlyph()
-            }
-            .accessibilityLabel("Return to Talkie")
-            .accessibilityHint("Go back to the main app view")
 
             Button {
                 showingSettings = true
@@ -522,9 +542,9 @@ struct CompanionShortcutModeView: View {
     }
 
     private var cockpitHeaderHeight: CGFloat { 38 }
-    private var cockpitPrimaryHeight: CGFloat { 48 }
+    private var cockpitPrimaryHeight: CGFloat { recentCompanionResult != nil ? 76 : 48 }
     private var cockpitFollowUpHeight: CGFloat { 36 }
-    private var cockpitMinHeight: CGFloat { 168 }
+    private var cockpitMinHeight: CGFloat { recentCompanionResult != nil ? 198 : 168 }
 
     private var statusStrip: some View {
         let activeEntry = activeRuntimeEntry
@@ -599,7 +619,7 @@ struct CompanionShortcutModeView: View {
                         guard recentCompanionResult != nil, activeRuntimeEntry == nil else { return }
                         let isMeaningful = isHorizontal ? abs(value.translation.width) > 120 : abs(value.translation.height) > 80
                         if isMeaningful {
-                            withAnimation(.easeOut(duration: 0.2)) { resultDismissedAt = Date() }
+                            dismissRecentResult(animated: true)
                         }
                     }
             )
@@ -624,7 +644,7 @@ struct CompanionShortcutModeView: View {
 
                     Text(activeStatusContextLabel(for: activeEntry.shortcut))
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.textTertiary)
+                        .foregroundColor(.white.opacity(0.58))
                         .lineLimit(1)
                 }
 
@@ -676,9 +696,9 @@ struct CompanionShortcutModeView: View {
             } else if let recentCompanionResult {
                 ZStack(alignment: .topTrailing) {
                     Text(recentCompanionResult.resultPreview)
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundColor(.textPrimary.opacity(0.88))
-                        .lineLimit(2)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(.white.opacity(0.9))
+                        .lineLimit(3)
                         .lineSpacing(2)
                         .multilineTextAlignment(.leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -694,9 +714,7 @@ struct CompanionShortcutModeView: View {
                         .accessibilityLabel("Recent dictation result")
 
                     Button {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            resultDismissedAt = Date()
-                        }
+                        dismissRecentResult(animated: true)
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 9, weight: .semibold))
@@ -711,9 +729,7 @@ struct CompanionShortcutModeView: View {
                     .accessibilityLabel("Dismiss result")
                 }
             } else {
-                Text("READY")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.textTertiary.opacity(0.4))
+                TalkieEyebrow(text: "Ready", tint: .panelInk, showLeader: false)
                     .lineLimit(1)
             }
         }
@@ -776,10 +792,15 @@ struct CompanionShortcutModeView: View {
                 ForEach(Array(page.shortcutSlots.enumerated()), id: \.offset) { _, slotID in
                     let shortcut = CompanionShortcutDefinition(rawValue: slotID)
                     let splitAction = splitShortcutCardAction(for: shortcut)
+                    let primaryTriggerID = slotID
+                    let secondaryTriggerID = splitAction == nil ? nil : CompanionCommandDefinition.enter.id
                     ShortcutCard(
                         shortcut: shortcut,
                         isActive: isShortcutActive(shortcut),
-                        isTriggering: runningShortcutID == slotID && shortcut != nil,
+                        isTriggering: runningShortcutID == primaryTriggerID && shortcut != nil,
+                        isSecondaryTriggering: secondaryTriggerID != nil
+                            && runningShortcutID == secondaryTriggerID
+                            && shortcut != nil,
                         columnCount: boardColumnCount,
                         minHeight: tileMinHeight,
                         splitAction: splitAction
@@ -818,13 +839,11 @@ struct CompanionShortcutModeView: View {
         }
 
         return .init(
-            primaryTitle: shortcut == .itermDictate ? "Again" : "Dictate",
-            primaryIcon: shortcut.icon,
-            secondaryTitle: "Enter",
-            secondaryIcon: CompanionCommandDefinition.enter.icon,
-            secondaryColor: CompanionCommandDefinition.enter.color,
-            primaryAction: { await runShortcut(shortcut) },
-            secondaryAction: { await runCommand(.enter) }
+            primaryTitle: "Enter",
+            primaryIcon: CompanionCommandDefinition.enter.icon,
+            primaryColor: CompanionCommandDefinition.enter.color,
+            primaryAction: { await runCommand(.enter) },
+            secondaryAction: { await restartDictationFromRecentResult(shortcut) }
         )
     }
 
@@ -961,11 +980,16 @@ struct CompanionShortcutModeView: View {
     @MainActor
     private func runCommand(_ command: CompanionCommandDefinition) async {
         await runShortcutID(command.id)
-        let clearsResult: Set<String> = ["deck-enter", "deck-delete", "deck-select-all", "deck-paste"]
-        if clearsResult.contains(command.id) {
-            try? await Task.sleep(for: .milliseconds(350))
-            withAnimation(.easeOut(duration: 0.2)) { resultDismissedAt = Date() }
+        if command.id == CompanionCommandDefinition.enter.id, recentCompanionResult != nil {
+            try? await Task.sleep(for: .milliseconds(250))
+            dismissRecentResult(animated: true)
         }
+    }
+
+    @MainActor
+    private func restartDictationFromRecentResult(_ shortcut: CompanionShortcutDefinition) async {
+        dismissRecentResult(animated: true)
+        await runShortcut(shortcut)
     }
 
     @MainActor
@@ -977,6 +1001,16 @@ struct CompanionShortcutModeView: View {
                 color: .green
             )
             showingScreenPreview = true
+            return
+        }
+
+        if shortcutID == CompanionShortcutDefinition.macPasteImage.rawValue {
+            latestTriggerFeedback = CompanionTriggerFeedback(
+                title: "IMAGE",
+                icon: "photo.on.rectangle.angled",
+                color: .cyan
+            )
+            showingMacPastePhotoPicker = true
             return
         }
 
@@ -1015,6 +1049,108 @@ struct CompanionShortcutModeView: View {
         Task { await bridgeManager.refreshCompanionState() }
     }
 
+    private func loadMacPastePhotoPickerItem(_ item: PhotosPickerItem) {
+        Task {
+            guard let data = try? await item.loadTransferable(type: Data.self),
+                  let image = UIImage(data: data) else {
+                await MainActor.run {
+                    latestTriggerFeedback = CompanionTriggerFeedback(
+                        title: "IMAGE FAILED",
+                        icon: "exclamationmark.triangle",
+                        color: .orange
+                    )
+                }
+                return
+            }
+
+            await pasteImageToActiveMac(image)
+        }
+    }
+
+    @MainActor
+    private func pasteImageToActiveMac(_ image: UIImage) async {
+        guard !isPastingImageToMac else { return }
+        isPastingImageToMac = true
+        defer { isPastingImageToMac = false }
+
+        if bridgeManager.status != .connected && bridgeManager.isPaired {
+            await bridgeManager.connect()
+        }
+
+        guard bridgeManager.status == .connected else {
+            latestTriggerFeedback = CompanionTriggerFeedback(
+                title: "PAIR MAC",
+                icon: "wifi.exclamationmark",
+                color: .orange
+            )
+            return
+        }
+
+        guard let payload = preparedCompanionImagePayload(from: image) else {
+            latestTriggerFeedback = CompanionTriggerFeedback(
+                title: "IMAGE FAILED",
+                icon: "exclamationmark.triangle",
+                color: .orange
+            )
+            return
+        }
+
+        do {
+            let response = try await bridgeManager.client.companionPasteImage(
+                imageData: payload.data,
+                mimeType: payload.mimeType,
+                autoPaste: true
+            )
+
+            latestTriggerFeedback = CompanionTriggerFeedback(
+                title: response.ok ? "IMAGE SENT" : "IMAGE FAILED",
+                icon: response.ok ? "photo.badge.checkmark" : "exclamationmark.triangle",
+                color: response.ok ? .green : .orange
+            )
+        } catch {
+            latestTriggerFeedback = CompanionTriggerFeedback(
+                title: "IMAGE FAILED",
+                icon: "exclamationmark.triangle",
+                color: .orange
+            )
+        }
+    }
+
+    private func preparedCompanionImagePayload(from image: UIImage) -> (data: Data, mimeType: String)? {
+        let resizedImage = resizedCompanionPasteImageIfNeeded(image)
+
+        if let pngData = resizedImage.pngData(), pngData.count <= 6_000_000 {
+            return (pngData, "image/png")
+        }
+
+        if let jpegData = resizedImage.jpegData(compressionQuality: 0.9) {
+            return (jpegData, "image/jpeg")
+        }
+
+        return nil
+    }
+
+    private func resizedCompanionPasteImageIfNeeded(
+        _ image: UIImage,
+        maxDimension: CGFloat = 2400
+    ) -> UIImage {
+        let largestDimension = max(image.size.width, image.size.height)
+        guard largestDimension > maxDimension, largestDimension > 0 else {
+            return image
+        }
+
+        let scale = maxDimension / largestDimension
+        let targetSize = CGSize(
+            width: floor(image.size.width * scale),
+            height: floor(image.size.height * scale)
+        )
+
+        let renderer = UIGraphicsImageRenderer(size: targetSize)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+    }
+
     @MainActor
     private func applyOptimisticRuntimeState(_ state: CompanionShortcutRuntimeState) {
         optimisticRuntimeToken = UUID()
@@ -1045,10 +1181,14 @@ struct CompanionShortcutModeView: View {
         idleResetToken = token
 
         Task {
-            try? await Task.sleep(for: postActionIdleResetDelay)
+            try? await Task.sleep(for: transientIdleResetDelay)
             await MainActor.run {
                 guard idleResetToken == token else { return }
                 guard activeRuntimeEntry == nil else { return }
+                if recentCompanionResult != nil {
+                    clearTransientPresentation(animated: true)
+                    return
+                }
                 guard hasIdleResettablePresentation else { return }
                 resetIdlePresentation(animated: true)
             }
@@ -1063,6 +1203,36 @@ struct CompanionShortcutModeView: View {
             if recentCompanionResult != nil {
                 resultDismissedAt = Date()
             }
+            latestTriggerFeedback = nil
+            lastTriggeredShortcutID = nil
+            lastTriggeredAt = nil
+        }
+
+        if animated {
+            withAnimation(.easeOut(duration: 0.25), updates)
+        } else {
+            updates()
+        }
+    }
+
+    @MainActor
+    private func dismissRecentResult(animated: Bool) {
+        guard recentCompanionResult != nil else { return }
+
+        let updates = {
+            resultDismissedAt = Date()
+        }
+
+        if animated {
+            withAnimation(.easeOut(duration: 0.2), updates)
+        } else {
+            updates()
+        }
+    }
+
+    @MainActor
+    private func clearTransientPresentation(animated: Bool) {
+        let updates = {
             latestTriggerFeedback = nil
             lastTriggeredShortcutID = nil
             lastTriggeredAt = nil
@@ -1345,14 +1515,14 @@ struct CompanionShortcutModeView: View {
             HStack(spacing: 7) {
                 Text(activeMacName)
                     .font(.system(size: usesCompactPhoneMetrics ? 14 : 15, weight: .semibold))
-                    .foregroundColor(.textPrimary)
+                    .foregroundColor(.white.opacity(0.74))
                     .lineLimit(1)
                     .contentTransition(.opacity)
 
                 if canSwitchActiveMac {
                     Image(systemName: "chevron.down")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(.textTertiary.opacity(0.7))
+                        .foregroundColor(.white.opacity(0.4))
                         .rotationEffect(.degrees(showingMacPicker ? 180 : 0))
                 }
             }
@@ -1396,7 +1566,7 @@ struct CompanionShortcutModeView: View {
         latestTriggerFeedback = CompanionTriggerFeedback(
             title: activeMacName,
             icon: "desktopcomputer",
-            color: .textPrimary
+            color: .white
         )
         try? await Task.sleep(for: .milliseconds(220))
         withAnimation(.easeOut(duration: 0.22)) {
@@ -1417,7 +1587,7 @@ struct CompanionShortcutModeView: View {
         latestTriggerFeedback = CompanionTriggerFeedback(
             title: activeMacName,
             icon: "desktopcomputer",
-            color: .textPrimary
+            color: .white
         )
         try? await Task.sleep(for: .milliseconds(220))
         withAnimation(.easeOut(duration: 0.22)) {
@@ -1451,6 +1621,7 @@ struct CompanionShortcutModeView: View {
                 icon: "square.stack.3d.up.fill",
                 color: CompanionCommandDefinition.appNext.color
             )
+            dismissRecentResult(animated: true)
 
             withAnimation(.easeOut(duration: 0.18)) {
                 showingAppSwitcher = false
@@ -1539,9 +1710,7 @@ private struct ShortcutCard: View {
     struct SplitAction {
         let primaryTitle: String
         let primaryIcon: String
-        let secondaryTitle: String
-        let secondaryIcon: String
-        let secondaryColor: Color
+        let primaryColor: Color
         let primaryAction: @Sendable () async -> Void
         let secondaryAction: @Sendable () async -> Void
     }
@@ -1549,12 +1718,16 @@ private struct ShortcutCard: View {
     let shortcut: CompanionShortcutDefinition?
     let isActive: Bool
     let isTriggering: Bool
+    var isSecondaryTriggering = false
     var columnCount: Int = 2
     var minHeight: CGFloat = 118
     let splitAction: SplitAction?
     let action: @Sendable () async -> Void
 
     private var accentColor: Color { shortcut?.color ?? .textTertiary }
+    private var displayTitle: String { shortcut?.title ?? "Empty" }
+    private var displaySubtitle: String { shortcut?.subtitle ?? "" }
+    private var displayIcon: String { shortcut?.icon ?? "plus" }
     private var isCompact: Bool { columnCount >= 3 }
     private var isDense: Bool { columnCount >= 4 }
 
@@ -1564,38 +1737,46 @@ private struct ShortcutCard: View {
     private var cornerSize: CGFloat { isDense ? 12 : 16 }
     private var titleFont: CGFloat { isDense ? 11 : isCompact ? 12 : 13 }
     private var subtitleFont: CGFloat { isDense ? 9 : isCompact ? 10 : 11 }
+    private var overlayButtonWidth: CGFloat { isDense ? 58 : isCompact ? 64 : 72 }
+    private var overlayButtonHeight: CGFloat { isDense ? 28 : isCompact ? 30 : 32 }
+    private var overlayInset: CGFloat { isDense ? 7 : isCompact ? 8 : 10 }
 
     var body: some View {
-        ZStack(alignment: .trailing) {
+        ZStack(alignment: .topTrailing) {
             Button {
                 Task {
                     if let splitAction {
-                        await splitAction.primaryAction()
+                        await splitAction.secondaryAction()
                     } else {
                         await action()
                     }
                 }
             } label: {
-                tileShell(mainTileContent(trailingInset: splitAction == nil ? 0 : 78))
+                tileShell(mainTileContent())
             }
             .buttonStyle(TileButtonStyle())
-            .disabled(shortcut == nil || isTriggering)
+            .disabled(shortcut == nil || isTriggering || isSecondaryTriggering)
 
             if let splitAction, shortcut != nil {
-                SplitShortcutEdgeButton(
-                    title: splitAction.secondaryTitle,
-                    icon: splitAction.secondaryIcon,
-                    isTriggering: false
+                EmbeddedShortcutActionButton(
+                    title: splitAction.primaryTitle,
+                    icon: splitAction.primaryIcon,
+                    tintColor: splitAction.primaryColor,
+                    width: overlayButtonWidth,
+                    height: overlayButtonHeight,
+                    isTriggering: isSecondaryTriggering,
+                    isDisabled: isTriggering
                 ) {
-                    await splitAction.secondaryAction()
+                    await splitAction.primaryAction()
                 }
-                .padding(.trailing, 14)
-                .padding(.vertical, 14)
+                .padding(.top, overlayInset)
+                .padding(.trailing, overlayInset)
             }
         }
+        .frame(maxWidth: .infinity, minHeight: minHeight, maxHeight: minHeight, alignment: .topLeading)
     }
 
-    private func mainTileContent(trailingInset: CGFloat) -> some View {
+    private func mainTileContent() -> some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack {
                 if isTriggering {
@@ -1604,7 +1785,7 @@ private struct ShortcutCard: View {
                         .scaleEffect(isDense ? 0.65 : 0.85)
                         .frame(width: iconSize, height: iconSize)
                 } else {
-                    Image(systemName: shortcut?.icon ?? "plus")
+                    Image(systemName: displayIcon)
                         .font(.system(size: iconFontSize, weight: .semibold))
                         .foregroundColor(shortcut == nil ? .textTertiary.opacity(0.35) : accentColor)
                         .frame(width: iconSize, height: iconSize)
@@ -1616,20 +1797,19 @@ private struct ShortcutCard: View {
 
             Spacer(minLength: 0)
 
-            Text(shortcut?.title ?? "Empty")
+            Text(displayTitle)
                 .font(.system(size: titleFont, weight: .semibold))
                 .foregroundColor(shortcut == nil ? .textTertiary.opacity(0.3) : .textPrimary)
                 .lineLimit(1)
 
             if !isDense {
-                Text(shortcut?.subtitle ?? "")
+                Text(displaySubtitle)
                     .font(.system(size: subtitleFont, weight: .regular))
                     .foregroundColor(.textTertiary)
                     .lineLimit(isCompact ? 1 : 2)
                     .padding(.top, 2)
-            }
+                }
         }
-        .padding(.trailing, trailingInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -1670,50 +1850,50 @@ private struct ShortcutCard: View {
     }
 }
 
-private struct SplitShortcutEdgeButton: View {
+private struct EmbeddedShortcutActionButton: View {
     let title: String
     let icon: String
+    let tintColor: Color
+    let width: CGFloat
+    let height: CGFloat
     let isTriggering: Bool
+    var isDisabled = false
     let action: @Sendable () async -> Void
 
     var body: some View {
         Button {
             Task { await action() }
         } label: {
-            VStack(spacing: 8) {
-                Spacer(minLength: 0)
-
+            HStack(spacing: 4) {
                 if isTriggering {
                     ProgressView()
-                        .tint(.white.opacity(0.55))
-                        .scaleEffect(0.72)
-                        .frame(width: 16, height: 16)
+                        .tint(tintColor)
+                        .scaleEffect(0.62)
+                        .frame(width: 13, height: 13)
                 } else {
                     Image(systemName: icon)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.68))
-                        .frame(width: 18, height: 18)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(tintColor)
+                        .frame(width: 13, height: 13)
                 }
 
                 Text(title)
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.62))
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.textPrimary.opacity(0.78))
                     .lineLimit(1)
-                    .tracking(0.5)
-
-                Spacer(minLength: 0)
             }
-            .frame(width: 54)
-            .frame(maxHeight: .infinity)
-            .background(Color.white.opacity(0.045))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .frame(width: width, height: height)
+            .background(Color.surfacePrimary.opacity(0.84))
+            .clipShape(RoundedRectangle(cornerRadius: 9))
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 0.75)
+                RoundedRectangle(cornerRadius: 9)
+                    .stroke(tintColor.opacity(0.24), lineWidth: 0.8)
             )
+            .shadow(color: .black.opacity(0.08), radius: 5, x: 0, y: 2)
         }
         .buttonStyle(TileButtonStyle())
-        .disabled(isTriggering)
+        .disabled(isTriggering || isDisabled)
+        .accessibilityLabel(title)
     }
 }
 
@@ -3411,6 +3591,7 @@ private enum CompanionShortcutDefinition: String, CaseIterable {
     case talkieCommand = "talkie-command"
     case talkieRecent = "talkie-recent"
     case talkieDevices = "talkie-devices"
+    case macPasteImage = "mac-paste-image"
 
     static let talkiePageSlots: [String] = [
         Self.talkieDictate.rawValue,
@@ -3428,11 +3609,12 @@ private enum CompanionShortcutDefinition: String, CaseIterable {
         Self.talkiePending.rawValue,
         Self.talkieRecent.rawValue,
         Self.talkieHome.rawValue,
-        Self.talkieDevices.rawValue,
+        Self.macPasteImage.rawValue,
     ]
 
     static let macPageSlots: [String] = [
         Self.macWindows.rawValue,
+        Self.macPasteImage.rawValue,
         Self.talkieKeyboard.rawValue,
         Self.itermDictate.rawValue,
         Self.macSessions.rawValue,
@@ -3446,7 +3628,6 @@ private enum CompanionShortcutDefinition: String, CaseIterable {
         Self.talkieDevices.rawValue,
         Self.talkieHome.rawValue,
         Self.talkiePending.rawValue,
-        "",
         "",
     ]
 
@@ -3471,6 +3652,7 @@ private enum CompanionShortcutDefinition: String, CaseIterable {
         case .talkieCommand:  return "Palette"
         case .talkieRecent:   return "Recents"
         case .talkieDevices:  return "Pairing"
+        case .macPasteImage:  return "Share Image"
         }
     }
 
@@ -3493,6 +3675,7 @@ private enum CompanionShortcutDefinition: String, CaseIterable {
         case .talkieCommand:  return "Open the Mac command palette."
         case .talkieRecent:   return "Open recent agent activity on Mac."
         case .talkieDevices:  return "Open device and companion settings on Mac."
+        case .macPasteImage:  return "Send a screenshot or photo to your Mac."
         }
     }
 
@@ -3515,6 +3698,7 @@ private enum CompanionShortcutDefinition: String, CaseIterable {
         case .talkieCommand:  return "command"
         case .talkieRecent:   return "clock.arrow.circlepath"
         case .talkieDevices:  return "ipad.and.iphone"
+        case .macPasteImage:  return "photo.on.rectangle.angled"
         }
     }
 
@@ -3537,6 +3721,7 @@ private enum CompanionShortcutDefinition: String, CaseIterable {
         case .talkieCommand:  return .indigo
         case .talkieRecent:   return .gray
         case .talkieDevices:  return .cyan
+        case .macPasteImage:  return .cyan
         }
     }
 }
@@ -3595,9 +3780,20 @@ private extension CompanionShortcutRecentResult {
     }
 
     var resultPreview: String {
-        resultText
+        let trimmed = resultText
             .replacing("\n", with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if !trimmed.isEmpty {
+            return trimmed
+        }
+
+        switch CompanionShortcutDefinition(rawValue: shortcutId) {
+        case .some(.talkieDictate), .some(.itermDictate):
+            return "Dictation finished. No text captured."
+        default:
+            return "Command finished."
+        }
     }
 }
 
@@ -3628,6 +3824,7 @@ private extension CompanionShortcutDefinition {
         case .talkieCommand:  return "CMD"
         case .talkieRecent:   return "LOG"
         case .talkieDevices:  return "LINK"
+        case .macPasteImage:  return "IMG"
         }
     }
 

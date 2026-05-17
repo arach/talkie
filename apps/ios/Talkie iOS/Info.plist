@@ -13,6 +13,8 @@
 	<string>$(TALKIE_IOS_APP_BUNDLE_ID)</string>
 	<key>TalkieCloudKitContainerIdentifier</key>
 	<string>$(TALKIE_IOS_CLOUDKIT_CONTAINER)</string>
+	<key>TalkieCodeSigningAllowed</key>
+	<string>$(CODE_SIGNING_ALLOWED)</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -50,13 +52,13 @@
 		<string>remote-notification</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>Talkie uses the camera to scan QR codes and capture photos for memo attachments.</string>
+	<string>Talkie uses the camera to scan QR codes, capture photos for memo attachments, and scan text for secure AI setup.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Talkie uses your photo library so you can attach screenshots and images to memos.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Talkie uses your location to tag voice memos with where they were recorded.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Talkie uses your local network to find and connect to nearby Macs running Talkie.</string>
+	<string>Talkie uses your local network to connect to nearby Macs for pairing, terminal access, and secure setup.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_talkie-bridge._tcp</string>

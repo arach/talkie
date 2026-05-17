@@ -365,7 +365,7 @@ struct AboutSettingsView: View {
                         name: "Accessibility",
                         description: "Direct text insertion after transcription",
                         status: s.ax,
-                        onRequest: { permissionsManager.openAccessibilitySettings() }
+                        onRequest: { permissionsManager.requestAgentAccessibilityPermission() }
                     )
 
                     if !agentState.isXPCConnected {

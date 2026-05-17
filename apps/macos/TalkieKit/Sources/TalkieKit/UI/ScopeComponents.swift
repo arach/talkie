@@ -480,28 +480,29 @@ public enum ScopeTopBandLayout {
     /// top of the band. The wordmark anchors to the same value so the
     /// bottoms of the two glyph rows align across columns.
     public static let baselineFromTop: CGFloat = 30
-    /// 18pt — top inset applied above the page-title band to match the
-    /// donor sidebar's `headerTopPadding`. The sidebar wraps its label
-    /// header in 18pt of empty space at the top of the column, so any
-    /// page title rendered at Y=0 of the detail column would sit 18pt
-    /// HIGHER than the wordmark. We pad both layers identically so the
-    /// title bar reads as a single horizontal rail across the window.
-    public static let topInset: CGFloat = 18
+    /// 7pt — top inset applied above the page-title band. Locked to
+    /// `SidebarLayout.headerTopPadding` so the page title, sidebar
+    /// wordmark, and the persistent GlobalActionBar overlay (also at
+    /// `.padding(.top, 7)`) share one horizontal rail across the window.
+    public static let topInset: CGFloat = 4
 }
 
 public struct ScopeTopBand<Trailing: View>: View {
     public let title: String
+    public let breadcrumb: String?
     public let chrome: String?
     public let horizontalPadding: CGFloat
     private let trailing: () -> Trailing
 
     public init(
         title: String,
+        breadcrumb: String? = nil,
         chrome: String? = nil,
         horizontalPadding: CGFloat = ScopeTopBandLayout.horizontalPadding,
         @ViewBuilder trailing: @escaping () -> Trailing
     ) {
         self.title = title
+        self.breadcrumb = breadcrumb
         self.chrome = chrome
         self.horizontalPadding = horizontalPadding
         self.trailing = trailing
@@ -531,6 +532,25 @@ public struct ScopeTopBand<Trailing: View>: View {
                     .foregroundColor(ScopeInk.primary)
                     .tracking(-0.3)
                     .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+
+                if let breadcrumb, !breadcrumb.isEmpty {
+                    // Amber chevron embellishment — small, tracking-wide
+                    // typographic flourish between the section title and
+                    // the active filter, keyed to the same baseline so it
+                    // reads as part of the title row, not a separate line.
+                    Text("›")
+                        .font(.system(size: 18, weight: .light))
+                        .foregroundStyle(ScopeAmber.solid.opacity(0.75))
+                        .baselineOffset(2)
+                    Text(breadcrumb)
+                        .font(ScopeTopBand.display(size: 18))
+                        .italic()
+                        .foregroundColor(ScopeInk.muted)
+                        .tracking(-0.2)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
 
                 Spacer(minLength: 8)
 
@@ -567,11 +587,13 @@ public extension ScopeTopBand where Trailing == EmptyView {
     /// Convenience initializer for bands with no trailing accessory.
     init(
         title: String,
+        breadcrumb: String? = nil,
         chrome: String? = nil,
         horizontalPadding: CGFloat = ScopeTopBandLayout.horizontalPadding
     ) {
         self.init(
             title: title,
+            breadcrumb: breadcrumb,
             chrome: chrome,
             horizontalPadding: horizontalPadding,
             trailing: { EmptyView() }

@@ -93,7 +93,7 @@ export function defaultModelForProvider(
 ): string {
   switch (providerId) {
     case "openai":
-      return "gpt-5.2-chat-latest";
+      return "gpt-5.5";
     case "anthropic":
       return "claude-sonnet-4-20250514";
     case "google":
@@ -142,7 +142,7 @@ export function readProviderAPIKey(
   const settingsKey = providerSettingsKey(providerId);
   const explicitSuite = process.env.TALKIE_SHARED_SETTINGS_SUITE?.trim();
   if (explicitSuite) {
-    return readDefaultsValue(explicitSuite, settingsKey);
+    return readDefaultsValue(explicitSuite, settingsKey) ?? readProviderEnvValue(providerId);
   }
 
   for (const suite of DEFAULT_SHARED_SETTINGS_SUITES) {
@@ -152,7 +152,7 @@ export function readProviderAPIKey(
     }
   }
 
-  return null;
+  return readProviderEnvValue(providerId);
 }
 
 function resolveSettingsConfigPath(): string | null {
@@ -191,4 +191,33 @@ function readDefaultsValue(suite: string, key: string): string | null {
 
   const value = result.stdout.toString().trim();
   return value.length > 0 ? value : null;
+}
+
+function readProviderEnvValue(
+  providerId: "openai" | "anthropic" | "google" | "groq"
+): string | null {
+  const keys = providerEnvKeys(providerId);
+  for (const key of keys) {
+    const value = process.env[key]?.trim();
+    if (value) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function providerEnvKeys(
+  providerId: "openai" | "anthropic" | "google" | "groq"
+): string[] {
+  switch (providerId) {
+    case "openai":
+      return ["OPENAI_API_KEY", "OPENAI_KEY"];
+    case "anthropic":
+      return ["ANTHROPIC_API_KEY", "ANTHROPIC_KEY"];
+    case "google":
+      return ["GEMINI_API_KEY", "GOOGLE_API_KEY", "GEMINI_KEY", "GOOGLE_KEY"];
+    case "groq":
+      return ["GROQ_API_KEY", "GROQ_KEY"];
+  }
 }

@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <rect width="128" height="128" fill="#0E0D0A"/>
+
+  <defs>
+    <filter id="part" x="-15%" y="-15%" width="130%" height="130%">
+      <!-- Dilate circle — minimal spread -->
+      <feMorphology in="SourceGraphic" operator="dilate" radius="2" result="wide"/>
+      <!-- Noise pattern -->
+      <feTurbulence type="fractalNoise" baseFrequency="0.06" numOctaves="4" seed="7" result="noise"/>
+      <!-- Threshold noise — sparser scatter -->
+      <feComponentTransfer in="noise" result="dots">
+        <feFuncA type="discrete" tableValues="0 0 0 0 0 1 0 0 0 0"/>
+      </feComponentTransfer>
+      <!-- Mask dots to dilated region -->
+      <feComposite in="dots" in2="wide" operator="in" result="outerDots"/>
+      <feFlood flood-color="#E68A3C" flood-opacity="0.6" result="color"/>
+      <feComposite in="color" in2="outerDots" operator="in" result="coloredOuter"/>
+      <!-- Dense inner dots -->
+      <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="3" seed="13" result="noise2"/>
+      <feComponentTransfer in="noise2" result="dots2">
+        <feFuncA type="discrete" tableValues="0 0 0 1 1 1 1 0 0 0"/>
+      </feComponentTransfer>
+      <feComposite in="dots2" in2="SourceGraphic" operator="in" result="innerDots"/>
+      <feFlood flood-color="#E68A3C" result="color2"/>
+      <feComposite in="color2" in2="innerDots" operator="in" result="coloredInner"/>
+      <feMerge>
+        <feMergeNode in="coloredOuter"/>
+        <feMergeNode in="coloredInner"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <circle cx="64" cy="64" r="12" fill="#E68A3C" filter="url(#part)"/>
+</svg>

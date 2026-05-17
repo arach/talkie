@@ -230,6 +230,7 @@ struct ScopeDraftsScreen: View {
                 monitorHeader
                 monitorPipeline
             }
+            .clipShape(RoundedRectangle(cornerRadius: 6))
         }
         .frame(height: 78)
         .shadow(color: .black.opacity(0.16), radius: 18, y: 8)
@@ -263,8 +264,12 @@ struct ScopeDraftsScreen: View {
         .padding(.horizontal, 14)
         .padding(.top, 8)
         .padding(.bottom, 6)
+        .background(ScopePanel.stripTop)
         .overlay(alignment: .bottom) {
-            Rectangle().fill(ScopePanel.Edge.subtle).frame(height: 1)
+            Rectangle()
+                .fill(ScopePanel.Edge.subtle)
+                .frame(height: 1)
+                .padding(.horizontal, 14)
         }
     }
 
@@ -845,7 +850,7 @@ struct ScopeDraftsScreen: View {
         }
         .buttonStyle(.plain)
         .disabled(voicePromptDisabled)
-        .help("Speak to tell the model what to do with your text")
+        .help("Voice instruction → revise")
     }
 
     private func scopeActionChip(_ action: SmartAction) -> some View {
@@ -886,7 +891,7 @@ struct ScopeDraftsScreen: View {
             HStack(alignment: .firstTextBaseline) {
                 Eyebrow("Transforms")
                 Spacer()
-                Text("ONE-SHOT REVISIONS")
+                Text("\(availableActions.count) AVAILABLE")
                     .font(ScopeType.chrome)
                     .tracking(ScopeType.Tracking.wide)
                     .foregroundStyle(ScopeInk.subtle)
@@ -915,17 +920,18 @@ struct ScopeDraftsScreen: View {
         }
     }
 
-    // MARK: - Ownership strip
+    // MARK: - Signal-path strip
 
-    /// Small architectural footer — your text → your model → your output.
-    /// Echoes the homepage's "U1 → U2 → U3" ownership row.
+    /// Small architectural footer — input → model → output. Data labels,
+    /// no narrative. The pins (P1/P2/P3) and the path between them carry
+    /// the meaning; the captions report state.
     private var ownershipStrip: some View {
         HStack(spacing: 14) {
-            ownershipNode(pin: "P1", label: "Your words", detail: "local · this device")
+            ownershipNode(pin: "P1", label: "Input", detail: "local · this device")
             SignalPath(color: ScopeAmber.solid, width: 24)
-            ownershipNode(pin: "P2", label: "Your model", detail: resolvedModelName?.uppercased() ?? "PICK A MODEL")
+            ownershipNode(pin: "P2", label: "Model", detail: resolvedModelName?.uppercased() ?? "NOT SELECTED")
             SignalPath(color: ScopeAmber.solid, width: 24)
-            ownershipNode(pin: "P3", label: "Your output", detail: "copy · memo · ship")
+            ownershipNode(pin: "P3", label: "Output", detail: "copy · memo")
         }
         .padding(.top, 6)
     }

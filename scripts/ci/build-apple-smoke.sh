@@ -69,12 +69,11 @@ build_ios_project() {
 }
 
 build_watch_project() {
-  run_group "Build watchOS app for simulator" \
+  run_group "Build embedded watchOS app for simulator" \
     xcodebuild \
-      -project apps/ios/TalkieWatch/TalkieWatch.xcodeproj \
-      -scheme TalkieWatch \
+      -project apps/ios/Talkie-iOS.xcodeproj \
+      -scheme "TalkieWatch Watch App" \
       -configuration Debug \
-      -sdk watchsimulator \
       -destination 'generic/platform=watchOS Simulator' \
       -derivedDataPath "$derived_root/watchos" \
       "${xcode_common[@]}" \

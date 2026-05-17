@@ -181,6 +181,7 @@ public final class LLMProviderRegistry {
     /// Curated list of recommended models to show in pickers
     public static let recommendedModels: Set<String> = [
         // OpenAI - GPT-5 (tight selection)
+        "gpt-5.5",              // Current default
         "gpt-5.2-chat-latest",  // Flagship conversational
         "gpt-5.2-pro",          // Higher quality, slower
         "gpt-5-nano",           // Fastest/cheapest
@@ -283,7 +284,7 @@ public final class LLMProviderRegistry {
     /// Default model ID for a provider
     public func defaultModelId(for providerId: String) -> String {
         switch providerId {
-        case "openai": return "gpt-4o-mini"
+        case "openai": return "gpt-5.5"
         case "anthropic": return "claude-3-5-sonnet-20241022"
         case "gemini": return "gemini-1.5-flash-latest"
         case "groq": return "llama-3.3-70b-versatile"

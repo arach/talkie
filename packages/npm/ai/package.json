@@ -1,0 +1,35 @@
+{
+  "name": "@talkie/ai",
+  "version": "0.1.0",
+  "description": "Secure local setup helpers for Talkie iPhone AI credentials",
+  "type": "module",
+  "bin": {
+    "talkie-ai": "./talkie-ai.js"
+  },
+  "files": [
+    "talkie-ai.js"
+  ],
+  "keywords": [
+    "talkie",
+    "ai",
+    "qr",
+    "ios",
+    "local"
+  ],
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arach/talkie",
+    "directory": "packages/npm/ai"
+  },
+  "homepage": "https://usetalkie.com",
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "darwin"
+  ],
+  "dependencies": {
+    "qrcode-terminal": "^0.12.0"
+  }
+}

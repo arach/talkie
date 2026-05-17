@@ -18,6 +18,7 @@ struct DesignHomeView: View {
     @AppStorage(SidebarStyleStorage.indicatorKey) private var indicatorStyleRaw = SidebarIndicatorStyle.default.rawValue
     @AppStorage(SidebarStyleStorage.iconKey)      private var iconStyleRaw      = SidebarIconStyle.default.rawValue
     @AppStorage(SidebarStyleStorage.motionKey)    private var motionStyleRaw    = SidebarMotionStyle.default.rawValue
+    @AppStorage(SidebarStyleStorage.effectKey)    private var effectStyleRaw    = SidebarEffectStyle.flush.rawValue
 
     var body: some View {
         ScrollView {
@@ -96,6 +97,13 @@ struct DesignHomeView: View {
                     cases: SidebarMotionStyle.allCases,
                     label: { $0.label }
                 )
+
+                sidebarStylePicker(
+                    title: "Effect",
+                    selection: $effectStyleRaw,
+                    cases: SidebarEffectStyle.allCases,
+                    label: { $0.label }
+                )
             }
 
             HStack(spacing: Spacing.sm) {
@@ -104,6 +112,7 @@ struct DesignHomeView: View {
                     indicatorStyleRaw = SidebarIndicatorStyle.default.rawValue
                     iconStyleRaw      = SidebarIconStyle.default.rawValue
                     motionStyleRaw    = SidebarMotionStyle.default.rawValue
+                    effectStyleRaw    = SidebarEffectStyle.flush.rawValue
                 }
                 .buttonStyle(.borderless)
                 .font(Theme.current.fontXS)
@@ -111,7 +120,7 @@ struct DesignHomeView: View {
 
                 Spacer()
 
-                Text("Active: \(surfaceStyleRaw) · \(indicatorStyleRaw) · \(iconStyleRaw) · \(motionStyleRaw)")
+                Text("Active: \(surfaceStyleRaw) · \(indicatorStyleRaw) · \(iconStyleRaw) · \(motionStyleRaw) · \(effectStyleRaw)")
                     .font(Theme.current.fontXS.monospaced())
                     .foregroundColor(Theme.current.foregroundMuted)
             }

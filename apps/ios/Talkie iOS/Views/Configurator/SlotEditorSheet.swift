@@ -122,10 +122,7 @@ struct SlotEditorSheet: View {
 
     private var slotHeader: some View {
         HStack {
-            Text("SLOT \(slot)")
-                .font(.techLabel)
-                .tracking(2)
-                .foregroundColor(.textTertiary)
+            TalkieEyebrow(text: "Slot \(slot)")
 
             Spacer()
 
@@ -215,10 +212,7 @@ struct SlotEditorSheet: View {
 
     private var typeSelector: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("TYPE")
-                .font(.techLabel)
-                .tracking(2)
-                .foregroundColor(.textTertiary)
+            TalkieEyebrow(text: "Type")
 
             HStack(spacing: 6) {
                 TypeButton(label: "Text", icon: "character.cursor.ibeam", type: .text, selected: slotType) { slotType = .text }
@@ -257,10 +251,7 @@ struct SlotEditorSheet: View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             // Label field
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text("LABEL")
-                    .font(.techLabel)
-                    .tracking(2)
-                    .foregroundColor(.textTertiary)
+                TalkieEyebrow(text: "Label")
 
                 TextField("Button label", text: $label)
                     .textFieldStyle(.roundedBorder)
@@ -270,10 +261,7 @@ struct SlotEditorSheet: View {
             // Content field (optional - defaults to label)
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 HStack {
-                    Text("INSERTS")
-                        .font(.techLabel)
-                        .tracking(2)
-                        .foregroundColor(.textTertiary)
+                    TalkieEyebrow(text: "Inserts")
 
                     Text("(optional)")
                         .font(.system(size: 10))
@@ -293,10 +281,7 @@ struct SlotEditorSheet: View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             // Label field
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text("LABEL")
-                    .font(.techLabel)
-                    .tracking(2)
-                    .foregroundColor(.textTertiary)
+                TalkieEyebrow(text: "Label")
 
                 TextField("Button label", text: $label)
                     .textFieldStyle(.roundedBorder)
@@ -305,10 +290,7 @@ struct SlotEditorSheet: View {
 
             // Multi-line content field
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text("CONTENT")
-                    .font(.techLabel)
-                    .tracking(2)
-                    .foregroundColor(.textTertiary)
+                TalkieEyebrow(text: "Content")
 
                 TextEditor(text: $content)
                     .font(.system(size: 14, design: .monospaced))
@@ -328,10 +310,7 @@ struct SlotEditorSheet: View {
 
     private var actionPicker: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("ACTION")
-                .font(.techLabel)
-                .tracking(2)
-                .foregroundColor(.textTertiary)
+            TalkieEyebrow(text: "Action")
 
             LazyVGrid(columns: [
                 GridItem(.flexible()),

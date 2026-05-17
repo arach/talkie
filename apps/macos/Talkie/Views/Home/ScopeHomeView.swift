@@ -52,10 +52,35 @@ struct ScopeHomeView: View {
     var onOpenLibrary: () -> Void = {}
     var onOpenItem: (UnifiedActivityItem) -> Void = { _ in }
 
+    // MARK: - Agent bay treatments (independent, combinable)
+    // Each AppStorage bool toggles one visual treatment on the agent
+    // panel. Toggle chips live in `agentBayTreatmentStrip` (DEBUG +
+    // Design Mode only). Default off → ships current austere look.
+    @AppStorage("scopeAgentBay.lift")      private var bayLift: Bool = false
+    @AppStorage("scopeAgentBay.sparkline") private var baySparkline: Bool = true
+    @AppStorage("scopeAgentBay.waveform")  private var bayWaveform: Bool = false
+    @AppStorage("scopeAgentBay.compact")   private var bayCompact: Bool = true
+    @AppStorage("scopeAgentBay.ambient")   private var bayAmbient: Bool = false
+    @AppStorage("scopeAgentBay.bezel")     private var bayBezel: Bool = false
+    @AppStorage("scopeAgentBay.heatmap")   private var bayHeatmap: Bool = false
+    @AppStorage("scopeAgentBay.timeline")  private var bayTimeline: Bool = false
+    @AppStorage("scopeAgentBay.brackets")  private var bayBrackets: Bool = false
+    // Default to CHIFFON — the Scope theme's canonical bay per the
+    // studio decision (2026-05-17). See BayScheme.canonical(for:) and
+    // design/studio/app/mac-home/NOTES.md.
+    @AppStorage("scopeAgentBay.scheme")    private var bayScheme: String = BayScheme.chiffon.rawValue
+    // Migration fallback: users with deprecated stored values
+    // (graphite/pewter/ash/stone — dropped 2026-05-17) decode to nil
+    // and should land on the Scope canonical, not the original amber.
+    private var currentScheme: BayScheme { BayScheme(rawValue: bayScheme) ?? .chiffon }
+
     private var todayTotal: Int { todayMemos + todayDictations }
 
     var body: some View {
-        VStack(spacing: 0) {
+        #if DEBUG
+        let _ = FrameRateMonitor.shared.recordBodyAccess("ScopeHomeView")
+        #endif
+        return VStack(spacing: 0) {
             ScopeTopBand(title: "Today", chrome: heroTrailing)
 
             ScrollView {
@@ -63,7 +88,10 @@ struct ScopeHomeView: View {
                     hero
                     captureModes
                     agentPanel
+                    routinesStrip
                     signalTable
+                    discoveryRow
+                    systemStatusRail
                     ownershipStrip
                 }
                 .padding(.horizontal, 32)
@@ -125,132 +153,331 @@ struct ScopeHomeView: View {
                 spacing: 16
             ) {
                 CaptureModeCard(
-                    icon: "mic.fill",
+                    glyph: .dot,
                     eyebrow: "Memo",
                     channel: "CH-01",
-                    title: "Catch it before it changes.",
-                    copy: "Record what you’re thinking. The transcript lands here.",
-                    action: onStartRecording
+                    state: captureStateMemo,
+                    action: "START RECORDING",
+                    hint: "·",
+                    onTap: onStartRecording
                 )
                 CaptureModeCard(
-                    icon: "keyboard",
+                    glyph: .ring,
                     eyebrow: "Dictation",
                     channel: "CH-02",
-                    title: "Speak straight into the work.",
-                    copy: "Hotkey on Mac. Dictate into whatever app you’re already in.",
-                    action: {}
+                    state: captureStateDictation,
+                    action: "DICTATE",
+                    hint: "⌃⇧⌘ D",
+                    onTap: {}
                 )
                 CaptureModeCard(
-                    icon: "camera.viewfinder",
+                    glyph: .crosshair,
                     eyebrow: "Capture",
                     channel: "CH-03",
-                    title: "Pin the screen, not just the words.",
-                    copy: "Hyper+S to grab the moment alongside what you say.",
-                    action: {}
+                    state: "Hyper+S armed",       // TODO: wire to TrayState
+                    action: "CAPTURE",
+                    hint: "⌃⇧⌘ S",
+                    onTap: {}
                 )
             }
         }
+    }
+
+    /// Stub state lines for the capture cards. Stays factual (counts /
+    /// last-time) rather than editorial. TODO: wire to MemoStats /
+    /// DictationStore / TrayBadge live state.
+    private var captureStateMemo: String {
+        if todayMemos == 0 { return "Ready" }
+        if todayMemos == 1 { return "1 today" }
+        return "\(todayMemos) today"
+    }
+    private var captureStateDictation: String {
+        if todayDictations == 0 { return "Ready" }
+        if todayDictations == 1 { return "1 today" }
+        return "\(todayDictations) today"
+    }
+
+    // MARK: - Routines strip (Workflows · Console)
+    //
+    // RESTORED from the original HomeGrid taxonomy (actionWorkflows +
+    // actionHelpers + featureAgentConsole). Two light panels on the
+    // cream canvas so they read as cousins of the Capture Mode cards,
+    // not as competing dark slabs with the bay.
+    //
+    // Data is stubbed at this stage. TODO: wire Workflows to
+    // WorkflowRunsStore (or equivalent); wire Console to the active
+    // ConsoleRegistry tabs.
+
+    private var routinesStrip: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Eyebrow("Routines")
+            HStack(spacing: 16) {
+                RoutinesPanel(
+                    title: "Workflows",
+                    trailing: "3 ran today",
+                    rows: [
+                        .init(leading: .filled, label: "Summarize standup",  trailing: "9:31 AM"),
+                        .init(leading: .filled, label: "Dictation → Linear", trailing: "9:14 AM"),
+                        .init(leading: .hollow, label: "Compose draft",      trailing: "Yesterday"),
+                    ],
+                    footer: "MANAGE WORKFLOWS"
+                )
+                RoutinesPanel(
+                    title: "Console",
+                    trailing: "2 tabs",
+                    rows: [
+                        .init(leading: .filled, label: "iTerm2", trailing: "ACTIVE"),
+                        .init(leading: .filled, label: "Codex",  trailing: "IDLE"),
+                        .init(leading: .hollow, label: "Claude", trailing: "OFF"),
+                    ],
+                    footer: "OPEN CONSOLE"
+                )
+            }
+        }
+    }
+
+    // MARK: - Discovery row (Today · Shortcuts · Trending)
+    //
+    // RESTORED from widgetActivity + widgetShortcuts + widgetTrending.
+    // Three discovery surfaces at the same density as the Capture Modes
+    // row. Each widget gets a tailored visual so they read as distinct,
+    // not as three flat lists.
+    //
+    // TODO: wire Today to Calendar/Reminders; Trending to a real
+    // recurring-theme aggregator. Shortcuts is the only one mostly
+    // real today (HotkeyManager registrations).
+
+    private var discoveryRow: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Eyebrow("Discovery")
+            HStack(spacing: 16) {
+                TodayWidget()
+                ShortcutsWidget()
+                TrendingWidget()
+            }
+        }
+    }
+
+    // MARK: - System status rail (scheme-aware)
+    //
+    // RESTORED from the systemStatus + devicesBridge cards. The rail
+    // wears the same scheme as the bay above so the two read as the
+    // top + bottom of one instrument body. On AMBER it's a gunmetal
+    // recessed footer; on CHIFFON (Scope canonical) it's a barely-
+    // there cream strip.
+    //
+    // TODO: wire phosphor dots to live service state
+    // (ServiceManager.agent / .sync / .updater).
+
+    private var systemStatusRail: some View {
+        SystemStatusRail(scheme: currentScheme)
     }
 
     // MARK: - Agent panel (dark instrument bay in the cream)
 
     private var agentPanel: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        let scheme = currentScheme
+        return VStack(alignment: .leading, spacing: 14) {
+            #if DEBUG
+            agentBayTreatmentStrip
+            #endif
             Eyebrow("Agent")
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(ScopePanel.bg)
+                    .fill(scheme.panelBg)
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .stroke(ScopePanel.Edge.normal, lineWidth: 1)
+                            .stroke(scheme.edge, lineWidth: 0.5)
                     )
-                GraticuleBackground(pitch: 24, color: ScopePanel.traceFaint, opacity: 0.55)
+
+                if bayLift {
+                    bayLiftOverlay(scheme: scheme)
+                        .mask(RoundedRectangle(cornerRadius: 8))
+                }
+
+                GraticuleBackground(pitch: 28, color: scheme.traceFaint, opacity: 0.32)
                     .mask(RoundedRectangle(cornerRadius: 8))
 
+                if bayWaveform {
+                    BackgroundWaveform(scheme: scheme)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 36)        // clear top strip
+                        .padding(.bottom, 36)     // clear bottom strip
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+
+                if bayAmbient {
+                    AmbientScanline(scheme: scheme)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+
                 VStack(alignment: .leading, spacing: 0) {
-                    panelHeader
-                    panelBody
-                    panelFooter
+                    panelHeader(scheme: scheme)
+                    panelBody(scheme: scheme)
+                    panelFooter(scheme: scheme)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                if bayHeatmap {
+                    // Floats in the body's negative space, anchored to
+                    // the top-right corner just below the header rail
+                    // — keeps the rail at its natural height.
+                    ActivityHeatmap(scheme: scheme)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                        .padding(.top, 40)
+                        .padding(.trailing, 18)
+                        .allowsHitTesting(false)
+                }
+
+                if bayBrackets {
+                    BayCornerBrackets(color: scheme.edgeStrong)
+                        .padding(.horizontal, 4)
+                        .padding(.top, 32)
+                        .padding(.bottom, 32)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+
+                if bayBezel {
+                    BezelOverlay(scheme: scheme)
                 }
             }
-            .frame(height: 220)
-            .shadow(color: .black.opacity(0.18), radius: 30, y: 18)
+            .frame(height: bayCompact ? 150 : 220)
+            // Trimmed from radius:30 / y:18 — the 60pt Gaussian kernel was
+            // recomputing on every layout invalidation and dominating
+            // scroll cost on this page. radius:12 / y:6 keeps the panel
+            // reading as embedded without the offscreen blur tax.
+            .compositingGroup()
+            .shadow(color: .black.opacity(0.20), radius: 12, y: 6)
         }
     }
 
-    private var panelHeader: some View {
+    /// Treatment 1 — slate gradient lift + warm radial bloom behind stats.
+    /// Sits above the flat bg fill and under the graticule so the grid
+    /// still reads on top of the softer base.
+    private func bayLiftOverlay(scheme: BayScheme) -> some View {
+        ZStack {
+            LinearGradient(
+                stops: [
+                    .init(color: Color.hex("1E2528"), location: 0.0),
+                    .init(color: Color.hex("171C1F"), location: 0.45),
+                    .init(color: Color.hex("0F1416"), location: 1.0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            RadialGradient(
+                colors: [
+                    scheme.trace.opacity(0.10),
+                    scheme.trace.opacity(0.04),
+                    .clear
+                ],
+                center: .center,
+                startRadius: 0,
+                endRadius: 360
+            )
+            .blendMode(.plusLighter)
+        }
+    }
+
+    private func panelHeader(scheme: BayScheme) -> some View {
         HStack(spacing: 8) {
-            PhosphorDot(color: ScopePanel.trace, size: 6)
+            if bayAmbient {
+                BreathingDot(color: scheme.trace, size: 6)
+            } else {
+                PhosphorDot(color: scheme.trace, size: 6)
+            }
             Text("RUNNING · AG-01 / TALKIE.AGENT")
                 .font(ScopeType.chrome)
                 .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(ScopePanel.inkFaint)
+                .foregroundStyle(scheme.inkFaint)
             Spacer()
             Text("LOCAL ONLY · NO TELEMETRY")
                 .font(ScopeType.chrome)
                 .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(ScopePanel.inkSubtle)
+                .foregroundStyle(scheme.inkSubtle)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+        .background(scheme.stripTopFill)
         .overlay(alignment: .bottom) {
-            Rectangle().fill(ScopePanel.Edge.faint).frame(height: 1)
+            Rectangle()
+                .fill(scheme.edge)
+                .frame(height: 0.5)
+                .padding(.horizontal, 16)
         }
     }
 
-    private var panelBody: some View {
-        HStack(spacing: 0) {
-            statTile(value: "\(todayMemos)",    label: "MEMOS · TODAY")
-            tileDivider
-            statTile(value: "\(todayDictations)", label: "DICTATIONS · TODAY")
-            tileDivider
-            statTile(value: streak > 0 ? "\(streak)d" : "0d", label: "STREAK")
-            tileDivider
-            statTile(value: wordsFormatted, label: "TOTAL WORDS")
+    private func panelBody(scheme: BayScheme) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                statTile(scheme: scheme, seed: 0, value: "\(todayMemos)",    label: "MEMOS · TODAY")
+                tileDivider(scheme: scheme)
+                statTile(scheme: scheme, seed: 1, value: "\(todayDictations)", label: "DICTATIONS · TODAY")
+                tileDivider(scheme: scheme)
+                statTile(scheme: scheme, seed: 2, value: streak > 0 ? "\(streak)d" : "0d", label: "STREAK")
+                tileDivider(scheme: scheme)
+                statTile(scheme: scheme, seed: 3, value: wordsFormatted, label: "TOTAL WORDS")
+            }
+            .frame(maxHeight: .infinity)
+
+            if bayTimeline {
+                TodayTimeline(scheme: scheme)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 4)
+                    .padding(.bottom, 6)
+            }
         }
-        .frame(maxHeight: .infinity)
         .padding(.horizontal, 16)
     }
 
-    private var tileDivider: some View {
+    private func tileDivider(scheme: BayScheme) -> some View {
         Rectangle()
-            .fill(ScopePanel.Edge.faint)
-            .frame(width: 1)
+            .fill(scheme.edge)
+            .frame(width: 0.5)
             .padding(.vertical, 18)
     }
 
-    private func statTile(value: String, label: String) -> some View {
+    private func statTile(scheme: BayScheme, seed: Int, value: String, label: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(value)
-                .font(ScopeFont.display(size: 34))
-                .foregroundStyle(ScopePanel.trace)
+                .font(ScopeFont.display(size: bayCompact ? 26 : 34))
+                .foregroundStyle(scheme.statInk)
                 .tracking(-0.5)
-                .shadow(color: ScopePanel.traceGlow, radius: 4)
+                .shadow(color: scheme.traceGlow, radius: 4)
             Text(label)
                 .font(ScopeType.chrome)
                 .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(ScopePanel.inkFaint)
+                .foregroundStyle(scheme.inkFaint)
+            if baySparkline {
+                StatSparkline(seed: seed, scheme: scheme)
+                    .frame(height: bayCompact ? 12 : 16)
+                    .padding(.top, 2)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 14)
     }
 
-    private var panelFooter: some View {
+    private func panelFooter(scheme: BayScheme) -> some View {
         HStack(spacing: 12) {
             Text("· TRIG · LIVE · SIGNAL PATH · LOCAL")
                 .font(ScopeType.chrome)
                 .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(ScopePanel.inkFaint)
+                .foregroundStyle(scheme.inkFaint)
             Spacer()
             Text(Date().formatted(date: .omitted, time: .shortened).uppercased())
                 .font(ScopeType.chrome)
                 .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(ScopePanel.inkSubtle)
+                .foregroundStyle(scheme.inkSubtle)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+        .background(scheme.stripBottomFill)
         .overlay(alignment: .top) {
-            Rectangle().fill(ScopePanel.Edge.faint).frame(height: 1)
+            Rectangle()
+                .fill(scheme.edge)
+                .frame(height: 0.5)
+                .padding(.horizontal, 16)
         }
     }
 
@@ -261,6 +488,140 @@ struct ScopeHomeView: View {
         }
         return "\(totalWords)"
     }
+
+    // MARK: - Treatment toggle strip (DEBUG + Design Mode only)
+    //
+    // Mirrors the Library readout switcher. Each chip toggles one
+    // treatment independently so they can be auditioned in any
+    // combination.
+    #if DEBUG
+    @ViewBuilder
+    private var agentBayTreatmentStrip: some View {
+        if DesignModeManager.shared.isEnabled {
+            VStack(alignment: .leading, spacing: 6) {
+                // Row 1: treatment toggles (independent, combinable).
+                HStack(spacing: 6) {
+                    Text("· TREATMENTS")
+                        .font(ScopeType.chrome)
+                        .tracking(ScopeType.Tracking.wide)
+                        .foregroundStyle(ScopePanel.inkFaint)
+                        .frame(width: 90, alignment: .leading)
+                    bayChip("LIFT",      isOn: bayLift)      { bayLift.toggle() }
+                    bayChip("SPARKLINE", isOn: baySparkline) { baySparkline.toggle() }
+                    bayChip("WAVEFORM",  isOn: bayWaveform)  { bayWaveform.toggle() }
+                    bayChip("COMPACT",   isOn: bayCompact)   { bayCompact.toggle() }
+                    bayChip("AMBIENT",   isOn: bayAmbient)   { bayAmbient.toggle() }
+                    bayChip("BEZEL",     isOn: bayBezel)     { bayBezel.toggle() }
+                    bayChip("HEATMAP",   isOn: bayHeatmap)   { bayHeatmap.toggle() }
+                    bayChip("TIMELINE",  isOn: bayTimeline)  { bayTimeline.toggle() }
+                    bayChip("BRACKETS",  isOn: bayBrackets)  { bayBrackets.toggle() }
+                    Spacer(minLength: 0)
+                    Button {
+                        bayLift = false
+                        baySparkline = true
+                        bayWaveform = false
+                        bayCompact = true
+                        bayAmbient = false
+                        bayBezel = false
+                        bayHeatmap = false
+                        bayTimeline = false
+                        bayBrackets = false
+                        bayScheme = BayScheme.chiffon.rawValue
+                    } label: {
+                        Text("RESET")
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .tracking(0.8)
+                            .foregroundStyle(ScopePanel.inkSubtle)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                // Row 2: color scheme picker (mutually exclusive).
+                HStack(spacing: 6) {
+                    Text("· SCHEME")
+                        .font(ScopeType.chrome)
+                        .tracking(ScopeType.Tracking.wide)
+                        .foregroundStyle(ScopePanel.inkFaint)
+                        .frame(width: 90, alignment: .leading)
+                    ForEach(BayScheme.allCases, id: \.self) { option in
+                        let raw = option.rawValue
+                        let isActive = bayScheme == raw
+                        Button {
+                            bayScheme = raw
+                        } label: {
+                            HStack(spacing: 5) {
+                                Circle()
+                                    .fill(option.trace)
+                                    .frame(width: 7, height: 7)
+                                Text(option.displayName)
+                                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                                    .tracking(0.8)
+                                    .foregroundStyle(isActive ? ScopePanel.bg : ScopePanel.inkMuted)
+                            }
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(isActive ? option.trace : Color.clear)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 3)
+                                    .stroke(
+                                        isActive ? option.trace : ScopePanel.Edge.normal,
+                                        lineWidth: 0.5
+                                    )
+                            )
+                            .contentShape(RoundedRectangle(cornerRadius: 3))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(ScopePanel.bg.opacity(0.92))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(ScopePanel.Edge.normal, lineWidth: 0.5)
+            )
+            .overlay(alignment: .leading) {
+                Rectangle()
+                    .fill(currentScheme.trace.opacity(0.6))
+                    .frame(width: 2)
+            }
+        }
+    }
+
+    private func bayChip(_ label: String, isOn: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .tracking(0.8)
+                .foregroundStyle(isOn ? ScopePanel.bg : ScopePanel.inkMuted)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(isOn ? currentScheme.trace : Color.clear)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(
+                            isOn ? currentScheme.trace : ScopePanel.Edge.normal,
+                            lineWidth: 0.5
+                        )
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 3))
+        }
+        .buttonStyle(.plain)
+    }
+    #endif
 
     // MARK: - Signal table (recent activity)
 
@@ -289,13 +650,13 @@ struct ScopeHomeView: View {
                     ForEach(unifiedActivity.prefix(6)) { item in
                         SignalRow(item: item, action: { onOpenItem(item) })
                             .overlay(alignment: .top) {
-                                Rectangle().fill(ScopeEdge.subtle).frame(height: 1)
+                                Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
                             }
                     }
                 }
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
-                        .stroke(ScopeEdge.faint, lineWidth: 1)
+                        .stroke(ScopeEdge.faint, lineWidth: 0.5)
                 )
             }
         }
@@ -314,7 +675,7 @@ struct ScopeHomeView: View {
         .padding(.horizontal, 16)
         .overlay(
             RoundedRectangle(cornerRadius: 4)
-                .stroke(ScopeEdge.faint, lineWidth: 1)
+                .stroke(ScopeEdge.faint, lineWidth: 0.5)
         )
     }
 
@@ -354,74 +715,58 @@ struct ScopeHomeView: View {
 
 // MARK: - Capture mode card
 
+/// Capture mode card — three thin rows on a cream tile.
+///
+///   ▌ glyph    eyebrow                channel
+///   ──────────────────────────────────────
+///   state · single factual line
+///   ──────────────────────────────────────
+///   ACTION →                         hint
+///
+/// No editorial title or sub-copy. The card is the affordance; the
+/// glyph + label + action + hint together communicate enough. Per the
+/// no-marketing-copy preference (2026-05-17).
 private struct CaptureModeCard: View {
-    let icon: String
+    enum Glyph { case dot, ring, crosshair }
+
+    let glyph: Glyph
     let eyebrow: String
     let channel: String
-    let title: String
-    let copy: String
-    let action: () -> Void
+    let state: String
+    let action: String
+    let hint: String
+    let onTap: () -> Void
 
     @State private var isHovered = false
 
     var body: some View {
-        Button(action: action) {
-            ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(ScopeCanvas.surface)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(isHovered ? ScopeEdge.strong : ScopeEdge.normal, lineWidth: 1)
-                    )
-                GraticuleBackground(pitch: 24, color: ScopeTrace.faint, opacity: 0.45)
-                    .mask(RoundedRectangle(cornerRadius: 6))
-
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        HStack(spacing: 10) {
-                            iconBadge
-                            Text(eyebrow.uppercased())
-                                .font(ScopeType.channel)
-                                .tracking(ScopeType.Tracking.wide)
-                                .foregroundStyle(ScopeInk.faint)
-                        }
-                        Spacer()
-                        Text(channel)
-                            .font(ScopeType.channel)
-                            .tracking(ScopeType.Tracking.wide)
-                            .foregroundStyle(ScopeInk.subtle)
-                    }
-
-                    Rectangle().fill(ScopeEdge.subtle).frame(height: 1)
-
-                    Text(title)
-                        .font(ScopeFont.display(size: 19))
-                        .foregroundStyle(ScopeInk.primary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                        .tracking(-0.3)
-
-                    Text(copy)
-                        .font(.system(size: 12))
-                        .foregroundStyle(ScopeInk.muted)
-                        .lineLimit(3)
-                        .multilineTextAlignment(.leading)
-
-                    Spacer(minLength: 0)
-
-                    HStack(spacing: 4) {
-                        Text("EXPLORE")
-                            .font(ScopeType.channel)
-                            .tracking(ScopeType.Tracking.wide)
-                            .foregroundStyle(ScopeInk.faint)
-                        Text("→")
-                            .font(.system(size: 11))
-                            .foregroundStyle(ScopeInk.faint)
-                    }
-                }
-                .padding(16)
+        #if DEBUG
+        let _ = FrameRateMonitor.shared.recordBodyAccess("CaptureModeCard")
+        #endif
+        return Button(action: onTap) {
+            VStack(spacing: 0) {
+                identityRow
+                Divider()
+                    .frame(height: 0.5)
+                    .overlay(ScopeEdge.subtle)
+                stateRow
+                Divider()
+                    .frame(height: 0.5)
+                    .overlay(ScopeEdge.subtle)
+                actionRow
             }
-            .frame(minHeight: 200, alignment: .topLeading)
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(ScopeCanvas.surface)
+                    GraticuleBackground(pitch: 32, color: ScopeTrace.faint, opacity: 0.12)
+                        .mask(RoundedRectangle(cornerRadius: 6))
+                }
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(isHovered ? ScopeEdge.normal : ScopeEdge.faint, lineWidth: 0.5)
+            )
             .offset(y: isHovered ? -2 : 0)
         }
         .buttonStyle(.plain)
@@ -429,20 +774,119 @@ private struct CaptureModeCard: View {
         .animation(.easeOut(duration: 0.16), value: isHovered)
     }
 
-    private var iconBadge: some View {
-        RoundedRectangle(cornerRadius: 4)
-            .fill(ScopeAmber.tintSubtle)
-            .frame(width: 28, height: 28)
-            .overlay(
-                RoundedRectangle(cornerRadius: 4)
-                    .stroke(ScopeEdge.normal, lineWidth: 1)
-            )
-            .overlay(
-                Image(systemName: icon)
-                    .font(.system(size: 12))
-                    .foregroundStyle(ScopeAmber.solid)
-                    .phosphorGlow(radius: 3, opacity: 0.32)
-            )
+    private var identityRow: some View {
+        HStack(spacing: 10) {
+            CaptureGlyph(kind: glyph)
+                .frame(width: 22, height: 22)
+            Text(eyebrow.uppercased())
+                .font(ScopeType.channel)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopeInk.primary)
+            Spacer()
+            Text(channel)
+                .font(ScopeType.channel)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopeInk.subtle)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+    }
+
+    private var stateRow: some View {
+        HStack {
+            Text(state.uppercased())
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopeInk.faint)
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+    }
+
+    private var actionRow: some View {
+        HStack(spacing: 4) {
+            Text(action)
+                .font(ScopeType.channel)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(isHovered ? ScopeAmber.solid : Color.hex("9A6A22"))
+            Text("→")
+                .font(.system(size: 11))
+                .foregroundStyle(isHovered ? ScopeAmber.solid : Color.hex("9A6A22"))
+            Spacer()
+            Text(hint)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundStyle(ScopeInk.subtle)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+    }
+}
+
+/// Per-card amber identity. Three distinct treatments so the cards
+/// read as siblings, not clones. All within the amber/copper family
+/// per the design language.
+private struct CaptureGlyph: View {
+    let kind: CaptureModeCard.Glyph
+
+    var body: some View {
+        switch kind {
+        case .dot:
+            ZStack {
+                Circle()
+                    .stroke(ScopeAmber.solid.opacity(0.18), lineWidth: 1)
+                Circle()
+                    .fill(ScopeAmber.solid)
+                    .frame(width: 9, height: 9)
+                    .shadow(color: ScopeAmber.solid.opacity(0.45), radius: 3)
+            }
+        case .ring:
+            ZStack {
+                Circle()
+                    .stroke(ScopeAmber.solid, lineWidth: 1.5)
+                    .frame(width: 14, height: 14)
+                Circle()
+                    .fill(ScopeAmber.solid)
+                    .frame(width: 3.5, height: 3.5)
+            }
+        case .crosshair:
+            ZStack {
+                CornerBracketsMark()
+                    .stroke(ScopeAmber.solid, lineWidth: 1.2)
+                Circle()
+                    .fill(ScopeAmber.solid)
+                    .frame(width: 5, height: 5)
+            }
+        }
+    }
+}
+
+/// Four corner L-marks inscribed in the glyph frame. Used by the
+/// "Capture" mode glyph to evoke a viewfinder.
+private struct CornerBracketsMark: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let inset: CGFloat = 1
+        let len: CGFloat = 5
+        let minX = rect.minX + inset, maxX = rect.maxX - inset
+        let minY = rect.minY + inset, maxY = rect.maxY - inset
+        // top-left
+        p.move(to: CGPoint(x: minX, y: minY + len))
+        p.addLine(to: CGPoint(x: minX, y: minY))
+        p.addLine(to: CGPoint(x: minX + len, y: minY))
+        // top-right
+        p.move(to: CGPoint(x: maxX - len, y: minY))
+        p.addLine(to: CGPoint(x: maxX, y: minY))
+        p.addLine(to: CGPoint(x: maxX, y: minY + len))
+        // bottom-left
+        p.move(to: CGPoint(x: minX, y: maxY - len))
+        p.addLine(to: CGPoint(x: minX, y: maxY))
+        p.addLine(to: CGPoint(x: minX + len, y: maxY))
+        // bottom-right
+        p.move(to: CGPoint(x: maxX - len, y: maxY))
+        p.addLine(to: CGPoint(x: maxX, y: maxY))
+        p.addLine(to: CGPoint(x: maxX, y: maxY - len))
+        return p
     }
 }
 
@@ -455,11 +899,14 @@ private struct SignalRow: View {
     @State private var isHovered = false
 
     var body: some View {
-        Button(action: action) {
+        #if DEBUG
+        let _ = FrameRateMonitor.shared.recordBodyAccess("SignalRow")
+        #endif
+        return Button(action: action) {
             HStack(spacing: 14) {
                 ChannelLabel(item.type == .memo ? "M" : "D",
                              color: item.type == .memo ? ScopeAmber.solid : ScopeInk.muted,
-                             strokeColor: ScopeEdge.normal)
+                             strokeColor: ScopeEdge.faint)
                     .frame(width: 28)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -500,5 +947,871 @@ private struct SignalRow: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - Agent bay treatment subviews
+
+/// Treatment 2 — per-stat 7-day sparkline. Synthetic data seeded by
+/// tile index so each tile reads distinct. Static path; cheap to draw.
+private struct StatSparkline: View {
+    let seed: Int
+    let scheme: BayScheme
+
+    var body: some View {
+        GeometryReader { geo in
+            let samples = StatSparkline.samples(seed: seed)
+            let w = geo.size.width
+            let h = geo.size.height
+            Path { path in
+                guard samples.count > 1 else { return }
+                let step = w / CGFloat(samples.count - 1)
+                for (i, v) in samples.enumerated() {
+                    let x = CGFloat(i) * step
+                    let y = h - CGFloat(v) * h
+                    if i == 0 { path.move(to: CGPoint(x: x, y: y)) }
+                    else      { path.addLine(to: CGPoint(x: x, y: y)) }
+                }
+            }
+            .stroke(scheme.trace.opacity(0.7), lineWidth: 1)
+        }
+    }
+
+    /// Deterministic pseudo-7-day curve. Mixes a low-frequency sine
+    /// with a hashed jitter so each seed is recognizably its own shape
+    /// but still smooth.
+    static func samples(seed: Int) -> [Double] {
+        (0..<7).map { i in
+            let phase = Double(seed) * 0.9
+            let sine = sin(Double(i) * 0.85 + phase) * 0.3 + 0.55
+            let jitter = Double((seed &* 31 &+ i &* 17) & 0xFF) / 255.0 * 0.18
+            return min(0.95, max(0.08, sine + jitter - 0.09))
+        }
+    }
+}
+
+/// Treatment 3 — background waveform that runs full-width behind the
+/// stats. Static, very low opacity; reads as ambient signal context,
+/// not data viz.
+private struct BackgroundWaveform: View {
+    let scheme: BayScheme
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            let mid = h / 2
+            Path { path in
+                let n = 120
+                for i in 0...n {
+                    let t = Double(i) / Double(n)
+                    let x = CGFloat(t) * w
+                    // Two layered sines + deterministic jitter — feels
+                    // organic without animating.
+                    let a = sin(t * .pi * 6.0) * 0.35
+                    let b = sin(t * .pi * 13.0 + 1.2) * 0.18
+                    let j = sin(t * .pi * 31.0) * 0.06
+                    let y = mid + CGFloat(a + b + j) * (h * 0.32)
+                    if i == 0 { path.move(to: CGPoint(x: x, y: y)) }
+                    else      { path.addLine(to: CGPoint(x: x, y: y)) }
+                }
+            }
+            .stroke(scheme.trace.opacity(0.18), lineWidth: 0.75)
+        }
+    }
+}
+
+/// Treatment 5a — slow breathing on the running dot. TimelineView is
+/// scoped to the dot only so the parent body doesn't re-evaluate.
+private struct BreathingDot: View {
+    let color: Color
+    let size: CGFloat
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { ctx in
+            let t = ctx.date.timeIntervalSinceReferenceDate
+            let phase = (sin(t * .pi / 1.5) + 1) / 2   // 0…1, ~3s cycle
+            let opacity = 0.55 + phase * 0.45           // 0.55 … 1.0
+            Circle()
+                .fill(color)
+                .frame(width: size, height: size)
+                .opacity(opacity)
+                .shadow(color: color.opacity(0.30 + phase * 0.30), radius: size * 0.6)
+        }
+    }
+}
+
+/// Treatment 5b — slow CRT scanline drifting top→bottom across the
+/// panel. ~14s cycle so it reads as ambient, not motion noise.
+private struct AmbientScanline: View {
+    let scheme: BayScheme
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 24.0, paused: false)) { ctx in
+            GeometryReader { geo in
+                let t = ctx.date.timeIntervalSinceReferenceDate
+                let cycle = 14.0
+                let progress = (t.truncatingRemainder(dividingBy: cycle)) / cycle
+                let y = CGFloat(progress) * geo.size.height
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0.0),
+                        .init(color: scheme.trace.opacity(0.10), location: 0.5),
+                        .init(color: .clear, location: 1.0)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 36)
+                .offset(y: y - 18)
+                .allowsHitTesting(false)
+            }
+        }
+    }
+}
+
+// MARK: - Bay color schemes
+//
+// Each scheme swaps the phosphor / accent family inside the agent bay
+// — the gunmetal bg + rails stay constant, so the bay always reads as
+// "instrument bay sunk into cream desk" regardless of which tube color
+// is fitted.
+
+enum BayScheme: String, CaseIterable {
+    // Aligned with `design/studio/lib/schemes.ts` as of 2026-05-17.
+    // The intermediate gray gradient (graphite/pewter/ash/stone) was
+    // dropped after the studio review — read as "filtered" rather
+    // than designed. New light-mode canonicals from the studio's
+    // light-touch sibling work:
+    //
+    //   Modern theme → PEARL    (cool family, canonical = lightest)
+    //   Scope theme  → CHIFFON  (warm family, canonical = lightest)
+    //
+    // Sibling ladder within each family for fine-tuning bay presence.
+    // AMBER kept as the reference for the original lit-electronics
+    // identity. See design/studio/app/mac-home/NOTES.md for rationale.
+    case amber       // Reference dark (original electronics bay)
+    case pearl       // Modern canonical — cool lightest
+    case porcelain   // Cool mid
+    case aluminum    // Cool saturated
+    case chiffon     // Scope canonical — warm lightest
+    case vellum      // Warm mid
+    case paper       // Warm saturated
+
+    var displayName: String {
+        switch self {
+        case .amber:     return "AMBER"
+        case .pearl:     return "PEARL"
+        case .porcelain: return "PORCELAIN"
+        case .aluminum:  return "ALUMINUM"
+        case .chiffon:   return "CHIFFON"
+        case .vellum:    return "VELLUM"
+        case .paper:     return "PAPER"
+        }
+    }
+
+    /// True when the surface is light enough to need dark text on it.
+    /// Toggles glow off, switches stat numbers to graphite ink, and
+    /// bumps edge contrast. All current non-AMBER schemes are light.
+    var isLight: Bool { self != .amber }
+
+    /// Canonical accent. Dark schemes use it as the phosphor for stat
+    /// numbers + dot + sparkline; light schemes use it as the edge /
+    /// sparkline accent only (stat numbers fall back to `statInk`).
+    /// Cool-family accents pull slightly cooler (#D49236); warm-family
+    /// stays at the canonical copper (#9A6A22). AMBER is the original
+    /// phosphor.
+    var trace: Color {
+        switch self {
+        case .amber:                              return Color.hex("E89A3C")
+        case .pearl, .porcelain, .aluminum:       return Color.hex("D49236")
+        case .chiffon, .vellum, .paper:           return Color.hex("9A6A22")
+        }
+    }
+
+    /// Glow halo. Light schemes disable glow — printed surfaces don't
+    /// emit light, so the halo would just look smudgy.
+    var traceGlow: Color { isLight ? .clear : trace.opacity(0.50) }
+
+    /// Background graticule tint — barely-there.
+    var traceFaint: Color { trace.opacity(isLight ? 0.06 : 0.08) }
+
+    /// Edge / divider color — same hue as trace, very low alpha.
+    /// Lighter schemes need slightly more contrast to read.
+    var edge: Color {
+        switch self {
+        case .amber:                 return trace.opacity(0.10)
+        case .pearl, .chiffon:       return trace.opacity(0.10)   // lightest — kept restrained
+        case .porcelain, .vellum:    return trace.opacity(0.12)
+        case .aluminum, .paper:      return trace.opacity(0.18)   // most saturated of the light family
+        }
+    }
+
+    /// Edge for crisper marks (corner brackets).
+    var edgeStrong: Color {
+        switch self {
+        case .amber:                 return trace.opacity(0.28)
+        case .pearl, .chiffon:       return trace.opacity(0.28)
+        case .porcelain, .vellum:    return trace.opacity(0.34)
+        case .aluminum, .paper:      return trace.opacity(0.40)
+        }
+    }
+
+    /// Cell color for the activity heatmap. Intensity-scaled at call site.
+    func cell(intensity: Double) -> Color {
+        let base = isLight ? 0.12 : 0.10
+        let span = isLight ? 0.55 : 0.60
+        return trace.opacity(base + span * intensity)
+    }
+
+    // MARK: Surface tokens
+
+    /// Bay panel base fill. Mirrors `--scheme-bg` from studio.
+    var panelBg: Color {
+        switch self {
+        case .amber:      return Color.hex("14181A")
+        case .pearl:      return Color.hex("F5F8FA")
+        case .porcelain:  return Color.hex("EAEEF1")
+        case .aluminum:   return Color.hex("D6DBE0")
+        case .chiffon:    return Color.hex("FAF5E8")
+        case .vellum:     return Color.hex("F4EFE0")
+        case .paper:      return Color.hex("EEE7D6")
+        }
+    }
+
+    /// Stat number color. Dark → phosphor; light → deep neutral ink
+    /// tuned to the scheme's warmth.
+    var statInk: Color {
+        switch self {
+        case .amber:                                    return trace
+        case .pearl, .porcelain, .aluminum:             return Color.hex("2A2E32")   // cool charcoal
+        case .chiffon, .vellum, .paper:                 return Color.hex("2A2520")   // warm espresso
+        }
+    }
+
+    /// Chrome label color (status text, captions).
+    var inkFaint: Color {
+        switch self {
+        case .amber:      return Color.hex("7A8B85")
+        case .pearl:      return Color.hex("6E737B")
+        case .porcelain:  return Color.hex("5C6168")
+        case .aluminum:   return Color.hex("5C6168")
+        case .chiffon:    return Color.hex("7B6E60")
+        case .vellum:     return Color.hex("6B5D4F")
+        case .paper:      return Color.hex("6B5D4F")
+        }
+    }
+
+    /// Subtle chrome (timestamps, secondary metadata).
+    var inkSubtle: Color {
+        switch self {
+        case .amber:      return Color.hex("6B7A75")
+        case .pearl:      return Color.hex("8A8F96")
+        case .porcelain:  return Color.hex("787D84")
+        case .aluminum:   return Color.hex("4F545B")
+        case .chiffon:    return Color.hex("928576")
+        case .vellum:     return Color.hex("857664")
+        case .paper:      return Color.hex("5C4F42")
+        }
+    }
+
+    /// Top control rail — brushed cover. Tuned per scheme; lightest
+    /// at top, darker into the body so the strip reads as a separate
+    /// fabricated piece.
+    var stripTopFill: LinearGradient {
+        let stops: [(String, Double)] = {
+            switch self {
+            case .amber:
+                return [("1F2426", 0.0), ("1A1F22", 0.35), ("0F1416", 1.0)]
+            case .pearl:
+                return [("FBFCFE", 0.0), ("F2F5F7", 0.60), ("E5E9ED", 1.0)]
+            case .porcelain:
+                return [("F2F5F7", 0.0), ("E8ECEF", 0.60), ("DCE0E4", 1.0)]
+            case .aluminum:
+                return [("DFE3E8", 0.0), ("D4D8DD", 0.60), ("C8CDD2", 1.0)]
+            case .chiffon:
+                return [("FDF8EB", 0.0), ("F5F0E2", 0.60), ("ECE7D6", 1.0)]
+            case .vellum:
+                return [("F8F3E5", 0.0), ("F0EBDB", 0.60), ("E8E2D0", 1.0)]
+            case .paper:
+                return [("F2ECDB", 0.0), ("EAE3D0", 0.60), ("E2DBC6", 1.0)]
+            }
+        }()
+        return LinearGradient(
+            stops: stops.map { .init(color: Color.hex($0.0), location: $0.1) },
+            startPoint: .top, endPoint: .bottom
+        )
+    }
+
+    /// Bottom rail — recessed feel. Asymmetric with stripTop.
+    var stripBottomFill: LinearGradient {
+        let stops: [(String, Double)] = {
+            switch self {
+            case .amber:
+                return [("0D1113", 0.0), ("161B1E", 0.55), ("1E2528", 1.0)]
+            case .pearl:
+                return [("ECEFF2", 0.0), ("F5F8FA", 0.55), ("FBFDFE", 1.0)]
+            case .porcelain:
+                return [("E0E4E8", 0.0), ("EAEEF1", 0.55), ("F0F3F6", 1.0)]
+            case .aluminum:
+                return [("CFD4D9", 0.0), ("D6DBE0", 0.55), ("DDE2E7", 1.0)]
+            case .chiffon:
+                return [("F0ECDE", 0.0), ("F8F3E6", 0.55), ("FDF9EC", 1.0)]
+            case .vellum:
+                return [("ECE6D6", 0.0), ("F4EFE0", 0.55), ("F9F4E6", 1.0)]
+            case .paper:
+                return [("E2DAC4", 0.0), ("EBE3CD", 0.55), ("F3ECD8", 1.0)]
+            }
+        }()
+        return LinearGradient(
+            stops: stops.map { .init(color: Color.hex($0.0), location: $0.1) },
+            startPoint: .top, endPoint: .bottom
+        )
+    }
+
+    // MARK: Theme bindings
+
+    /// Canonical scheme for a given Talkie theme. Used by the bay's
+    /// default state when no user-set value is stored.
+    static func canonical(for theme: ThemePreset?) -> BayScheme {
+        switch theme {
+        case .scope:       return .chiffon
+        // case .modern:   return .pearl     // future — when modern theme lands
+        default:           return .amber
+        }
+    }
+}
+
+// MARK: - More agent bay treatments
+
+/// Inner highlight (top) + inner shadow (bottom) so the bay reads as
+/// physically sunk into the cream desk. Drawn as two thin gradient
+/// rings inside the rounded rect. Light schemes use a much softer
+/// shadow — a heavy black ring on cream paper reads as cheap chrome.
+struct BezelOverlay: View {
+    let scheme: BayScheme
+
+    var body: some View {
+        let highlightTop = scheme.isLight ? 0.45 : 0.10
+        let highlightMid = scheme.isLight ? 0.10 : 0.02
+        let shadowMid    = scheme.isLight ? 0.06 : 0.20
+        let shadowBottom = scheme.isLight ? 0.14 : 0.45
+
+        ZStack {
+            // Top inner highlight — catches the light from above.
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(highlightTop),
+                            Color.white.opacity(highlightMid),
+                            .clear
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 1
+                )
+                .padding(0.5)
+
+            // Bottom inner shadow — recess cue.
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            .clear,
+                            Color.black.opacity(shadowMid),
+                            Color.black.opacity(shadowBottom)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 1
+                )
+                .padding(1.5)
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+/// 7-day phosphor heatmap. 7 columns × 5 rows of small cells; each
+/// cell's opacity is seeded so the grid reads as a recent-activity
+/// matrix without real data plumbing.
+struct ActivityHeatmap: View {
+    let scheme: BayScheme
+
+    var body: some View {
+        let cols = 7
+        let rows = 5
+        let cellSize: CGFloat = 8
+        let gap: CGFloat = 2
+
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Text("LAST 7d")
+                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                    .tracking(0.8)
+                    .foregroundStyle(scheme.inkFaint)
+                Spacer()
+            }
+            VStack(spacing: gap) {
+                ForEach(0..<rows, id: \.self) { r in
+                    HStack(spacing: gap) {
+                        ForEach(0..<cols, id: \.self) { c in
+                            let intensity = ActivityHeatmap.intensity(row: r, col: c)
+                            RoundedRectangle(cornerRadius: 1.5)
+                                .fill(scheme.cell(intensity: intensity))
+                                .frame(width: cellSize, height: cellSize)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(width: CGFloat(cols) * cellSize + CGFloat(cols - 1) * gap, alignment: .leading)
+    }
+
+    static func intensity(row: Int, col: Int) -> Double {
+        // Deterministic seeded intensity — diagonal-ish ramp w/ noise.
+        let base = Double((col &* 23 &+ row &* 41 &+ 7) & 0xFF) / 255.0
+        let bias = Double(col) / 7.0 * 0.4
+        let v = base * 0.7 + bias
+        return min(1.0, max(0.05, v))
+    }
+}
+
+/// 24h tick ribbon. Each of 48 half-hour columns gets a vertical tick
+/// whose height encodes synthetic activity density. Static.
+struct TodayTimeline: View {
+    let scheme: BayScheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 0) {
+                Text("00").chromeLabel(color: scheme.inkSubtle)
+                Spacer()
+                Text("06").chromeLabel(color: scheme.inkSubtle)
+                Spacer()
+                Text("12").chromeLabel(color: scheme.inkSubtle)
+                Spacer()
+                Text("18").chromeLabel(color: scheme.inkSubtle)
+                Spacer()
+                Text("24").chromeLabel(color: scheme.inkSubtle)
+            }
+            GeometryReader { geo in
+                HStack(alignment: .bottom, spacing: 1) {
+                    ForEach(0..<48, id: \.self) { i in
+                        let intensity = TodayTimeline.intensity(slot: i)
+                        Rectangle()
+                            .fill(scheme.trace.opacity(0.18 + 0.55 * intensity))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: max(2, geo.size.height * CGFloat(intensity)))
+                    }
+                }
+                .frame(maxHeight: .infinity, alignment: .bottom)
+            }
+            .frame(height: 14)
+        }
+    }
+
+    static func intensity(slot: Int) -> Double {
+        // Bursty pattern: heavier mid-morning + evening, quiet overnight.
+        let hour = Double(slot) / 2.0
+        let morning = exp(-pow((hour - 10) / 3.0, 2)) * 0.75
+        let evening = exp(-pow((hour - 20) / 2.5, 2)) * 0.55
+        let jitter = Double((slot &* 53 &+ 11) & 0xFF) / 255.0 * 0.15
+        return min(1.0, max(0.04, morning + evening + jitter * 0.4))
+    }
+}
+
+private extension Text {
+    func chromeLabel(color: Color) -> some View {
+        self
+            .font(.system(size: 7, weight: .semibold, design: .monospaced))
+            .tracking(0.6)
+            .foregroundStyle(color)
+    }
+}
+
+/// Viewfinder-style L-shaped corner crops drawn inside the panel.
+/// Inset slightly from the rounded edge so they read as crop marks,
+/// not as a second border.
+struct BayCornerBrackets: View {
+    let color: Color
+
+    var body: some View {
+        GeometryReader { geo in
+            let inset: CGFloat = 8
+            let len: CGFloat = 10
+            let w = geo.size.width
+            let h = geo.size.height
+
+            Path { p in
+                // Top-left
+                p.move(to: CGPoint(x: inset, y: inset + len))
+                p.addLine(to: CGPoint(x: inset, y: inset))
+                p.addLine(to: CGPoint(x: inset + len, y: inset))
+                // Top-right
+                p.move(to: CGPoint(x: w - inset - len, y: inset))
+                p.addLine(to: CGPoint(x: w - inset, y: inset))
+                p.addLine(to: CGPoint(x: w - inset, y: inset + len))
+                // Bottom-left
+                p.move(to: CGPoint(x: inset, y: h - inset - len))
+                p.addLine(to: CGPoint(x: inset, y: h - inset))
+                p.addLine(to: CGPoint(x: inset + len, y: h - inset))
+                // Bottom-right
+                p.move(to: CGPoint(x: w - inset - len, y: h - inset))
+                p.addLine(to: CGPoint(x: w - inset, y: h - inset))
+                p.addLine(to: CGPoint(x: w - inset, y: h - inset - len))
+            }
+            .stroke(color, lineWidth: 1)
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+// MARK: - Routines panel
+//
+// Light cream panel with header rail (title + trailing chrome), a
+// short list of rows, and a footer link. Used for both Workflows and
+// Console quick-entries in the Routines strip.
+
+private struct RoutinesPanel: View {
+    enum Dot { case filled, hollow }
+    struct Row { let leading: Dot; let label: String; let trailing: String }
+
+    let title: String
+    let trailing: String
+    let rows: [Row]
+    let footer: String
+
+    @State private var isHovered = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(ScopeFont.display(size: 14, medium: true))
+                    .foregroundStyle(ScopeInk.primary)
+                Spacer()
+                Text(trailing.uppercased())
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.faint)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
+            }
+
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { idx, row in
+                    HStack(spacing: 10) {
+                        Circle()
+                            .fill(row.leading == .filled ? Color.hex("9A6A22") : Color.clear)
+                            .overlay(
+                                Circle().stroke(Color.hex("9A6A22"), lineWidth: row.leading == .hollow ? 1 : 0)
+                            )
+                            .frame(width: 5, height: 5)
+                        Text(row.label)
+                            .font(.system(size: 12))
+                            .foregroundStyle(ScopeInk.primary)
+                        Spacer()
+                        Text(row.trailing.uppercased())
+                            .font(ScopeType.chrome)
+                            .tracking(ScopeType.Tracking.wide)
+                            .foregroundStyle(ScopeInk.subtle)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    if idx < rows.count - 1 {
+                        Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
+                    }
+                }
+            }
+
+            Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
+
+            HStack(spacing: 4) {
+                Spacer()
+                Text(footer)
+                    .font(ScopeType.channel)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(isHovered ? ScopeAmber.solid : Color.hex("9A6A22"))
+                Text("→")
+                    .font(.system(size: 11))
+                    .foregroundStyle(isHovered ? ScopeAmber.solid : Color.hex("9A6A22"))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+        }
+        .background(ScopeCanvas.surface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(isHovered ? ScopeEdge.normal : ScopeEdge.faint, lineWidth: 0.5)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .frame(maxWidth: .infinity)
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.16), value: isHovered)
+    }
+}
+
+// MARK: - Discovery widgets
+
+/// Today — small 24h timeline with event dots. Reads as a day-at-a-
+/// glance map, not a list. Sample events for now.
+private struct TodayWidget: View {
+    private struct Event { let hour: Double; let label: String }
+    private let events: [Event] = [
+        .init(hour: 9.5,  label: "09:30 · Design review"),
+        .init(hour: 11.0, label: "11:00 · Standup"),
+        .init(hour: 14.0, label: "14:00 · Bay polish merge"),
+    ]
+
+    var body: some View {
+        DiscoveryWidgetCard(title: "Today", eyebrow: "Calendar") {
+            VStack(alignment: .leading, spacing: 10) {
+                GeometryReader { geo in
+                    ZStack(alignment: .topLeading) {
+                        Rectangle()
+                            .fill(ScopeEdge.faint)
+                            .frame(height: 0.5)
+                            .offset(y: 10)
+                        ForEach([0, 4, 8, 12, 16, 20, 24], id: \.self) { h in
+                            let x = CGFloat(h) / 24.0 * geo.size.width
+                            VStack(spacing: 2) {
+                                Rectangle()
+                                    .fill(ScopeEdge.faint)
+                                    .frame(width: 1, height: 4)
+                                Text(String(format: "%02d", h))
+                                    .font(.system(size: 7, weight: .semibold, design: .monospaced))
+                                    .tracking(0.6)
+                                    .foregroundStyle(ScopeInk.subtle)
+                            }
+                            .offset(x: x - 6, y: 6)
+                        }
+                        ForEach(Array(events.enumerated()), id: \.offset) { _, event in
+                            let x = CGFloat(event.hour) / 24.0 * geo.size.width
+                            Circle()
+                                .fill(Color.hex("9A6A22"))
+                                .frame(width: 10, height: 10)
+                                .overlay(
+                                    Circle().stroke(ScopeCanvas.surface, lineWidth: 2)
+                                )
+                                .offset(x: x - 5, y: 5)
+                        }
+                    }
+                }
+                .frame(height: 26)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(Array(events.enumerated()), id: \.offset) { _, event in
+                        HStack {
+                            let parts = event.label.split(separator: " · ", maxSplits: 1).map(String.init)
+                            Text(parts.first ?? event.label)
+                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(ScopeInk.primary)
+                            Spacer()
+                            Text(parts.count > 1 ? parts[1] : "")
+                                .font(.system(size: 11))
+                                .foregroundStyle(ScopeInk.faint)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Shortcuts — proper key-cap glyphs grouped vertically.
+private struct ShortcutsWidget: View {
+    private struct Shortcut { let keys: [String]; let label: String }
+    private let shortcuts: [Shortcut] = [
+        .init(keys: ["⌃", "⇧", "⌘", "M"], label: "New Memo"),
+        .init(keys: ["⌃", "⇧", "⌘", "D"], label: "Dictate"),
+        .init(keys: ["⌃", "⇧", "⌘", "S"], label: "Capture screen"),
+        .init(keys: ["⌃", "⇧", "⌘", "L"], label: "Library"),
+    ]
+
+    var body: some View {
+        DiscoveryWidgetCard(title: "Shortcuts", eyebrow: "Keyboard") {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Array(shortcuts.enumerated()), id: \.offset) { _, s in
+                    HStack(spacing: 8) {
+                        HStack(spacing: 3) {
+                            ForEach(s.keys, id: \.self) { key in
+                                Text(key)
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundStyle(ScopeInk.primary)
+                                    .frame(minWidth: 18, minHeight: 18)
+                                    .background(ScopeCanvas.surface)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 3)
+                                            .stroke(ScopeEdge.normal, lineWidth: 0.5)
+                                    )
+                            }
+                        }
+                        Text(s.label)
+                            .font(.system(size: 11))
+                            .foregroundStyle(ScopeInk.faint)
+                        Spacer()
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Trending — tag + horizontal bar + count. Mini histogram, not a list.
+private struct TrendingWidget: View {
+    private struct Trend { let tag: String; let count: Int }
+    private let trends: [Trend] = [
+        .init(tag: "Standups",       count: 8),
+        .init(tag: "Compose drafts", count: 5),
+        .init(tag: "Code review",    count: 3),
+        .init(tag: "Design notes",   count: 2),
+    ]
+    private var maxCount: Int { trends.map(\.count).max() ?? 1 }
+
+    var body: some View {
+        DiscoveryWidgetCard(title: "Trending", eyebrow: "This week") {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(trends.enumerated()), id: \.offset) { _, t in
+                    HStack(spacing: 10) {
+                        Text(t.tag)
+                            .font(.system(size: 11))
+                            .foregroundStyle(ScopeInk.primary)
+                            .frame(width: 110, alignment: .leading)
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Rectangle().fill(ScopeEdge.faint)
+                                Rectangle()
+                                    .fill(Color.hex("9A6A22"))
+                                    .frame(width: geo.size.width * CGFloat(t.count) / CGFloat(maxCount))
+                            }
+                        }
+                        .frame(height: 6)
+                        .clipShape(RoundedRectangle(cornerRadius: 1))
+                        Text("\(t.count)")
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundStyle(ScopeInk.subtle)
+                            .frame(width: 16, alignment: .trailing)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Shared discovery widget chrome — title + trailing eyebrow + content.
+/// Named `DiscoveryWidgetCard` to avoid colliding with `WidgetCard` in
+/// `HomeWidgets.swift`, which serves the original (non-Scope) Home grid.
+private struct DiscoveryWidgetCard<Content: View>: View {
+    let title: String
+    let eyebrow: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(ScopeFont.display(size: 13, medium: true))
+                    .foregroundStyle(ScopeInk.primary)
+                Spacer()
+                Text(eyebrow.uppercased())
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.faint)
+            }
+            .padding(.bottom, 6)
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
+            }
+            content
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ScopeCanvas.surface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(ScopeEdge.faint, lineWidth: 0.5)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+// MARK: - System status rail
+//
+// Scheme-aware footer rail. Inherits the bay's scheme so the bay and
+// rail read as the two ends of the same instrument body, with the
+// editorial light surfaces between them. On dark schemes (AMBER) it's
+// a gunmetal recessed strip; on light (PEARL/CHIFFON/etc.) it's a
+// barely-there chrome rail.
+
+private struct SystemStatusRail: View {
+    let scheme: BayScheme
+
+    var body: some View {
+        HStack(spacing: 18) {
+            phosphor(label: "AGENT",   detail: "AG-01 · RUNNING", state: .ok)
+            divider
+            phosphor(label: "BRIDGE",  detail: "LOCAL · CONNECTED", state: .ok)
+            divider
+            phosphor(label: "ICLOUD",  detail: "SYNCED", state: .ok)
+            divider
+            phosphor(label: "UPDATES", detail: "CURRENT", state: .muted)
+            Spacer()
+            Text(uptimeChrome)
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(scheme.inkSubtle)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(scheme.stripBottomFill)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(scheme.edge, lineWidth: 0.5)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
+    private enum DotState { case ok, warn, muted }
+
+    private func phosphor(label: String, detail: String, state: DotState) -> some View {
+        HStack(spacing: 6) {
+            let dotColor: Color = {
+                switch state {
+                case .ok:    return scheme.trace
+                case .warn:  return Color.hex("C77F2E")
+                case .muted: return scheme.inkSubtle
+                }
+            }()
+            Circle()
+                .fill(dotColor)
+                .frame(width: 6, height: 6)
+                .shadow(color: scheme.isLight ? .clear : dotColor.opacity(0.55), radius: 3)
+            Text(label)
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(scheme.inkFaint)
+            Text(detail)
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(scheme.inkSubtle)
+        }
+    }
+
+    private var divider: some View {
+        Rectangle()
+            .fill(scheme.edge)
+            .frame(width: 0.5, height: 12)
+    }
+
+    private var uptimeChrome: String {
+        // TODO: wire to ProcessInfo / launchd state. Stub matches
+        // Mac Home study.
+        "PID \(ProcessInfo.processInfo.processIdentifier) · UPTIME 4H"
     }
 }

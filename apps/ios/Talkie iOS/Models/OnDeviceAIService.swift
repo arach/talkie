@@ -172,6 +172,48 @@ class OnDeviceAIService: ObservableObject {
         #endif
     }
 
+    /// Answer a short Apple Watch voice request in speech-friendly prose.
+    func answerWatchQuestion(_ question: String) async throws -> String {
+        #if canImport(FoundationModels)
+        if !isAvailable {
+            await checkAvailability()
+        }
+
+        guard isAvailable else {
+            throw OnDeviceAIError.notAvailable
+        }
+
+        let trimmedQuestion = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuestion.isEmpty else {
+            throw OnDeviceAIError.noTranscript
+        }
+
+        isProcessing = true
+        defer { isProcessing = false }
+
+        let session = LanguageModelSession(instructions: Self.watchAssistantSystemPrompt)
+        let response = try await session.respond(
+            to: String(trimmedQuestion.prefix(3000)),
+            options: FoundationModels.GenerationOptions(temperature: 0.4)
+        )
+        let answer = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !answer.isEmpty else {
+            throw OnDeviceAIError.generationFailed("Watch AI returned no answer")
+        }
+
+        return answer
+        #else
+        throw OnDeviceAIError.notAvailable
+        #endif
+    }
+
+    private static let watchAssistantSystemPrompt = """
+    You are Talkie's Apple Watch voice assistant. Answer the user's spoken request directly, \
+    briefly, and naturally. Prefer one or two short paragraphs. If the request is ambiguous, \
+    give the most useful answer and ask one concise follow-up question only when necessary.
+    """
+
     /// Generate concise sidecar output for a bookmarked moment in a recording.
     func generateRecordingSidecarOutput(
         kind: RecordingSidecarKind,

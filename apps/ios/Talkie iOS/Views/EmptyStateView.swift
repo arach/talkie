@@ -2,7 +2,7 @@
 //  EmptyStateView.swift
 //  talkie
 //
-//  Created by Claude Code on 2025-11-23.
+//  Theme-aware empty state shown when there are no memos yet.
 //
 
 import SwiftUI
@@ -13,47 +13,46 @@ struct EmptyStateView: View {
     var onSyncTapped: (() -> Void)? = nil
     var onDismissSyncPrompt: (() -> Void)? = nil
 
+    @ObservedObject private var theme = ThemeManager.shared
+
     var body: some View {
+        let chrome = theme.chrome
+
         VStack(spacing: Spacing.xl) {
             Spacer(minLength: Spacing.xxl)
 
             VStack(spacing: Spacing.xl) {
+                // Logo card with status
                 ZStack {
                     RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .fill(Color.surfaceSecondary.opacity(0.9))
+                        .fill(theme.colors.cardBackground.opacity(0.9))
                         .frame(width: 132, height: 132)
                         .overlay(
                             RoundedRectangle(cornerRadius: 30, style: .continuous)
-                                .stroke(Color.borderPrimary, lineWidth: 1)
+                                .stroke(chrome.edge, lineWidth: 1)
                         )
 
                     VStack(spacing: 10) {
                         Image(systemName: "waveform.path.ecg")
                             .font(.system(size: 34, weight: .medium))
-                            .foregroundStyle(Color.textSecondary)
+                            .foregroundStyle(theme.colors.textSecondary)
 
                         HStack(spacing: 6) {
-                            Circle()
-                                .fill(Color.memoAccent)
-                                .frame(width: 8, height: 8)
-
+                            TalkieStatusDot(diameter: 8, pulses: true)
                             Text("READY")
                                 .font(.techLabel)
                                 .tracking(1.5)
-                                .foregroundStyle(Color.textSecondary)
+                                .foregroundStyle(theme.colors.textSecondary)
                         }
                     }
                 }
 
                 VStack(spacing: Spacing.sm) {
-                    Text("READY FOR YOUR FIRST NOTE")
-                        .font(.techLabel)
-                        .tracking(2)
-                        .foregroundStyle(Color.textPrimary)
+                    TalkieEyebrow(text: "Ready for Your First Note", showLeader: false)
 
                     Text("Record something quick, dictate hands-free, and bring your Mac online whenever you want sync and terminal access.")
                         .font(.bodyMedium)
-                        .foregroundStyle(Color.textSecondary)
+                        .foregroundStyle(theme.colors.textSecondary)
                         .multilineTextAlignment(.center)
                         .lineSpacing(4)
                         .frame(maxWidth: 320)
@@ -68,17 +67,18 @@ struct EmptyStateView: View {
                             Text("Record")
                                 .font(.labelLarge)
                         }
-                        .foregroundStyle(.white)
+                        .foregroundStyle(chrome.panelInk)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
                         .background(
                             LinearGradient(
-                                colors: [Color.memoAccent, Color.memoAccentGlow],
+                                colors: [chrome.accent, chrome.accentStrong],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
                         .clipShape(.rect(cornerRadius: 16))
+                        .talkieAccentGlow()
                     }
 
                     if showsSyncPrompt, let onSyncTapped {
@@ -90,14 +90,14 @@ struct EmptyStateView: View {
                                 Text("Sync")
                                     .font(.labelLarge)
                             }
-                            .foregroundStyle(Color.textPrimary)
+                            .foregroundStyle(theme.colors.textPrimary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
-                            .background(Color.surfacePrimary.opacity(0.75))
+                            .background(theme.colors.searchBackground.opacity(0.75))
                             .clipShape(.rect(cornerRadius: 16))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(Color.borderPrimary, lineWidth: 1)
+                                    .stroke(chrome.edge, lineWidth: 1)
                             )
                         }
                     }
@@ -109,7 +109,7 @@ struct EmptyStateView: View {
             .background(cardBackground)
             .overlay(
                 RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .stroke(Color.borderSecondary, lineWidth: 1)
+                    .stroke(chrome.edgeFaint, lineWidth: 1)
             )
             .padding(.horizontal, Spacing.lg)
 
@@ -122,35 +122,36 @@ struct EmptyStateView: View {
         }
         .padding(.bottom, 108)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.surfacePrimary)
+        .background(theme.colors.background)
     }
 
     private var cardBackground: some View {
         RoundedRectangle(cornerRadius: 30, style: .continuous)
             .fill(Color.clear)
-            .glassEffect(.regular.tint(Color.white.opacity(0.08)))
+            .glassEffect(.regular.tint(theme.colors.cardBackground.opacity(0.4)))
     }
 
     private var syncPromptCard: some View {
-        HStack(alignment: .center, spacing: Spacing.md) {
+        let chrome = theme.chrome
+        return HStack(alignment: .center, spacing: Spacing.md) {
             ZStack {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.active.opacity(0.12))
+                    .fill(chrome.accentTint)
                     .frame(width: 44, height: 44)
 
                 Image(systemName: "icloud")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color.active)
+                    .foregroundStyle(chrome.accent)
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Keep your Mac in sync")
                     .font(.headlineSmall)
-                    .foregroundStyle(Color.textPrimary)
+                    .foregroundStyle(theme.colors.textPrimary)
 
                 Text("Turn on iCloud later if you want memos and device state to follow you across Talkie.")
                     .font(.labelLarge)
-                    .foregroundStyle(Color.textSecondary)
+                    .foregroundStyle(theme.colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -160,20 +161,20 @@ struct EmptyStateView: View {
                 Button(action: onDismissSyncPrompt) {
                     Image(systemName: "xmark")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Color.textTertiary)
+                        .foregroundStyle(theme.colors.textTertiary)
                         .frame(width: 28, height: 28)
-                        .background(Color.surfaceSecondary)
+                        .background(theme.colors.cardBackground)
                         .clipShape(.circle)
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(Spacing.md)
-        .background(Color.surfaceSecondary.opacity(0.9))
+        .background(theme.colors.cardBackground.opacity(0.9))
         .clipShape(.rect(cornerRadius: 22))
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.borderPrimary, lineWidth: 1)
+                .stroke(chrome.edge, lineWidth: 1)
         )
     }
 }

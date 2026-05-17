@@ -16,7 +16,7 @@ struct TalkieAppConfiguration: Codable {
     }
 
     struct Appearance: Codable {
-        var theme: String = "midnight"
+        var theme: String = "scope"
         var mode: String = "system"
     }
 
@@ -152,12 +152,21 @@ struct TalkieAppConfiguration: Codable {
         var apiKey = ""
         /// Shared playback speed for generated audio and on-device readout.
         var playbackRate: Double? = nil
+        /// "phone", "watch", or "silent" for spoken AI command responses.
+        var aiVoiceOutputRoute = "phone"
     }
 
     struct Compose: Codable {
         var revisionPath = "direct"
         var directProviderId = "openai"
-        var directModelId = ""
+        var directModelId = TalkieAIProviderCredentialPayload.defaultOpenAIModel
+    }
+
+    struct HyperScan: Codable {
+        /// When true, uploaded HyperScan captures are retained on the Mac.
+        /// When false (default), they are written to a transient directory
+        /// and auto-deleted by the Mac after a short TTL.
+        var retainCaptures = false
     }
 
     struct SSH: Codable {
@@ -184,5 +193,6 @@ struct TalkieAppConfiguration: Codable {
     var bridge = Bridge()
     var tts = TTS()
     var compose = Compose()
+    var hyperScan = HyperScan()
     var ssh = SSH()
 }

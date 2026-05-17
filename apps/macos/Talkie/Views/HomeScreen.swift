@@ -146,12 +146,42 @@ struct HomeScreen: View {
                 todayDictations: todayDictations,
                 totalWords: totalWords,
                 streak: streak,
-                onStartRecording: { showingRecordingView = true },
-                onOpenLibrary: { /* TODO: wire library nav */ },
-                onOpenItem: { _ in /* TODO: wire item nav */ }
+                onStartRecording: {
+                    // Match HomeGrid: nav to Recordings (which hosts the
+                    // overlay) and post the notification it listens for.
+                    NavigationState.shared.navigate(to: .recordings)
+                    NotificationCenter.default.post(name: .init("ShowRecordingView"), object: nil)
+                },
+                onOpenLibrary: { NavigationState.shared.navigate(to: .recordings) },
+                // Item-specific deep-linking is a follow-up — for now, opening
+                // any row in the captures table routes to the Recordings list.
+                onOpenItem: { _ in NavigationState.shared.navigate(to: .recordings) }
             )
             .task {
-                if !hasPerformedInitialLoad { loadData() }
+                if !hasPerformedInitialLoad {
+                    DatabaseManager.shared.afterInitialized { [memosVM, dictationStore] in
+                        Task { @MainActor in
+                            await memosVM.loadStats()
+                            await memosVM.loadRecentMemos(limit: Self.startupMemoLoadLimit)
+                            dictationStore.refresh()
+                        }
+                    }
+                    loadData()
+                    hasPerformedInitialLoad = true
+                }
+            }
+            // The Scope path was missing the store-change reactivity the
+            // standard path has — once `loadData()` ran on first appear
+            // the view never re-pulled, so new dictations / memos never
+            // showed up. Mirror the standard path's onChange wiring.
+            .onChange(of: dictationStore.dictations.count) { _, _ in
+                loadData()
+            }
+            .onChange(of: memosVM.totalCount) { _, _ in
+                loadData()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .syncDataAvailable)) { _ in
+                handleSyncDrivenRefresh()
             }
             .onReceive(NotificationCenter.default.publisher(for: .talkieSyncCompleted)) { _ in
                 handleSyncDrivenRefresh()

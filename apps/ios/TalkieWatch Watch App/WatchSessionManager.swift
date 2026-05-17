@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import AVFoundation
 import WatchConnectivity
 import WatchKit
 
@@ -28,7 +29,9 @@ struct WatchMemo: Identifiable, Codable {
         case sending
         case sent
         case received      // iPhone received it
+        case thinking      // iPhone is transcribing or answering
         case transcribed   // Transcription complete
+        case answered      // AI answer is ready
         case failed
     }
 
@@ -65,6 +68,7 @@ final class WatchSessionManager: NSObject, ObservableObject {
     private var session: WCSession?
     private var currentMemoId: UUID?
     private var sendingTimeoutTask: Task<Void, Never>?
+    private var aiAudioPlayer: AVAudioPlayer?
 
     private override init() {
         super.init()
@@ -137,6 +141,9 @@ final class WatchSessionManager: NSObject, ObservableObject {
             metadata["presetName"] = preset.name
             if let workflowId = preset.workflowId {
                 metadata["workflowId"] = workflowId
+            }
+            if let intent = preset.intent {
+                metadata["intent"] = intent
             }
         }
 
@@ -223,6 +230,33 @@ final class WatchSessionManager: NSObject, ObservableObject {
         guard let uuid = UUID(uuidString: memoId),
               let memoStatus = WatchMemo.MemoStatus(rawValue: status) else { return }
         updateMemoStatus(uuid, status: memoStatus, preview: preview)
+    }
+
+    private func handleAIAudio(fileURL: URL, metadata: [String: Any]) {
+        do {
+            let audioURL = FileManager.default.temporaryDirectory
+                .appending(path: "talkie-ai-answer-\(UUID().uuidString)")
+                .appendingPathExtension("mp3")
+            try? FileManager.default.removeItem(at: audioURL)
+            try FileManager.default.moveItem(at: fileURL, to: audioURL)
+
+            if let memoId = metadata["memoId"] as? String {
+                handleMemoUpdate(
+                    memoId: memoId,
+                    status: "answered",
+                    preview: metadata["preview"] as? String
+                )
+            }
+
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
+            try AVAudioSession.sharedInstance().setActive(true)
+            aiAudioPlayer = try AVAudioPlayer(contentsOf: audioURL)
+            aiAudioPlayer?.prepareToPlay()
+            aiAudioPlayer?.play()
+            print("⌚️ [Watch] 🔊 Playing AI answer on Watch")
+        } catch {
+            print("⌚️ [Watch] ❌ AI audio playback failed: \(error.localizedDescription)")
+        }
     }
 }
 
@@ -316,6 +350,17 @@ extension WatchSessionManager: WCSessionDelegate {
                 let preview = message["preview"] as? String
                 self.handleMemoUpdate(memoId: memoId, status: status, preview: preview)
             }
+        }
+    }
+
+    nonisolated func session(_ session: WCSession, didReceive file: WCSessionFile) {
+        let metadata = file.metadata ?? [:]
+        guard metadata["type"] as? String == "aiAudio" else {
+            return
+        }
+
+        Task { @MainActor in
+            self.handleAIAudio(fileURL: file.fileURL, metadata: metadata)
         }
     }
 

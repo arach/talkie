@@ -82,13 +82,11 @@ struct AboutView: View {
                 VStack(spacing: 6) {
                     // Header with checkmark/warning
                     HStack {
-                        Text("STATUS")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .tracking(1)
-                            .foregroundColor(.white.opacity(0.3))
+                        WatchEyebrow(text: "Status", tint: .panelInk, showLeader: false)
 
                         Spacer()
 
+                        // semantic green/orange — universal status colors.
                         Image(systemName: systemHealthy ? "checkmark" : "exclamationmark.triangle.fill")
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundColor(systemHealthy ? .green : .orange)
@@ -115,20 +113,17 @@ struct AboutView: View {
                 }
 
                 #if DEBUG
-                Divider()
+                WatchDivider()
                     .padding(.vertical, 2)
 
                 // Logs section (debug only - moved up)
                 Button(action: { showLogs.toggle() }) {
                     HStack {
-                        Text("LOGS")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .tracking(1)
-                            .foregroundColor(.white.opacity(0.3))
+                        WatchEyebrow(text: "Logs", tint: .panelInk, showLeader: false)
                         Spacer()
                         Image(systemName: showLogs ? "chevron.up" : "chevron.down")
                             .font(.system(size: 9))
-                            .foregroundColor(.white.opacity(0.3))
+                            .foregroundColor(WatchTheme.current.panelInkFaint)
                     }
                 }
                 .buttonStyle(.plain)
@@ -138,30 +133,32 @@ struct AboutView: View {
                 }
                 #endif
 
-                Divider()
+                WatchDivider(hasTick: true)
                     .padding(.vertical, 4)
 
-                // App info
+                // App info — TALKIE wordmark in lit chrome accent.
                 VStack(spacing: 4) {
+                    let chrome = WatchTheme.current
                     Text("TALKIE")
-                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .font(.system(size: 13, weight: .bold, design: .monospaced))
                         .tracking(2)
-                        .foregroundColor(.white)
+                        .foregroundColor(chrome.accent)
+                        .shadow(color: chrome.accentGlow, radius: chrome.glowRadius)
 
                     Text("v\(appVersion)")
                         .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(chrome.panelInkFaint)
                 }
 
                 #if DEBUG
                 // Build info (debug only)
                 HStack(spacing: 6) {
                     Badge(text: "DEBUG", color: .orange)
-                    Badge(text: snapshotTime, color: .blue)
+                    Badge(text: snapshotTime, color: WatchTheme.current.accent)
                 }
                 #endif
 
-                Divider()
+                WatchDivider()
                     .padding(.vertical, 4)
 
                 // Device info
@@ -220,9 +217,10 @@ struct QuickRecordCTA: View {
     @State private var pulse = false
 
     var body: some View {
+        let chrome = WatchTheme.current
         Button(action: handleTap) {
             if isExpanded {
-                // Expanded: show record button
+                // Expanded: show record button (.red is semantic).
                 HStack(spacing: 4) {
                     Circle()
                         .fill(Color.red)
@@ -236,7 +234,7 @@ struct QuickRecordCTA: View {
 
                     Text("GO")
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .tracking(1)
+                        .tracking(1.5)
                         .foregroundColor(.white)
                 }
                 .padding(.horizontal, 10)
@@ -244,9 +242,9 @@ struct QuickRecordCTA: View {
                 .background(Color.red.opacity(0.8))
                 .clipShape(Capsule())
             } else {
-                // Sliver: minimal gray bar
+                // Sliver: minimal themed bar (chrome edge).
                 RoundedRectangle(cornerRadius: 1)
-                    .fill(Color.white.opacity(0.2))
+                    .fill(chrome.edge)
                     .frame(width: 32, height: 3)
             }
         }
@@ -283,14 +281,16 @@ struct StatusRow: View {
     let isGood: Bool
 
     var body: some View {
+        let chrome = WatchTheme.current
         HStack {
+            // semantic green/orange — universal status colors.
             Circle()
                 .fill(isGood ? Color.green : Color.orange)
                 .frame(width: 4, height: 4)
 
             Text(label)
                 .font(.system(size: 9, weight: .medium))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(chrome.panelInkFaint)
 
             Spacer()
 
@@ -310,22 +310,23 @@ struct DiagnosticRow: View {
     let color: Color
 
     var body: some View {
+        let chrome = WatchTheme.current
         HStack {
             Image(systemName: icon)
                 .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.3))
+                .foregroundColor(chrome.panelInkFaint.opacity(0.7))
                 .frame(width: 16)
 
             Text(label.uppercased())
                 .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .tracking(0.5)
-                .foregroundColor(.white.opacity(0.4))
+                .tracking(1.5)
+                .foregroundColor(chrome.panelInkFaint)
 
             Spacer()
 
             Text(value)
                 .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(chrome.panelInk.opacity(0.85))
         }
     }
 }

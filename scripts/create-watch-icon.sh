@@ -8,7 +8,7 @@ set -e
 SOURCE="${1:-input.png}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
-DEST="${2:-$REPO_ROOT/apps/ios/TalkieWatch/Assets.xcassets/AppIcon.appiconset}"
+DEST="${2:-$REPO_ROOT/apps/ios/TalkieWatch Watch App/Assets.xcassets/AppIcon.appiconset}"
 
 if [ ! -f "$SOURCE" ]; then
   echo "Usage: $0 <source_image.png> [output_dir]"

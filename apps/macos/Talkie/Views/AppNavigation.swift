@@ -121,6 +121,7 @@ struct AppNavigation: View {
     @AppStorage(SidebarStyleStorage.indicatorKey) private var indicatorStyleRaw = SidebarIndicatorStyle.default.rawValue
     @AppStorage(SidebarStyleStorage.iconKey) private var iconStyleRaw = SidebarIconStyle.default.rawValue
     @AppStorage(SidebarStyleStorage.motionKey) private var motionStyleRaw = SidebarMotionStyle.default.rawValue
+    @AppStorage(SidebarStyleStorage.effectKey) private var effectStyleRaw = SidebarEffectStyle.flush.rawValue
     private static let sidebarMinLabelWidth: Double = 100
     private static let sidebarMaxLabelWidth: Double = 220
     private static let sidebarResizeActivationDistance: CGFloat = 6
@@ -139,7 +140,8 @@ struct AppNavigation: View {
             surface: SidebarSurfaceStyle(rawValue: surfaceStyleRaw) ?? .default,
             indicator: SidebarIndicatorStyle(rawValue: indicatorStyleRaw) ?? .default,
             icon: SidebarIconStyle(rawValue: iconStyleRaw) ?? .default,
-            motion: SidebarMotionStyle(rawValue: motionStyleRaw) ?? .default
+            motion: SidebarMotionStyle(rawValue: motionStyleRaw) ?? .default,
+            effect: SidebarEffectStyle(rawValue: effectStyleRaw) ?? .flush
         )
     }
 
@@ -828,7 +830,6 @@ struct AppNavigation: View {
             entries.append(.item(SidebarItem(id: .dictations, title: "Dictations", icon: "waveform.badge.mic", selectedIcon: "mic.circle.fill")))
         }
         #endif
-        entries.append(.item(SidebarItem(id: .notes, title: "Notes", icon: "note.text", selectedIcon: "doc.text.fill")))
         if settings.hasUnlockedAdvancedFeatures {
             entries.append(.item(SidebarItem(id: .drafts, title: "Compose", icon: "square.and.pencil", selectedIcon: "square.and.pencil.circle.fill")))
             entries.append(.item(SidebarItem(id: .contextRules, title: "Context", icon: "square.stack.3d.forward.dottedline", selectedIcon: "square.stack.3d.forward.dottedline.fill")))
@@ -843,7 +844,15 @@ struct AppNavigation: View {
         }
 
         entries.append(.section(id: "tools", title: "Tools"))
-        entries.append(.item(SidebarItem(id: .liveDashboard, title: "Stats", icon: "waveform.path.ecg", selectedIcon: "chart.bar.fill")))
+        // Scope theme renames this slot from "Stats" to "Learn" — the
+        // screen for that theme is `ScopeLearnScreen`, an agent-powered
+        // discovery interstitial that replaces the data-listing Stats
+        // page. Standard themes keep "Stats" → `StatsScreen`.
+        if settings.isScopeTheme {
+            entries.append(.item(SidebarItem(id: .liveDashboard, title: "Learn", icon: "sparkles", selectedIcon: "sparkles")))
+        } else {
+            entries.append(.item(SidebarItem(id: .liveDashboard, title: "Stats", icon: "waveform.path.ecg", selectedIcon: "chart.bar.fill")))
+        }
         entries.append(.item(SidebarItem(id: .models, title: "Models", icon: "brain", selectedIcon: "brain.fill")))
         if settings.hasUnlockedAdvancedFeatures {
             entries.append(.item(SidebarItem(id: .workflows, title: "Workflows", icon: "wand.and.stars", selectedIcon: "wand.and.rays.inverse")))
@@ -1022,12 +1031,13 @@ struct AppNavigation: View {
                     }
                 case .liveDashboard:
                     if SettingsManager.shared.isScopeTheme {
-                        // Scope owns its own top band via ScopeTopBand
-                        // (title: "Recordings"). No wrapInTalkieSection
-                        // here — would otherwise stack a duplicate band.
-                        ScopeStatsScreen(
-                            onSelectDictation: { _ in selectedSection = .dictations }
-                        )
+                        // Scope theme renders Learn — the agent-powered
+                        // discovery interstitial — in place of the
+                        // data-listing Stats page. Scope owns its own
+                        // top band via ScopeTopBand; no wrapInTalkieSection
+                        // here. ScopeStatsScreen kept in source but no
+                        // longer mounted on this branch.
+                        ScopeLearnScreen()
                     } else {
                         StatsScreen(
                             onSelectDictation: { _ in selectedSection = .dictations }

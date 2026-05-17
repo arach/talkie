@@ -99,6 +99,14 @@ class iCloudStatusManager: ObservableObject {
         }
     }
 
+    var canUseCloudKitContainer: Bool {
+        #if targetEnvironment(simulator)
+        return false
+        #else
+        return status.isAvailable
+        #endif
+    }
+
     #if DEBUG
     /// Simulated status for debug testing (nil = use real status)
     @Published var simulatedStatus: iCloudStatus? = nil
@@ -153,7 +161,18 @@ class iCloudStatusManager: ObservableObject {
     /// Async initial check - non-blocking, for UI feedback only
     /// PersistenceController uses CloudKit container regardless; this is just for banner display
     private func checkStatusAsync() {
-        let container = CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier)
+        if resolveSimulatorStatusIfNeeded(isInitial: true) {
+            return
+        }
+
+        guard let container = CloudKitContainerProvider.container() else {
+            let reason = CloudKitContainerProvider.unavailableReason ?? "CloudKit unavailable"
+            realStatus = .couldNotDetermine
+            status = realStatus
+            initialCheckComplete = true
+            AppLogger.persistence.info("CloudKit status check skipped: \(reason)")
+            return
+        }
 
         container.accountStatus { [weak self] accountStatus, error in
             DispatchQueue.main.async {
@@ -204,7 +223,17 @@ class iCloudStatusManager: ObservableObject {
         if simulatedStatus != nil { return }
         #endif
 
-        let container = CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier)
+        if resolveSimulatorStatusIfNeeded(isInitial: false) {
+            return
+        }
+
+        guard let container = CloudKitContainerProvider.container() else {
+            let reason = CloudKitContainerProvider.unavailableReason ?? "CloudKit unavailable"
+            realStatus = .couldNotDetermine
+            status = realStatus
+            AppLogger.persistence.info("CloudKit status check skipped: \(reason)")
+            return
+        }
 
         container.accountStatus { [weak self] accountStatus, error in
             DispatchQueue.main.async {
@@ -250,6 +279,33 @@ class iCloudStatusManager: ObservableObject {
                 #endif
             }
         }
+    }
+
+    private func resolveSimulatorStatusIfNeeded(isInitial: Bool) -> Bool {
+        #if targetEnvironment(simulator)
+        let didAlreadyResolve = realStatus == .couldNotDetermine
+        realStatus = .couldNotDetermine
+
+        #if DEBUG
+        if simulatedStatus == nil {
+            status = realStatus
+        }
+        #else
+        status = realStatus
+        #endif
+
+        if isInitial {
+            initialCheckComplete = true
+        }
+
+        if isInitial || !didAlreadyResolve {
+            AppLogger.persistence.info("iCloud status check skipped on simulator - local storage only")
+        }
+
+        return true
+        #else
+        return false
+        #endif
     }
 
     func dismissBanner() {

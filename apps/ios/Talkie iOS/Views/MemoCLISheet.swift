@@ -73,9 +73,7 @@ struct MemoCLISheet: View {
     private var presetsSection: some View {
         VStack(spacing: Spacing.xs) {
             HStack {
-                Text("COMMANDS")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(Color.textTertiary)
+                TalkieEyebrow(text: "Commands")
                 Spacer()
             }
 
@@ -117,9 +115,7 @@ struct MemoCLISheet: View {
     private var customCommandSection: some View {
         VStack(spacing: Spacing.xs) {
             HStack {
-                Text("CUSTOM")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(Color.textTertiary)
+                TalkieEyebrow(text: "Custom")
                 Spacer()
             }
 

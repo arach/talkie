@@ -116,6 +116,12 @@ public struct ServiceDebugInfo {
     public let bundleId: String?
 }
 
+public enum AgentAccessibilityPermissionRequestResult: Equatable, Sendable {
+    case granted
+    case waitingForUserAction
+    case agentUnavailable
+}
+
 // MARK: - Service Manager
 
 @MainActor
@@ -716,7 +722,7 @@ public final class ServiceManager {
                 installLaunchAgentIfNeeded(label: label)
             }
         } else {
-            // Dev/staging: regenerate the launch agent against the freshest DerivedData build.
+            // Dev/staging: regenerate the launch agent against the stable dev install.
             Task {
                 try? await HelperLaunchManager.shared.launch(.agent, resolvingConflicts: true)
             }
@@ -776,8 +782,12 @@ public final class ServiceManager {
         return granted
     }
 
-    /// Launch and connect to the targeted TalkieAgent, then ask that process for Accessibility permission.
-    public func requestAgentAccessibilityPermission() async -> Bool? {
+    /// Launch and connect to the targeted TalkieAgent, then check Accessibility permission.
+    ///
+    /// Accessibility setup is completed through the install assistant so users can add
+    /// the exact app bundle in System Settings without an extra system prompt blocking
+    /// the guided drag flow.
+    public func requestAgentAccessibilityPermission() async -> AgentAccessibilityPermissionRequestResult {
         let env = effectiveHelperEnvironment
         let bundleId = TalkieHelper.agent.bundleId(for: env)
         let xpcService = TalkieHelper.agent.xpcServiceName(for: env)
@@ -809,19 +819,26 @@ public final class ServiceManager {
                 "[Permissions] Agent accessibility request could not connect to target",
                 detail: "env=\(env.displayName), bundle=\(bundleId), xpc=\(xpcService)"
             )
-            return nil
+            return .agentUnavailable
         }
 
-        let granted = await live.requestAccessibilityPermission()
-        live.refreshPermissions()
+        let refreshed = await live.refreshPermissionsNow()
 
-        if let granted {
-            logger.info("[Permissions] Agent accessibility request completed", detail: "granted=\(granted), bundle=\(bundleId)")
-        } else {
+        if refreshed?.accessibility == true {
+            logger.info("[Permissions] Agent accessibility request completed", detail: "granted=true, bundle=\(bundleId)")
+            return .granted
+        }
+
+        if refreshed == nil {
             logger.warning("[Permissions] Agent accessibility request returned no result", detail: "bundle=\(bundleId)")
+            return .agentUnavailable
         }
 
-        return granted
+        logger.info(
+            "[Permissions] Agent accessibility request is waiting for user action",
+            detail: "bundle=\(bundleId)"
+        )
+        return .waitingForUserAction
     }
 
     /// Launch TalkieEngine
@@ -1244,7 +1261,7 @@ public final class ServiceManager {
         }
 
         // 2. Check local debug builds before LaunchServices, which can point at
-        // an older registered helper from another DerivedData folder.
+        // an older registered helper from another checkout or build folder.
         #if DEBUG
         if let debugURL = findDebugBuild(appName: appName) {
             return debugURL
@@ -1299,6 +1316,7 @@ public final class ServiceManager {
         let executableName = appName.hasSuffix(".app") ? String(appName.dropLast(4)) : appName
         var candidates: [(url: URL, date: Date)] = []
         var seen = Set<String>()
+        let env = effectiveHelperEnvironment
 
         func appendCandidate(_ appURL: URL) {
             guard FileManager.default.fileExists(atPath: appURL.path),
@@ -1314,6 +1332,8 @@ public final class ServiceManager {
                 ?? .distantPast
             candidates.append((appURL, date))
         }
+
+        appendCandidate(env.userInstalledAppURL(named: appName))
 
         if let repoRoot = LocalCheckoutLocator.talkieRepositoryRootURL(compileTimeFilePath: #filePath) {
             let repoBuildRoots = [
@@ -1333,6 +1353,10 @@ public final class ServiceManager {
             }
         }
 
+        if !allowsDerivedDataFallback {
+            return candidates.max(by: { $0.date < $1.date })?.url
+        }
+
         let derivedDataPath = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Developer/Xcode/DerivedData")
 
@@ -1348,6 +1372,11 @@ public final class ServiceManager {
         }
 
         return candidates.max(by: { $0.date < $1.date })?.url
+    }
+
+    private var allowsDerivedDataFallback: Bool {
+        ProcessInfo.processInfo.environment["TALKIE_ALLOW_DERIVEDDATA_FALLBACK"] == "1"
+            || UserDefaults.standard.bool(forKey: "ServiceManager.allowDerivedDataFallback")
     }
 
     private func findProcesses(named processName: String) -> [ServiceProcessInfo] {
@@ -1449,15 +1478,23 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
 
     /// Refresh agent permissions via XPC. Call on app activation or when permissions may have changed.
     public func refreshPermissions() {
-        guard isXPCConnected else { return }
         Task {
-            if let perms = await checkPermissions() {
-                hasMicrophonePermission = perms.microphone
-                hasAccessibilityPermission = perms.accessibility
-                hasScreenRecordingPermission = perms.screenRecording
-                lastPermissionCheck = Date()
-            }
+            _ = await refreshPermissionsNow()
         }
+    }
+
+    /// Refresh agent permissions via XPC and wait for the current snapshot.
+    @discardableResult
+    public func refreshPermissionsNow() async -> (microphone: Bool, accessibility: Bool, screenRecording: Bool)? {
+        guard isXPCConnected else { return nil }
+        guard let perms = await checkPermissions() else { return nil }
+
+        hasMicrophonePermission = perms.microphone
+        hasAccessibilityPermission = perms.accessibility
+        hasScreenRecordingPermission = perms.screenRecording
+        lastPermissionCheck = Date()
+
+        return perms
     }
 
     // ─── Private ───
@@ -1575,11 +1612,16 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
     /// Force reconnect - drops current XPC connection and rescans for agent
     public func reconnect() {
         logger.info("[Agent] Force reconnecting...")
-        xpcManager?.disconnect()
+        guard let xpcManager else {
+            startXPCMonitoring(autoConnect: true)
+            return
+        }
+
+        xpcManager.disconnect()
 
         Task {
             try? await Task.sleep(for: .milliseconds(200))
-            await xpcManager?.connect()
+            await xpcManager.connect()
         }
     }
 
@@ -1592,7 +1634,14 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
 
     func startXPCMonitoring(autoConnect: Bool = false) {
         startDistributedNotificationMonitoring()
-        guard xpcManager == nil else { return }
+        if let existingManager = xpcManager {
+            if autoConnect && !existingManager.isConnected {
+                Task {
+                    await existingManager.connect()
+                }
+            }
+            return
+        }
 
         xpcManager = XPCServiceManager<TalkieAgentXPCServiceProtocol>(
             serviceNameProvider: { env in env.liveXPCService },
@@ -1652,8 +1701,13 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
     /// Trigger XPC connection to TalkieAgent.
     /// Call after ensureHelpersRunning so the Agent's listener is ready.
     func connectXPC() {
+        guard let xpcManager else {
+            startXPCMonitoring(autoConnect: true)
+            return
+        }
+
         Task {
-            await xpcManager?.connect()
+            await xpcManager.connect()
         }
     }
 

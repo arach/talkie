@@ -56,6 +56,7 @@ public final class LLMOpenAIProvider: LLMProvider, @unchecked Sendable {
 
     private static let staticModels: [LLMModel] = [
         // GPT-5 family
+        LLMModel(id: "gpt-5.5", name: "gpt-5.5", displayName: "GPT-5.5", size: "Cloud", type: .cloud, provider: "openai"),
         LLMModel(id: "gpt-5.2", name: "gpt-5.2", displayName: "GPT-5.2 Thinking", size: "Cloud", type: .cloud, provider: "openai"),
         LLMModel(id: "gpt-5.2-chat-latest", name: "gpt-5.2-chat-latest", displayName: "GPT-5.2 Instant", size: "Cloud", type: .cloud, provider: "openai"),
         LLMModel(id: "gpt-5.1", name: "gpt-5.1", displayName: "GPT-5.1 Thinking", size: "Cloud", type: .cloud, provider: "openai"),

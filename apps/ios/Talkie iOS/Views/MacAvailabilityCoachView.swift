@@ -12,12 +12,15 @@ import UIKit
 struct MacAvailabilityCoachView: View {
     @State private var directRegistry = DirectMacRegistry.shared
     @State private var cloudObserver = MacStatusObserver.shared
+    @State private var nearbyBrowser = NearbyMacBrowser.shared
     private var bridgeManager = BridgeManager.shared
     @State private var showingQRScanner = false
     @State private var showingTerminalDestinations = false
     @State private var pendingRemovalMac: DirectMacRegistry.MacEntry?
     @State private var showingAvailabilityTips = false
     @State private var showingBackgroundSignals = false
+    @State private var pairingNearbyMacID: String?
+    @State private var nearbyPairingMessage: String?
 
     var body: some View {
         ZStack {
@@ -26,7 +29,16 @@ struct MacAvailabilityCoachView: View {
 
             ScrollView {
                 VStack(spacing: Spacing.lg) {
+                    if directRegistry.macs.isEmpty {
+                        nearbyMacsSection
+                    }
+
                     directMacsSection
+
+                    if !directRegistry.macs.isEmpty {
+                        nearbyMacsSection
+                    }
+
                     connectionActionsSection
                     availabilityHelpSection
 
@@ -77,7 +89,11 @@ struct MacAvailabilityCoachView: View {
         }
         .task {
             directRegistry.refresh()
+            nearbyBrowser.start()
             await cloudObserver.refresh()
+        }
+        .onDisappear {
+            nearbyBrowser.stop()
         }
     }
 
@@ -88,10 +104,7 @@ struct MacAvailabilityCoachView: View {
     private var directMacsSection: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             if !directRegistry.macs.isEmpty {
-                Text(directRegistry.macs.count == 1 ? "YOUR MAC" : "YOUR MACS")
-                    .font(.techLabel)
-                    .tracking(2)
-                    .foregroundColor(.textTertiary)
+                TalkieEyebrow(text: directRegistry.macs.count == 1 ? "Your Mac" : "Your Macs")
                     .padding(.horizontal, Spacing.md)
             }
 
@@ -105,7 +118,7 @@ struct MacAvailabilityCoachView: View {
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.textPrimary)
 
-                    Text("Scan a QR from any Mac to add direct pairing or terminal access.")
+                    Text("Nearby Talkie bridges appear above. You can still scan a QR to add direct pairing or terminal access.")
                         .font(.system(size: 13))
                         .foregroundColor(.textTertiary)
                         .multilineTextAlignment(.center)
@@ -141,12 +154,69 @@ struct MacAvailabilityCoachView: View {
         .padding(.horizontal, Spacing.md)
     }
 
+    private var nearbyMacsSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            TalkieEyebrow(text: "Nearby")
+                .padding(.horizontal, Spacing.md)
+
+            VStack(spacing: Spacing.xs) {
+                if nearbyBrowser.macs.isEmpty {
+                    HStack(spacing: Spacing.sm) {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(Color.textTertiary)
+                            .frame(width: 22)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(nearbyBrowser.errorMessage ?? "Searching local network")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(Color.textSecondary)
+
+                            Text("Start the Talkie bridge on your Mac in nearby mode.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Color.textTertiary)
+                                .lineLimit(2)
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(Spacing.md)
+                    .background(Color.surfaceSecondary)
+                    .clipShape(.rect(cornerRadius: CornerRadius.sm))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous)
+                            .stroke(Color.borderPrimary, lineWidth: 0.5)
+                    }
+                } else {
+                    ForEach(nearbyBrowser.macs) { mac in
+                        let isSaved = bridgeManager.pairedHostname == mac.connectionHost
+                        let isConnected = isSaved && bridgeManager.status == .connected
+                        NearbyBridgePairCard(
+                            mac: mac,
+                            isPairing: pairingNearbyMacID == mac.id,
+                            isSaved: isSaved,
+                            isConnected: isConnected,
+                            onPair: {
+                                pairNearbyMac(mac)
+                            }
+                        )
+                    }
+                }
+
+                if let nearbyPairingMessage {
+                    Label(nearbyPairingMessage, systemImage: "network")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.textSecondary)
+                        .padding(.horizontal, 2)
+                }
+            }
+            .padding(.horizontal, Spacing.md)
+        }
+    }
+
     private var connectionActionsSection: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("ADD")
-                .font(.techLabel)
-                .tracking(2)
-                .foregroundColor(.textTertiary)
+            TalkieEyebrow(text: "Add")
                 .padding(.horizontal, Spacing.md)
 
             AddMacActionCard(title: "Scan QR Code", systemImage: "qrcode.viewfinder") {
@@ -158,10 +228,7 @@ struct MacAvailabilityCoachView: View {
 
     private var availabilityHelpSection: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("AVAILABILITY")
-                .font(.techLabel)
-                .tracking(2)
-                .foregroundColor(.textTertiary)
+            TalkieEyebrow(text: "Availability")
                 .padding(.horizontal, Spacing.md)
 
             DisclosureGroup(isExpanded: $showingAvailabilityTips) {
@@ -221,10 +288,7 @@ struct MacAvailabilityCoachView: View {
 
     private var cloudSignalsSection: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("BACKGROUND PROCESSING")
-                .font(.techLabel)
-                .tracking(2)
-                .foregroundColor(.textTertiary)
+            TalkieEyebrow(text: "Background Processing")
                 .padding(.horizontal, Spacing.md)
 
             DisclosureGroup(isExpanded: $showingBackgroundSignals) {
@@ -320,6 +384,120 @@ struct MacAvailabilityCoachView: View {
         }
 
         directRegistry.refresh()
+    }
+
+    private func pairNearbyMac(_ mac: NearbyMacBrowser.NearbyMac) {
+        guard pairingNearbyMacID == nil else { return }
+
+        pairingNearbyMacID = mac.id
+        nearbyPairingMessage = nil
+
+        Task {
+            let result = await bridgeManager.processNearbyMac(mac)
+            directRegistry.refresh()
+            await cloudObserver.refresh()
+
+            switch result {
+            case .approved:
+                nearbyPairingMessage = "Connected to \(mac.name)."
+            case .pendingApproval:
+                nearbyPairingMessage = "Pairing request sent. Approve this iPhone in Talkie on the Mac."
+            case nil:
+                nearbyPairingMessage = bridgeManager.errorMessage ?? "Could not pair with \(mac.name)."
+            }
+
+            pairingNearbyMacID = nil
+        }
+    }
+}
+
+private struct NearbyBridgePairCard: View {
+    let mac: NearbyMacBrowser.NearbyMac
+    let isPairing: Bool
+    let isSaved: Bool
+    let isConnected: Bool
+    let onPair: () -> Void
+
+    var body: some View {
+        Button(action: onPair) {
+            HStack(spacing: 12) {
+                LeadingIconContainer {
+                    if isPairing {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(Color.active)
+                    } else {
+                        Image(systemName: "network")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(Color.active)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(mac.name)
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .foregroundStyle(Color.textPrimary)
+                            .lineLimit(1)
+
+                        if isConnected || isSaved {
+                            Text(isConnected ? "CONNECTED" : "SAVED")
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .foregroundStyle(isConnected ? Color.success : Color.textSecondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background((isConnected ? Color.success : Color.textSecondary).opacity(0.12))
+                                .clipShape(.capsule)
+                        }
+                    }
+
+                    Text(secondaryText)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(Color.textTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: trailingIcon)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(isConnected ? Color.success : Color.active)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous)
+                    .fill(Color.surfaceSecondary)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous)
+                    .stroke(Color.borderPrimary, lineWidth: 0.5)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(isPairing || isConnected)
+    }
+
+    private var secondaryText: String {
+        if isSaved && !isConnected {
+            return "Saved pair · tap to verify or refresh"
+        }
+
+        return "\(mac.connectionHost):\(mac.port) · \(mac.routeLabel)"
+    }
+
+    private var trailingIcon: String {
+        if isConnected {
+            return "checkmark.circle.fill"
+        }
+
+        if isSaved {
+            return "arrow.clockwise.circle"
+        }
+
+        return "arrow.right.circle"
     }
 }
 

@@ -471,13 +471,23 @@ final class CloudKitSyncHealth: ObservableObject {
 
             guard !Task.isCancelled, self != nil else { return }
 
+            #if targetEnvironment(simulator)
+            AppLogger.sync.info("Skipping CloudKit recovery check on simulator")
+            return
+            #else
             // Check if iCloud is available now
-            let container = CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier)
+            guard let container = CloudKitContainerProvider.container() else {
+                let reason = CloudKitContainerProvider.unavailableReason ?? "CloudKit unavailable"
+                AppLogger.sync.info("CloudKit recovery check skipped: \(reason)")
+                return
+            }
+
             let status = try? await container.accountStatus()
             if status == .available {
                 AppLogger.sync.info("☁️ Network recovered, CloudKit should auto-retry")
                 // NSPersistentCloudKitContainer will auto-retry on next Core Data save
             }
+            #endif
         }
     }
 

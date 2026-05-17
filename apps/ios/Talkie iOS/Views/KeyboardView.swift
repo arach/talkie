@@ -98,10 +98,7 @@ struct KeyboardView: View {
     private var composeSection: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack {
-                Text("COMPOSE")
-                    .font(.system(size: 10, weight: .regular))
-                    .foregroundColor(.textTertiary.opacity(0.7))
-                    .tracking(1.5)
+                TalkieEyebrow(text: "Compose")
 
                 Spacer()
 
@@ -259,10 +256,7 @@ struct KeyboardView: View {
     }
 
     private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.system(size: 10, weight: .regular))
-            .foregroundColor(.textTertiary.opacity(0.6))
-            .tracking(1.5)
+        TalkieEyebrow(text: title)
     }
 
     private var isIPad: Bool {

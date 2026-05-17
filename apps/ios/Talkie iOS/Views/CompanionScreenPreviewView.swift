@@ -113,9 +113,7 @@ struct CompanionScreenPreviewView: View {
 
     private var statusPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(macName.uppercased())
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.green.opacity(0.9))
+            TalkieEyebrow(text: macName, tint: .panelInk, showLeader: false)
 
             Text(statusCopy)
                 .font(.system(size: 14, weight: .medium))

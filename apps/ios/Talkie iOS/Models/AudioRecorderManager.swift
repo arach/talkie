@@ -39,6 +39,20 @@ class AudioRecorderManager: NSObject, ObservableObject {
 
     deinit {
         NotificationCenter.default.removeObserver(self)
+        // Last-resort safety net: if the manager is being torn down while still
+        // holding the mic (e.g. the owning View was dismissed without going
+        // through finalize/cancel), stop the recorder and release the audio
+        // session so the iOS mic indicator turns off.
+        if audioRecorder?.isRecording == true {
+            audioRecorder?.stop()
+        }
+        audioRecorder = nil
+        timer?.invalidate()
+        levelTimer?.invalidate()
+        if isRecording {
+            // Deactivate without touching @Published state from deinit.
+            try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+        }
     }
 
     @discardableResult

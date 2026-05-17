@@ -78,7 +78,7 @@ struct PresetRecordingView: View {
                     Spacer()
                     Text(formatDuration(recorder.recordingDuration))
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.35))
+                        .foregroundColor(WatchTheme.current.panelInkFaint.opacity(0.55))
                 }
             }
             .padding(.bottom, 4)
@@ -92,10 +92,7 @@ struct PresetRecordingView: View {
         VStack(spacing: 8) {
             // Header
             HStack {
-                Text("STATUS")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .tracking(1)
-                    .foregroundColor(.white.opacity(0.3))
+                WatchEyebrow(text: "Status", tint: .panelInk, showLeader: false)
                 Spacer()
             }
 
@@ -115,7 +112,7 @@ struct PresetRecordingView: View {
             sendingStatusRow(
                 label: "Transfer",
                 value: "sending...",
-                isGood: nil,  // nil = in progress
+                isGood: nil,  // nil = in progress (renders with theme accent)
                 showSpinner: true
             )
 
@@ -129,25 +126,35 @@ struct PresetRecordingView: View {
     }
 
     private func sendingStatusRow(label: String, value: String, isGood: Bool?, showSpinner: Bool = false) -> some View {
-        HStack(spacing: 6) {
+        let chrome = WatchTheme.current
+        // isGood == true → semantic green; isGood == false → semantic orange;
+        // nil (in-progress) → theme accent.
+        let stateColor: Color = {
+            switch isGood {
+            case .some(true):  return .green
+            case .some(false): return .orange
+            case .none:        return chrome.accent
+            }
+        }()
+
+        return HStack(spacing: 6) {
             if showSpinner {
-                // Braille spinner (matches TalkieKit)
-                BrailleSpinner(color: .blue)
+                BrailleSpinner(color: stateColor)
             } else {
                 Circle()
-                    .fill(isGood == true ? Color.green : (isGood == false ? Color.orange : Color.blue))
+                    .fill(stateColor)
                     .frame(width: 4, height: 4)
             }
 
             Text(label)
                 .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(chrome.panelInkFaint)
 
             Spacer()
 
             Text(value)
                 .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .foregroundColor(isGood == true ? .green : (isGood == false ? .orange : .blue))
+                .foregroundColor(stateColor)
         }
     }
 
@@ -171,6 +178,7 @@ struct PresetRecordingView: View {
     // MARK: - REC Indicator (subtle, top-right)
 
     private var recIndicator: some View {
+        // .red is universal recording semantic — keep across themes.
         HStack(spacing: 3) {
             Circle()
                 .fill(Color.red)
@@ -184,8 +192,8 @@ struct PresetRecordingView: View {
 
             Text("REC")
                 .font(.system(size: 8, weight: .bold, design: .monospaced))
-                .foregroundColor(.red.opacity(0.8))
-                .tracking(0.5)
+                .foregroundColor(.red.opacity(0.85))
+                .tracking(1.5)
         }
         .onAppear { recPulse = true }
         .onDisappear { recPulse = false }
@@ -243,7 +251,7 @@ struct PresetRecordingView: View {
             VStack(spacing: 4) {
                 Text("Sent")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(WatchTheme.current.panelInk)
 
                 HStack(spacing: 4) {
                     Image(systemName: preset.icon)

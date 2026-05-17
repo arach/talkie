@@ -2,7 +2,8 @@
 //  SignInView.swift
 //  Talkie iOS
 //
-//  Account setup — shown contextually from Settings / Mac Sync
+//  Account setup — shown contextually from Settings / Mac Sync.
+//  Theme-aware: adopts the active theme's canvas + chrome.
 //
 
 import SwiftUI
@@ -14,12 +15,15 @@ struct SignInView: View {
     @State private var isSigningIn = false
     @State private var errorMessage: String?
     @State private var showInfo = false
+    @ObservedObject private var theme = ThemeManager.shared
 
     private var authManager: AuthManager { AuthManager.shared }
 
     var body: some View {
+        let chrome = theme.chrome
+
         ZStack {
-            Color(hex: "0A0A0A")
+            theme.colors.background
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -29,9 +33,9 @@ struct SignInView: View {
                     Button(action: { dismiss() }) {
                         Image(systemName: "xmark")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(Color(hex: "6A6A6A"))
+                            .foregroundColor(theme.colors.textTertiary)
                             .frame(width: 32, height: 32)
-                            .background(Color.white.opacity(0.08))
+                            .background(chrome.edge.opacity(0.5))
                             .clipShape(Circle())
                     }
                     .padding(.trailing, Spacing.md)
@@ -43,26 +47,29 @@ struct SignInView: View {
                 // Icon
                 ZStack {
                     Circle()
-                        .stroke(Color(hex: "22C55E").opacity(0.3), lineWidth: 1)
+                        .stroke(theme.colors.success.opacity(0.3), lineWidth: 1)
                         .frame(width: 88, height: 88)
 
                     Image(systemName: "link.circle")
                         .font(.system(size: 40, weight: .thin))
-                        .foregroundColor(Color(hex: "22C55E"))
+                        .foregroundColor(theme.colors.success)
+                        .shadow(color: theme.colors.success.opacity(0.3), radius: chrome.glowRadius)
                 }
                 .padding(.bottom, Spacing.lg)
 
-                // Headline
-                Text("CONNECT YOUR DEVICES")
-                    .font(.system(size: 14, weight: .semibold))
-                    .tracking(3)
-                    .foregroundColor(.white)
+                // Eyebrow + headline
+                TalkieEyebrow(text: "Connect Your Devices", showLeader: false)
+                    .padding(.bottom, Spacing.xs)
+
+                Text("Sync across iPhone and Mac")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(theme.colors.textPrimary)
                     .padding(.bottom, Spacing.sm)
 
                 // Value prop
                 Text("Create a free account to sync memos\nbetween your iPhone and Mac.")
                     .font(.system(size: 15, weight: .light))
-                    .foregroundColor(Color(hex: "8A8A8A"))
+                    .foregroundColor(theme.colors.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(4)
                     .padding(.bottom, Spacing.md)
@@ -81,7 +88,7 @@ struct SignInView: View {
                         Image(systemName: showInfo ? "chevron.up" : "chevron.down")
                             .font(.system(size: 10, weight: .light))
                     }
-                    .foregroundColor(Color(hex: "6A6A6A"))
+                    .foregroundColor(theme.colors.textTertiary)
                 }
                 .padding(.bottom, showInfo ? Spacing.sm : Spacing.xxl)
 
@@ -100,8 +107,10 @@ struct SignInView: View {
                 // Auth steps progress
                 if !authManager.authSteps.isEmpty {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
-                        ForEach(authManager.authSteps) { step in
+                        ForEach(Array(authManager.authSteps.enumerated()), id: \.element.id) { index, step in
                             HStack(spacing: Spacing.sm) {
+                                TalkieChannelLabel(code: String(format: "S%02d", index + 1), isActive: step.status == .inProgress || step.status == .completed)
+
                                 stepIcon(for: step.status)
 
                                 VStack(alignment: .leading, spacing: 2) {
@@ -112,7 +121,7 @@ struct SignInView: View {
                                     if let detail = step.detail {
                                         Text(detail)
                                             .font(.system(size: 11, weight: .light))
-                                            .foregroundColor(Color(hex: "6A6A6A"))
+                                            .foregroundColor(theme.colors.textTertiary)
                                     }
                                 }
                             }
@@ -143,7 +152,7 @@ struct SignInView: View {
                     HStack(spacing: Spacing.sm) {
                         if isSigningIn {
                             ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .black))
+                                .progressViewStyle(CircularProgressViewStyle(tint: theme.colors.background))
                                 .scaleEffect(0.8)
                         } else {
                             Image(systemName: "apple.logo")
@@ -153,11 +162,12 @@ struct SignInView: View {
                             .font(.system(size: 13, weight: .bold))
                             .tracking(2)
                     }
-                    .foregroundColor(Color(hex: "0A0A0A"))
+                    .foregroundColor(chrome.panelInk)
                     .frame(maxWidth: .infinity)
                     .frame(height: 52)
-                    .background(Color(hex: "22C55E"))
+                    .background(theme.colors.success)
                     .cornerRadius(CornerRadius.md)
+                    .shadow(color: theme.colors.success.opacity(0.4), radius: chrome.glowRadius)
                 }
                 .disabled(isSigningIn)
                 .padding(.horizontal, Spacing.xl)
@@ -171,7 +181,7 @@ struct SignInView: View {
                     Text("Your data stays on your devices and your iCloud.")
                         .font(.system(size: 10, design: .monospaced))
                 }
-                .foregroundColor(Color(hex: "4A4A4A"))
+                .foregroundColor(theme.colors.textTertiary.opacity(0.7))
                 .padding(.bottom, Spacing.xl)
             }
         }
@@ -204,17 +214,17 @@ struct SignInView: View {
         switch status {
         case .pending:
             Circle()
-                .stroke(Color(hex: "3A3A3A"), lineWidth: 1)
+                .stroke(theme.chrome.edge, lineWidth: 1)
                 .frame(width: 16, height: 16)
         case .inProgress:
             ProgressView()
-                .progressViewStyle(CircularProgressViewStyle(tint: .active))
+                .progressViewStyle(CircularProgressViewStyle(tint: theme.chrome.accent))
                 .scaleEffect(0.6)
                 .frame(width: 16, height: 16)
         case .completed:
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 16))
-                .foregroundColor(.success)
+                .foregroundColor(theme.colors.success)
         case .failed:
             Image(systemName: "xmark.circle.fill")
                 .font(.system(size: 16))
@@ -226,19 +236,19 @@ struct SignInView: View {
         HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .light))
-                .foregroundColor(Color(hex: "22C55E"))
+                .foregroundColor(theme.colors.success)
                 .frame(width: 20)
             Text(text)
                 .font(.system(size: 13, weight: .light))
-                .foregroundColor(Color(hex: "9A9A9A"))
+                .foregroundColor(theme.colors.textSecondary)
         }
     }
 
     private func stepColor(for status: AuthStep.Status) -> Color {
         switch status {
-        case .pending: return Color(hex: "4A4A4A")
-        case .inProgress: return .white
-        case .completed: return Color(hex: "8A8A8A")
+        case .pending: return theme.colors.textTertiary.opacity(0.6)
+        case .inProgress: return theme.colors.textPrimary
+        case .completed: return theme.colors.textSecondary
         case .failed: return .recording
         }
     }

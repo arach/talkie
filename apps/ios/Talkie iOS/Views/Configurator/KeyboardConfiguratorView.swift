@@ -155,10 +155,7 @@ struct KeyboardConfiguratorView: View {
 
     private var configurationArea: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("TAP A SLOT TO CONFIGURE")
-                .font(.system(size: 10, weight: .regular))
-                .tracking(1.5)
-                .foregroundColor(.textTertiary.opacity(0.6))
+            TalkieEyebrow(text: "Tap a Slot to Configure")
 
             Text("Select any key below to customize what it does.")
                 .font(.system(size: 13, weight: .light))

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <pattern id="htdots" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="12" cy="12" r="8" fill="white"/>
+    </pattern>
+    <mask id="htmask1">
+      <rect width="1024" height="1024" fill="url(#htdots)"/>
+    </mask>
+    <mask id="htmask2">
+      <rect x="3" y="3" width="1024" height="1024" fill="url(#htdots)"/>
+    </mask>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1024" height="1024" fill="#F4EFE6"/>
+
+  <!-- Layer 1: Hot Mic offset -->
+  <g transform="translate(194.56, 0)">
+    <text x="317.44" y="880.64" font-size="798.72" text-anchor="middle"
+          font-family="'JetBrains Mono', ui-monospace, monospace" font-weight="500"
+          fill="#FF5346" mask="url(#htmask1)" transform="translate(3,2)" opacity="0.8">t</text>
+  </g>
+
+  <!-- Layer 2: Tape Tan -->
+  <g transform="translate(194.56, 0)">
+    <text x="317.44" y="880.64" font-size="798.72" text-anchor="middle"
+          font-family="'JetBrains Mono', ui-monospace, monospace" font-weight="500"
+          fill="#7A6E5C" mask="url(#htmask2)" opacity="0.9">t</text>
+  </g>
+</svg>

@@ -11,6 +11,7 @@
  */
 
 import { log } from "../../log";
+import { talkieServerFetch } from "../talkie-local-client";
 import { serviceUnavailable, serverError, notFound, notImplemented, proxyError, jpeg } from "./responses";
 
 // ===== Types =====
@@ -86,7 +87,7 @@ export async function listWindows(): Promise<ProxyResult<WindowsListResponse>> {
   log.info("GET /windows");
 
   return withTalkieServer("List windows", async () => {
-    const response = await fetch(`${TALKIESERVER_URL}/windows/claude`);
+    const response = await talkieServerFetch(`${TALKIESERVER_URL}/windows/claude`);
     return await response.json() as WindowsListResponse;
   });
 }
@@ -99,7 +100,7 @@ export async function getWindow(windowId: string): Promise<ProxyResult<WindowRes
   log.info(`GET /windows/${windowId}`);
 
   return withTalkieServer("Get window", async () => {
-    const response = await fetch(`${TALKIESERVER_URL}/windows/claude`);
+    const response = await talkieServerFetch(`${TALKIESERVER_URL}/windows/claude`);
     const data = await response.json() as WindowsListResponse;
 
     const window = data.windows?.find(w => w.windowID === parseInt(windowId, 10));
@@ -123,7 +124,7 @@ export async function getWindowScreenshot(windowId: string): Promise<Response> {
   }
 
   try {
-    const response = await fetch(`${TALKIESERVER_URL}/screenshot/window/${windowId}`);
+    const response = await talkieServerFetch(`${TALKIESERVER_URL}/screenshot/window/${windowId}`);
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({})) as { error?: string };
@@ -155,7 +156,7 @@ export async function captureAllWindows(): Promise<ProxyResult<CapturesResponse>
   log.info("GET /windows/captures");
 
   return withTalkieServer("Capture windows", async () => {
-    const response = await fetch(`${TALKIESERVER_URL}/screenshot/terminals`);
+    const response = await talkieServerFetch(`${TALKIESERVER_URL}/screenshot/terminals`);
 
     if (!response.ok) {
       const errorText = await response.text();

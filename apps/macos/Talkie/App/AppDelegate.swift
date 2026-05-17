@@ -156,6 +156,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         // This enables persistent file logging for all categories including sync
         TalkieLogger.configure(source: .talkie)
 
+        do {
+            try TalkieRuntimeIdentityStore.writeCurrentProcess(component: .mac)
+        } catch {
+            logger.error("Failed to write runtime identity: \(error.localizedDescription)")
+        }
+
         // Configure glass effects from user preference (load-time only)
         GlassConfig.enableGlassEffects = SettingsManager.shared.enableGlassEffects
 

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <style>@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500');</style>
+
+  </defs>
+  <rect width="1024" height="1024" fill="#0E0D0A"/>
+  <g transform="translate(195, 0)">
+    <text x="317.44" y="880.64" text-anchor="middle" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="500" font-size="798.72" fill="#F4EFE6" >t</text><circle cx="494.08" cy="480.256" r="20.48" fill="#E68A3C"/>
+  </g>
+</svg>
