@@ -2,7 +2,7 @@
 //  ThemeManager.swift
 //  Talkie iOS
 //
-//  Manages app themes with 3 configurable options
+//  Manages app themes with 5 configurable options
 //
 
 import SwiftUI
@@ -44,28 +44,31 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
 // MARK: - Theme Definitions
 
 enum AppTheme: String, CaseIterable, Identifiable {
+    case scope = "scope"
     case midnight = "midnight"
     case tactical = "tactical"
     case ghost = "ghost"
-    case scope = "scope"
+    case lift = "lift"
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
+        case .scope: return "Scope"
         case .midnight: return "Midnight"
         case .tactical: return "Tactical"
         case .ghost: return "Ghost"
-        case .scope: return "Scope"
+        case .lift: return "Lift"
         }
     }
 
     var description: String {
         switch self {
+        case .scope: return "Paper chassis with brass instrument chrome"
         case .midnight: return "Deep black with subtle highlights"
         case .tactical: return "High contrast, sharp edges"
         case .ghost: return "Soft, muted elegance"
-        case .scope: return "Paper chassis with brass instrument chrome"
+        case .lift: return "Pure white surfaces with indigo lift"
         }
     }
 }
@@ -141,6 +144,21 @@ private let cachedGhostColors = ThemeColors(
     success: Color(hex: "10B981")
 )
 
+private let cachedLiftColors = ThemeColors(
+    tableHeaderBackground: Color(hex: "FAFAFA", darkHex: "1A1A1A"),
+    tableCellBackground: Color(hex: "FFFFFF", darkHex: "1A1A1A"),
+    tableDivider: Color(hex: "000000", darkHex: "FFFFFF").opacity(0.04),
+    tableBorder: Color(hex: "000000", darkHex: "FFFFFF").opacity(0.10),
+    background: Color(hex: "FFFFFF", darkHex: "1A1A1A"),
+    cardBackground: Color(hex: "FFFFFF", darkHex: "1A1A1A"),
+    searchBackground: Color(hex: "FAFAFA", darkHex: "181818"),
+    textPrimary: Color(hex: "1A1A1A", darkHex: "FAFAFA"),
+    textSecondary: Color(hex: "525252", darkHex: "A0A0A0"),
+    textTertiary: Color(hex: "A0A0A0", darkHex: "707070"),
+    accent: Color(hex: "6366F1"),
+    success: Color(hex: "10B981")
+)
+
 // Scope: black-and-gold instrument chassis. Paper-white canvas, warm-graphite
 // instrument panels, brass-amber accent. Mirrors the latest direction on
 // `ui/instrument-bay-polish` — softer brass over emerald, paper over pure
@@ -165,10 +183,11 @@ private let cachedScopeColors = ThemeColors(
 extension AppTheme {
     var colors: ThemeColors {
         switch self {
+        case .scope: return cachedScopeColors
         case .midnight: return cachedMidnightColors
         case .tactical: return cachedTacticalColors
         case .ghost: return cachedGhostColors
-        case .scope: return cachedScopeColors
+        case .lift: return cachedLiftColors
         }
     }
 

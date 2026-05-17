@@ -72,7 +72,7 @@ struct talkieApp: App {
             ZStack {
                 if let controller = persistenceController, mainInterfaceVisible {
                     // Database ready - show main content
-                    HomeView()
+                    AppShellNext { HomeNextStub() }
                         .environment(Clerk.shared)
                         .environment(\.managedObjectContext, controller.container.viewContext)
                         .environmentObject(deepLinkManager)
