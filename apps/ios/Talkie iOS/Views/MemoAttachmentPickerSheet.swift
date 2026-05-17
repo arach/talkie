@@ -81,10 +81,7 @@ struct MemoAttachmentPickerSheet: View {
             }
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text("Recent")
-                    .font(.techLabel)
-                    .tracking(1.5)
-                    .foregroundColor(.textSecondary)
+                TalkieEyebrow(text: "Recent")
 
                 if !recentAssets.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {

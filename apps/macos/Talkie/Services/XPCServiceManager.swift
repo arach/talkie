@@ -115,6 +115,7 @@ public class XPCServiceManager<ServiceProtocol> {
     /// Reconnect attempt tracking for graduated backoff
     private var reconnectAttempt = 0
     private var firstAttemptTime: Date?
+    private var reconnectTask: Task<Void, Never>?
 
     /// Track when connection was established (for stable connection detection)
     private var connectionEstablishedAt: Date?
@@ -145,6 +146,8 @@ public class XPCServiceManager<ServiceProtocol> {
 
     /// Reset backoff state (call when connection succeeds)
     private func resetBackoff() {
+        reconnectTask?.cancel()
+        reconnectTask = nil
         reconnectAttempt = 0
         firstAttemptTime = nil
     }
@@ -209,7 +212,7 @@ public class XPCServiceManager<ServiceProtocol> {
             launchHandler()
 
             // Wait for service to start (up to 3 seconds)
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            try? await Task.sleep(for: .seconds(2))
 
             if await tryConnect(to: preferredEnvironmentProvider()) {
                 isConnecting = false
@@ -223,6 +226,7 @@ public class XPCServiceManager<ServiceProtocol> {
         hasAttemptedAutoLaunch = false  // Reset for manual retry
 
         log.info(" ❌ Failed to connect to any environment")
+        scheduleReconnect()
     }
 
     /// Try connecting to a specific environment
@@ -281,7 +285,7 @@ public class XPCServiceManager<ServiceProtocol> {
 
                     // Auto-reconnect on invalidation
                     if self.autoReconnectEnabled {
-                        await self.scheduleReconnect()
+                        self.scheduleReconnect()
                     }
                 }
             }
@@ -298,7 +302,7 @@ public class XPCServiceManager<ServiceProtocol> {
 
                     // Auto-reconnect with exponential backoff
                     if self.autoReconnectEnabled {
-                        await self.scheduleReconnect()
+                        self.scheduleReconnect()
                     }
                 }
             }
@@ -443,7 +447,7 @@ public class XPCServiceManager<ServiceProtocol> {
                     }
 
                     if self.autoReconnectEnabled {
-                        await self.scheduleReconnect()
+                        self.scheduleReconnect()
                     }
                 }
             }
@@ -458,7 +462,7 @@ public class XPCServiceManager<ServiceProtocol> {
                     self.connectionInfo = .disconnected
 
                     if self.autoReconnectEnabled {
-                        await self.scheduleReconnect()
+                        self.scheduleReconnect()
                     }
                 }
             }
@@ -593,7 +597,7 @@ public class XPCServiceManager<ServiceProtocol> {
         guard let connection = xpcConnection else {
             // Connection lost, try to reconnect
             log.info(" 💔 Heartbeat: no connection")
-            await scheduleReconnect()
+            scheduleReconnect()
             return
         }
 
@@ -629,13 +633,13 @@ public class XPCServiceManager<ServiceProtocol> {
                 xpcConnection?.invalidate()
                 xpcConnection = nil
                 connectionInfo = .disconnected
-                await scheduleReconnect()
+                scheduleReconnect()
             }
         }
     }
 
     /// Schedule a reconnection attempt with graduated backoff
-    private func scheduleReconnect() async {
+    private func scheduleReconnect() {
         guard autoReconnectEnabled else {
             log.info(" Auto-reconnect disabled")
             return
@@ -643,6 +647,11 @@ public class XPCServiceManager<ServiceProtocol> {
 
         guard !isConnecting else {
             log.info(" Already connecting, skipping reconnect")
+            return
+        }
+
+        guard reconnectTask == nil else {
+            log.info(" Reconnect already scheduled")
             return
         }
 
@@ -656,9 +665,12 @@ public class XPCServiceManager<ServiceProtocol> {
         log.info(" 🔄 Reconnect attempt \(reconnectAttempt) in \(delay)s")
         stopHeartbeat()
 
-        try? await Task.sleep(for: .seconds(delay))
-
-        await connect()
+        reconnectTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled else { return }
+            self?.reconnectTask = nil
+            await self?.connect()
+        }
     }
 
     /// Get remote object proxy

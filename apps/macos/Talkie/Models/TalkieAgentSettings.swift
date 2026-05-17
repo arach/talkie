@@ -502,6 +502,8 @@ final class AgentSettings {
             case .classic: return .live
             case .warm: return .warm
             case .light: return .light
+            case .liquidGlass: return .midnight  // Deep dark for glass to pop
+            case .scope: return .light           // Light agent UI matches cream-phosphor
             }
         }
         set {

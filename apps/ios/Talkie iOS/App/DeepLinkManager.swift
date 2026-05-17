@@ -50,6 +50,11 @@ class DeepLinkManager: ObservableObject {
         let sourceDescription: String
     }
 
+    enum AISetupStatus: Equatable {
+        case success(providerName: String, modelId: String)
+        case failure(message: String)
+    }
+
     static let shared = DeepLinkManager()
 
     @Published var pendingAction: DeepLinkAction = .none
@@ -57,6 +62,7 @@ class DeepLinkManager: ObservableObject {
     @Published var lastKeyboardDebug: String?
     @Published var keyboardAutoStartRequested: Bool = false
     @Published var pendingSSHImport: PendingSSHImport?
+    @Published var aiSetupStatus: AISetupStatus?
 
     /// Callback URLs from the last x-callback-url request
     var callbackURLs: CallbackURLs?
@@ -152,6 +158,9 @@ class DeepLinkManager: ObservableObject {
                 AppLogger.app.info("Deep link: open SSH terminal")
                 pendingAction = .openSSHTerminal
             }
+
+        case "ai":
+            handleAISetup(from: url, components: components)
 
         case "share":
             // Handle talkie://share?id=<uuid> from Share Extension
@@ -378,6 +387,39 @@ class DeepLinkManager: ObservableObject {
             } catch {
                 AppLogger.app.error("SSH import deep link failed: \(error.localizedDescription)")
                 pendingAction = .openSSHTerminal
+            }
+        }
+    }
+
+    private func handleAISetup(from url: URL, components: URLComponents?) {
+        let scannedCode = components?.queryItems?.first(where: { $0.name == "payload" })?.value
+            ?? url.absoluteString
+
+        Task { @MainActor in
+            do {
+                let route = try await TalkieQRCodeRouter.route(scannedCode: scannedCode)
+
+                let input: TalkieAIProviderCredentialIngestor.InputRoute
+                switch route {
+                case .aiProviderCredential(let payload):
+                    input = .directCredential(payload)
+                case .aiProviderCredentialSetup(let invite):
+                    input = .setupInvite(invite)
+                default:
+                    AppLogger.app.warning("Deep link: AI setup payload had unexpected route")
+                    aiSetupStatus = .failure(message: "This QR isn't an iPhone AI setup code.")
+                    return
+                }
+
+                let result = try await TalkieAIProviderCredentialIngestor.shared.ingest(input)
+                AppLogger.app.info(
+                    "Deep link: imported iPhone AI credentials",
+                    detail: "provider=\(result.providerId) model=\(result.modelId) handshake=\(result.viaSetupHandshake)"
+                )
+                aiSetupStatus = .success(providerName: result.providerName, modelId: result.modelId)
+            } catch {
+                AppLogger.app.error("Deep link: AI setup failed: \(error.localizedDescription)")
+                aiSetupStatus = .failure(message: error.localizedDescription)
             }
         }
     }

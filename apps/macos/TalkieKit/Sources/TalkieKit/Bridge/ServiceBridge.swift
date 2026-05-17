@@ -17,6 +17,15 @@ import Network
 
 private let log = Log(.system)
 
+private extension NWError {
+    var isAddressAlreadyInUse: Bool {
+        if case .posix(let code) = self {
+            return code == .EADDRINUSE
+        }
+        return false
+    }
+}
+
 /// A WebSocket JSON-RPC server that binds to localhost on a given port.
 /// Services register method handlers; the bridge dispatches incoming requests.
 public final class ServiceBridge: @unchecked Sendable {
@@ -86,6 +95,10 @@ public final class ServiceBridge: @unchecked Sendable {
         do {
             listener = try NWListener(using: params)
         } catch {
+            if (error as? NWError)?.isAddressAlreadyInUse == true {
+                log.info("[\(serviceName)] ServiceBridge port \(port) already owned by another process; this instance will not bind")
+                return
+            }
             log.error("[\(serviceName)] ServiceBridge failed to create listener: \(error)")
             return
         }
@@ -96,8 +109,13 @@ public final class ServiceBridge: @unchecked Sendable {
             case .ready:
                 log.info("[\(self.serviceName)] ServiceBridge listening on ws://\(self.bindAddress):\(self.port)")
             case .failed(let error):
-                log.error("[\(self.serviceName)] ServiceBridge listener failed: \(error)")
+                if error.isAddressAlreadyInUse {
+                    log.info("[\(self.serviceName)] ServiceBridge port \(self.port) already owned by another process; this instance will not bind")
+                } else {
+                    log.error("[\(self.serviceName)] ServiceBridge listener failed: \(error)")
+                }
                 self.listener?.cancel()
+                self.listener = nil
             case .cancelled:
                 log.info("[\(self.serviceName)] ServiceBridge listener cancelled")
             default:
@@ -165,7 +183,7 @@ public final class ServiceBridge: @unchecked Sendable {
 
             if let error {
                 // posix(57) = socket not connected — normal close
-                if case .posix(let code) = error as? NWError, code == .ENOTCONN {
+                if case .posix(let code) = error, code == .ENOTCONN {
                     connection.cancel()
                     return
                 }

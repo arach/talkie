@@ -67,6 +67,8 @@ struct CaptureComposeView: View {
                         dictationResetTrigger: $dictationResetTrigger
                     ) {
                         EmptyView()
+                    } footerContent: {
+                        EmptyView()
                     }
                     .animation(.easeInOut(duration: 0.25), value: isComposing)
 
@@ -84,18 +86,11 @@ struct CaptureComposeView: View {
             .navigationTitle("New Capture")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { saveCapture() }
-                        .fontWeight(.semibold)
-                        .disabled(trimmedText.isEmpty)
-                }
+                captureToolbar
             }
             .sheet(isPresented: $showingCamera) {
                 if supportsDocumentScanner {
-                    CaptureDocumentScannerView(
+                    DocumentCameraScannerView(
                         onPageScanned: processFirstPage(_:deferredPages:),
                         onFailure: { message in
                             importError = message
@@ -132,9 +127,7 @@ struct CaptureComposeView: View {
                 }
             }
             .onChange(of: dictationState) { _, state in
-                if state == .recording && !isComposing {
-                    withAnimation { isComposing = true }
-                }
+                handleDictationStateChange(state)
             }
             .fullScreenCover(isPresented: $showingWebBrowser) {
                 WebCaptureBrowser(initialURL: webBrowserURL) { result in
@@ -150,6 +143,28 @@ struct CaptureComposeView: View {
                 }
             }
         }
+    }
+
+    @ToolbarContentBuilder
+    private var captureToolbar: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) {
+            Button("Cancel", action: cancelCapture)
+        }
+
+        ToolbarItem(placement: .confirmationAction) {
+            Button("Save", action: saveCapture)
+                .fontWeight(.semibold)
+                .disabled(trimmedText.isEmpty)
+        }
+    }
+
+    private func cancelCapture() {
+        dismiss()
+    }
+
+    private func handleDictationStateChange(_ state: InlineDictationController.State) {
+        guard state == .recording, !isComposing else { return }
+        withAnimation { isComposing = true }
     }
 
     // MARK: - Import Options
@@ -265,7 +280,7 @@ struct CaptureComposeView: View {
     // MARK: - Actions
 
     private var supportsDocumentScanner: Bool {
-        VNDocumentCameraViewController.isSupported
+        DocumentCameraScannerView.isSupported
     }
 
     private var supportsCameraCapture: Bool {
@@ -441,90 +456,5 @@ struct CaptureComposeView: View {
 
     private var trimmedText: String {
         draftText.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-}
-
-private struct CaptureDocumentScannerView: UIViewControllerRepresentable {
-    let onPageScanned: (UIImage, [URL]) -> Void
-    let onFailure: (String) -> Void
-
-    @Environment(\.dismiss) private var dismiss
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(
-            onPageScanned: onPageScanned,
-            onFailure: onFailure,
-            dismiss: dismiss.callAsFunction
-        )
-    }
-
-    func makeUIViewController(context: Context) -> VNDocumentCameraViewController {
-        let controller = VNDocumentCameraViewController()
-        controller.delegate = context.coordinator
-        return controller
-    }
-
-    func updateUIViewController(_ uiViewController: VNDocumentCameraViewController, context: Context) {}
-
-    final class Coordinator: NSObject, VNDocumentCameraViewControllerDelegate {
-        let onPageScanned: (UIImage, [URL]) -> Void
-        let onFailure: (String) -> Void
-        let dismiss: () -> Void
-
-        init(
-            onPageScanned: @escaping (UIImage, [URL]) -> Void,
-            onFailure: @escaping (String) -> Void,
-            dismiss: @escaping () -> Void
-        ) {
-            self.onPageScanned = onPageScanned
-            self.onFailure = onFailure
-            self.dismiss = dismiss
-        }
-
-        func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) {
-            dismiss()
-        }
-
-        func documentCameraViewController(
-            _ controller: VNDocumentCameraViewController,
-            didFailWithError error: Error
-        ) {
-            onFailure(error.localizedDescription)
-            dismiss()
-        }
-
-        func documentCameraViewController(
-            _ controller: VNDocumentCameraViewController,
-            didFinishWith scan: VNDocumentCameraScan
-        ) {
-            guard scan.pageCount > 0 else {
-                onFailure("No pages were captured")
-                dismiss()
-                return
-            }
-
-            let firstPage = scan.imageOfPage(at: 0)
-            var deferredURLs: [URL] = []
-
-            if scan.pageCount > 1 {
-                let tempDir = FileManager.default.temporaryDirectory
-                    .appendingPathComponent("talkie-scan-\(UUID().uuidString)")
-                try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-
-                for i in 1..<scan.pageCount {
-                    autoreleasepool {
-                        let page = scan.imageOfPage(at: i)
-                        if let data = page.pngData() {
-                            let url = tempDir.appendingPathComponent("page-\(i).png")
-                            try? data.write(to: url)
-                            deferredURLs.append(url)
-                        }
-                    }
-                }
-            }
-
-            onPageScanned(firstPage, deferredURLs)
-            dismiss()
-        }
     }
 }

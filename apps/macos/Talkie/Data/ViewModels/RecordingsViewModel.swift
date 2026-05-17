@@ -111,7 +111,7 @@ final class RecordingsViewModel {
 
     /// Load next page (expands the observation window)
     func loadNextPage() async {
-        guard hasMorePages else { return }
+        guard hasMorePages, !isLoading else { return }
         currentLimit += pageSize
         await startObservation()
     }
@@ -127,7 +127,7 @@ final class RecordingsViewModel {
             case .notes: return .notes
             }
         }()
-        await toggleSemanticFilter(semanticFilter)
+        await selectSemanticFilter(semanticFilter)
     }
 
     /// Refresh (re-subscribes the observation)
@@ -167,6 +167,13 @@ final class RecordingsViewModel {
     }
 
     // MARK: - Semantic Filter Actions
+
+    /// Select a semantic filter without toggling it off when it is already active.
+    func selectSemanticFilter(_ filter: SemanticFilter) async {
+        filterState.select(filter)
+        currentLimit = pageSize
+        await startObservation()
+    }
 
     /// Toggle a semantic filter
     func toggleSemanticFilter(_ filter: SemanticFilter) async {
@@ -217,14 +224,27 @@ final class RecordingsViewModel {
         let limit = currentLimit
 
         log.debug("observation.start: \(filterState.description), sort=\(sortField), limit=\(limit)")
+        #if DEBUG
+        FrameRateMonitor.shared.beginRecordingsObservation(
+            filter: filterState.description,
+            sort: String(describing: sortField),
+            limit: limit
+        )
+        #endif
 
         let dbQueue: DatabaseQueue
         do {
             dbQueue = try await dbManager.databaseWhenReady()
+            #if DEBUG
+            FrameRateMonitor.shared.markRecordingsObservation(stage: "db_ready")
+            #endif
         } catch {
             self.error = error
             self.isLoading = false
             log.error("observation.start failed: \(error.localizedDescription)")
+            #if DEBUG
+            FrameRateMonitor.shared.failRecordingsObservation(error.localizedDescription)
+            #endif
             return
         }
 
@@ -243,16 +263,22 @@ final class RecordingsViewModel {
             let recordings = try TalkieObject.fetchAll(db, sql: fetchSQL)
             return (recordings, count)
         }
+        #if DEBUG
+        FrameRateMonitor.shared.markRecordingsObservation(stage: "tracking_created")
+        #endif
 
         observationCancellable = observation.start(
             in: dbQueue,
-            scheduling: .immediate,
+            scheduling: .async(onQueue: .main),
             onError: { [weak self] error in
                 Task { @MainActor [weak self] in
                     guard let self else { return }
                     self.error = error
                     self.isLoading = false
                     log.error("observation.error: \(error.localizedDescription)")
+                    #if DEBUG
+                    FrameRateMonitor.shared.failRecordingsObservation(error.localizedDescription)
+                    #endif
                 }
             },
             onChange: { [weak self] result in
@@ -262,9 +288,23 @@ final class RecordingsViewModel {
                     self.totalCount = result.count
                     self.isLoading = false
                     log.debug("observation.update: total=\(result.count), displayed=\(result.recordings.count)")
+                    #if DEBUG
+                    FrameRateMonitor.shared.finishRecordingsObservation(
+                        displayed: result.recordings.count,
+                        total: result.count
+                    )
+                    FrameRateMonitor.shared.markNavigationDataVisible(
+                        section: NavigationState.shared.selectedSection?.perfName ?? "Library",
+                        source: "RecordingsViewModel",
+                        detail: "displayed=\(result.recordings.count) total=\(result.count)"
+                    )
+                    #endif
                 }
             }
         )
+        #if DEBUG
+        FrameRateMonitor.shared.markRecordingsObservation(stage: "start_returned")
+        #endif
     }
 
     /// Build ORDER BY clause from current sort settings

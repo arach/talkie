@@ -120,7 +120,7 @@ struct WorkflowDefinition: Identifiable, Codable, Hashable {
     }
 
     private static var defaultOpenAIModelId: String {
-        LLMConfig.shared.defaultModel(for: "openai") ?? "gpt-5.2-chat-latest"
+        LLMConfig.shared.defaultModel(for: "openai") ?? "gpt-5.5"
     }
 
     // Built-in system workflows
@@ -882,6 +882,8 @@ enum WorkflowLLMProvider: String, Codable, CaseIterable {
             ]
         case .openai:
             return [
+                WorkflowModelOption(id: "gpt-5.5", name: "GPT-5.5", contextWindow: 128000,
+                                   costTier: .capable),
                 WorkflowModelOption(id: "gpt-5-nano", name: "GPT-5 Nano", contextWindow: 128000,
                                    costTier: .budget),
                 WorkflowModelOption(id: "gpt-5.2-chat-latest", name: "GPT-5.2", contextWindow: 128000,

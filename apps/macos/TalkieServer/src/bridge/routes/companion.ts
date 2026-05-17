@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { log } from "../../log";
 import { listSecurityEvents, type SecurityEvent } from "../../security/events";
+import { talkieServerFetch } from "../talkie-local-client";
 import { badRequest, proxyError, serverError, serviceUnavailable } from "./responses";
 
 export interface CompanionStateResponse {
@@ -217,7 +218,7 @@ export async function companionTriggerRoute(
   }
 
   try {
-    const response = await fetch(`${TALKIESERVER_URL}/companion/trigger`, {
+    const response = await talkieServerFetch(`${TALKIESERVER_URL}/companion/trigger`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ shortcutId }),
@@ -289,7 +290,7 @@ export async function companionActivateAppRoute(
   }
 
   try {
-    const response = await fetch(`${TALKIESERVER_URL}/companion/activate-app`, {
+    const response = await talkieServerFetch(`${TALKIESERVER_URL}/companion/activate-app`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ processIdentifier, bundleIdentifier }),
@@ -327,7 +328,7 @@ export async function companionTrackpadRoute(
   }
 
   try {
-    const response = await fetch(`${TALKIESERVER_URL}/companion/trackpad`, {
+    const response = await talkieServerFetch(`${TALKIESERVER_URL}/companion/trackpad`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -358,7 +359,7 @@ export async function companionPasteImageRoute(
   }
 
   try {
-    const response = await fetch(`${TALKIESERVER_URL}/companion/paste-image`, {
+    const response = await talkieServerFetch(`${TALKIESERVER_URL}/companion/paste-image`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -630,6 +631,10 @@ function resolveLegacySlotId(tile: ShortcutBoardTile): string {
     case "talkie-devices":
     case "devices":
       return "talkie-devices";
+    case "mac-paste-image":
+    case "paste-image":
+    case "share-image":
+      return "mac-paste-image";
     default:
       return "";
   }
@@ -660,7 +665,7 @@ function defaultShortcutPages(): CompanionShortcutPage[] {
         "talkie-pending",
         "talkie-recent",
         "talkie-home",
-        "talkie-devices",
+        "mac-paste-image",
       ],
     },
     {
@@ -668,6 +673,7 @@ function defaultShortcutPages(): CompanionShortcutPage[] {
       title: "Mac",
       shortcutSlots: [
         "mac-windows",
+        "mac-paste-image",
         "talkie-keyboard",
         "iterm-dictate",
         "mac-sessions",
@@ -681,7 +687,6 @@ function defaultShortcutPages(): CompanionShortcutPage[] {
         "talkie-devices",
         "talkie-home",
         "talkie-pending",
-        "",
         "",
       ],
     },
@@ -764,7 +769,7 @@ async function readTalkieRuntimeState(): Promise<CompanionRuntimeState> {
   }
 
   try {
-    const response = await fetch(`${TALKIESERVER_URL}/companion/runtime-state`, {
+    const response = await talkieServerFetch(`${TALKIESERVER_URL}/companion/runtime-state`, {
       signal: AbortSignal.timeout(2000),
     });
 

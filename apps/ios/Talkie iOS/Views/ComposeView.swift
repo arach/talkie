@@ -4,6 +4,15 @@ import SwiftUI
 import TalkieMobileKit
 import UIKit
 
+// Notification pipe so the Keyboard pill in the bottom tray can pop the custom
+// Talkie keyboard on the editor's UITextView. SwiftUI's @FocusState binding
+// doesn't always propagate to a UIViewRepresentable's updateUIView, so this
+// gives us a deterministic side channel.
+extension Notification.Name {
+    static let composeRequestEditorFocus = Notification.Name("composeRequestEditorFocus")
+    static let composeRequestEditorBlur = Notification.Name("composeRequestEditorBlur")
+}
+
 private enum ComposeRevisionPath: String, CaseIterable, Identifiable {
     case direct
     case mac
@@ -52,6 +61,107 @@ enum ComposeMicPlacement {
     }
 }
 
+struct ComposeInitialContext: Equatable, Identifiable {
+    let id: UUID
+    let title: String?
+    let text: String
+    let sourceDescription: String?
+    let sourceURL: String?
+
+    init(
+        id: UUID = UUID(),
+        title: String? = nil,
+        text: String,
+        sourceDescription: String? = nil,
+        sourceURL: String? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.text = text
+        self.sourceDescription = sourceDescription
+        self.sourceURL = sourceURL
+    }
+
+    init(capture: Capture) {
+        self.id = capture.id
+        self.title = capture.title
+        self.text = capture.text
+        self.sourceDescription = capture.bookmark?.sourceApplicationName
+            ?? capture.bookmark?.siteName
+            ?? capture.sourceType.capitalized
+        self.sourceURL = capture.sourceURL
+    }
+}
+
+private enum ComposeSegmentKind {
+    case capturedContext
+    case pastedContext
+    case dictation
+    case revision
+    case savedNote
+
+    var title: String {
+        switch self {
+        case .capturedContext:
+            return "Capture"
+        case .pastedContext:
+            return "Paste"
+        case .dictation:
+            return "Dictation"
+        case .revision:
+            return "Revision"
+        case .savedNote:
+            return "Note"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .capturedContext:
+            return "tray.and.arrow.down.fill"
+        case .pastedContext:
+            return "doc.on.clipboard"
+        case .dictation:
+            return "waveform"
+        case .revision:
+            return "sparkles"
+        case .savedNote:
+            return "note.text"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .capturedContext:
+            return Color.orange
+        case .pastedContext:
+            return Color.blue
+        case .dictation:
+            return Color.recording
+        case .revision:
+            return Color.brandAccent
+        case .savedNote:
+            return Color.textSecondary
+        }
+    }
+}
+
+private struct ComposeSegment: Identifiable, Equatable {
+    let id = UUID()
+    let kind: ComposeSegmentKind
+    let title: String
+    let detail: String?
+    let text: String
+    let createdAt: Date
+}
+
+private struct ComposeWorkflowAction: Identifiable, Equatable {
+    let id: String
+    let title: String
+    let systemImage: String
+    let prompt: String
+}
+
 @MainActor
 @Observable
 private final class ComposeVoiceCommandState {
@@ -82,7 +192,11 @@ private final class ComposeVoiceCommandState {
     func toggle(canStart: Bool) {
         errorMessage = nil
 
-        switch controller.currentState {
+        // Drive off the observed state (what the pill icon is showing) rather
+        // than controller.currentState — that internal value can briefly lag
+        // the @Observable property and cause a "tap to stop" to mis-fire a
+        // brand-new start instead.
+        switch dictationState {
         case .idle:
             guard canStart else { return }
             Task {
@@ -119,6 +233,7 @@ struct ComposeView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     private let presentationStyle: PresentationStyle
+    private let initialContext: ComposeInitialContext?
     private let onBack: (() -> Void)?
 
     @State private var bridgeManager = BridgeManager.shared
@@ -150,17 +265,23 @@ struct ComposeView: View {
     @State private var directOptionsRequestID = 0
     @State private var directOptionsError: String?
     @State private var showingBridgeSettings = false
-    @State private var actionBarHeight: CGFloat = 120
     @State private var commandPreview: ComposeVoiceCommandPreview?
     @State private var activeNote: ComposeNote?
     @State private var isShowingNoteEditor = false
+    @State private var didPrepareInitialEditor = false
+    @State private var composeSegments: [ComposeSegment] = []
+    @State private var recentCaptures: [Capture] = []
+    @State private var selectedRange: NSRange?
+    @State private var showingRevisionHistory = false
     @FocusState private var isDraftFocused: Bool
 
     init(
-        presentationStyle: PresentationStyle = .sheet,
+        presentationStyle: PresentationStyle = .embedded,
+        initialContext: ComposeInitialContext? = nil,
         onBack: (() -> Void)? = nil
     ) {
         self.presentationStyle = presentationStyle
+        self.initialContext = initialContext
         self.onBack = onBack
     }
 
@@ -172,7 +293,6 @@ struct ComposeView: View {
                 }
             } else {
                 composeContent
-                    .ignoresSafeArea(edges: .bottom)
             }
         }
     }
@@ -185,22 +305,13 @@ struct ComposeView: View {
             composeBody
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
+            // Voice command preview floats in from the bottom when active.
             if isShowingNoteEditor, let commandPreview {
                 ComposeVoiceCommandPreviewBubble(text: commandPreview.text)
                     .padding(.horizontal, Spacing.md)
-                    .padding(.bottom, actionBarHeight + 12)
+                    .padding(.bottom, 96)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            composeActionTray
-                .background {
-                    GeometryReader { proxy in
-                        Color.clear
-                            .allowsHitTesting(false)
-                            .preference(key: ComposeActionBarHeightPreferenceKey.self, value: proxy.size.height)
-                    }
-                }
         }
         .modifier(ComposeNavigationChrome(
             presentationStyle: presentationStyle,
@@ -211,6 +322,7 @@ struct ComposeView: View {
             draftText: draftText,
             isRevising: isRevising,
             hasActiveDictation: hasActiveDictation,
+            headerModelControls: AnyView(composeHeaderModelControls),
             saveNote: { saveNote() },
             createNewNote: { focus in
                 createNewNote(focus: focus)
@@ -220,13 +332,22 @@ struct ComposeView: View {
         .navigationDestination(isPresented: $showingBridgeSettings) {
             BridgeSettingsView()
         }
-        .onPreferenceChange(ComposeActionBarHeightPreferenceKey.self) { newHeight in
-            guard abs(actionBarHeight - newHeight) > 0.5 else { return }
-            actionBarHeight = newHeight
+        .sheet(isPresented: $showingRevisionHistory) {
+            ComposeHistorySheet(
+                revisions: appliedRevisions,
+                onDismiss: { showingRevisionHistory = false }
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .onAppear {
             voiceCommandState.configureIfNeeded()
+            refreshRecentCaptures()
+            prepareInitialEditorIfNeeded()
             refreshDirectOptionsIfNeeded()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .capturesDidChange)) { _ in
+            refreshRecentCaptures()
         }
         .onChange(of: voiceCommandState.latestTranscript) { _, transcript in
             guard let transcript else { return }
@@ -271,68 +392,38 @@ struct ComposeView: View {
 
     @ViewBuilder
     private var composeEditorBody: some View {
-        if pendingRevision == nil && appliedRevisions.isEmpty {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                if let composeErrorMessage {
-                    composeErrorBanner(message: composeErrorMessage)
-                }
-
-                ComposeEditorCard(
-                    placeholder: "",
-                    editorMinHeight: 200,
-                    text: $draftText,
-                    draftFocus: $isDraftFocused,
-                    dictationState: $dictationState,
-                    dictationError: $dictationError,
-                    dictationTrigger: $draftDictationTrigger,
-                    dictationResetTrigger: $draftDictationResetTrigger,
-                    showsDictationButton: true,
-                    prefersMinimalKeyboard: false
-                ) {
-                    composeRevisionControls
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            }
-            .padding(Spacing.md)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        } else {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    if let composeErrorMessage {
-                        composeErrorBanner(message: composeErrorMessage)
-                    }
-
-                    ComposeEditorCard(
-                        placeholder: "",
-                        editorMinHeight: 200,
-                        text: $draftText,
-                        draftFocus: $isDraftFocused,
-                        dictationState: $dictationState,
-                        dictationError: $dictationError,
-                        dictationTrigger: $draftDictationTrigger,
-                        dictationResetTrigger: $draftDictationResetTrigger,
-                        showsDictationButton: true,
-                        prefersMinimalKeyboard: false
-                    ) {
-                        composeRevisionControls
-                    }
-
-                    if let pendingRevision {
-                        ComposePreviewCard(
-                            revision: pendingRevision,
-                            applyRevision: applyPendingRevision,
-                            discardRevision: discardPendingRevision
-                        )
-                    }
-
-                    if !appliedRevisions.isEmpty {
-                        ComposeHistoryCard(revisions: appliedRevisions)
-                    }
-                }
-                .padding(Spacing.md)
-            }
-            .scrollDismissesKeyboard(.interactively)
-        }
+        ComposeEditorWorkspace(
+            errorMessage: composeErrorMessage,
+            appliedRevisions: appliedRevisions,
+            draftText: $draftText,
+            draftFocus: $isDraftFocused,
+            dictationState: $dictationState,
+            dictationError: $dictationError,
+            dictationTrigger: $draftDictationTrigger,
+            dictationResetTrigger: $draftDictationResetTrigger,
+            selectedRange: $selectedRange,
+            segments: composeSegments,
+            latestCaptureTitle: latestCaptureTitle,
+            canPaste: UIPasteboard.general.hasStrings,
+            canAddLatestCapture: !recentCaptures.isEmpty,
+            voiceCommandState: voiceCommandState.dictationState,
+            isVoiceCommandEnabled: isVoiceCommandButtonEnabled,
+            canStartDraftDictation: canStartDraftDictation,
+            primaryActions: primaryWorkflowActions,
+            secondaryActions: loopWorkflowActions,
+            areQuickActionsEnabled: areQuickActionsEnabled,
+            canSave: canSaveNote && hasPendingNoteChanges,
+            pendingRevision: $pendingRevision,
+            onSelectRevision: applyAppliedRevision,
+            onAppendClipboard: appendClipboardContext,
+            onAppendLatestCapture: appendLatestCaptureContext,
+            onDictationTranscript: recordDictationSegment,
+            onSave: { saveNote() },
+            onApplyPending: applyPendingRevision,
+            onDiscardPending: discardPendingRevision,
+            onToggleVoiceCommand: toggleVoiceCommand,
+            onPerformAction: performWorkflowAction
+        )
     }
 
     private var composeNotesListBody: some View {
@@ -343,17 +434,9 @@ struct ComposeView: View {
 
             VStack(spacing: 0) {
                 HStack {
-                    Text("NOTES")
-                        .font(.system(size: 10, weight: .medium))
-                        .tracking(1)
-                        .foregroundStyle(themeManager.colors.textTertiary)
-
+                    TalkieEyebrow(text: "Notes")
                     Spacer()
-
-                    Text("LAST EDITED")
-                        .font(.system(size: 10, weight: .medium))
-                        .tracking(1)
-                        .foregroundStyle(themeManager.colors.textTertiary)
+                    TalkieEyebrow(text: "Last Edited", tint: .ink, showLeader: false)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
@@ -420,42 +503,287 @@ private struct ComposeNavigationChrome: ViewModifier {
     let draftText: String
     let isRevising: Bool
     let hasActiveDictation: Bool
+    let headerModelControls: AnyView?
     let saveNote: () -> Void
     let createNewNote: (Bool) -> Void
     let clearDraft: () -> Void
 
+    @ObservedObject private var theme = ThemeManager.shared
+
+    private var canCommitSave: Bool {
+        canSaveNote && hasPendingNoteChanges
+    }
+
     func body(content: Content) -> some View {
         content
-            .navigationTitle(presentationStyle == .sheet ? "Compose" : "")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if presentationStyle == .sheet {
-                    ToolbarItemGroup(placement: .topBarTrailing) {
-                        if isShowingNoteEditor {
-                            Button("Save") {
-                                saveNote()
-                            }
-                            .disabled(!canSaveNote || !hasPendingNoteChanges)
+                ToolbarItem(placement: .principal) {
+                    if isShowingNoteEditor, let headerModelControls {
+                        // "Compose with ✨ Model ▾" — tappable Menu inline as
+                        // the nav title. Stays in the principal slot so it
+                        // centers naturally with the leading back chevron.
+                        headerModelControls
+                    } else {
+                        Text(isShowingNoteEditor ? "Compose" : "Notes")
+                            .font(.system(size: 10, weight: .regular, design: .monospaced))
+                            .tracking(2)
+                            .foregroundStyle(theme.colors.textTertiary)
+                    }
+                }
 
-                            if hasDraft {
-                                ShareLink(item: draftText) {
-                                    Image(systemName: "square.and.arrow.up")
+                if isShowingNoteEditor {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Save") { saveNote() }
+                            .fontWeight(.medium)
+                            .disabled(!canCommitSave)
+                    }
+                } else {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("New") { createNewNote(true) }
+                            .fontWeight(.medium)
+                    }
+                }
+            }
+    }
+}
+
+private struct ComposeEditorWorkspace: View {
+    let errorMessage: String?
+    let appliedRevisions: [ComposeAppliedRevision]
+    @Binding var draftText: String
+    let draftFocus: FocusState<Bool>.Binding
+    @Binding var dictationState: InlineDictationController.State
+    @Binding var dictationError: String?
+    @Binding var dictationTrigger: Int
+    @Binding var dictationResetTrigger: Int
+    var selectedRange: Binding<NSRange?>?
+    let segments: [ComposeSegment]
+    let latestCaptureTitle: String?
+    let canPaste: Bool
+    let canAddLatestCapture: Bool
+    let voiceCommandState: InlineDictationController.State
+    let isVoiceCommandEnabled: Bool
+    let canStartDraftDictation: Bool
+    let primaryActions: [ComposeWorkflowAction]
+    let secondaryActions: [ComposeWorkflowAction]
+    let areQuickActionsEnabled: Bool
+    let canSave: Bool
+    @Binding var pendingRevision: ComposePendingRevision?
+    let onSelectRevision: (ComposeAppliedRevision) -> Void
+    let onAppendClipboard: () -> Void
+    let onAppendLatestCapture: () -> Void
+    let onDictationTranscript: (String) -> Void
+    let onSave: () -> Void
+    let onApplyPending: () -> Void
+    let onDiscardPending: () -> Void
+    let onToggleVoiceCommand: () -> Void
+    let onPerformAction: (ComposeWorkflowAction) -> Void
+
+    init(
+        errorMessage: String?,
+        appliedRevisions: [ComposeAppliedRevision],
+        draftText: Binding<String>,
+        draftFocus: FocusState<Bool>.Binding,
+        dictationState: Binding<InlineDictationController.State>,
+        dictationError: Binding<String?>,
+        dictationTrigger: Binding<Int>,
+        dictationResetTrigger: Binding<Int>,
+        selectedRange: Binding<NSRange?>?,
+        segments: [ComposeSegment],
+        latestCaptureTitle: String?,
+        canPaste: Bool,
+        canAddLatestCapture: Bool,
+        voiceCommandState: InlineDictationController.State,
+        isVoiceCommandEnabled: Bool,
+        canStartDraftDictation: Bool,
+        primaryActions: [ComposeWorkflowAction],
+        secondaryActions: [ComposeWorkflowAction],
+        areQuickActionsEnabled: Bool,
+        canSave: Bool,
+        pendingRevision: Binding<ComposePendingRevision?>,
+        onSelectRevision: @escaping (ComposeAppliedRevision) -> Void,
+        onAppendClipboard: @escaping () -> Void,
+        onAppendLatestCapture: @escaping () -> Void,
+        onDictationTranscript: @escaping (String) -> Void,
+        onSave: @escaping () -> Void,
+        onApplyPending: @escaping () -> Void,
+        onDiscardPending: @escaping () -> Void,
+        onToggleVoiceCommand: @escaping () -> Void,
+        onPerformAction: @escaping (ComposeWorkflowAction) -> Void
+    ) {
+        self.errorMessage = errorMessage
+        self.appliedRevisions = appliedRevisions
+        self._draftText = draftText
+        self.draftFocus = draftFocus
+        self._dictationState = dictationState
+        self._dictationError = dictationError
+        self._dictationTrigger = dictationTrigger
+        self._dictationResetTrigger = dictationResetTrigger
+        self.selectedRange = selectedRange
+        self.segments = segments
+        self.latestCaptureTitle = latestCaptureTitle
+        self.canPaste = canPaste
+        self.canAddLatestCapture = canAddLatestCapture
+        self.voiceCommandState = voiceCommandState
+        self.isVoiceCommandEnabled = isVoiceCommandEnabled
+        self.canStartDraftDictation = canStartDraftDictation
+        self.primaryActions = primaryActions
+        self.secondaryActions = secondaryActions
+        self.areQuickActionsEnabled = areQuickActionsEnabled
+        self.canSave = canSave
+        self._pendingRevision = pendingRevision
+        self.onSelectRevision = onSelectRevision
+        self.onAppendClipboard = onAppendClipboard
+        self.onAppendLatestCapture = onAppendLatestCapture
+        self.onDictationTranscript = onDictationTranscript
+        self.onSave = onSave
+        self.onApplyPending = onApplyPending
+        self.onDiscardPending = onDiscardPending
+        self.onToggleVoiceCommand = onToggleVoiceCommand
+        self.onPerformAction = onPerformAction
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                if let errorMessage {
+                    ComposeErrorBanner(message: errorMessage)
+                }
+
+                if !segments.isEmpty {
+                    ComposeSegmentsBar(segments: segments)
+                }
+
+                if !appliedRevisions.isEmpty {
+                    ComposeVersionsCellStrip(
+                        revisions: appliedRevisions,
+                        onSelect: onSelectRevision
+                    )
+                }
+
+                ComposeEditorCard(
+                    placeholder: "Type, paste, or dictate...",
+                    editorMinHeight: 360,
+                    text: $draftText,
+                    draftFocus: draftFocus,
+                    dictationState: $dictationState,
+                    dictationError: $dictationError,
+                    dictationTrigger: $dictationTrigger,
+                    dictationResetTrigger: $dictationResetTrigger,
+                    selectedRange: selectedRange,
+                    showsDictationButton: true,
+                    prefersMinimalKeyboard: false,
+                    usesSystemKeyboard: true,
+                    canStartDictation: canStartDraftDictation,
+                    onDictationTranscript: onDictationTranscript,
+                    providerLabel: nil,
+                    showsFooterStrip: false,
+                    onSave: onSave,
+                    canSave: canSave,
+                    pendingRevision: $pendingRevision,
+                    onApplyPending: onApplyPending,
+                    onDiscardPending: onDiscardPending
+                ) {
+                    EmptyView()
+                } footerContent: {
+                    EmptyView()
+                }
+                .frame(maxHeight: .infinity, alignment: .top)
+
+                commandAndTransformControls
+            }
+            .padding(.horizontal, Spacing.md)
+            .padding(.top, Spacing.xs)
+            .padding(.bottom, Spacing.sm)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+            ComposeTray(
+                voiceCommandState: voiceCommandState,
+                isVoiceCommandEnabled: isVoiceCommandEnabled,
+                onToggleVoiceCommand: onToggleVoiceCommand,
+                isDraftFocused: draftFocus.wrappedValue,
+                onToggleKeyboard: toggleKeyboardFocus
+            )
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .simultaneousGesture(keyboardDismissDrag)
+    }
+
+    private func toggleKeyboardFocus() {
+        let willFocus = !draftFocus.wrappedValue
+        draftFocus.wrappedValue = willFocus
+        NotificationCenter.default.post(
+            name: willFocus ? .composeRequestEditorFocus : .composeRequestEditorBlur,
+            object: nil
+        )
+    }
+
+    private var commandAndTransformControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if areQuickActionsEnabled && !primaryActions.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    TalkieEyebrow(text: "Transforms", tint: .ink, showLeader: true)
+                        .padding(.leading, 2)
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(primaryActions) { action in
+                                ComposeBayQuickChip(
+                                    title: action.title,
+                                    systemImage: action.systemImage,
+                                    isEnabled: true
+                                ) {
+                                    onPerformAction(action)
                                 }
-                                .accessibilityLabel("Share Draft")
                             }
 
-                            Button("Clear") {
-                                clearDraft()
-                            }
-                            .disabled(isRevising || hasActiveDictation)
-                        } else {
-                            Button("New") {
-                                createNewNote(true)
+                            if !secondaryActions.isEmpty {
+                                ComposeBayMenuChip(
+                                    title: "Loop",
+                                    systemImage: "point.3.connected.trianglepath.dotted",
+                                    isEnabled: areQuickActionsEnabled,
+                                    actions: secondaryActions,
+                                    onPerformAction: onPerformAction
+                                )
                             }
                         }
                     }
                 }
             }
+        }
+        .simultaneousGesture(TapGesture().onEnded {
+            dismissDraftKeyboard()
+        })
+    }
+
+    private var keyboardDismissDrag: some Gesture {
+        DragGesture(minimumDistance: 28)
+            .onEnded { value in
+                guard shouldDismissKeyboard(for: value) else { return }
+                dismissDraftKeyboard()
+            }
+    }
+
+    private func shouldDismissKeyboard(for value: DragGesture.Value) -> Bool {
+        let verticalDistance = value.translation.height
+        let horizontalDistance = abs(value.translation.width)
+        return verticalDistance > 46 && verticalDistance > horizontalDistance * 1.4
+    }
+
+    private func dismissDraftKeyboard() {
+        guard draftFocus.wrappedValue else { return }
+        draftFocus.wrappedValue = false
+    }
+}
+
+private struct ComposeErrorBanner: View {
+    let message: String
+
+    var body: some View {
+        Label(message, systemImage: "exclamationmark.triangle.fill")
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(Color.recording)
     }
 }
 
@@ -501,13 +829,35 @@ extension ComposeView {
     private var selectedDirectModel: ComposeDirectModelOption? {
         guard let selectedDirectProvider else { return nil }
 
-        if let matchingModel = selectedDirectProvider.models.first(where: {
-            $0.id == appSettings.composeDirectModelId
-        }) {
-            return matchingModel
-        }
+        return resolvedDirectModel(for: selectedDirectProvider)
+    }
 
-        return selectedDirectProvider.models.first
+    /// Compact "Provider · Model" label rendered inline at the bottom of the
+    /// editor card. `nil` when nothing useful is configured.
+    private var composeProviderLabel: String? {
+        guard let provider = selectedDirectProvider else { return nil }
+        let providerName = provider.providerName
+        if let model = selectedDirectModel {
+            return "\(providerName) \(theme.chrome.eyebrowLeader) \(model.name)"
+        }
+        return providerName
+    }
+
+    /// Re-exposed so the inline provider label can pick the active theme's
+    /// eyebrow leader. (`themeManager` is observed; this just renames it.)
+    private var theme: ThemeManager { themeManager }
+
+    private var phoneAIProvider: ComposeBorrowedProvider? {
+        TalkieAIProviderResolver.shared.configuredProvider()
+    }
+
+    private var latestCaptureTitle: String? {
+        guard let capture = recentCaptures.first else { return nil }
+        if let title = capture.title?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !title.isEmpty {
+            return title
+        }
+        return capture.sourceType.capitalized
     }
 
     private var hasActiveDictation: Bool {
@@ -523,12 +873,89 @@ extension ComposeView {
             || (!isRevising && dictationState == .idle && voiceCommandState.dictationState == .idle)
     }
 
-    private var quickPrompts: [String] {
+    private var canStartDraftDictation: Bool {
+        !isRevising && voiceCommandState.dictationState == .idle
+    }
+
+    private var primaryWorkflowActions: [ComposeWorkflowAction] {
         [
-            "Make this shorter",
-            "Clean this up",
-            "Make this friendlier",
-            "Turn this into notes",
+            ComposeWorkflowAction(
+                id: "clean-up",
+                title: "Clean Up",
+                systemImage: "wand.and.sparkles",
+                prompt: "Clean this up while preserving my meaning and voice."
+            ),
+            ComposeWorkflowAction(
+                id: "shorter",
+                title: "Shorten",
+                systemImage: "text.badge.minus",
+                prompt: "Make this shorter without losing the important details."
+            ),
+            ComposeWorkflowAction(
+                id: "tasks",
+                title: "Tasks",
+                systemImage: "checklist",
+                prompt: "Extract clear tasks, owners, and next steps from this."
+            ),
+            ComposeWorkflowAction(
+                id: "notes",
+                title: "Notes",
+                systemImage: "note.text",
+                prompt: "Turn this into clean structured notes with useful headings."
+            ),
+            ComposeWorkflowAction(
+                id: "friendlier",
+                title: "Friendlier",
+                systemImage: "face.smiling",
+                prompt: "Make this friendlier and warmer while keeping it direct."
+            ),
+            ComposeWorkflowAction(
+                id: "title",
+                title: "Title",
+                systemImage: "textformat.size",
+                prompt: "Suggest a strong concise title, then keep the note below it."
+            ),
+        ]
+    }
+
+    private var loopWorkflowActions: [ComposeWorkflowAction] {
+        [
+            ComposeWorkflowAction(
+                id: "continue",
+                title: "Continue",
+                systemImage: "arrow.clockwise",
+                prompt: "Continue this into the next useful paragraph or section."
+            ),
+            ComposeWorkflowAction(
+                id: "critique",
+                title: "Critique",
+                systemImage: "magnifyingglass",
+                prompt: "Critique this briefly, then provide a stronger revised version."
+            ),
+            ComposeWorkflowAction(
+                id: "questions",
+                title: "Questions",
+                systemImage: "questionmark.bubble",
+                prompt: "List the most important follow-up questions, then revise the note to make gaps obvious."
+            ),
+            ComposeWorkflowAction(
+                id: "decision",
+                title: "Decision",
+                systemImage: "arrow.branch",
+                prompt: "Turn this into a decision memo with context, options, recommendation, and next steps."
+            ),
+            ComposeWorkflowAction(
+                id: "message",
+                title: "Message",
+                systemImage: "bubble.left.and.text.bubble.right",
+                prompt: "Rewrite this as a clear message I can send to another person."
+            ),
+            ComposeWorkflowAction(
+                id: "workflow",
+                title: "Workflow",
+                systemImage: "point.3.connected.trianglepath.dotted",
+                prompt: "Convert this into a practical AI workflow loop: inputs, actions, review points, and outputs."
+            ),
         ]
     }
 
@@ -537,7 +964,7 @@ extension ComposeView {
     }
 
     @ViewBuilder
-    private var composeRevisionControls: some View {
+    private var composeHeaderModelControls: some View {
         ComposeRevisionControlsRow(
             selectedRevisionPath: selectedRevisionPath,
             isPaired: bridgeManager.isPaired,
@@ -562,50 +989,14 @@ extension ComposeView {
             selectDirectModel: { modelId in
                 selectDirectModel(modelId)
             },
+            selectDirectProviderModel: { providerId, modelId in
+                selectDirectProviderModel(providerId: providerId, modelId: modelId)
+            },
             reconnectToMac: reconnectToMac,
             openBridgeSettings: openBridgeSettings,
-            showsStatusMessage: false
+            showsStatusMessage: false,
+            useEditorialLabel: true
         )
-        .frame(maxWidth: .infinity)
-    }
-
-    @ViewBuilder
-    private var composeActionTray: some View {
-        if isShowingNoteEditor {
-            VStack(spacing: 8) {
-                if hasDraft {
-                    ComposeQuickActionsBar(
-                        quickPrompts: quickPrompts,
-                        areQuickActionsEnabled: areQuickActionsEnabled,
-                        canSaveNote: canSaveNote && hasPendingNoteChanges,
-                        saveNote: { saveNote() },
-                        applyQuickPrompt: applyQuickPrompt
-                    )
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                } else {
-                    ComposeQuickActionsSkeletonBar()
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-
-                ComposeCommandDock(
-                    backAccessibilityLabel: "Back to notes",
-                    isVoiceCommandEnabled: isVoiceCommandButtonEnabled,
-                    voiceCommandState: voiceCommandState.dictationState,
-                    backAction: performBackAction,
-                    voiceCommandAction: toggleVoiceCommand,
-                    keyboardAction: focusDraftEditor
-                )
-            }
-            .fixedSize(horizontal: false, vertical: true)
-        } else {
-            ComposeNotesListDock(
-                backAccessibilityLabel: presentationStyle == .sheet ? "Close Compose" : "Return to memos",
-                backAction: performBackAction,
-                createNoteAction: {
-                    createNewNote(focus: true)
-                }
-            )
-        }
     }
 
     private func clearDraft() {
@@ -618,10 +1009,120 @@ extension ComposeView {
         errorMessage = nil
         appliedRevisions.removeAll()
         commandPreview = nil
+        composeSegments.removeAll()
+        selectedRange = nil
     }
 
-    private func applyQuickPrompt(_ prompt: String) {
-        submitInstruction(prompt)
+    private func prepareInitialEditorIfNeeded() {
+        guard !didPrepareInitialEditor else { return }
+        didPrepareInitialEditor = true
+
+        if let initialContext {
+            clearDraft()
+            activeNote = nil
+            draftText = initialContext.text
+            isShowingNoteEditor = true
+            addSegment(
+                kind: .capturedContext,
+                title: initialContext.title ?? "Captured context",
+                detail: initialContext.sourceDescription ?? initialContext.sourceURL,
+                text: initialContext.text
+            )
+            return
+        }
+
+        if !isShowingNoteEditor {
+            activeNote = nil
+            isShowingNoteEditor = true
+        }
+    }
+
+    private func refreshRecentCaptures() {
+        CaptureStore.shared.reload()
+        recentCaptures = CaptureStore.shared.all()
+    }
+
+    private func appendClipboardContext() {
+        guard let clipboardText = UIPasteboard.general.string?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !clipboardText.isEmpty else {
+            return
+        }
+
+        appendTextAsSegment(
+            clipboardText,
+            kind: .pastedContext,
+            title: "Pasted text",
+            detail: "Clipboard"
+        )
+    }
+
+    private func appendLatestCaptureContext() {
+        refreshRecentCaptures()
+        guard let capture = recentCaptures.first else { return }
+        let title = capture.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let displayTitle = title?.isEmpty == false ? title ?? "Latest capture" : "Latest capture"
+        appendTextAsSegment(
+            capture.text,
+            kind: .capturedContext,
+            title: displayTitle,
+            detail: capture.bookmark?.siteName ?? capture.sourceType.capitalized
+        )
+    }
+
+    private func appendTextAsSegment(
+        _ text: String,
+        kind: ComposeSegmentKind,
+        title: String,
+        detail: String?
+    ) {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else { return }
+
+        if !draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if !draftText.hasSuffix("\n") {
+                draftText += "\n"
+            }
+            draftText += "\n"
+        }
+        draftText += trimmedText
+        addSegment(kind: kind, title: title, detail: detail, text: trimmedText)
+        isShowingNoteEditor = true
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    private func recordDictationSegment(_ transcript: String) {
+        addSegment(
+            kind: .dictation,
+            title: "Voice segment",
+            detail: "\(transcript.split(whereSeparator: \.isWhitespace).count) words",
+            text: transcript
+        )
+    }
+
+    private func addSegment(
+        kind: ComposeSegmentKind,
+        title: String,
+        detail: String?,
+        text: String
+    ) {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else { return }
+
+        composeSegments.insert(
+            ComposeSegment(
+                kind: kind,
+                title: title,
+                detail: detail,
+                text: trimmedText,
+                createdAt: .now
+            ),
+            at: 0
+        )
+    }
+
+    private func performWorkflowAction(_ action: ComposeWorkflowAction) {
+        submitInstruction(action.prompt)
     }
 
     private func performBackAction() {
@@ -673,6 +1174,14 @@ extension ComposeView {
         clearDraft()
         activeNote = note
         draftText = note.content ?? ""
+        if hasDraft {
+            addSegment(
+                kind: .savedNote,
+                title: note.title ?? "Saved note",
+                detail: note.lastModified.map { $0.formatted(.dateTime.month().day().hour().minute()) },
+                text: draftText
+            )
+        }
         isShowingNoteEditor = true
 
         if focus {
@@ -690,6 +1199,8 @@ extension ComposeView {
         commandPreview = nil
         errorMessage = nil
         activeNote = nil
+        selectedRange = nil
+        composeSegments.removeAll()
         isShowingNoteEditor = false
     }
 
@@ -850,18 +1361,76 @@ extension ComposeView {
         }
     }
 
+    private func currentRevisionTarget() -> ComposeRevisionTarget? {
+        let trimmedDraft = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedDraft.isEmpty else { return nil }
+
+        if let selectedRange,
+           selectedRange.length > 0 {
+            let nsText = draftText as NSString
+            let rangeEnd = selectedRange.location + selectedRange.length
+            if selectedRange.location >= 0, rangeEnd <= nsText.length {
+                let selectedText = nsText.substring(with: selectedRange)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !selectedText.isEmpty {
+                    return ComposeRevisionTarget(
+                        text: selectedText,
+                        fullDocument: draftText,
+                        selectedRange: selectedRange
+                    )
+                }
+            }
+        }
+
+        return ComposeRevisionTarget(
+            text: draftText,
+            fullDocument: draftText,
+            selectedRange: nil
+        )
+    }
+
+    private func macInstruction(
+        _ instruction: String,
+        for target: ComposeRevisionTarget
+    ) -> String {
+        guard target.selectedRange != nil else { return instruction }
+
+        return [
+            instruction,
+            "",
+            "Editing scope: Selected excerpt of a larger note.",
+            "",
+            "Current full document:",
+            target.fullDocument,
+            "",
+            "Return only the revised selected excerpt.",
+        ].joined(separator: "\n")
+    }
+
+    private func revisionHistoryPromptContext() -> String {
+        guard !appliedRevisions.isEmpty else { return "No prior revisions." }
+
+        return appliedRevisions.reversed().enumerated().map { index, revision in
+            [
+                "Revision \(index + 1)",
+                "- Timestamp: \(ISO8601DateFormatter().string(from: revision.createdAt))",
+                "- Scope: \(revision.scope)",
+                "- Instruction: \(revision.instruction)",
+                "- Text After:",
+                revision.text,
+            ].joined(separator: "\n")
+        }.joined(separator: "\n\n")
+    }
+
     private func requestDirectRevision() {
         guard !isRevising else { return }
 
         let instruction = instructionText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let draft = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let target = currentRevisionTarget() else { return }
 
-        guard !instruction.isEmpty, !draft.isEmpty else { return }
-        guard let selectedDirectProvider else {
-            errorMessage = directOptionsError ?? "Direct iPhone Compose is not ready yet."
-            return
-        }
+        guard !instruction.isEmpty else { return }
 
+        let directProviderOption = selectedDirectProvider
         let selectedModelId = selectedDirectModel?.id ?? appSettings.composeDirectModelId
 
         isRevising = true
@@ -869,17 +1438,34 @@ extension ComposeView {
 
         Task {
             do {
-                let provider = try await bridgeManager.composeBorrowedProvider(
-                    providerId: selectedDirectProvider.providerId,
-                    modelId: selectedModelId
-                )
+                let provider: ComposeBorrowedProvider
+                if let phoneAIProvider {
+                    provider = phoneAIProvider
+                } else {
+                    guard let directProviderOption else {
+                        throw BridgeError.messageFailed(
+                            directOptionsError ?? "Set up AI credentials in Settings -> AI, or pair a Mac provider."
+                        )
+                    }
+
+                    provider = try await bridgeManager.composeBorrowedProvider(
+                        providerId: directProviderOption.providerId,
+                        modelId: selectedModelId
+                    )
+                }
+
                 let result = try await ComposeLocalRevisionService.shared.revise(
-                    text: draftText,
+                    text: target.text,
                     instruction: instruction,
-                    provider: provider
+                    provider: provider,
+                    fullDocument: target.fullDocument,
+                    editingScope: target.editingScope,
+                    revisionHistory: revisionHistoryPromptContext()
                 )
                 pendingRevision = ComposePendingRevision(
-                    originalText: draftText,
+                    originalText: target.text,
+                    originalDocumentText: target.fullDocument,
+                    targetRange: target.selectedRange,
                     revisedText: result.revisedText,
                     instruction: instruction,
                     providerName: result.providerName,
@@ -899,9 +1485,9 @@ extension ComposeView {
         guard !isRevising else { return }
 
         let instruction = instructionText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let draft = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let target = currentRevisionTarget() else { return }
 
-        guard !instruction.isEmpty, !draft.isEmpty else { return }
+        guard !instruction.isEmpty else { return }
 
         isRevising = true
         errorMessage = nil
@@ -909,11 +1495,13 @@ extension ComposeView {
         Task {
             do {
                 let result = try await bridgeManager.composeRevision(
-                    text: draftText,
-                    instruction: instruction
+                    text: target.text,
+                    instruction: macInstruction(instruction, for: target)
                 )
                 pendingRevision = ComposePendingRevision(
-                    originalText: draftText,
+                    originalText: target.text,
+                    originalDocumentText: target.fullDocument,
+                    targetRange: target.selectedRange,
                     revisedText: result.revisedText,
                     instruction: instruction,
                     providerName: result.providerName,
@@ -932,10 +1520,19 @@ extension ComposeView {
     private func applyPendingRevision() {
         guard let pendingRevision else { return }
 
-        draftText = pendingRevision.revisedText
+        if let targetRange = pendingRevision.targetRange {
+            guard replacePendingSelection(pendingRevision, targetRange: targetRange) else {
+                errorMessage = "The selected text changed. Run the voice command again."
+                return
+            }
+        } else {
+            draftText = pendingRevision.revisedText
+        }
+
         appliedRevisions.insert(
             ComposeAppliedRevision(
                 instruction: pendingRevision.instruction,
+                scope: pendingRevision.isSelectionRevision ? "Selection" : "Document",
                 text: pendingRevision.revisedText,
                 providerName: pendingRevision.providerName,
                 modelId: pendingRevision.modelId,
@@ -943,12 +1540,55 @@ extension ComposeView {
             ),
             at: 0
         )
+        addSegment(
+            kind: .revision,
+            title: pendingRevision.isSelectionRevision ? "Selection revised" : "Draft revised",
+            detail: pendingRevision.instruction,
+            text: pendingRevision.revisedText
+        )
+        // Speak the revised draft excerpt — no separate AI explanation field exists.
+        let spokenText = String(pendingRevision.revisedText.prefix(280))
         self.pendingRevision = nil
         errorMessage = nil
+        Task { @MainActor in
+            _ = await AIResponseSpeechRouter.shared.speak(spokenText)
+        }
     }
 
     private func discardPendingRevision() {
         pendingRevision = nil
+    }
+
+    fileprivate func applyAppliedRevision(_ revision: ComposeAppliedRevision) {
+        draftText = revision.text
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    private func replacePendingSelection(
+        _ pendingRevision: ComposePendingRevision,
+        targetRange: NSRange
+    ) -> Bool {
+        let nsText = draftText as NSString
+        let rangeEnd = targetRange.location + targetRange.length
+        guard targetRange.location >= 0, rangeEnd <= nsText.length else {
+            return false
+        }
+
+        let currentTarget = nsText.substring(with: targetRange)
+        guard currentTarget == pendingRevision.originalText else {
+            return false
+        }
+
+        if let swiftRange = Range(targetRange, in: draftText) {
+            draftText.replaceSubrange(swiftRange, with: pendingRevision.revisedText)
+            selectedRange = NSRange(
+                location: targetRange.location,
+                length: (pendingRevision.revisedText as NSString).length
+            )
+            return true
+        }
+
+        return false
     }
 
     private func openBridgeSettings() {
@@ -1007,11 +1647,11 @@ extension ComposeView {
             $0.providerId == options.selectedProviderId
         }) ?? options.providers[0]
 
-        let selectedModel = selectedProvider.models.first(where: {
-            $0.id == appSettings.composeDirectModelId
-        }) ?? selectedProvider.models.first(where: {
-            $0.id == options.selectedModelId
-        }) ?? selectedProvider.models.first
+        let selectedModel = resolvedDirectModel(
+            for: selectedProvider,
+            savedModelId: appSettings.composeDirectModelId,
+            serverSelectedModelId: options.selectedModelId
+        )
 
         appSettings.composeDirectProviderId = selectedProvider.providerId
         appSettings.composeDirectModelId = selectedModel?.id ?? ""
@@ -1021,8 +1661,15 @@ extension ComposeView {
         guard let provider = availableDirectProviders.first(where: { $0.providerId == providerId }) else { return }
         appSettings.composeDirectProviderId = provider.providerId
 
-        if !provider.models.contains(where: { $0.id == appSettings.composeDirectModelId }) {
-            appSettings.composeDirectModelId = provider.models.first?.id ?? ""
+        let savedModelId = appSettings.composeDirectModelId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let shouldKeepSavedModel = shouldKeepSavedDirectModel(savedModelId, providerId: provider.providerId)
+            && provider.models.contains(where: { $0.id == savedModelId })
+
+        if !shouldKeepSavedModel {
+            appSettings.composeDirectModelId = resolvedDirectModel(
+                for: provider,
+                savedModelId: savedModelId
+            )?.id ?? ""
         }
     }
 
@@ -1031,24 +1678,73 @@ extension ComposeView {
         guard selectedDirectProvider.models.contains(where: { $0.id == modelId }) else { return }
         appSettings.composeDirectModelId = modelId
     }
-}
 
-private struct ComposeActionBarHeightPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
+    private func selectDirectProviderModel(providerId: String, modelId: String) {
+        guard let provider = availableDirectProviders.first(where: { $0.providerId == providerId }) else { return }
 
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
+        appSettings.composeDirectProviderId = provider.providerId
+        if provider.models.contains(where: { $0.id == modelId }) {
+            appSettings.composeDirectModelId = modelId
+        } else {
+            appSettings.composeDirectModelId = resolvedDirectModel(for: provider)?.id ?? ""
+        }
+    }
+
+    private func resolvedDirectModel(
+        for provider: ComposeDirectProviderOption,
+        savedModelId: String? = nil,
+        serverSelectedModelId: String? = nil
+    ) -> ComposeDirectModelOption? {
+        let savedModelId = (savedModelId ?? appSettings.composeDirectModelId)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if shouldKeepSavedDirectModel(savedModelId, providerId: provider.providerId),
+           let matchingModel = provider.models.first(where: { $0.id == savedModelId }) {
+            return matchingModel
+        }
+
+        if let preferredModel = preferredDirectModel(in: provider) {
+            return preferredModel
+        }
+
+        if let serverSelectedModelId,
+           let serverModel = provider.models.first(where: { $0.id == serverSelectedModelId }) {
+            return serverModel
+        }
+
+        if let legacyModel = provider.models.first(where: { $0.id == savedModelId }) {
+            return legacyModel
+        }
+
+        return provider.models.first
+    }
+
+    private func preferredDirectModel(in provider: ComposeDirectProviderOption) -> ComposeDirectModelOption? {
+        let preferredModelId = TalkieAIProviderCredentialPayload.defaultModel(for: provider.providerId)
+        return provider.models.first { $0.id == preferredModelId }
+    }
+
+    private func shouldKeepSavedDirectModel(_ modelId: String, providerId: String) -> Bool {
+        guard !modelId.isEmpty else { return false }
+        return !TalkieAIProviderCredentialPayload.isLegacyDefaultModel(modelId, for: providerId)
     }
 }
 
-private struct ComposePendingRevision {
+struct ComposePendingRevision: Identifiable {
+    let id = UUID()
     let originalText: String
-    let revisedText: String
+    let originalDocumentText: String
+    let targetRange: NSRange?
+    var revisedText: String
     let instruction: String
     let providerName: String
     let modelId: String
     let fallbackReason: String?
     let createdAt: Date
+
+    var isSelectionRevision: Bool {
+        targetRange != nil
+    }
 }
 
 private struct ComposeVoiceCommandPreview: Equatable, Identifiable {
@@ -1059,10 +1755,25 @@ private struct ComposeVoiceCommandPreview: Equatable, Identifiable {
 private struct ComposeAppliedRevision: Identifiable {
     let id = UUID()
     let instruction: String
+    let scope: String
     let text: String
     let providerName: String
     let modelId: String
     let createdAt: Date
+}
+
+private struct ComposeRevisionTarget {
+    let text: String
+    let fullDocument: String
+    let selectedRange: NSRange?
+
+    var editingScope: String {
+        selectedRange == nil ? "Entire document." : "Selected excerpt of a larger note."
+    }
+
+    var historyScopeLabel: String {
+        selectedRange == nil ? "Document" : "Selection"
+    }
 }
 
 private struct ComposeRevisionControlsRow: View {
@@ -1081,15 +1792,17 @@ private struct ComposeRevisionControlsRow: View {
     let selectPairedMac: (String) -> Void
     let selectDirectProvider: (String) -> Void
     let selectDirectModel: (String) -> Void
+    let selectDirectProviderModel: (String, String) -> Void
     let reconnectToMac: () -> Void
     let openBridgeSettings: () -> Void
     var showsStatusMessage = true
+    var useEditorialLabel = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             ViewThatFits {
                 selectionChips
-                    .frame(maxWidth: .infinity, alignment: .center)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     selectionChips
@@ -1112,39 +1825,22 @@ private struct ComposeRevisionControlsRow: View {
     }
 
     private var selectionChips: some View {
-        HStack(spacing: Spacing.xs) {
-            Menu {
+        Menu {
+            Section("Method") {
                 Button {
                     selectRevisionPath(.direct)
                 } label: {
-                    Label(ComposeRevisionPath.direct.title, systemImage: ComposeRevisionPath.direct.systemImage)
+                    Label("API", systemImage: selectedRevisionPath == .direct ? "checkmark.circle.fill" : ComposeRevisionPath.direct.systemImage)
                 }
 
                 if isPaired {
-                    if connectionStatus == .connected {
-                        Button {
-                            selectRevisionPath(.mac)
-                        } label: {
-                            Label(ComposeRevisionPath.mac.title, systemImage: ComposeRevisionPath.mac.systemImage)
-                        }
-                    } else if connectionStatus == .connecting {
-                        Button {
-                        } label: {
-                            Label("Connecting to Mac", systemImage: "wifi.exclamationmark")
-                        }
-                        .disabled(true)
-                    } else {
-                        Button {
-                            reconnectToMac()
-                        } label: {
-                            Label("Reconnect Mac", systemImage: "arrow.clockwise")
-                        }
-                    }
-
                     Button {
-                        openBridgeSettings()
+                        selectRevisionPath(.mac)
+                        if connectionStatus != .connected {
+                            reconnectToMac()
+                        }
                     } label: {
-                        Label("Mac Settings", systemImage: "gearshape")
+                        Label(macMethodMenuTitle, systemImage: selectedRevisionPath == .mac ? "checkmark.circle.fill" : macMethodMenuIcon)
                     }
                 } else {
                     Button {
@@ -1153,97 +1849,201 @@ private struct ComposeRevisionControlsRow: View {
                         Label("Pair Mac", systemImage: "desktopcomputer.badge.plus")
                     }
                 }
-            } label: {
-                ComposeSelectionChip(
-                    title: selectedPathTitle,
-                    systemImage: selectedPathIcon,
-                    tint: selectedRevisionPath == .direct ? Color.brandAccent : statusColor,
-                    showsMenuIndicator: true
-                )
             }
 
-            if pairedMacs.count > 1 {
-                Menu {
+            Section("API Model") {
+                if availableDirectProviders.isEmpty {
+                    apiPlaceholderMenuItem
+                } else {
+                    ForEach(availableDirectProviders) { provider in
+                        if provider.models.isEmpty {
+                            Button {
+                                selectRevisionPath(.direct)
+                                selectDirectProvider(provider.providerId)
+                            } label: {
+                                Label(provider.providerName, systemImage: selectedProvider?.providerId == provider.providerId ? "checkmark.circle.fill" : providerSymbol(for: provider.providerId))
+                            }
+                        } else {
+                            Menu {
+                                ForEach(provider.models) { model in
+                                    Button {
+                                        selectRevisionPath(.direct)
+                                        selectDirectProviderModel(provider.providerId, model.id)
+                                    } label: {
+                                        Label(model.name, systemImage: isSelected(provider: provider, model: model) ? "checkmark.circle.fill" : "cpu")
+                                    }
+                                }
+                            } label: {
+                                Label(provider.providerName, systemImage: selectedProvider?.providerId == provider.providerId ? "checkmark.circle.fill" : providerSymbol(for: provider.providerId))
+                            }
+                        }
+                    }
+                }
+            }
+
+            Section("Mac") {
+                if pairedMacs.isEmpty {
+                    Button {
+                        if isPaired {
+                            reconnectToMac()
+                        } else {
+                            openBridgeSettings()
+                        }
+                    } label: {
+                        Label(isPaired ? activeMacTitle : "Pair Mac", systemImage: isPaired ? "arrow.clockwise" : "desktopcomputer.badge.plus")
+                    }
+                } else {
                     ForEach(pairedMacs) { pairedMac in
                         Button {
                             selectPairedMac(pairedMac.id)
+                            selectRevisionPath(.mac)
+                            if connectionStatus != .connected {
+                                reconnectToMac()
+                            }
                         } label: {
-                            Label(pairedMacTitle(for: pairedMac), systemImage: pairedMac.id == activePairedMacID ? "checkmark.circle.fill" : "desktopcomputer")
+                            Label(pairedMacTitle(for: pairedMac), systemImage: pairedMac.id == activePairedMacID && selectedRevisionPath == .mac ? "checkmark.circle.fill" : "desktopcomputer")
                         }
                     }
+
+                    if connectionStatus != .connected {
+                        Button {
+                            reconnectToMac()
+                        } label: {
+                            Label("Reconnect Mac", systemImage: "arrow.clockwise")
+                        }
+                    }
+                }
+
+                Button {
+                    openBridgeSettings()
                 } label: {
-                    ComposeSelectionChip(
-                        title: activeMacTitle,
-                        systemImage: "desktopcomputer",
-                        tint: statusColor,
-                        showsMenuIndicator: true
-                    )
+                    Label(isPaired ? "Mac Settings" : "Pair Mac", systemImage: isPaired ? "gearshape" : "desktopcomputer.badge.plus")
                 }
             }
-
-            if selectedRevisionPath == .direct {
-                if let selectedProvider {
-                    Menu {
-                        ForEach(availableDirectProviders) { provider in
-                            Button {
-                                selectDirectProvider(provider.providerId)
-                            } label: {
-                                Label(provider.providerName, systemImage: providerSymbol(for: provider.providerId))
-                            }
-                        }
-                    } label: {
-                        ComposeSelectionChip(
-                            title: selectedProvider.providerName,
-                            systemImage: providerSymbol(for: selectedProvider.providerId),
-                            tint: providerTint(for: selectedProvider.providerId),
-                            showsMenuIndicator: true
-                        )
-                    }
-                    
-                    if let selectedModel {
-                        Menu {
-                            ForEach(selectedProvider.models) { model in
-                                Button(model.name) {
-                                    selectDirectModel(model.id)
-                                }
-                            }
-                        } label: {
-                            ComposeSelectionChip(
-                                title: selectedModel.name,
-                                systemImage: "cpu",
-                                tint: Color.textSecondary,
-                                showsMenuIndicator: true
-                            )
-                        }
-                    } else if showsDirectSelectionPlaceholders {
-                        ComposeSelectionChip(
-                            title: directModelPlaceholderTitle,
-                            systemImage: directModelPlaceholderIcon,
-                            tint: directPlaceholderTint,
-                            isEnabled: false,
-                            showsLoadingIndicator: isLoadingDirectOptions
-                        )
-                    }
-                } else if showsDirectSelectionPlaceholders {
-                    ComposeSelectionChip(
-                        title: directProviderPlaceholderTitle,
-                        systemImage: directProviderPlaceholderIcon,
-                        tint: directPlaceholderTint,
-                        isEnabled: false,
-                        showsLoadingIndicator: isLoadingDirectOptions
-                    )
-
-                    ComposeSelectionChip(
-                        title: directModelPlaceholderTitle,
-                        systemImage: directModelPlaceholderIcon,
-                        tint: directPlaceholderTint,
-                        isEnabled: false,
-                        showsLoadingIndicator: isLoadingDirectOptions
-                    )
-                }
+        } label: {
+            if useEditorialLabel {
+                ComposeEditorialModelLabel(
+                    title: selectedRouteTitle,
+                    tint: selectedRouteTint,
+                    isLoading: selectedRouteIsLoading
+                )
+            } else {
+                ComposeSelectionChip(
+                    title: selectedRouteTitle,
+                    systemImage: selectedRouteIcon,
+                    tint: selectedRouteTint,
+                    showsMenuIndicator: true,
+                    showsLoadingIndicator: selectedRouteIsLoading
+                )
             }
         }
         .padding(.vertical, 2)
+    }
+
+    @ViewBuilder
+    private var apiPlaceholderMenuItem: some View {
+        if isLoadingDirectOptions {
+            Button {
+            } label: {
+                Label("Loading API Providers", systemImage: "hourglass")
+            }
+            .disabled(true)
+        } else if !isPaired {
+            Button {
+                openBridgeSettings()
+            } label: {
+                Label("Pair Mac to Load APIs", systemImage: "desktopcomputer.badge.plus")
+            }
+        } else if directOptionsError != nil {
+            Button {
+                reconnectToMac()
+            } label: {
+                Label("Reload API Providers", systemImage: "arrow.clockwise")
+            }
+        } else {
+            Button {
+            } label: {
+                Label("No API Providers", systemImage: "network.slash")
+            }
+            .disabled(true)
+        }
+    }
+
+    private var selectedRouteTitle: String {
+        switch selectedRevisionPath {
+        case .direct:
+            if let selectedProvider, let selectedModel {
+                return "API · \(selectedProvider.providerName) · \(selectedModel.name)"
+            }
+            if let selectedProvider {
+                return "API · \(selectedProvider.providerName)"
+            }
+            if isLoadingDirectOptions {
+                return "API · Loading"
+            }
+            if directOptionsError != nil {
+                return "API · Unavailable"
+            }
+            return "API"
+        case .mac:
+            return "Mac · \(activeMacTitle)"
+        }
+    }
+
+    private var selectedRouteIcon: String {
+        switch selectedRevisionPath {
+        case .direct:
+            guard let selectedProvider else { return directProviderPlaceholderIcon }
+            return providerSymbol(for: selectedProvider.providerId)
+        case .mac:
+            return selectedPathIcon
+        }
+    }
+
+    private var selectedRouteTint: Color {
+        switch selectedRevisionPath {
+        case .direct:
+            guard let selectedProvider else { return directPlaceholderTint }
+            return providerTint(for: selectedProvider.providerId)
+        case .mac:
+            return statusColor
+        }
+    }
+
+    private var selectedRouteIsLoading: Bool {
+        selectedRevisionPath == .direct && isLoadingDirectOptions && availableDirectProviders.isEmpty
+    }
+
+    private var macMethodMenuTitle: String {
+        guard isPaired else { return "Pair Mac" }
+
+        switch connectionStatus {
+        case .connected:
+            return "Mac"
+        case .connecting:
+            return "Connecting to Mac"
+        case .disconnected, .error:
+            return "Reconnect Mac"
+        }
+    }
+
+    private var macMethodMenuIcon: String {
+        guard isPaired else { return "desktopcomputer.badge.plus" }
+
+        switch connectionStatus {
+        case .connected:
+            return ComposeRevisionPath.mac.systemImage
+        case .connecting:
+            return "wifi.exclamationmark"
+        case .disconnected, .error:
+            return "arrow.clockwise"
+        }
+    }
+
+    private func isSelected(provider: ComposeDirectProviderOption, model: ComposeDirectModelOption) -> Bool {
+        selectedRevisionPath == .direct
+            && selectedProvider?.providerId == provider.providerId
+            && selectedModel?.id == model.id
     }
 
     private var selectedProvider: ComposeDirectProviderOption? {
@@ -1473,9 +2273,22 @@ private struct ComposeSelectionChip: View {
     var showsMenuIndicator = false
     var isEnabled = true
     var showsLoadingIndicator = false
+    var isLive = true   // lit signal-dot when the chip represents an active path
+
+    @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
+        let chrome = theme.chrome
+        let corner = max(chrome.chromeCorner, 6)
         HStack(spacing: 6) {
+            // Signal dot — lit when this lever is on an active path, faint when
+            // the chip is a placeholder/loading state. Reads as "channel armed".
+            TalkieStatusDot(
+                diameter: 5,
+                pulses: showsLoadingIndicator,
+                color: isLive && isEnabled ? tint : theme.colors.textTertiary.opacity(0.5)
+            )
+
             if showsLoadingIndicator {
                 ProgressView()
                     .controlSize(.mini)
@@ -1487,26 +2300,105 @@ private struct ComposeSelectionChip: View {
             }
 
             Text(title)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Color.textPrimary)
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .tracking(0.2)
+                .foregroundStyle(theme.colors.textPrimary)
                 .lineLimit(1)
 
             if showsMenuIndicator {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(Color.textTertiary)
+                    .foregroundStyle(theme.colors.textTertiary)
             }
         }
-        .padding(.horizontal, 9)
+        .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(Color.surfacePrimary)
-        .clipShape(.capsule)
+        .background(
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                .fill(theme.colors.cardBackground)
+        )
         .overlay {
-            Capsule()
-                .stroke(Color.borderPrimary.opacity(0.7), lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                .stroke(
+                    isLive && isEnabled ? chrome.edge : chrome.edgeFaint,
+                    lineWidth: chrome.hairlineWidth
+                )
                 .allowsHitTesting(false)
         }
-        .opacity(isEnabled ? 1 : 0.74)
+        .opacity(isEnabled ? 1 : 0.7)
+    }
+}
+
+// Consolidated editorial header: "Draft with ✨ provider · model ▾". Replaces
+// the separate DRAFT eyebrow + model byline pair with one line that reads as a
+// single tappable phrase. Sparkles glyph carries the AI cue; the route title
+// trails as the noun. Tap anywhere opens the picker Menu.
+private struct ComposeEditorialModelLabel: View {
+    let title: String
+    let tint: Color
+    var isLoading: Bool = false
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text("Compose with")
+                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .tracking(1.4)
+                .textCase(.uppercase)
+                .foregroundStyle(theme.colors.textTertiary)
+
+            Image(systemName: "sparkles")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(tint.opacity(0.85))
+                .scopePhosphorGlow(radius: 2)
+
+            if isLoading {
+                ProgressView()
+                    .controlSize(.mini)
+                    .tint(tint)
+            }
+
+            Text(modelDisplay)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(theme.colors.textSecondary)
+                .lineLimit(1)
+
+            Image(systemName: "chevron.down")
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundStyle(theme.colors.textTertiary)
+        }
+        .padding(.horizontal, 2)
+        .padding(.vertical, 1)
+        .accessibilityLabel("Model: \(modelDisplay)")
+        .accessibilityHint("Tap to change route or model")
+    }
+
+    // Display the model as a clean short noun. Drops the route prefix AND the
+    // provider name (users recognize the model — "GPT-5" — without needing
+    // "OpenAI" attached). Trailing component after the last " · " wins.
+    //   "API · OpenAI · GPT-5"  → "GPT-5"
+    //   "API · OpenAI"           → "OpenAI"  (no model picked yet for this provider)
+    //   "API · Loading"          → "Loading…"
+    //   "API · Unavailable"      → "Unavailable"
+    //   "API"                    → "Choose model"  (nothing picked at all)
+    //   "Mac · iMac"             → "iMac"
+    //   "Mac"                    → "Mac"
+    private var modelDisplay: String {
+        let trimmed = title.trimmingCharacters(in: .whitespaces)
+        for prefix in ["API · ", "MAC · ", "Mac · "] {
+            if trimmed.hasPrefix(prefix) {
+                let remainder = String(trimmed.dropFirst(prefix.count))
+                if remainder == "Loading" { return "Loading…" }
+                if let lastSegment = remainder.components(separatedBy: " · ").last,
+                   !lastSegment.isEmpty {
+                    return lastSegment
+                }
+                return remainder
+            }
+        }
+        if trimmed == "API" { return "Choose model" }
+        return trimmed
     }
 }
 
@@ -1520,22 +2412,16 @@ struct ComposeKeyboardTextSurface: View {
     @Binding var dictationResetTrigger: Int
     let minHeight: CGFloat
     let micPlacement: ComposeMicPlacement
+    var selectedRange: Binding<NSRange?>? = nil
     var showsDictationButton = true
     var prefersMinimalKeyboard = false
+    var usesSystemKeyboard = false
+    var canStartDictation = true
+    var onDictationTranscript: ((String) -> Void)?
 
     var body: some View {
-        ComposeKeyboardTextView(
-            text: $text,
-            placeholder: placeholder,
-            isFocused: focus,
-            dictationState: $dictationState,
-            dictationError: $dictationError,
-            contentBottomInset: showsDictationButton ? micPlacement.contentBottomInset : 16,
-            prefersMinimalKeyboard: prefersMinimalKeyboard,
-            dictationTrigger: dictationTrigger,
-            dictationResetTrigger: dictationResetTrigger
-        )
-        .frame(minHeight: minHeight)
+        editorContent
+        .frame(minHeight: minHeight, maxHeight: .infinity, alignment: .top)
         .background(Color.surfacePrimary)
         .clipShape(.rect(cornerRadius: CornerRadius.sm))
         .overlay {
@@ -1549,6 +2435,40 @@ struct ComposeKeyboardTextSurface: View {
                     .padding(micPadding)
                     .zIndex(1)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var editorContent: some View {
+        if usesSystemKeyboard {
+            ComposeNativeDraftTextEditor(
+                text: $text,
+                placeholder: placeholder,
+                focus: focus,
+                dictationState: $dictationState,
+                dictationError: $dictationError,
+                dictationTrigger: dictationTrigger,
+                dictationResetTrigger: dictationResetTrigger,
+                selectedRange: selectedRange,
+                contentBottomInset: showsDictationButton ? micPlacement.contentBottomInset : 16,
+                canStartDictation: canStartDictation,
+                onDictationTranscript: onDictationTranscript
+            )
+        } else {
+            ComposeKeyboardTextView(
+                text: $text,
+                placeholder: placeholder,
+                isFocused: focus,
+                dictationState: $dictationState,
+                dictationError: $dictationError,
+                selectedRange: selectedRange,
+                contentBottomInset: showsDictationButton ? micPlacement.contentBottomInset : 16,
+                prefersMinimalKeyboard: prefersMinimalKeyboard,
+                canStartDictation: canStartDictation,
+                dictationTrigger: dictationTrigger,
+                dictationResetTrigger: dictationResetTrigger,
+                onDictationTranscript: onDictationTranscript
+            )
         }
     }
 
@@ -1566,8 +2486,12 @@ struct ComposeKeyboardTextSurface: View {
         }
         .buttonStyle(.plain)
         .contentShape(.circle)
-        .disabled(dictationState == .transcribing)
+        .disabled(isDictationButtonDisabled)
         .accessibilityLabel(dictationLabel)
+    }
+
+    private var isDictationButtonDisabled: Bool {
+        dictationState == .transcribing || (dictationState == .idle && !canStartDictation)
     }
 
     private var dictationIcon: String {
@@ -1625,16 +2549,287 @@ struct ComposeKeyboardTextSurface: View {
     }
 }
 
+private struct ComposeNativeDictationTranscript: Equatable {
+    let id = UUID()
+    let text: String
+}
+
+private enum ComposeRevisionReviewMode: String, CaseIterable, Identifiable {
+    case before
+    case after
+    case diff
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .before:
+            return "Before"
+        case .after:
+            return "After"
+        case .diff:
+            return "Diff"
+        }
+    }
+}
+
+@MainActor
+@Observable
+private final class ComposeNativeEditorDictationState {
+    var state: InlineDictationController.State = .idle
+    var errorMessage: String?
+    var latestTranscript: ComposeNativeDictationTranscript?
+
+    private let controller = InlineDictationController()
+
+    init() {
+        controller.onStateChange = { [weak self] state in
+            self?.state = state
+        }
+        controller.onTranscript = { [weak self] transcript in
+            self?.errorMessage = nil
+            self?.latestTranscript = ComposeNativeDictationTranscript(text: transcript)
+        }
+        controller.onError = { [weak self] message in
+            self?.errorMessage = message
+            self?.state = .idle
+        }
+    }
+
+    func toggle(canStart: Bool) {
+        errorMessage = nil
+
+        switch controller.currentState {
+        case .idle:
+            guard canStart else { return }
+            Task {
+                await controller.start()
+            }
+        case .recording:
+            controller.stop(insertTranscript: true)
+        case .transcribing:
+            break
+        }
+    }
+
+    func cancel() {
+        controller.cancel()
+    }
+
+    func consumeTranscript() {
+        latestTranscript = nil
+    }
+}
+
+private struct ComposeNativeDraftTextEditor: View {
+    @Binding var text: String
+    let placeholder: String
+    let focus: FocusState<Bool>.Binding
+    @Binding var dictationState: InlineDictationController.State
+    @Binding var dictationError: String?
+    let dictationTrigger: Int
+    let dictationResetTrigger: Int
+    var selectedRange: Binding<NSRange?>?
+    let contentBottomInset: CGFloat
+    let canStartDictation: Bool
+    var onDictationTranscript: ((String) -> Void)?
+
+    @State private var dictation = ComposeNativeEditorDictationState()
+    @State private var textSelection: TextSelection?
+    @State private var lastDictationTrigger = 0
+    @State private var lastDictationResetTrigger = 0
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            TextEditor(text: $text, selection: $textSelection)
+                .focused(focus)
+                .font(.body)
+                .foregroundStyle(Color.textPrimary)
+                .tint(Color.brandAccent)
+                .scrollContentBackground(.hidden)
+                .scrollDismissesKeyboard(.interactively)
+                .textInputAutocapitalization(.sentences)
+                .autocorrectionDisabled(false)
+                .contentMargins(.horizontal, 14, for: .scrollContent)
+                .contentMargins(.top, 16, for: .scrollContent)
+                .contentMargins(.bottom, contentBottomInset, for: .scrollContent)
+                .background(Color.clear)
+
+            if text.isEmpty {
+                Text(placeholder)
+                    .font(.body)
+                    .foregroundStyle(Color.textTertiary)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    .allowsHitTesting(false)
+            }
+        }
+        .onAppear {
+            lastDictationTrigger = dictationTrigger
+            lastDictationResetTrigger = dictationResetTrigger
+            dictationState = dictation.state
+            dictationError = dictation.errorMessage
+            selectedRange?.wrappedValue = nil
+        }
+        .onDisappear {
+            cancelDictation(clearError: true)
+            selectedRange?.wrappedValue = nil
+        }
+        .onChange(of: text) { _, _ in
+            selectedRange?.wrappedValue = nil
+        }
+        .onChange(of: textSelection) { _, selection in
+            publishSelection(selection)
+        }
+        .onChange(of: dictationTrigger) { _, trigger in
+            handleDictationTrigger(trigger)
+        }
+        .onChange(of: dictationResetTrigger) { _, trigger in
+            handleDictationResetTrigger(trigger)
+        }
+        .onChange(of: dictation.state) { _, state in
+            dictationState = state
+        }
+        .onChange(of: dictation.errorMessage) { _, message in
+            dictationError = message
+        }
+        .onChange(of: dictation.latestTranscript) { _, result in
+            guard let result else { return }
+            if let insertedTranscript = appendTranscript(result.text) {
+                onDictationTranscript?(insertedTranscript)
+            }
+            dictation.consumeTranscript()
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+
+                Button {
+                    focus.wrappedValue = false
+                } label: {
+                    Image(systemName: "keyboard.chevron.compact.down")
+                }
+                .accessibilityLabel("Dismiss keyboard")
+            }
+        }
+    }
+
+    private func handleDictationTrigger(_ trigger: Int) {
+        guard trigger != lastDictationTrigger else { return }
+        lastDictationTrigger = trigger
+        focus.wrappedValue = true
+        dictation.toggle(canStart: canStartDictation)
+    }
+
+    private func handleDictationResetTrigger(_ trigger: Int) {
+        guard trigger != lastDictationResetTrigger else { return }
+        lastDictationResetTrigger = trigger
+        cancelDictation(clearError: true)
+    }
+
+    private func appendTranscript(_ transcript: String) -> String? {
+        let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        let separator = text.isEmpty || text.last?.isWhitespace == true ? "" : " "
+        text += separator + trimmed
+        selectedRange?.wrappedValue = nil
+        return trimmed
+    }
+
+    private func publishSelection(_ selection: TextSelection?) {
+        selectedRange?.wrappedValue = selectedNSRange(from: selection)
+    }
+
+    private func selectedNSRange(from selection: TextSelection?) -> NSRange? {
+        guard let selection, !selection.isInsertion else { return nil }
+
+        switch selection.indices {
+        case .selection(let range):
+            return nsRange(for: range)
+        case .multiSelection(let ranges):
+            guard let range = ranges.ranges.first(where: { !$0.isEmpty }) else {
+                return nil
+            }
+            return nsRange(for: range)
+        @unknown default:
+            return nil
+        }
+    }
+
+    private func nsRange(for range: Range<String.Index>) -> NSRange? {
+        guard !range.isEmpty else { return nil }
+        return NSRange(range, in: text)
+    }
+
+    private func cancelDictation(clearError: Bool) {
+        dictation.cancel()
+        dictationState = .idle
+        if clearError {
+            dictationError = nil
+        }
+    }
+}
+
+private struct ComposeRevisionEditableTextSurface: View {
+    @Binding var text: String
+    let placeholder: String
+
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            TextEditor(text: $text)
+                .focused($isFocused)
+                .font(.body)
+                .foregroundStyle(Color.textPrimary)
+                .tint(Color.brandAccent)
+                .scrollContentBackground(.hidden)
+                .scrollDismissesKeyboard(.interactively)
+                .textInputAutocapitalization(.sentences)
+                .autocorrectionDisabled(false)
+                .contentMargins(.horizontal, 14, for: .scrollContent)
+                .contentMargins(.top, 16, for: .scrollContent)
+                .contentMargins(.bottom, 16, for: .scrollContent)
+                .background(Color.clear)
+
+            if text.isEmpty {
+                Text(placeholder)
+                    .font(.body)
+                    .foregroundStyle(Color.textTertiary)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    .allowsHitTesting(false)
+            }
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+
+                Button {
+                    isFocused = false
+                } label: {
+                    Image(systemName: "keyboard.chevron.compact.down")
+                }
+                .accessibilityLabel("Dismiss keyboard")
+            }
+        }
+    }
+}
+
 struct ComposeKeyboardTextView: UIViewRepresentable {
     @Binding var text: String
     let placeholder: String
     let isFocused: FocusState<Bool>.Binding
     @Binding var dictationState: InlineDictationController.State
     @Binding var dictationError: String?
+    var selectedRange: Binding<NSRange?>?
     let contentBottomInset: CGFloat
     let prefersMinimalKeyboard: Bool
+    let canStartDictation: Bool
     let dictationTrigger: Int
     let dictationResetTrigger: Int
+    var onDictationTranscript: ((String) -> Void)?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
@@ -1654,13 +2849,18 @@ struct ComposeKeyboardTextView: UIViewRepresentable {
         context.coordinator.text = $text
         context.coordinator.dictationState = $dictationState
         context.coordinator.dictationError = $dictationError
+        context.coordinator.canStartDictation = canStartDictation
         context.coordinator.setFocused = { focused in
             isFocused.wrappedValue = focused
         }
+        context.coordinator.selectedRange = selectedRange
+        context.coordinator.onDictationTranscript = onDictationTranscript
         context.coordinator.textView = textView
         context.coordinator.keyboard = textView.inputView as? HostedTalkieKeyboardView
         context.coordinator.keyboard?.preferredInitialLayout = prefersMinimalKeyboard ? .minimal : .compact
         context.coordinator.keyboard?.preferredInitialModeId = KeyboardMode.abc.id
+        textView.isUserInteractionEnabled = true
+        textView.textContainerInset = UIEdgeInsets(top: 16, left: 14, bottom: contentBottomInset, right: 14)
 
         if textView.text != text {
             textView.text = text
@@ -1677,6 +2877,17 @@ struct ComposeKeyboardTextView: UIViewRepresentable {
             if !textView.isFirstResponder {
                 textView.becomeFirstResponder()
             }
+        } else if textView.isFirstResponder {
+            textView.resignFirstResponder()
+        }
+    }
+
+    static func dismantleUIView(_ uiView: UITextView, coordinator: Coordinator) {
+        coordinator.teardown()
+        uiView.delegate = nil
+        uiView.inputView = nil
+        if uiView.isFirstResponder {
+            uiView.resignFirstResponder()
         }
     }
 
@@ -1694,9 +2905,11 @@ struct ComposeKeyboardTextView: UIViewRepresentable {
         keyboard.onRequestCollapse = { [weak textView] in
             textView?.resignFirstResponder()
         }
-
         textView.inputView = keyboard
+        coordinator.keyboard = keyboard
+
         textView.delegate = coordinator
+        textView.accessibilityIdentifier = "keyboard.compose"
         textView.backgroundColor = .clear
         textView.textColor = UIColor(Color.textPrimary)
         textView.tintColor = UIColor(Color.brandAccent)
@@ -1717,7 +2930,6 @@ struct ComposeKeyboardTextView: UIViewRepresentable {
         textView.inputAssistantItem.trailingBarButtonGroups = []
 
         coordinator.textView = textView
-        coordinator.keyboard = keyboard
         coordinator.updatePlaceholder(in: textView, placeholder: placeholder)
     }
 
@@ -1730,7 +2942,10 @@ struct ComposeKeyboardTextView: UIViewRepresentable {
         var text: Binding<String>
         var dictationState: Binding<InlineDictationController.State>
         var dictationError: Binding<String?>
+        var canStartDictation = true
         var setFocused: ((Bool) -> Void)?
+        var selectedRange: Binding<NSRange?>?
+        var onDictationTranscript: ((String) -> Void)?
         weak var textView: UITextView?
         weak var keyboard: HostedTalkieKeyboardView?
 
@@ -1757,6 +2972,7 @@ struct ComposeKeyboardTextView: UIViewRepresentable {
                 guard let self else { return }
                 self.dictationError.wrappedValue = nil
                 self.replaceSelection(with: transcript)
+                self.onDictationTranscript?(transcript)
                 self.keyboard?.showDictationSuccessFeedback()
             }
             dictationController.onError = { [weak self] message in
@@ -1764,6 +2980,36 @@ struct ComposeKeyboardTextView: UIViewRepresentable {
                 self?.dictationState.wrappedValue = .idle
                 self?.keyboard?.setDictationState(.idle)
             }
+
+            // Side-channel focus pipe — the bottom-tray Keyboard button posts
+            // these notifications because FocusState.Binding writes don't
+            // reliably trigger this representable's updateUIView.
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handleFocusRequest),
+                name: .composeRequestEditorFocus,
+                object: nil
+            )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handleBlurRequest),
+                name: .composeRequestEditorBlur,
+                object: nil
+            )
+        }
+
+        deinit {
+            NotificationCenter.default.removeObserver(self)
+        }
+
+        @objc private func handleFocusRequest() {
+            guard let textView, !textView.isFirstResponder else { return }
+            textView.becomeFirstResponder()
+        }
+
+        @objc private func handleBlurRequest() {
+            guard let textView, textView.isFirstResponder else { return }
+            textView.resignFirstResponder()
         }
 
         func textViewDidBeginEditing(_ textView: UITextView) {
@@ -1781,6 +3027,10 @@ struct ComposeKeyboardTextView: UIViewRepresentable {
         func textViewDidChange(_ textView: UITextView) {
             text.wrappedValue = textView.text
             updatePlaceholderVisibility(in: textView)
+        }
+
+        func textViewDidChangeSelection(_ textView: UITextView) {
+            selectedRange?.wrappedValue = textView.selectedRange.length > 0 ? textView.selectedRange : nil
         }
 
         func performKeyboardAction(_ action: KeyboardAction) {
@@ -1814,8 +3064,12 @@ struct ComposeKeyboardTextView: UIViewRepresentable {
         func toggleDictation() {
             dictationError.wrappedValue = nil
 
-            switch dictationController.currentState {
+            // Drive off the binding the UI is reading (what the mic icon
+            // currently shows) so a "tap to stop" never gets reinterpreted as
+            // a fresh start during the start()-→-recording transition window.
+            switch dictationState.wrappedValue {
             case .idle:
+                guard canStartDictation else { return }
                 Task { @MainActor [weak self] in
                     guard let self else { return }
                     await self.dictationController.start()
@@ -1868,6 +3122,7 @@ struct ComposeKeyboardTextView: UIViewRepresentable {
                 let newLabel = UILabel()
                 newLabel.tag = Constants.placeholderTag
                 newLabel.translatesAutoresizingMaskIntoConstraints = false
+                newLabel.isUserInteractionEnabled = false
                 newLabel.numberOfLines = 0
                 textView.addSubview(newLabel)
                 NSLayoutConstraint.activate([
@@ -1905,6 +3160,17 @@ struct ComposeKeyboardTextView: UIViewRepresentable {
             dictationError.wrappedValue = nil
             dictationController.cancel()
             keyboard?.setDictationState(.idle)
+        }
+
+        func teardown() {
+            dictationController.cancel()
+            keyboard?.inputHost = nil
+            keyboard?.onDictationToggle = nil
+            keyboard?.onLayoutHeightChange = nil
+            keyboard?.onRequestCollapse = nil
+            keyboard = nil
+            textView = nil
+            selectedRange?.wrappedValue = nil
         }
 
         private func replaceSelection(with insertedText: String) {
@@ -1960,7 +3226,7 @@ struct ComposeKeyboardTextView: UIViewRepresentable {
     }
 }
 
-struct ComposeEditorCard<HeaderContent: View>: View {
+struct ComposeEditorCard<HeaderContent: View, FooterContent: View>: View {
     let placeholder: String
     let editorMinHeight: CGFloat
     @Binding var text: String
@@ -1969,10 +3235,29 @@ struct ComposeEditorCard<HeaderContent: View>: View {
     @Binding var dictationError: String?
     @Binding var dictationTrigger: Int
     @Binding var dictationResetTrigger: Int
+    var selectedRange: Binding<NSRange?>?
     let headerContent: HeaderContent
+    let footerContent: FooterContent
     var showsDictationButton = true
     var prefersMinimalKeyboard = false
+    var usesSystemKeyboard = false
+    var canStartDictation = true
+    var onDictationTranscript: ((String) -> Void)?
+    var providerLabel: String? = nil   // e.g. "OpenAI · GPT-5" — shown inline with Quick Copy
+    var showsConsoleHeader = true
+    var consoleHeaderLabel: String = "Draft"
+    var headerModelControls: AnyView? = nil
+    var showsFooterStrip: Bool = true
+    var onSave: (() -> Void)? = nil
+    var canSave: Bool = false
+    var onShowHistory: (() -> Void)? = nil
+    var historyCount: Int = 0
+    @Binding var pendingRevision: ComposePendingRevision?
+    var onApplyPending: (() -> Void)? = nil
+    var onDiscardPending: (() -> Void)? = nil
     @State private var showingCopiedFeedback = false
+    @State private var revisionReviewMode: ComposeRevisionReviewMode = .after
+    @ObservedObject private var theme = ThemeManager.shared
 
     init(
         placeholder: String,
@@ -1983,9 +3268,26 @@ struct ComposeEditorCard<HeaderContent: View>: View {
         dictationError: Binding<String?>,
         dictationTrigger: Binding<Int>,
         dictationResetTrigger: Binding<Int>,
+        selectedRange: Binding<NSRange?>? = nil,
         showsDictationButton: Bool = true,
         prefersMinimalKeyboard: Bool = false,
-        @ViewBuilder headerContent: () -> HeaderContent
+        usesSystemKeyboard: Bool = false,
+        canStartDictation: Bool = true,
+        onDictationTranscript: ((String) -> Void)? = nil,
+        providerLabel: String? = nil,
+        showsConsoleHeader: Bool = true,
+        consoleHeaderLabel: String = "Draft",
+        headerModelControls: AnyView? = nil,
+        showsFooterStrip: Bool = true,
+        onSave: (() -> Void)? = nil,
+        canSave: Bool = false,
+        onShowHistory: (() -> Void)? = nil,
+        historyCount: Int = 0,
+        pendingRevision: Binding<ComposePendingRevision?> = .constant(nil),
+        onApplyPending: (() -> Void)? = nil,
+        onDiscardPending: (() -> Void)? = nil,
+        @ViewBuilder headerContent: () -> HeaderContent,
+        @ViewBuilder footerContent: () -> FooterContent
     ) {
         self.placeholder = placeholder
         self.editorMinHeight = editorMinHeight
@@ -1995,79 +3297,324 @@ struct ComposeEditorCard<HeaderContent: View>: View {
         self._dictationError = dictationError
         self._dictationTrigger = dictationTrigger
         self._dictationResetTrigger = dictationResetTrigger
+        self.selectedRange = selectedRange
         self.showsDictationButton = showsDictationButton
         self.prefersMinimalKeyboard = prefersMinimalKeyboard
+        self.usesSystemKeyboard = usesSystemKeyboard
+        self.canStartDictation = canStartDictation
+        self.onDictationTranscript = onDictationTranscript
+        self.providerLabel = providerLabel
+        self.showsConsoleHeader = showsConsoleHeader
+        self.consoleHeaderLabel = consoleHeaderLabel
+        self.headerModelControls = headerModelControls
+        self.showsFooterStrip = showsFooterStrip
+        self.onSave = onSave
+        self.canSave = canSave
+        self.onShowHistory = onShowHistory
+        self.historyCount = historyCount
+        self._pendingRevision = pendingRevision
+        self.onApplyPending = onApplyPending
+        self.onDiscardPending = onDiscardPending
         self.headerContent = headerContent()
+        self.footerContent = footerContent()
     }
 
     var body: some View {
+        let chrome = theme.chrome
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            headerContent
-
-            ComposeKeyboardTextSurface(
-                text: $text,
-                placeholder: placeholder,
-                focus: draftFocus,
-                dictationState: $dictationState,
-                dictationError: $dictationError,
-                dictationTrigger: $dictationTrigger,
-                dictationResetTrigger: $dictationResetTrigger,
-                minHeight: editorMinHeight,
-                micPlacement: .bottomCenter,
-                showsDictationButton: showsDictationButton,
-                prefersMinimalKeyboard: prefersMinimalKeyboard
-            )
-
-            HStack {
-                Spacer()
-
-                Button(action: copyDraft) {
-                    HStack(spacing: 4) {
-                        Image(systemName: showingCopiedFeedback ? "checkmark" : "doc.on.doc")
-                            .font(.system(size: 10, weight: .semibold))
-
-                        Text(showingCopiedFeedback ? "Copied" : "Quick Copy")
-                            .font(.system(size: 10, weight: .semibold))
-                    }
-                    .foregroundStyle(showingCopiedFeedback ? Color.success : Color.textSecondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(Color.surfacePrimary)
-                    .clipShape(.capsule)
-                    .overlay {
-                        Capsule()
-                            .stroke(Color.borderPrimary.opacity(0.7), lineWidth: 0.5)
-                            .allowsHitTesting(false)
-                    }
-                }
-                .buttonStyle(.plain)
-                .disabled(trimmedText.isEmpty)
-                .opacity(trimmedText.isEmpty ? 0.45 : 1)
+            if showsConsoleHeader && pendingRevision != nil {
+                consoleHeader(chrome: chrome)
             }
 
-            if dictationState != .idle || dictationError != nil {
-                HStack(spacing: 8) {
-                    Image(systemName: dictationState == .recording ? "waveform.circle.fill" : "waveform.badge.magnifyingglass")
-                        .foregroundStyle(dictationState == .recording ? Color.recording : Color.brandAccent)
+            headerContent
 
-                    Text(dictationMessage)
+            if let pendingRevision {
+                revisionReviewSurface(
+                    revision: pendingRevision,
+                    chrome: chrome
+                )
+            } else {
+                ComposeKeyboardTextSurface(
+                    text: $text,
+                    placeholder: placeholder,
+                    focus: draftFocus,
+                    dictationState: $dictationState,
+                    dictationError: $dictationError,
+                    dictationTrigger: $dictationTrigger,
+                    dictationResetTrigger: $dictationResetTrigger,
+                    minHeight: editorMinHeight,
+                    micPlacement: .bottomCenter,
+                    selectedRange: selectedRange,
+                    showsDictationButton: showsDictationButton,
+                    prefersMinimalKeyboard: prefersMinimalKeyboard,
+                    usesSystemKeyboard: usesSystemKeyboard,
+                    canStartDictation: canStartDictation,
+                    onDictationTranscript: onDictationTranscript
+                )
+                .frame(maxHeight: .infinity)
+                .overlay {
+                    RoundedRectangle(cornerRadius: CornerRadius.md, style: .continuous)
+                        .stroke(chrome.edgeFaint, lineWidth: 0.5)
+                        .allowsHitTesting(false)
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    if !trimmedText.isEmpty {
+                        editorCopyButton(chrome: chrome)
+                            .padding(.bottom, 12)
+                            .padding(.trailing, 12)
+                            .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .bottomTrailing)))
+                    }
+                }
+                .animation(.easeOut(duration: 0.18), value: trimmedText.isEmpty)
+                .animation(.easeOut(duration: 0.18), value: showingCopiedFeedback)
+            }
+
+            if showsFooterStrip {
+                footerStrip
+            }
+
+            if let dictationError {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color.recording)
+                    Text(dictationError)
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.textSecondary)
+                        .foregroundStyle(theme.colors.textSecondary)
                 }
             }
         }
-        .padding(Spacing.md)
-        .background(Color.surfaceSecondary)
-        .clipShape(.rect(cornerRadius: CornerRadius.md))
+        .padding(.vertical, 2)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .onChange(of: pendingRevision?.id) { _, revisionID in
+            if revisionID != nil {
+                revisionReviewMode = .after
+            }
+        }
+    }
+
+    // Footer strip — command + route chooser on the left, persistence affordances
+    // on the right. It stacks only when the phone width is too narrow.
+    private var footerStrip: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                footerContent
+
+                Spacer(minLength: 8)
+
+                footerActions
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                footerContent
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                HStack(spacing: 14) {
+                    Spacer(minLength: 0)
+                    footerActions
+                }
+            }
+        }
+        .padding(.horizontal, 4)
+    }
+
+    private var footerActions: some View {
+        HStack(spacing: 14) {
+            if let onShowHistory, historyCount > 0 {
+                Button(action: onShowHistory) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 10, weight: .light))
+                        Text("History · \(historyCount)")
+                            .font(.system(size: 10, weight: .regular))
+                    }
+                    .foregroundStyle(theme.colors.textTertiary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Show revision history, \(historyCount) entries")
+            }
+
+            Button(action: copyDraft) {
+                HStack(spacing: 4) {
+                    Image(systemName: showingCopiedFeedback ? "checkmark" : "doc.on.doc")
+                        .font(.system(size: 10, weight: .light))
+
+                    Text(showingCopiedFeedback ? "Copied" : "Copy")
+                        .font(.system(size: 10, weight: .regular))
+                }
+                .foregroundStyle(showingCopiedFeedback ? Color.success : theme.colors.textTertiary)
+            }
+            .buttonStyle(.plain)
+            .opacity(trimmedText.isEmpty ? 0.45 : 1)
+        }
+    }
+
+    @ViewBuilder
+    private func revisionReviewSurface(
+        revision: ComposePendingRevision,
+        chrome: ChromeTokens
+    ) -> some View {
+        Group {
+            switch revisionReviewMode {
+            case .before:
+                revisionTextScrollSurface(text: revision.originalText)
+            case .after:
+                ComposeRevisionEditableTextSurface(
+                    text: revisedTextBinding,
+                    placeholder: "Edit the revised draft..."
+                )
+            case .diff:
+                ScrollView {
+                    ComposeRevisionDiffView(
+                        originalText: revision.originalText,
+                        revisedText: revision.revisedText
+                    )
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .padding(14)
+                }
+            }
+        }
+        .frame(height: editorMinHeight)
+        .background(Color.surfacePrimary)
+        .clipShape(.rect(cornerRadius: CornerRadius.sm))
         .overlay {
-            RoundedRectangle(cornerRadius: CornerRadius.md)
-                .stroke(Color.borderPrimary, lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
+                .stroke(chrome.action.opacity(0.35), lineWidth: chrome.hairlineWidth)
                 .allowsHitTesting(false)
         }
     }
 
+    private func revisionTextScrollSurface(text: String) -> some View {
+        ScrollView {
+            Text(text)
+                .font(.body)
+                .foregroundStyle(theme.colors.textPrimary)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .padding(14)
+        }
+    }
+
+    // Tiny instrument-display strip: theme eyebrow + thin trace + live word
+    // count. Gives the editor a "working surface" framing without consuming
+    // meaningful vertical space.
+    @ViewBuilder
+    private func consoleHeader(chrome: ChromeTokens) -> some View {
+        // The header only surfaces when a pending revision needs the
+        // before/after/diff picker — everything else (model name, counts,
+        // save) lives in the navigation bar now.
+        if pendingRevision != nil {
+            HStack(spacing: 10) {
+                revisionHeaderControls(chrome: chrome)
+            }
+            .padding(.horizontal, 2)
+        }
+    }
+
+    private func revisionHeaderControls(chrome: ChromeTokens) -> some View {
+        HStack(spacing: 5) {
+            Picker("Revision view", selection: $revisionReviewMode) {
+                ForEach(ComposeRevisionReviewMode.allCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(maxWidth: 168)
+
+            Button {
+                onDiscardPending?()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color.recording)
+                    .frame(width: 24, height: 24)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.recording.opacity(0.10))
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(Color.recording.opacity(0.45), lineWidth: chrome.hairlineWidth)
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Discard revision")
+
+            Button {
+                onApplyPending?()
+            } label: {
+                Image(systemName: pendingRevision?.isSelectionRevision == true ? "arrow.down.doc" : "checkmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color.surfacePrimary)
+                    .frame(width: 24, height: 24)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(chrome.accent)
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(pendingRevision?.isSelectionRevision == true ? "Apply selection" : "Replace draft")
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var revisedTextBinding: Binding<String> {
+        Binding(
+            get: { pendingRevision?.revisedText ?? "" },
+            set: { newValue in
+                var nextRevision = pendingRevision
+                nextRevision?.revisedText = newValue
+                pendingRevision = nextRevision
+            }
+        )
+    }
+
+    private var composeCounts: (words: Int, characters: Int) {
+        let trimmed = trimmedText
+        guard !trimmed.isEmpty else { return (0, 0) }
+        let words = trimmed.split(whereSeparator: \.isWhitespace).count
+        return (words, trimmed.count)
+    }
+
+    private func consoleCountLabel(_ counts: (words: Int, characters: Int)) -> String {
+        guard counts.words > 0 else { return "0W" }
+        if counts.characters >= 1000 {
+            let kilo = Double(counts.characters) / 1000
+            return String(format: "%dW · %.1fKC", counts.words, kilo)
+        }
+        return "\(counts.words)W · \(counts.characters)C"
+    }
+
     private var trimmedText: String {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // Floating Copy affordance pinned to the top-right of the editor surface
+    // (inside the text area). Quiet circular chip, slightly elevated. Toggles
+    // to a checkmark with success tint on confirm.
+    private func editorCopyButton(chrome: ChromeTokens) -> some View {
+        Button(action: copyDraft) {
+            Image(systemName: showingCopiedFeedback ? "checkmark" : "doc.on.doc")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(showingCopiedFeedback ? Color.success : theme.colors.textSecondary)
+                .frame(width: 32, height: 32)
+                .background(
+                    Circle()
+                        .fill(theme.colors.cardBackground.opacity(0.92))
+                )
+                .overlay {
+                    Circle()
+                        .stroke(
+                            showingCopiedFeedback ? Color.success.opacity(0.5) : chrome.edgeFaint,
+                            lineWidth: chrome.hairlineWidth
+                        )
+                        .allowsHitTesting(false)
+                }
+                .shadow(color: Color.black.opacity(0.06), radius: 4, x: 0, y: 1)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(showingCopiedFeedback ? "Draft copied" : "Copy draft to clipboard")
     }
 
     private func copyDraft() {
@@ -2110,30 +3657,25 @@ private struct ComposePreviewCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Revision Preview")
-                        .font(.headlineSmall)
-                        .foregroundStyle(Color.textPrimary)
-
-                    Text(revision.instruction)
-                        .font(.bodySmall)
-                        .foregroundStyle(Color.textSecondary)
-
-                    Text(summaryLabel)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.textTertiary)
-                }
-
+            // Eyebrow alone — the headline used to duplicate this label.
+            HStack {
+                TalkieEyebrow(text: "Revision Preview")
                 Spacer()
+                TalkieChannelLabel(code: revision.providerName, isActive: true)
+            }
 
-                Text(revision.providerName)
+            // Instruction is the real signal — make it the primary content.
+            Text(revision.instruction)
+                .font(.bodyMedium)
+                .foregroundStyle(Color.textPrimary)
+
+            // Signal indicator: word count transformation reads as input → output.
+            HStack(spacing: 6) {
+                TalkieStatusDot(diameter: 4)
+                Text(summaryLabel.uppercased())
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(Color.brandAccent)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .background(Color.brandAccent.opacity(0.12))
-                    .clipShape(.capsule)
+                    .tracking(1)
+                    .foregroundStyle(Color.textTertiary)
             }
 
             if let fallbackReason = revision.fallbackReason {
@@ -2143,18 +3685,29 @@ private struct ComposePreviewCard: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Suggested Draft")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(Color.textTertiary)
+                HStack(spacing: 8) {
+                    TalkieEyebrow(
+                        text: revision.isSelectionRevision ? "Suggested Selection" : "Diff",
+                        tint: .ink,
+                        showLeader: false
+                    )
+                    Spacer(minLength: 4)
+                    diffLegend
+                }
 
-                Text(revision.revisedText)
-                    .font(.body)
-                    .foregroundStyle(Color.textPrimary)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-                    .background(Color.surfacePrimary)
-                    .clipShape(.rect(cornerRadius: CornerRadius.sm))
+                ComposeRevisionDiffView(
+                    originalText: revision.originalText,
+                    revisedText: revision.revisedText
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(Color.surfacePrimary)
+                .clipShape(.rect(cornerRadius: CornerRadius.sm))
+                .overlay {
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .stroke(ThemeManager.shared.chrome.edgeFaint, lineWidth: 0.5)
+                        .allowsHitTesting(false)
+                }
             }
 
             HStack(spacing: Spacing.sm) {
@@ -2165,10 +3718,11 @@ private struct ComposePreviewCard: View {
 
                 Spacer()
 
-                Button("Replace Draft", systemImage: "arrow.down.doc") {
+                Button(revision.isSelectionRevision ? "Apply Selection" : "Replace Draft", systemImage: "arrow.down.doc") {
                     applyRevision()
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(Color.active)
             }
         }
         .padding(Spacing.md)
@@ -2176,7 +3730,7 @@ private struct ComposePreviewCard: View {
         .clipShape(.rect(cornerRadius: CornerRadius.md))
         .overlay {
             RoundedRectangle(cornerRadius: CornerRadius.md)
-                .stroke(Color.borderPrimary, lineWidth: 0.5)
+                .stroke(ThemeManager.shared.chrome.edge, lineWidth: 0.5)
                 .allowsHitTesting(false)
         }
     }
@@ -2186,6 +3740,31 @@ private struct ComposePreviewCard: View {
         let revisedCount = revision.revisedText.split(whereSeparator: \.isWhitespace).count
         return "\(originalCount) → \(revisedCount) words"
     }
+
+    @ViewBuilder
+    private var diffLegend: some View {
+        let chrome = ThemeManager.shared.chrome
+        HStack(spacing: 8) {
+            HStack(spacing: 3) {
+                Rectangle()
+                    .fill(chrome.accent)
+                    .frame(width: 6, height: 1.5)
+                Text("ADDED")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .tracking(0.8)
+                    .foregroundStyle(chrome.accent)
+            }
+            HStack(spacing: 3) {
+                Rectangle()
+                    .fill(Color.textTertiary)
+                    .frame(width: 6, height: 1.5)
+                Text("REMOVED")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .tracking(0.8)
+                    .foregroundStyle(Color.textTertiary)
+            }
+        }
+    }
 }
 
 private struct ComposeHistoryCard: View {
@@ -2193,19 +3772,27 @@ private struct ComposeHistoryCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
+            TalkieEyebrow(text: "Applied Revisions")
+
             Text("Applied Revisions")
                 .font(.headlineSmall)
                 .foregroundStyle(Color.textPrimary)
 
-            ForEach(revisions.prefix(5)) { revision in
+            TalkieDivider()
+                .padding(.vertical, 2)
+
+            ForEach(Array(revisions.prefix(5).enumerated()), id: \.element.id) { index, revision in
                 HStack(alignment: .top, spacing: Spacing.sm) {
+                    TalkieChannelLabel(code: String(format: "R%02d", index + 1))
+                        .padding(.top, 1)
+
                     VStack(alignment: .leading, spacing: 6) {
                         Text(revision.instruction)
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(Color.textPrimary)
                             .lineLimit(1)
 
-                        Text("\(revision.providerName) • \(revision.modelId)")
+                        Text("\(revision.scope) • \(revision.providerName) • \(revision.modelId)")
                             .font(.system(size: 11))
                             .foregroundStyle(Color.textSecondary)
                     }
@@ -2229,246 +3816,114 @@ private struct ComposeHistoryCard: View {
         .clipShape(.rect(cornerRadius: CornerRadius.md))
         .overlay {
             RoundedRectangle(cornerRadius: CornerRadius.md)
-                .stroke(Color.borderPrimary, lineWidth: 0.5)
+                .stroke(ThemeManager.shared.chrome.edge, lineWidth: 0.5)
                 .allowsHitTesting(false)
         }
     }
 }
 
-private struct ComposeCommandDock: View {
-    let backAccessibilityLabel: String
-    let isVoiceCommandEnabled: Bool
-    let voiceCommandState: InlineDictationController.State
-    let backAction: () -> Void
-    let voiceCommandAction: () -> Void
-    let keyboardAction: () -> Void
-
-    var body: some View {
-        HStack(spacing: 0) {
-            ComposeTrayCircleButton(
-                icon: "chevron.left",
-                accessibilityLabel: backAccessibilityLabel,
-                action: backAction
-            )
-            .frame(width: DockLayout.sideButtonSize, height: DockLayout.sideButtonSize)
-
-            Spacer()
-
-            ComposeVoiceCommandButton(
-                state: voiceCommandState,
-                isEnabled: isVoiceCommandEnabled,
-                action: voiceCommandAction
-            )
-
-            Spacer()
-
-            ComposeTrayCircleButton(
-                icon: "keyboard",
-                accessibilityLabel: "Open the keyboard",
-                action: keyboardAction
-            )
-            .frame(width: DockLayout.sideButtonSize, height: DockLayout.sideButtonSize)
-        }
-        .padding(.horizontal, DockLayout.horizontalPadding)
-        .padding(.top, DockLayout.topPadding)
-        .padding(.bottom, DockLayout.bottomPadding)
-        .frame(maxWidth: .infinity)
-        .background {
-            BottomTrayBackground()
-                .allowsHitTesting(false)
-        }
-    }
-}
-
-private struct ComposeQuickActionsBar: View {
-    let quickPrompts: [String]
-    let areQuickActionsEnabled: Bool
-    let canSaveNote: Bool
-    let saveNote: () -> Void
-    let applyQuickPrompt: (String) -> Void
+private struct ComposeSegmentsBar: View {
+    let segments: [ComposeSegment]
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ComposeDockQuickActionPill(
-                    title: "Save Note",
-                    isEnabled: canSaveNote
-                ) {
-                    saveNote()
-                }
-
-                ForEach(quickPrompts, id: \.self) { prompt in
-                    ComposeDockQuickActionPill(
-                        title: prompt,
-                        isEnabled: areQuickActionsEnabled
-                    ) {
-                        applyQuickPrompt(prompt)
-                    }
+                ForEach(Array(segments.prefix(12).enumerated()), id: \.element.id) { index, segment in
+                    ComposeSegmentChip(segment: segment, index: index)
                 }
             }
-            .padding(.horizontal, DockLayout.horizontalPadding)
+            .padding(.vertical, 2)
         }
-        .frame(height: 32)
         .scrollClipDisabled()
-        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityLabel("Compose segments")
     }
 }
 
-private struct ComposeNotesListDock: View {
-    let backAccessibilityLabel: String
-    let backAction: () -> Void
-    let createNoteAction: () -> Void
+private struct ComposeSegmentChip: View {
+    let segment: ComposeSegment
+    let index: Int
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    private var channelCode: String { String(format: "S%02d", index + 1) }
 
     var body: some View {
-        HStack(spacing: 0) {
-            ComposeTrayCircleButton(
-                icon: "chevron.left",
-                accessibilityLabel: backAccessibilityLabel,
-                action: backAction
-            )
-            .frame(width: DockLayout.sideButtonSize, height: DockLayout.sideButtonSize)
+        let chrome = theme.chrome
+        HStack(spacing: 7) {
+            // Channel pill — situates each segment as a numbered signal
+            TalkieChannelLabel(code: channelCode, isActive: false)
 
-            Spacer()
+            Image(systemName: segment.kind.systemImage)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(segment.kind.tint)
 
-            ComposeCreateNoteButton(action: createNoteAction)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(segment.title.isEmpty ? segment.kind.title : segment.title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(theme.colors.textPrimary)
+                    .lineLimit(1)
 
-            Spacer()
-
-            Color.clear
-                .frame(width: DockLayout.sideButtonSize, height: DockLayout.sideButtonSize)
+                Text(segment.detail ?? segmentPreview)
+                    .font(.system(size: 10))
+                    .foregroundStyle(theme.colors.textTertiary)
+                    .lineLimit(1)
+            }
         }
-        .padding(.horizontal, DockLayout.horizontalPadding)
-        .padding(.top, DockLayout.topPadding)
-        .padding(.bottom, DockLayout.bottomPadding)
-        .frame(maxWidth: .infinity)
-        .background {
-            BottomTrayBackground()
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(theme.colors.cardBackground)
+        .clipShape(.rect(cornerRadius: CornerRadius.sm))
+        .overlay {
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
+                .strokeBorder(chrome.edgeFaint, lineWidth: 0.5)
                 .allowsHitTesting(false)
         }
     }
-}
 
-private struct ComposeQuickActionsSkeletonBar: View {
-    private let widths: [CGFloat] = [88, 108, 96, 118]
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(widths, id: \.self) { width in
-                    Capsule()
-                        .fill(Color.surfacePrimary.opacity(0.75))
-                        .frame(width: width, height: 32)
-                        .overlay {
-                            Capsule()
-                                .stroke(Color.borderPrimary.opacity(0.55), lineWidth: 0.5)
-                        }
-                        .overlay {
-                            Capsule()
-                                .fill(Color.textPrimary.opacity(0.05))
-                                .padding(6)
-                        }
-                }
-            }
-            .padding(.horizontal, DockLayout.horizontalPadding)
-        }
-        .frame(height: 32)
-        .scrollClipDisabled()
-        .fixedSize(horizontal: false, vertical: true)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+    private var segmentPreview: String {
+        let words = segment.text.split(whereSeparator: \.isWhitespace).prefix(6)
+        return words.joined(separator: " ")
     }
 }
 
 private struct ComposeVoiceCommandPreviewBubble: View {
     let text: String
 
+    @ObservedObject private var theme = ThemeManager.shared
+
     var body: some View {
+        let chrome = theme.chrome
         HStack(spacing: 8) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(Color.brandAccent)
+            // Signal indicator — pulsing phosphor dot + chrome trace = "AI inbound"
+            HStack(spacing: 4) {
+                TalkieStatusDot(diameter: 5, pulses: true)
+                Rectangle()
+                    .fill(chrome.accent.opacity(0.45))
+                    .frame(width: 12, height: 1)
+                Image(systemName: "sparkles")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(chrome.accent)
+                    .talkieAccentGlow()
+            }
 
             Text(text)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Color.textPrimary)
+                .foregroundStyle(theme.colors.textPrimary)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.surfaceSecondary.opacity(0.96))
+        .background(theme.colors.cardBackground.opacity(0.96))
         .clipShape(.capsule)
         .overlay {
             Capsule()
-                .stroke(Color.borderPrimary.opacity(0.8), lineWidth: 0.5)
+                .stroke(chrome.accent.opacity(0.35), lineWidth: 0.5)
         }
+        .shadow(color: chrome.accentGlow, radius: chrome.glowRadius * 2)
         .shadow(color: Color.black.opacity(0.08), radius: 14, y: 6)
         .allowsHitTesting(false)
-    }
-}
-
-private struct ComposeDockQuickActionPill: View {
-    let title: String
-    let isEnabled: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Color.textPrimary)
-                .lineLimit(1)
-                .padding(.horizontal, 11)
-                .frame(minHeight: 32)
-        }
-        .buttonStyle(.plain)
-        .disabled(!isEnabled)
-        .background(buttonBackground)
-        .overlay {
-            Capsule()
-                .strokeBorder(Color.borderPrimary.opacity(0.7), lineWidth: 0.5)
-                .allowsHitTesting(false)
-        }
-        .clipShape(.capsule)
-        .opacity(isEnabled ? 1 : 0.4)
-    }
-
-    @ViewBuilder
-    private var buttonBackground: some View {
-        if #available(iOS 26.0, *) {
-            Capsule()
-                .fill(.clear)
-                .glassEffect(.regular.interactive(), in: .capsule)
-        } else {
-            Capsule()
-                .fill(Color.surfacePrimary.opacity(0.55))
-        }
-    }
-}
-
-private struct ComposeCreateNoteButton: View {
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            ZStack {
-                Circle()
-                    .fill(Color.surfacePrimary)
-                    .frame(width: DockLayout.recordButtonSize, height: DockLayout.recordButtonSize)
-                    .overlay {
-                        Circle()
-                            .strokeBorder(Color.brandAccent.opacity(0.45), lineWidth: 1)
-                            .allowsHitTesting(false)
-                    }
-
-                Image(systemName: "square.and.pencil")
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(Color.brandAccent)
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Create a new note")
     }
 }
 
@@ -2477,14 +3932,16 @@ private struct ComposeNotesEmptyStateRow: View {
 
     var body: some View {
         VStack(spacing: Spacing.md) {
+            HStack(spacing: 6) {
+                TalkieStatusDot(diameter: 5, pulses: true)
+                TalkieEyebrow(text: "Awaiting Input", showLeader: false)
+            }
+
             Image(systemName: "square.and.pencil")
                 .font(.system(size: 32, weight: .light))
                 .foregroundStyle(Color.textTertiary)
 
-            Text("NO NOTES")
-                .font(.techLabel)
-                .tracking(2)
-                .foregroundStyle(Color.textSecondary)
+            TalkieEyebrow(text: "No Notes", tint: .ink, showLeader: false)
 
             Text("Create a note to start revising text here.")
                 .font(.bodySmall)
@@ -2494,7 +3951,7 @@ private struct ComposeNotesEmptyStateRow: View {
                 createNote()
             }
             .buttonStyle(.borderedProminent)
-            .tint(Color.brandAccent)
+            .tint(Color.active)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Spacing.xl)
@@ -2561,111 +4018,943 @@ private struct ComposeNoteRow: View {
     }
 }
 
-private struct ComposeTrayCircleButton: View {
-    let icon: String
-    let accessibilityLabel: String
-    let action: () -> Void
+// MARK: - Word-level Diff
+//
+// LCS-based word diff used to render an inline preview of an AI revision —
+// common words appear plain, additions are accent-tinted with an underline,
+// deletions get a strikethrough. Good enough for short paragraphs; for very
+// long bodies we still fall back to the full revised text.
 
-    var body: some View {
-        BottomCircleButton(
-            icon: icon,
-            isActive: false,
-            action: action
-        )
-        .accessibilityLabel(accessibilityLabel)
+private enum ComposeDiffToken: Hashable {
+    case unchanged(String)
+    case added(String)
+    case removed(String)
+}
+
+private enum ComposeWordDiff {
+    static func tokens(from original: String, to revised: String) -> [ComposeDiffToken] {
+        let originalWords = tokenize(original)
+        let revisedWords = tokenize(revised)
+        let n = originalWords.count
+        let m = revisedWords.count
+
+        guard n > 0 || m > 0 else { return [] }
+
+        // LCS dynamic-programming table.
+        var dp = Array(repeating: Array(repeating: 0, count: m + 1), count: n + 1)
+        for i in 0..<n {
+            for j in 0..<m {
+                if originalWords[i] == revisedWords[j] {
+                    dp[i + 1][j + 1] = dp[i][j] + 1
+                } else {
+                    dp[i + 1][j + 1] = max(dp[i + 1][j], dp[i][j + 1])
+                }
+            }
+        }
+
+        // Backtrack to produce tokens in document order.
+        var tokens: [ComposeDiffToken] = []
+        var i = n
+        var j = m
+        while i > 0 && j > 0 {
+            if originalWords[i - 1] == revisedWords[j - 1] {
+                tokens.append(.unchanged(originalWords[i - 1]))
+                i -= 1
+                j -= 1
+            } else if dp[i - 1][j] >= dp[i][j - 1] {
+                tokens.append(.removed(originalWords[i - 1]))
+                i -= 1
+            } else {
+                tokens.append(.added(revisedWords[j - 1]))
+                j -= 1
+            }
+        }
+        while i > 0 {
+            tokens.append(.removed(originalWords[i - 1]))
+            i -= 1
+        }
+        while j > 0 {
+            tokens.append(.added(revisedWords[j - 1]))
+            j -= 1
+        }
+        return tokens.reversed()
+    }
+
+    private static func tokenize(_ string: String) -> [String] {
+        string
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
     }
 }
 
-private struct ComposeVoiceCommandButton: View {
+private struct ComposeRevisionDiffView: View {
+    let originalText: String
+    let revisedText: String
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    private static let maxDiffCharacters = 4000
+
+    var body: some View {
+        if shouldFallbackToFullText {
+            Text(revisedText)
+                .font(.body)
+                .foregroundStyle(theme.colors.textPrimary)
+                .textSelection(.enabled)
+        } else {
+            Text(attributedDiff)
+                .font(.body)
+                .textSelection(.enabled)
+        }
+    }
+
+    private var shouldFallbackToFullText: Bool {
+        originalText.count + revisedText.count > Self.maxDiffCharacters
+    }
+
+    private var attributedDiff: AttributedString {
+        let tokens = ComposeWordDiff.tokens(from: originalText, to: revisedText)
+        var result = AttributedString()
+        for (index, token) in tokens.enumerated() {
+            var fragment: AttributedString
+            switch token {
+            case .unchanged(let word):
+                fragment = AttributedString(word)
+                fragment.foregroundColor = theme.colors.textPrimary
+            case .added(let word):
+                fragment = AttributedString(word)
+                fragment.foregroundColor = theme.chrome.accent
+                fragment.underlineStyle = .single
+            case .removed(let word):
+                fragment = AttributedString(word)
+                fragment.foregroundColor = theme.colors.textTertiary
+                fragment.strikethroughStyle = .single
+            }
+            result.append(fragment)
+            if index < tokens.count - 1 {
+                result.append(AttributedString(" "))
+            }
+        }
+        return result
+    }
+}
+
+// MARK: - Versions Cell Strip
+//
+// Horizontal R-cell strip mounted above the editor when applied revisions
+// exist. Each cell shows R-code · short instruction · time. Tap to swap that
+// revision into the draft (replaces the draft text).
+
+private struct ComposeVersionsCellStrip: View {
+    let revisions: [ComposeAppliedRevision]
+    let onSelect: (ComposeAppliedRevision) -> Void
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm"
+        return f
+    }()
+
+    var body: some View {
+        let chrome = theme.chrome
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                TalkieEyebrow(text: "Versions", tint: .accent, showLeader: true)
+                Spacer(minLength: 4)
+                Text("\(revisions.count) SAVED")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .tracking(1)
+                    .foregroundStyle(theme.colors.textTertiary)
+            }
+            .padding(.horizontal, 2)
+
+            HStack(spacing: 0) {
+                ForEach(Array(revisions.prefix(4).enumerated()), id: \.element.id) { index, revision in
+                    Button {
+                        onSelect(revision)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(String(format: "R%02d", index + 1))
+                                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(chrome.accent)
+                            Text(revision.instruction)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(theme.colors.textPrimary)
+                                .lineLimit(1)
+                            Text(Self.timeFormatter.string(from: revision.createdAt))
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundStyle(theme.colors.textTertiary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(index == 0 ? theme.colors.tableCellBackground : Color.clear)
+                    }
+                    .buttonStyle(.plain)
+                    .overlay(alignment: .trailing) {
+                        if index < min(revisions.count, 4) - 1 {
+                            Rectangle()
+                                .fill(chrome.edgeFaint)
+                                .frame(width: chrome.hairlineWidth)
+                                .padding(.vertical, 4)
+                        }
+                    }
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(theme.colors.background)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .stroke(chrome.edgeFaint, lineWidth: chrome.hairlineWidth)
+                    .allowsHitTesting(false)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Versions, \(revisions.count) saved")
+    }
+}
+
+// MARK: - Revision Overlay
+//
+// Full-screen sheet presented when an AI revision is ready to review. The
+// diff fills the screen so the user can really read it; scroll if long.
+
+private struct ComposeRevisionOverlay: View {
+    let revision: ComposePendingRevision
+    let apply: () -> Void
+    let discard: () -> Void
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        let chrome = theme.chrome
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    headerStrip(chrome: chrome)
+
+                    Text(revision.instruction)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(theme.colors.textPrimary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    if let fallbackReason = revision.fallbackReason {
+                        HStack(spacing: 6) {
+                            Image(systemName: "info.circle.fill")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(Color.warning)
+                            Text(fallbackReason)
+                                .font(.system(size: 12))
+                                .foregroundStyle(theme.colors.textSecondary)
+                        }
+                    }
+
+                    diffLegend(chrome: chrome)
+
+                    ComposeRevisionDiffView(
+                        originalText: revision.originalText,
+                        revisedText: revision.revisedText
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+                    .background(theme.colors.background)
+                    .clipShape(.rect(cornerRadius: CornerRadius.sm))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: CornerRadius.sm)
+                            .stroke(chrome.edgeFaint, lineWidth: chrome.hairlineWidth)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .padding(Spacing.md)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+            .background(theme.colors.cardBackground)
+            .navigationTitle(revision.isSelectionRevision ? "Selection Revision" : "Draft Revision")
+            .navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                actionBar(chrome: chrome)
+            }
+        }
+    }
+
+    private func headerStrip(chrome: ChromeTokens) -> some View {
+        HStack(spacing: 6) {
+            TalkieEyebrow(text: "Diff", tint: .accent, showLeader: true)
+            Spacer(minLength: 4)
+            TalkieChannelLabel(code: revision.providerName, isActive: true)
+            TalkieChannelLabel(code: revision.modelId)
+        }
+    }
+
+    private func diffLegend(chrome: ChromeTokens) -> some View {
+        HStack(spacing: 14) {
+            HStack(spacing: 4) {
+                Rectangle()
+                    .fill(chrome.accent)
+                    .frame(width: 10, height: 2)
+                Text("ADDED")
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .tracking(1)
+                    .foregroundStyle(chrome.accent)
+            }
+            HStack(spacing: 4) {
+                Rectangle()
+                    .fill(theme.colors.textTertiary)
+                    .frame(width: 10, height: 2)
+                Text("REMOVED")
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .tracking(1)
+                    .foregroundStyle(theme.colors.textTertiary)
+            }
+            Spacer(minLength: 0)
+            Text(wordDeltaLabel)
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .tracking(1)
+                .foregroundStyle(theme.colors.textSecondary)
+        }
+    }
+
+    private var wordDeltaLabel: String {
+        let originalCount = revision.originalText.split(whereSeparator: \.isWhitespace).count
+        let revisedCount = revision.revisedText.split(whereSeparator: \.isWhitespace).count
+        let delta = revisedCount - originalCount
+        let sign = delta > 0 ? "+" : ""
+        return "\(originalCount) → \(revisedCount)W (\(sign)\(delta))"
+    }
+
+    private func actionBar(chrome: ChromeTokens) -> some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(chrome.edgeFaint)
+                .frame(height: chrome.hairlineWidth)
+
+            HStack(spacing: Spacing.sm) {
+                Button(role: .destructive) { discard() } label: {
+                    Label("Discard", systemImage: "xmark")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
+                Button { apply() } label: {
+                    Label(revision.isSelectionRevision ? "Apply Selection" : "Replace Draft", systemImage: "arrow.down.doc")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(chrome.accent)
+            }
+            .padding(.horizontal, Spacing.md)
+            .padding(.top, 10)
+            .padding(.bottom, 12)
+            .background(theme.colors.cardBackground)
+        }
+    }
+}
+
+// MARK: - History Sheet
+//
+// Sheet-presented table of applied revisions. Tap rows to inspect a row's
+// metadata; this replaces the inline ComposeHistoryCard / top-of-bay strip.
+
+private struct ComposeHistorySheet: View {
+    let revisions: [ComposeAppliedRevision]
+    let onDismiss: () -> Void
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if revisions.isEmpty {
+                    emptyState
+                } else {
+                    List {
+                        ForEach(Array(revisions.enumerated()), id: \.element.id) { index, revision in
+                            HistoryRow(index: index, revision: revision)
+                                .listRowBackground(theme.colors.tableCellBackground)
+                        }
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .background(theme.colors.background)
+                }
+            }
+            .navigationTitle("History")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done", action: onDismiss)
+                        .fontWeight(.medium)
+                }
+            }
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 28, weight: .light))
+                .foregroundStyle(theme.colors.textTertiary)
+            Text("No revisions yet")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(theme.colors.textSecondary)
+            Text("Applied AI revisions will appear here.")
+                .font(.system(size: 11))
+                .foregroundStyle(theme.colors.textTertiary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(theme.colors.background)
+    }
+}
+
+private struct HistoryRow: View {
+    let index: Int
+    let revision: ComposeAppliedRevision
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            TalkieChannelLabel(code: String(format: "R%02d", index + 1))
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(revision.instruction)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(theme.colors.textPrimary)
+                    .lineLimit(2)
+
+                HStack(spacing: 4) {
+                    Text(revision.scope)
+                    Text(theme.chrome.eyebrowLeader)
+                    Text(revision.providerName)
+                    Text(theme.chrome.eyebrowLeader)
+                    Text(revision.modelId)
+                }
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(theme.colors.textTertiary)
+                .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(revision.createdAt, style: .time)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(theme.colors.textSecondary)
+
+                Text("\(wordCount(revision.text))W")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(theme.colors.textTertiary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func wordCount(_ string: String) -> Int {
+        string.split(whereSeparator: \.isWhitespace).count
+    }
+}
+
+// MARK: - Compose Bay Action Row
+//
+// The thin bottom action row inside the bay. Mirrors the macOS layout: a
+// filled COMMAND voice pill on the left, then a scrollable strip of quick
+// action chips. The home tab bar's mic stays separate (memos, different path).
+
+private struct ComposeBayActionRow: View {
+    let voiceCommandState: InlineDictationController.State
+    let isVoiceCommandEnabled: Bool
+    let quickActions: [ComposeWorkflowAction]
+    let quickActionsEnabled: Bool
+    let toggleVoiceCommand: () -> Void
+    let applyAction: (ComposeWorkflowAction) -> Void
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Lane 1 — the voice command pill on its own line.
+            HStack {
+                ComposeBayCommandPill(
+                    state: voiceCommandState,
+                    isEnabled: isVoiceCommandEnabled,
+                    action: toggleVoiceCommand
+                )
+                Spacer(minLength: 0)
+            }
+
+            // Lane 2 — quick action chips, only shown when something can act
+            // on the draft. No empty/disabled row hanging out.
+            if quickActionsEnabled && !quickActions.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(quickActions) { action in
+                            ComposeBayQuickChip(
+                                title: action.title,
+                                systemImage: action.systemImage,
+                                isEnabled: true
+                            ) {
+                                applyAction(action)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.top, 6)
+        .accessibilityElement(children: .contain)
+    }
+}
+
+private struct ComposeBayCommandPill: View {
     let state: InlineDictationController.State
     let isEnabled: Bool
     let action: () -> Void
 
+    @ObservedObject private var theme = ThemeManager.shared
+
     var body: some View {
+        let chrome = theme.chrome
+        let corner = max(chrome.chromeCorner, 8)
         Button(action: action) {
-            ZStack {
-                if state == .recording {
-                    Circle()
-                        .fill(Color.recording)
-                        .frame(width: 72, height: 72)
-                        .blur(radius: 18)
-                        .opacity(0.4)
-                }
-
-                Circle()
-                    .fill(buttonFill)
-                    .frame(width: DockLayout.recordButtonSize, height: DockLayout.recordButtonSize)
-                    .overlay {
-                        Circle()
-                            .strokeBorder(buttonBorder, lineWidth: 1)
-                            .allowsHitTesting(false)
-                    }
-
-                Image(systemName: iconName)
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(iconColor)
+            HStack(spacing: 8) {
+                iconView
+                Text("Command")
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .tracking(1.4)
+                    .textCase(.uppercase)
             }
+            .foregroundStyle(foreground)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .fill(fill)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .stroke(strokeColor, lineWidth: state == .idle ? chrome.hairlineWidth : 1)
+                    .allowsHitTesting(false)
+            }
+            .shadow(color: shadowColor, radius: 6, x: 0, y: 2)
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1 : 0.45)
-        .scaleEffect(state == .recording ? 1.08 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.72), value: state)
+        .frame(minHeight: 44)
         .accessibilityLabel(accessibilityLabel)
     }
 
-    private var iconName: String {
+    // Idle: mic + small sparkles glyph in the top-trailing corner — composes
+    // "AI-powered voice command" without inventing a new symbol. Recording:
+    // single stop glyph (no AI flourish — the action is just "stop"). Tran-
+    // scribing: waveform.
+    @ViewBuilder
+    private var iconView: some View {
         switch state {
         case .idle:
-            return "sparkles"
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 15, weight: .semibold))
+
+                Image(systemName: "sparkles")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(theme.chrome.accent)
+                    .offset(x: 4, y: -3)
+                    .scopePhosphorGlow(radius: 2)
+            }
+            .frame(width: 18, height: 18)
         case .recording:
-            return "stop.fill"
+            Image(systemName: "stop.fill")
+                .font(.system(size: 15, weight: .semibold))
         case .transcribing:
-            return "waveform"
+            Image(systemName: "waveform")
+                .font(.system(size: 15, weight: .semibold))
         }
     }
 
-    private var iconColor: Color {
+    private var foreground: Color {
         switch state {
-        case .idle:
-            return Color.brandAccent
-        case .recording:
-            return .white
-        case .transcribing:
-            return Color.brandAccent
+        case .recording:    return .white
+        case .transcribing: return theme.chrome.accent
+        case .idle:         return theme.colors.textPrimary
         }
     }
 
-    private var buttonFill: Color {
+    private var fill: Color {
         switch state {
-        case .idle:
-            return Color.surfacePrimary
-        case .recording:
-            return Color.recording
-        case .transcribing:
-            return Color.surfacePrimary
+        case .recording:    return Color.recording
+        case .transcribing: return theme.chrome.accentTint
+        case .idle:         return theme.colors.tableCellBackground
         }
     }
 
-    private var buttonBorder: Color {
+    private var strokeColor: Color {
         switch state {
-        case .idle:
-            return Color.brandAccent.opacity(0.45)
-        case .recording:
-            return Color.recordingGlow.opacity(0.4)
-        case .transcribing:
-            return Color.brandAccent.opacity(0.3)
+        case .recording:    return Color.recording.opacity(0.6)
+        case .transcribing: return theme.chrome.accent.opacity(0.4)
+        case .idle:         return theme.chrome.edge.opacity(0.85)
+        }
+    }
+
+    private var shadowColor: Color {
+        switch state {
+        case .recording:    return Color.recording.opacity(0.30)
+        case .transcribing: return theme.chrome.accent.opacity(0.18)
+        case .idle:         return Color.black.opacity(0.08)
         }
     }
 
     private var accessibilityLabel: String {
         switch state {
-        case .idle:
-            return "Start voice command"
-        case .recording:
-            return "Stop voice command"
-        case .transcribing:
-            return "Transcribing voice command"
+        case .idle:         return "Start voice command"
+        case .recording:    return "Stop voice command"
+        case .transcribing: return "Transcribing voice command"
         }
+    }
+}
+
+// Joystick complication — sits in the middle of the compose tray as a visual
+// fifth wheel and a cursor-nav affordance. Rendered as a stylized 4-arrow dpad
+// inside a 44pt square. Toggles `isActive` on tap (lit state); the actual
+// cursor-pad expansion is future work — the seat is here in the meantime.
+private struct ComposeJoystickButton: View {
+    let isActive: Bool
+    let action: () -> Void
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        let chrome = theme.chrome
+        let corner = max(chrome.chromeCorner, 8)
+        Button(action: action) {
+            ZStack {
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .fill(isActive ? chrome.accentTint : theme.colors.tableCellBackground)
+
+                VStack(spacing: 3) {
+                    Image(systemName: "chevron.up")
+                        .font(.system(size: 7, weight: .bold))
+
+                    HStack(spacing: 8) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 7, weight: .bold))
+
+                        Circle()
+                            .fill(isActive ? chrome.accent : theme.colors.textTertiary.opacity(0.55))
+                            .frame(width: 4, height: 4)
+
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 7, weight: .bold))
+                    }
+
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 7, weight: .bold))
+                }
+                .foregroundStyle(isActive ? chrome.accent : theme.colors.textSecondary)
+            }
+            .frame(width: 44, height: 44)
+            .overlay {
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .stroke(
+                        isActive ? chrome.accent.opacity(0.45) : chrome.edge.opacity(0.7),
+                        lineWidth: chrome.hairlineWidth
+                    )
+                    .allowsHitTesting(false)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Cursor joystick")
+        .accessibilityHint("Toggles the cursor navigator. Coming soon: drag to move the caret.")
+    }
+}
+
+// Keyboard pill in the right cluster of the bottom tray. Pill shape with icon
+// + uppercase label so it visually balances the Command pill on the left. Lit
+// when the editor is focused (so the user knows tapping again will dismiss).
+private struct ComposeBayKeyboardButton: View {
+    let isFocused: Bool
+    let action: () -> Void
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        let chrome = theme.chrome
+        let corner = max(chrome.chromeCorner, 8)
+        Button(action: action) {
+            HStack(spacing: 7) {
+                Text("Keyboard")
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .tracking(1.2)
+                    .textCase(.uppercase)
+                Image(systemName: isFocused ? "keyboard.chevron.compact.down" : "keyboard")
+                    .font(.system(size: 14, weight: .medium))
+            }
+            .foregroundStyle(isFocused ? chrome.accent : theme.colors.textSecondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .fill(isFocused ? chrome.accentTint : theme.colors.tableCellBackground)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .stroke(
+                        isFocused ? chrome.accent.opacity(0.45) : chrome.edge.opacity(0.85),
+                        lineWidth: chrome.hairlineWidth
+                    )
+                    .allowsHitTesting(false)
+            }
+            .shadow(color: Color.black.opacity(0.06), radius: 4, x: 0, y: 1)
+        }
+        .buttonStyle(.plain)
+        .frame(minHeight: 44)
+        .accessibilityLabel(isFocused ? "Dismiss keyboard" : "Show keyboard")
+    }
+}
+
+private struct ComposeBayQuickChip: View {
+    let title: String
+    let systemImage: String
+    let isEnabled: Bool
+    let action: () -> Void
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        let chrome = theme.chrome
+        let corner = max(chrome.chromeCorner, 6)
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 10, weight: .medium))
+                Text(title)
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .tracking(0.8)
+                    .textCase(.uppercase)
+                    .lineLimit(1)
+            }
+            .foregroundStyle(theme.colors.textSecondary)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .fill(theme.colors.cardBackground)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .stroke(chrome.edgeFaint, lineWidth: chrome.hairlineWidth)
+                    .allowsHitTesting(false)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.5)
+    }
+}
+
+private struct ComposeBayMenuChip: View {
+    let title: String
+    let systemImage: String
+    let isEnabled: Bool
+    let actions: [ComposeWorkflowAction]
+    let onPerformAction: (ComposeWorkflowAction) -> Void
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        let chrome = theme.chrome
+        let corner = max(chrome.chromeCorner, 6)
+        Menu {
+            ForEach(actions) { action in
+                Button {
+                    onPerformAction(action)
+                } label: {
+                    Label(action.title, systemImage: action.systemImage)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 10, weight: .medium))
+                Text(title)
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .tracking(0.8)
+                    .textCase(.uppercase)
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+            }
+            .foregroundStyle(theme.colors.textSecondary)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .fill(theme.colors.cardBackground)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .stroke(chrome.edgeFaint, lineWidth: chrome.hairlineWidth)
+                    .allowsHitTesting(false)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled || actions.isEmpty)
+        .opacity(isEnabled && !actions.isEmpty ? 1 : 0.5)
+    }
+}
+
+// MARK: - Compose Tray
+//
+// Flat strip pinned to the bottom of the compose surface. Visual continuity
+// with ActionDock — canvas background, top hairline, dock-style padding. Slot
+// layout: prominent Command pill on the left, a joystick complication centered
+// as the visual fifth wheel, then Copy + Keyboard complications on the right.
+
+private struct ComposeTray: View {
+    let voiceCommandState: InlineDictationController.State
+    let isVoiceCommandEnabled: Bool
+    let onToggleVoiceCommand: () -> Void
+    let isDraftFocused: Bool
+    let onToggleKeyboard: () -> Void
+
+    @State private var isJoystickActive = false
+    @ObservedObject private var theme = ThemeManager.shared
+
+    init(
+        voiceCommandState: InlineDictationController.State,
+        isVoiceCommandEnabled: Bool,
+        onToggleVoiceCommand: @escaping () -> Void,
+        isDraftFocused: Bool,
+        onToggleKeyboard: @escaping () -> Void
+    ) {
+        self.voiceCommandState = voiceCommandState
+        self.isVoiceCommandEnabled = isVoiceCommandEnabled
+        self.onToggleVoiceCommand = onToggleVoiceCommand
+        self.isDraftFocused = isDraftFocused
+        self.onToggleKeyboard = onToggleKeyboard
+    }
+
+    var body: some View {
+        let chrome = theme.chrome
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(chrome.edgeFaint)
+                .frame(height: chrome.hairlineWidth)
+
+            ZStack {
+                // Center: joystick — absolutely centered so it sits directly
+                // below the editor's dictation mic.
+                ComposeJoystickButton(
+                    isActive: isJoystickActive,
+                    action: { isJoystickActive.toggle() }
+                )
+
+                // Edges: Command pill anchors leading, Keyboard pill anchors
+                // trailing. The two pills balance across the joystick.
+                HStack(spacing: 0) {
+                    ComposeBayCommandPill(
+                        state: voiceCommandState,
+                        isEnabled: isVoiceCommandEnabled,
+                        action: onToggleVoiceCommand
+                    )
+
+                    Spacer(minLength: 0)
+
+                    ComposeBayKeyboardButton(
+                        isFocused: isDraftFocused,
+                        action: onToggleKeyboard
+                    )
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 12)
+            .padding(.bottom, 14)
+        }
+        .background {
+            if theme.currentTheme.isScope {
+                ScopeMobile.canvas.opacity(0.96)
+                    .ignoresSafeArea(edges: .bottom)
+            } else {
+                theme.colors.cardBackground.opacity(0.95)
+                    .ignoresSafeArea(edges: .bottom)
+            }
+        }
+    }
+
+}
+
+// Compact horizontal strip of applied revisions — a "scroll back through
+// versions" affordance at the top of the bay. The full ComposeHistoryCard is
+// kept available for places that want the vertical layout.
+private struct ComposeRevisionsStrip: View {
+    let revisions: [ComposeAppliedRevision]
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        let chrome = theme.chrome
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                TalkieEyebrow(text: "Versions", tint: .accent, showLeader: true)
+                Spacer(minLength: 4)
+                Text("\(revisions.count) APPLIED")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .tracking(1)
+                    .foregroundStyle(theme.colors.textTertiary)
+            }
+            .padding(.horizontal, 2)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(Array(revisions.prefix(8).enumerated()), id: \.element.id) { index, revision in
+                        ComposeRevisionPill(
+                            index: index,
+                            revision: revision,
+                            chrome: chrome,
+                            theme: theme
+                        )
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+            .scrollClipDisabled()
+        }
+    }
+}
+
+private struct ComposeRevisionPill: View {
+    let index: Int
+    let revision: ComposeAppliedRevision
+    let chrome: ChromeTokens
+    let theme: ThemeManager
+
+    var body: some View {
+        let code = String(format: "R%02d", index + 1)
+        HStack(spacing: 6) {
+            TalkieChannelLabel(code: code, isActive: index == 0)
+            Text(revision.instruction)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(theme.colors.textPrimary)
+                .lineLimit(1)
+                .frame(maxWidth: 160, alignment: .leading)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: max(chrome.chromeCorner, 4), style: .continuous)
+                .fill(theme.colors.tableCellBackground)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: max(chrome.chromeCorner, 4), style: .continuous)
+                .stroke(index == 0 ? chrome.edge : chrome.edgeFaint, lineWidth: chrome.hairlineWidth)
+                .allowsHitTesting(false)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Revision \(index + 1). \(revision.instruction).")
     }
 }

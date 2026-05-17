@@ -1612,11 +1612,16 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
     /// Force reconnect - drops current XPC connection and rescans for agent
     public func reconnect() {
         logger.info("[Agent] Force reconnecting...")
-        xpcManager?.disconnect()
+        guard let xpcManager else {
+            startXPCMonitoring(autoConnect: true)
+            return
+        }
+
+        xpcManager.disconnect()
 
         Task {
             try? await Task.sleep(for: .milliseconds(200))
-            await xpcManager?.connect()
+            await xpcManager.connect()
         }
     }
 
@@ -1629,7 +1634,14 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
 
     func startXPCMonitoring(autoConnect: Bool = false) {
         startDistributedNotificationMonitoring()
-        guard xpcManager == nil else { return }
+        if let existingManager = xpcManager {
+            if autoConnect && !existingManager.isConnected {
+                Task {
+                    await existingManager.connect()
+                }
+            }
+            return
+        }
 
         xpcManager = XPCServiceManager<TalkieAgentXPCServiceProtocol>(
             serviceNameProvider: { env in env.liveXPCService },
@@ -1689,8 +1701,13 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
     /// Trigger XPC connection to TalkieAgent.
     /// Call after ensureHelpersRunning so the Agent's listener is ready.
     func connectXPC() {
+        guard let xpcManager else {
+            startXPCMonitoring(autoConnect: true)
+            return
+        }
+
         Task {
-            await xpcManager?.connect()
+            await xpcManager.connect()
         }
     }
 

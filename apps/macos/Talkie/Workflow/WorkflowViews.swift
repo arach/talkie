@@ -498,7 +498,15 @@ struct WorkflowDetailView: View {
                             .padding(.vertical, 8)
                     } else {
                         ForEach(Array(workflow.steps.enumerated()), id: \.element.id) { index, step in
-                            WorkflowStepCard(step: step, stepNumber: index + 1)
+                            if SettingsManager.shared.isScopeTheme {
+                                ScopeWorkflowStepCard(
+                                    step: step,
+                                    stepNumber: index + 1,
+                                    totalSteps: workflow.steps.count
+                                )
+                            } else {
+                                WorkflowStepCard(step: step, stepNumber: index + 1)
+                            }
 
                             if index < workflow.steps.count - 1 {
                                 StepConnector()
@@ -1398,6 +1406,7 @@ struct WorkflowInlineEditor: View {
                                 WorkflowStepEditor(
                                     step: stepBinding(at: index),
                                     stepNumber: index + 1,
+                                    totalSteps: steps.count,
                                     isEditing: isEditing,
                                     onDelete: { deleteStep(at: index) },
                                     onMoveUp: index > 0 ? { moveStep(from: index, to: index - 1) } : nil,
@@ -1619,6 +1628,7 @@ struct WorkflowEditorSheet: View {
                                 WorkflowStepEditor(
                                     step: binding(for: step),
                                     stepNumber: index + 1,
+                                    totalSteps: editedWorkflow.steps.count,
                                     onDelete: { deleteStep(at: index) },
                                     onMoveUp: index > 0 ? { moveStep(from: index, to: index - 1) } : nil,
                                     onMoveDown: index < editedWorkflow.steps.count - 1 ? { moveStep(from: index, to: index + 1) } : nil
@@ -1816,6 +1826,7 @@ struct StepTypeCard: View {
 struct WorkflowStepEditor: View {
     @Binding var step: WorkflowStep
     let stepNumber: Int
+    var totalSteps: Int = 0
     var isEditing: Bool = true
     let onDelete: () -> Void
     let onMoveUp: (() -> Void)?
@@ -1828,64 +1839,71 @@ struct WorkflowStepEditor: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header - always visible
-            stepHeader
+        // Scope theme: when not in edit mode, render the dedicated
+        // Scope instrument-bay card. The full edit form path keeps the
+        // existing glass chrome so the form fields stay legible.
+        if SettingsManager.shared.isScopeTheme && !isEditing {
+            ScopeWorkflowStepCard(step: step, stepNumber: stepNumber, totalSteps: totalSteps)
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                // Header - always visible
+                stepHeader
 
-            if isExpanded {
-                Rectangle()
-                    .fill(Theme.current.border.opacity(0.1))
-                    .frame(height: 1)
+                if isExpanded {
+                    Rectangle()
+                        .fill(Theme.current.border.opacity(0.1))
+                        .frame(height: 1)
 
-                // Content: Read-only summary OR full editor
-                if isEditing {
-                    stepEditView
-                        .padding(Spacing.md)
-                } else {
-                    stepReadView
-                        .padding(Spacing.md)
+                    // Content: Read-only summary OR full editor
+                    if isEditing {
+                        stepEditView
+                            .padding(Spacing.md)
+                    } else {
+                        stepReadView
+                            .padding(Spacing.md)
+                    }
                 }
             }
-        }
-        .background(
-            ZStack {
-                // Glass material base
-                RoundedRectangle(cornerRadius: CornerRadius.sm)
-                    .fill(.ultraThinMaterial)
-                    .opacity(0.5)
+            .background(
+                ZStack {
+                    // Glass material base
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .fill(.ultraThinMaterial)
+                        .opacity(0.5)
 
-                // Gradient overlay
+                    // Gradient overlay
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.04),
+                                    Color.clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+
+                    // Colored tint based on step type
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .fill(stepColor.opacity(0.03))
+                }
+            )
+            .overlay(
                 RoundedRectangle(cornerRadius: CornerRadius.sm)
-                    .fill(
+                    .strokeBorder(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.04),
-                                Color.clear
+                                stepColor.opacity(isEditing ? 0.3 : 0.2),
+                                stepColor.opacity(isEditing ? 0.15 : 0.1)
                             ],
                             startPoint: .top,
                             endPoint: .bottom
-                        )
+                        ),
+                        lineWidth: 1
                     )
-
-                // Colored tint based on step type
-                RoundedRectangle(cornerRadius: CornerRadius.sm)
-                    .fill(stepColor.opacity(0.03))
-            }
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: CornerRadius.sm)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            stepColor.opacity(isEditing ? 0.3 : 0.2),
-                            stepColor.opacity(isEditing ? 0.15 : 0.1)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 1
-                )
-        )
+            )
+        }
     }
 
     // MARK: - Header

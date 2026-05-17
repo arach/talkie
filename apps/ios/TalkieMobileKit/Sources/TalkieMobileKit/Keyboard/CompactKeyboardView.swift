@@ -467,7 +467,11 @@ public final class CompactKeyboardView: UIView {
 
         btn.addTarget(self, action: #selector(keyTapped(_:)), for: .touchUpInside)
         btn.addTarget(self, action: #selector(keyTouchDown(_:)), for: .touchDown)
-        btn.addTarget(self, action: #selector(keyTouchUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+        btn.addTarget(
+            self,
+            action: #selector(keyTouchUp(_:)),
+            for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit, .touchDragOutside]
+        )
 
         // Add long press for accents
         if btn.hasAccents {
@@ -548,7 +552,7 @@ public final class CompactKeyboardView: UIView {
         btn.addTarget(
             self,
             action: #selector(specialKeyTouchUp(_:)),
-            for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit]
+            for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit, .touchDragOutside]
         )
 
         // Delete key repeats on hold
@@ -884,6 +888,49 @@ public final class CompactKeyboardView: UIView {
         ) {
             sender.transform = .identity
             self.applySpecialKeyRestingStyle(sender)
+        }
+    }
+
+    public func resetTransientTouchState(animated: Bool) {
+        dismissAccentPopup()
+        dismissPunctuationPopup()
+        stopDeleteRepeat()
+
+        let reset = {
+            for button in self.keyButtons {
+                button.transform = .identity
+                if button.isShiftKey
+                    || button.isDeleteKey
+                    || button.isSpaceKey
+                    || button.isReturnKey
+                    || button.isSymbolKey
+                    || button.isModeKey
+                    || button.isEmojiKey {
+                    self.applySpecialKeyRestingStyle(button)
+                } else {
+                    button.backgroundColor = Colors.keyBackground
+                    button.layer.borderColor = Colors.keyBorder.cgColor
+                    button.layer.shadowOpacity = self.keyRestingShadowOpacity
+                }
+            }
+        }
+
+        if animated {
+            UIView.animate(
+                withDuration: 0.12,
+                delay: 0,
+                options: [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut],
+                animations: reset
+            )
+        } else {
+            UIView.performWithoutAnimation(reset)
+        }
+    }
+
+    public override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil {
+            resetTransientTouchState(animated: false)
         }
     }
 

@@ -9,6 +9,7 @@
  */
 
 import { log } from "../../log";
+import { talkieServerFetch } from "../talkie-local-client";
 
 // TalkieServer (Talkie main app) handles requests via XPC to TalkieAgent
 const TALKIESERVER_PORT = 8766;
@@ -44,7 +45,7 @@ export async function windowsRoute(req: Request): Promise<Response> {
   }
 
   try {
-    const response = await fetch(`${TALKIESERVER_URL}/windows/claude`);
+    const response = await talkieServerFetch(`${TALKIESERVER_URL}/windows/claude`);
     const data = await response.json();
     return Response.json(data);
   } catch (error) {
@@ -69,7 +70,7 @@ export async function windowsCapturesRoute(req: Request): Promise<Response> {
   }
 
   try {
-    const response = await fetch(`${TALKIESERVER_URL}/screenshot/terminals`);
+    const response = await talkieServerFetch(`${TALKIESERVER_URL}/screenshot/terminals`);
     const data = await response.json();
     return Response.json(data);
   } catch (error) {
@@ -93,7 +94,7 @@ export async function windowScreenshotRoute(req: Request, windowId: string): Pro
   }
 
   try {
-    const response = await fetch(`${TALKIESERVER_URL}/screenshot/window/${windowId}`);
+    const response = await talkieServerFetch(`${TALKIESERVER_URL}/screenshot/window/${windowId}`);
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));

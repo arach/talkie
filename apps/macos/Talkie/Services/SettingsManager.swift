@@ -818,13 +818,14 @@ enum ThemePreset: String, CaseIterable, Codable {
     case classic = "classic"        // Comfortable defaults with blue accents
     case warm = "warm"              // Cozy dark mode with orange tones
     case light = "light"            // Deterministic light mode, designed palette
+    case liquidGlass = "liquidGlass" // Experimental glass effects
+    case scope = "scope"            // Cream-phosphor oscilloscope (homepage parity)
 
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
         // Migrate retired rawValues so existing user settings don't wipe on load
         switch raw {
         case "minimal": self = .light
-        case "liquidGlass": self = .talkiePro
         default:
             guard let preset = ThemePreset(rawValue: raw) else {
                 self = .talkiePro
@@ -843,6 +844,8 @@ enum ThemePreset: String, CaseIterable, Codable {
         case .classic: return "Classic"
         case .warm: return "Warm"
         case .light: return "Light"
+        case .liquidGlass: return "Liquid Glass"
+        case .scope: return "Scope"
         }
     }
 
@@ -855,6 +858,8 @@ enum ThemePreset: String, CaseIterable, Codable {
         case .classic: return "Comfortable defaults with blue accents"
         case .warm: return "Cozy dark mode with orange tones"
         case .light: return "Clean light mode with neutral surfaces"
+        case .liquidGlass: return "Experimental: maximum glass effects"
+        case .scope: return "Cream-paper canvas with brass amber chrome — instrument panel"
         }
     }
 
@@ -867,6 +872,8 @@ enum ThemePreset: String, CaseIterable, Codable {
         case .classic: return "star"
         case .warm: return "flame"
         case .light: return "sun.max"
+        case .liquidGlass: return "drop.fill"
+        case .scope: return "waveform.path.ecg"
         }
     }
 
@@ -902,6 +909,10 @@ enum ThemePreset: String, CaseIterable, Codable {
                 Color(red: 0.0625, green: 0.0697, blue: 0.0774),
                 Color(red: 0.8961, green: 0.5104, blue: 0.0706)
             )
+        case .liquidGlass:
+            return (Color(white: 0.05), Color.white, Color.cyan)
+        case .scope:
+            return (ScopeCanvas.canvas, ScopeInk.primary, ScopeAmber.solid)
         }
     }
 
@@ -915,6 +926,8 @@ enum ThemePreset: String, CaseIterable, Codable {
         case .classic: return .dark
         case .warm: return .dark
         case .light: return .light
+        case .liquidGlass: return .dark
+        case .scope: return .light          // Cream-phosphor — forced light
         }
     }
 
@@ -928,6 +941,8 @@ enum ThemePreset: String, CaseIterable, Codable {
         case .classic: return .system
         case .warm: return .system
         case .light: return .system
+        case .liquidGlass: return .system
+        case .scope: return .monospace          // Instrument-panel labels — mono chrome
         }
     }
 
@@ -941,6 +956,8 @@ enum ThemePreset: String, CaseIterable, Codable {
         case .classic: return .system
         case .warm: return .monospace           // Monospace content for warm theme
         case .light: return .system
+        case .liquidGlass: return .system
+        case .scope: return .system
         }
     }
 
@@ -953,6 +970,8 @@ enum ThemePreset: String, CaseIterable, Codable {
         case .classic: return .blue
         case .warm: return .orange
         case .light: return .orange         // Warm amber accent
+        case .liquidGlass: return .blue
+        case .scope: return .orange         // Closest stock match for amber/brass
         }
     }
 
@@ -966,13 +985,15 @@ enum ThemePreset: String, CaseIterable, Codable {
         case .classic: return .medium
         case .warm: return .medium
         case .light: return .medium
+        case .liquidGlass: return .medium
+        case .scope: return .medium
         }
     }
 
     /// Whether this theme uses true black backgrounds
     var usesTrueBlack: Bool {
         switch self {
-        case .technical, .terminal: return true
+        case .technical, .terminal, .liquidGlass: return true
         default: return false
         }
     }
@@ -987,6 +1008,8 @@ enum ThemePreset: String, CaseIterable, Codable {
         case .light: return .subtle            // Light: minimal glass for clarity
         case .technical: return .subtle        // Flat, technical aesthetic
         case .terminal: return .subtle      // Flat, minimal glass
+        case .liquidGlass: return .extreme
+        case .scope: return .subtle         // Flat — instrument aesthetic
         }
     }
 
@@ -995,6 +1018,8 @@ enum ThemePreset: String, CaseIterable, Codable {
         switch self {
         case .terminal: return 0            // Sharp corners - no rounding
         case .technical: return 0.5            // Tight corners - technical aesthetic
+        case .scope: return 0.5             // Sharper instrument feel — md=6pt, sm=4pt, xs=2pt
+        case .light: return 0.75            // Slightly reduced
         default: return 1.0                 // Standard
         }
     }
@@ -1004,6 +1029,7 @@ enum ThemePreset: String, CaseIterable, Codable {
         switch self {
         case .terminal: return true         // Thin, clean lines
         case .technical: return false          // Crisper system rendering on true-black surfaces
+        case .liquidGlass: return true      // Light, ethereal feel
         default: return false
         }
     }
@@ -1242,6 +1268,11 @@ final class SettingsManager {
     /// Check if warm theme is active
     var isWarmTheme: Bool {
         currentTheme == .warm
+    }
+
+    /// Check if scope (cream-phosphor) theme is active
+    var isScopeTheme: Bool {
+        currentTheme == .scope
     }
 
     /// Current glass depth based on theme
@@ -1570,6 +1601,7 @@ final class SettingsManager {
 
     /// Primary background
     var tacticalBackground: Color {
+        if isScopeTheme { return ScopeCanvas.canvas }
         if useTacticalColors {
             return isDarkMode ? Color(white: 0.05) : Color(white: 0.96)
         }
@@ -1591,6 +1623,7 @@ final class SettingsManager {
 
     /// Secondary background (slightly lighter/darker)
     var tacticalBackgroundSecondary: Color {
+        if isScopeTheme { return ScopeCanvas.canvasAlt }
         if useTacticalColors {
             return isDarkMode ? Color(white: 0.08) : Color(white: 0.88)
         }
@@ -1612,6 +1645,7 @@ final class SettingsManager {
 
     /// Tertiary background for cards/panels
     var tacticalBackgroundTertiary: Color {
+        if isScopeTheme { return ScopeCanvas.surface }
         if useTacticalColors {
             return isDarkMode ? Color(white: 0.12) : Color(white: 0.90)
         }
@@ -1633,6 +1667,7 @@ final class SettingsManager {
 
     /// Primary text
     var tacticalForeground: Color {
+        if isScopeTheme { return ScopeInk.primary }
         if useTacticalColors {
             return isDarkMode ? Color(white: 0.98) : Color(white: 0.08)
         }
@@ -1654,6 +1689,7 @@ final class SettingsManager {
 
     /// Secondary text
     var tacticalForegroundSecondary: Color {
+        if isScopeTheme { return ScopeInk.muted }
         if useTacticalColors {
             return isDarkMode ? Color(white: 0.78) : Color(white: 0.28)
         }
@@ -1676,6 +1712,7 @@ final class SettingsManager {
 
     /// Muted text for timestamps, metadata
     var tacticalForegroundMuted: Color {
+        if isScopeTheme { return ScopeInk.faint }
         if useTacticalColors {
             return isDarkMode ? Color(white: 0.58) : Color(white: 0.45)
         }
@@ -1697,6 +1734,7 @@ final class SettingsManager {
 
     /// Divider/border color
     var tacticalDivider: Color {
+        if isScopeTheme { return ScopeEdge.faint }
         if useTacticalColors {
             return isDarkMode ? Color(white: 0.2) : Color(white: 0.65)
         }
@@ -1740,6 +1778,7 @@ final class SettingsManager {
 
     /// Surface Level 0: Window/App background (deepest layer)
     var surfaceBase: Color {
+        if isScopeTheme { return ScopeCanvas.canvas }
         if isTechnicalTheme {
             return isDarkMode ? Color.black : Color.white
         }
@@ -1754,6 +1793,7 @@ final class SettingsManager {
 
     /// Surface Level 1: Primary content areas (slightly elevated)
     var surface1: Color {
+        if isScopeTheme { return ScopeCanvas.canvasAlt }
         if isTechnicalTheme {
             return isDarkMode ? Color(white: 0.04) : Color(white: 0.98)
         }
@@ -1768,6 +1808,7 @@ final class SettingsManager {
 
     /// Surface Level 2: Cards, panels, modals (more elevated)
     var surface2: Color {
+        if isScopeTheme { return ScopeCanvas.surface }
         if isTechnicalTheme {
             return isDarkMode ? Color(white: 0.067) : Color(white: 0.96)
         }
@@ -1782,6 +1823,7 @@ final class SettingsManager {
 
     /// Surface Level 3: Elevated elements (popovers, tooltips, menus)
     var surface3: Color {
+        if isScopeTheme { return ScopeCanvas.surface }
         if isTechnicalTheme {
             return isDarkMode ? Color(white: 0.10) : Color(white: 0.94)
         }
@@ -1824,6 +1866,7 @@ final class SettingsManager {
 
     /// Text/Input background (slightly elevated from base)
     var surfaceInput: Color {
+        if isScopeTheme { return ScopeCanvas.surface }
         if isTechnicalTheme {
             return isDarkMode ? Color(white: 0.05) : Color(white: 0.97)
         }
@@ -1841,6 +1884,7 @@ final class SettingsManager {
 
     /// Hover state overlay - dark: 0.05+0.05=0.10, light: 0.95-0.05=0.90
     var surfaceHover: Color {
+        if isScopeTheme { return ScopeCanvas.canvasAlt }
         if isTechnicalTheme {
             return isDarkMode ? Color(white: 0.08) : Color(white: 0.95)
         }
@@ -1855,6 +1899,7 @@ final class SettingsManager {
 
     /// Active/pressed state overlay
     var surfaceActive: Color {
+        if isScopeTheme { return ScopeCanvas.surface }
         if isTechnicalTheme {
             return isDarkMode ? Color(white: 0.10) : Color(white: 0.92)
         }
@@ -1869,6 +1914,7 @@ final class SettingsManager {
 
     /// Selected state overlay
     var surfaceSelected: Color {
+        if isScopeTheme { return ScopeAmber.tint }
         if isTechnicalTheme {
             return isDarkMode ? Color(white: 0.12) : Color(white: 0.90)
         }
@@ -1883,6 +1929,7 @@ final class SettingsManager {
 
     /// Alternating row background (for lists)
     var surfaceAlternate: Color {
+        if isScopeTheme { return ScopeCanvas.canvasAlt }
         if isTechnicalTheme {
             return isDarkMode ? Color(white: 0.03) : Color(white: 0.98)
         }
@@ -1921,17 +1968,20 @@ final class SettingsManager {
 
     /// Default border (subtle) - dark: ~0.13 (8% of white on 0.05), light: ~0.87 (8% of black on 0.95)
     var borderDefault: Color {
-        isDarkMode ? Color(white: 0.13) : Color(white: 0.87)
+        if isScopeTheme { return ScopeEdge.normal }
+        return isDarkMode ? Color(white: 0.13) : Color(white: 0.87)
     }
 
     /// Strong border (more visible) - dark: ~0.20 (15% of white on 0.05), light: ~0.80
     var borderStrong: Color {
-        isDarkMode ? Color(white: 0.20) : Color(white: 0.80)
+        if isScopeTheme { return ScopeEdge.strong }
+        return isDarkMode ? Color(white: 0.20) : Color(white: 0.80)
     }
 
     /// Divider for separating content - dark: ~0.11 (6% of white on 0.05), light: ~0.89
     var divider: Color {
-        isDarkMode ? Color(white: 0.11) : Color(white: 0.89)
+        if isScopeTheme { return ScopeEdge.faint }
+        return isDarkMode ? Color(white: 0.11) : Color(white: 0.89)
     }
 
     /// Success border
@@ -2127,6 +2177,12 @@ final class SettingsManager {
         } else {
             ThemeConfig.reset()
         }
+
+        // Flat themes (Scope) skip glass material rendering entirely —
+        // the aesthetic is fundamentally flat and the materials cost
+        // frames in light mode without any visual win. Runtime-only;
+        // doesn't persist or override user preference for other themes.
+        GlassConfig.themeFlatOverride = (activeTheme == .scope)
 
         // Recalculate all cached font tokens
         recalculateCachedTokens()

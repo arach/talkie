@@ -20,10 +20,7 @@ struct MemoAttachmentsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack(alignment: .center, spacing: Spacing.xs) {
-                Text("ATTACHMENTS")
-                    .font(.techLabel)
-                    .tracking(2)
-                    .foregroundColor(.textSecondary)
+                TalkieEyebrow(text: "Attachments")
 
                 if !attachments.isEmpty {
                     Text("\(attachments.count)")

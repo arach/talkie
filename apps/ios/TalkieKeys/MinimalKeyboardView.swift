@@ -225,7 +225,7 @@ final class MinimalKeyboardView: UIView {
         button.addTarget(
             self,
             action: #selector(keyTouchUp(_:)),
-            for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit]
+            for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit, .touchDragOutside]
         )
     }
 
@@ -240,6 +240,37 @@ final class MinimalKeyboardView: UIView {
         UIView.animate(withDuration: 0.12, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut]) {
             sender.transform = .identity
             self.applyKeyRestingStyle(to: sender)
+        }
+    }
+
+    func resetTransientTouchState(animated: Bool) {
+        let buttons = Array(slotButtons.values) + [dictateButton].compactMap { $0 }
+        var seen = Set<ObjectIdentifier>()
+
+        let reset = {
+            for button in buttons {
+                guard seen.insert(ObjectIdentifier(button)).inserted else { continue }
+                button.transform = .identity
+                self.applyKeyRestingStyle(to: button)
+            }
+        }
+
+        if animated {
+            UIView.animate(
+                withDuration: 0.12,
+                delay: 0,
+                options: [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut],
+                animations: reset
+            )
+        } else {
+            UIView.performWithoutAnimation(reset)
+        }
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil {
+            resetTransientTouchState(animated: false)
         }
     }
 

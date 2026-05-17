@@ -37,16 +37,19 @@ enum TTSService {
             return bridgeStatus == .connected
         }
 
-        let hasDirectProvider = settings.ttsMode == "direct" && !settings.ttsApiKey.isEmpty
+        let hasDirectProvider = settings.ttsMode == "direct"
+            && (!settings.ttsApiKey.isEmpty || directSpeechProvider(settings: settings) != nil)
         return hasDirectProvider || bridgeStatus == .connected
     }
 
     @MainActor
     static func synthesizeConfigured(
         text: String,
-        settings: TalkieAppSettings = .shared
+        settings: TalkieAppSettings? = nil
     ) async throws -> Data {
-        let isDirect = settings.ttsMode == "direct" && !settings.ttsApiKey.isEmpty
+        let settings = settings ?? .shared
+        let provider = directSpeechProvider(settings: settings)
+        let isDirect = settings.ttsMode == "direct" && (!settings.ttsApiKey.isEmpty || provider != nil)
         let isLocal = settings.ttsProvider == "local"
 
         if isLocal {
@@ -64,7 +67,7 @@ enum TTSService {
         }
 
         if isDirect {
-            return try await synthesizeDirect(text: text, settings: settings)
+            return try await synthesizeDirect(text: text, settings: settings, provider: provider)
         }
 
         guard BridgeManager.shared.status == .connected else {
@@ -150,7 +153,11 @@ enum TTSService {
     }
 
     @MainActor
-    private static func synthesizeDirect(text: String, settings: TalkieAppSettings) async throws -> Data {
+    private static func synthesizeDirect(
+        text: String,
+        settings: TalkieAppSettings,
+        provider: ComposeBorrowedProvider?
+    ) async throws -> Data {
         switch settings.ttsProvider {
         case "elevenlabs":
             return try await synthesizeElevenLabs(
@@ -162,9 +169,15 @@ enum TTSService {
             return try await synthesizeOpenAI(
                 text: text,
                 voice: settings.ttsVoice.isEmpty ? "echo" : settings.ttsVoice,
-                apiKey: settings.ttsApiKey
+                apiKey: provider?.apiKey ?? settings.ttsApiKey
             )
         }
+    }
+
+    @MainActor
+    private static func directSpeechProvider(settings: TalkieAppSettings) -> ComposeBorrowedProvider? {
+        guard settings.ttsProvider == "openai" else { return nil }
+        return TalkieAIProviderResolver.shared.provider(providerId: "openai")
     }
 
     private static func bridgeAudio(from response: TTSResponse, failureMessage: String) throws -> Data {

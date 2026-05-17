@@ -750,6 +750,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardInputHost {
 
         // Run stale-state hygiene on every keyboard entry, not just initial load.
         cleanupStaleState()
+        resetTransientTouchState(animated: false)
 
         // Respect the host app's keyboardAppearance request.
         // If the text field asks for .dark, override our interface style.
@@ -908,6 +909,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardInputHost {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        resetTransientTouchState(animated: false)
         modeKnobFadeWorkItem?.cancel()
         modeKnobFadeWorkItem = nil
         dismissCursorPadOverlay()
@@ -2741,7 +2743,7 @@ final class KeyboardViewController: UIInputViewController, KeyboardInputHost {
         button.addTarget(
             self,
             action: #selector(gridKeyTouchUp(_:)),
-            for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit]
+            for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit, .touchDragOutside]
         )
     }
 
@@ -2778,6 +2780,38 @@ final class KeyboardViewController: UIInputViewController, KeyboardInputHost {
         UIView.animate(withDuration: 0.12, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut]) {
             sender.transform = .identity
             self.applyGridKeyRestingStyle(to: sender)
+        }
+    }
+
+    private func resetTransientTouchState(animated: Bool) {
+        puncLongPressTimer?.invalidate()
+        puncLongPressTimer = nil
+        puncDidFireLongPress = false
+        dismissPuncOverlay()
+
+        compactKeyboardView?.resetTransientTouchState(animated: animated)
+        minimalKeyboardView?.resetTransientTouchState(animated: animated)
+
+        let buttons = Array(slotButtons.values) + [recordButton].compactMap { $0 }
+        var seen = Set<ObjectIdentifier>()
+
+        let reset = {
+            for button in buttons {
+                guard seen.insert(ObjectIdentifier(button)).inserted else { continue }
+                button.transform = .identity
+                self.applyGridKeyRestingStyle(to: button)
+            }
+        }
+
+        if animated {
+            UIView.animate(
+                withDuration: 0.12,
+                delay: 0,
+                options: [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut],
+                animations: reset
+            )
+        } else {
+            UIView.performWithoutAnimation(reset)
         }
     }
 

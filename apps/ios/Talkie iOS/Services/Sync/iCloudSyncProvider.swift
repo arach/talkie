@@ -53,6 +53,9 @@ class iCloudSyncProvider: SyncProvider {
     // MARK: - Private
 
     private func checkiCloudStatus() async -> Bool {
+        #if targetEnvironment(simulator)
+        return false
+        #else
         guard let container = CloudKitContainerProvider.container() else {
             let reason = CloudKitContainerProvider.unavailableReason ?? "CloudKit unavailable"
             log.info("iCloud unavailable: \(reason)")
@@ -64,5 +67,6 @@ class iCloudSyncProvider: SyncProvider {
                 continuation.resume(returning: status == .available)
             }
         }
+        #endif
     }
 }

@@ -84,10 +84,7 @@ struct WorkflowActionSheet: View {
 
                         BrailleSpinner(size: 18)
 
-                        Text("PROCESSING...")
-                            .font(.techLabel)
-                            .tracking(2)
-                            .foregroundColor(.textSecondary)
+                        TalkieEyebrow(text: "Processing...", tint: .ink, showLeader: false)
 
                         Spacer()
                     }
@@ -110,10 +107,7 @@ struct WorkflowActionSheet: View {
                             }
 
                             VStack(spacing: Spacing.xxs) {
-                                Text("READY")
-                                    .font(.techLabel)
-                                    .tracking(2)
-                                    .foregroundColor(.textSecondary)
+                                TalkieEyebrow(text: "Ready")
 
                                 Text("Tap below to process")
                                     .font(.labelSmall)
@@ -166,10 +160,7 @@ struct WorkflowActionSheet: View {
             .toolbarBackground(Color.surfacePrimary, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text(title)
-                        .font(.techLabel)
-                        .tracking(2)
-                        .foregroundColor(.textPrimary)
+                    TalkieEyebrow(text: title)
                 }
 
                 ToolbarItem(placement: .navigationBarLeading) {

@@ -82,10 +82,19 @@ public struct TalkieTextEditor: NSViewRepresentable {
             }
         }
 
-        // Update styling
-        textView.font = font
-        textView.textColor = textColor
-        textView.insertionPointColor = insertionPointColor
+        // Only reassign styling when it actually changed. Setting `font`
+        // on NSTextView forces a full text-storage re-layout — doing it
+        // on every keystroke (SwiftUI re-evals when bound text changes)
+        // stalls the main thread into a beachball.
+        if textView.font != font {
+            textView.font = font
+        }
+        if textView.textColor != textColor {
+            textView.textColor = textColor
+        }
+        if textView.insertionPointColor != insertionPointColor {
+            textView.insertionPointColor = insertionPointColor
+        }
     }
 
     public func makeCoordinator() -> Coordinator {
@@ -110,11 +119,14 @@ public struct TalkieTextEditor: NSViewRepresentable {
             guard let textView = notification.object as? NSTextView else { return }
             let range = textView.selectedRange()
 
-            // Only update if there's an actual selection (length > 0)
-            // or clear it if selection is collapsed
+            // Dedupe writes — every keystroke fires this notification
+            // (cursor moves), and writing the same `nil` to an @Observable
+            // property still notifies observers and invalidates views.
             if range.length > 0 {
-                parent.selectedRange = range
-            } else {
+                if parent.selectedRange != range {
+                    parent.selectedRange = range
+                }
+            } else if parent.selectedRange != nil {
                 parent.selectedRange = nil
             }
         }

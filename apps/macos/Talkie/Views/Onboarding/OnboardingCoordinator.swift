@@ -104,11 +104,6 @@ final class OnboardingManager {
     var downloadStatus: String = ""
     var selectedModelType: String = ""  // "parakeet", "whisper", or "" for none
 
-    // Resource download state (fonts, presets, workflows - downloaded in parallel with model)
-    var isResourcesDownloaded = false
-    var isDownloadingResources = false
-    var resourcesDownloadProgress: Double = 0
-
     // Status check state
     var checkStatuses: [StatusCheck: CheckStatus] = [:]
     var allChecksComplete = false
@@ -490,11 +485,6 @@ final class OnboardingManager {
         downloadStatus = "Connecting to engine..."
         errorMessage = nil
 
-        // Start resource download in parallel (fonts, presets, workflows)
-        Task {
-            await downloadResourcesIfNeeded()
-        }
-
         // Ensure engine is connected first
         let engineClient = EngineClient.shared
         if !engineClient.isConnected {
@@ -537,34 +527,6 @@ final class OnboardingManager {
 
         progressTask.cancel()
         isDownloadingModel = false
-    }
-
-    // MARK: - Resource Download
-
-    /// Download optional resources (fonts, presets, workflows) if not already present
-    func downloadResourcesIfNeeded() async {
-        let downloader = ResourceDownloader.shared
-
-        // Skip if already downloaded or downloading
-        guard downloader.needsResourceDownload else {
-            isResourcesDownloaded = true
-            return
-        }
-
-        guard !isDownloadingResources else { return }
-
-        isDownloadingResources = true
-        resourcesDownloadProgress = 0
-
-        do {
-            try await downloader.downloadResources()
-            isResourcesDownloaded = true
-        } catch {
-            // Resource download failure is non-fatal - app works without them
-            print("Resource download failed (non-fatal): \(error)")
-        }
-
-        isDownloadingResources = false
     }
 
     // MARK: - Status Checks

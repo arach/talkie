@@ -90,10 +90,7 @@ struct KeyboardActivationView: View {
                     }
                 }
                 ToolbarItem(placement: .principal) {
-                    Text("KEYBOARD MODE")
-                        .font(.techLabel)
-                        .tracking(2)
-                        .foregroundColor(.textPrimary)
+                    TalkieEyebrow(text: "Keyboard Mode")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     KeyboardModeToggle(isEnabled: $isKeyboardModeEnabled)
@@ -207,10 +204,7 @@ struct KeyboardActivationView: View {
                 VStack(spacing: 10) {
                     HStack(spacing: 8) {
                         BrailleSpinner(size: 14, color: .textTertiary)
-                        Text("INITIALIZING")
-                            .font(.techLabelSmall)
-                            .tracking(1.5)
-                            .foregroundColor(.textTertiary)
+                        TalkieEyebrow(text: "Initializing", tint: .ink, showLeader: false)
                     }
 
                     // Show what's happening under the hood
@@ -601,10 +595,7 @@ struct KeyboardActivationView: View {
     #if DEBUG
     private var debugSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("DEBUG")
-                .font(.techLabelSmall)
-                .tracking(1)
-                .foregroundStyle(Color.textTertiary)
+            TalkieEyebrow(text: "Debug", tint: .ink, showLeader: false)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("state: \(sharedStore.phase.rawValue)")
@@ -635,10 +626,7 @@ struct KeyboardActivationView: View {
     private var activityTicker: some View {
         if !activityLog.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
-                Text("LOG")
-                    .font(.techLabelSmall)
-                    .tracking(1)
-                    .foregroundStyle(Color.textTertiary)
+                TalkieEyebrow(text: "Log", tint: .ink, showLeader: false)
                     .padding(.bottom, 8)
 
                 ScrollViewReader { proxy in

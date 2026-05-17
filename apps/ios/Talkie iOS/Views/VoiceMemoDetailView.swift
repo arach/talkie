@@ -19,6 +19,7 @@ struct VoiceMemoDetailView: View {
     @ObservedObject var audioPlayer: AudioPlayerManager
     var scrollToActivity: Bool = false
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var theme = ThemeManager.shared
 
     @State private var isEditMode = false
     @State private var isEditingTitle = false
@@ -67,12 +68,24 @@ struct VoiceMemoDetailView: View {
     @State private var isRunningOCR = false
     @State private var ocrResultText: String?
     @State private var showingAgentSheet = false
+    @State private var showingMemoAISheet = false
     @State private var showingCLISheet = false
+    @State private var expandedTimelineRows: Set<String> = []
     @Environment(\.managedObjectContext) private var viewContext
     @StateObject private var aiService = OnDeviceAIService.shared
     @StateObject private var sidecarStore = RecordingSidecarStore.shared
     private let liveWorkflowClient = LiveWorkflowClient()
     private let memoAttachmentStore = MemoAttachmentStore.shared
+
+    /// Identifies a foldable timeline event whose content can be revealed
+    /// in-place. Reserved for inline content — bigger / richer payloads
+    /// can still escape to a sheet down the road.
+    struct ActivityDetailSpec: Identifiable, Equatable {
+        let id: String
+        let title: String
+        let icon: String
+        let content: String
+    }
 
     private enum ReminderStatus: Equatable {
         case idle
@@ -101,6 +114,21 @@ struct VoiceMemoDetailView: View {
 
     private var memoCreatedAt: Date {
         memo.createdAt ?? Date()
+    }
+
+    /// Auto-generated titles look like `Recording 12/15/24, 10:42 AM`.
+    /// When a title is hand-written or AI-named, surface it — otherwise the
+    /// date in the header already says everything.
+    private var hasMeaningfulTitle: Bool {
+        guard let title = memo.title?.trimmingCharacters(in: .whitespaces), !title.isEmpty else {
+            return false
+        }
+        if title.hasPrefix("Recording "),
+           let firstChar = title.dropFirst("Recording ".count).first,
+           firstChar.isNumber {
+            return false
+        }
+        return true
     }
 
     private var memoSidecarRequests: [RecordingSidecarRequest] {
@@ -155,18 +183,23 @@ struct VoiceMemoDetailView: View {
             } message: {
                 Text(sendToMacAlertMessage)
             }
-            .toolbarBackground(Color.surfacePrimary, for: .navigationBar)
+            .toolbarBackground(theme.colors.background, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("MEMO DETAIL")
-                        .font(.techLabel)
-                        .tracking(2)
-                        .foregroundColor(.textPrimary)
+                    // Title (when meaningful) lives here. When the memo is
+                    // auto-named, the title slot stays empty — the body
+                    // header carries the date and metadata.
+                    if hasMeaningfulTitle {
+                        Text(memoTitle)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(theme.colors.textPrimary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
                 }
 
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: {
-                        // Save any pending edits before closing
                         if isEditingTitle {
                             saveTitle()
                         }
@@ -175,17 +208,19 @@ struct VoiceMemoDetailView: View {
                         }
                         dismiss()
                     }) {
-                        Text("CLOSE")
-                            .font(.techLabel)
-                            .tracking(1)
-                            .foregroundColor(.textSecondary)
+                        // Refined close: small × glyph, full tap target.
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .light))
+                            .foregroundColor(theme.colors.textTertiary)
+                            .frame(width: 28, height: 28)
+                            .contentShape(Rectangle())
                     }
+                    .accessibilityLabel("Close")
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
                         if isEditMode {
-                            // Save any pending edits and exit edit mode
                             if isEditingTitle {
                                 saveTitle()
                             }
@@ -194,14 +229,12 @@ struct VoiceMemoDetailView: View {
                             }
                             isEditMode = false
                         } else {
-                            // Enter edit mode
                             isEditMode = true
                         }
                     }) {
-                        Text(isEditMode ? "DONE" : "EDIT")
-                            .font(.techLabel)
-                            .tracking(1)
-                            .foregroundColor(.active)
+                        Text(isEditMode ? "Done" : "Edit")
+                            .font(.system(size: 13, weight: isEditMode ? .medium : .regular))
+                            .foregroundColor(isEditMode ? theme.chrome.accent : theme.colors.textSecondary)
                     }
                 }
             }
@@ -278,6 +311,17 @@ struct VoiceMemoDetailView: View {
                     memoTitle: memoTitle,
                     memoTranscript: memo.transcription ?? "",
                     memoId: memo.id?.uuidString
+                )
+            }
+            .sheet(isPresented: $showingMemoAISheet) {
+                MemoAICommandsSheet(
+                    memoTitle: memoTitle,
+                    memoTranscript: memo.currentTranscript ?? "",
+                    memoId: memo.id?.uuidString,
+                    onAnswer: { answer in
+                        memo.summary = answer
+                        try? viewContext.save()
+                    }
                 )
             }
             .sheet(isPresented: $showingCLISheet) {
@@ -377,35 +421,6 @@ struct VoiceMemoDetailView: View {
                     }
                 }
             }
-            #if DEBUG
-            .overlay(alignment: .bottomTrailing) {
-                if !ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT") {
-                DebugToolbarOverlay(
-                    content: {
-                        DetailViewDebugContent(
-                            memo: memo,
-                            onTriggerToast: {
-                                presentMacWorkflowToast(
-                                    workflowName: "Test Workflow",
-                                    subtitle: "Queued for your next available Mac."
-                                )
-                            },
-                            onTriggerReminderToast: {
-                                showingReminderToast = true
-                            }
-                        )
-                    },
-                    debugInfo: {
-                        var info: [String: String] = [:]
-                        info["Memo"] = memo.id?.uuidString.prefix(8).description ?? "-"
-                        info["Playing"] = audioPlayer.isPlaying ? "Yes" : "No"
-                        info["Synced"] = memo.cloudSyncedAt != nil ? "Yes" : "No"
-                        return info
-                    }
-                )
-                }
-            }
-            #endif
         }
     }
 
@@ -414,12 +429,21 @@ struct VoiceMemoDetailView: View {
         ScrollView {
             VStack(spacing: Spacing.md) {
                 detailHeaderSection()
-                playbackSection()
-                transcriptSection()
-                quickActionsSection
-                memoAttachmentsSection
-                macActionsSection
-                activitySection()
+
+                // Primary instrument: transcript + player + quick actions
+                // composed into a single chrome-bezeled console. Everything
+                // you do with the speech itself lives here.
+                transcriptInstrument()
+
+                // Actions instrument: workflows + agent + CLI you can run
+                // against the memo on your Mac. Same chrome rhythm.
+                actionsInstrument()
+
+                // Secondary instrument: attachments + activity as a "replay"
+                // surface — Polaroid-strip for photos, chat-replay timeline
+                // for what's happened to this memo.
+                captureReplayInstrument()
+
                 deleteMemoSection()
 
                 Spacer(minLength: Spacing.xxl)
@@ -439,91 +463,677 @@ struct VoiceMemoDetailView: View {
 
     @ViewBuilder
     private func detailHeaderSection() -> some View {
-        VStack(spacing: Spacing.xs) {
+        // Date + dense metadata are the primary header content.
+        // The title (when meaningful) lives in the navigation title slot.
+        // In-line title editing only appears here when edit mode is active.
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(formatHeaderDate(memoCreatedAt))
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(theme.colors.textPrimary)
+
+                Spacer()
+
+                // Metadata chips — theme-leader separated, compact
+                HStack(spacing: 8) {
+                    if memo.hasLocation {
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(theme.colors.textTertiary)
+                    }
+                    if let tz = memo.timezone, tz != TimeZone.current.identifier {
+                        Text(shortTZ(tz))
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .tracking(1)
+                            .foregroundStyle(theme.colors.textTertiary)
+                    }
+                    if memo.cloudSyncedAt != nil {
+                        Image(systemName: "checkmark.icloud.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(theme.colors.textTertiary)
+                    }
+                    if memo.macReceivedAt != nil {
+                        Image(systemName: "desktopcomputer")
+                            .font(.system(size: 11))
+                            .foregroundStyle(theme.colors.textTertiary)
+                    }
+                }
+            }
+
+            // Title editing surface — only appears while editing.
             if isEditingTitle {
                 TextField("Title", text: $editedTitle)
                     .font(.bodyMedium)
-                    .padding(Spacing.sm)
-                    .background(Color.surfaceSecondary)
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 8)
+                    .background(theme.colors.cardBackground)
                     .cornerRadius(CornerRadius.sm)
                     .overlay(
                         RoundedRectangle(cornerRadius: CornerRadius.sm)
-                            .strokeBorder(Color.active, lineWidth: 1)
+                            .strokeBorder(theme.chrome.accent, lineWidth: 1)
                     )
-                    .padding(.horizontal, Spacing.md)
-            } else {
-                HStack(spacing: Spacing.xs) {
-                    Text(memoTitle)
-                        .font(.bodyMedium)
-                        .fontWeight(.medium)
-                        .foregroundColor(.textPrimary)
-                        .multilineTextAlignment(.center)
-
-                    if isEditMode {
-                        Image(systemName: "pencil")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.active)
-                    }
-                }
-                .padding(.horizontal, Spacing.md)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if isEditMode {
-                        editedTitle = memoTitle
-                        isEditingTitle = true
-                    }
-                }
             }
-
-            HStack(spacing: Spacing.xs) {
-                Text(formatDate(memoCreatedAt).uppercased())
-                    .font(.techLabelSmall)
-                    .tracking(1)
-
-                if memo.hasLocation {
-                    Text("|")
-                        .font(.system(size: 9, weight: .ultraLight))
-                        .opacity(0.5)
-
-                    HStack(spacing: 2) {
-                        Image(systemName: "mappin")
-                            .font(.system(size: 9, weight: .medium))
-                        Text(formatCoordinates(lat: memo.latitude, lon: memo.longitude))
-                            .font(.techLabelSmall)
-                            .tracking(0.5)
-                    }
-                }
-
-                if let tz = memo.timezone, tz != TimeZone.current.identifier {
-                    Text("|")
-                        .font(.system(size: 9, weight: .ultraLight))
-                        .opacity(0.5)
-                    Text(tz.components(separatedBy: "/").last?.replacingOccurrences(of: "_", with: " ") ?? tz)
-                        .font(.techLabelSmall)
-                        .tracking(0.5)
-                }
-
-                if memo.cloudSyncedAt != nil || memo.macReceivedAt != nil {
-                    Text("|")
-                        .font(.system(size: 9, weight: .ultraLight))
-                        .opacity(0.5)
-
-                    HStack(spacing: 4) {
-                        if memo.cloudSyncedAt != nil {
-                            Image(systemName: "checkmark.icloud.fill")
-                                .font(.system(size: 10, weight: .medium))
-                        }
-
-                        if memo.macReceivedAt != nil {
-                            Image(systemName: "desktopcomputer")
-                                .font(.system(size: 10, weight: .medium))
-                        }
-                    }
-                }
-            }
-            .foregroundColor(.textSecondary)
         }
+        .padding(.horizontal, Spacing.md)
         .padding(.top, Spacing.xs)
+    }
+
+    private func formatHeaderDate(_ date: Date) -> String {
+        // "Today · 10:42 AM" / "Yesterday · 3:14 PM" / "Mar 5 · 10:42 AM"
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        let time = formatter.string(from: date)
+
+        let leader = theme.chrome.eyebrowLeader
+        if Calendar.current.isDateInToday(date) {
+            return "Today \(leader) \(time)"
+        } else if Calendar.current.isDateInYesterday(date) {
+            return "Yesterday \(leader) \(time)"
+        } else {
+            let dayFormatter = DateFormatter()
+            dayFormatter.dateFormat = "MMM d"
+            return "\(dayFormatter.string(from: date)) \(leader) \(time)"
+        }
+    }
+
+    private func shortTZ(_ id: String) -> String {
+        // "America/Los_Angeles" → "LA". "America/New_York" → "NYC". Else last city, max 4 chars.
+        let city = id.components(separatedBy: "/").last?.replacingOccurrences(of: "_", with: "") ?? id
+        return String(city.prefix(4)).uppercased()
+    }
+
+    // MARK: - Transcript Instrument
+    //
+    // Transcript + player + quick actions as a single chrome-bezeled console.
+    // Reads as one instrument with multiple controls — the whole "work with
+    // the captured speech" surface.
+
+    @ViewBuilder
+    private func transcriptInstrument() -> some View {
+        let chrome = theme.chrome
+
+        VStack(spacing: 0) {
+            transcriptInstrumentHeader
+                .padding(.horizontal, Spacing.md)
+                .padding(.vertical, Spacing.xs + 2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(theme.colors.tableHeaderBackground)
+
+            Rectangle()
+                .fill(chrome.edgeFaint)
+                .frame(height: chrome.hairlineWidth)
+
+            transcriptInstrumentBody
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Rectangle()
+                .fill(chrome.edgeFaint)
+                .frame(height: chrome.hairlineWidth)
+
+            transcriptInstrumentPlayer
+                .padding(.horizontal, Spacing.md)
+                .padding(.vertical, Spacing.xs + 2)
+
+            Rectangle()
+                .fill(chrome.edgeFaint)
+                .frame(height: chrome.hairlineWidth)
+
+            transcriptInstrumentActionRail
+                .padding(.horizontal, Spacing.md)
+                .padding(.vertical, Spacing.xs + 2)
+        }
+        .background(theme.colors.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: CornerRadius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: CornerRadius.md, style: .continuous)
+                .stroke(chrome.edge, lineWidth: chrome.hairlineWidth)
+        )
+        .padding(.horizontal, Spacing.md)
+    }
+
+    private var transcriptInstrumentHeader: some View {
+        HStack(spacing: 8) {
+            TalkieChannelLabel(code: "T01", isActive: memo.currentTranscript?.isEmpty == false)
+            TalkieEyebrow(text: "Transcript", tint: .ink, showLeader: false)
+
+            if memo.isTranscribing {
+                TalkieStatusBadge(label: "Transcribing", style: .transcribing, pulses: true, bare: true)
+            }
+
+            Spacer()
+
+            if let wc = transcriptWordCount {
+                Text("\(wc)W")
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .tracking(1)
+                    .foregroundStyle(theme.colors.textTertiary)
+            }
+
+            if isEditMode && memo.currentTranscript?.isEmpty == false {
+                Image(systemName: isEditingTranscript ? "checkmark" : "pencil")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(theme.chrome.accent)
+            }
+        }
+    }
+
+    private var transcriptWordCount: Int? {
+        guard let t = memo.currentTranscript?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }
+        return t.split(whereSeparator: \.isWhitespace).count
+    }
+
+    @ViewBuilder
+    private var transcriptInstrumentBody: some View {
+        // The transcript body sits on its own slightly different "page"
+        // background — gives the note itself a distinct surface from the
+        // surrounding console chrome.
+        ZStack {
+            theme.colors.background.opacity(0.55)
+
+            Group {
+                if memo.isTranscribing {
+                    VStack(spacing: 6) {
+                        PulsingDot(color: .transcribing, size: 8)
+                        Text("Awaiting transcript")
+                            .font(.bodySmall)
+                            .foregroundStyle(theme.colors.textTertiary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, Spacing.xl)
+                } else if let transcription = memo.currentTranscript, !transcription.isEmpty {
+                    if isEditingTranscript {
+                        TranscriptEditorView(
+                            text: $editedTranscript,
+                            onCancel: {
+                                isEditingTranscript = false
+                                editedTranscript = ""
+                            },
+                            onSave: saveTranscriptEdit
+                        )
+                        .padding(Spacing.md)
+                    } else {
+                        ScrollView {
+                            Text(transcription)
+                                .font(.bodyMedium)
+                                .foregroundColor(theme.colors.textPrimary)
+                                .textSelection(.enabled)
+                                .lineSpacing(5)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(minHeight: 140, maxHeight: isTranscriptExpanded ? .infinity : 240)
+                        .padding(Spacing.md)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            if isEditMode {
+                                editedTranscript = transcription
+                                isEditingTranscript = true
+                            }
+                        }
+                        .contextMenu {
+                            if memo.sortedTranscriptVersions.count > 1 {
+                                Button(action: { showingVersionHistory = true }) {
+                                    Label("Version History", systemImage: "clock.arrow.circlepath")
+                                }
+                            }
+                            Button(action: {
+                                UIPasteboard.general.string = transcription
+                            }) {
+                                Label("Copy", systemImage: "doc.on.doc")
+                            }
+                        }
+                    }
+                } else {
+                    VStack(spacing: 6) {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 22, weight: .light))
+                            .foregroundStyle(theme.colors.textTertiary.opacity(0.6))
+                        Text("No transcript yet")
+                            .font(.bodySmall)
+                            .foregroundStyle(theme.colors.textTertiary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, Spacing.xl)
+                }
+            }
+        }
+    }
+
+    private var transcriptInstrumentPlayer: some View {
+        let chrome = theme.chrome
+        return HStack(spacing: Spacing.sm) {
+            // Play / pause — anchored on the left of the rail.
+            Button(action: togglePlayback) {
+                ZStack {
+                    Circle()
+                        .fill(isPlaying ? chrome.accent : Color.clear)
+                        .frame(width: 30, height: 30)
+                        .overlay(
+                            Circle()
+                                .strokeBorder(chrome.accent, lineWidth: 1.5)
+                        )
+
+                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(isPlaying ? chrome.panelInk : chrome.accent)
+                        .offset(x: isPlaying ? 0 : 1)
+                }
+            }
+
+            // Compact waveform / progress bar
+            ZStack(alignment: .leading) {
+                if let waveformData = memo.waveformData,
+                   let levels = try? JSONDecoder().decode([Float].self, from: waveformData) {
+                    InteractiveWaveformView(
+                        levels: levels,
+                        height: 28,
+                        progress: playbackProgress,
+                        playedColor: chrome.accent,
+                        unplayedColor: theme.colors.textTertiary.opacity(0.35)
+                    ) { seekProgress in
+                        seekToProgress(seekProgress)
+                    }
+                } else {
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(theme.colors.textTertiary.opacity(0.25))
+                                .frame(height: 3)
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(chrome.accent)
+                                .frame(width: geo.size.width * playbackProgress, height: 3)
+                        }
+                        .frame(maxHeight: .infinity, alignment: .center)
+                    }
+                    .frame(height: 28)
+                }
+            }
+
+            // Compact time readout on the right
+            Text(playbackTimeLabel)
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .tracking(0.5)
+                .foregroundStyle(theme.colors.textTertiary)
+                .frame(width: 78, alignment: .trailing)
+                .monospacedDigit()
+        }
+    }
+
+    private var playbackTimeLabel: String {
+        let current = formatDuration(isPlaying ? audioPlayer.currentTime : 0)
+        let total = formatDuration(memo.duration)
+        return "\(current) / \(total)"
+    }
+
+    private var transcriptInstrumentActionRail: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                instrumentActionPill(
+                    icon: SpeechSynthesisService.shared.isSpeaking ? "stop.fill" : "speaker.wave.2.fill",
+                    label: SpeechSynthesisService.shared.isSpeaking ? "Stop" : "Read",
+                    isLit: memo.currentTranscript != nil
+                ) {
+                    if let text = memo.currentTranscript {
+                        SpeechSynthesisService.shared.toggleReadout(text)
+                    }
+                }
+
+                instrumentActionPill(icon: "sparkles", label: "Ask", isLit: memo.currentTranscript?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false) {
+                    showingMemoAISheet = true
+                }
+
+                instrumentActionPill(icon: "note.text", label: "Note", isLit: memo.currentTranscript != nil) {
+                    createNote()
+                }
+
+                instrumentActionPill(icon: "square.and.arrow.up", label: "Share", isLit: true) {
+                    showingShare = true
+                }
+
+                instrumentActionPill(icon: reminderStatusIcon, label: reminderStatusLabel, isLit: reminderStatus != .creating) {
+                    createReminder()
+                }
+            }
+            .scrollClipDisabled()
+        }
+    }
+
+    private func instrumentActionPill(icon: String, label: String, isLit: Bool, action: @escaping () -> Void) -> some View {
+        let chrome = theme.chrome
+        return Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .semibold))
+                Text(label)
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundStyle(theme.colors.textPrimary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                Capsule().fill(theme.colors.background.opacity(0.6))
+            )
+            .overlay(
+                Capsule().stroke(isLit ? chrome.accent.opacity(0.30) : chrome.edgeFaint, lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(!isLit)
+        .opacity(isLit ? 1 : 0.55)
+    }
+
+    // MARK: - Capture Replay Instrument
+    //
+    // Attachments + activity (workflow runs, summary, tasks, reminders)
+    // rendered as a "replay" surface — Polaroid strip + chat-replay timeline.
+    // Less console, more keepsake / scrolling history.
+
+    @ViewBuilder
+    private func captureReplayInstrument() -> some View {
+        let hasAttachments = !memoAttachments.isEmpty
+        let hasActivity = memo.summary != nil || memo.tasks != nil || memo.reminders != nil ||
+            (memo.workflowRuns as? Set<WorkflowRun>)?.isEmpty == false
+
+        if hasAttachments || hasActivity {
+            cardboardCard {
+                if hasAttachments {
+                    polaroidStrip
+                        .padding(.top, Spacing.sm)
+                        .padding(.bottom, Spacing.xs)
+                }
+
+                if hasActivity {
+                    activityTimeline
+                        .padding(.horizontal, Spacing.md)
+                        .padding(.top, hasAttachments ? Spacing.xs : Spacing.sm)
+                        .padding(.bottom, Spacing.sm)
+                }
+            }
+            .id("activity-section")
+        }
+    }
+
+    /// Cardboard display card — warm two-tone face with a folder-tab label
+    /// sticking up from the top edge. Reads like a point-of-purchase card or
+    /// a filed index card, distinctly NOT a console panel.
+    private func cardboardCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        let chrome = theme.chrome
+        let eventCount = activityEventCount
+
+        return VStack(spacing: 0) {
+            // The tab — thin type, light fill, faint hairline. A whisper of a
+            // file folder index tab rather than a stamp.
+            HStack(spacing: 6) {
+                Text("R01")
+                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                    .tracking(1.2)
+                    .foregroundStyle(chrome.accent)
+                Text(theme.chrome.eyebrowLeader)
+                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                    .foregroundStyle(theme.colors.textTertiary.opacity(0.5))
+                Text("Replay")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(theme.colors.textSecondary)
+                if eventCount > 0 {
+                    Text(theme.chrome.eyebrowLeader)
+                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                        .foregroundStyle(theme.colors.textTertiary.opacity(0.5))
+                    Text("\(eventCount)")
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .foregroundStyle(theme.colors.textTertiary)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background {
+                UnevenRoundedRectangle(cornerRadii: .init(topLeading: 6, bottomLeading: 0, bottomTrailing: 0, topTrailing: 6))
+                    .fill(theme.colors.cardBackground.opacity(0.85))
+                    .overlay {
+                        UnevenRoundedRectangle(cornerRadii: .init(topLeading: 6, bottomLeading: 0, bottomTrailing: 0, topTrailing: 6))
+                            .stroke(chrome.edgeFaint, lineWidth: chrome.hairlineWidth)
+                    }
+            }
+            .padding(.leading, Spacing.md)
+            .padding(.bottom, -1)
+
+            // The card body — light, near-flat. A whisper of warmth from the
+            // theme's cardBackground tone; no heavy gradient, no big shadow.
+            VStack(spacing: 0) {
+                content()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(theme.colors.cardBackground.opacity(0.5))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .stroke(chrome.edgeFaint, lineWidth: chrome.hairlineWidth)
+            }
+            .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+        }
+        .padding(.horizontal, Spacing.md)
+    }
+
+    private var activityEventCount: Int {
+        var n = 1 // captured
+        if memo.currentTranscript?.isEmpty == false { n += 1 }
+        if let runs = memo.workflowRuns as? Set<WorkflowRun> { n += runs.count }
+        if memo.summary != nil { n += 1 }
+        if memo.tasks != nil { n += 1 }
+        if memo.reminders != nil { n += 1 }
+        return n
+    }
+
+    private var polaroidStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(memoAttachments) { attachment in
+                    polaroidThumbnail(attachment: attachment)
+                }
+            }
+            .padding(.horizontal, Spacing.md)
+        }
+    }
+
+    private func polaroidThumbnail(attachment: MemoImageAttachment) -> some View {
+        // Polaroid frame: white border, slight shadow, square photo on top, label space below
+        let frameColor = theme.colors.textPrimary.opacity(0.04) // subtle paper warmth
+        return Button {
+            selectedAttachmentPreview = attachment
+        } label: {
+            VStack(spacing: 4) {
+                Group {
+                    if let img = MemoAttachmentStore.shared.image(for: attachment) {
+                        Image(uiImage: img)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else {
+                        Image(systemName: "photo")
+                            .font(.system(size: 22, weight: .light))
+                            .foregroundStyle(theme.colors.textTertiary)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
+                .frame(width: 72, height: 72)
+                .clipped()
+
+                Text(attachment.addedAt, style: .time)
+                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                    .tracking(0.5)
+                    .foregroundStyle(theme.colors.textTertiary)
+            }
+            .padding(6)
+            .background(theme.colors.background)
+            .overlay {
+                Rectangle()
+                    .stroke(frameColor, lineWidth: 0.5)
+            }
+            .shadow(color: Color.black.opacity(0.10), radius: 3, x: 0, y: 1)
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var activityTimeline: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            timelineRow(
+                time: memoCreatedAt,
+                label: "Captured",
+                detail: formatDuration(memo.duration) + " of audio"
+            )
+
+            if memo.currentTranscript != nil {
+                timelineRow(
+                    time: memoCreatedAt.addingTimeInterval(60),
+                    label: "Transcribed",
+                    detail: transcriptWordCount.map { "\($0) words" }
+                )
+            }
+
+            if let summary = memo.summary {
+                timelineRow(
+                    time: memoCreatedAt,
+                    label: "Summary",
+                    detail: "Generated",
+                    detailSpec: ActivityDetailSpec(id: "summary", title: "Summary", icon: "doc.text", content: summary)
+                )
+            }
+
+            if let tasks = memo.tasks {
+                timelineRow(
+                    time: memoCreatedAt,
+                    label: "Tasks",
+                    detail: "Extracted",
+                    detailSpec: ActivityDetailSpec(id: "tasks", title: "Tasks", icon: "checklist", content: tasks)
+                )
+            }
+
+            if let reminders = memo.reminders {
+                timelineRow(
+                    time: memoCreatedAt,
+                    label: "Reminders",
+                    detail: "Extracted",
+                    detailSpec: ActivityDetailSpec(id: "reminders", title: "Reminders", icon: "bell", content: reminders)
+                )
+            }
+
+            if let workflowRuns = memo.workflowRuns as? Set<WorkflowRun> {
+                ForEach(
+                    workflowRuns.sorted { ($0.runDate ?? .distantPast) > ($1.runDate ?? .distantPast) },
+                    id: \.id
+                ) { run in
+                    timelineRow(
+                        time: run.runDate ?? memoCreatedAt,
+                        label: run.workflowName ?? "Workflow",
+                        detail: run.status,
+                        detailSpec: workflowRunSpec(run)
+                    )
+                }
+            }
+        }
+    }
+
+    private func workflowRunSpec(_ run: WorkflowRun) -> ActivityDetailSpec? {
+        let content = run.output ?? ""
+        guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return ActivityDetailSpec(
+            id: "wf-\(run.id?.uuidString ?? UUID().uuidString)",
+            title: run.workflowName ?? "Workflow",
+            icon: "gearshape.2",
+            content: content
+        )
+    }
+
+    /// One-line timeline row laid out as a proper 3-column table:
+    /// [ time ] [ label ] [ detail ] → optional fold-out chevron.
+    /// Fixed widths keep the label column-aligned across rows. When
+    /// `detailSpec` is provided, the chevron rotates and the row reveals
+    /// its content in-place.
+    private func timelineRow(time: Date, label: String, detail: String?, detailSpec: ActivityDetailSpec? = nil) -> some View {
+        let chrome = theme.chrome
+        let isExpanded = detailSpec.map { expandedTimelineRows.contains($0.id) } ?? false
+
+        let row = HStack(spacing: 8) {
+            Text(time, style: .time)
+                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .foregroundStyle(theme.colors.textTertiary)
+                .frame(width: 60, alignment: .leading)
+                .monospacedDigit()
+
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(theme.colors.textPrimary)
+                .lineLimit(1)
+                .frame(width: 96, alignment: .leading)
+
+            if let detail {
+                Text(detail)
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.colors.textTertiary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+
+            if detailSpec != nil {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(isExpanded ? chrome.accent : theme.colors.textTertiary.opacity(0.7))
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+            }
+        }
+        .padding(.vertical, 6)
+        .contentShape(Rectangle())
+
+        return VStack(alignment: .leading, spacing: 0) {
+            if let detailSpec {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        if expandedTimelineRows.contains(detailSpec.id) {
+                            expandedTimelineRows.remove(detailSpec.id)
+                        } else {
+                            expandedTimelineRows.insert(detailSpec.id)
+                        }
+                    }
+                } label: {
+                    row
+                }
+                .buttonStyle(.plain)
+
+                if isExpanded {
+                    foldOutContent(detailSpec)
+                }
+            } else {
+                row
+            }
+        }
+    }
+
+    /// Inline fold-out body — indented to align with the label column,
+    /// styled as a quiet inset inside the same table chassis.
+    private func foldOutContent(_ spec: ActivityDetailSpec) -> some View {
+        let chrome = theme.chrome
+        return VStack(alignment: .leading, spacing: 0) {
+            Text(spec.content)
+                .font(.system(size: 12))
+                .foregroundStyle(theme.colors.textPrimary)
+                .textSelection(.enabled)
+                .lineSpacing(3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 10)
+                .padding(.horizontal, 12)
+                .background(theme.colors.background.opacity(0.6))
+                .overlay(alignment: .leading) {
+                    // Accent rail anchors the fold-out to its parent row.
+                    Rectangle()
+                        .fill(chrome.accent.opacity(0.55))
+                        .frame(width: 2)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        }
+        .padding(.leading, 68)       // align with the label column
+        .padding(.bottom, 6)
+        .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
     @ViewBuilder
@@ -535,7 +1145,7 @@ struct VoiceMemoDetailView: View {
                     levels: levels,
                     height: 48,
                     progress: playbackProgress,
-                    playedColor: .active,
+                    playedColor: theme.chrome.accent,
                     unplayedColor: .textTertiary.opacity(0.4)
                 ) { seekProgress in
                     seekToProgress(seekProgress)
@@ -547,7 +1157,7 @@ struct VoiceMemoDetailView: View {
                             .fill(Color.textTertiary.opacity(0.3))
                             .frame(height: 4)
                         RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.active)
+                            .fill(theme.chrome.accent)
                             .frame(width: geo.size.width * playbackProgress, height: 4)
                     }
                     .frame(maxHeight: .infinity, alignment: .center)
@@ -567,26 +1177,26 @@ struct VoiceMemoDetailView: View {
                     ZStack {
                         if isPlaying {
                             Circle()
-                                .fill(Color.active)
+                                .fill(theme.chrome.accent)
                                 .frame(width: 38, height: 38)
                                 .blur(radius: 8)
                                 .opacity(0.4)
                         }
 
                         Circle()
-                            .fill(isPlaying ? Color.active : Color.surfaceSecondary)
+                            .fill(isPlaying ? theme.chrome.accent : theme.colors.cardBackground)
                             .frame(width: 34, height: 34)
                             .overlay(
                                 Circle()
                                     .strokeBorder(
-                                        isPlaying ? Color.active : Color.borderPrimary,
+                                        isPlaying ? theme.chrome.accent : theme.chrome.edge,
                                         lineWidth: 1.5
                                     )
                             )
 
                         Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(isPlaying ? .white : .textPrimary)
+                            .foregroundColor(isPlaying ? theme.chrome.panelInk : theme.colors.textPrimary)
                             .offset(x: isPlaying ? 0 : 1)
                     }
                 }
@@ -607,10 +1217,7 @@ struct VoiceMemoDetailView: View {
         if memo.isTranscribing {
             HStack(spacing: Spacing.sm) {
                 PulsingDot(color: .transcribing, size: 10)
-                Text("TRANSCRIBING")
-                    .font(.techLabel)
-                    .tracking(2)
-                    .foregroundColor(.transcribing)
+                TalkieEyebrow(text: "Transcribing")
             }
             .padding(Spacing.md)
             .frame(maxWidth: .infinity)
@@ -620,15 +1227,12 @@ struct VoiceMemoDetailView: View {
         } else if let transcription = memo.currentTranscript {
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 HStack {
-                    Text("TRANSCRIPT")
-                        .font(.techLabel)
-                        .tracking(2)
-                        .foregroundColor(.textSecondary)
+                    TalkieEyebrow(text: "Transcript")
 
                     if isEditMode && !isEditingTranscript {
                         Image(systemName: "pencil")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.active)
+                            .foregroundColor(theme.chrome.accent)
                     }
 
                     Spacer()
@@ -734,10 +1338,7 @@ struct VoiceMemoDetailView: View {
             (memo.workflowRuns as? Set<WorkflowRun>)?.isEmpty == false {
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 HStack {
-                    Text("ACTIVITY")
-                        .font(.techLabel)
-                        .tracking(2)
-                        .foregroundColor(.textSecondary)
+                    TalkieEyebrow(text: "Activity")
                         .id("activity-section")
 
                     Spacer()
@@ -1147,10 +1748,7 @@ struct VoiceMemoDetailView: View {
 
     private var quickActionsSection: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("QUICK ACTIONS")
-                .font(.techLabel)
-                .tracking(2)
-                .foregroundColor(.textSecondary)
+            TalkieEyebrow(text: "Quick Actions")
 
             HStack(spacing: Spacing.xs) {
                 // Readout
@@ -1189,6 +1787,17 @@ struct VoiceMemoDetailView: View {
                     isAvailable: memo.currentTranscript != nil
                 ) {
                     createNote()
+                }
+
+                QuickActionButton(
+                    icon: "sparkles",
+                    label: "Ask",
+                    badge: .local,
+                    isProcessing: false,
+                    hasContent: memo.id.map { AgentSessionStore.shared.hasConversation(forMemoId: $0.uuidString) } ?? false,
+                    isAvailable: memo.currentTranscript?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                ) {
+                    showingMemoAISheet = true
                 }
 
                 // Set Reminder (creates via EventKit)
@@ -1240,10 +1849,7 @@ struct VoiceMemoDetailView: View {
     private var sidecarSection: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack {
-                Text("SIDECAR")
-                    .font(.techLabel)
-                    .tracking(2)
-                    .foregroundColor(.textSecondary)
+                TalkieEyebrow(text: "Sidecar")
 
                 Spacer()
 
@@ -1341,17 +1947,220 @@ struct VoiceMemoDetailView: View {
         }
     }
 
+    // MARK: - Actions (Industrial Pushbuttons)
+    //
+    // Freestanding — no surrounding console, no table chrome. Just a small
+    // stamped section plate, then a grid of chunky factory-floor pushbuttons
+    // that sit directly on the page. Each button has heavy bezels, an
+    // imprinted/stamped label, and an LED status indicator. Think industrial
+    // control panel buttons, not flat capsules.
+
+    @ViewBuilder
+    private func actionsInstrument() -> some View {
+        let pinned = pinnedMacWorkflows
+        let isMacOnline = bridgeManager.status == .connected
+        let isPaired = hasBridgePairingForAttachments
+
+        let buttons: [ActionButtonSpec] = buildActionButtons(pinned: pinned, isMacOnline: isMacOnline)
+
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            actionsSectionPlate(isMacOnline: isMacOnline, isPaired: isPaired)
+
+            if let error = aiError {
+                aiErrorBanner(error: error)
+            }
+
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                ForEach(buttons, id: \.id) { btn in
+                    retroActionButton(btn)
+                }
+            }
+
+            if pinned.isEmpty && isPaired {
+                HStack(spacing: 6) {
+                    Image(systemName: "pin")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(theme.colors.textTertiary.opacity(0.7))
+                    Text("Pin workflows in Settings to add them here")
+                        .font(.system(size: 11))
+                        .foregroundStyle(theme.colors.textTertiary)
+                }
+                .padding(.top, 4)
+            }
+
+            if !isPaired {
+                HStack(spacing: 6) {
+                    Image(systemName: "desktopcomputer")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(theme.colors.textTertiary)
+                    Text("Pair your Mac to run actions, ask the agent, and execute CLI.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(theme.colors.textTertiary)
+                        .lineLimit(2)
+                }
+                .padding(.top, 4)
+            }
+        }
+        .padding(.horizontal, Spacing.md)
+    }
+
+    // Light section plate — thin type, faint hairline trailing into the
+    // status. No heavy/bold weights.
+    private func actionsSectionPlate(isMacOnline: Bool, isPaired: Bool) -> some View {
+        let chrome = theme.chrome
+        return HStack(spacing: 8) {
+            HStack(spacing: 6) {
+                Text("A01")
+                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                    .tracking(1.2)
+                    .foregroundStyle(chrome.accent)
+
+                Text("ACTIONS")
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .tracking(2)
+                    .foregroundStyle(theme.colors.textSecondary)
+            }
+
+            Rectangle()
+                .fill(chrome.edgeFaint)
+                .frame(height: 0.5)
+                .frame(maxWidth: .infinity)
+
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(isMacOnline ? Color.success : theme.colors.textTertiary.opacity(0.5))
+                    .frame(width: 5, height: 5)
+                Text(isMacOnline ? "Mac Online" : (isPaired ? "Mac Offline" : "No Mac"))
+                    .font(.system(size: 10, weight: .regular))
+                    .foregroundStyle(theme.colors.textTertiary)
+            }
+        }
+    }
+
+    // Flat, light, crisp button — thin icon, clean label, an LED pip only
+    // when something's actually happening. Site-inspired. No gradients,
+    // highlights, or shadows. The thin border carries the structure.
+    private func retroActionButton(_ btn: ActionButtonSpec) -> some View {
+        let chrome = theme.chrome
+        let isLit = btn.isAvailable && !btn.isProcessing
+        let showLED = btn.isProcessing || btn.hasContent
+        let ledColor: Color = btn.isProcessing ? chrome.accent : Color.success
+
+        let face = VStack(spacing: 10) {
+            Spacer(minLength: 0)
+
+            // Thin-stroke icon
+            Image(systemName: btn.icon)
+                .font(.system(size: 22, weight: .light))
+                .foregroundStyle(isLit ? theme.colors.textPrimary : theme.colors.textTertiary)
+
+            // Clean label — regular weight mono caps, light tracking
+            Text(btn.name.uppercased())
+                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .tracking(1.4)
+                .foregroundStyle(isLit ? theme.colors.textSecondary : theme.colors.textTertiary)
+                .lineLimit(1)
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 80)
+        .background(theme.colors.cardBackground.opacity(0.5))
+        .overlay {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .stroke(isLit ? chrome.accent.opacity(0.25) : chrome.edgeFaint, lineWidth: 0.5)
+        }
+        .overlay(alignment: .topTrailing) {
+            // Status pip only when meaningful — sits quietly in the corner.
+            if showLED {
+                Circle()
+                    .fill(ledColor)
+                    .frame(width: 5, height: 5)
+                    .shadow(color: btn.isProcessing ? chrome.accentGlow : .clear, radius: 3)
+                    .padding(8)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .opacity(btn.isAvailable ? 1 : 0.5)
+        .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+
+        return Button(action: btn.action) {
+            face
+        }
+        .buttonStyle(RetroButtonStyle())
+        .disabled(!btn.isAvailable || btn.isProcessing)
+    }
+
+    private struct ActionButtonSpec {
+        let id: String
+        let icon: String
+        let name: String
+        let isAvailable: Bool
+        let isProcessing: Bool
+        let hasContent: Bool
+        let action: () -> Void
+
+        var stateLabel: String {
+            if isProcessing { return "RUN…" }
+            if hasContent { return "DONE" }
+            return isAvailable ? "READY" : "OFFLINE"
+        }
+    }
+
+    private struct RetroButtonStyle: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .scaleEffect(configuration.isPressed ? 0.97 : 1)
+                .brightness(configuration.isPressed ? -0.05 : 0)
+                .animation(.easeOut(duration: 0.10), value: configuration.isPressed)
+        }
+    }
+
+    private func buildActionButtons(pinned: [TalkieAppConfiguration.PinnedWorkflow], isMacOnline: Bool) -> [ActionButtonSpec] {
+        var rows: [ActionButtonSpec] = []
+
+        for wf in pinned.prefix(2) {
+            rows.append(ActionButtonSpec(
+                id: wf.id ?? UUID().uuidString,
+                icon: wf.icon.isEmpty ? "wand.and.stars" : wf.icon,
+                name: wf.name.isEmpty ? "Workflow" : wf.name,
+                isAvailable: auth.isSignedIn && memo.id != nil && isMacOnline,
+                isProcessing: isWorkflowInFlight(workflowId: wf.id),
+                hasContent: hasWorkflowOutput(workflowId: wf.id),
+                action: { runPinnedWorkflow(wf) }
+            ))
+        }
+
+        rows.append(ActionButtonSpec(
+            id: "agent",
+            icon: "bubble.left.and.text.bubble.right",
+            name: "Agent",
+            isAvailable: isMacOnline,
+            isProcessing: false,
+            hasContent: memo.id.map { AgentSessionStore.shared.hasConversation(forMemoId: $0.uuidString) } ?? false,
+            action: { showingAgentSheet = true }
+        ))
+
+        rows.append(ActionButtonSpec(
+            id: "cli",
+            icon: "terminal",
+            name: "CLI",
+            isAvailable: isMacOnline,
+            isProcessing: false,
+            hasContent: false,
+            action: { showingCLISheet = true }
+        ))
+
+        return rows
+    }
+
     private var macActionsSection: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack {
-                Text("MAC ACTIONS")
-                    .font(.techLabel)
-                    .tracking(2)
-                    .foregroundColor(.textSecondary)
+                TalkieEyebrow(text: "Mac Actions")
 
                 Spacer()
 
-                // Mac connection status
                 macConnectionBadge
             }
 
@@ -1953,15 +2762,7 @@ struct VoiceMemoDetailView: View {
             hasLoadedRecentAttachmentAssets = true
             recentAttachmentAssets = fetchRecentAttachmentAssets()
         case .notDetermined:
-            PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
-                Task { @MainActor in
-                    attachmentPhotoAuthorizationStatus = status
-                    if status == .authorized || status == .limited {
-                        hasLoadedRecentAttachmentAssets = true
-                        recentAttachmentAssets = fetchRecentAttachmentAssets()
-                    }
-                }
-            }
+            recentAttachmentAssets = []
         default:
             recentAttachmentAssets = []
         }
@@ -2147,6 +2948,10 @@ struct VoiceMemoDetailView: View {
     private func fetchLatestFromCloudKit() {
         guard let memoId = memo.id else { return }
 
+        #if targetEnvironment(simulator)
+        AppLogger.persistence.info("Skipping CloudKit memo refresh on simulator")
+        return
+        #else
         guard let container = CloudKitContainerProvider.container() else {
             let reason = CloudKitContainerProvider.unavailableReason ?? "CloudKit unavailable"
             AppLogger.persistence.warning("Memo CloudKit fetch skipped: \(reason)")
@@ -2209,6 +3014,7 @@ struct VoiceMemoDetailView: View {
                 AppLogger.persistence.error("CloudKit fetch failed: \(error.localizedDescription)")
             }
         }
+        #endif
     }
 
     /// Fetch workflow runs from CloudKit for this memo
@@ -2309,13 +3115,17 @@ struct QuickActionButton: View {
         isProcessing || (!hasContent && !isAvailable)
     }
 
+    // The "is this action available right now" color — neutral by design.
+    // Real status moments (hasContent → success, isProcessing → blue) keep
+    // their colorful semantic; the bare "available" state goes through
+    // chrome.action so the affordance reads as quiet ink instead of accent.
     private var statusColor: Color {
         if hasContent { return .success }
         if isProcessing { return .blue }
         if isAvailable {
             switch badge {
-            case .none: return .active
-            case .local: return .active
+            case .none: return .action
+            case .local: return .action
             case .remote: return .blue
             }
         }
@@ -2433,7 +3243,7 @@ struct AIActionCell: View {
                 ZStack {
                     Image(systemName: icon)
                         .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(isAvailable ? .active : .textTertiary)
+                        .foregroundColor(isAvailable ? .action : .textTertiary)
 
                     if isProcessing {
                         BrailleSpinner(size: 10)
@@ -2452,15 +3262,15 @@ struct AIActionCell: View {
                     Text(isProcessing ? "..." : "AI")
                         .font(.techLabelSmall)
                 }
-                .foregroundColor(isProcessing ? .transcribing : (isAvailable ? .active : .textTertiary))
+                .foregroundColor(isProcessing ? .transcribing : (isAvailable ? .action : .textTertiary))
             }
             .frame(maxWidth: .infinity)
             .frame(height: 72)
-            .background(isAvailable ? Color.active.opacity(0.05) : Color.surfaceSecondary)
+            .background(isAvailable ? Color.actionTint : Color.surfaceSecondary)
             .cornerRadius(CornerRadius.sm)
             .overlay(
                 RoundedRectangle(cornerRadius: CornerRadius.sm)
-                    .strokeBorder(isAvailable ? Color.active.opacity(0.3) : Color.borderPrimary, lineWidth: 0.5)
+                    .strokeBorder(isAvailable ? Color.action.opacity(0.3) : Color.borderPrimary, lineWidth: 0.5)
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -2533,11 +3343,11 @@ struct AIWorkflowCell: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 72)
-            .background(hasContent ? Color.success.opacity(0.03) : (isAIAvailable ? Color.active.opacity(0.03) : Color.surfaceSecondary))
+            .background(hasContent ? Color.success.opacity(0.03) : (isAIAvailable ? Color.actionTint : Color.surfaceSecondary))
             .cornerRadius(CornerRadius.sm)
             .overlay(
                 RoundedRectangle(cornerRadius: CornerRadius.sm)
-                    .strokeBorder(hasContent ? Color.success.opacity(0.3) : (isAIAvailable ? Color.active.opacity(0.2) : Color.borderPrimary), lineWidth: 0.5)
+                    .strokeBorder(hasContent ? Color.success.opacity(0.3) : (isAIAvailable ? Color.action.opacity(0.3) : Color.borderPrimary), lineWidth: 0.5)
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -2699,10 +3509,7 @@ struct WorkflowOutputCard: View {
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(hasContent ? .success : .textTertiary)
 
-                        Text(title)
-                            .font(.techLabel)
-                            .tracking(1)
-                            .foregroundColor(hasContent ? .textPrimary : .textTertiary)
+                        TalkieEyebrow(text: title, tint: hasContent ? .accent : .ink)
                     }
 
                     Spacer()
@@ -2711,10 +3518,7 @@ struct WorkflowOutputCard: View {
                     if isProcessing {
                         HStack(spacing: 4) {
                             BrailleSpinner(size: 12)
-                            Text("PROCESSING")
-                                .font(.techLabelSmall)
-                                .tracking(1)
-                                .foregroundColor(.transcribing)
+                            TalkieEyebrow(text: "Processing", tint: .ink, showLeader: false)
                         }
                     } else if hasContent {
                         HStack(spacing: 4) {
@@ -2726,10 +3530,7 @@ struct WorkflowOutputCard: View {
                                 .foregroundColor(.textTertiary)
                         }
                     } else {
-                        Text("AWAITING")
-                            .font(.techLabelSmall)
-                            .tracking(1)
-                            .foregroundColor(.textTertiary)
+                        TalkieEyebrow(text: "Awaiting", tint: .ink, showLeader: false)
                     }
                 }
             }
@@ -2774,10 +3575,7 @@ struct WorkflowOutputSection: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.success)
 
-                Text(title)
-                    .font(.techLabel)
-                    .tracking(1)
-                    .foregroundColor(.textSecondary)
+                TalkieEyebrow(text: title)
 
                 Spacer()
             }
@@ -2874,10 +3672,7 @@ private struct RecordingSidecarResultCard: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.textPrimary)
 
-                Text(request.kind.displayName.uppercased())
-                    .font(.techLabel)
-                    .tracking(1)
-                    .foregroundColor(.textSecondary)
+                TalkieEyebrow(text: request.kind.displayName)
 
                 Text(offsetText)
                     .font(.monoSmall)
@@ -3020,10 +3815,7 @@ struct TranscriptVersionHistorySheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("VERSION HISTORY")
-                        .font(.techLabel)
-                        .tracking(2)
-                        .foregroundColor(.textPrimary)
+                    TalkieEyebrow(text: "Version History")
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -3099,10 +3891,7 @@ struct TranscriptVersionRow: View {
             .buttonStyle(PlainButtonStyle())
 
             if !isExpanded && (version.content?.count ?? 0) > 150 {
-                Text("TAP TO EXPAND")
-                    .font(.techLabelSmall)
-                    .tracking(1)
-                    .foregroundColor(.active)
+                TalkieEyebrow(text: "Tap to Expand", tint: .ink, showLeader: false)
             }
         }
         .padding(Spacing.md)
@@ -3296,10 +4085,7 @@ struct ReminderConfigSheet: View {
             VStack(spacing: 0) {
                 // Title field
                 VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text("TITLE")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .tracking(1)
-                        .foregroundColor(.textTertiary)
+                    TalkieEyebrow(text: "Title")
 
                     TextField("Reminder title", text: $title)
                         .font(.system(size: 16, design: .monospaced))
@@ -3312,10 +4098,7 @@ struct ReminderConfigSheet: View {
 
                 // Due date picker
                 VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text("REMIND ME")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .tracking(1)
-                        .foregroundColor(.textTertiary)
+                    TalkieEyebrow(text: "Remind Me")
 
                     DatePicker(
                         "",
@@ -3334,10 +4117,7 @@ struct ReminderConfigSheet: View {
 
                 // Quick time options
                 VStack(spacing: Spacing.sm) {
-                    Text("QUICK SET")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .tracking(1)
-                        .foregroundColor(.textTertiary)
+                    TalkieEyebrow(text: "Quick Set")
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     HStack(spacing: Spacing.xs) {

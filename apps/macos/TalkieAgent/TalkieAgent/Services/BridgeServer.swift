@@ -2,6 +2,15 @@ import Foundation
 import Network
 import TalkieKit
 
+private extension NWError {
+    var isAddressAlreadyInUse: Bool {
+        if case .posix(let code) = self {
+            return code == .EADDRINUSE
+        }
+        return false
+    }
+}
+
 /// HTTP server for Bridge API communication
 /// Runs on port 8767, accepts connections from any interface (auth-protected)
 @available(macOS 14.0, *)
@@ -26,20 +35,20 @@ actor BridgeServer {
 
         parameters.requiredLocalEndpoint = NWEndpoint.hostPort(host: "0.0.0.0", port: NWEndpoint.Port(rawValue: port)!)
 
-        let listener = try NWListener(using: parameters)
+        let listener: NWListener
+        do {
+            listener = try NWListener(using: parameters)
+        } catch let error as NWError where error.isAddressAlreadyInUse {
+            log.info("BridgeServer port \(port) already owned by another process; this instance will not bind")
+            isRunning = false
+            return
+        } catch {
+            throw error
+        }
 
         listener.stateUpdateHandler = { [weak self] state in
-            Task { @MainActor in
-                switch state {
-                case .ready:
-                    self?.log.info("BridgeServer listening on port \(self?.port ?? 0)")
-                case .failed(let error):
-                    self?.log.error("BridgeServer failed: \(error)")
-                case .cancelled:
-                    self?.log.info("BridgeServer cancelled")
-                default:
-                    break
-                }
+            Task {
+                await self?.handleListenerState(state)
             }
         }
 
@@ -53,6 +62,28 @@ actor BridgeServer {
         self.listener = listener
         self.isRunning = true
         log.info("BridgeServer started on port \(port)")
+    }
+
+    private func handleListenerState(_ state: NWListener.State) {
+        switch state {
+        case .ready:
+            log.info("BridgeServer listening on port \(port)")
+        case .failed(let error):
+            if error.isAddressAlreadyInUse {
+                log.info("BridgeServer port \(port) already owned by another process; this instance will not bind")
+            } else {
+                log.error("BridgeServer failed: \(error)")
+            }
+            listener?.cancel()
+            listener = nil
+            isRunning = false
+        case .cancelled:
+            log.info("BridgeServer cancelled")
+            listener = nil
+            isRunning = false
+        default:
+            break
+        }
     }
 
     func stop() {

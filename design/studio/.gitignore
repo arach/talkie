@@ -1,0 +1,14 @@
+# next
+/.next/
+/out/
+
+# deps
+/node_modules/
+
+# misc
+.DS_Store
+*.tsbuildinfo
+next-env.d.ts
+
+# logs
+*.log

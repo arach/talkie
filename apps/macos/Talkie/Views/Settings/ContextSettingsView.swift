@@ -77,9 +77,13 @@ struct ContextSettingsView: View {
                     contextContent
                 }
             case .consumer:
-                TalkiePage("ContextRules", title: "Context") {
-                    consumerIntro
-                    contextContent
+                if settingsManager.isScopeTheme {
+                    ScopeContextView(initialTab: selectedTab)
+                } else {
+                    TalkiePage("ContextRules", title: "Context") {
+                        consumerIntro
+                        contextContent
+                    }
                 }
             }
         }

@@ -7,6 +7,7 @@
 
 import Foundation
 import Darwin
+import UserNotifications
 import TalkieKit
 
 private let log = Log(.system)
@@ -212,6 +213,7 @@ final class BridgeManager {
     private var isStartingBridge = false  // Prevents concurrent start attempts
     private var resolvedBridgeHost: String?
     private var lastPairableHealthAt: Date?
+    private var notifiedPendingPairingIDs: Set<String> = []
 
     // MARK: - DEBUG Helpers
 
@@ -941,9 +943,36 @@ final class BridgeManager {
             }
 
             let response = try JSONDecoder().decode(PendingResponse.self, from: data)
+            let previousNotifiedIDs = notifiedPendingPairingIDs
             pendingPairings = response.pending
+            let pendingIDs = Set(response.pending.map(\.deviceId))
+            notifiedPendingPairingIDs.formIntersection(pendingIDs)
+
+            for pairing in response.pending where !previousNotifiedIDs.contains(pairing.deviceId) {
+                notifyPendingPairing(pairing)
+                notifiedPendingPairingIDs.insert(pairing.deviceId)
+            }
         } catch {
             log.error("Failed to refresh pending pairings: \(error)")
+        }
+    }
+
+    private func notifyPendingPairing(_ pairing: PendingPairing) {
+        let content = UNMutableNotificationContent()
+        content.title = "Approve Talkie iPhone?"
+        content.body = "\(pairing.name) wants to refresh its Mac Bridge pairing."
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: "talkie-bridge-pairing-\(pairing.deviceId)",
+            content: content,
+            trigger: nil
+        )
+
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error {
+                log.warning("Failed to show pending pairing notification: \(error.localizedDescription)")
+            }
         }
     }
 

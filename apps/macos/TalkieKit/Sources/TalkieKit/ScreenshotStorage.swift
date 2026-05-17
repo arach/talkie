@@ -19,6 +19,12 @@ public enum ScreenshotStorage {
         return appSupport.appendingPathComponent("Talkie/Screenshots", isDirectory: true)
     }
 
+    public static var companionCapturesDirectory: URL {
+        screenshotsDirectory
+            .appending(path: "devices", directoryHint: .isDirectory)
+            .appending(path: "companion", directoryHint: .isDirectory)
+    }
+
     /// Save screenshot data and return the URL.
     public static func save(
         _ data: Data,
@@ -68,9 +74,10 @@ public enum ScreenshotStorage {
         height: Int? = nil,
         windowTitle: String? = nil,
         appName: String? = nil,
-        displayName: String? = nil
+        displayName: String? = nil,
+        relativeDirectory: String? = nil
     ) -> URL? {
-        let dir = screenshotsDirectory
+        let dir = storageDirectory(relativeDirectory: relativeDirectory)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
         let filename = CaptureFilenameFormatter.screenshotFilename(
@@ -91,6 +98,19 @@ public enum ScreenshotStorage {
         } catch {
             Log(.system).error("Failed to save standalone screenshot: \(error)")
             return nil
+        }
+    }
+
+    private static func storageDirectory(relativeDirectory: String?) -> URL {
+        guard let relativeDirectory else { return screenshotsDirectory }
+
+        let parts = relativeDirectory
+            .split(separator: "/")
+            .map(String.init)
+            .filter { !$0.isEmpty && $0 != "." && $0 != ".." }
+
+        return parts.reduce(screenshotsDirectory) { partialResult, component in
+            partialResult.appending(path: component, directoryHint: .isDirectory)
         }
     }
 
