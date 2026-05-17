@@ -151,7 +151,30 @@ struct HomeScreen: View {
                 onOpenItem: { _ in /* TODO: wire item nav */ }
             )
             .task {
-                if !hasPerformedInitialLoad { loadData() }
+                if !hasPerformedInitialLoad {
+                    DatabaseManager.shared.afterInitialized { [memosVM, dictationStore] in
+                        Task { @MainActor in
+                            await memosVM.loadStats()
+                            await memosVM.loadRecentMemos(limit: Self.startupMemoLoadLimit)
+                            dictationStore.refresh()
+                        }
+                    }
+                    loadData()
+                    hasPerformedInitialLoad = true
+                }
+            }
+            // The Scope path was missing the store-change reactivity the
+            // standard path has — once `loadData()` ran on first appear
+            // the view never re-pulled, so new dictations / memos never
+            // showed up. Mirror the standard path's onChange wiring.
+            .onChange(of: dictationStore.dictations.count) { _, _ in
+                loadData()
+            }
+            .onChange(of: memosVM.totalCount) { _, _ in
+                loadData()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .syncDataAvailable)) { _ in
+                handleSyncDrivenRefresh()
             }
             .onReceive(NotificationCenter.default.publisher(for: .talkieSyncCompleted)) { _ in
                 handleSyncDrivenRefresh()
