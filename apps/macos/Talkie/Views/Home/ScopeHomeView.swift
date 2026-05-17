@@ -65,7 +65,10 @@ struct ScopeHomeView: View {
     @AppStorage("scopeAgentBay.heatmap")   private var bayHeatmap: Bool = false
     @AppStorage("scopeAgentBay.timeline")  private var bayTimeline: Bool = false
     @AppStorage("scopeAgentBay.brackets")  private var bayBrackets: Bool = false
-    @AppStorage("scopeAgentBay.scheme")    private var bayScheme: String = BayScheme.amber.rawValue
+    // Default to CHIFFON — the Scope theme's canonical bay per the
+    // studio decision (2026-05-17). See BayScheme.canonical(for:) and
+    // design/studio/app/mac-home/NOTES.md.
+    @AppStorage("scopeAgentBay.scheme")    private var bayScheme: String = BayScheme.chiffon.rawValue
     private var currentScheme: BayScheme { BayScheme(rawValue: bayScheme) ?? .amber }
 
     private var todayTotal: Int { todayMemos + todayDictations }
@@ -424,7 +427,7 @@ struct ScopeHomeView: View {
                         bayHeatmap = false
                         bayTimeline = false
                         bayBrackets = false
-                        bayScheme = BayScheme.amber.rawValue
+                        bayScheme = BayScheme.chiffon.rawValue
                     } label: {
                         Text("RESET")
                             .font(.system(size: 9, weight: .semibold, design: .monospaced))
@@ -900,44 +903,54 @@ private struct AmbientScanline: View {
 // is fitted.
 
 enum BayScheme: String, CaseIterable {
-    // Ordered darkest → lightest so the picker reads as a continuous
-    // gradient. Dark schemes (amber/graphite/pewter) use a phosphor
-    // accent for stat numbers and a halo glow. Light schemes
-    // (ash/stone/paper) use a graphite ink for numbers and no glow —
-    // printed surfaces don't emit.
-    case amber, graphite, pewter, ash, stone, paper
+    // Aligned with `design/studio/lib/schemes.ts` as of 2026-05-17.
+    // The intermediate gray gradient (graphite/pewter/ash/stone) was
+    // dropped after the studio review — read as "filtered" rather
+    // than designed. New light-mode canonicals from the studio's
+    // light-touch sibling work:
+    //
+    //   Modern theme → PEARL    (cool family, canonical = lightest)
+    //   Scope theme  → CHIFFON  (warm family, canonical = lightest)
+    //
+    // Sibling ladder within each family for fine-tuning bay presence.
+    // AMBER kept as the reference for the original lit-electronics
+    // identity. See design/studio/app/mac-home/NOTES.md for rationale.
+    case amber       // Reference dark (original electronics bay)
+    case pearl       // Modern canonical — cool lightest
+    case porcelain   // Cool mid
+    case aluminum    // Cool saturated
+    case chiffon     // Scope canonical — warm lightest
+    case vellum      // Warm mid
+    case paper       // Warm saturated
 
     var displayName: String {
         switch self {
-        case .amber:    return "AMBER"
-        case .graphite: return "GRAPHITE"
-        case .pewter:   return "PEWTER"
-        case .ash:      return "ASH"
-        case .stone:    return "STONE"
-        case .paper:    return "PAPER"
+        case .amber:     return "AMBER"
+        case .pearl:     return "PEARL"
+        case .porcelain: return "PORCELAIN"
+        case .aluminum:  return "ALUMINUM"
+        case .chiffon:   return "CHIFFON"
+        case .vellum:    return "VELLUM"
+        case .paper:     return "PAPER"
         }
     }
 
     /// True when the surface is light enough to need dark text on it.
     /// Toggles glow off, switches stat numbers to graphite ink, and
-    /// bumps edge contrast.
-    var isLight: Bool {
-        switch self {
-        case .ash, .stone, .paper: return true
-        default:                   return false
-        }
-    }
+    /// bumps edge contrast. All current non-AMBER schemes are light.
+    var isLight: Bool { self != .amber }
 
-    /// Canonical accent. On dark schemes (amber/graphite/pewter) this
-    /// is the phosphor used for stat numbers + dot + sparkline. On
-    /// light schemes this is the edge/sparkline accent — stat numbers
-    /// use `statInk` instead.
+    /// Canonical accent. Dark schemes use it as the phosphor for stat
+    /// numbers + dot + sparkline; light schemes use it as the edge /
+    /// sparkline accent only (stat numbers fall back to `statInk`).
+    /// Cool-family accents pull slightly cooler (#D49236); warm-family
+    /// stays at the canonical copper (#9A6A22). AMBER is the original
+    /// phosphor.
     var trace: Color {
         switch self {
-        case .amber, .graphite, .pewter: return Color.hex("E89A3C")  // phosphor
-        case .ash:    return Color.hex("8C5E1E")   // burnt amber on industrial gray
-        case .stone:  return Color.hex("9A6A22")   // deep copper on warm gray
-        case .paper:  return Color.hex("9A6A22")   // deep copper on cream
+        case .amber:                              return Color.hex("E89A3C")
+        case .pearl, .porcelain, .aluminum:       return Color.hex("D49236")
+        case .chiffon, .vellum, .paper:           return Color.hex("9A6A22")
         }
     }
 
@@ -949,10 +962,25 @@ enum BayScheme: String, CaseIterable {
     var traceFaint: Color { trace.opacity(isLight ? 0.06 : 0.08) }
 
     /// Edge / divider color — same hue as trace, very low alpha.
-    var edge: Color { trace.opacity(isLight ? 0.18 : 0.10) }
+    /// Lighter schemes need slightly more contrast to read.
+    var edge: Color {
+        switch self {
+        case .amber:                 return trace.opacity(0.10)
+        case .pearl, .chiffon:       return trace.opacity(0.10)   // lightest — kept restrained
+        case .porcelain, .vellum:    return trace.opacity(0.12)
+        case .aluminum, .paper:      return trace.opacity(0.18)   // most saturated of the light family
+        }
+    }
 
     /// Edge for crisper marks (corner brackets).
-    var edgeStrong: Color { trace.opacity(isLight ? 0.40 : 0.28) }
+    var edgeStrong: Color {
+        switch self {
+        case .amber:                 return trace.opacity(0.28)
+        case .pearl, .chiffon:       return trace.opacity(0.28)
+        case .porcelain, .vellum:    return trace.opacity(0.34)
+        case .aluminum, .paper:      return trace.opacity(0.40)
+        }
+    }
 
     /// Cell color for the activity heatmap. Intensity-scaled at call site.
     func cell(intensity: Double) -> Color {
@@ -961,75 +989,77 @@ enum BayScheme: String, CaseIterable {
         return trace.opacity(base + span * intensity)
     }
 
-    // MARK: Surface tokens (overrideable per scheme)
+    // MARK: Surface tokens
 
-    /// Bay panel base fill, ordered darkest → lightest. AMBER is the
-    /// canonical gunmetal; intermediate grays bridge to PAPER cream.
+    /// Bay panel base fill. Mirrors `--scheme-bg` from studio.
     var panelBg: Color {
         switch self {
-        case .amber:    return Color.hex("14181A")   // gunmetal (ScopePanel.bg)
-        case .graphite: return Color.hex("3A3D40")   // softened dark
-        case .pewter:   return Color.hex("7A7C7E")   // mid-dark gray
-        case .ash:      return Color.hex("B8B6B3")   // industrial mid
-        case .stone:    return Color.hex("D8D5D0")   // warm light gray
-        case .paper:    return Color.hex("EEE7D6")   // warm cream
+        case .amber:      return Color.hex("14181A")
+        case .pearl:      return Color.hex("F5F8FA")
+        case .porcelain:  return Color.hex("EAEEF1")
+        case .aluminum:   return Color.hex("D6DBE0")
+        case .chiffon:    return Color.hex("FAF5E8")
+        case .vellum:     return Color.hex("F4EFE0")
+        case .paper:      return Color.hex("EEE7D6")
         }
     }
 
-    /// Stat number color. Dark surface → phosphor (trace); light
-    /// surface → deep neutral ink.
+    /// Stat number color. Dark → phosphor; light → deep neutral ink
+    /// tuned to the scheme's warmth.
     var statInk: Color {
         switch self {
-        case .ash:   return Color.hex("2A2A28")
-        case .stone: return Color.hex("2A2622")
-        case .paper: return Color.hex("2A2117")
-        default:     return trace
+        case .amber:                                    return trace
+        case .pearl, .porcelain, .aluminum:             return Color.hex("2A2E32")   // cool charcoal
+        case .chiffon, .vellum, .paper:                 return Color.hex("2A2520")   // warm espresso
         }
     }
 
     /// Chrome label color (status text, captions).
     var inkFaint: Color {
         switch self {
-        case .amber:    return Color.hex("7A8B85")   // ScopePanel.inkFaint
-        case .graphite: return Color.hex("9AA0A4")   // lifted on softer dark
-        case .pewter:   return Color.hex("D8D6D2")   // light chrome on mid-dark
-        case .ash:      return Color.hex("4E4C49")
-        case .stone:    return Color.hex("5A5550")
-        case .paper:    return Color.hex("6E5F46")
+        case .amber:      return Color.hex("7A8B85")
+        case .pearl:      return Color.hex("6E737B")
+        case .porcelain:  return Color.hex("5C6168")
+        case .aluminum:   return Color.hex("5C6168")
+        case .chiffon:    return Color.hex("7B6E60")
+        case .vellum:     return Color.hex("6B5D4F")
+        case .paper:      return Color.hex("6B5D4F")
         }
     }
 
     /// Subtle chrome (timestamps, secondary metadata).
     var inkSubtle: Color {
         switch self {
-        case .amber:    return Color.hex("6B7A75")   // ScopePanel.inkSubtle
-        case .graphite: return Color.hex("868C90")
-        case .pewter:   return Color.hex("BEBDBA")
-        case .ash:      return Color.hex("6E6C68")
-        case .stone:    return Color.hex("7A7570")
-        case .paper:    return Color.hex("8A7C66")
+        case .amber:      return Color.hex("6B7A75")
+        case .pearl:      return Color.hex("8A8F96")
+        case .porcelain:  return Color.hex("787D84")
+        case .aluminum:   return Color.hex("4F545B")
+        case .chiffon:    return Color.hex("928576")
+        case .vellum:     return Color.hex("857664")
+        case .paper:      return Color.hex("5C4F42")
         }
     }
 
-    /// Top control rail — brushed cover. Each scheme's rail is a band
-    /// tuned to its surface; the rail should always read as a
-    /// separately-fabricated piece, slightly lighter at top + darker
-    /// into the body.
+    /// Top control rail — brushed cover. Tuned per scheme; lightest
+    /// at top, darker into the body so the strip reads as a separate
+    /// fabricated piece.
     var stripTopFill: LinearGradient {
         let stops: [(String, Double)] = {
             switch self {
             case .amber:
                 return [("1F2426", 0.0), ("1A1F22", 0.35), ("0F1416", 1.0)]
-            case .graphite:
-                return [("464A4D", 0.0), ("3D4143", 0.45), ("32363A", 1.0)]
-            case .pewter:
-                return [("8C8E90", 0.0), ("808284", 0.45), ("6E7072", 1.0)]
-            case .ash:
-                return [("C6C4C1", 0.0), ("BEBCB9", 0.45), ("B0AEAB", 1.0)]
-            case .stone:
-                return [("E2DFDA", 0.0), ("D6D2CC", 0.45), ("CAC6BF", 1.0)]
+            case .pearl:
+                return [("FBFCFE", 0.0), ("F2F5F7", 0.60), ("E5E9ED", 1.0)]
+            case .porcelain:
+                return [("F2F5F7", 0.0), ("E8ECEF", 0.60), ("DCE0E4", 1.0)]
+            case .aluminum:
+                return [("DFE3E8", 0.0), ("D4D8DD", 0.60), ("C8CDD2", 1.0)]
+            case .chiffon:
+                return [("FDF8EB", 0.0), ("F5F0E2", 0.60), ("ECE7D6", 1.0)]
+            case .vellum:
+                return [("F8F3E5", 0.0), ("F0EBDB", 0.60), ("E8E2D0", 1.0)]
             case .paper:
-                return [("F5EFE2", 0.0), ("EDE6D4", 0.45), ("E5DDCA", 1.0)]
+                return [("F2ECDB", 0.0), ("EAE3D0", 0.60), ("E2DBC6", 1.0)]
             }
         }()
         return LinearGradient(
@@ -1038,21 +1068,22 @@ enum BayScheme: String, CaseIterable {
         )
     }
 
-    /// Bottom rail — recessed feel. Asymmetric with stripTop so the
-    /// two rails read as different physical surfaces.
+    /// Bottom rail — recessed feel. Asymmetric with stripTop.
     var stripBottomFill: LinearGradient {
         let stops: [(String, Double)] = {
             switch self {
             case .amber:
                 return [("0D1113", 0.0), ("161B1E", 0.55), ("1E2528", 1.0)]
-            case .graphite:
-                return [("2E3134", 0.0), ("383C3F", 0.55), ("424649", 1.0)]
-            case .pewter:
-                return [("66686A", 0.0), ("75777A", 0.55), ("84868A", 1.0)]
-            case .ash:
-                return [("A8A6A3", 0.0), ("B2B0AD", 0.55), ("BCBAB7", 1.0)]
-            case .stone:
-                return [("C4C0BA", 0.0), ("CECABF", 0.55), ("D8D4CC", 1.0)]
+            case .pearl:
+                return [("ECEFF2", 0.0), ("F5F8FA", 0.55), ("FBFDFE", 1.0)]
+            case .porcelain:
+                return [("E0E4E8", 0.0), ("EAEEF1", 0.55), ("F0F3F6", 1.0)]
+            case .aluminum:
+                return [("CFD4D9", 0.0), ("D6DBE0", 0.55), ("DDE2E7", 1.0)]
+            case .chiffon:
+                return [("F0ECDE", 0.0), ("F8F3E6", 0.55), ("FDF9EC", 1.0)]
+            case .vellum:
+                return [("ECE6D6", 0.0), ("F4EFE0", 0.55), ("F9F4E6", 1.0)]
             case .paper:
                 return [("E2DAC4", 0.0), ("EBE3CD", 0.55), ("F3ECD8", 1.0)]
             }
@@ -1061,6 +1092,18 @@ enum BayScheme: String, CaseIterable {
             stops: stops.map { .init(color: Color.hex($0.0), location: $0.1) },
             startPoint: .top, endPoint: .bottom
         )
+    }
+
+    // MARK: Theme bindings
+
+    /// Canonical scheme for a given Talkie theme. Used by the bay's
+    /// default state when no user-set value is stored.
+    static func canonical(for theme: ThemePreset?) -> BayScheme {
+        switch theme {
+        case .scope:       return .chiffon
+        // case .modern:   return .pearl     // future — when modern theme lands
+        default:           return .amber
+        }
     }
 }
 
