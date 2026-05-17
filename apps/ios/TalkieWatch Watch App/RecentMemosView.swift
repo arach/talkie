@@ -11,16 +11,15 @@ struct RecentMemosView: View {
     @EnvironmentObject var sessionManager: WatchSessionManager
 
     var body: some View {
+        let chrome = WatchTheme.current
         List {
             if sessionManager.recentMemos.isEmpty {
-                Text("No recent memos")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                WatchEyebrow(text: "No Recent Memos", tint: .ink, showLeader: false)
                     .listRowBackground(Color.clear)
             } else {
                 ForEach(sessionManager.recentMemos) { memo in
                     MemoRow(memo: memo)
-                        .listRowBackground(Color.white.opacity(0.05))
+                        .listRowBackground(chrome.panel.opacity(0.20))
                 }
             }
         }
@@ -82,8 +81,14 @@ struct MemoRow: View {
             case .received:
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(.blue)
+            case .thinking:
+                Image(systemName: "sparkles")
+                    .foregroundColor(.cyan)
             case .transcribed:
                 Image(systemName: "text.bubble.fill")
+                    .foregroundColor(.green)
+            case .answered:
+                Image(systemName: "sparkles.square.filled.on.square")
                     .foregroundColor(.green)
             case .failed:
                 Image(systemName: "exclamationmark.circle")

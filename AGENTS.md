@@ -56,6 +56,24 @@ xcodebuild -scheme Talkie -destination 'platform=macOS' test
 
 ---
 
+## Codex Xcode Build Hygiene
+
+When running `xcodebuild` from Codex, do not place DerivedData under `/tmp` or `/private/tmp` and do not use ad hoc paths such as `/private/tmp/talkie-*`.
+
+Use a per-run DerivedData directory under the user cache area instead:
+
+```bash
+mkdir -p "$HOME/Library/Caches/codex-builds"
+DERIVED_DATA_DIR="$(mktemp -d "$HOME/Library/Caches/codex-builds/deriveddata.XXXXXXXX")"
+xcodebuild ... -derivedDataPath "$DERIVED_DATA_DIR"
+```
+
+Prefer removing that per-run directory before ending the session unless it is intentionally being kept for debugging. If keeping it, mention the path in the final reply.
+
+A weekly `~/bin/tmp-janitor.sh` (launchd: `com.user.tmp-janitor`) cleans up forgotten DerivedData dirs in both `/private/tmp/talkie-*` and `$HOME/Library/Caches/codex-builds/` that are older than 7 days and not open. The janitor uses positive Xcode fingerprinting (info.plist + WorkspacePath match), not name globbing, so it will not touch unrelated tmp artifacts.
+
+---
+
 ## Code Style
 
 ### Swift 6.2 Concurrency

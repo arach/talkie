@@ -2,8 +2,10 @@
 //  SplashView.swift
 //  Talkie iOS
 //
-//  Splash screen shown during app initialization
-//  Uses the same tactical design language as onboarding
+//  Splash screen shown during app initialization.
+//  Theme-aware: adopts the active theme's canvas + chrome (cream/amber for
+//  scope, jet/blue for midnight, gunmetal/orange for tactical, frost/indigo
+//  for ghost) so the handoff into the app feels continuous.
 //
 
 import SwiftUI
@@ -11,68 +13,60 @@ import SwiftUI
 struct SplashView: View {
     private static let isScreenshotMode = ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT")
 
-    // In screenshot mode, show everything immediately (no animation = no XCUITest idle-wait)
     @State private var showContent = isScreenshotMode
     @State private var showTagline = isScreenshotMode
+    @ObservedObject private var theme = ThemeManager.shared
+
+    private var taglineSegments: [String] { ["Record", "Dictate", "Transcribe"] }
 
     var body: some View {
+        let chrome = theme.chrome
+
         ZStack {
-            // Dark tactical background
-            Color(hex: "0A0A0A")
+            theme.colors.background
                 .ignoresSafeArea()
 
-            // Grid pattern overlay - subtle
-            SplashGridPattern()
-                .opacity(0.25)
+            SplashGridPattern(color: chrome.edgeSubtle)
+                .opacity(0.6)
 
-            // Corner brackets
-            SplashCornerBrackets()
+            SplashCornerBrackets(color: chrome.edge)
 
-            // Content
             VStack(spacing: 24) {
                 Spacer()
                 Spacer()
 
-                // ";) Talkie" logo badge
-                SplashLogo()
+                SplashLogo(stroke: chrome.edge)
                     .opacity(showContent ? 1 : 0)
                     .scaleEffect(showContent ? 1 : 0.8)
 
-                // Main headline - VOICE + AI inline
+                // Main headline — VOICE + AI
                 HStack(spacing: 8) {
                     Text("VOICE")
                         .font(.system(size: 36, weight: .black, design: .default))
-                        .foregroundColor(.white)
+                        .foregroundColor(theme.colors.textPrimary)
 
                     Text("+ AI")
                         .font(.system(size: 36, weight: .black, design: .default))
-                        .foregroundColor(.brandAccent)
+                        .foregroundColor(chrome.accent)
+                        .talkieAccentGlow()
                 }
                 .opacity(showContent ? 1 : 0)
                 .offset(y: showContent ? 0 : 20)
 
-                // Tagline
-                HStack(spacing: 8) {
-                    Text("RECORD")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .tracking(1)
-                        .foregroundColor(Color(hex: "9A9A9A"))
-
-                    Text("·")
-                        .foregroundColor(Color(hex: "4A4A4A"))
-
-                    Text("DICTATE")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .tracking(1)
-                        .foregroundColor(Color(hex: "9A9A9A"))
-
-                    Text("·")
-                        .foregroundColor(Color(hex: "4A4A4A"))
-
-                    Text("TRANSCRIBE")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .tracking(1)
-                        .foregroundColor(Color(hex: "9A9A9A"))
+                // Tagline — theme-aware separator + status dot
+                HStack(spacing: 10) {
+                    TalkieStatusDot(diameter: 5, pulses: true)
+                    ForEach(Array(taglineSegments.enumerated()), id: \.offset) { index, segment in
+                        Text(segment.uppercased())
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .tracking(1)
+                            .foregroundColor(theme.colors.textSecondary)
+                        if index < taglineSegments.count - 1 {
+                            Text(chrome.eyebrowLeader)
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundColor(theme.colors.textTertiary)
+                        }
+                    }
                 }
                 .opacity(showTagline ? 1 : 0)
                 .offset(y: showTagline ? 0 : 10)
@@ -84,11 +78,11 @@ struct SplashView: View {
                 VStack(spacing: 4) {
                     Text("usetalkie.com")
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(Color(hex: "5A5A5A"))
+                        .foregroundColor(theme.colors.textTertiary)
 
                     Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")")
                         .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(Color(hex: "3A3A3A"))
+                        .foregroundColor(theme.colors.textTertiary.opacity(0.7))
                 }
                 .opacity(showTagline ? 1 : 0)
                 .padding(.bottom, 60)
@@ -111,56 +105,49 @@ struct SplashView: View {
 // MARK: - Splash Components
 
 private struct SplashGridPattern: View {
+    let color: Color
+
     var body: some View {
         Canvas { context, size in
             let gridSize: CGFloat = 40
-            let lineColor = Color(hex: "1A1A1A")
-
-            // Vertical lines
             for x in stride(from: 0, to: size.width, by: gridSize) {
                 var path = Path()
                 path.move(to: CGPoint(x: x, y: 0))
                 path.addLine(to: CGPoint(x: x, y: size.height))
-                context.stroke(path, with: .color(lineColor), lineWidth: 1)
+                context.stroke(path, with: .color(color), lineWidth: 1)
             }
-
-            // Horizontal lines
             for y in stride(from: 0, to: size.height, by: gridSize) {
                 var path = Path()
                 path.move(to: CGPoint(x: 0, y: y))
                 path.addLine(to: CGPoint(x: size.width, y: y))
-                context.stroke(path, with: .color(lineColor), lineWidth: 1)
+                context.stroke(path, with: .color(color), lineWidth: 1)
             }
         }
     }
 }
 
 private struct SplashCornerBrackets: View {
+    let color: Color
     private let bracketSize: CGFloat = 40
     private let strokeWidth: CGFloat = 1.5
-    private let color = Color(hex: "2A2A2A")
 
     var body: some View {
         GeometryReader { geo in
-            // Top-left
             SplashBracketShape(corner: .topLeft)
                 .stroke(color, lineWidth: strokeWidth)
                 .frame(width: bracketSize, height: bracketSize)
                 .position(x: bracketSize / 2 + 20, y: bracketSize / 2 + 60)
 
-            // Top-right
             SplashBracketShape(corner: .topRight)
                 .stroke(color, lineWidth: strokeWidth)
                 .frame(width: bracketSize, height: bracketSize)
                 .position(x: geo.size.width - bracketSize / 2 - 20, y: bracketSize / 2 + 60)
 
-            // Bottom-left
             SplashBracketShape(corner: .bottomLeft)
                 .stroke(color, lineWidth: strokeWidth)
                 .frame(width: bracketSize, height: bracketSize)
                 .position(x: bracketSize / 2 + 20, y: geo.size.height - bracketSize / 2 - 120)
 
-            // Bottom-right
             SplashBracketShape(corner: .bottomRight)
                 .stroke(color, lineWidth: strokeWidth)
                 .frame(width: bracketSize, height: bracketSize)
@@ -204,6 +191,8 @@ private struct SplashBracketShape: Shape {
 }
 
 private struct SplashLogo: View {
+    let stroke: Color
+
     var body: some View {
         Image("TalkieLogo")
             .resizable()
@@ -212,7 +201,7 @@ private struct SplashLogo: View {
             .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(Color(hex: "2A2A2A"), lineWidth: 1)
+                    .stroke(stroke, lineWidth: 1)
             )
     }
 }

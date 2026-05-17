@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 import TalkieMobileKit
 
 struct SettingsView: View {
@@ -14,6 +15,11 @@ struct SettingsView: View {
     @ObservedObject var logStore = LogStore.shared
     @State private var appSettings = TalkieAppSettings.shared
     @State private var showingAllLogs = false
+    @State private var showingAIQRScanner = false
+    @State private var aiCredentialRefreshID = UUID()
+    @State private var isImportingMacAICredentials = false
+    @State private var macAICredentialImportMessage: String?
+    @State private var macAICredentialImportError: String?
     @State private var showLocationPrivacy = false
     @State private var showSignIn = false
     private var bridgeManager = BridgeManager.shared
@@ -180,13 +186,14 @@ struct SettingsView: View {
                                 SettingsLeadingIcon(systemName: "rectangle.grid.2x2", color: .active)
 
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("Command Deck")
+                                    Text("Auto-Open Command Deck")
                                         .font(.system(size: 14, weight: .regular))
                                         .foregroundColor(.textPrimary)
 
                                     Text(companionSubtitle)
                                         .font(.system(size: 12, weight: .light))
                                         .foregroundColor(.textSecondary)
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
 
                                 Spacer()
@@ -196,6 +203,144 @@ struct SettingsView: View {
                                     .tint(.active)
                             }
                             .padding(Spacing.sm)
+                        }
+
+                        settingsSection("AI & VOICE") {
+                            VStack(spacing: 0) {
+                                NavigationLink(destination: AISettingsDetail(refreshID: $aiCredentialRefreshID)) {
+                                    settingsRow(
+                                        icon: "sparkles",
+                                        iconColor: .cyan,
+                                        title: "AI",
+                                        subtitle: aiCapabilitySummary,
+                                        badge: { SettingsStatusBadge(isReady: aiCredentialProvider != nil) }
+                                    )
+                                }
+                                .id(aiCredentialRefreshID)
+
+                                Divider().background(Color.borderPrimary).padding(.leading, settingsRowDividerInset)
+
+                                NavigationLink(destination: AIVoiceSettingsDetail()) {
+                                    settingsRow(
+                                        icon: "speaker.wave.2.fill",
+                                        iconColor: .orange,
+                                        title: "AI Voice",
+                                        subtitle: aiVoiceCapabilitySummary,
+                                        badge: { SettingsStatusBadge(isReady: isAIVoiceReady) }
+                                    )
+                                }
+
+                                Divider().background(Color.borderPrimary).padding(.leading, settingsRowDividerInset)
+
+                                HStack(spacing: Spacing.sm) {
+                                    SettingsLeadingIcon(systemName: "quote.bubble", color: .active)
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Speak Replies")
+                                            .font(.system(size: 14, weight: .regular))
+                                            .foregroundColor(.textPrimary)
+
+                                        Text(aiVoiceRouteSummary)
+                                            .font(.system(size: 12, weight: .light))
+                                            .foregroundColor(.textSecondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+
+                                    Spacer()
+
+                                    Toggle("", isOn: Binding(
+                                        get: { appSettings.aiVoiceOutputRoute != "silent" },
+                                        set: { appSettings.aiVoiceOutputRoute = $0 ? "phone" : "silent" }
+                                    ))
+                                    .labelsHidden()
+                                    .tint(.active)
+                                }
+                                .padding(Spacing.sm)
+
+                                Divider().background(Color.borderPrimary).padding(.leading, settingsRowDividerInset)
+
+                                NavigationLink(destination: MacAvailabilityCoachView()) {
+                                    settingsRow(
+                                        icon: "macmini",
+                                        iconColor: bridgeManager.isPaired ? .green : .textTertiary,
+                                        title: "Mac mini",
+                                        subtitle: macMiniSummary,
+                                        badge: { BridgeStatusBadge() }
+                                    )
+                                }
+
+                                if bridgeManager.isPaired {
+                                    Divider().background(Color.borderPrimary).padding(.leading, settingsRowDividerInset)
+
+                                    Button {
+                                        importAICredentialsFromPairedMac()
+                                    } label: {
+                                        settingsRow(
+                                            icon: "lock.rectangle.stack",
+                                            iconColor: .cyan,
+                                            title: isImportingMacAICredentials ? "Importing from Mac..." : "Import from Mac",
+                                            subtitle: macAICredentialImportSubtitle,
+                                            badge: {
+                                                if isImportingMacAICredentials {
+                                                    ProgressView()
+                                                        .scaleEffect(0.75)
+                                                        .tint(.cyan)
+                                                } else if macAICredentialImportMessage != nil {
+                                                    Image(systemName: "checkmark.circle.fill")
+                                                        .font(.system(size: 16, weight: .medium))
+                                                        .foregroundColor(.green)
+                                                } else if macAICredentialImportError != nil {
+                                                    Image(systemName: "exclamationmark.triangle.fill")
+                                                        .font(.system(size: 14, weight: .medium))
+                                                        .foregroundColor(.orange)
+                                                } else {
+                                                    Image(systemName: "lock.fill")
+                                                        .font(.system(size: 13, weight: .medium))
+                                                        .foregroundColor(.cyan)
+                                                }
+                                            }
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(isImportingMacAICredentials)
+
+                                    if shouldShowMacAICredentialImportDiagnostics {
+                                        Divider().background(Color.borderPrimary).padding(.leading, settingsRowDividerInset)
+
+                                        macAICredentialImportDiagnosticsCard
+                                    } else {
+                                        Divider().background(Color.borderPrimary).padding(.leading, settingsRowDividerInset)
+
+                                        Button {
+                                            copyMacAICredentialImportDiagnostics()
+                                        } label: {
+                                            settingsRow(
+                                                icon: "stethoscope",
+                                                iconColor: .textSecondary,
+                                                title: "Diagnostics",
+                                                subtitle: "Copy AI and Mac connection status"
+                                            )
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+
+                                if !bridgeManager.isPaired {
+                                    Divider().background(Color.borderPrimary).padding(.leading, settingsRowDividerInset)
+
+                                    Button {
+                                        copyMacAICredentialImportDiagnostics()
+                                    } label: {
+                                        settingsRow(
+                                            icon: "stethoscope",
+                                            iconColor: .textSecondary,
+                                            title: "Diagnostics",
+                                            subtitle: "Copy AI and Mac connection status"
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
                         }
 
                         // MARK: - Recording
@@ -246,120 +391,6 @@ struct SettingsView: View {
                                         .padding(.horizontal, Spacing.sm)
                                         .padding(.bottom, Spacing.sm)
                                         .transition(.opacity.combined(with: .move(edge: .top)))
-                                }
-                            }
-                        }
-
-                        // MARK: - Text-to-Speech
-                        settingsSection("TEXT-TO-SPEECH") {
-                            VStack(spacing: 0) {
-                                // Provider picker
-                                HStack {
-                                    SettingsLeadingIcon(systemName: "speaker.wave.2.fill", color: .orange)
-                                    Text("Provider")
-                                        .font(.system(size: 15))
-                                        .foregroundColor(.textPrimary)
-                                    Spacer()
-                                    Picker("", selection: $appSettings.ttsProvider) {
-                                        Text("Local").tag("local")
-                                        Text("OpenAI").tag("openai")
-                                        Text("ElevenLabs").tag("elevenlabs")
-                                    }
-                                    .pickerStyle(.segmented)
-                                    .frame(width: 220)
-                                }
-                                .padding(.horizontal, Spacing.sm)
-                                .padding(.vertical, 10)
-
-                                if appSettings.ttsProvider == "local" {
-                                    Divider().background(Color.borderPrimary).padding(.leading, settingsRowDividerInset)
-
-                                    HStack {
-                                        SettingsLeadingIcon(systemName: "desktopcomputer", color: .green)
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text("Kokoro TTS")
-                                                .font(.system(size: 15))
-                                                .foregroundColor(.textPrimary)
-                                            Text("Free, runs on your Mac via Bridge")
-                                                .font(.system(size: 12))
-                                                .foregroundColor(.textTertiary)
-                                        }
-                                        Spacer()
-                                    }
-                                    .padding(.horizontal, Spacing.sm)
-                                    .padding(.vertical, 10)
-
-                                    Divider().background(Color.borderPrimary).padding(.leading, settingsRowDividerInset)
-
-                                    // Voice
-                                    HStack {
-                                        SettingsLeadingIcon(systemName: "waveform", color: .purple)
-                                        Text("Voice")
-                                            .font(.system(size: 15))
-                                            .foregroundColor(.textPrimary)
-                                        Spacer()
-                                        TextField("af_heart", text: $appSettings.ttsVoice)
-                                            .font(.system(size: 14))
-                                            .textFieldStyle(.roundedBorder)
-                                            .frame(maxWidth: 140)
-                                    }
-                                    .padding(.horizontal, Spacing.sm)
-                                    .padding(.vertical, 10)
-                                } else {
-                                    Divider().background(Color.borderPrimary).padding(.leading, settingsRowDividerInset)
-
-                                    // Mode picker (bridge vs direct)
-                                    HStack {
-                                        SettingsLeadingIcon(systemName: "cloud.fill", color: .blue)
-                                        Text("Route")
-                                            .font(.system(size: 15))
-                                            .foregroundColor(.textPrimary)
-                                        Spacer()
-                                        Picker("", selection: $appSettings.ttsMode) {
-                                            Text("Via Mac").tag("bridge")
-                                            Text("Direct").tag("direct")
-                                        }
-                                        .pickerStyle(.segmented)
-                                        .frame(width: 160)
-                                    }
-                                    .padding(.horizontal, Spacing.sm)
-                                    .padding(.vertical, 10)
-
-                                    if appSettings.ttsMode == "direct" {
-                                        Divider().background(Color.borderPrimary).padding(.leading, settingsRowDividerInset)
-
-                                        // API Key
-                                        HStack {
-                                            SettingsLeadingIcon(systemName: "key.fill", color: .yellow)
-                                            Text("API Key")
-                                                .font(.system(size: 15))
-                                                .foregroundColor(.textPrimary)
-                                            Spacer()
-                                            SecureField("Paste key", text: $appSettings.ttsApiKey)
-                                                .font(.system(size: 14, design: .monospaced))
-                                                .textFieldStyle(.roundedBorder)
-                                                .frame(maxWidth: 200)
-                                        }
-                                        .padding(.horizontal, Spacing.sm)
-                                        .padding(.vertical, 10)
-                                    }
-
-                                    Divider().background(Color.borderPrimary).padding(.leading, settingsRowDividerInset)
-
-                                    // Voice
-                                    HStack {
-                                        SettingsLeadingIcon(systemName: "waveform", color: .purple)
-                                        Text("Voice")
-                                            .font(.system(size: 15))
-                                            .foregroundColor(.textPrimary)
-                                        Spacer()
-                                        TextField(appSettings.ttsProvider == "openai" ? "echo" : "Voice ID", text: $appSettings.ttsVoice)
-                                            .font(.system(size: 14))
-                                            .textFieldStyle(.roundedBorder)
-                                            .frame(maxWidth: 140)
-                                    }
-                                    .padding(.horizontal, Spacing.sm)
-                                    .padding(.vertical, 10)
                                 }
                             }
                         }
@@ -496,6 +527,11 @@ struct SettingsView: View {
         .sheet(isPresented: $showingAllLogs) {
             LogViewerSheet()
         }
+        .sheet(isPresented: $showingAIQRScanner, onDismiss: {
+            aiCredentialRefreshID = UUID()
+        }) {
+            QRScannerView()
+        }
     }
 
     // MARK: - Settings Helpers
@@ -523,29 +559,337 @@ struct SettingsView: View {
         return "\(savedHosts.count) saved hosts"
     }
 
+    private var aiCredentialProvider: ComposeBorrowedProvider? {
+        _ = aiCredentialRefreshID
+        return ComposeProviderCredentialStore.shared.load(
+            providerId: appSettings.composeDirectProviderId,
+            modelId: appSettings.composeDirectModelId
+        )
+    }
+
+    private var aiCredentialSummary: String {
+        guard let provider = aiCredentialProvider else {
+            return "Not configured"
+        }
+
+        return "\(provider.providerName) • \(provider.modelId)"
+    }
+
+    private var aiCapabilitySummary: String {
+        aiCredentialProvider == nil ? "Needs setup" : "Ready"
+    }
+
+    private var aiVoiceCapabilitySummary: String {
+        let state = isAIVoiceReady ? "Ready" : "Needs setup"
+        return "\(state) • \(aiVoiceRouteLabel)"
+    }
+
+    private var isAIVoiceReady: Bool {
+        TTSService.canSynthesizeConfiguredAudio(settings: appSettings)
+    }
+
+    private var aiVoiceRouteLabel: String {
+        switch appSettings.aiVoiceOutputRoute {
+        case "watch":
+            return "Watch"
+        case "silent":
+            return "Silent"
+        default:
+            return "iPhone"
+        }
+    }
+
+    private var aiVoiceRouteSummary: String {
+        switch appSettings.aiVoiceOutputRoute {
+        case "watch":
+            return "Short AI replies are routed to the paired Watch when available."
+        case "silent":
+            return "AI replies stay visual. Speech generation remains available from memo and capture views."
+        default:
+            return "Short AI replies speak on this iPhone using the speech provider below."
+        }
+    }
+
+    private var speechProviderSummary: String {
+        switch appSettings.ttsProvider {
+        case "openai":
+            return "OpenAI speech can reuse the saved AI provider credential."
+        case "elevenlabs":
+            return "Third-party speech, direct key required for phone playback."
+        default:
+            return "Mac Bridge Kokoro speech, no phone API key required."
+        }
+    }
+
+    private var speechRouteSummary: String {
+        if appSettings.ttsMode == "direct" {
+            if reusableSpeechCredential != nil {
+                return "Direct on iPhone using the saved provider credential."
+            }
+            return "Direct on iPhone with a provider key saved on this device."
+        }
+
+        return "Via paired Mac when Bridge is connected."
+    }
+
+    private var reusableSpeechCredential: ComposeBorrowedProvider? {
+        _ = aiCredentialRefreshID
+        guard appSettings.ttsProvider == "openai" else { return nil }
+        return ComposeProviderCredentialStore.shared.load(providerId: "openai")
+    }
+
+    private var shouldShowSpeechCredentialRow: Bool {
+        appSettings.ttsMode == "direct"
+    }
+
+    private var speechCredentialSummary: String {
+        if let reusableSpeechCredential {
+            return "Using saved \(reusableSpeechCredential.providerName) key for speech and AI."
+        }
+
+        if appSettings.ttsProvider == "elevenlabs" {
+            return "Paste an ElevenLabs API key for direct phone speech."
+        }
+
+        return "Paste an OpenAI key, or import it once from your paired Mac."
+    }
+
+    private var speechVoicePlaceholder: String {
+        switch appSettings.ttsProvider {
+        case "elevenlabs":
+            return "Voice ID"
+        case "local":
+            return "af_heart"
+        default:
+            return "echo"
+        }
+    }
+
+    private var speechVoiceSummary: String {
+        switch appSettings.ttsProvider {
+        case "elevenlabs":
+            return "ElevenLabs voice ID"
+        case "local":
+            return "Kokoro voice on the Mac"
+        default:
+            return "OpenAI voice name"
+        }
+    }
+
+    private var macAICredentialImportSubtitle: String {
+        if let message = macAICredentialImportMessage {
+            return message
+        }
+
+        if let error = macAICredentialImportError {
+            return error
+        }
+
+        if isImportingMacAICredentials {
+            return "Decrypting and validating the paired Mac provider key"
+        }
+
+        if bridgeManager.status == .connected {
+            return "Copy the Mac provider key over the encrypted bridge"
+        }
+
+        return "Reconnects to your Mac, then copies the encrypted provider key"
+    }
+
+    private var shouldShowMacAICredentialImportDiagnostics: Bool {
+        isImportingMacAICredentials ||
+        macAICredentialImportMessage != nil ||
+        macAICredentialImportError != nil ||
+        !bridgeManager.credentialImportEvents.isEmpty ||
+        bridgeManager.awaitingPairingApproval
+    }
+
+    private var macAICredentialImportDiagnosticsCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: macAICredentialImportError == nil ? "lock.shield" : "exclamationmark.triangle")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(macAICredentialImportError == nil ? Color.cyan : Color.orange)
+
+                Text("Credential Import")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.textPrimary)
+
+                Spacer(minLength: 0)
+
+                Button {
+                    copyMacAICredentialImportDiagnostics()
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Copy credential import diagnostics")
+            }
+
+            VStack(alignment: .leading, spacing: 7) {
+                credentialDiagnosticLine(
+                    icon: bridgeManager.status.icon,
+                    color: bridgeManager.status.color,
+                    text: "Bridge: \(bridgeManager.status.rawValue)"
+                )
+
+                if bridgeManager.awaitingPairingApproval {
+                    credentialDiagnosticLine(
+                        icon: "person.crop.circle.badge.checkmark",
+                        color: .orange,
+                        text: "Approval needed on Mac"
+                    )
+                }
+
+                if let error = bridgeManager.errorMessage, !error.isEmpty {
+                    credentialDiagnosticLine(
+                        icon: "exclamationmark.circle",
+                        color: .orange,
+                        text: error
+                    )
+                }
+
+                ForEach(bridgeManager.credentialImportEvents) { event in
+                    credentialDiagnosticLine(
+                        icon: credentialImportEventIcon(for: event.level),
+                        color: credentialImportEventColor(for: event.level),
+                        text: event.message
+                    )
+                }
+            }
+        }
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, 12)
+    }
+
+    private func credentialDiagnosticLine(icon: String, color: Color, text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(color)
+                .frame(width: 16)
+
+            Text(text)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Color.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func credentialImportEventIcon(
+        for level: BridgeManager.CredentialImportEvent.Level
+    ) -> String {
+        switch level {
+        case .info:
+            return "circle"
+        case .warning:
+            return "exclamationmark.circle"
+        case .success:
+            return "checkmark.circle.fill"
+        }
+    }
+
+    private func credentialImportEventColor(
+        for level: BridgeManager.CredentialImportEvent.Level
+    ) -> Color {
+        switch level {
+        case .info:
+            return .textTertiary
+        case .warning:
+            return .orange
+        case .success:
+            return .green
+        }
+    }
+
     private var companionSubtitle: String {
         if bridgeManager.isPaired {
             let macName = bridgeManager.pairedMacName ?? bridgeManager.pairedHostname ?? "your Mac"
-            return "Let \(macName) switch this device into the command deck while connected"
+            return "Let \(macName) switch this phone into Command Deck automatically. The manual deck button still works."
         }
 
-        return "Pair with a Mac first, then let it request the command deck while connected"
+        return "Pair with a Mac first to allow automatic Command Deck handoff. The manual deck button still works."
+    }
+
+    private var macMiniSummary: String {
+        guard bridgeManager.isPaired else {
+            return "Pair a Mac to import keys and run local AI Voice"
+        }
+
+        let name = bridgeManager.pairedMacDisplayName ?? "Paired Mac"
+        if bridgeManager.status == .connected {
+            return "\(name) connected"
+        }
+
+        return "\(name) paired • \(bridgeManager.status.rawValue)"
+    }
+
+    private func importAICredentialsFromPairedMac() {
+        guard !isImportingMacAICredentials else { return }
+
+        isImportingMacAICredentials = true
+        macAICredentialImportMessage = nil
+        macAICredentialImportError = nil
+
+        Task { @MainActor in
+            do {
+                let result = try await bridgeManager.importAIProviderCredentialsFromMac()
+                appSettings.composeDirectProviderId = result.providerId
+                appSettings.composeDirectModelId = result.modelId
+                aiCredentialRefreshID = UUID()
+                macAICredentialImportMessage = "Saved \(result.providerName) • \(result.modelId)"
+            } catch BridgeError.httpError(401) {
+                macAICredentialImportError = "The Mac rejected this iPhone's bridge signature. Approve the pending pairing on your Mac, then try again."
+            } catch {
+                macAICredentialImportError = error.localizedDescription
+            }
+
+            isImportingMacAICredentials = false
+        }
+    }
+
+    private func copyMacAICredentialImportDiagnostics() {
+        let portDescription = bridgeManager.pairedPort.map(String.init) ?? "-"
+        var lines: [String] = [
+            "AI credential import diagnostics",
+            "Bridge status: \(bridgeManager.status.rawValue)",
+            "Awaiting approval: \(bridgeManager.awaitingPairingApproval ? "yes" : "no")",
+            "Paired Mac: \(bridgeManager.pairedMacDisplayName ?? "unknown")",
+            "Host: \(bridgeManager.pairedHostname ?? "unknown"):\(portDescription)",
+        ]
+
+        if let error = bridgeManager.errorMessage, !error.isEmpty {
+            lines.append("Bridge error: \(error)")
+        }
+
+        if let message = macAICredentialImportMessage {
+            lines.append("Result: \(message)")
+        }
+
+        if let error = macAICredentialImportError {
+            lines.append("Import error: \(error)")
+        }
+
+        lines.append(contentsOf: bridgeManager.credentialImportEvents.map { event in
+            "[\(event.level)] \(event.message)"
+        })
+
+        UIPasteboard.general.string = lines.joined(separator: "\n")
     }
 
     private func settingsSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text(title)
-                .font(.system(size: 10, weight: .regular))
-                .tracking(1.5)
-                .foregroundColor(.textTertiary.opacity(0.6))
+            TalkieEyebrow(text: title)
                 .padding(.horizontal, Spacing.md)
 
             content()
-                .background(Color.surfaceSecondary)
+                .background(themeManager.colors.cardBackground)
                 .cornerRadius(CornerRadius.sm)
                 .overlay(
                     RoundedRectangle(cornerRadius: CornerRadius.sm)
-                        .stroke(Color.textTertiary.opacity(0.12), lineWidth: 0.5)
+                        .stroke(themeManager.chrome.edgeFaint, lineWidth: 0.5)
                 )
                 .padding(.horizontal, Spacing.md)
         }
@@ -553,6 +897,7 @@ struct SettingsView: View {
     }
 
     private static let quickNavItems: [(icon: String, label: String, section: String)] = [
+        ("sparkles",             "AI",         "AI & VOICE"),
         ("ipad.and.iphone",      "Companion",  "COMPANION"),
         ("keyboard",             "Dictation",  "KEYBOARD & DICTATION"),
         ("waveform",             "Recording",  "RECORDING"),
@@ -636,6 +981,546 @@ private struct SettingsLeadingIcon: View {
             .font(.system(size: fontSize, weight: weight))
             .foregroundColor(color)
             .frame(width: 28, height: 28)
+    }
+}
+
+private struct SettingsStatusBadge: View {
+    let isReady: Bool
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(isReady ? Color.success : Color.orange)
+                .frame(width: 6, height: 6)
+            Text(isReady ? "Ready" : "Needs setup")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.textSecondary)
+        }
+    }
+}
+
+// MARK: - AI Settings Detail
+
+private struct AISettingsDetail: View {
+    @State private var appSettings = TalkieAppSettings.shared
+    @Binding var refreshID: UUID
+    @State private var showingAIQRScanner = false
+    @State private var isTestingAI = false
+    @State private var testMessage: String?
+
+    private var provider: ComposeBorrowedProvider? {
+        _ = refreshID
+        return ComposeProviderCredentialStore.shared.load(
+            providerId: appSettings.composeDirectProviderId,
+            modelId: appSettings.composeDirectModelId
+        )
+    }
+
+    var body: some View {
+        @Bindable var appSettings = appSettings
+
+        ZStack {
+            Color.surfacePrimary
+                .ignoresSafeArea()
+
+            ScrollView {
+                VStack(spacing: Spacing.lg) {
+                    SettingsDetailSection("AI Provider") {
+                        detailRow(
+                            icon: "sparkles",
+                            iconColor: .cyan,
+                            title: "Provider",
+                            subtitle: provider?.providerName ?? "Needs setup"
+                        )
+
+                        Divider().background(Color.borderPrimary)
+
+                        detailRow(
+                            icon: "cpu",
+                            iconColor: .active,
+                            title: "Model",
+                            subtitle: provider?.modelId ?? appSettings.composeDirectModelId
+                        )
+
+                        Divider().background(Color.borderPrimary)
+
+                        detailRow(
+                            icon: "iphone",
+                            iconColor: .green,
+                            title: "Runs on",
+                            subtitle: provider == nil ? "Set up credentials to run AI on this iPhone" : "This iPhone"
+                        )
+
+                        Divider().background(Color.borderPrimary)
+
+                        detailRow(
+                            icon: provider == nil ? "key.fill" : "checkmark.seal.fill",
+                            iconColor: provider == nil ? .yellow : .green,
+                            title: "Credentials",
+                            subtitle: provider == nil ? "Import from Mac or scan setup QR" : "Saved on this iPhone"
+                        )
+                    }
+
+                    SettingsDetailSection("Setup") {
+                        Button {
+                            showingAIQRScanner = true
+                        } label: {
+                            detailRow(
+                                icon: "qrcode.viewfinder",
+                                iconColor: .active,
+                                title: "Scan Setup QR",
+                                subtitle: "Run npx @talkie/ai qr on your Mac"
+                            )
+                        }
+                        .buttonStyle(.plain)
+
+                        if provider != nil {
+                            Divider().background(Color.borderPrimary)
+
+                            Button(role: .destructive) {
+                                ComposeProviderCredentialStore.shared.deleteAll()
+                                appSettings.composeDirectProviderId = "openai"
+                                appSettings.composeDirectModelId = ""
+                                refreshID = UUID()
+                                testMessage = nil
+                            } label: {
+                                detailRow(
+                                    icon: "trash",
+                                    iconColor: .red,
+                                    title: "Clear Credentials",
+                                    subtitle: "Remove phone-stored provider keys"
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    SettingsDetailSection("Test") {
+                        Button {
+                            testAI()
+                        } label: {
+                            HStack(spacing: 12) {
+                                SettingsLeadingIcon(systemName: "checkmark.circle", color: .cyan)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(isTestingAI ? "Testing AI..." : "Test AI")
+                                        .font(.system(size: 14, weight: .regular))
+                                        .foregroundColor(.textPrimary)
+
+                                    Text(testMessage ?? "Send a short check with the saved provider")
+                                        .font(.system(size: 11, weight: .light))
+                                        .foregroundColor(.textSecondary)
+                                }
+
+                                Spacer()
+
+                                if isTestingAI {
+                                    ProgressView()
+                                        .scaleEffect(0.75)
+                                        .tint(.cyan)
+                                }
+                            }
+                            .padding(.horizontal, Spacing.sm)
+                            .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(provider == nil || isTestingAI)
+                    }
+
+                    Spacer(minLength: 40)
+                }
+                .padding(.top, Spacing.md)
+            }
+        }
+        .navigationTitle("AI")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showingAIQRScanner, onDismiss: {
+            refreshID = UUID()
+        }) {
+            QRScannerView()
+        }
+    }
+
+    private func testAI() {
+        guard let provider, !isTestingAI else { return }
+
+        isTestingAI = true
+        testMessage = nil
+
+        Task { @MainActor in
+            do {
+                _ = try await CaptureAICommandService.shared.run(
+                    context: "Talkie settings connection test.",
+                    instruction: "Reply with exactly: Ready.",
+                    title: "Settings AI Test",
+                    sourceDescription: "Settings",
+                    provider: provider
+                )
+                testMessage = "Ready"
+            } catch {
+                testMessage = error.localizedDescription
+            }
+
+            isTestingAI = false
+        }
+    }
+
+    private func detailRow(icon: String, iconColor: Color, title: String, subtitle: String) -> some View {
+        HStack(spacing: 12) {
+            SettingsLeadingIcon(systemName: icon, color: iconColor)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundColor(title == "Clear Credentials" ? .red : .textPrimary)
+
+                Text(subtitle)
+                    .font(.system(size: 11, weight: .light))
+                    .foregroundColor(.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, 10)
+    }
+}
+
+// MARK: - AI Voice Settings Detail
+
+private struct AIVoiceSettingsDetail: View {
+    @State private var appSettings = TalkieAppSettings.shared
+    @State private var isTestingVoice = false
+    @State private var testMessage: String?
+
+    private var reusableSpeechCredential: ComposeBorrowedProvider? {
+        guard appSettings.ttsProvider == "openai" else { return nil }
+        return TalkieAIProviderResolver.shared.provider(providerId: "openai")
+    }
+
+    var body: some View {
+        @Bindable var appSettings = appSettings
+
+        ZStack {
+            Color.surfacePrimary
+                .ignoresSafeArea()
+
+            ScrollView {
+                VStack(spacing: Spacing.lg) {
+                    SettingsDetailSection("AI Voice") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            detailHeader(icon: "waveform", color: .purple, title: "Provider")
+
+                            Text(aiVoiceProviderSummary)
+                                .font(.system(size: 12, weight: .light))
+                                .foregroundColor(.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.leading, 40)
+
+                            Picker("", selection: $appSettings.ttsProvider) {
+                                Text("Mac").tag("local")
+                                Text("OpenAI").tag("openai")
+                                Text("ElevenLabs").tag("elevenlabs")
+                            }
+                            .pickerStyle(.segmented)
+                            .padding(.leading, 40)
+                        }
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, 10)
+
+                        Divider().background(Color.borderPrimary)
+
+                        HStack {
+                            SettingsLeadingIcon(systemName: "person.wave.2", color: .purple)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Voice")
+                                    .font(.system(size: 14, weight: .regular))
+                                    .foregroundColor(.textPrimary)
+
+                                Text(aiVoiceNameSummary)
+                                    .font(.system(size: 12, weight: .light))
+                                    .foregroundColor(.textSecondary)
+                            }
+
+                            Spacer()
+
+                            TextField(aiVoicePlaceholder, text: $appSettings.ttsVoice)
+                                .font(.system(size: 14))
+                                .textFieldStyle(.roundedBorder)
+                                .frame(maxWidth: 140)
+                        }
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, 10)
+
+                        Divider().background(Color.borderPrimary)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            detailHeader(icon: "arrow.triangle.2.circlepath", color: .blue, title: "Runs on")
+
+                            Text(aiVoiceRunsOnSummary)
+                                .font(.system(size: 12, weight: .light))
+                                .foregroundColor(.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.leading, 40)
+
+                            if appSettings.ttsProvider != "local" {
+                                Picker("", selection: $appSettings.ttsMode) {
+                                    Text("Via Mac").tag("bridge")
+                                    Text("Direct").tag("direct")
+                                }
+                                .pickerStyle(.segmented)
+                                .padding(.leading, 40)
+                            }
+                        }
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, 10)
+
+                        if shouldShowCredentialRow {
+                            Divider().background(Color.borderPrimary)
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                detailHeader(
+                                    icon: reusableSpeechCredential == nil ? "key.fill" : "checkmark.seal.fill",
+                                    color: reusableSpeechCredential == nil ? .yellow : .green,
+                                    title: "Credentials"
+                                )
+
+                                Text(aiVoiceCredentialSummary)
+                                    .font(.system(size: 12, weight: .light))
+                                    .foregroundColor(.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .padding(.leading, 40)
+
+                                if reusableSpeechCredential == nil {
+                                    SecureField("Paste key", text: $appSettings.ttsApiKey)
+                                        .font(.system(size: 14, design: .monospaced))
+                                        .textFieldStyle(.roundedBorder)
+                                        .padding(.leading, 40)
+                                }
+                            }
+                            .padding(.horizontal, Spacing.sm)
+                            .padding(.vertical, 10)
+                        }
+                    }
+
+                    SettingsDetailSection("Replies") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: Spacing.sm) {
+                                SettingsLeadingIcon(systemName: "quote.bubble", color: .active)
+
+                                Text("Speak Replies")
+                                    .font(.system(size: 14, weight: .regular))
+                                    .foregroundColor(.textPrimary)
+
+                                Spacer()
+
+                                Toggle("", isOn: Binding(
+                                    get: { appSettings.aiVoiceOutputRoute != "silent" },
+                                    set: { appSettings.aiVoiceOutputRoute = $0 ? "phone" : "silent" }
+                                ))
+                                .labelsHidden()
+                                .tint(.active)
+                            }
+
+                            Picker("", selection: $appSettings.aiVoiceOutputRoute) {
+                                Text("iPhone").tag("phone")
+                                Text("Watch").tag("watch")
+                                Text("Silent").tag("silent")
+                            }
+                            .pickerStyle(.segmented)
+                            .padding(.leading, 40)
+
+                            Text(aiVoiceRouteSummary)
+                                .font(.system(size: 12, weight: .light))
+                                .foregroundColor(.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.leading, 40)
+                        }
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, 10)
+                    }
+
+                    SettingsDetailSection("Test") {
+                        Button {
+                            testVoice()
+                        } label: {
+                            HStack(spacing: 12) {
+                                SettingsLeadingIcon(systemName: "play.circle", color: .orange)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(isTestingVoice ? "Testing AI Voice..." : "Test AI Voice")
+                                        .font(.system(size: 14, weight: .regular))
+                                        .foregroundColor(.textPrimary)
+
+                                    Text(testMessage ?? "Generate a short spoken reply")
+                                        .font(.system(size: 11, weight: .light))
+                                        .foregroundColor(.textSecondary)
+                                }
+
+                                Spacer()
+
+                                if isTestingVoice {
+                                    ProgressView()
+                                        .scaleEffect(0.75)
+                                        .tint(.orange)
+                                }
+                            }
+                            .padding(.horizontal, Spacing.sm)
+                            .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!TTSService.canSynthesizeConfiguredAudio(settings: appSettings) || isTestingVoice)
+                    }
+
+                    Spacer(minLength: 40)
+                }
+                .padding(.top, Spacing.md)
+            }
+        }
+        .navigationTitle("AI Voice")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var aiVoiceProviderSummary: String {
+        switch appSettings.ttsProvider {
+        case "openai":
+            return "OpenAI speech can reuse the saved AI credential."
+        case "elevenlabs":
+            return "Third-party speech, direct key required for phone playback."
+        default:
+            return "Mac Bridge Kokoro speech, no phone API key required."
+        }
+    }
+
+    private var aiVoiceRunsOnSummary: String {
+        if appSettings.ttsProvider == "local" {
+            return "Paired Mac through Bridge."
+        }
+
+        if appSettings.ttsMode == "direct" {
+            if reusableSpeechCredential != nil {
+                return "This iPhone using the saved AI credential."
+            }
+            return "This iPhone with a provider key saved here."
+        }
+
+        return "Paired Mac when Bridge is connected."
+    }
+
+    private var shouldShowCredentialRow: Bool {
+        appSettings.ttsMode == "direct"
+    }
+
+    private var aiVoiceCredentialSummary: String {
+        if let reusableSpeechCredential {
+            return "Use AI key: saved \(reusableSpeechCredential.providerName) credential."
+        }
+
+        if appSettings.ttsProvider == "elevenlabs" {
+            return "Paste an ElevenLabs API key for direct AI Voice playback."
+        }
+
+        return "Paste an OpenAI key, or import it once from your paired Mac."
+    }
+
+    private var aiVoicePlaceholder: String {
+        switch appSettings.ttsProvider {
+        case "elevenlabs":
+            return "Voice ID"
+        case "local":
+            return "af_heart"
+        default:
+            return "echo"
+        }
+    }
+
+    private var aiVoiceNameSummary: String {
+        switch appSettings.ttsProvider {
+        case "elevenlabs":
+            return "ElevenLabs voice ID"
+        case "local":
+            return "Kokoro voice on the Mac"
+        default:
+            return "OpenAI voice name"
+        }
+    }
+
+    private var aiVoiceRouteSummary: String {
+        switch appSettings.aiVoiceOutputRoute {
+        case "watch":
+            return "Short AI replies are routed to the paired Watch when available."
+        case "silent":
+            return "AI replies stay visual."
+        default:
+            return "Short AI replies speak on this iPhone."
+        }
+    }
+
+    private func testVoice() {
+        guard !isTestingVoice else { return }
+
+        isTestingVoice = true
+        testMessage = nil
+
+        Task { @MainActor in
+            do {
+                let audioData = try await TTSService.synthesizeConfigured(
+                    text: "AI Voice is ready.",
+                    settings: appSettings
+                )
+                await WalkieFX.shared.playVoiceAudio(
+                    data: audioData,
+                    playbackRate: Float(appSettings.ttsPlaybackRate)
+                )
+                testMessage = "Ready"
+            } catch {
+                testMessage = error.localizedDescription
+            }
+
+            isTestingVoice = false
+        }
+    }
+
+    private func detailHeader(icon: String, color: Color, title: String) -> some View {
+        HStack(spacing: Spacing.sm) {
+            SettingsLeadingIcon(systemName: icon, color: color)
+
+            Text(title)
+                .font(.system(size: 14, weight: .regular))
+                .foregroundColor(.textPrimary)
+
+            Spacer()
+        }
+    }
+}
+
+private struct SettingsDetailSection<Content: View>: View {
+    let title: String
+    let content: Content
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            TalkieEyebrow(text: title)
+                .padding(.horizontal, Spacing.md)
+
+            content
+                .background(theme.colors.cardBackground)
+                .cornerRadius(CornerRadius.sm)
+                .overlay(
+                    RoundedRectangle(cornerRadius: CornerRadius.sm)
+                        .stroke(theme.chrome.edgeFaint, lineWidth: 0.5)
+                )
+                .padding(.horizontal, Spacing.md)
+        }
     }
 }
 
@@ -766,10 +1651,7 @@ struct AppearanceSettingsDetail: View {
                 VStack(spacing: Spacing.lg) {
                     // Appearance mode
                     VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Text("MODE")
-                            .font(.system(size: 10, weight: .regular))
-                            .tracking(1.5)
-                            .foregroundColor(.textTertiary.opacity(0.6))
+                        TalkieEyebrow(text: "Mode")
 
                         HStack(spacing: Spacing.sm) {
                             ForEach(AppearanceMode.allCases, id: \.self) { mode in
@@ -785,10 +1667,7 @@ struct AppearanceSettingsDetail: View {
 
                     // Theme list
                     VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Text("THEME")
-                            .font(.system(size: 10, weight: .regular))
-                            .tracking(1.5)
-                            .foregroundColor(.textTertiary.opacity(0.6))
+                        TalkieEyebrow(text: "Theme")
                             .padding(.horizontal, Spacing.md)
 
                         VStack(spacing: 0) {
@@ -803,21 +1682,18 @@ struct AppearanceSettingsDetail: View {
                                 )
                             }
                         }
-                        .background(Color.surfaceSecondary)
+                        .background(themeManager.colors.cardBackground)
                         .cornerRadius(CornerRadius.sm)
                         .overlay(
                             RoundedRectangle(cornerRadius: CornerRadius.sm)
-                                .stroke(Color.textTertiary.opacity(0.12), lineWidth: 0.5)
+                                .stroke(themeManager.chrome.edgeFaint, lineWidth: 0.5)
                         )
                         .padding(.horizontal, Spacing.md)
                     }
 
                     // Theme preview
                     VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Text("PREVIEW")
-                            .font(.system(size: 10, weight: .regular))
-                            .tracking(1.5)
-                            .foregroundColor(.textTertiary.opacity(0.6))
+                        TalkieEyebrow(text: "Preview", tint: .ink, showLeader: false)
                             .padding(.horizontal, Spacing.md)
 
                         ThemePreview(theme: themeManager.currentTheme)
@@ -840,6 +1716,7 @@ struct DictationEngineSettingsDetail: View {
     @StateObject private var parakeetManager = ParakeetModelManager.shared
     @State private var appSettings = TalkieAppSettings.shared
     @State private var selectedModel: ParakeetModel = TalkieAppSettings.shared.preferredParakeetModel
+    @ObservedObject private var theme = ThemeManager.shared
 
     private var keyboardEngine: TranscriptionEnginePreference {
         get { appSettings.transcriptionKeyboardEngine }
@@ -860,10 +1737,7 @@ struct DictationEngineSettingsDetail: View {
                 VStack(spacing: Spacing.lg) {
                     // Engine choice
                     VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Text("ENGINE")
-                            .font(.system(size: 10, weight: .regular))
-                            .tracking(1.5)
-                            .foregroundColor(.textTertiary.opacity(0.6))
+                        TalkieEyebrow(text: "Engine")
                             .padding(.horizontal, Spacing.md)
 
                         VStack(spacing: 0) {
@@ -921,21 +1795,18 @@ struct DictationEngineSettingsDetail: View {
                             }
                             .padding(Spacing.sm)
                         }
-                        .background(Color.surfaceSecondary)
+                        .background(theme.colors.cardBackground)
                         .cornerRadius(CornerRadius.sm)
                         .overlay(
                             RoundedRectangle(cornerRadius: CornerRadius.sm)
-                                .stroke(Color.textTertiary.opacity(0.12), lineWidth: 0.5)
+                                .stroke(theme.chrome.edgeFaint, lineWidth: 0.5)
                         )
                         .padding(.horizontal, Spacing.md)
                     }
 
                     // Model
                     VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Text("MODEL")
-                            .font(.system(size: 10, weight: .regular))
-                            .tracking(1.5)
-                            .foregroundColor(.textTertiary.opacity(0.6))
+                        TalkieEyebrow(text: "Model")
                             .padding(.horizontal, Spacing.md)
 
                         VStack(spacing: 0) {
@@ -1001,11 +1872,11 @@ struct DictationEngineSettingsDetail: View {
                             }
                             .padding(Spacing.sm)
                         }
-                        .background(Color.surfaceSecondary)
+                        .background(theme.colors.cardBackground)
                         .cornerRadius(CornerRadius.sm)
                         .overlay(
                             RoundedRectangle(cornerRadius: CornerRadius.sm)
-                                .stroke(Color.textTertiary.opacity(0.12), lineWidth: 0.5)
+                                .stroke(theme.chrome.edgeFaint, lineWidth: 0.5)
                         )
                         .padding(.horizontal, Spacing.md)
                     }
@@ -1065,7 +1936,7 @@ struct DictationEngineSettingsDetail: View {
             } label: {
                 Text("Download")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(theme.chrome.panelInk)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(Color.active)
@@ -1104,7 +1975,7 @@ struct DictationEngineSettingsDetail: View {
                             .cornerRadius(6)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color.textTertiary.opacity(0.2), lineWidth: 0.5)
+                                    .stroke(theme.chrome.edgeFaint, lineWidth: 0.5)
                             )
                     }
                 } else {
@@ -1117,7 +1988,7 @@ struct DictationEngineSettingsDetail: View {
             } label: {
                 Text("Retry")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(theme.chrome.panelInk)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(Color.active)
@@ -1213,10 +2084,7 @@ struct LogViewerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("LOGS")
-                        .font(.techLabel)
-                        .tracking(2)
-                        .foregroundColor(.textPrimary)
+                    TalkieEyebrow(text: "Logs", tint: .ink, showLeader: false)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") { dismiss() }
@@ -1233,11 +2101,13 @@ struct FilterButton: View {
     let isSelected: Bool
     let action: () -> Void
 
+    @ObservedObject private var theme = ThemeManager.shared
+
     var body: some View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 11, weight: isSelected ? .bold : .medium))
-                .foregroundColor(isSelected ? .white : .textSecondary)
+                .foregroundColor(isSelected ? theme.chrome.panelInk : .textSecondary)
                 .padding(.horizontal, Spacing.sm)
                 .padding(.vertical, 4)
                 .background(isSelected ? Color.active : Color.surfaceSecondary)
@@ -1426,6 +2296,7 @@ struct ThemePreview: View {
 struct SyncSection: View {
     @State private var appSettings = TalkieAppSettings.shared
     @ObservedObject var cloudStatusManager = iCloudStatusManager.shared
+    @ObservedObject private var theme = ThemeManager.shared
     @State private var showingEnableConfirmation = false
     @State private var localMemoCount: Int = 0
 
@@ -1441,10 +2312,7 @@ struct SyncSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("SYNC")
-                .font(.techLabel)
-                .tracking(2)
-                .foregroundColor(.textTertiary)
+            TalkieEyebrow(text: "Sync")
                 .padding(.horizontal, Spacing.md)
 
             VStack(spacing: 0) {
@@ -1500,11 +2368,11 @@ struct SyncSection: View {
                 }
 
             }
-            .background(Color.surfaceSecondary)
+            .background(theme.colors.cardBackground)
             .cornerRadius(CornerRadius.sm)
             .overlay(
                 RoundedRectangle(cornerRadius: CornerRadius.sm)
-                    .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
+                    .strokeBorder(theme.chrome.edgeFaint, lineWidth: 0.5)
             )
             .padding(.horizontal, Spacing.md)
         }
@@ -1589,6 +2457,7 @@ struct SyncSection: View {
 
 struct ConnectionsSection: View {
     @ObservedObject var cloudStatusManager = iCloudStatusManager.shared
+    @ObservedObject private var theme = ThemeManager.shared
     @State private var appSettings = TalkieAppSettings.shared
     private var bridgeManager = BridgeManager.shared
 
@@ -1616,10 +2485,7 @@ struct ConnectionsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("CONNECTIONS")
-                .font(.techLabel)
-                .tracking(2)
-                .foregroundColor(.textTertiary)
+            TalkieEyebrow(text: "Connections")
                 .padding(.horizontal, Spacing.md)
 
             NavigationLink(destination: ConnectionCenterView()) {
@@ -1644,11 +2510,11 @@ struct ConnectionsSection: View {
                         .foregroundColor(.textTertiary)
                 }
                 .padding(Spacing.sm)
-                .background(Color.surfaceSecondary)
+                .background(theme.colors.cardBackground)
                 .cornerRadius(CornerRadius.sm)
                 .overlay(
                     RoundedRectangle(cornerRadius: CornerRadius.sm)
-                        .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
+                        .strokeBorder(theme.chrome.edgeFaint, lineWidth: 0.5)
                 )
             }
             .padding(.horizontal, Spacing.md)
@@ -1745,16 +2611,14 @@ struct MacAvailabilityBadge: View {
 
 struct TranscriptionEngineSection: View {
     @StateObject private var parakeetManager = ParakeetModelManager.shared
+    @ObservedObject private var theme = ThemeManager.shared
     @State private var keyboardEngine: TranscriptionEnginePreference = TranscriptionService.shared.keyboardEnginePreference
     @State private var memoEngine: TranscriptionEnginePreference = TranscriptionService.shared.memoEnginePreference
     @State private var selectedModel: ParakeetModel = ParakeetModelManager.shared.preferredModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("TRANSCRIPTION")
-                .font(.techLabel)
-                .tracking(2)
-                .foregroundColor(.textTertiary)
+            TalkieEyebrow(text: "Transcription")
                 .padding(.horizontal, Spacing.md)
 
             VStack(spacing: 0) {
@@ -1776,11 +2640,11 @@ struct TranscriptionEngineSection: View {
                 // Parakeet model status
                 parakeetStatusRow
             }
-            .background(Color.surfaceSecondary)
+            .background(theme.colors.cardBackground)
             .cornerRadius(CornerRadius.sm)
             .overlay(
                 RoundedRectangle(cornerRadius: CornerRadius.sm)
-                    .strokeBorder(Color.borderPrimary, lineWidth: 0.5)
+                    .strokeBorder(theme.chrome.edgeFaint, lineWidth: 0.5)
             )
             .padding(.horizontal, Spacing.md)
         }
@@ -1972,7 +2836,7 @@ struct TranscriptionEngineSection: View {
             } label: {
                 Text("Download")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(theme.chrome.panelInk)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(Color.active)
@@ -2016,7 +2880,7 @@ struct TranscriptionEngineSection: View {
                             .cornerRadius(6)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color.textTertiary.opacity(0.2), lineWidth: 0.5)
+                                    .stroke(theme.chrome.edgeFaint, lineWidth: 0.5)
                             )
                     }
                 } else {
@@ -2032,7 +2896,7 @@ struct TranscriptionEngineSection: View {
             } label: {
                 Text("Retry")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(theme.chrome.panelInk)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(Color.active)

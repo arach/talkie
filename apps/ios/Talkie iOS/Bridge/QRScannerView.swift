@@ -63,7 +63,7 @@ struct QRScannerView: View {
                                 .font(.headline)
                                 .foregroundColor(.white)
 
-                            Text("Scan any Talkie pairing QR. Mac Bridge codes pair here, and SSH terminal codes are routed automatically.")
+                            Text("Scan any Talkie QR. Mac Bridge, SSH terminal, and secure iPhone AI setup codes are routed automatically.")
                                 .font(.caption)
                                 .foregroundColor(.white.opacity(0.7))
                                 .multilineTextAlignment(.center)
@@ -241,6 +241,14 @@ struct QRScannerView: View {
                         }
                         dismiss()
                     }
+
+                case .aiProviderCredential(let payload):
+                    _ = try await TalkieAIProviderCredentialIngestor.shared.ingest(.directCredential(payload))
+                    await MainActor.run { dismiss() }
+
+                case .aiProviderCredentialSetup(let invite):
+                    _ = try await TalkieAIProviderCredentialIngestor.shared.ingest(.setupInvite(invite))
+                    await MainActor.run { dismiss() }
 
                 case .talkieURL(let url):
                     await MainActor.run {

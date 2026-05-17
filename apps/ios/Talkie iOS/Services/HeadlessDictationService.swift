@@ -243,6 +243,24 @@ final class HeadlessDictationService: NSObject, ObservableObject {
     @objc private func handleAppWillResignActive() {
         guard isActive else { return }
         AppLogger.app.info("HeadlessDictation: App will resign active")
+
+        // If we are not actively recording for a keyboard dictation request,
+        // tear down the warm recorder so the iOS mic indicator turns off when
+        // the user leaves the app. The warm recorder is only useful while the
+        // app is foreground; backgrounded apps cannot start a new recording
+        // anyway. handleAppDidBecomeActive will restart the warm recorder when
+        // the app returns to the foreground.
+        guard !isRecording else { return }
+
+        if warmRecorder != nil {
+            AppLogger.app.info("HeadlessDictation: Releasing warm recorder for background to free mic")
+            stopWarmRecorder(setCapability: .foregroundOnly)
+            // Bridge no longer signals warm-ready while backgrounded.
+            bridge.setAppReady(false)
+            isInReadyMode = false
+            readyPollTimer?.invalidate()
+            readyPollTimer = nil
+        }
     }
 
     // MARK: - Public API

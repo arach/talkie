@@ -357,6 +357,13 @@ actor BridgeClient {
         return try JSONDecoder().decode(MemoAttachmentUploadResponse.self, from: data)
     }
 
+    func sendHyperScanCapture(
+        body: HyperScanUploadRequest
+    ) async throws -> HyperScanUploadResponse {
+        let data = try await post("/debug/hyper-scan", body: body, timeout: 90)
+        return try JSONDecoder().decode(HyperScanUploadResponse.self, from: data)
+    }
+
     // MARK: - Headless Claude (AI Agent)
 
     /// Send a message to a Claude Code session in headless mode.
@@ -891,6 +898,123 @@ struct MemoAttachmentUploadResponse: Codable {
     let memoId: String
     let savedCount: Int
     let storedAt: String
+}
+
+// MARK: - Hyper Scan Debug Types
+
+struct HyperScanUploadRequest: Codable {
+    let schemaVersion: Int
+    let captureId: String
+    let captureKind: String
+    let createdAt: String
+    let recognizedText: String
+    let coverage: HyperScanUploadSummary
+    let fragments: [String]
+    let stitchCandidates: [HyperScanUploadStitchCandidate]
+    let puzzle: HyperScanUploadPuzzle?
+    let snaps: [HyperScanUploadSnap]
+    let retain: Bool
+}
+
+struct HyperScanUploadSummary: Codable {
+    let targetSnapCount: Int
+    let targetSegmentCount: Int
+    let snapCount: Int
+    let processedSnapCount: Int
+    let queuedSnapCount: Int
+    let readySnapCount: Int
+    let segmentCount: Int
+    let progress: Double
+    let hasTargetCoverage: Bool
+}
+
+struct HyperScanUploadStitchCandidate: Codable {
+    let apiKey: String
+    let confidencePercent: Int
+    let fragmentCount: Int
+    let isValidShape: Bool
+}
+
+struct HyperScanUploadPuzzle: Codable {
+    let bestGuess: String?
+    let confidencePercent: Int
+    let isKnownGoodMatch: Bool?
+    let similarityPercent: Int?
+    let editDistance: Int?
+    let candidateLength: Int?
+    let expectedLength: Int?
+}
+
+struct HyperScanUploadSnap: Codable {
+    let id: String
+    let captureIndex: Int
+    let role: String
+    let addedAt: String
+    let status: String
+    let displayFragment: String
+    let recognizedText: String
+    let textLines: [HyperScanUploadTextLine]
+    let fragments: [String]
+    let pixelWidth: Int
+    let pixelHeight: Int
+    let mimeType: String
+    let dataBase64: String
+    let geometry: HyperScanUploadGeometry?
+    let motion: HyperScanUploadMotion?
+    let quality: HyperScanUploadQuality?
+}
+
+struct HyperScanUploadTextLine: Codable {
+    let blockIndex: Int
+    let lineIndex: Int
+    let text: String
+    let fragments: [String]
+    let geometry: HyperScanUploadGeometry?
+}
+
+struct HyperScanUploadGeometry: Codable {
+    let normalizedX: Double
+    let normalizedY: Double
+    let normalizedWidth: Double
+    let normalizedHeight: Double
+    let centerX: Double
+    let centerY: Double
+    let angleDegrees: Double
+}
+
+struct HyperScanUploadMotion: Codable {
+    let capturedAt: String
+    let roll: Double
+    let pitch: Double
+    let yaw: Double
+    let rotationRateX: Double
+    let rotationRateY: Double
+    let rotationRateZ: Double
+    let userAccelerationX: Double
+    let userAccelerationY: Double
+    let userAccelerationZ: Double
+    let gravityX: Double
+    let gravityY: Double
+    let gravityZ: Double
+}
+
+struct HyperScanUploadQuality: Codable {
+    let recognizedCharacterCount: Int
+    let fragmentCount: Int
+    let geometryArea: Double?
+    let orientationClass: String?
+    let isLikelyUsable: Bool
+    let note: String?
+}
+
+struct HyperScanUploadResponse: Codable {
+    let ok: Bool
+    let captureId: String
+    let savedCount: Int
+    let storedAt: String
+    let storedPath: String
+    let retain: Bool
+    let expiresAt: String?
 }
 
 struct ComposeRevisionRequest: Codable {

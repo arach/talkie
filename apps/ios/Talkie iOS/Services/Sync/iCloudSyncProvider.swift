@@ -53,10 +53,14 @@ class iCloudSyncProvider: SyncProvider {
     // MARK: - Private
 
     private func checkiCloudStatus() async -> Bool {
+        #if targetEnvironment(simulator)
+        return false
+        #else
         await withCheckedContinuation { continuation in
             CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier).accountStatus { status, _ in
                 continuation.resume(returning: status == .available)
             }
         }
+        #endif
     }
 }

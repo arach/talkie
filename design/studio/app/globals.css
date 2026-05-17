@@ -1,0 +1,292 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ──────────────────────────────────────────────────────────────────
+ * Studio globals.
+ *
+ * Three layers:
+ *   1. Studio chrome baseline (body, scrollbar) — neutral, never themed.
+ *   2. iOS theme bundles — `[data-theme="X"]` blocks set `--theme-*`
+ *      CSS vars consumed by every iOS-facing component.
+ *   3. Keyframes — animations referenced by components via Tailwind
+ *      arbitrary-value `animate-[...]` utilities.
+ * ────────────────────────────────────────────────────────────────── */
+
+html, body {
+  background: theme('colors.studio.canvas');
+  color: theme('colors.studio.ink');
+  font-family: theme('fontFamily.mono');
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ * iOS theme bundles.
+ *
+ * Token vocabulary (full per theme):
+ *   --theme-canvas       page bg
+ *   --theme-canvas-alt   alternate page bg (section rhythm)
+ *   --theme-paper        sheet lifted off canvas (cards, tiles)
+ *   --theme-sheet        modal sheet bg (recording sheet, action sheets)
+ *   --theme-ink          headline / primary type
+ *   --theme-ink-dim      body lead
+ *   --theme-ink-muted    paragraph body
+ *   --theme-ink-faint    metadata / channel labels
+ *   --theme-ink-subtle   decorative glyphs
+ *   --theme-amber        the accent (NOT always amber — themed)
+ *   --theme-amber-soft   translucent accent for borders
+ *   --theme-amber-glow   text-shadow / drop-shadow halo color
+ *   --theme-amber-faint  tint for chip backgrounds, etc.
+ *   --theme-edge         primary card border
+ *   --theme-edge-dim     default tile border
+ *   --theme-edge-faint   section dividers
+ *   --theme-edge-subtle  list-item rules
+ *   --theme-screen-bg          recessed CRT bg (always-dark except Ghost)
+ *   --theme-screen-trace       phosphor on the screen
+ *   --theme-screen-trace-glow  glow halo for the trace
+ *   --theme-rec          record-state red (consistent across themes)
+ *   --theme-rec-glow     record halo
+ *   --theme-font-display the headline face
+ *   --theme-font-body    paragraph + UI face
+ *   --theme-font-mono    chrome (channel labels, eyebrows)
+ *   --theme-display-weight
+ *   --theme-display-tracking
+ *
+ * Adding a token: extend ALL four blocks below + document in
+ * lib/themes.ts so its `preview` array reflects the truth.
+ * ────────────────────────────────────────────────────────────────── */
+
+/* Per-theme display modulation. Same Newsreader face everywhere;
+ * weight + tracking + italic discipline shift the editorial register.
+ * Scope/Midnight = 500w confident; Tactical = 400w workhorse; Ghost =
+ * 400w open-tracked magazine. */
+/* Scope (light mode — mirrors iOS `cachedScopeColors` +
+ * `scopeChrome`). Paper-white canvas, warm-graphite ink, brass amber
+ * accent. Eyebrow leader is `·`, soft 3px chrome corners, 0.5px
+ * hairlines, glow radius 2. The default. */
+[data-theme="scope"] {
+  --theme-canvas:       #FBFAF7;
+  --theme-canvas-alt:   #F5F3EE;
+  --theme-paper:        #F8F6F1;
+  --theme-sheet:        #F2F0EA;
+  --theme-ink:          #1A1612;
+  --theme-ink-dim:      #2A2620;
+  --theme-ink-muted:    #463B32;
+  --theme-ink-faint:    #5A5045;
+  --theme-ink-subtle:   #A39989;
+  --theme-amber:        #B5823A;
+  --theme-amber-soft:   rgba(181, 130, 58, 0.34);
+  --theme-amber-glow:   rgba(181, 130, 58, 0.14);
+  --theme-amber-faint:  rgba(181, 130, 58, 0.08);
+  --theme-edge:         rgba(26, 22, 18, 0.30);
+  --theme-edge-dim:     rgba(26, 22, 18, 0.20);
+  --theme-edge-faint:   rgba(26, 22, 18, 0.10);
+  --theme-edge-subtle:  rgba(26, 22, 18, 0.06);
+  --theme-screen-bg:        #0A0907;
+  --theme-screen-trace:     #E89A3C;
+  --theme-screen-trace-glow: rgba(232, 154, 60, 0.55);
+  --theme-rec:          #C43A1C;
+  --theme-rec-glow:     rgba(196, 58, 28, 0.50);
+  --theme-eyebrow-leader: "\B7";  /* · */
+  --theme-chrome-corner: 3px;
+  --theme-hairline-w:    0.5px;
+  --theme-glow-radius:   2px;
+  --theme-card-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.45);
+  --theme-card-shadow-strong:
+    0 1px 0 rgba(255, 255, 255, 0.5),
+    0 4px 12px -6px rgba(20, 16, 12, 0.10),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.55);
+  --theme-font-display: Newsreader, "Iowan Old Style", Georgia, serif;
+  --theme-font-body:    Inter, -apple-system, "SF Pro Text", sans-serif;
+  --theme-font-mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --theme-display-weight: 500;
+  --theme-display-tracking: -0.018em;
+}
+
+/* Midnight (dark mode — mirrors apps/ios .../ThemeManager.swift
+ * `cachedMidnightColors` and DesignSystem.swift `midnightChrome`).
+ * Accent: Vercel-blue, NOT green phosphor — vivid info-blue on
+ * near-black. Eyebrow leader is em-dash. */
+[data-theme="midnight"] {
+  --theme-canvas:       #0A0A0A;
+  --theme-canvas-alt:   #111111;
+  --theme-paper:        #111111;
+  --theme-sheet:        #151515;
+  --theme-ink:          #FAFAFA;
+  --theme-ink-dim:      #D4D4D4;
+  --theme-ink-muted:    #A8A8A8;
+  --theme-ink-faint:    #9A9A9A;
+  --theme-ink-subtle:   #6A6A6A;
+  --theme-amber:        #0084FF;
+  --theme-amber-soft:   rgba(0, 132, 255, 0.34);
+  --theme-amber-glow:   rgba(0, 132, 255, 0.14);
+  --theme-amber-faint:  rgba(0, 132, 255, 0.08);
+  --theme-edge:         rgba(250, 250, 250, 0.30);
+  --theme-edge-dim:     rgba(250, 250, 250, 0.18);
+  --theme-edge-faint:   rgba(250, 250, 250, 0.10);
+  --theme-edge-subtle:  rgba(250, 250, 250, 0.05);
+  --theme-screen-bg:        #000000;
+  --theme-screen-trace:     #0084FF;
+  --theme-screen-trace-glow: rgba(0, 132, 255, 0.50);
+  --theme-rec:          #FF453A;
+  --theme-rec-glow:     rgba(255, 69, 58, 0.55);
+  --theme-eyebrow-leader: "—";
+  --theme-chrome-corner: 2px;
+  --theme-hairline-w:    0.5px;
+  --theme-glow-radius:   3px;
+  --theme-card-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.04);
+  --theme-card-shadow-strong:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.06),
+    0 8px 24px -8px rgba(0, 0, 0, 0.60);
+  --theme-font-display: Newsreader, "Iowan Old Style", Georgia, serif;
+  --theme-font-body:    Inter, -apple-system, "SF Pro Text", sans-serif;
+  --theme-font-mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --theme-display-weight: 500;
+  --theme-display-tracking: -0.018em;
+}
+
+/* Tactical (dark mode — mirrors iOS `cachedTacticalColors` +
+ * `tacticalChrome`). Palantir/Anduril-inspired. Vivid orange accent
+ * on near-black. SQUARE corners, heavier 1.0px hairlines, near-zero
+ * glow halo, `›` eyebrow leader. */
+[data-theme="tactical"] {
+  --theme-canvas:       #0A0A0A;
+  --theme-canvas-alt:   #181818;
+  --theme-paper:        #1A1A1A;
+  --theme-sheet:        #181818;
+  --theme-ink:          #F0F0F0;
+  --theme-ink-dim:      #C8C8C8;
+  --theme-ink-muted:    #B0B0B0;
+  --theme-ink-faint:    #A0A0A0;
+  --theme-ink-subtle:   #707070;
+  --theme-amber:        #FF8800;
+  --theme-amber-soft:   rgba(255, 136, 0, 0.50);
+  --theme-amber-glow:   rgba(255, 136, 0, 0.18);
+  --theme-amber-faint:  rgba(255, 136, 0, 0.12);
+  --theme-edge:         rgba(240, 240, 240, 0.34);
+  --theme-edge-dim:     rgba(240, 240, 240, 0.22);
+  --theme-edge-faint:   rgba(240, 240, 240, 0.14);
+  --theme-edge-subtle:  rgba(240, 240, 240, 0.08);
+  --theme-screen-bg:        #000000;
+  --theme-screen-trace:     #FF9020;
+  --theme-screen-trace-glow: rgba(255, 144, 32, 0.22);
+  --theme-rec:          #FF453A;
+  --theme-rec-glow:     rgba(255, 69, 58, 0.40);
+  --theme-eyebrow-leader: "\203A";  /* › */
+  --theme-chrome-corner: 0px;
+  --theme-hairline-w:    1px;
+  --theme-glow-radius:   1px;
+  --theme-card-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.04);
+  --theme-card-shadow-strong:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.05),
+    0 8px 20px -8px rgba(0, 0, 0, 0.55);
+  --theme-font-display: Newsreader, "Iowan Old Style", Georgia, serif;
+  --theme-font-body:    Inter, -apple-system, "SF Pro Text", sans-serif;
+  --theme-font-mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --theme-display-weight: 500;
+  --theme-display-tracking: -0.015em;
+}
+
+/* Lift — pure-white surface, hierarchy from shadow elevation only.
+ * NOT in the iOS shipping themes; an exploration variant. Indigo
+ * accent (same as Ghost). All cards / panels / sheets sit on the
+ * same #FFFFFF — they're differentiated by drop shadow. The cleanest
+ * test of layout discipline. */
+[data-theme="lift"] {
+  --theme-canvas:       #FFFFFF;
+  --theme-canvas-alt:   #FAFAFA;
+  --theme-paper:        #FFFFFF;
+  --theme-sheet:        #FFFFFF;
+  --theme-ink:          #1A1A1A;
+  --theme-ink-dim:      #2E2E2E;
+  --theme-ink-muted:    #525252;
+  --theme-ink-faint:    #7A7A7A;
+  --theme-ink-subtle:   #A0A0A0;
+  --theme-amber:        #6366F1;
+  --theme-amber-soft:   rgba(99, 102, 241, 0.32);
+  --theme-amber-glow:   rgba(99, 102, 241, 0.10);
+  --theme-amber-faint:  rgba(99, 102, 241, 0.06);
+  --theme-edge:         rgba(0, 0, 0, 0.10);
+  --theme-edge-dim:     rgba(0, 0, 0, 0.06);
+  --theme-edge-faint:   rgba(0, 0, 0, 0.04);
+  --theme-edge-subtle:  rgba(0, 0, 0, 0.02);
+  --theme-screen-bg:        #1E1B4B;
+  --theme-screen-trace:     #A5B4FC;
+  --theme-screen-trace-glow: rgba(165, 180, 252, 0.45);
+  --theme-rec:          #EF4444;
+  --theme-rec-glow:     rgba(239, 68, 68, 0.40);
+  --theme-eyebrow-leader: "\B7";  /* · */
+  --theme-chrome-corner: 8px;
+  --theme-hairline-w:    0.5px;
+  --theme-glow-radius:   0px;
+  --theme-card-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 4px 12px -2px rgba(0, 0, 0, 0.08);
+  --theme-card-shadow-strong:
+    0 2px 4px rgba(0, 0, 0, 0.05),
+    0 10px 24px -6px rgba(0, 0, 0, 0.12);
+  --theme-font-display: Newsreader, "Iowan Old Style", Georgia, serif;
+  --theme-font-body:    Inter, -apple-system, "SF Pro Text", sans-serif;
+  --theme-font-mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --theme-display-weight: 400;
+  --theme-display-tracking: -0.02em;
+}
+
+/* Ghost (light mode — mirrors iOS `cachedGhostColors` +
+ * `ghostChrome`). Near-white paper with INDIGO accent (NOT neutral
+ * slate). Diffuse 7px glow halo (vapory), softer 5px chrome corners.
+ * Stationery identity that still has a chromatic accent. */
+[data-theme="ghost"] {
+  --theme-canvas:       #F5F5F5;
+  --theme-canvas-alt:   #FAFAFA;
+  --theme-paper:        #FFFFFF;
+  --theme-sheet:        #FFFFFF;
+  --theme-ink:          #2A2A2A;
+  --theme-ink-dim:      #3D3D3D;
+  --theme-ink-muted:    #525252;
+  --theme-ink-faint:    #7A7A7A;
+  --theme-ink-subtle:   #A0A0A0;
+  --theme-amber:        #6366F1;
+  --theme-amber-soft:   rgba(99, 102, 241, 0.34);
+  --theme-amber-glow:   rgba(99, 102, 241, 0.14);
+  --theme-amber-faint:  rgba(99, 102, 241, 0.06);
+  --theme-edge:         rgba(42, 42, 42, 0.24);
+  --theme-edge-dim:     rgba(42, 42, 42, 0.16);
+  --theme-edge-faint:   rgba(42, 42, 42, 0.10);
+  --theme-edge-subtle:  rgba(42, 42, 42, 0.05);
+  --theme-screen-bg:        #1E1B4B;
+  --theme-screen-trace:     #A5B4FC;
+  --theme-screen-trace-glow: rgba(165, 180, 252, 0.45);
+  --theme-rec:          #EF4444;
+  --theme-rec-glow:     rgba(239, 68, 68, 0.40);
+  --theme-eyebrow-leader: "\B7";  /* · */
+  --theme-chrome-corner: 5px;
+  --theme-hairline-w:    0.5px;
+  --theme-glow-radius:   4px;
+  --theme-card-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.55);
+  --theme-card-shadow-strong:
+    0 1px 2px rgba(0, 0, 0, 0.03),
+    0 6px 18px -6px rgba(0, 0, 0, 0.06),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.55);
+  --theme-font-display: Newsreader, "Iowan Old Style", Georgia, serif;
+  --theme-font-body:    Inter, -apple-system, "SF Pro Text", sans-serif;
+  --theme-font-mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --theme-display-weight: 400;
+  --theme-display-tracking: -0.02em;
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ * Animations.
+ * ────────────────────────────────────────────────────────────────── */
+@keyframes rec-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.35; transform: scale(0.85); }
+}
+@keyframes bus-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.45; transform: scale(0.85); }
+}

@@ -141,6 +141,11 @@ final class TalkieAgentServerSupervisor {
         env["TALKIE_SERVER_ENABLE_BRIDGE"] = "1"
         env["TALKIE_SERVER_ENABLE_EXTENSIONS"] = "1"
         env["TALKIE_SPEECH_TOKEN"] = TalkieSpeechSupervisor.shared.authToken
+        env["TALKIE_SHARED_SETTINGS_SUITE"] = TalkieEnvironment.current.sharedSettingsSuite
+        env["TALKIE_SETTINGS_CONFIG_PATH"] = TalkieEnvironment.current.appSupportDirectory
+            .appending(path: "settings", directoryHint: .isDirectory)
+            .appending(path: "config.json")
+            .path
         if let speechHost = ProcessInfo.processInfo.environment["TALKIE_SPEECH_HOST"] {
             env["TALKIE_SPEECH_HOST"] = speechHost
         }

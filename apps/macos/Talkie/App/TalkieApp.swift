@@ -144,6 +144,7 @@ struct TalkieApp: App {
     @State private var showKeyboardHelp = false
     @State private var showReportSheet = false
     @State private var showVoiceCommand = false
+    @State private var bridgeManager = BridgeManager.shared
 
     var body: some Scene {
         // Log time to first body access (once)
@@ -210,6 +211,12 @@ struct TalkieApp: App {
                     if showVoiceCommand {
                         VoiceCommandOverlay()
                     }
+                }
+                // Mac-side iPhone pairing approval
+                .overlay(alignment: .top) {
+                    BridgePairingApprovalPrompt(bridgeManager: bridgeManager)
+                        .padding(.top, 18)
+                        .padding(.horizontal, 18)
                 }
                 // Non-modal shortcut hints (⌘⇧? / ⌃⇧?)
                 .overlay(alignment: .topTrailing) {
@@ -315,4 +322,69 @@ struct TalkieApp: App {
         }
     }
 
+}
+
+private struct BridgePairingApprovalPrompt: View {
+    let bridgeManager: BridgeManager
+
+    var body: some View {
+        if let pairing = bridgeManager.pendingPairings.first {
+            HStack(spacing: 12) {
+                Image(systemName: "iphone.gen3.radiowaves.left.and.right")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.orange)
+                    .frame(width: 38, height: 38)
+                    .background(Color.orange.opacity(0.12))
+                    .clipShape(.rect(cornerRadius: 8))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Approve iPhone Pairing?")
+                        .font(Theme.current.fontSMMedium)
+                        .foregroundStyle(Theme.current.foreground)
+
+                    Text("\(pairing.name) wants to connect or refresh bridge access.")
+                        .font(Theme.current.fontXS)
+                        .foregroundStyle(Theme.current.foregroundSecondary)
+                }
+
+                Spacer(minLength: 12)
+
+                Button {
+                    Task { await bridgeManager.rejectPairing(pairing.deviceId) }
+                } label: {
+                    Text("Reject")
+                        .font(Theme.current.fontXSMedium)
+                        .foregroundStyle(.red)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(Color.red.opacity(0.1))
+                        .clipShape(.rect(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    Task { await bridgeManager.approvePairing(pairing.deviceId) }
+                } label: {
+                    Text("Approve")
+                        .font(Theme.current.fontXSMedium)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(Color.green)
+                        .clipShape(.rect(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(12)
+            .frame(maxWidth: 560)
+            .background(.regularMaterial)
+            .clipShape(.rect(cornerRadius: 8))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.orange.opacity(0.22), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.14), radius: 18, y: 8)
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
 }

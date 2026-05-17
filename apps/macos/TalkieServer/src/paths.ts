@@ -12,6 +12,9 @@ const HOME = process.env.HOME || "";
 const TALKIE_APP_SUPPORT = `${HOME}/Library/Application Support/Talkie`;
 export const BRIDGE_DATA_DIR = `${TALKIE_APP_SUPPORT}/Bridge`;
 export const MEMO_ATTACHMENTS_DIR = `${BRIDGE_DATA_DIR}/MemoAttachments`;
+export const HYPER_SCAN_DIR = `${BRIDGE_DATA_DIR}/HyperScan`;
+/// Transient subdirectory under HYPER_SCAN_DIR for ephemeral (non-retained) captures.
+export const HYPER_SCAN_TRANSIENT_DIR = `${HYPER_SCAN_DIR}/.transient`;
 
 // Hidden directories for sensitive data
 export const KEYS_DIR = `${BRIDGE_DATA_DIR}/.keys`;
@@ -31,11 +34,15 @@ export async function ensureDirectories(): Promise<void> {
   const { chmod, mkdir } = await import("node:fs/promises");
   await mkdir(BRIDGE_DATA_DIR, { recursive: true, mode: 0o700 });
   await mkdir(MEMO_ATTACHMENTS_DIR, { recursive: true, mode: 0o700 });
+  await mkdir(HYPER_SCAN_DIR, { recursive: true, mode: 0o700 });
+  await mkdir(HYPER_SCAN_TRANSIENT_DIR, { recursive: true, mode: 0o700 });
   await mkdir(KEYS_DIR, { recursive: true, mode: 0o700 });
   await mkdir(CONFIG_DIR, { recursive: true, mode: 0o700 });
   await Promise.all([
     chmod(BRIDGE_DATA_DIR, 0o700),
     chmod(MEMO_ATTACHMENTS_DIR, 0o700),
+    chmod(HYPER_SCAN_DIR, 0o700),
+    chmod(HYPER_SCAN_TRANSIENT_DIR, 0o700),
     chmod(KEYS_DIR, 0o700),
     chmod(CONFIG_DIR, 0o700),
   ]);

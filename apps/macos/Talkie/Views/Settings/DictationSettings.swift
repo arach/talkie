@@ -539,6 +539,7 @@ enum CompanionShortcutBoardPreset: String, CaseIterable, Identifiable {
     case talkieCommand = "talkie-command"
     case talkieRecent = "talkie-recent"
     case talkieDevices = "talkie-devices"
+    case macPasteImage = "mac-paste-image"
 
     var id: String { rawValue }
 
@@ -560,6 +561,7 @@ enum CompanionShortcutBoardPreset: String, CaseIterable, Identifiable {
         case .talkieCommand: return "Command"
         case .talkieRecent: return "Recent"
         case .talkieDevices: return "Devices"
+        case .macPasteImage: return "Share Image"
         }
     }
 
@@ -581,6 +583,7 @@ enum CompanionShortcutBoardPreset: String, CaseIterable, Identifiable {
         case .talkieCommand: return "Open the command palette."
         case .talkieRecent: return "Open recent agent activity."
         case .talkieDevices: return "Open device settings."
+        case .macPasteImage: return "Send a screenshot or photo from your iPhone to the Mac."
         }
     }
 
@@ -602,6 +605,7 @@ enum CompanionShortcutBoardPreset: String, CaseIterable, Identifiable {
         case .talkieCommand: return "command"
         case .talkieRecent: return "clock.arrow.circlepath"
         case .talkieDevices: return "ipad.and.iphone"
+        case .macPasteImage: return "photo.on.rectangle.angled"
         }
     }
 
@@ -623,6 +627,7 @@ enum CompanionShortcutBoardPreset: String, CaseIterable, Identifiable {
         case .talkieCommand: return .indigo
         case .talkieRecent: return .gray
         case .talkieDevices: return .cyan
+        case .macPasteImage: return .cyan
         }
     }
 

@@ -181,6 +181,14 @@ struct SSHPrivateKeyQRCodeImportView: View {
                         isImporting = false
                     }
 
+                case .aiProviderCredential(let payload):
+                    _ = try await TalkieAIProviderCredentialIngestor.shared.ingest(.directCredential(payload))
+                    await MainActor.run { dismiss() }
+
+                case .aiProviderCredentialSetup(let invite):
+                    _ = try await TalkieAIProviderCredentialIngestor.shared.ingest(.setupInvite(invite))
+                    await MainActor.run { dismiss() }
+
                 case .talkieURL(let url):
                     await MainActor.run {
                         AppLogger.ui.info("Talkie QR routed via deep link", detail: url.absoluteString)

@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Compose Bay — Design Options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  /* usetalkie.com oscilloscope tokens, light/scope mode */
+  :root {
+    --canvas:         #e8dcc4;
+    --canvas-alt:     #e0d3b6;
+    --surface:        #ddd0b3;
+    --paper:          #f3eadb;
+    --paper-alt:      #ece1cd;
+    --trace:          #2a2520;
+    --trace-glow:     rgba(42, 37, 32, 0.18);
+    --trace-faint:    rgba(42, 37, 32, 0.08);
+    --amber:          #c47d1c;
+    --amber-glow:     rgba(196, 125, 28, 0.32);
+    --ink:            #1a1612;
+    --ink-dim:        #2a221e;
+    --ink-muted:      #463b32;
+    --ink-faint:      #6b5d4f;
+    --ink-subtle:     #7d6e5e;
+    --edge:           rgba(26, 22, 18, 0.30);
+    --edge-dim:       rgba(26, 22, 18, 0.20);
+    --edge-faint:     rgba(26, 22, 18, 0.14);
+    --edge-subtle:    rgba(26, 22, 18, 0.08);
+
+    --panel-bg:       #1c1814;
+    --panel-bg-alt:   #221d18;
+    --panel-edge:     rgba(232, 154, 60, 0.24);
+    --panel-ink:      #f0ead8;
+    --panel-ink-faint:#80786a;
+    --panel-trace:    #e89a3c;
+    --panel-trace-glow: rgba(232, 154, 60, 0.50);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 48px 32px 96px;
+    background: var(--canvas);
+    color: var(--trace);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+  }
+
+  header { max-width: 1280px; margin: 0 auto 40px; }
+  header h1 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 500;
+    font-size: 38px;
+    margin: 0 0 8px;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+  }
+  header p {
+    margin: 0;
+    color: var(--ink-faint);
+    font-size: 14px;
+    max-width: 720px;
+    line-height: 1.6;
+  }
+  header .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    color: var(--amber);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .grid {
+    max-width: 1280px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 32px;
+  }
+
+  .variant { display: flex; flex-direction: column; gap: 14px; }
+
+  .variant-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--amber);
+  }
+  .variant-name {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 500;
+    font-size: 22px;
+    color: var(--ink);
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .variant-desc {
+    font-size: 13px;
+    color: var(--ink-faint);
+    line-height: 1.55;
+    margin: 0;
+  }
+
+  /* iPhone frame */
+  .phone {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 9 / 19.5;
+    background: #0a0a0a;
+    border-radius: 36px;
+    padding: 10px;
+    box-shadow:
+      0 0 0 1px rgba(0,0,0,0.15),
+      0 12px 32px -8px rgba(0,0,0,0.20),
+      0 30px 80px -20px rgba(0,0,0,0.10);
+  }
+  .screen {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 28px;
+    overflow: hidden;
+    background: #f7f3e9;  /* page surface — overridden per variant */
+    display: flex;
+    flex-direction: column;
+  }
+  .status-bar {
+    height: 28px;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 18px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .nav-bar {
+    height: 42px;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: 0 16px;
+  }
+  .nav-back {
+    position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+    font-size: 17px; color: var(--ink-dim); line-height: 1;
+  }
+  .nav-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  /* Default bay (variant A baseline) */
+  .bay {
+    margin: 0 16px 16px;
+    flex: 1;
+    background: var(--paper);
+    border: 0.5px solid var(--edge);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    gap: 10px;
+    min-height: 0;
+  }
+
+  .eyebrow-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--amber);
+  }
+  .eyebrow-rule { flex: 1; height: 0.5px; background: var(--trace-faint); }
+  .count { color: var(--ink-faint); }
+
+  .editor-card {
+    flex: 1;
+    min-height: 100px;
+    background: #fbf6ec;
+    border: 0.5px solid var(--edge-faint);
+    border-radius: 6px;
+    padding: 14px;
+    position: relative;
+    color: var(--ink-faint);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .editor-card::after {
+    content: '';
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.04);
+    box-shadow: 0 0 0 0.5px var(--edge-faint);
+  }
+  .editor-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--ink-faint);
+    padding-top: 6px;
+  }
+  .editor-footer .save { color: var(--amber); }
+
+  .action-row1, .action-row2 {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .command-pill {
+    display: inline-flex; gap: 4px; align-items: center;
+    background: var(--paper-alt);
+    border: 0.5px solid var(--edge);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.05em;
+    color: var(--ink);
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .chip {
+    display: inline-flex; gap: 4px; align-items: center;
+    background: #fbf6ec;
+    border: 0.5px solid var(--edge-faint);
+    border-radius: 6px;
+    padding: 4px 7px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.05em;
+    color: var(--ink-dim);
+  }
+  .chip .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--amber); }
+  .chip.muted { color: var(--ink-faint); }
+  .chip.muted .dot { background: var(--ink-subtle); }
+
+  /* ===================== Variant overrides ===================== */
+
+  /* A: baseline (existing) */
+  .v-baseline .screen { background: #f7f3e9; }
+
+  /* B: bigger bay, quiet page */
+  .v-bigger .screen { background: #f7f3e9; }
+  .v-bigger .bay { margin: 0 6px 8px; padding: 12px; }
+
+  /* C: page-as-bay, only top/bottom hairlines */
+  .v-pageasbay .screen { background: var(--paper); }
+  .v-pageasbay .bay {
+    margin: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 14px 12px 12px;
+    border-top: 0.5px solid var(--edge-faint);
+    border-bottom: 0.5px solid var(--edge-faint);
+  }
+
+  /* D: bay with internal dark instrument strip (Mac-parity) */
+  .v-strip .screen { background: #f7f3e9; }
+  .v-strip .bay { padding: 0; gap: 0; }
+  .v-strip .instrument-strip {
+    background: var(--panel-bg);
+    color: var(--panel-ink);
+    padding: 6px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+  }
+  .v-strip .instrument-strip .left { color: var(--panel-trace); }
+  .v-strip .instrument-strip .right { color: var(--panel-ink-faint); }
+  .v-strip .bay-inner { padding: 12px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+
+  /* E: two-tone zones */
+  .v-twotone .screen { background: #f7f3e9; }
+  .v-twotone .bay { padding: 0; gap: 0; }
+  .v-twotone .editor-zone { padding: 12px; display: flex; flex-direction: column; gap: 10px; flex: 1; background: #fbf6ec; }
+  .v-twotone .controls-zone {
+    padding: 12px;
+    background: var(--canvas-alt);
+    border-top: 0.5px solid var(--edge-faint);
+    display: flex; flex-direction: column; gap: 8px;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+  }
+
+  /* F: soft drop-shadow bay, no stroke */
+  .v-elevated .screen { background: #efe7d5; }
+  .v-elevated .bay {
+    background: var(--paper);
+    border: 0;
+    border-radius: 12px;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.6) inset,
+      0 12px 24px -10px rgba(42, 37, 32, 0.18),
+      0 1px 3px rgba(42, 37, 32, 0.08);
+  }
+
+  /* G: D + F hybrid — elevated bay with instrument strip */
+  .v-hybrid .screen { background: #efe7d5; }
+  .v-hybrid .bay {
+    margin: 0 12px 14px;
+    background: var(--paper);
+    border: 0;
+    border-radius: 14px;
+    padding: 0;
+    gap: 0;
+    overflow: hidden;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.6) inset,
+      0 14px 28px -10px rgba(42, 37, 32, 0.22),
+      0 2px 4px rgba(42, 37, 32, 0.08);
+  }
+  .v-hybrid .instrument-strip {
+    background: var(--panel-bg);
+    color: var(--panel-ink);
+    padding: 8px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    position: relative;
+  }
+  .v-hybrid .instrument-strip::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 0.5px;
+    background: var(--panel-edge);
+  }
+  .v-hybrid .instrument-strip .left {
+    color: var(--panel-trace);
+    text-shadow: 0 0 6px var(--panel-trace-glow);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .v-hybrid .instrument-strip .led {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--panel-trace);
+    box-shadow: 0 0 5px var(--panel-trace-glow);
+  }
+  .v-hybrid .instrument-strip .right { color: var(--panel-ink-faint); }
+  .v-hybrid .bay-inner {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex: 1;
+  }
+
+  /* Status bar fake glyphs */
+  .status-bar .right { display: inline-flex; gap: 3px; align-items: center; }
+  .status-bar .bar { width: 12px; height: 8px; background: var(--ink); border-radius: 1px; opacity: 0.85; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">· Compose · Bay design options</div>
+  <h1>Compose page treatments</h1>
+  <p>Six variants of the bay-on-page layout, using the live <code>usetalkie.com</code> tokens (canvas / paper / amber / trace). Each phone shows the same content (AI chips, editor, COMMAND row, auto-actions) so only the framing changes.</p>
+</header>
+
+<div class="grid">
+
+  <!-- A: BASELINE (current) -->
+  <div class="variant v-baseline">
+    <div class="phone"><div class="screen">
+      <div class="status-bar"><span>9:41</span><span class="right"><span class="bar"></span></span></div>
+      <div class="nav-bar"><span class="nav-back">‹</span><span class="nav-title">Compose</span></div>
+      <div class="bay">
+        <div class="eyebrow-row"><span>· Draft</span><span class="eyebrow-rule"></span><span class="count">12W · 89C</span></div>
+        <div class="editor-card">Type, paste, or dictate…</div>
+        <div class="editor-footer"><span>📜 History · 2</span><span class="save">↓ Save</span><span>⎘ Copy</span></div>
+        <div class="action-row1">
+          <span class="command-pill">🎤 Command</span>
+          <span class="chip"><span class="dot"></span>API ▾</span>
+          <span class="chip"><span class="dot"></span>OpenAI ▾</span>
+        </div>
+        <div class="action-row2">
+          <span class="chip muted">Clean</span>
+          <span class="chip muted">Shorten</span>
+          <span class="chip muted">Tasks</span>
+        </div>
+      </div>
+    </div></div>
+    <div class="variant-label">A · Current</div>
+    <h3 class="variant-name">Baseline</h3>
+    <p class="variant-desc">What we just reverted to. Bay sits inside 16pt of neutral page margin with a rounded bezel and full chrome.edge stroke.</p>
+  </div>
+
+  <!-- B: BIGGER BAY -->
+  <div class="variant v-bigger">
+    <div class="phone"><div class="screen">
+      <div class="status-bar"><span>9:41</span><span class="right"><span class="bar"></span></span></div>
+      <div class="nav-bar"><span class="nav-back">‹</span><span class="nav-title">Compose</span></div>
+      <div class="bay">
+        <div class="eyebrow-row"><span>· Draft</span><span class="eyebrow-rule"></span><span class="count">12W · 89C</span></div>
+        <div class="editor-card">Type, paste, or dictate…</div>
+        <div class="editor-footer"><span>📜 History · 2</span><span class="save">↓ Save</span><span>⎘ Copy</span></div>
+        <div class="action-row1">
+          <span class="command-pill">🎤 Command</span>
+          <span class="chip"><span class="dot"></span>API ▾</span>
+          <span class="chip"><span class="dot"></span>OpenAI ▾</span>
+        </div>
+        <div class="action-row2">
+          <span class="chip muted">Clean</span>
+          <span class="chip muted">Shorten</span>
+          <span class="chip muted">Tasks</span>
+        </div>
+      </div>
+    </div></div>
+    <div class="variant-label">B · Bigger bay</div>
+    <h3 class="variant-name">Bigger bay, quiet page</h3>
+    <p class="variant-desc">Same bay design, but page margins shrink from 16pt to 6pt so the bay dominates the page. Smallest structural change to fix "little card on white".</p>
+  </div>
+
+  <!-- C: PAGE-AS-BAY -->
+  <div class="variant v-pageasbay">
+    <div class="phone"><div class="screen">
+      <div class="status-bar"><span>9:41</span><span class="right"><span class="bar"></span></span></div>
+      <div class="nav-bar"><span class="nav-back">‹</span><span class="nav-title">Compose</span></div>
+      <div class="bay">
+        <div class="eyebrow-row"><span>· Draft</span><span class="eyebrow-rule"></span><span class="count">12W · 89C</span></div>
+        <div class="editor-card">Type, paste, or dictate…</div>
+        <div class="editor-footer"><span>📜 History · 2</span><span class="save">↓ Save</span><span>⎘ Copy</span></div>
+        <div class="action-row1">
+          <span class="command-pill">🎤 Command</span>
+          <span class="chip"><span class="dot"></span>API ▾</span>
+          <span class="chip"><span class="dot"></span>OpenAI ▾</span>
+        </div>
+        <div class="action-row2">
+          <span class="chip muted">Clean</span>
+          <span class="chip muted">Shorten</span>
+          <span class="chip muted">Tasks</span>
+        </div>
+      </div>
+    </div></div>
+    <div class="variant-label">C · Page-as-bay</div>
+    <h3 class="variant-name">Page IS the bay</h3>
+    <p class="variant-desc">Drop the card. Page background becomes the paper color directly; only top + bottom hairlines mark the bay. Most minimal. Risk: less "framed".</p>
+  </div>
+
+  <!-- D: INTERNAL TOP STRIP -->
+  <div class="variant v-strip">
+    <div class="phone"><div class="screen">
+      <div class="status-bar"><span>9:41</span><span class="right"><span class="bar"></span></span></div>
+      <div class="nav-bar"><span class="nav-back">‹</span><span class="nav-title">Compose</span></div>
+      <div class="bay">
+        <div class="instrument-strip">
+          <span class="left">· Signal · OpenAI</span>
+          <span class="right">GPT-5</span>
+        </div>
+        <div class="bay-inner">
+          <div class="eyebrow-row"><span>· Draft</span><span class="eyebrow-rule"></span><span class="count">12W · 89C</span></div>
+          <div class="editor-card">Type, paste, or dictate…</div>
+          <div class="editor-footer"><span>📜 History · 2</span><span class="save">↓ Save</span><span>⎘ Copy</span></div>
+          <div class="action-row1">
+            <span class="command-pill">🎤 Command</span>
+            <span class="chip"><span class="dot"></span>API ▾</span>
+            <span class="chip"><span class="dot"></span>OpenAI ▾</span>
+          </div>
+          <div class="action-row2">
+            <span class="chip muted">Clean</span>
+            <span class="chip muted">Shorten</span>
+            <span class="chip muted">Tasks</span>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="variant-label">D · Instrument strip</div>
+    <h3 class="variant-name">Bay + dark top strip</h3>
+    <p class="variant-desc">Mac-parity move: dark chrome strip at the top of the bay carries the signal/model identity. Cream paper below. Highest visual identity.</p>
+  </div>
+
+  <!-- E: TWO-TONE -->
+  <div class="variant v-twotone">
+    <div class="phone"><div class="screen">
+      <div class="status-bar"><span>9:41</span><span class="right"><span class="bar"></span></span></div>
+      <div class="nav-bar"><span class="nav-back">‹</span><span class="nav-title">Compose</span></div>
+      <div class="bay">
+        <div class="editor-zone">
+          <div class="eyebrow-row"><span>· Draft</span><span class="eyebrow-rule"></span><span class="count">12W · 89C</span></div>
+          <div class="editor-card">Type, paste, or dictate…</div>
+          <div class="editor-footer"><span>📜 History · 2</span><span class="save">↓ Save</span><span>⎘ Copy</span></div>
+        </div>
+        <div class="controls-zone">
+          <div class="action-row1">
+            <span class="command-pill">🎤 Command</span>
+            <span class="chip"><span class="dot"></span>API ▾</span>
+            <span class="chip"><span class="dot"></span>OpenAI ▾</span>
+          </div>
+          <div class="action-row2">
+            <span class="chip muted">Clean</span>
+            <span class="chip muted">Shorten</span>
+            <span class="chip muted">Tasks</span>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="variant-label">E · Two-tone zones</div>
+    <h3 class="variant-name">Editor + control surface</h3>
+    <p class="variant-desc">Bay splits into a lighter editor zone (paper) and a slightly darker controls zone (canvas-alt) divided by a hairline. Reads as instrument with a control deck.</p>
+  </div>
+
+  <!-- G: D+F HYBRID (proposed) -->
+  <div class="variant v-hybrid" style="grid-column: 1 / -1; max-width: 380px;">
+    <div class="phone"><div class="screen">
+      <div class="status-bar"><span>9:41</span><span class="right"><span class="bar"></span></span></div>
+      <div class="nav-bar"><span class="nav-back">‹</span><span class="nav-title">Compose</span></div>
+      <div class="bay">
+        <div class="instrument-strip">
+          <span class="left"><span class="led"></span>· Signal · OpenAI</span>
+          <span class="right">GPT-5</span>
+        </div>
+        <div class="bay-inner">
+          <div class="eyebrow-row"><span>· Draft</span><span class="eyebrow-rule"></span><span class="count">12W · 89C</span></div>
+          <div class="editor-card">Type, paste, or dictate…</div>
+          <div class="editor-footer"><span>📜 History · 2</span><span class="save">↓ Save</span><span>⎘ Copy</span></div>
+          <div class="action-row1">
+            <span class="command-pill">🎤 Command</span>
+            <span class="chip"><span class="dot"></span>API ▾</span>
+            <span class="chip"><span class="dot"></span>OpenAI ▾</span>
+          </div>
+          <div class="action-row2">
+            <span class="chip muted">Clean</span>
+            <span class="chip muted">Shorten</span>
+            <span class="chip muted">Tasks</span>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="variant-label">G · D + F hybrid · proposed</div>
+    <h3 class="variant-name">Elevated bay with instrument strip</h3>
+    <p class="variant-desc">Page tinted warm canvas. Bay floats on a soft drop shadow (F), rounded 14pt corners, no stroke. The dark instrument strip (D) sits inside the top with a lit phosphor LED, model on the right. Closest single answer to what you described.</p>
+  </div>
+
+  <!-- F: ELEVATED -->
+  <div class="variant v-elevated">
+    <div class="phone"><div class="screen">
+      <div class="status-bar"><span>9:41</span><span class="right"><span class="bar"></span></span></div>
+      <div class="nav-bar"><span class="nav-back">‹</span><span class="nav-title">Compose</span></div>
+      <div class="bay">
+        <div class="eyebrow-row"><span>· Draft</span><span class="eyebrow-rule"></span><span class="count">12W · 89C</span></div>
+        <div class="editor-card">Type, paste, or dictate…</div>
+        <div class="editor-footer"><span>📜 History · 2</span><span class="save">↓ Save</span><span>⎘ Copy</span></div>
+        <div class="action-row1">
+          <span class="command-pill">🎤 Command</span>
+          <span class="chip"><span class="dot"></span>API ▾</span>
+          <span class="chip"><span class="dot"></span>OpenAI ▾</span>
+        </div>
+        <div class="action-row2">
+          <span class="chip muted">Clean</span>
+          <span class="chip muted">Shorten</span>
+          <span class="chip muted">Tasks</span>
+        </div>
+      </div>
+    </div></div>
+    <div class="variant-label">F · Elevated</div>
+    <h3 class="variant-name">Soft-shadow elevation</h3>
+    <p class="variant-desc">Page tinted slightly warmer (canvas), bay floats on a soft drop shadow instead of a hairline stroke. Reads as a paper card on a paper desk.</p>
+  </div>
+
+</div>
+
+</body>
+</html>

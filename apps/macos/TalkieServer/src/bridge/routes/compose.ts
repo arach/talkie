@@ -31,6 +31,9 @@ const DIRECT_COMPOSE_MODEL_OPTIONS: Record<
     { id: "gemma2-9b-it", name: "Gemma 2 9B" },
   ],
   openai: [
+    { id: "gpt-5.5", name: "GPT-5.5" },
+    { id: "gpt-5.4", name: "GPT-5.4" },
+    { id: "gpt-5.4-mini", name: "GPT-5.4 Mini" },
     { id: "gpt-5-nano", name: "GPT-5 Nano" },
     { id: "gpt-5.2-chat-latest", name: "GPT-5.2" },
     { id: "o4-mini", name: "o4-mini" },
@@ -303,6 +306,7 @@ export async function composeBorrowedProviderRoute(
     if (requestedProviderId) {
       const requestedProvider = talkieProviderToInferenceProvider(requestedProviderId);
       if (!isDirectComposeProvider(requestedProvider)) {
+        log.warn(`Borrowed compose provider rejected unsupported provider: ${requestedProviderId}`);
         return {
           ok: false,
           error: "That provider is not available for direct iPhone Compose.",
@@ -310,6 +314,7 @@ export async function composeBorrowedProviderRoute(
       }
 
       if (!hasAPIKey(requestedProvider)) {
+        log.warn(`Borrowed compose provider missing API key for requested provider: ${requestedProvider}`);
         return {
           ok: false,
           error:
@@ -323,6 +328,7 @@ export async function composeBorrowedProviderRoute(
       const resolution = resolveDirectComposeProvider(configuredProvider, configuredProviderId);
 
       if (!resolution) {
+        log.warn("Borrowed compose provider unavailable: no OpenAI or Groq provider has an API key");
         return {
           ok: false,
           error:
@@ -337,22 +343,26 @@ export async function composeBorrowedProviderRoute(
 
     const apiKey = readProviderAPIKey(selectedProvider);
     if (!apiKey) {
+      log.warn(`Borrowed compose provider missing API key for selected provider: ${selectedProvider}`);
       return {
         ok: false,
         error: "The paired Mac provider is missing an API key.",
       };
     }
 
-    const resolvedModel =
+    const resolvedModel = resolveDirectModelId(
+      selectedProvider,
       requestedModelId ||
-      (selectedProvider === configuredProvider && composeSettings.modelId
-        ? composeSettings.modelId
-        : defaultModelForProvider(selectedProvider));
+        (selectedProvider === configuredProvider && composeSettings.modelId
+          ? composeSettings.modelId
+          : null)
+    );
 
     const talkieProviderId = inferenceProviderToTalkieProvider(selectedProvider);
     const encryptionKey = await getDeviceEncryptionKey(deviceId);
 
     if (!encryptionKey) {
+      log.warn(`Borrowed compose provider rejected unauthorized paired device: ${deviceId}`);
       return {
         ok: false,
         error: "The paired iPhone is no longer authorized. Re-pair and try again.",
@@ -524,11 +534,24 @@ function resolveDirectModelId(
   preferredModelId: string | null
 ): string {
   const normalizedPreferredModel = preferredModelId?.trim();
-  if (normalizedPreferredModel) {
+  if (
+    normalizedPreferredModel &&
+    !isLegacyDirectDefaultModel(provider, normalizedPreferredModel)
+  ) {
     return normalizedPreferredModel;
   }
 
   return directComposeModelOptions(provider, null)[0]?.id ?? defaultModelForProvider(provider);
+}
+
+function isLegacyDirectDefaultModel(
+  provider: DirectComposeProviderName,
+  modelId: string
+): boolean {
+  return (
+    provider === "openai" &&
+    (modelId === "gpt-5.2-chat-latest" || modelId === "gpt-5.4-mini")
+  );
 }
 
 function providerDisplayNameFromConfigured(

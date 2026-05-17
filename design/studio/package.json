@@ -1,0 +1,26 @@
+{
+  "name": "talkie-studio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Visual design exploration lab for the Talkie macOS and iOS apps. Each study compares one artifact across the 9-scheme material picker so palette/material decisions land before SwiftUI gets touched.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "^16.0.10",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3"
+  }
+}

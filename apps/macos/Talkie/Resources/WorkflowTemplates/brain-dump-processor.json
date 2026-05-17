@@ -72,7 +72,7 @@
       "type": "llm",
       "outputKey": "research",
       "provider": "openai",
-      "modelId": "gpt-5.2-chat-latest",
+      "modelId": "gpt-5.5",
       "prompt": "Based on these brainstormed ideas, suggest:\n1. Related concepts worth exploring\n2. Potential connections to other fields\n3. One actionable experiment to test the most promising idea\n\nIdeas:\n{{parsed.ideas}}\n\nBe concise and practical. Focus on sparking further thinking.",
       "systemPrompt": "You are a creative thinking partner who helps expand ideas with cross-disciplinary insights.",
       "temperature": 0.7,
