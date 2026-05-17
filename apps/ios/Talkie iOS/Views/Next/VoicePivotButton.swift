@@ -111,10 +111,14 @@ struct VoicePivotButton: View {
     }
 
     private var shadowRadius: CGFloat {
+        // Resting uses a small static drop-shadow; expanded + listening
+        // scale from the theme's chrome.glowRadius so Tactical's
+        // matte 1pt glow doesn't bloom like Ghost's 7pt diffuse halo.
+        let glow = theme.currentTheme.chrome.glowRadius
         switch chrome.state {
         case .resting:   return 4
-        case .expanded:  return 8
-        case .listening: return 14
+        case .expanded:  return max(6, glow * 2)
+        case .listening: return max(10, glow * 3)
         }
     }
 
@@ -127,58 +131,13 @@ struct VoicePivotButton: View {
     }
 }
 
-/// Voice-command bracket glyph — matches the studio's VoiceCmdGlyph.
-/// Two outer arcs, two inner arcs, center dot. Rendered via Canvas
-/// for crisp scaling at any size.
+/// Voice-command glyph — bracket-wave with center dot. Uses SF
+/// Symbol `dot.radiowaves.left.and.right` which renders the exact
+/// "((·))" shape we want, scales cleanly across button sizes, and
+/// inherits the foreground color from the parent.
 private struct VoiceCmdGlyph: View {
     var body: some View {
-        Canvas { ctx, size in
-            let s = min(size.width, size.height) / 16
-            let cx = size.width / 2
-            let cy = size.height / 2
-            let lineWidth: CGFloat = 1.1 * s
-
-            func arc(centerX: CGFloat, radius: CGFloat, start: Double, end: Double, clockwise: Bool) -> Path {
-                var p = Path()
-                p.addArc(
-                    center: CGPoint(x: centerX, y: cy),
-                    radius: radius,
-                    startAngle: .degrees(start),
-                    endAngle: .degrees(end),
-                    clockwise: clockwise
-                )
-                return p
-            }
-
-            // Outer brackets — wider arcs framing the dot.
-            ctx.stroke(
-                arc(centerX: cx - 4 * s, radius: 5 * s, start: 135, end: -135, clockwise: false),
-                with: .foreground,
-                lineWidth: lineWidth
-            )
-            ctx.stroke(
-                arc(centerX: cx + 4 * s, radius: 5 * s, start: 45, end: -45, clockwise: true),
-                with: .foreground,
-                lineWidth: lineWidth
-            )
-            // Inner brackets — closer to the dot.
-            ctx.stroke(
-                arc(centerX: cx - 2 * s, radius: 2.5 * s, start: 135, end: -135, clockwise: false),
-                with: .foreground,
-                lineWidth: lineWidth
-            )
-            ctx.stroke(
-                arc(centerX: cx + 2 * s, radius: 2.5 * s, start: 45, end: -45, clockwise: true),
-                with: .foreground,
-                lineWidth: lineWidth
-            )
-            // Center dot.
-            let dot = Path(ellipseIn: CGRect(
-                x: cx - 1.3 * s, y: cy - 1.3 * s,
-                width: 2.6 * s, height: 2.6 * s
-            ))
-            ctx.fill(dot, with: .foreground)
-        }
-        .frame(width: 16, height: 16)
+        Image(systemName: "dot.radiowaves.left.and.right")
+            .font(.system(size: 18, weight: .medium))
     }
 }

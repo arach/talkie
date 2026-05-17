@@ -11,7 +11,7 @@ import SwiftUI
 
 struct AppShellNext<Content: View>: View {
     @StateObject private var chrome = ShellChrome()
-    @ObservedObject private var theme = ThemeManager.shared
+    @EnvironmentObject private var theme: ThemeManager
 
     private let content: () -> Content
 
@@ -65,6 +65,21 @@ final class ShellChrome: ObservableObject {
     }
 
     @Published private(set) var state: State = .resting
+
+    init() {
+        guard ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT") else { return }
+        let arguments = ProcessInfo.processInfo.arguments
+        guard
+            let stateFlagIndex = arguments.firstIndex(of: "--screenshotChromeState"),
+            arguments.indices.contains(stateFlagIndex + 1)
+        else { return }
+
+        switch arguments[stateFlagIndex + 1] {
+        case "expanded": state = .expanded
+        case "listening": state = .listening
+        default: state = .resting
+        }
+    }
 
     /// Single-tap on the voice button. Toggles resting ↔ expanded.
     /// During listening, no-op (release-from-long-press handles return).

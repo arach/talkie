@@ -62,10 +62,11 @@ private struct CornerSlot: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
+        let hairline = theme.currentTheme.chrome.hairlineWidth
         Button(action: action) {
             ZStack {
                 Circle().fill(theme.colors.cardBackground)
-                Circle().strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: 0.5)
+                Circle().strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: hairline)
                 glyph.foregroundStyle(theme.colors.textSecondary)
             }
             .frame(width: 40, height: 40)
@@ -106,7 +107,7 @@ private struct LiquidGlassTray: View {
                     .fill(theme.colors.cardBackground.opacity(0.70))
                     .background(.ultraThinMaterial, in: Capsule())
                 Capsule()
-                    .strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: 0.5)
+                    .strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: theme.currentTheme.chrome.hairlineWidth)
             }
         )
         .shadow(color: .black.opacity(0.15), radius: 12, y: 6)

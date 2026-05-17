@@ -14,7 +14,7 @@ extension Color {
     // Primary Brand Colors
     static let brandPrimary = Color(hex: "0A0A0A")        // Deep black
     static let brandSecondary = Color(hex: "FAFAFA")      // Pure white
-    static let brandAccent = Color(hex: "0070F3")         // Vercel blue (legacy fixed brand)
+    static let brandAccent = Color(hex: "0084FF")         // Vercel blue (legacy fixed brand)
 
     // Tactical Grays (Palantir/Anduril inspired)
     static let tactical900 = Color(hex: "0A0A0A")
@@ -486,8 +486,8 @@ private let scopeChrome = ChromeTokens(
 )
 
 private let midnightChrome: ChromeTokens = {
-    let accent = Color(hex: "0070F3", darkHex: "0084FF")
-    let ink = Color(hex: "0A0A0A", darkHex: "FAFAFA")
+    let accent = Color(hex: "0084FF")
+    let ink = Color(hex: "FAFAFA")
     return ChromeTokens(
         accent: accent,
         accentTint: accent.opacity(0.10),
@@ -515,8 +515,8 @@ private let midnightChrome: ChromeTokens = {
 }()
 
 private let tacticalChrome: ChromeTokens = {
-    let accent = Color(hex: "FF6B00", darkHex: "FF8800")
-    let ink = Color(hex: "1A1A1A", darkHex: "F0F0F0")
+    let accent = Color(hex: "FF8800")
+    let ink = Color(hex: "F0F0F0")
     return ChromeTokens(
         accent: accent,
         accentTint: accent.opacity(0.12),

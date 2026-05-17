@@ -150,6 +150,17 @@ class DeepLinkManager: ObservableObject {
             AppLogger.app.info("Deep link: open settings")
             pendingAction = .openSettings
 
+        case "theme":
+            if let key = components?.queryItems?.first(where: { $0.name == "key" })?.value,
+               let theme = AppTheme(rawValue: key) {
+                AppLogger.app.info("Deep link: apply theme \(key)")
+                Task { @MainActor in
+                    ThemeManager.shared.apply(theme: theme)
+                }
+            } else {
+                AppLogger.app.warning("Deep link: theme missing or invalid key")
+            }
+
         case "ssh":
             let path = components?.path ?? ""
             if path == "/import-key" {

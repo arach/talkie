@@ -100,32 +100,32 @@ struct ThemeColors {
 // MARK: - Cached Theme Colors (parsed once at app launch, not on every access)
 
 private let cachedMidnightColors = ThemeColors(
-    tableHeaderBackground: Color(hex: "F0F0F0", darkHex: "1A1A1A"),
-    tableCellBackground: Color(hex: "F5F5F5", darkHex: "000000"),
-    tableDivider: Color(hex: "E0E0E0", darkHex: "FFFFFF").opacity(0.08),
-    tableBorder: Color(hex: "D0D0D0", darkHex: "333333"),
-    background: Color(hex: "FFFFFF", darkHex: "0A0A0A"),
-    cardBackground: Color(hex: "F8F8F8", darkHex: "111111"),
-    searchBackground: Color(hex: "F0F0F0", darkHex: "151515"),
-    textPrimary: Color(hex: "0A0A0A", darkHex: "FAFAFA"),
-    textSecondary: Color(hex: "6A6A6A", darkHex: "9A9A9A"),
-    textTertiary: Color(hex: "9A9A9A", darkHex: "6A6A6A"),
-    accent: Color(hex: "0070F3"),
+    tableHeaderBackground: Color(hex: "111111"),
+    tableCellBackground: Color(hex: "000000"),
+    tableDivider: Color(hex: "FFFFFF").opacity(0.08),
+    tableBorder: Color(hex: "333333"),
+    background: Color(hex: "0A0A0A"),
+    cardBackground: Color(hex: "111111"),
+    searchBackground: Color(hex: "151515"),
+    textPrimary: Color(hex: "FAFAFA"),
+    textSecondary: Color(hex: "9A9A9A"),
+    textTertiary: Color(hex: "6A6A6A"),
+    accent: Color(hex: "0084FF"),
     success: Color(hex: "22C55E")
 )
 
 private let cachedTacticalColors = ThemeColors(
-    tableHeaderBackground: Color(hex: "E8E8E8", darkHex: "252525"),
-    tableCellBackground: Color(hex: "FAFAFA", darkHex: "0F0F0F"),
-    tableDivider: Color(hex: "CCCCCC", darkHex: "3A3A3A"),
-    tableBorder: Color(hex: "BBBBBB", darkHex: "4A4A4A"),
-    background: Color(hex: "F0F0F0", darkHex: "0A0A0A"),
-    cardBackground: Color(hex: "FFFFFF", darkHex: "1A1A1A"),
-    searchBackground: Color(hex: "FFFFFF", darkHex: "181818"),
-    textPrimary: Color(hex: "1A1A1A", darkHex: "F0F0F0"),
-    textSecondary: Color(hex: "5A5A5A", darkHex: "A0A0A0"),
-    textTertiary: Color(hex: "8A8A8A", darkHex: "707070"),
-    accent: Color(hex: "FF6B00"),
+    tableHeaderBackground: Color(hex: "1A1A1A"),
+    tableCellBackground: Color(hex: "0F0F0F"),
+    tableDivider: Color(hex: "3A3A3A"),
+    tableBorder: Color(hex: "4A4A4A"),
+    background: Color(hex: "0A0A0A"),
+    cardBackground: Color(hex: "1A1A1A"),
+    searchBackground: Color(hex: "181818"),
+    textPrimary: Color(hex: "F0F0F0"),
+    textSecondary: Color(hex: "A0A0A0"),
+    textTertiary: Color(hex: "707070"),
+    accent: Color(hex: "FF8800"),
     success: Color(hex: "00D26A")
 )
 
@@ -223,5 +223,18 @@ class ThemeManager: ObservableObject {
         let configuration = TalkieAppConfigurationStore.shared.configuration
         self.currentTheme = AppTheme(rawValue: configuration.appearance.theme) ?? .scope
         self.appearanceMode = AppearanceMode(rawValue: configuration.appearance.mode) ?? .system
+    }
+
+    func reloadFromDisk() {
+        let configuration = TalkieAppConfigurationStore.shared.reload()
+        currentTheme = AppTheme(rawValue: configuration.appearance.theme) ?? .scope
+        appearanceMode = AppearanceMode(rawValue: configuration.appearance.mode) ?? .system
+    }
+
+    func apply(theme: AppTheme, appearanceMode: AppearanceMode? = nil) {
+        currentTheme = theme
+        if let appearanceMode {
+            self.appearanceMode = appearanceMode
+        }
     }
 }

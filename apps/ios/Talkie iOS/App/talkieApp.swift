@@ -21,6 +21,7 @@ struct talkieApp: App {
     @State private var mainInterfaceVisible = false
     @ObservedObject private var deepLinkManager = DeepLinkManager.shared
     @State private var appSettings = TalkieAppSettings.shared
+    private let themeManager = ThemeManager.shared
 
     // First launch detection
     @State private var showOnboarding = false
@@ -46,6 +47,7 @@ struct talkieApp: App {
         registerBackgroundTasks()
         _ = TalkieAppSettings.shared
         _ = TalkieAppConfigurationStore.shared.synchronizePinnedWorkflowMirror()
+        applyScreenshotThemeOverrideIfNeeded()
 
         // Configure Clerk authentication (auto-restores existing sessions)
         #if DEBUG
@@ -76,6 +78,7 @@ struct talkieApp: App {
                         .environment(Clerk.shared)
                         .environment(\.managedObjectContext, controller.container.viewContext)
                         .environmentObject(deepLinkManager)
+                        .environmentObject(themeManager)
                         .onAppear {
                             if !appSettings.hasSeenOnboarding && !Self.isScreenshotMode {
                                 showOnboarding = true
@@ -160,6 +163,20 @@ struct talkieApp: App {
                 }
             }
         }
+    }
+
+    // MARK: - Screenshot Theme Override
+
+    private func applyScreenshotThemeOverrideIfNeeded() {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard
+            let themeFlagIndex = arguments.firstIndex(of: "--screenshotTheme"),
+            arguments.indices.contains(themeFlagIndex + 1),
+            let theme = AppTheme(rawValue: arguments[themeFlagIndex + 1])
+        else { return }
+
+        themeManager.apply(theme: theme)
+        AppLogger.app.info("📸 Screenshot theme override: \(theme.rawValue)")
     }
 
     // MARK: - Screenshot Demo Data

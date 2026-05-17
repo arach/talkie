@@ -19,15 +19,23 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     private var cloudKitSubscriptionSetUp = false
     private var cancellables = Set<AnyCancellable>()
 
+    private var isFastlaneSnapshot: Bool {
+        let processInfo = ProcessInfo.processInfo
+        return processInfo.arguments.contains("-FASTLANE_SNAPSHOT")
+            || processInfo.environment["FASTLANE_SNAPSHOT"] == "1"
+    }
+
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Register for remote notifications
-        application.registerForRemoteNotifications()
+        if !isFastlaneSnapshot {
+            // Register for remote notifications
+            application.registerForRemoteNotifications()
+
+            // Request notification permissions for local notifications (workflow completion alerts)
+            requestNotificationPermissions()
+        }
 
         // Set up notification center delegate
         UNUserNotificationCenter.current().delegate = self
-
-        // Request notification permissions for local notifications (workflow completion alerts)
-        requestNotificationPermissions()
 
         // Set up CloudKit subscription when iCloud becomes available (non-blocking)
         setupCloudKitSubscriptionWhenReady()
@@ -325,6 +333,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     }
 
     private func requestNotificationPermissions() {
+        let processInfo = ProcessInfo.processInfo
+        guard !processInfo.arguments.contains("-FASTLANE_SNAPSHOT"),
+              processInfo.environment["FASTLANE_SNAPSHOT"] != "1" else { return }
+
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if let error = error {
                 AppLogger.app.error("Notification permission error: \(error.localizedDescription)")

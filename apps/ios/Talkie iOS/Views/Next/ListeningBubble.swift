@@ -38,12 +38,17 @@ struct ListeningBubble: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(
+            // Theme-aware corner radius — Tactical's chromeCorner:0
+            // gives sharp square edges; Lift's :8 gives soft cards.
+            // Bubble corner scales above the chrome chip baseline so
+            // it still reads as a floating element, not chrome.
             ZStack {
-                RoundedRectangle(cornerRadius: 12)
+                let radius = theme.currentTheme.chrome.chromeCorner + 6
+                RoundedRectangle(cornerRadius: radius)
                     .fill(theme.colors.cardBackground.opacity(0.88))
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(theme.currentTheme.chrome.accentStrong, lineWidth: 0.5)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius))
+                RoundedRectangle(cornerRadius: radius)
+                    .strokeBorder(theme.currentTheme.chrome.accentStrong, lineWidth: theme.currentTheme.chrome.hairlineWidth)
             }
         )
         .shadow(color: .black.opacity(0.18), radius: 12, y: 6)
