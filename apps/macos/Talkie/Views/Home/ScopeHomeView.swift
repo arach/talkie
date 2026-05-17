@@ -85,7 +85,10 @@ struct ScopeHomeView: View {
                     hero
                     captureModes
                     agentPanel
+                    routinesStrip
                     signalTable
+                    discoveryRow
+                    systemStatusRail
                     ownershipStrip
                 }
                 .padding(.horizontal, 32)
@@ -147,31 +150,124 @@ struct ScopeHomeView: View {
                 spacing: 16
             ) {
                 CaptureModeCard(
-                    icon: "mic.fill",
+                    glyph: .dot,
                     eyebrow: "Memo",
                     channel: "CH-01",
-                    title: "Catch it before it changes.",
-                    copy: "Record what you’re thinking. The transcript lands here.",
-                    action: onStartRecording
+                    state: captureStateMemo,
+                    action: "START RECORDING",
+                    hint: "·",
+                    onTap: onStartRecording
                 )
                 CaptureModeCard(
-                    icon: "keyboard",
+                    glyph: .ring,
                     eyebrow: "Dictation",
                     channel: "CH-02",
-                    title: "Speak straight into the work.",
-                    copy: "Hotkey on Mac. Dictate into whatever app you’re already in.",
-                    action: {}
+                    state: captureStateDictation,
+                    action: "DICTATE",
+                    hint: "⌃⇧⌘ D",
+                    onTap: {}
                 )
                 CaptureModeCard(
-                    icon: "camera.viewfinder",
+                    glyph: .crosshair,
                     eyebrow: "Capture",
                     channel: "CH-03",
-                    title: "Pin the screen, not just the words.",
-                    copy: "Hyper+S to grab the moment alongside what you say.",
-                    action: {}
+                    state: "Hyper+S armed",       // TODO: wire to TrayState
+                    action: "CAPTURE",
+                    hint: "⌃⇧⌘ S",
+                    onTap: {}
                 )
             }
         }
+    }
+
+    /// Stub state lines for the capture cards. Stays factual (counts /
+    /// last-time) rather than editorial. TODO: wire to MemoStats /
+    /// DictationStore / TrayBadge live state.
+    private var captureStateMemo: String {
+        if todayMemos == 0 { return "Ready" }
+        if todayMemos == 1 { return "1 today" }
+        return "\(todayMemos) today"
+    }
+    private var captureStateDictation: String {
+        if todayDictations == 0 { return "Ready" }
+        if todayDictations == 1 { return "1 today" }
+        return "\(todayDictations) today"
+    }
+
+    // MARK: - Routines strip (Workflows · Console)
+    //
+    // RESTORED from the original HomeGrid taxonomy (actionWorkflows +
+    // actionHelpers + featureAgentConsole). Two light panels on the
+    // cream canvas so they read as cousins of the Capture Mode cards,
+    // not as competing dark slabs with the bay.
+    //
+    // Data is stubbed at this stage. TODO: wire Workflows to
+    // WorkflowRunsStore (or equivalent); wire Console to the active
+    // ConsoleRegistry tabs.
+
+    private var routinesStrip: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Eyebrow("Routines")
+            HStack(spacing: 16) {
+                RoutinesPanel(
+                    title: "Workflows",
+                    trailing: "3 ran today",
+                    rows: [
+                        .init(leading: .filled, label: "Summarize standup",  trailing: "9:31 AM"),
+                        .init(leading: .filled, label: "Dictation → Linear", trailing: "9:14 AM"),
+                        .init(leading: .hollow, label: "Compose draft",      trailing: "Yesterday"),
+                    ],
+                    footer: "MANAGE WORKFLOWS"
+                )
+                RoutinesPanel(
+                    title: "Console",
+                    trailing: "2 tabs",
+                    rows: [
+                        .init(leading: .filled, label: "iTerm2", trailing: "ACTIVE"),
+                        .init(leading: .filled, label: "Codex",  trailing: "IDLE"),
+                        .init(leading: .hollow, label: "Claude", trailing: "OFF"),
+                    ],
+                    footer: "OPEN CONSOLE"
+                )
+            }
+        }
+    }
+
+    // MARK: - Discovery row (Today · Shortcuts · Trending)
+    //
+    // RESTORED from widgetActivity + widgetShortcuts + widgetTrending.
+    // Three discovery surfaces at the same density as the Capture Modes
+    // row. Each widget gets a tailored visual so they read as distinct,
+    // not as three flat lists.
+    //
+    // TODO: wire Today to Calendar/Reminders; Trending to a real
+    // recurring-theme aggregator. Shortcuts is the only one mostly
+    // real today (HotkeyManager registrations).
+
+    private var discoveryRow: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Eyebrow("Discovery")
+            HStack(spacing: 16) {
+                TodayWidget()
+                ShortcutsWidget()
+                TrendingWidget()
+            }
+        }
+    }
+
+    // MARK: - System status rail (scheme-aware)
+    //
+    // RESTORED from the systemStatus + devicesBridge cards. The rail
+    // wears the same scheme as the bay above so the two read as the
+    // top + bottom of one instrument body. On AMBER it's a gunmetal
+    // recessed footer; on CHIFFON (Scope canonical) it's a barely-
+    // there cream strip.
+    //
+    // TODO: wire phosphor dots to live service state
+    // (ServiceManager.agent / .sync / .updater).
+
+    private var systemStatusRail: some View {
+        SystemStatusRail(scheme: currentScheme)
     }
 
     // MARK: - Agent panel (dark instrument bay in the cream)
@@ -616,13 +712,27 @@ struct ScopeHomeView: View {
 
 // MARK: - Capture mode card
 
+/// Capture mode card — three thin rows on a cream tile.
+///
+///   ▌ glyph    eyebrow                channel
+///   ──────────────────────────────────────
+///   state · single factual line
+///   ──────────────────────────────────────
+///   ACTION →                         hint
+///
+/// No editorial title or sub-copy. The card is the affordance; the
+/// glyph + label + action + hint together communicate enough. Per the
+/// no-marketing-copy preference (2026-05-17).
 private struct CaptureModeCard: View {
-    let icon: String
+    enum Glyph { case dot, ring, crosshair }
+
+    let glyph: Glyph
     let eyebrow: String
     let channel: String
-    let title: String
-    let copy: String
-    let action: () -> Void
+    let state: String
+    let action: String
+    let hint: String
+    let onTap: () -> Void
 
     @State private var isHovered = false
 
@@ -630,67 +740,30 @@ private struct CaptureModeCard: View {
         #if DEBUG
         let _ = FrameRateMonitor.shared.recordBodyAccess("CaptureModeCard")
         #endif
-        return Button(action: action) {
-            ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(ScopeCanvas.surface)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(isHovered ? ScopeEdge.normal : ScopeEdge.faint, lineWidth: 0.5)
-                    )
-                // Graticule was clashing with content on the cool palette
-                // — dropped opacity from 0.45 → 0.15 and widened pitch
-                // from 24 → 32 so it reads as faint drafting paper, not
-                // a grid pattern competing for attention.
-                GraticuleBackground(pitch: 32, color: ScopeTrace.faint, opacity: 0.15)
-                    .mask(RoundedRectangle(cornerRadius: 6))
-
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        HStack(spacing: 10) {
-                            iconBadge
-                            Text(eyebrow.uppercased())
-                                .font(ScopeType.channel)
-                                .tracking(ScopeType.Tracking.wide)
-                                .foregroundStyle(ScopeInk.faint)
-                        }
-                        Spacer()
-                        Text(channel)
-                            .font(ScopeType.channel)
-                            .tracking(ScopeType.Tracking.wide)
-                            .foregroundStyle(ScopeInk.subtle)
-                    }
-
-                    Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
-
-                    Text(title)
-                        .font(ScopeFont.display(size: 19))
-                        .foregroundStyle(ScopeInk.primary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                        .tracking(-0.3)
-
-                    Text(copy)
-                        .font(.system(size: 12))
-                        .foregroundStyle(ScopeInk.muted)
-                        .lineLimit(3)
-                        .multilineTextAlignment(.leading)
-
-                    Spacer(minLength: 0)
-
-                    HStack(spacing: 4) {
-                        Text("EXPLORE")
-                            .font(ScopeType.channel)
-                            .tracking(ScopeType.Tracking.wide)
-                            .foregroundStyle(ScopeInk.faint)
-                        Text("→")
-                            .font(.system(size: 11))
-                            .foregroundStyle(ScopeInk.faint)
-                    }
-                }
-                .padding(16)
+        return Button(action: onTap) {
+            VStack(spacing: 0) {
+                identityRow
+                Divider()
+                    .frame(height: 0.5)
+                    .overlay(ScopeEdge.subtle)
+                stateRow
+                Divider()
+                    .frame(height: 0.5)
+                    .overlay(ScopeEdge.subtle)
+                actionRow
             }
-            .frame(minHeight: 200, alignment: .topLeading)
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(ScopeCanvas.surface)
+                    GraticuleBackground(pitch: 32, color: ScopeTrace.faint, opacity: 0.12)
+                        .mask(RoundedRectangle(cornerRadius: 6))
+                }
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(isHovered ? ScopeEdge.normal : ScopeEdge.faint, lineWidth: 0.5)
+            )
             .offset(y: isHovered ? -2 : 0)
         }
         .buttonStyle(.plain)
@@ -698,20 +771,119 @@ private struct CaptureModeCard: View {
         .animation(.easeOut(duration: 0.16), value: isHovered)
     }
 
-    private var iconBadge: some View {
-        RoundedRectangle(cornerRadius: 4)
-            .fill(ScopeAmber.tintSubtle)
-            .frame(width: 28, height: 28)
-            .overlay(
-                RoundedRectangle(cornerRadius: 4)
-                    .stroke(ScopeEdge.faint, lineWidth: 0.5)
-            )
-            .overlay(
-                Image(systemName: icon)
-                    .font(.system(size: 12))
-                    .foregroundStyle(ScopeAmber.solid)
-                    .phosphorGlow(radius: 3, opacity: 0.32)
-            )
+    private var identityRow: some View {
+        HStack(spacing: 10) {
+            CaptureGlyph(kind: glyph)
+                .frame(width: 22, height: 22)
+            Text(eyebrow.uppercased())
+                .font(ScopeType.channel)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopeInk.primary)
+            Spacer()
+            Text(channel)
+                .font(ScopeType.channel)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopeInk.subtle)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+    }
+
+    private var stateRow: some View {
+        HStack {
+            Text(state.uppercased())
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopeInk.faint)
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+    }
+
+    private var actionRow: some View {
+        HStack(spacing: 4) {
+            Text(action)
+                .font(ScopeType.channel)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(isHovered ? ScopeAmber.solid : Color.hex("9A6A22"))
+            Text("→")
+                .font(.system(size: 11))
+                .foregroundStyle(isHovered ? ScopeAmber.solid : Color.hex("9A6A22"))
+            Spacer()
+            Text(hint)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundStyle(ScopeInk.subtle)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+    }
+}
+
+/// Per-card amber identity. Three distinct treatments so the cards
+/// read as siblings, not clones. All within the amber/copper family
+/// per the design language.
+private struct CaptureGlyph: View {
+    let kind: CaptureModeCard.Glyph
+
+    var body: some View {
+        switch kind {
+        case .dot:
+            ZStack {
+                Circle()
+                    .stroke(ScopeAmber.solid.opacity(0.18), lineWidth: 1)
+                Circle()
+                    .fill(ScopeAmber.solid)
+                    .frame(width: 9, height: 9)
+                    .shadow(color: ScopeAmber.solid.opacity(0.45), radius: 3)
+            }
+        case .ring:
+            ZStack {
+                Circle()
+                    .stroke(ScopeAmber.solid, lineWidth: 1.5)
+                    .frame(width: 14, height: 14)
+                Circle()
+                    .fill(ScopeAmber.solid)
+                    .frame(width: 3.5, height: 3.5)
+            }
+        case .crosshair:
+            ZStack {
+                CornerBracketsMark()
+                    .stroke(ScopeAmber.solid, lineWidth: 1.2)
+                Circle()
+                    .fill(ScopeAmber.solid)
+                    .frame(width: 5, height: 5)
+            }
+        }
+    }
+}
+
+/// Four corner L-marks inscribed in the glyph frame. Used by the
+/// "Capture" mode glyph to evoke a viewfinder.
+private struct CornerBracketsMark: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let inset: CGFloat = 1
+        let len: CGFloat = 5
+        let minX = rect.minX + inset, maxX = rect.maxX - inset
+        let minY = rect.minY + inset, maxY = rect.maxY - inset
+        // top-left
+        p.move(to: CGPoint(x: minX, y: minY + len))
+        p.addLine(to: CGPoint(x: minX, y: minY))
+        p.addLine(to: CGPoint(x: minX + len, y: minY))
+        // top-right
+        p.move(to: CGPoint(x: maxX - len, y: minY))
+        p.addLine(to: CGPoint(x: maxX, y: minY))
+        p.addLine(to: CGPoint(x: maxX, y: minY + len))
+        // bottom-left
+        p.move(to: CGPoint(x: minX, y: maxY - len))
+        p.addLine(to: CGPoint(x: minX, y: maxY))
+        p.addLine(to: CGPoint(x: minX + len, y: maxY))
+        // bottom-right
+        p.move(to: CGPoint(x: maxX - len, y: maxY))
+        p.addLine(to: CGPoint(x: maxX, y: maxY))
+        p.addLine(to: CGPoint(x: maxX, y: maxY - len))
+        return p
     }
 }
 
@@ -1291,5 +1463,352 @@ struct BayCornerBrackets: View {
             .stroke(color, lineWidth: 1)
         }
         .allowsHitTesting(false)
+    }
+}
+
+// MARK: - Routines panel
+//
+// Light cream panel with header rail (title + trailing chrome), a
+// short list of rows, and a footer link. Used for both Workflows and
+// Console quick-entries in the Routines strip.
+
+private struct RoutinesPanel: View {
+    enum Dot { case filled, hollow }
+    struct Row { let leading: Dot; let label: String; let trailing: String }
+
+    let title: String
+    let trailing: String
+    let rows: [Row]
+    let footer: String
+
+    @State private var isHovered = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(ScopeFont.display(size: 14, medium: true))
+                    .foregroundStyle(ScopeInk.primary)
+                Spacer()
+                Text(trailing.uppercased())
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.faint)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
+            }
+
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { idx, row in
+                    HStack(spacing: 10) {
+                        Circle()
+                            .fill(row.leading == .filled ? Color.hex("9A6A22") : Color.clear)
+                            .overlay(
+                                Circle().stroke(Color.hex("9A6A22"), lineWidth: row.leading == .hollow ? 1 : 0)
+                            )
+                            .frame(width: 5, height: 5)
+                        Text(row.label)
+                            .font(.system(size: 12))
+                            .foregroundStyle(ScopeInk.primary)
+                        Spacer()
+                        Text(row.trailing.uppercased())
+                            .font(ScopeType.chrome)
+                            .tracking(ScopeType.Tracking.wide)
+                            .foregroundStyle(ScopeInk.subtle)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    if idx < rows.count - 1 {
+                        Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
+                    }
+                }
+            }
+
+            Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
+
+            HStack(spacing: 4) {
+                Spacer()
+                Text(footer)
+                    .font(ScopeType.channel)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(isHovered ? ScopeAmber.solid : Color.hex("9A6A22"))
+                Text("→")
+                    .font(.system(size: 11))
+                    .foregroundStyle(isHovered ? ScopeAmber.solid : Color.hex("9A6A22"))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+        }
+        .background(ScopeCanvas.surface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(isHovered ? ScopeEdge.normal : ScopeEdge.faint, lineWidth: 0.5)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .frame(maxWidth: .infinity)
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.16), value: isHovered)
+    }
+}
+
+// MARK: - Discovery widgets
+
+/// Today — small 24h timeline with event dots. Reads as a day-at-a-
+/// glance map, not a list. Sample events for now.
+private struct TodayWidget: View {
+    private struct Event { let hour: Double; let label: String }
+    private let events: [Event] = [
+        .init(hour: 9.5,  label: "09:30 · Design review"),
+        .init(hour: 11.0, label: "11:00 · Standup"),
+        .init(hour: 14.0, label: "14:00 · Bay polish merge"),
+    ]
+
+    var body: some View {
+        DiscoveryWidgetCard(title: "Today", eyebrow: "Calendar") {
+            VStack(alignment: .leading, spacing: 10) {
+                GeometryReader { geo in
+                    ZStack(alignment: .topLeading) {
+                        Rectangle()
+                            .fill(ScopeEdge.faint)
+                            .frame(height: 0.5)
+                            .offset(y: 10)
+                        ForEach([0, 4, 8, 12, 16, 20, 24], id: \.self) { h in
+                            let x = CGFloat(h) / 24.0 * geo.size.width
+                            VStack(spacing: 2) {
+                                Rectangle()
+                                    .fill(ScopeEdge.faint)
+                                    .frame(width: 1, height: 4)
+                                Text(String(format: "%02d", h))
+                                    .font(.system(size: 7, weight: .semibold, design: .monospaced))
+                                    .tracking(0.6)
+                                    .foregroundStyle(ScopeInk.subtle)
+                            }
+                            .offset(x: x - 6, y: 6)
+                        }
+                        ForEach(Array(events.enumerated()), id: \.offset) { _, event in
+                            let x = CGFloat(event.hour) / 24.0 * geo.size.width
+                            Circle()
+                                .fill(Color.hex("9A6A22"))
+                                .frame(width: 10, height: 10)
+                                .overlay(
+                                    Circle().stroke(ScopeCanvas.surface, lineWidth: 2)
+                                )
+                                .offset(x: x - 5, y: 5)
+                        }
+                    }
+                }
+                .frame(height: 26)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(Array(events.enumerated()), id: \.offset) { _, event in
+                        HStack {
+                            let parts = event.label.split(separator: " · ", maxSplits: 1).map(String.init)
+                            Text(parts.first ?? event.label)
+                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(ScopeInk.primary)
+                            Spacer()
+                            Text(parts.count > 1 ? parts[1] : "")
+                                .font(.system(size: 11))
+                                .foregroundStyle(ScopeInk.faint)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Shortcuts — proper key-cap glyphs grouped vertically.
+private struct ShortcutsWidget: View {
+    private struct Shortcut { let keys: [String]; let label: String }
+    private let shortcuts: [Shortcut] = [
+        .init(keys: ["⌃", "⇧", "⌘", "M"], label: "New Memo"),
+        .init(keys: ["⌃", "⇧", "⌘", "D"], label: "Dictate"),
+        .init(keys: ["⌃", "⇧", "⌘", "S"], label: "Capture screen"),
+        .init(keys: ["⌃", "⇧", "⌘", "L"], label: "Library"),
+    ]
+
+    var body: some View {
+        DiscoveryWidgetCard(title: "Shortcuts", eyebrow: "Keyboard") {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Array(shortcuts.enumerated()), id: \.offset) { _, s in
+                    HStack(spacing: 8) {
+                        HStack(spacing: 3) {
+                            ForEach(s.keys, id: \.self) { key in
+                                Text(key)
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundStyle(ScopeInk.primary)
+                                    .frame(minWidth: 18, minHeight: 18)
+                                    .background(ScopeCanvas.surface)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 3)
+                                            .stroke(ScopeEdge.normal, lineWidth: 0.5)
+                                    )
+                            }
+                        }
+                        Text(s.label)
+                            .font(.system(size: 11))
+                            .foregroundStyle(ScopeInk.faint)
+                        Spacer()
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Trending — tag + horizontal bar + count. Mini histogram, not a list.
+private struct TrendingWidget: View {
+    private struct Trend { let tag: String; let count: Int }
+    private let trends: [Trend] = [
+        .init(tag: "Standups",       count: 8),
+        .init(tag: "Compose drafts", count: 5),
+        .init(tag: "Code review",    count: 3),
+        .init(tag: "Design notes",   count: 2),
+    ]
+    private var maxCount: Int { trends.map(\.count).max() ?? 1 }
+
+    var body: some View {
+        DiscoveryWidgetCard(title: "Trending", eyebrow: "This week") {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(trends.enumerated()), id: \.offset) { _, t in
+                    HStack(spacing: 10) {
+                        Text(t.tag)
+                            .font(.system(size: 11))
+                            .foregroundStyle(ScopeInk.primary)
+                            .frame(width: 110, alignment: .leading)
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Rectangle().fill(ScopeEdge.faint)
+                                Rectangle()
+                                    .fill(Color.hex("9A6A22"))
+                                    .frame(width: geo.size.width * CGFloat(t.count) / CGFloat(maxCount))
+                            }
+                        }
+                        .frame(height: 6)
+                        .clipShape(RoundedRectangle(cornerRadius: 1))
+                        Text("\(t.count)")
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundStyle(ScopeInk.subtle)
+                            .frame(width: 16, alignment: .trailing)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Shared discovery widget chrome — title + trailing eyebrow + content.
+/// Named `DiscoveryWidgetCard` to avoid colliding with `WidgetCard` in
+/// `HomeWidgets.swift`, which serves the original (non-Scope) Home grid.
+private struct DiscoveryWidgetCard<Content: View>: View {
+    let title: String
+    let eyebrow: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(ScopeFont.display(size: 13, medium: true))
+                    .foregroundStyle(ScopeInk.primary)
+                Spacer()
+                Text(eyebrow.uppercased())
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.faint)
+            }
+            .padding(.bottom, 6)
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
+            }
+            content
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ScopeCanvas.surface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(ScopeEdge.faint, lineWidth: 0.5)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+// MARK: - System status rail
+//
+// Scheme-aware footer rail. Inherits the bay's scheme so the bay and
+// rail read as the two ends of the same instrument body, with the
+// editorial light surfaces between them. On dark schemes (AMBER) it's
+// a gunmetal recessed strip; on light (PEARL/CHIFFON/etc.) it's a
+// barely-there chrome rail.
+
+private struct SystemStatusRail: View {
+    let scheme: BayScheme
+
+    var body: some View {
+        HStack(spacing: 18) {
+            phosphor(label: "AGENT",   detail: "AG-01 · RUNNING", state: .ok)
+            divider
+            phosphor(label: "BRIDGE",  detail: "LOCAL · CONNECTED", state: .ok)
+            divider
+            phosphor(label: "ICLOUD",  detail: "SYNCED", state: .ok)
+            divider
+            phosphor(label: "UPDATES", detail: "CURRENT", state: .muted)
+            Spacer()
+            Text(uptimeChrome)
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(scheme.inkSubtle)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(scheme.stripBottomFill)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(scheme.edge, lineWidth: 0.5)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
+    private enum DotState { case ok, warn, muted }
+
+    private func phosphor(label: String, detail: String, state: DotState) -> some View {
+        HStack(spacing: 6) {
+            let dotColor: Color = {
+                switch state {
+                case .ok:    return scheme.trace
+                case .warn:  return Color.hex("C77F2E")
+                case .muted: return scheme.inkSubtle
+                }
+            }()
+            Circle()
+                .fill(dotColor)
+                .frame(width: 6, height: 6)
+                .shadow(color: scheme.isLight ? .clear : dotColor.opacity(0.55), radius: 3)
+            Text(label)
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(scheme.inkFaint)
+            Text(detail)
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(scheme.inkSubtle)
+        }
+    }
+
+    private var divider: some View {
+        Rectangle()
+            .fill(scheme.edge)
+            .frame(width: 0.5, height: 12)
+    }
+
+    private var uptimeChrome: String {
+        // TODO: wire to ProcessInfo / launchd state. Stub matches
+        // Mac Home study.
+        "PID \(ProcessInfo.processInfo.processIdentifier) · UPTIME 4H"
     }
 }
