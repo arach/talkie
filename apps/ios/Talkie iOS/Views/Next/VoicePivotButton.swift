@@ -112,13 +112,14 @@ struct VoicePivotButton: View {
 
     private var shadowRadius: CGFloat {
         // Resting uses a small static drop-shadow; expanded + listening
-        // scale from the theme's chrome.glowRadius so Tactical's
-        // matte 1pt glow doesn't bloom like Ghost's 7pt diffuse halo.
+        // scale directly from theme.chrome.glowRadius with NO floor —
+        // Tactical's glowRadius:1 → matte 2pt halo; Ghost's :7 → diffuse
+        // 14pt halo; Scope's :2 → soft 4pt. Each theme's character shows.
         let glow = theme.currentTheme.chrome.glowRadius
         switch chrome.state {
         case .resting:   return 4
-        case .expanded:  return max(6, glow * 2)
-        case .listening: return max(10, glow * 3)
+        case .expanded:  return glow * 2
+        case .listening: return glow * 3
         }
     }
 
