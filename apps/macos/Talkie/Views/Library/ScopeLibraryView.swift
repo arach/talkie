@@ -548,7 +548,7 @@ struct ScopeLibraryView: View {
     private var loadingState: some View {
         HStack(spacing: 10) {
             PhosphorDot(color: ScopeAmber.solid.opacity(0.5), size: 5)
-            Text("SCANNING TAPE · STAND BY")
+            Text("LOADING")
                 .font(ScopeType.eyebrow)
                 .tracking(ScopeType.Tracking.wide)
                 .foregroundStyle(ScopeInk.faint)
@@ -564,7 +564,7 @@ struct ScopeLibraryView: View {
                     .frame(width: 48, height: 48)
                 PhosphorDot(color: ScopeAmber.solid.opacity(0.7), size: 8)
             }
-            Text("NO SIGNAL · WAITING FOR INPUT")
+            Text("NO RECORDINGS YET")
                 .font(ScopeType.eyebrow)
                 .tracking(ScopeType.Tracking.wide)
                 .foregroundStyle(ScopeInk.faint)
@@ -580,7 +580,7 @@ struct ScopeLibraryView: View {
     private var emptyStateSubtitle: String {
         if !searchText.isEmpty { return "No matches for \"\(searchText)\"." }
         switch typeFilter {
-        case .all: return "Start a recording — the channel will light up."
+        case .all: return "Start a recording."
         case .memos: return "Memos land here once you've recorded."
         case .dictations: return "Trigger dictation in any app — transcripts arrive here."
         case .notes: return "Typed thoughts and screenshots collect here."
@@ -731,50 +731,36 @@ struct ScopeLibraryView: View {
         surface: ReadoutSurface,
         @ViewBuilder body: () -> Body
     ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("· LIBRARY")
-                    .font(ScopeType.eyebrow)
-                    .tracking(ScopeType.Tracking.wide)
-                    .foregroundStyle(ScopeAmber.solid)
-                Spacer()
-                Text("\(viewModel.totalCount) ON FILE")
-                    .font(ScopeType.chrome)
-                    .tracking(ScopeType.Tracking.wide)
-                    .foregroundStyle(ScopeInk.subtle)
-            }
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(surface.bg)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(surface.edgeFaint, lineWidth: 1)
+                )
 
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(surface.bg)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(surface.edgeFaint, lineWidth: 1)
-                    )
-
-                VStack(spacing: 0) {
-                    readoutChromeStrip(
-                        surface: surface,
-                        leading: surface.topStripLeading,
-                        trailing: surface.topStripTrailing,
-                        fill: AnyView(surface.topStripFill),
-                        isTop: true
-                    )
-                    body()
-                        .frame(maxHeight: .infinity)
-                    readoutChromeStrip(
-                        surface: surface,
-                        leading: surface.bottomStripLeading,
-                        trailing: Date().formatted(date: .omitted, time: .shortened).uppercased(),
-                        fill: AnyView(surface.bottomStripFill),
-                        isTop: false
-                    )
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+            VStack(spacing: 0) {
+                readoutChromeStrip(
+                    surface: surface,
+                    leading: surface.topStripLeading,
+                    trailing: surface.topStripTrailing,
+                    fill: AnyView(surface.topStripFill),
+                    isTop: true
+                )
+                body()
+                    .frame(maxHeight: .infinity)
+                readoutChromeStrip(
+                    surface: surface,
+                    leading: surface.bottomStripLeading,
+                    trailing: Date().formatted(date: .omitted, time: .shortened).uppercased(),
+                    fill: AnyView(surface.bottomStripFill),
+                    isTop: false
+                )
             }
-            .frame(height: 200)
-            .shadow(color: .black.opacity(0.22), radius: 22, y: 12)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
+        .frame(height: 200)
+        .shadow(color: .black.opacity(0.22), radius: 22, y: 12)
     }
 
     /// Universal top/bottom chrome strip. Pulled out so variants share
@@ -859,11 +845,11 @@ struct ScopeLibraryView: View {
                     .font(.system(size: 14))
                     .foregroundStyle(ScopeInk.subtle)
             }
-            Text("NO TRACK SELECTED")
+            Text("NOTHING SELECTED")
                 .font(ScopeType.eyebrow)
                 .tracking(ScopeType.Tracking.wide)
                 .foregroundStyle(ScopeInk.faint)
-            Text("Pick a row to inspect its trace.")
+            Text("Pick a row to see details.")
                 .font(.system(size: 12))
                 .foregroundStyle(ScopeInk.subtle)
         }
@@ -877,13 +863,13 @@ struct ScopeLibraryView: View {
         return ZStack {
             GraticuleBackground(pitch: 20, color: surface.signal.opacity(0.06), opacity: 0.5)
             HStack(spacing: 0) {
-                statsTile(value: "\(stats.total)",      label: "TRACKS",      surface: surface)
+                statsTile(value: "\(stats.total)",      label: "RECORDINGS", surface: surface)
                 statsDivider(surface: surface)
-                statsTile(value: "\(stats.thisWeek)",    label: "THIS WEEK",   surface: surface)
+                statsTile(value: "\(stats.thisWeek)",    label: "THIS WEEK",  surface: surface)
                 statsDivider(surface: surface)
-                statsTile(value: stats.topChannel,       label: "TOP CHANNEL", surface: surface)
+                statsTile(value: stats.topChannel,       label: "TOP SOURCE", surface: surface)
                 statsDivider(surface: surface)
-                statsTile(value: stats.avgDuration,      label: "AVG LENGTH",  surface: surface)
+                statsTile(value: stats.avgDuration,      label: "AVG LENGTH", surface: surface)
             }
             .padding(.horizontal, 14)
         }
@@ -1006,8 +992,8 @@ struct ScopeLibraryView: View {
 
     private var phaseIdleHint: String {
         let count = viewModel.totalCount
-        if count == 0 { return "PHOSPHOR · STANDBY" }
-        return "\(count) ON FILE · CURL · 14S/CYCLE"
+        if count == 0 { return "IDLE" }
+        return "\(count) ON FILE"
     }
 
     private func phaseTitle(for r: TalkieObject) -> String {
@@ -1107,7 +1093,7 @@ struct ScopeLibraryView: View {
         var parts: [String] = []
         if week > 0 { parts.append("\(week) this week") }
         if let ago = lastAgo { parts.append("last \(ago)") }
-        if parts.isEmpty { return "awaiting first signal" }
+        if parts.isEmpty { return "no recordings yet" }
         return parts.joined(separator: " · ")
     }
 
@@ -1781,12 +1767,12 @@ extension ReadoutSurface {
         signal: ScopePanel.trace,
         signalGlow: ScopePanel.traceGlow,
         edgeFaint: ScopePanel.Edge.faint,
-        topStripLeading: "LIBRARY · IDLE",
-        topStripTrailing: "LOCAL ONLY",
-        bottomStripLeading: "· 30D · SIGNAL PATH · LOCAL"
+        topStripLeading: "LIBRARY",
+        topStripTrailing: "",
+        bottomStripLeading: "· 30D"
     )
 
-    /// Abyssal teal-black with aqua-mint phosphor — the Lissajous bay.
+    /// Abyssal teal-black with aqua-mint phosphor — the figure-eight bay.
     static let phasePlot = ReadoutSurface(
         bg: Color.hex("0B1418"),
         bgSecondary: Color.hex("0F1C22"),
@@ -1798,9 +1784,9 @@ extension ReadoutSurface {
         signal: Color.hex("5FE3C9"),
         signalGlow: Color.hex("5FE3C9").opacity(0.45),
         edgeFaint: Color.hex("5FE3C9").opacity(0.12),
-        topStripLeading: "PHASE · LIVE",
-        topStripTrailing: "X/Y · LOCAL",
-        bottomStripLeading: "· LISSAJOUS · 14S/CYCLE"
+        topStripLeading: "LIBRARY",
+        topStripTrailing: "",
+        bottomStripLeading: ""
     )
 
     /// Slate canvas with neutral cream ink — the merged Broadcast.
@@ -1821,9 +1807,9 @@ extension ReadoutSurface {
         signal: Color.hex("C47D1C"),
         signalGlow: Color.hex("C47D1C").opacity(0.32),
         edgeFaint: Color.hex("2A3138"),
-        topStripLeading: "BROADCAST",
-        topStripTrailing: "LOCAL",
-        bottomStripLeading: "· LIVE · LOCAL"
+        topStripLeading: "LIBRARY",
+        topStripTrailing: "",
+        bottomStripLeading: ""
     )
 
     /// Resolved top-strip fill — either the variant's custom gradient

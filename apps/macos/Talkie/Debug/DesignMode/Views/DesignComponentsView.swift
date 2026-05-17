@@ -47,7 +47,7 @@ private struct LibraryVariantsPicker: View {
                     .font(ScopeType.eyebrow)
                     .tracking(ScopeType.Tracking.wide)
                     .foregroundStyle(ScopeAmber.solid)
-                Text("Switch live · the bay morphs to host each body")
+                Text("Choose the readout body for the inspector.")
                     .font(ScopeType.chrome)
                     .tracking(ScopeType.Tracking.wide)
                     .foregroundStyle(ScopeInk.subtle)
