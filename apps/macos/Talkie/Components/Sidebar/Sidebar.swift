@@ -156,6 +156,41 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
     }
 
     public var body: some View {
+        // The effect axis (flush / floating / shadow / recessed) wraps the
+        // core sidebar with different chrome. Surface fill is owned by
+        // `coreSidebarContent`; effects only add wrapping geometry +
+        // overlays so any effect composes with any surface style.
+        switch style.effect {
+        case .flush:
+            coreSidebarContent
+                .overlay(alignment: .trailing) {
+                    SidebarTrailingSeparator(style: style.surface)
+                }
+        case .shadowRail:
+            coreSidebarContent
+                .overlay(alignment: .trailing) {
+                    SidebarTrailingSeparator(style: style.surface)
+                }
+                .overlay(alignment: .trailing) {
+                    SidebarTrailingShadow(style: style.surface)
+                }
+        case .recessed:
+            coreSidebarContent
+                .overlay {
+                    SidebarInnerShadow(style: style.surface)
+                        .allowsHitTesting(false)
+                }
+                .overlay(alignment: .trailing) {
+                    SidebarTrailingSeparator(style: style.surface)
+                }
+        }
+    }
+
+    /// The sidebar's content + surface fill, without the depth/effect
+    /// chrome layer. Always renders the same regardless of effect; the
+    /// effect axis wraps this in different outer geometry.
+    @ViewBuilder
+    private var coreSidebarContent: some View {
         VStack(spacing: 0) {
             sidebarBody
             Spacer(minLength: 0)
@@ -175,9 +210,6 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
                     .fill(Color.white.opacity(0.10))
                     .frame(height: 0.5)
             }
-        }
-        .overlay(alignment: .trailing) {
-            SidebarTrailingSeparator(style: style.surface)
         }
     }
 
@@ -630,6 +662,104 @@ struct SidebarTrailingSeparator: View {
             Rectangle()
                 .fill(Color.primary.opacity(0.12))
                 .frame(width: 0.5)
+        }
+    }
+}
+
+/// Outward shadow that bleeds from the sidebar's trailing edge into the
+/// content area. 16pt-wide linear gradient anchored just past the hairline
+/// so the two don't fight. Used by the `.shadowRail` effect to suggest the
+/// sidebar sits on a slightly higher z-plane than the content.
+///
+/// Skipped on `.glass` — that surface already paints its own white
+/// trailing gradient; a dark fade on top would muddy it.
+struct SidebarTrailingShadow: View {
+    let style: SidebarSurfaceStyle
+
+    /// How far the shadow bleeds into the content column.
+    private static let bleed: CGFloat = 16
+    /// Edge opacity — cool charcoal at low alpha, neutral enough not to
+    /// feel like a drop shadow.
+    private static let edgeOpacity: Double = 0.10
+
+    var body: some View {
+        switch style {
+        case .glass:
+            EmptyView()
+        case .default, .editorial:
+            LinearGradient(
+                colors: [
+                    Color(red: 0.06, green: 0.067, blue: 0.071).opacity(Self.edgeOpacity),
+                    Color(red: 0.06, green: 0.067, blue: 0.071).opacity(0)
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: Self.bleed)
+            // Push the gradient *outside* the sidebar so it lands on the
+            // content column. The 0.5pt offset clears the hairline.
+            .offset(x: Self.bleed + 0.5)
+            .allowsHitTesting(false)
+        }
+    }
+}
+
+/// Inner-frame inset overlay — gives the sidebar a recessed-well feel
+/// without changing the surface fill. Two layered gradients:
+///
+///   1. A top edge inner shadow (8pt) — the lip catching shadow because
+///      the implied light source is bottom-left.
+///   2. A bottom-edge soft drop shadow (14pt) — the well floor where
+///      the sidebar meets the window bottom. Sits *above* the footer's
+///      0.5pt divider so the divider still defines the boundary; the
+///      shadow only darkens the lower half of the footer slot.
+///
+/// We deliberately do *not* shade the right edge — the trailing 0.5pt
+/// separator already does that job; doubling them would read as a
+/// chunky border, not a well. The asymmetric "top only" feel paired
+/// with the trailing hairline is what sells "recessed."
+///
+/// Color is `Color.primary` at low alpha so the effect tracks the
+/// theme: charcoal ink on the cool-slate light theme, off-white on
+/// dark. Tuned for subtlety — the gradient maxes out at ~6% alpha.
+struct SidebarInnerShadow: View {
+    let style: SidebarSurfaceStyle
+
+    var body: some View {
+        // Glass already paints its own bottom shade (~80pt black gradient);
+        // we drop our bottom band there and keep only the top lip so we
+        // don't double-darken.
+        let drawsBottom = style != .glass
+
+        ZStack {
+            // Top edge inner shadow — 8pt fall-off.
+            VStack(spacing: 0) {
+                LinearGradient(
+                    colors: [
+                        Color.primary.opacity(0.06),
+                        Color.primary.opacity(0.0)
+                    ],
+                    startPoint: .top, endPoint: .bottom
+                )
+                .frame(height: 8)
+                Spacer(minLength: 0)
+            }
+
+            // Bottom drop shadow — 14pt fall-off, slightly weaker so the
+            // top still reads as the dominant lip.
+            if drawsBottom {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    LinearGradient(
+                        colors: [
+                            Color.primary.opacity(0.0),
+                            Color.primary.opacity(0.05)
+                        ],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                    .frame(height: 14)
+                }
+            }
         }
     }
 }

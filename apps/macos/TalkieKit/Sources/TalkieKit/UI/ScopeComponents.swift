@@ -489,17 +489,20 @@ public enum ScopeTopBandLayout {
 
 public struct ScopeTopBand<Trailing: View>: View {
     public let title: String
+    public let breadcrumb: String?
     public let chrome: String?
     public let horizontalPadding: CGFloat
     private let trailing: () -> Trailing
 
     public init(
         title: String,
+        breadcrumb: String? = nil,
         chrome: String? = nil,
         horizontalPadding: CGFloat = ScopeTopBandLayout.horizontalPadding,
         @ViewBuilder trailing: @escaping () -> Trailing
     ) {
         self.title = title
+        self.breadcrumb = breadcrumb
         self.chrome = chrome
         self.horizontalPadding = horizontalPadding
         self.trailing = trailing
@@ -529,6 +532,25 @@ public struct ScopeTopBand<Trailing: View>: View {
                     .foregroundColor(ScopeInk.primary)
                     .tracking(-0.3)
                     .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+
+                if let breadcrumb, !breadcrumb.isEmpty {
+                    // Amber chevron embellishment — small, tracking-wide
+                    // typographic flourish between the section title and
+                    // the active filter, keyed to the same baseline so it
+                    // reads as part of the title row, not a separate line.
+                    Text("›")
+                        .font(.system(size: 18, weight: .light))
+                        .foregroundStyle(ScopeAmber.solid.opacity(0.75))
+                        .baselineOffset(2)
+                    Text(breadcrumb)
+                        .font(ScopeTopBand.display(size: 18))
+                        .italic()
+                        .foregroundColor(ScopeInk.muted)
+                        .tracking(-0.2)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
 
                 Spacer(minLength: 8)
 
@@ -565,11 +587,13 @@ public extension ScopeTopBand where Trailing == EmptyView {
     /// Convenience initializer for bands with no trailing accessory.
     init(
         title: String,
+        breadcrumb: String? = nil,
         chrome: String? = nil,
         horizontalPadding: CGFloat = ScopeTopBandLayout.horizontalPadding
     ) {
         self.init(
             title: title,
+            breadcrumb: breadcrumb,
             chrome: chrome,
             horizontalPadding: horizontalPadding,
             trailing: { EmptyView() }
