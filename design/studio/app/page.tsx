@@ -21,6 +21,14 @@ const STUDIES: Study[] = [
       "Full macOS Home composition. Reintegrates the original component taxonomy (stats / actions / activity / discovery / status) into the simplified Scope design language.",
   },
   {
+    slug: "mac-learn",
+    name: "Learn",
+    kind: "Composition study",
+    platform: "macOS",
+    blurb:
+      "Replacement for the data-listing Stats page — an interstitial that surfaces what Talkie can do. Hero · Ask Talkie agent box · Did-you-know feature recap · feature atlas · integrations · what's new.",
+  },
+  {
     slug: "agent-bay",
     name: "Agent Bay",
     kind: "Scheme study",
