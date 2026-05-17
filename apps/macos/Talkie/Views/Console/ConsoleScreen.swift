@@ -21,6 +21,10 @@ struct ConsoleScreen: View {
     /// tab. Toggled by the `+` button in the tab strip — lets the user
     /// pick a fresh harness for the next tab. Resets after the pick.
     @State private var isPickingNewTab = false
+    /// Tab whose chip is currently hovered — drives a small floating
+    /// preview chip above the number with the tab's icon + label, so
+    /// users can identify tabs without relying on numbers alone.
+    @State private var hoveredTabID: String? = nil
     #if DEBUG
     @State private var debugShowLoader = false
     @State private var debugLoaderReplayToken = UUID()
@@ -302,6 +306,7 @@ struct ConsoleScreen: View {
 
     private func scopeInlineTabChip(_ tab: TabDefinition, number: Int) -> some View {
         let isActive = tab.id == registry.activeTabId
+        let isHovered = hoveredTabID == tab.id
         return Button(action: {
             registry.activeTabId = tab.id
             isPickingNewTab = false
@@ -324,7 +329,47 @@ struct ConsoleScreen: View {
                 )
         }
         .buttonStyle(.plain)
-        .help("Switch to tab \(number)")
+        .onHover { hovering in
+            hoveredTabID = hovering ? tab.id : (hoveredTabID == tab.id ? nil : hoveredTabID)
+        }
+        .overlay(alignment: .top) {
+            if isHovered {
+                tabHoverPreview(tab)
+                    .fixedSize()
+                    .offset(y: -32)
+                    .allowsHitTesting(false)
+                    .transition(.opacity.combined(with: .offset(y: 4)))
+                    .zIndex(10)
+            }
+        }
+        .animation(.easeOut(duration: 0.14), value: isHovered)
+    }
+
+    /// Floating chip that appears above an inline tab chip on hover.
+    /// Numbers are cheap real estate but not informative — the preview
+    /// shows the tab's icon + label so the user doesn't have to memorize
+    /// "tab 2 is the Claude one."
+    private func tabHoverPreview(_ tab: TabDefinition) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: tab.symbolName)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(Color.hex("E8ECEA"))
+            Text(tab.label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Color.hex("E8ECEA"))
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.hex("15191E"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(Color.hex("2A3138"), lineWidth: 0.5)
+                )
+                .shadow(color: .black.opacity(0.22), radius: 8, y: 3)
+        )
     }
 
     private func scopeTabChip(_ tab: TabDefinition, number: Int) -> some View {
