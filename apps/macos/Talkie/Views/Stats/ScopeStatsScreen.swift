@@ -47,29 +47,26 @@ struct ScopeStatsScreen: View {
     var onSelectDictation: ((Dictation?) -> Void)?
 
     private let dictationStore = DictationStore.shared
-    private let recordingRepo = TalkieObjectRepository()
 
-    // Hero / panel stats
-    @State private var todayCount = 0
-    @State private var weekCount = 0
-    @State private var totalWords = 0
-    @State private var streak = 0
-    @State private var totalDictations = 0
+    /// All numbers the screen renders live on `StatsCache.shared` —
+    /// the cache pulls them in detached background tasks at most once
+    /// per hour (or on demand). Reading the singleton's properties
+    /// directly subscribes this view to updates via the Observation
+    /// framework, so the numbers appear as soon as the first refresh
+    /// lands without any local @State plumbing.
+    @Bindable private var cache = StatsCache.shared
 
-    // Top apps
-    @State private var topApps: [(name: String, bundleID: String?, count: Int)] = []
-
-    // Storage / workflow
-    @State private var deviceStorageBytes: Int64 = 0
-    @State private var workflowRunsCount = 0
-
-    // Heatmap (last ~13 weeks, like Home)
-    @State private var activityData: [DayActivity] = []
-    @State private var maxDayCount: Int = 1
-    @State private var activityTask: Task<Void, Never>?
-
-    // Sparkline (last 30 days)
-    @State private var sparklineCounts: [Int] = []
+    private var todayCount: Int        { cache.todayDictations }
+    private var weekCount: Int         { cache.weekDictations }
+    private var totalWords: Int        { cache.totalWords }
+    private var streak: Int            { cache.streak }
+    private var totalDictations: Int   { cache.totalDictations }
+    private var topApps: [TopApp]      { cache.topApps }
+    private var deviceStorageBytes: Int64 { cache.deviceStorageBytes }
+    private var workflowRunsCount: Int { cache.workflowRunsCount }
+    private var activityData: [DayActivity] { cache.activityData }
+    private var maxDayCount: Int       { cache.maxDayCount }
+    private var sparklineCounts: [Int] { cache.sparklineCounts }
 
     private var todayLabel: String {
         let f = DateFormatter()
@@ -78,58 +75,68 @@ struct ScopeStatsScreen: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 32) {
-                hero
-                sparklineStrip
-                instrumentBay
-                splitRow
-                recentDictationsTable
-                ownershipFooter
+        VStack(spacing: 0) {
+            ScopeTopBand(title: "Recordings", chrome: heroTrailing)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    hero
+                    sparklineStrip
+                    instrumentBay
+                    splitRow
+                    recentDictationsTable
+                    ownershipFooter
+                }
+                .padding(.horizontal, 32)
+                .padding(.top, 12)
+                .padding(.bottom, 24)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 40)
-            .padding(.vertical, 32)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(ScopeCanvas.canvas)
         .task {
-            await loadAll()
-        }
-        .onAppear {
-            Task { await loadAll() }
+            // Cache-first: paints instantly with whatever values the
+            // shared cache already holds; triggers a background
+            // refresh only if the data is stale (>1h old). All heavy
+            // work — including the FileManager enumeration that used
+            // to block main for tens of seconds — runs detached.
+            cache.refreshIfStale()
+            dictationStore.refresh()
         }
     }
 
     // MARK: - Hero
+    //
+    // The top-row identity ("Recordings" + words/streak chrome) lives in
+    // the universal `ScopeTopBand` above. The in-page hero now carries
+    // only the editorial flourish: the big Cormorant dictation count.
 
     private var hero: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Eyebrow("Signal · Recorded")
-            Text(headlineCopy)
-                .font(ScopeFont.display(size: 44))
-                .foregroundStyle(ScopeInk.primary)
-                .tracking(-0.8)
-                .lineSpacing(-2)
-            Text(subheadCopy)
-                .font(.system(size: 13, design: .monospaced))
-                .foregroundStyle(ScopeInk.muted)
-                .frame(maxWidth: 620, alignment: .leading)
-            ScopeDivider().padding(.top, 6)
-        }
+        ScopePageHero(
+            eyebrow: nil,
+            titleHead: heroTitleHead,
+            titleTail: nil,
+            trailing: nil,
+            size: .expanded
+        )
     }
 
-    private var headlineCopy: String {
-        if totalDictations == 0 {
-            return "Nothing on tape yet."
-        }
-        return "What you've said."
+    private var heroTitleHead: String {
+        if totalDictations == 0 { return "Nothing on tape" }
+        if totalDictations == 1 { return "1 dictation" }
+        return "\(formatNumber(totalDictations)) dictations"
     }
 
-    private var subheadCopy: String {
-        let total = formatNumber(totalDictations)
+    private var heroTrailing: String {
         let words = wordsFormatted(totalWords)
-        let streakStr = streak > 1 ? "\(streak)-day streak" : streak == 1 ? "1 day on the line" : "no active streak"
-        return "\(total) DICTATIONS · \(words) WORDS · \(streakStr.uppercased()) · LAST 30 DAYS · \(todayLabel)"
+        let streakStr = streak > 1 ? "\(streak)-DAY STREAK"
+            : streak == 1 ? "1 DAY ON THE LINE"
+            : nil
+        if let streakStr {
+            return "\(words) WORDS · \(streakStr) · LAST 30 DAYS"
+        }
+        return "\(words) WORDS · LAST 30 DAYS"
     }
 
     // MARK: - Sparkline strip (full bleed mono trace)
@@ -195,6 +202,7 @@ struct ScopeStatsScreen: View {
                     panelBody
                     panelFooter
                 }
+                .clipShape(RoundedRectangle(cornerRadius: 8))
             }
             .frame(height: 240)
             .shadow(color: .black.opacity(0.20), radius: 30, y: 18)
@@ -216,8 +224,12 @@ struct ScopeStatsScreen: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+        .background(ScopePanel.stripTop)
         .overlay(alignment: .bottom) {
-            Rectangle().fill(ScopePanel.Edge.faint).frame(height: 1)
+            Rectangle()
+                .fill(ScopePanel.Edge.faint)
+                .frame(height: 1)
+                .padding(.horizontal, 16)
         }
     }
 
@@ -290,8 +302,12 @@ struct ScopeStatsScreen: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+        .background(ScopePanel.stripBottom)
         .overlay(alignment: .top) {
-            Rectangle().fill(ScopePanel.Edge.faint).frame(height: 1)
+            Rectangle()
+                .fill(ScopePanel.Edge.faint)
+                .frame(height: 1)
+                .padding(.horizontal, 16)
         }
     }
 
@@ -575,137 +591,6 @@ struct ScopeStatsScreen: View {
 
     private var arrow: some View {
         SignalPath(color: ScopeAmber.solid, width: 28)
-    }
-
-    // MARK: - Data loading
-
-    private func loadAll() async {
-        await loadStats()
-        loadStorageStats()
-        dictationStore.refresh()
-        await buildActivity()
-    }
-
-    private func loadStats() async {
-        do {
-            async let today = recordingRepo.countRecordingsToday(type: .dictation)
-            async let week = recordingRepo.countDictationsThisWeek()
-            async let words = recordingRepo.totalDictationWords()
-            async let streakVal = recordingRepo.calculateDictationStreak()
-            async let apps = recordingRepo.topDictationApps(limit: 6)
-            async let total = recordingRepo.countDictations()
-
-            let results = try await (today, week, words, streakVal, apps, total)
-            await MainActor.run {
-                todayCount = results.0
-                weekCount = results.1
-                totalWords = results.2
-                streak = results.3
-                topApps = results.4
-                totalDictations = results.5
-            }
-        } catch {
-            print("ScopeStatsScreen.loadStats error: \(error)")
-        }
-    }
-
-    private func loadStorageStats() {
-        Task {
-            let bytes = await calculateStorageUsed()
-            await MainActor.run { deviceStorageBytes = bytes }
-        }
-        Task {
-            let count = await countWorkflowRuns()
-            await MainActor.run { workflowRunsCount = count }
-        }
-    }
-
-    private func buildActivity() async {
-        activityTask?.cancel()
-        activityTask = Task {
-            let result = await buildActivityData()
-            if !Task.isCancelled {
-                await MainActor.run {
-                    activityData = result.days
-                    maxDayCount = result.maxCount
-                    sparklineCounts = result.last30
-                }
-            }
-        }
-    }
-
-    private func buildActivityData() async -> (days: [DayActivity], maxCount: Int, last30: [Int]) {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        let weeksToShow = 13
-
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd"
-
-        var dayMap: [Date: Int] = [:]
-        if DatabaseManager.shared.isInitialized,
-           let dictationActivity = try? await recordingRepo.dictationActivityByDay(days: 365) {
-            for (dateString, count) in dictationActivity {
-                if let date = dateFormatter.date(from: dateString) {
-                    dayMap[calendar.startOfDay(for: date), default: 0] += count
-                }
-            }
-        }
-
-        let maxCount = max(dayMap.values.max() ?? 1, 1)
-
-        let todayWeekday = calendar.component(.weekday, from: today)
-        let daysBack = (weeksToShow - 1) * 7 + (todayWeekday - 1)
-        guard let startDate = calendar.date(byAdding: .day, value: -daysBack, to: today) else {
-            return ([], 1, [])
-        }
-
-        var days: [DayActivity] = []
-        var cursor = startDate
-        while cursor <= today {
-            let count = dayMap[cursor] ?? 0
-            let level = ActivityLevel.from(count: count, max: maxCount)
-            days.append(DayActivity(date: cursor, count: count, level: level))
-            cursor = calendar.date(byAdding: .day, value: 1, to: cursor) ?? cursor
-        }
-
-        // Last 30 days for sparkline
-        var last30: [Int] = []
-        for offset in stride(from: 29, through: 0, by: -1) {
-            if let d = calendar.date(byAdding: .day, value: -offset, to: today) {
-                last30.append(dayMap[calendar.startOfDay(for: d)] ?? 0)
-            }
-        }
-
-        return (days, maxCount, last30)
-    }
-
-    private func calculateStorageUsed() async -> Int64 {
-        guard let audioDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("Talkie")
-            .appendingPathComponent("Audio") else {
-            return 0
-        }
-        var totalSize: Int64 = 0
-        if let enumerator = FileManager.default.enumerator(at: audioDir, includingPropertiesForKeys: [.fileSizeKey]) {
-            for case let fileURL as URL in enumerator {
-                if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
-                    totalSize += Int64(size)
-                }
-            }
-        }
-        return totalSize
-    }
-
-    private func countWorkflowRuns() async -> Int {
-        do {
-            let db = try await DatabaseManager.shared.databaseWhenReady()
-            return try await db.read { db in
-                try WorkflowRunModel.fetchCount(db)
-            }
-        } catch {
-            return 0
-        }
     }
 
     // MARK: - Formatting

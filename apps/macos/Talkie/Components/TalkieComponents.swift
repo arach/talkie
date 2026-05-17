@@ -69,9 +69,15 @@ struct UniversalPageHeader: View {
     @State private var searchText = ""
     @FocusState private var isSearchFocused: Bool
 
+    private var isScope: Bool { SettingsManager.shared.isScopeTheme }
+
     var body: some View {
         PageHeaderBar {
-            TalkieText(pageTitle, style: .pageTitle)
+            if isScope {
+                CompactScopePageHeader(title: pageTitle, subtitle: nil)
+            } else {
+                TalkieText(pageTitle, style: .pageTitle)
+            }
 
             if let titleAccessory {
                 titleAccessory
@@ -81,9 +87,9 @@ struct UniversalPageHeader: View {
                 Button(action: { onRecordTap?() }) {
                     Image(systemName: "plus")
                         .font(Theme.current.fontXSMedium)
-                        .foregroundColor(Theme.current.foregroundSecondary)
+                        .foregroundColor(isScope ? ScopeAmber.solid : Theme.current.foregroundSecondary)
                         .frame(width: 22, height: 22)
-                        .background(Theme.current.foreground.opacity(0.08))
+                        .background(isScope ? ScopeAmber.tintSubtle : Theme.current.foreground.opacity(0.08))
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
@@ -100,7 +106,7 @@ struct UniversalPageHeader: View {
                 isFocused: $isSearchFocused
             )
         }
-        .background(Theme.current.background)
+        .background(isScope ? ScopeCanvas.canvas : Theme.current.background)
     }
 }
 

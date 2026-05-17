@@ -178,8 +178,12 @@ function buildService(service: TalkieService, projectRoot: string): { success: b
     : ["-project", `${projectRoot}/${service.xcodeProject}`];
   const start = Date.now();
 
+  // `-destination 'platform=macOS'` ensures xcodebuild filters to a macOS-
+  // capable scheme. Without it, an ambiguous workspace scheme (or one whose
+  // first-matching target happens to be iOS) can build the wrong product
+  // — reporting success while leaving the macOS .app stale.
   const result = Bun.spawnSync(
-    ["xcodebuild", ...containerArgs, "-scheme", service.xcodeScheme, "-configuration", "Debug", "build"],
+    ["xcodebuild", ...containerArgs, "-scheme", service.xcodeScheme, "-configuration", "Debug", "-destination", "platform=macOS", "build"],
     { stdout: "pipe", stderr: "pipe", timeout: 900_000 }
   );
 

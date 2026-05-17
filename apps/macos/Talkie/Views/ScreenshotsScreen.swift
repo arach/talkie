@@ -42,6 +42,16 @@ struct ScreenshotsScreen: View {
     @State private var isLoading = true
     @State private var searchText = ""
 
+    // ── Visible window ───────────────────────────────────────────
+    // Render only the first `visibleCount` items so 200+ thumbnails
+    // don't all decode at once on view-appear. The bottom sentinel
+    // bumps the count by `pageSize` as the user scrolls in. This is
+    // the "simple protection" referenced in the perf brief — image
+    // decoding on 200 cards concurrently was the main source of
+    // Screenshots-page hitches.
+    @State private var visibleCount: Int = 10
+    private static let pageSize: Int = 10
+
     // Layout
     @State private var detailWidth: CGFloat = 420
     private let detailMinWidth: CGFloat = 300
@@ -90,6 +100,11 @@ struct ScreenshotsScreen: View {
             }
             return false
         }
+    }
+
+    /// Window into `allItems` — the only slice that actually renders.
+    private var visibleItems: [ScreenshotItem] {
+        Array(allItems.prefix(visibleCount))
     }
 
     private var selectedItem: ScreenshotItem? {
@@ -197,8 +212,19 @@ struct ScreenshotsScreen: View {
                         columns: [GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 8)],
                         spacing: 8
                     ) {
-                        ForEach(allItems) { item in
-                            screenshotCard(item, allItems: allItems)
+                        ForEach(visibleItems) { item in
+                            screenshotCard(item, allItems: visibleItems)
+                        }
+
+                        // Infinite-scroll sentinel. When this 1pt-tall placeholder
+                        // appears in the LazyVGrid viewport, bump the window by
+                        // `pageSize`. Cheap: only renders when more items exist.
+                        if visibleCount < allItems.count {
+                            Color.clear
+                                .frame(height: 1)
+                                .onAppear {
+                                    visibleCount = min(visibleCount + Self.pageSize, allItems.count)
+                                }
                         }
                     }
                     .padding(PageLayout.horizontalPadding)

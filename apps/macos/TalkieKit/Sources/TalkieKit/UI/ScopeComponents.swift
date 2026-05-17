@@ -243,6 +243,364 @@ public struct ScopeDivider: View {
     }
 }
 
+// MARK: - ScopePageHero
+
+/// Unified in-page hero for Scope-themed screens. Lives *below* the
+/// universal 44pt top bar (which renders `CompactScopePageHeader`).
+/// This is the second header band — eyebrow + two-tone Cormorant title
+/// + optional trailing chrome + optional subtitle, capped with a
+/// `ScopeDivider`.
+///
+/// Total height target: ~58pt (no subtitle) / ~76pt (with subtitle).
+/// Previous bespoke heroes ran ~95–120pt. Halves the vertical real
+/// estate while keeping the lab/instrument vocabulary intact.
+public struct ScopePageHero: View {
+    public enum Size {
+        /// Default ~26pt Cormorant. Use for every secondary page.
+        case compact
+        /// ~32pt Cormorant. Reserved for the Home lobby where the hero
+        /// earns slightly more presence.
+        case expanded
+    }
+
+    public let eyebrow: String?
+    public let titleHead: String
+    public let titleTail: String?
+    public let trailing: String?
+    public let subtitle: String?
+    public let size: Size
+
+    public init(
+        eyebrow: String? = nil,
+        titleHead: String,
+        titleTail: String? = nil,
+        trailing: String? = nil,
+        subtitle: String? = nil,
+        size: Size = .compact
+    ) {
+        self.eyebrow = eyebrow
+        self.titleHead = titleHead
+        self.titleTail = titleTail
+        self.trailing = trailing
+        self.subtitle = subtitle
+        self.size = size
+    }
+
+    private var displaySize: CGFloat {
+        switch size {
+        case .compact:  return 26
+        case .expanded: return 32
+        }
+    }
+
+    /// Cormorant Garamond resolver — same fallback chain as the other
+    /// Scope files. Kept inline so the shared component doesn't need a
+    /// separate font helper.
+    private static func display(size: CGFloat) -> Font {
+        #if os(macOS)
+        for name in ["CormorantGaramond-Regular", "Cormorant Garamond", "CormorantGaramond"] {
+            if NSFont(name: name, size: size) != nil {
+                return .custom(name, size: size)
+            }
+        }
+        #endif
+        return .system(size: size, weight: .regular, design: .serif)
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Line 1 — eyebrow + trailing chrome (only rendered when
+            // either piece is present; pages whose top-row identity now
+            // lives in `ScopeTopBand` pass eyebrow=nil and skip this).
+            if (eyebrow != nil && !(eyebrow ?? "").isEmpty) ||
+               (trailing != nil && !(trailing ?? "").isEmpty) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    if let eyebrow, !eyebrow.isEmpty {
+                        Eyebrow(eyebrow)
+                    }
+                    Spacer(minLength: 8)
+                    if let trailing, !trailing.isEmpty {
+                        Text(trailing.uppercased())
+                            .font(ScopeType.chrome)
+                            .tracking(ScopeType.Tracking.wide)
+                            .foregroundStyle(ScopeInk.subtle)
+                            .lineLimit(1)
+                    }
+                }
+            }
+
+            // Line 2 — two-tone Cormorant title
+            Group {
+                if let titleTail, !titleTail.isEmpty {
+                    (
+                        Text(titleHead)
+                            .foregroundColor(ScopeInk.primary)
+                        +
+                        Text(" \(titleTail)")
+                            .foregroundColor(ScopeInk.muted)
+                            .italic()
+                    )
+                    .font(ScopePageHero.display(size: displaySize))
+                    .tracking(-0.5)
+                } else {
+                    Text(titleHead)
+                        .font(ScopePageHero.display(size: displaySize))
+                        .foregroundColor(ScopeInk.primary)
+                        .tracking(-0.5)
+                }
+            }
+            .lineLimit(1)
+            .truncationMode(.tail)
+
+            // Optional line 3 — one-line mono caption
+            if let subtitle, !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.faint)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .padding(.top, 2)
+            }
+
+            ScopeDivider().padding(.top, 6)
+        }
+    }
+}
+
+// MARK: - ScopePageStrip
+
+/// Unified slim header strip used at the top of every Scope utility
+/// page (Library, Drafts, Models, Context, Workflows). Replaces the
+/// bespoke per-page HStacks that drifted into slightly-different
+/// paddings / orderings.
+///
+/// Anatomy (left → right):
+/// - Leading: `PhosphorDot` + `Eyebrow(eyebrow)` (only when `eyebrow` set)
+/// - Spacer
+/// - Trailing chrome: right-aligned mono caption (e.g. `"127 ON FILE"`)
+/// - Optional trailing accessory view (button, badge, etc.)
+///
+/// Two visual modes:
+/// - `framed: false` — bare row, 8pt vertical padding only. For pages
+///   whose parent already supplies horizontal padding.
+/// - `framed: true` — wrapped in a section-card frame (cream surface,
+///   hairline border, 6pt corner radius). Translates the Stats
+///   `panelHeader` vocabulary onto the cream surface.
+public struct ScopePageStrip<Trailing: View>: View {
+    public let eyebrow: String?
+    public let chrome: String?
+    public let framed: Bool
+    private let trailing: () -> Trailing
+
+    public init(
+        eyebrow: String? = nil,
+        chrome: String? = nil,
+        framed: Bool = false,
+        @ViewBuilder trailing: @escaping () -> Trailing
+    ) {
+        self.eyebrow = eyebrow
+        self.chrome = chrome
+        self.framed = framed
+        self.trailing = trailing
+    }
+
+    public var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            if let eyebrow, !eyebrow.isEmpty {
+                PhosphorDot(color: ScopeAmber.solid, size: 6)
+                    .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] }
+                Eyebrow(eyebrow.uppercased(), color: ScopeAmber.solid)
+            }
+            Spacer(minLength: 8)
+            if let chrome, !chrome.isEmpty {
+                Text(chrome.uppercased())
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.subtle)
+                    .lineLimit(1)
+            }
+            trailing()
+        }
+        .padding(.horizontal, framed ? 14 : 0)
+        .padding(.vertical, framed ? 10 : 8)
+        .background(framedBackground)
+    }
+
+    @ViewBuilder
+    private var framedBackground: some View {
+        if framed {
+            RoundedRectangle(cornerRadius: 6)
+                .fill(ScopeCanvas.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(ScopeEdge.normal, lineWidth: 1)
+                )
+        } else {
+            Color.clear
+        }
+    }
+}
+
+public extension ScopePageStrip where Trailing == EmptyView {
+    /// Convenience initializer for strips with no trailing accessory.
+    init(eyebrow: String? = nil, chrome: String? = nil, framed: Bool = false) {
+        self.init(eyebrow: eyebrow, chrome: chrome, framed: framed, trailing: { EmptyView() })
+    }
+}
+
+// MARK: - ScopeTopBand
+//
+// The single, universal top row that every Scope-themed page renders
+// at the very top of its detail column. Locks four things across all
+// pages so the layout reads as one consistent shell:
+//
+// 1. 44pt vertical band height (matches the sidebar wordmark band).
+// 2. Title baseline pinned to a constant Y from the top of the band,
+//    so the bottoms of TALKIE (sidebar) and "Today" / "Drafts" / etc.
+//    sit on exactly the same horizontal line regardless of font.
+// 3. 32pt horizontal inset (matches every page's content grid).
+// 4. Optional right-side chrome and trailing accessory slot — same
+//    treatment everywhere (uppercase mono caption, hairline icon button
+//    if used).
+//
+// Editorial pages (Home, Stats) may still render a larger in-page
+// hero below — but the *top row* is owned by this band so the cross-
+// column alignment with the wordmark is invariant.
+
+/// Shared layout constants for the universal top band. Pinned here so
+/// the sidebar wordmark and every page's title pull from the same
+/// numbers — change them once and the whole shell moves together.
+public enum ScopeTopBandLayout {
+    /// 44pt — matches the sidebar wordmark frame.
+    public static let height: CGFloat = 44
+    /// 32pt — matches the standardized page horizontal padding.
+    public static let horizontalPadding: CGFloat = 32
+    /// 30pt — vertical position of the text baseline measured from the
+    /// top of the band. The wordmark anchors to the same value so the
+    /// bottoms of the two glyph rows align across columns.
+    public static let baselineFromTop: CGFloat = 30
+    /// 7pt — top inset applied above the page-title band. Locked to
+    /// `SidebarLayout.headerTopPadding` so the page title, sidebar
+    /// wordmark, and the persistent GlobalActionBar overlay (also at
+    /// `.padding(.top, 7)`) share one horizontal rail across the window.
+    public static let topInset: CGFloat = 4
+}
+
+public struct ScopeTopBand<Trailing: View>: View {
+    public let title: String
+    public let breadcrumb: String?
+    public let chrome: String?
+    public let horizontalPadding: CGFloat
+    private let trailing: () -> Trailing
+
+    public init(
+        title: String,
+        breadcrumb: String? = nil,
+        chrome: String? = nil,
+        horizontalPadding: CGFloat = ScopeTopBandLayout.horizontalPadding,
+        @ViewBuilder trailing: @escaping () -> Trailing
+    ) {
+        self.title = title
+        self.breadcrumb = breadcrumb
+        self.chrome = chrome
+        self.horizontalPadding = horizontalPadding
+        self.trailing = trailing
+    }
+
+    /// Cormorant Garamond resolver — same fallback chain as the rest of
+    /// the Scope components.
+    private static func display(size: CGFloat) -> Font {
+        #if os(macOS)
+        for name in ["CormorantGaramond-Regular", "Cormorant Garamond", "CormorantGaramond"] {
+            if NSFont(name: name, size: size) != nil {
+                return .custom(name, size: size)
+            }
+        }
+        #endif
+        return .system(size: size, weight: .regular, design: .serif)
+    }
+
+    public var body: some View {
+        ZStack(alignment: .topLeading) {
+            Color.clear
+                .frame(height: ScopeTopBandLayout.height)
+
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(title)
+                    .font(ScopeTopBand.display(size: 24))
+                    .foregroundColor(ScopeInk.primary)
+                    .tracking(-0.3)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+
+                if let breadcrumb, !breadcrumb.isEmpty {
+                    // Amber chevron embellishment — small, tracking-wide
+                    // typographic flourish between the section title and
+                    // the active filter, keyed to the same baseline so it
+                    // reads as part of the title row, not a separate line.
+                    Text("›")
+                        .font(.system(size: 18, weight: .light))
+                        .foregroundStyle(ScopeAmber.solid.opacity(0.75))
+                        .baselineOffset(2)
+                    Text(breadcrumb)
+                        .font(ScopeTopBand.display(size: 18))
+                        .italic()
+                        .foregroundColor(ScopeInk.muted)
+                        .tracking(-0.2)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+
+                Spacer(minLength: 8)
+
+                if let chrome, !chrome.isEmpty {
+                    Text(chrome.uppercased())
+                        .font(ScopeType.chrome)
+                        .tracking(ScopeType.Tracking.wide)
+                        .foregroundStyle(ScopeInk.subtle)
+                        .lineLimit(1)
+                }
+
+                trailing()
+            }
+            .padding(.horizontal, horizontalPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .alignmentGuide(.top) { dim in
+                // Pin the HStack's firstTextBaseline to a fixed Y from
+                // the top of the band so the title bottom always lands
+                // on the same horizontal line as the wordmark.
+                dim[.firstTextBaseline] - ScopeTopBandLayout.baselineFromTop
+            }
+        }
+        .frame(height: ScopeTopBandLayout.height, alignment: .topLeading)
+        // Push the band down so its baseline lines up with the donor
+        // sidebar's wordmark, which is itself offset by
+        // `SidebarLayout.headerTopPadding` (18pt) at the top of the
+        // sidebar column. Without this inset the page title sits 18pt
+        // above the wordmark — visible as the title "flying too high".
+        .padding(.top, ScopeTopBandLayout.topInset)
+    }
+}
+
+public extension ScopeTopBand where Trailing == EmptyView {
+    /// Convenience initializer for bands with no trailing accessory.
+    init(
+        title: String,
+        breadcrumb: String? = nil,
+        chrome: String? = nil,
+        horizontalPadding: CGFloat = ScopeTopBandLayout.horizontalPadding
+    ) {
+        self.init(
+            title: title,
+            breadcrumb: breadcrumb,
+            chrome: chrome,
+            horizontalPadding: horizontalPadding,
+            trailing: { EmptyView() }
+        )
+    }
+}
+
 // MARK: - SignalPath
 
 /// Two-node connector with a glowing gradient arrow — the homepage's

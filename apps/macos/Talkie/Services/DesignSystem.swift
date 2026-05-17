@@ -1086,13 +1086,58 @@ struct PageHeader: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            TalkieText(title, style: .pageTitle)
+        if SettingsManager.shared.isScopeTheme {
+            // Compact Scope variant — fits inside TalkiePage's 44pt bar.
+            // PhosphorDot + eyebrow lockup, two-tone serif title, optional
+            // mono subtitle. Full hero (with ScopeDivider) lives in
+            // SettingsPageHeader / SettingsPageContainer where the header
+            // band is flexible.
+            CompactScopePageHeader(title: title, subtitle: subtitle)
+        } else {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                TalkieText(title, style: .pageTitle)
 
-            if let subtitle = subtitle {
+                if let subtitle = subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                }
+            }
+        }
+    }
+}
+
+/// Single-line Scope-flavored PageHeader. Cormorant serif title, sized to
+/// fit inside PageLayout.headerHeight (44pt). This is THE source of page
+/// identity in Scope — in-page heroes must not duplicate it.
+struct CompactScopePageHeader: View {
+    let title: String
+    let subtitle: String?
+
+    private static func display(size: CGFloat) -> Font {
+        for name in ["CormorantGaramond-Regular", "Cormorant Garamond", "CormorantGaramond"] {
+            if NSFont(name: name, size: size) != nil {
+                return .custom(name, size: size)
+            }
+        }
+        return .system(size: size, weight: .regular, design: .serif)
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(title)
+                .font(CompactScopePageHeader.display(size: 24))
+                .foregroundColor(ScopeInk.primary)
+                .tracking(-0.3)
+                .lineLimit(1)
+
+            if let subtitle = subtitle, !subtitle.isEmpty {
                 Text(subtitle)
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundColor(Theme.current.foregroundSecondary)
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.normal)
+                    .foregroundStyle(ScopeInk.subtle)
+                    .lineLimit(1)
+                    .padding(.bottom, 2)
             }
         }
     }
@@ -1209,8 +1254,12 @@ struct SettingsPageHeader: View {
     }
 
     var body: some View {
-        TalkieText(displayTitle, style: .settingsTitle)
-            .frame(height: SettingsHeaderLayout.primaryLineHeight, alignment: .center)
+        if SettingsManager.shared.isScopeTheme {
+            ScopePageHeader(icon: icon, title: title, subtitle: subtitle)
+        } else {
+            TalkieText(displayTitle, style: .settingsTitle)
+                .frame(height: SettingsHeaderLayout.primaryLineHeight, alignment: .center)
+        }
     }
 }
 
@@ -1225,27 +1274,124 @@ struct SettingsPageContainer<Header: View, Content: View>: View {
         self.content = content()
     }
 
+    private var isScope: Bool { SettingsManager.shared.isScopeTheme }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Sticky header area - uses standardized layout for cross-column alignment
             header
-                .padding(.horizontal, Spacing.lg)
-                .padding(.top, SettingsHeaderLayout.topPadding)
-                .padding(.bottom, Spacing.sm)
+                .padding(.horizontal, isScope ? 28 : Spacing.lg)
+                .padding(.top, isScope ? 22 : SettingsHeaderLayout.topPadding)
+                .padding(.bottom, isScope ? 14 : Spacing.sm)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
-                .background(Theme.current.background)
+                .background(isScope ? ScopeCanvas.canvas : Theme.current.background)
 
             // Scrollable content
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.lg) {
                     content
                 }
-                .padding(Spacing.lg)
+                .padding(isScope ? 28 : Spacing.lg)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
         }
         .frame(minHeight: 500, maxHeight: .infinity)
-        .background(Theme.current.background)
+        .background(isScope ? ScopeCanvas.canvas : Theme.current.background)
+    }
+}
+
+// MARK: - Scope Page Header
+
+/// Cream-phosphor settings page header. Eyebrow with leading PhosphorDot,
+/// two-tone serif title (Cormorant), mono subtitle, ScopeDivider rule.
+/// Replaces the standard icon-title-subtitle layout when isScopeTheme.
+struct ScopePageHeader: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+
+    private static let regularCandidates = [
+        "CormorantGaramond-Regular",
+        "Cormorant Garamond",
+        "CormorantGaramond",
+    ]
+    private static let mediumCandidates = [
+        "CormorantGaramond-Medium",
+        "Cormorant Garamond Medium",
+    ]
+
+    /// Display font matched to other Scope screens (ScopeHomeView /
+    /// ScopeContextView). Tries Cormorant Garamond, falls back to system
+    /// serif so this works even when the homepage font isn't installed.
+    private static func display(size: CGFloat, medium: Bool = false) -> Font {
+        for name in (medium ? mediumCandidates : regularCandidates) {
+            if NSFont(name: name, size: size) != nil {
+                return .custom(name, size: size)
+            }
+        }
+        return .system(size: size, weight: medium ? .medium : .regular, design: .serif)
+    }
+
+    /// Split the title on the first space for the two-tone treatment.
+    /// Single-word titles render the entire word in primary ink.
+    private var titleParts: (head: String, tail: String?) {
+        let trimmed = title.trimmingCharacters(in: .whitespaces)
+        if let spaceIdx = trimmed.firstIndex(of: " ") {
+            let head = String(trimmed[..<spaceIdx])
+            let tail = String(trimmed[trimmed.index(after: spaceIdx)...])
+                .trimmingCharacters(in: .whitespaces)
+            return (head, tail.isEmpty ? nil : tail)
+        }
+        return (trimmed, nil)
+    }
+
+    @ViewBuilder
+    private var headline: some View {
+        let parts = titleParts
+        if let tail = parts.tail {
+            (
+                Text(parts.head.capitalized + " ")
+                    .foregroundColor(ScopeInk.primary)
+                +
+                Text(tail.capitalized)
+                    .foregroundColor(ScopeInk.muted)
+                    .italic()
+            )
+            .font(ScopePageHeader.display(size: 32))
+            .tracking(-0.4)
+        } else {
+            Text(parts.head.capitalized)
+                .font(ScopePageHeader.display(size: 32))
+                .foregroundColor(ScopeInk.primary)
+                .tracking(-0.4)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Eyebrow row: phosphor dot + uppercase tracked label
+            HStack(spacing: 8) {
+                PhosphorDot(color: ScopeAmber.solid, size: 5)
+                Text(title.uppercased())
+                    .font(ScopeType.eyebrow)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeAmber.solid)
+                    .phosphorGlow(radius: 3, opacity: 0.28)
+            }
+
+            headline
+
+            if !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.system(size: 12))
+                    .foregroundStyle(ScopeInk.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 640, alignment: .leading)
+            }
+
+            ScopeDivider().padding(.top, 6)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

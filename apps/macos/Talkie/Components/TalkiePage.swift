@@ -103,6 +103,8 @@ struct TalkiePage<Header: View, Content: View>: View {
         self.content = content()
     }
 
+    private var isScope: Bool { SettingsManager.shared.isScopeTheme }
+
     var body: some View {
         VStack(spacing: 0) {
             // Header section (unless full page or pageOnly)
@@ -113,7 +115,7 @@ struct TalkiePage<Header: View, Content: View>: View {
             // Content section
             contentSection
         }
-        .background(Theme.current.background)
+        .background(isScope ? ScopeCanvas.canvas : Theme.current.background)
         .environment(\.instrumentationSection, name)
     }
 
@@ -122,7 +124,7 @@ struct TalkiePage<Header: View, Content: View>: View {
             header
             Spacer(minLength: 0)
         }
-        .background(Theme.current.background)
+        .background(isScope ? ScopeCanvas.canvas : Theme.current.background)
     }
 
     @ViewBuilder
