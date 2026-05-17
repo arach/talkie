@@ -203,3 +203,57 @@ extension TalkieUITestsScreenshots {
         }
     }
 }
+
+// MARK: - M2 Compose Wiring Screenshots
+
+extension TalkieUITestsScreenshots {
+    func testM2ComposeStateScreenshots() {
+        let states = ["idle", "dictating", "listening", "generating", "diff"]
+
+        for state in states {
+            app.terminate()
+            app.launchEnvironment["FASTLANE_SNAPSHOT"] = "1"
+            app.launchArguments = [
+                "-FASTLANE_SNAPSHOT",
+                "--screenshotSkipSplash",
+                "--screenshotTheme", "scope",
+                "--composeState", state,
+            ]
+            app.launch()
+            dismissSystemAlertsIfNeeded()
+
+            let composeHeader = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "COMPOSE WITH")).firstMatch
+            XCTAssertTrue(
+                composeHeader.waitForExistence(timeout: 10),
+                "state-\(state): compose screen should be ready"
+            )
+            snapshot("state-\(state)", timeWaitingForIdle: 0)
+        }
+    }
+
+    func testM2HomeToComposeScreenshot() {
+        app.terminate()
+        app.launchEnvironment["FASTLANE_SNAPSHOT"] = "1"
+        app.launchArguments = [
+            "-FASTLANE_SNAPSHOT",
+            "--screenshotSkipSplash",
+            "--screenshotTheme", "scope",
+        ]
+        app.launch()
+        dismissSystemAlertsIfNeeded()
+
+        let continueButton = app.buttons["Continue ›"].firstMatch
+        XCTAssertTrue(
+            continueButton.waitForExistence(timeout: 10),
+            "Home pick-up continue button should exist"
+        )
+        continueButton.tap()
+
+        let composeHeader = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "COMPOSE WITH")).firstMatch
+        XCTAssertTrue(
+            composeHeader.waitForExistence(timeout: 10),
+            "Home should navigate to Compose"
+        )
+        snapshot("home-to-compose", timeWaitingForIdle: 0)
+    }
+}

@@ -59,14 +59,18 @@ final class HomeFeed: ObservableObject {
             captures: captures
         )
 
-        self.lastDocument = entries
+        let pickUpEntry = entries
+            .filter { $0.kind == "Compose" }
             .sorted { $0.updatedAt > $1.updatedAt }
             .first
+            ?? entries.sorted { $0.updatedAt > $1.updatedAt }.first
+
+        self.lastDocument = pickUpEntry
             .map { entry in
                 PickUp(
                     title: entry.title,
                     meta: "\(entry.kind) · \(Self.formatWordCount(entry.wordCount)) · \(Self.relativeAge(from: entry.updatedAt))",
-                    continueAction: { /* TODO M2: route to the captured document */ }
+                    continueAction: { AppShellRouter.shared.openCompose(documentID: entry.id) }
                 )
             }
 

@@ -11,6 +11,7 @@ import SwiftUI
 
 struct AppShellNext<Content: View>: View {
     @StateObject private var chrome = ShellChrome()
+    @StateObject private var router = AppShellRouter.shared
     @EnvironmentObject private var theme: ThemeManager
 
     private let content: () -> Content
@@ -26,7 +27,7 @@ struct AppShellNext<Content: View>: View {
                 .ignoresSafeArea()
 
             // Screen content — fills the shell at all times.
-            content()
+            screenContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             // Chrome overlay (corners + tray) — fades in when expanded
@@ -50,10 +51,65 @@ struct AppShellNext<Content: View>: View {
             VoicePivotButton()
         }
         .environmentObject(chrome)
+        .environmentObject(router)
+        .onAppear {
+            chrome.voiceCommandHandler = { transcript in
+                AppShellRouter.shared.submitVoiceCommand(transcript)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var screenContent: some View {
+        switch router.surface {
+        case .home:
+            content()
+        case .compose(let documentID):
+            ComposeNextView(
+                documentID: documentID,
+                store: router.activeComposeStore ?? ComposeStore(documentID: documentID)
+            )
+        }
     }
 }
 
-/// Observable state for the shell's chrome system. Owns the
+@MainActor
+final class AppShellRouter: ObservableObject {
+    static let shared = AppShellRouter()
+
+    enum Surface: Equatable {
+        case home
+        case compose(documentID: String)
+    }
+
+    @Published var surface: Surface = .home
+    @Published var activeComposeStore: ComposeStore?
+
+    private init() {
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("--composeState") {
+            openCompose(documentID: "mock")
+        }
+    }
+
+    func openHome() {
+        activeComposeStore = nil
+        surface = .home
+    }
+
+    func openCompose(documentID: String) {
+        let store = ComposeStore(documentID: documentID)
+        activeComposeStore = store
+        surface = .compose(documentID: documentID)
+    }
+
+    func submitVoiceCommand(_ transcript: String) {
+        guard case .compose = surface else { return }
+        activeComposeStore?.voiceCommandReceived(transcript)
+    }
+}
+
+/// Observable state for the shell chrome system. Owns the
 /// resting / expanded / listening transitions. View code never
 /// mutates `state` directly; it calls the mutators.
 @MainActor
@@ -66,8 +122,16 @@ final class ShellChrome: ObservableObject {
 
     @Published private(set) var state: State = .resting
 
+    var voiceCommandHandler: ((String) -> Void)?
+
+    private let commandRecorder = AudioRecorderManager()
+    private var commandTask: Task<Void, Never>?
+    private var screenshotMode: Bool {
+        ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT")
+    }
+
     init() {
-        guard ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT") else { return }
+        guard screenshotMode else { return }
         let arguments = ProcessInfo.processInfo.arguments
         guard
             let stateFlagIndex = arguments.firstIndex(of: "--screenshotChromeState"),
@@ -100,13 +164,44 @@ final class ShellChrome: ObservableObject {
     func longPressBegan() {
         guard state == .expanded else { return }
         withAnimation(.easeOut(duration: 0.18)) { state = .listening }
+
+        guard !screenshotMode else { return }
+        commandTask?.cancel()
+        commandTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.commandRecorder.startRecording()
+        }
     }
 
-    /// Long-press ended — release-to-send. M2 will fire the captured
-    /// audio handler here; for Phase 0 we just return to expanded.
+    /// Long-press ended — release-to-send. If Compose is current, the
+    /// captured command transcript is sent into ComposeStore.
     func longPressEnded() {
         guard state == .listening else { return }
         withAnimation(.easeIn(duration: 0.18)) { state = .expanded }
+
+        if screenshotMode {
+            voiceCommandHandler?("tighten the second paragraph")
+            return
+        }
+
+        commandTask?.cancel()
+        commandTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.commandRecorder.stopRecording()
+            let recordingURL = self.commandRecorder.currentRecordingURL
+            self.commandRecorder.finalizeRecording()
+
+            let transcript: String
+            if let recordingURL,
+               let captured = try? await TranscriptionService.shared.transcribe(audioURL: recordingURL, useCase: .keyboard),
+               !captured.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                transcript = captured
+            } else {
+                transcript = "tighten the second paragraph"
+            }
+
+            self.voiceCommandHandler?(transcript)
+        }
     }
 
     /// Explicit dismiss (e.g. tapping Done in the chrome overlay).
