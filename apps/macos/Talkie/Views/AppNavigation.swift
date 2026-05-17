@@ -232,7 +232,9 @@ struct AppNavigation: View {
     }
 
     private func toggleSidebar() {
-        NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
+        withAnimation(SidebarMotion.defaultSpring) {
+            sidebarHidden.toggle()
+        }
     }
 
     private func sectionName(for section: NavigationSection) -> String {
@@ -302,22 +304,6 @@ struct AppNavigation: View {
         }
     }
 
-    /// Stable action wrapper for the View > Toggle Sidebar menu command.
-    /// Captured once (not rebuilt on every body invocation) so the
-    /// FocusedValue doesn't invalidate downstream menu consumers
-    /// whenever AppNavigation re-renders. Closure captures `self` —
-    /// which is fine because we only read `sidebarHidden` through the
-    /// AppStorage wrapper, and SwiftUI handles the write.
-    private var sidebarToggleAction: SidebarToggleAction {
-        SidebarToggleAction(toggle: {
-            // Capture-list assignment via DispatchQueue would defeat the
-            // animation; safe to call on the main actor since menu
-            // commands always fire there.
-            withAnimation(SidebarMotion.defaultSpring) {
-                self.sidebarHidden.toggle()
-            }
-        })
-    }
 
     var body: some View {
         #if DEBUG
@@ -328,7 +314,6 @@ struct AppNavigation: View {
             .environment(\.sidebarTransition, sidebarTransition)
             .environment(\.sidebarStyle, sidebarStyle)
             .environment(\.sidebarShowMeasurements, false)
-            .focusedValue(\.sidebarToggle, sidebarToggleAction)
             .transaction { transaction in
                 if edgeHandleDragging {
                     transaction.animation = nil
@@ -443,6 +428,9 @@ struct AppNavigation: View {
                     didPrepareConsoleRegistry = true
                     TabDefinitionRegistry.shared.prepareForAppLaunch()
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .toggleAppSidebar)) { _ in
+                toggleSidebar()
             }
     }
 
