@@ -283,82 +283,57 @@ struct VoiceMemoDetailNext: View {
         }
     }
 
+    /// Matches the donor's `transcriptInstrumentPlayer` — a single
+    /// compact horizontal rail: play button (30pt circle, accent
+    /// fill when playing) + InteractiveWaveformView (28pt with
+    /// played/unplayed coloring) + monospaced "current / total"
+    /// time readout right-aligned.
     private var playbackCard: some View {
-        VStack(spacing: 12) {
-            ParticlesWaveformView(levels: store.memo.levels, height: 60, color: theme.currentTheme.chrome.accent)
-                .frame(height: 60)
-
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(theme.currentTheme.chrome.edgeFaint).frame(height: 3)
-                    Capsule().fill(theme.currentTheme.chrome.accent).frame(width: geo.size.width * store.memo.playheadProgress, height: 3)
-                    Circle().fill(theme.currentTheme.chrome.accent).frame(width: 10, height: 10).offset(x: geo.size.width * store.memo.playheadProgress - 5)
-                }
-                .contentShape(Rectangle())
-                .gesture(DragGesture(minimumDistance: 0).onChanged { value in
-                    let progress = geo.size.width > 0 ? value.location.x / geo.size.width : 0
-                    store.seek(progress: progress)
-                })
-            }
-            .frame(height: 10)
-
-            HStack {
-                Text(store.currentTimeLabel)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(theme.colors.textTertiary)
-                Spacer()
-                playbackTransport
-                Spacer()
-                Text(store.memo.durationLabel)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(theme.colors.textTertiary)
-            }
-        }
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 12).fill(theme.colors.cardBackground).overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: theme.currentTheme.chrome.hairlineWidth)))
-    }
-
-    private var playbackTransport: some View {
-        HStack(spacing: 18) {
-            Button(action: { store.skipBackward() }) {
-                Image(systemName: "gobackward.15")
-                    .font(.system(size: 18))
-                    .foregroundStyle(theme.colors.textSecondary)
-            }
-            .buttonStyle(.plain)
-
+        HStack(spacing: 10) {
             Button(action: { store.togglePlayback() }) {
                 ZStack {
                     Circle()
-                        .fill(theme.currentTheme.chrome.accent)
-                        .frame(width: 42, height: 42)
+                        .fill(store.memo.isPlaying ? theme.currentTheme.chrome.accent : Color.clear)
+                        .frame(width: 30, height: 30)
+                        .overlay(
+                            Circle().strokeBorder(theme.currentTheme.chrome.accent, lineWidth: 1.5)
+                        )
                     Image(systemName: store.memo.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(theme.colors.cardBackground)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(store.memo.isPlaying
+                            ? theme.colors.cardBackground
+                            : theme.currentTheme.chrome.accent)
+                        .offset(x: store.memo.isPlaying ? 0 : 1)
                 }
             }
             .buttonStyle(.plain)
 
-            Button(action: { store.skipForward() }) {
-                Image(systemName: "goforward.15")
-                    .font(.system(size: 18))
-                    .foregroundStyle(theme.colors.textSecondary)
-            }
-            .buttonStyle(.plain)
-        }
-    }
+            InteractiveWaveformView(
+                levels: store.memo.levels,
+                height: 28,
+                progress: store.memo.playheadProgress,
+                playedColor: theme.currentTheme.chrome.accent,
+                unplayedColor: theme.colors.textTertiary.opacity(0.35),
+                onSeek: { p in store.seek(progress: p) }
+            )
 
-    private func summaryCard(_ summary: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Image(systemName: "sparkles").font(.system(size: 10, weight: .medium)).foregroundStyle(theme.currentTheme.chrome.accent)
-                Text("· SUMMARY").font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1.8).foregroundStyle(theme.currentTheme.chrome.accent)
-            }
-            Text(summary).font(.system(size: 14)).lineSpacing(3).foregroundStyle(theme.colors.textPrimary)
+            Text("\(store.currentTimeLabel) / \(store.memo.durationLabel)")
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .tracking(0.5)
+                .foregroundStyle(theme.colors.textTertiary)
+                .frame(width: 78, alignment: .trailing)
+                .monospacedDigit()
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10).fill(theme.currentTheme.chrome.accentTint))
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(theme.colors.cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                      lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                )
+        )
     }
 
     private var transcriptSection: some View {
