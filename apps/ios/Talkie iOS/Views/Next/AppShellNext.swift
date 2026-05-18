@@ -77,6 +77,8 @@ struct AppShellNext<Content: View>: View {
             LibraryNextView()
         case .appearance:
             AppearancePickerNext()
+        case .captureDetail(let captureID):
+            CaptureDetailNext(captureID: captureID)
         }
     }
 }
@@ -90,6 +92,7 @@ final class AppShellRouter: ObservableObject {
         case compose(documentID: String)
         case library
         case appearance
+        case captureDetail(captureID: String)
     }
 
     @Published var surface: Surface = .home
@@ -103,6 +106,8 @@ final class AppShellRouter: ObservableObject {
             openLibrary()
         } else if args.contains("--appearance") {
             openAppearance()
+        } else if args.contains("--capture") {
+            openCaptureDetail(captureID: "mock")
         }
     }
 
@@ -125,6 +130,11 @@ final class AppShellRouter: ObservableObject {
     func openAppearance() {
         activeComposeStore = nil
         surface = .appearance
+    }
+
+    func openCaptureDetail(captureID: String) {
+        activeComposeStore = nil
+        surface = .captureDetail(captureID: captureID)
     }
 
     func submitVoiceCommand(_ transcript: String) {
