@@ -87,6 +87,14 @@ struct AppShellNext<Content: View>: View {
             ConnectionCenterNext()
         case .onboarding:
             OnboardingNext()
+        case .keyboardActivation:
+            KeyboardActivationNext()
+        case .signIn:
+            SignInNext()
+        case .webBrowser:
+            WebCaptureBrowserNext()
+        case .dictationOverlayDemo:
+            MinimalDictationOverlayDemoSurface()
         }
     }
 }
@@ -105,6 +113,10 @@ final class AppShellRouter: ObservableObject {
         case dictationHistory
         case connectionCenter
         case onboarding
+        case keyboardActivation
+        case signIn
+        case webBrowser
+        case dictationOverlayDemo
     }
 
     @Published var surface: Surface = .home
@@ -128,6 +140,14 @@ final class AppShellRouter: ObservableObject {
             openConnectionCenter()
         } else if args.contains("--onboarding") {
             openOnboarding()
+        } else if args.contains("--keyboard") {
+            openKeyboardActivation()
+        } else if args.contains("--signin") {
+            openSignIn()
+        } else if args.contains("--browser") {
+            openWebBrowser()
+        } else if args.contains("--overlay") {
+            openDictationOverlayDemo()
         }
     }
 
@@ -175,6 +195,26 @@ final class AppShellRouter: ObservableObject {
     func openOnboarding() {
         activeComposeStore = nil
         surface = .onboarding
+    }
+
+    func openKeyboardActivation() {
+        activeComposeStore = nil
+        surface = .keyboardActivation
+    }
+
+    func openSignIn() {
+        activeComposeStore = nil
+        surface = .signIn
+    }
+
+    func openWebBrowser() {
+        activeComposeStore = nil
+        surface = .webBrowser
+    }
+
+    func openDictationOverlayDemo() {
+        activeComposeStore = nil
+        surface = .dictationOverlayDemo
     }
 
     func submitVoiceCommand(_ transcript: String) {
