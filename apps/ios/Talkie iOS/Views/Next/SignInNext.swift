@@ -35,8 +35,9 @@ final class SignInStore: ObservableObject {
         enum Status { case pending, inProgress, completed, failed }
     }
 
-    // Codex wires against AuthManager.shared. For paint, no steps
-    // surfaced by default. Codex populates from authManager.authSteps.
+    // Codex wires this against the rebuild's native auth path
+    // (ASAuthorization / AuthenticationServices), NOT against
+    // AuthManager — the Clerk dependency is being removed.
 }
 
 struct SignInNext: View {
@@ -269,7 +270,10 @@ struct SignInNext: View {
 
     private var appleButton: some View {
         Button(action: {
-            // TODO M3+ wire: AuthManager.shared.signIn() task
+            // TODO M3+ wire: direct Sign in with Apple via
+            // ASAuthorization (AuthenticationServices framework).
+            // The rebuild intentionally avoids Clerk — no AuthManager
+            // call here.
         }) {
             HStack(spacing: 10) {
                 if store.isSigningIn {

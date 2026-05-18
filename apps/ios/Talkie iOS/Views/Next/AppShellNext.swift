@@ -83,6 +83,7 @@ struct AppShellNext<Content: View>: View {
         case .dictationOverlayDemo: return "overlay"
         case .signIn: return "signin"
         case .connectionCenter: return "connection"
+        case .onboarding: return "onboarding"
         }
     }
 
@@ -112,6 +113,8 @@ struct AppShellNext<Content: View>: View {
             SignInNext()
         case .connectionCenter:
             ConnectionCenterNext()
+        case .onboarding:
+            OnboardingNext()
         }
     }
 }
@@ -131,10 +134,9 @@ final class AppShellRouter: ObservableObject {
         case dictationOverlayDemo
         case signIn
         case connectionCenter
+        case onboarding
         // Still to re-port from donor (deleted earlier fabrications):
         // .keyboardActivation → live status/transcript view
-        // .connectionCenter   → connection-type rows
-        // .onboarding         → 3 feature pages w/ iCloud auth
         // .webBrowser         → URL bar + voice search + history
     }
 
@@ -161,6 +163,8 @@ final class AppShellRouter: ObservableObject {
             openSignIn()
         } else if args.contains("--connection") {
             openConnectionCenter()
+        } else if args.contains("--onboarding") {
+            openOnboarding()
         }
     }
 
@@ -213,6 +217,11 @@ final class AppShellRouter: ObservableObject {
     func openConnectionCenter() {
         activeComposeStore = nil
         surface = .connectionCenter
+    }
+
+    func openOnboarding() {
+        activeComposeStore = nil
+        surface = .onboarding
     }
 
     func submitVoiceCommand(_ transcript: String) {
