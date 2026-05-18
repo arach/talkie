@@ -242,10 +242,13 @@ private struct RecentSection: View {
 
                 Spacer()
 
-                Text("ALL")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .tracking(1.8)
-                    .foregroundStyle(theme.colors.textTertiary)
+                Button(action: { AppShellRouter.shared.openLibrary() }) {
+                    Text("ALL ›")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .tracking(1.8)
+                        .foregroundStyle(theme.colors.textTertiary)
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal, 4)
 

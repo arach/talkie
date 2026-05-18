@@ -69,6 +69,8 @@ struct AppShellNext<Content: View>: View {
                 documentID: documentID,
                 store: router.activeComposeStore ?? ComposeStore(documentID: documentID)
             )
+        case .library:
+            LibraryNextView()
         }
     }
 }
@@ -80,6 +82,7 @@ final class AppShellRouter: ObservableObject {
     enum Surface: Equatable {
         case home
         case compose(documentID: String)
+        case library
     }
 
     @Published var surface: Surface = .home
@@ -89,6 +92,8 @@ final class AppShellRouter: ObservableObject {
         let args = ProcessInfo.processInfo.arguments
         if args.contains("--composeState") {
             openCompose(documentID: "mock")
+        } else if args.contains("--library") {
+            openLibrary()
         }
     }
 
@@ -101,6 +106,11 @@ final class AppShellRouter: ObservableObject {
         let store = ComposeStore(documentID: documentID)
         activeComposeStore = store
         surface = .compose(documentID: documentID)
+    }
+
+    func openLibrary() {
+        activeComposeStore = nil
+        surface = .library
     }
 
     func submitVoiceCommand(_ transcript: String) {
