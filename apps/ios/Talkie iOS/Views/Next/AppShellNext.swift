@@ -79,6 +79,14 @@ struct AppShellNext<Content: View>: View {
             AppearancePickerNext()
         case .captureDetail(let captureID):
             CaptureDetailNext(captureID: captureID)
+        case .memoDetail(let memoID):
+            VoiceMemoDetailNext(memoID: memoID)
+        case .dictationHistory:
+            DictationHistoryNext()
+        case .connectionCenter:
+            ConnectionCenterNext()
+        case .onboarding:
+            OnboardingNext()
         }
     }
 }
@@ -93,6 +101,10 @@ final class AppShellRouter: ObservableObject {
         case library
         case appearance
         case captureDetail(captureID: String)
+        case memoDetail(memoID: String)
+        case dictationHistory
+        case connectionCenter
+        case onboarding
     }
 
     @Published var surface: Surface = .home
@@ -108,6 +120,14 @@ final class AppShellRouter: ObservableObject {
             openAppearance()
         } else if args.contains("--capture") {
             openCaptureDetail(captureID: "mock")
+        } else if args.contains("--memo") {
+            openMemoDetail(memoID: "mock")
+        } else if args.contains("--dictations") {
+            openDictationHistory()
+        } else if args.contains("--connection") {
+            openConnectionCenter()
+        } else if args.contains("--onboarding") {
+            openOnboarding()
         }
     }
 
@@ -135,6 +155,26 @@ final class AppShellRouter: ObservableObject {
     func openCaptureDetail(captureID: String) {
         activeComposeStore = nil
         surface = .captureDetail(captureID: captureID)
+    }
+
+    func openMemoDetail(memoID: String) {
+        activeComposeStore = nil
+        surface = .memoDetail(memoID: memoID)
+    }
+
+    func openDictationHistory() {
+        activeComposeStore = nil
+        surface = .dictationHistory
+    }
+
+    func openConnectionCenter() {
+        activeComposeStore = nil
+        surface = .connectionCenter
+    }
+
+    func openOnboarding() {
+        activeComposeStore = nil
+        surface = .onboarding
     }
 
     func submitVoiceCommand(_ transcript: String) {
