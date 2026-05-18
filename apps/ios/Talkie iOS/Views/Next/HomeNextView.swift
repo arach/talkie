@@ -274,46 +274,58 @@ private struct RecentRow: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        VStack(spacing: 0) {
-            if showDivider {
-                Rectangle()
-                    .fill(theme.currentTheme.chrome.edgeSubtle)
-                    .frame(height: theme.currentTheme.chrome.hairlineWidth)
-                    .padding(.leading, 36)
-            }
-            HStack(alignment: .top, spacing: 8) {
-                sourceGlyph
-                    .foregroundStyle(theme.colors.textTertiary)
-                    .frame(width: 16, height: 16)
-                    .padding(.top, 2)
+        Button(action: openItem) {
+            VStack(spacing: 0) {
+                if showDivider {
+                    Rectangle()
+                        .fill(theme.currentTheme.chrome.edgeSubtle)
+                        .frame(height: theme.currentTheme.chrome.hairlineWidth)
+                        .padding(.leading, 36)
+                }
+                HStack(alignment: .top, spacing: 8) {
+                    sourceGlyph
+                        .foregroundStyle(theme.colors.textTertiary)
+                        .frame(width: 16, height: 16)
+                        .padding(.top, 2)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(item.title)
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(theme.colors.textPrimary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .tracking(-0.05)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(item.title)
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(theme.colors.textPrimary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .tracking(-0.05)
+                                .frame(maxWidth: .infinity, alignment: .leading)
 
-                        Text(item.relativeTime)
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .monospacedDigit()
-                            .foregroundStyle(theme.colors.textTertiary)
-                    }
+                            Text(item.relativeTime)
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .monospacedDigit()
+                                .foregroundStyle(theme.colors.textTertiary)
+                        }
 
-                    if let preview = item.preview {
-                        Text(preview)
-                            .font(.system(size: 12.5))
-                            .foregroundStyle(theme.colors.textSecondary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
+                        if let preview = item.preview {
+                            Text(preview)
+                                .font(.system(size: 12.5))
+                                .foregroundStyle(theme.colors.textSecondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
                     }
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(RowPressStyle())
+    }
+
+    private func openItem() {
+        switch item.source {
+        case .dictation:        AppShellRouter.shared.openMemoDetail(memoID: item.id)
+        case .typed:            AppShellRouter.shared.openCompose(documentID: item.id)
+        case .link, .scan:      AppShellRouter.shared.openCaptureDetail(captureID: item.id)
         }
     }
 

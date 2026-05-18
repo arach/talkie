@@ -146,45 +146,54 @@ struct DictationHistoryNext: View {
     }
 
     private func entryRow(_ entry: DictationHistoryFeed.Entry, showDivider: Bool) -> some View {
-        VStack(spacing: 0) {
-            if showDivider {
-                Rectangle()
-                    .fill(theme.currentTheme.chrome.edgeSubtle)
-                    .frame(height: theme.currentTheme.chrome.hairlineWidth)
-                    .padding(.leading, 14)
-            }
+        Button(action: {
+            // Dictations are typed-text — route to a compose surface
+            // seeded with the dictation's text. ID maps to the
+            // KeyboardDictation entity via ComposeStore lookup.
+            AppShellRouter.shared.openCompose(documentID: entry.id)
+        }) {
+            VStack(spacing: 0) {
+                if showDivider {
+                    Rectangle()
+                        .fill(theme.currentTheme.chrome.edgeSubtle)
+                        .frame(height: theme.currentTheme.chrome.hairlineWidth)
+                        .padding(.leading, 14)
+                }
 
-            HStack(alignment: .top, spacing: 10) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(entry.timestamp)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .monospacedDigit()
-                        .foregroundStyle(theme.colors.textTertiary)
-                    if let app = entry.appName {
-                        Text(app.uppercased())
-                            .font(.system(size: 7, weight: .semibold, design: .monospaced))
-                            .tracking(1.2)
-                            .foregroundStyle(theme.colors.textTertiary.opacity(0.7))
+                HStack(alignment: .top, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(entry.timestamp)
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .monospacedDigit()
+                            .foregroundStyle(theme.colors.textTertiary)
+                        if let app = entry.appName {
+                            Text(app.uppercased())
+                                .font(.system(size: 7, weight: .semibold, design: .monospaced))
+                                .tracking(1.2)
+                                .foregroundStyle(theme.colors.textTertiary.opacity(0.7))
+                        }
                     }
+                    .frame(width: 60, alignment: .leading)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(entry.preview)
+                            .font(.system(size: 13.5))
+                            .foregroundStyle(theme.colors.textPrimary)
+                            .lineLimit(2)
+                            .tracking(-0.05)
+
+                        Text("\(entry.wordCount) words")
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .foregroundStyle(theme.colors.textTertiary)
+                    }
+
+                    Spacer()
                 }
-                .frame(width: 60, alignment: .leading)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(entry.preview)
-                        .font(.system(size: 13.5))
-                        .foregroundStyle(theme.colors.textPrimary)
-                        .lineLimit(2)
-                        .tracking(-0.05)
-
-                    Text("\(entry.wordCount) words")
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundStyle(theme.colors.textTertiary)
-                }
-
-                Spacer()
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(RowPressStyle())
     }
 }
