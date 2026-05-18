@@ -10,6 +10,7 @@
 import CoreData
 import Foundation
 import SwiftUI
+import TalkieMobileKit
 
 @MainActor
 final class ComposeStore: ObservableObject {
@@ -40,7 +41,12 @@ final class ComposeStore: ObservableObject {
 
         if documentID == "mock" {
             self.document = Self.mockDocument
-        } else if let note = Self.fetchNote(id: documentID, context: context) ?? Self.fetchLatestNote(context: context) {
+        } else if let note = Self.fetchNote(id: documentID, context: context) {
+            self.note = note
+            self.document = Self.document(from: note)
+        } else if let dictation = Self.fetchKeyboardDictation(id: documentID) {
+            self.document = Self.document(from: dictation)
+        } else if let note = Self.fetchLatestNote(context: context) {
             self.note = note
             self.document = Self.document(from: note)
         } else {
@@ -411,6 +417,25 @@ final class ComposeStore: ObservableObject {
         request.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
         request.fetchLimit = 1
         return (try? context.fetch(request))?.first
+    }
+
+
+    private static func fetchKeyboardDictation(id: String) -> KeyboardDictation? {
+        guard let uuid = UUID(uuidString: id) else { return nil }
+        KeyboardDictationStore.shared.reload()
+        return KeyboardDictationStore.shared.all().first { $0.id == uuid }
+    }
+
+    private static func document(from dictation: KeyboardDictation) -> Document {
+        let text = dictation.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = title(from: text, fallback: "Keyboard dictation")
+        return Document(title: title, paragraphs: text.isEmpty ? [""] : [text])
+    }
+
+    private static func title(from text: String, fallback: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return fallback }
+        return String(trimmed.prefix(64))
     }
 
     private static func fetchLatestNote(context: NSManagedObjectContext) -> ComposeNote? {

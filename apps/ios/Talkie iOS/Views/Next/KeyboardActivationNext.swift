@@ -9,6 +9,8 @@
 //
 
 import SwiftUI
+import TalkieMobileKit
+import UIKit
 
 @MainActor
 final class KeyboardActivationStore: ObservableObject {
@@ -40,7 +42,21 @@ final class KeyboardActivationStore: ObservableObject {
         }
     }
 
-    init() { self.state = .partial }
+    init() {
+        self.state = .partial
+        refresh()
+    }
+
+    func refresh() {
+        let bridge = KeyboardBridge.shared
+        if bridge.getKeyboardModeEnabled() {
+            state = .ready
+        } else if bridge.isAppGroupAccessible {
+            state = .partial
+        } else {
+            state = .notAdded
+        }
+    }
 }
 
 struct KeyboardActivationNext: View {
@@ -189,7 +205,7 @@ struct KeyboardActivationNext: View {
 
     private var footer: some View {
         VStack(spacing: 8) {
-            Button(action: { /* TODO: openURL(UIApplication.openSettingsURLString) */ }) {
+            Button(action: footerTapped) {
                 Text(footerCTA)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(theme.colors.cardBackground)
@@ -202,6 +218,16 @@ struct KeyboardActivationNext: View {
         .padding(.horizontal, 24)
         .padding(.top, 8)
         .padding(.bottom, 22)
+        .onAppear { store.refresh() }
+    }
+
+    private func footerTapped() {
+        if store.state == .ready {
+            AppShellRouter.shared.openHome()
+            return
+        }
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
     }
 
     private var footerCTA: String {

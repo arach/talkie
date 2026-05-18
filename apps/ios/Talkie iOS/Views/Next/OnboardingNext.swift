@@ -8,11 +8,14 @@
 //  account flows still live in the donor.
 //
 
+import AVFoundation
 import SwiftUI
+import UIKit
 
 struct OnboardingNext: View {
     @ObservedObject private var theme = ThemeManager.shared
     @State private var slide: Slide = .welcome
+    @State private var micPermissionHint: String?
 
     enum Slide: Int, CaseIterable {
         case welcome, mic, keyboard, done
@@ -113,6 +116,13 @@ struct OnboardingNext: View {
             permissionRow(systemImage: "mic", label: "Microphone", status: "Needed for voice")
             permissionRow(systemImage: "lock.fill", label: "On-device first", status: "No cloud upload")
             permissionRow(systemImage: "icloud", label: "iCloud sync", status: "Opt in, anytime")
+
+            if let micPermissionHint {
+                Text(micPermissionHint)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(theme.colors.textTertiary)
+                    .padding(.top, 4)
+            }
         }
     }
 
@@ -245,10 +255,31 @@ struct OnboardingNext: View {
 
     private func advance() {
         switch slide {
-        case .welcome:  slide = .mic
-        case .mic:      slide = .keyboard
-        case .keyboard: slide = .done
-        case .done:     AppShellRouter.shared.openHome()
+        case .welcome:
+            slide = .mic
+        case .mic:
+            requestMicrophoneThenAdvance()
+        case .keyboard:
+            openSettings()
+            slide = .done
+        case .done:
+            AppShellRouter.shared.openHome()
         }
+    }
+
+    private func requestMicrophoneThenAdvance() {
+        AVAudioApplication.requestRecordPermission { granted in
+            Task { @MainActor in
+                if !granted {
+                    micPermissionHint = "Microphone access was denied. You can enable it later in Settings."
+                }
+                slide = .keyboard
+            }
+        }
+    }
+
+    private func openSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
     }
 }
