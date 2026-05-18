@@ -26,3 +26,16 @@ struct RowPressStyle: ButtonStyle {
             .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
     }
 }
+
+/// Chunkier press feedback for card-shaped buttons (theme preview
+/// cards, PICK UP, capture detail hero, etc.). Visible scale +
+/// soft shadow lift on press — a more deliberate "this is a card
+/// I'm picking up" feel than the rowstyle's whisper of tint.
+struct CardPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.978 : 1.0)
+            .brightness(configuration.isPressed ? -0.015 : 0)
+            .animation(.spring(response: 0.28, dampingFraction: 0.78), value: configuration.isPressed)
+    }
+}

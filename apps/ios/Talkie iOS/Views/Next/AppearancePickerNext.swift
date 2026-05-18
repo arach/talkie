@@ -156,7 +156,13 @@ private struct ThemePreviewCard: View {
 
     var body: some View {
         Button(action: onSelect) {
-            HStack(spacing: 12) {
+            cardContent
+        }
+        .buttonStyle(CardPressStyle())
+    }
+
+    private var cardContent: some View {
+        HStack(spacing: 12) {
                 // Mini chrome render with the option's tokens
                 ThemeMiniature(themeOption: themeOption)
                     .frame(width: 80, height: 100)
@@ -202,8 +208,6 @@ private struct ThemePreviewCard: View {
                             )
                     )
             )
-        }
-        .buttonStyle(.plain)
     }
 
     private var cornerLabel: String {

@@ -27,9 +27,14 @@ struct AppShellNext<Content: View>: View {
             theme.colors.background
                 .ignoresSafeArea()
 
-            // Screen content — fills the shell at all times.
+            // Screen content — fills the shell at all times. The id
+            // ties identity to the current surface so SwiftUI runs
+            // the transition between distinct screens.
             screenContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .id(surfaceID)
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
+                .animation(.easeOut(duration: 0.24), value: surfaceID)
 
             // Chrome overlay (corners + tray) — fades in when expanded
             // or listening; allows hit-testing only when visible.
@@ -60,6 +65,27 @@ struct AppShellNext<Content: View>: View {
             chrome.voiceCommandHandler = { transcript in
                 AppShellRouter.shared.submitVoiceCommand(transcript)
             }
+        }
+    }
+
+    /// Stable identity per surface so SwiftUI fires the transition
+    /// between distinct screens (different cases = different ids).
+    /// Compose includes the doc id so swapping docs animates too.
+    private var surfaceID: String {
+        switch router.surface {
+        case .home: return "home"
+        case .compose(let d): return "compose:\(d)"
+        case .library: return "library"
+        case .appearance: return "appearance"
+        case .captureDetail(let c): return "capture:\(c)"
+        case .memoDetail(let m): return "memo:\(m)"
+        case .dictationHistory: return "dictations"
+        case .connectionCenter: return "connection"
+        case .onboarding: return "onboarding"
+        case .keyboardActivation: return "keyboard"
+        case .signIn: return "signin"
+        case .webBrowser: return "browser"
+        case .dictationOverlayDemo: return "overlay"
         }
     }
 
