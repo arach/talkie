@@ -33,12 +33,21 @@ struct ComposeNextView: View {
         _compose = StateObject(wrappedValue: store ?? ComposeStore(documentID: documentID))
     }
 
+    /// Header back-label: short version of the document title, with
+    /// a sensible fallback for the empty case.
+    private var backTitle: String {
+        let title = compose.document.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if title.isEmpty || title.lowercased() == "untitled note" { return "Home" }
+        return String(title.prefix(20))
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ComposeHeader(
+                backLabel: backTitle,
                 modelLabel: compose.modelLabel,
                 state: compose.state,
-                onBack: { /* TODO M2+: dismiss back to Home */ }
+                onBack: { AppShellRouter.shared.openHome() }
             )
 
             DocumentBody(
@@ -73,6 +82,7 @@ struct ComposeNextView: View {
 // MARK: - Header
 
 private struct ComposeHeader: View {
+    let backLabel: String
     let modelLabel: String
     let state: ComposeState
     let onBack: () -> Void
@@ -85,7 +95,7 @@ private struct ComposeHeader: View {
                 HStack(spacing: 2) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14))
-                    Text("Bio")
+                    Text(backLabel)
                         .font(.system(size: 13, weight: .medium))
                 }
                 .foregroundStyle(theme.colors.textSecondary)
@@ -101,7 +111,7 @@ private struct ComposeHeader: View {
                     .foregroundStyle(theme.colors.textTertiary)
 
                 Button(action: { /* TODO: model picker */ }) {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 3) {
                         Image(systemName: "sparkles")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(theme.currentTheme.chrome.accent)
@@ -110,8 +120,9 @@ private struct ComposeHeader: View {
                             .foregroundStyle(theme.colors.textPrimary)
                             .tracking(-0.3)
                         Image(systemName: "chevron.down")
-                            .font(.system(size: 10))
+                            .font(.system(size: 9, weight: .semibold))
                             .foregroundStyle(theme.colors.textTertiary)
+                            .padding(.leading, 1)
                     }
                 }
                 .buttonStyle(.plain)
@@ -341,19 +352,25 @@ private struct InlineMicButton: View {
                         lineWidth: theme.currentTheme.chrome.hairlineWidth
                     ))
                 Image(systemName: state == .dictating ? "stop.fill" : "mic.fill")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(
                         state == .dictating
                             ? theme.colors.cardBackground
                             : theme.colors.textSecondary
                     )
             }
-            .frame(width: 32, height: 32)
-            .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+            .frame(width: 38, height: 38)
+            .shadow(
+                color: state == .dictating
+                    ? theme.currentTheme.chrome.accentGlow
+                    : Color.black.opacity(0.14),
+                radius: state == .dictating ? 8 : 5,
+                y: 2
+            )
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .padding(.bottom, 12)
+        .padding(.bottom, 14)
     }
 }
 
