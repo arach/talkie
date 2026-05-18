@@ -62,7 +62,7 @@ private struct HomeHeader: View {
                 .tracking(3.2)
                 .foregroundStyle(theme.colors.textPrimary.opacity(0.78))
             Spacer()
-            Button(action: { /* TODO: route to Settings */ }) {
+            Button(action: { AppShellRouter.shared.openAppearance() }) {
                 Image(systemName: "gearshape")
                     .font(.system(size: 13))
                     .foregroundStyle(theme.colors.textTertiary)

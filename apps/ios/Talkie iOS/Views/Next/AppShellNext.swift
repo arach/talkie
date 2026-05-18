@@ -75,6 +75,8 @@ struct AppShellNext<Content: View>: View {
             )
         case .library:
             LibraryNextView()
+        case .appearance:
+            AppearancePickerNext()
         }
     }
 }
@@ -87,6 +89,7 @@ final class AppShellRouter: ObservableObject {
         case home
         case compose(documentID: String)
         case library
+        case appearance
     }
 
     @Published var surface: Surface = .home
@@ -98,6 +101,8 @@ final class AppShellRouter: ObservableObject {
             openCompose(documentID: "mock")
         } else if args.contains("--library") {
             openLibrary()
+        } else if args.contains("--appearance") {
+            openAppearance()
         }
     }
 
@@ -115,6 +120,11 @@ final class AppShellRouter: ObservableObject {
     func openLibrary() {
         activeComposeStore = nil
         surface = .library
+    }
+
+    func openAppearance() {
+        activeComposeStore = nil
+        surface = .appearance
     }
 
     func submitVoiceCommand(_ transcript: String) {
