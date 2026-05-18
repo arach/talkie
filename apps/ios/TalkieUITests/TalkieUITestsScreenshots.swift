@@ -257,3 +257,30 @@ extension TalkieUITestsScreenshots {
         snapshot("home-to-compose", timeWaitingForIdle: 0)
     }
 }
+
+// MARK: - Compose Action Tray Wiring
+
+extension TalkieUITestsScreenshots {
+    func testM2ComposeActionTrayButtons() {
+        app.terminate()
+        app.launchEnvironment["FASTLANE_SNAPSHOT"] = "1"
+        app.launchArguments = [
+            "-FASTLANE_SNAPSHOT",
+            "--screenshotSkipSplash",
+            "--screenshotTheme", "scope",
+            "--composeState", "idle",
+        ]
+        app.launch()
+        dismissSystemAlertsIfNeeded()
+
+        let keyboardButton = app.buttons["Keyboard"].firstMatch
+        XCTAssertTrue(keyboardButton.waitForExistence(timeout: 10), "Keyboard tray button should exist")
+        keyboardButton.tap()
+        XCTAssertTrue(keyboardButton.exists, "Keyboard tray button should remain available after requesting focus")
+
+        let voiceButton = app.buttons["Voice command"].firstMatch
+        XCTAssertTrue(voiceButton.waitForExistence(timeout: 10), "Voice command tray button should exist")
+        voiceButton.tap()
+        XCTAssertTrue(app.buttons["Accept"].firstMatch.waitForExistence(timeout: 10), "Voice command button should produce a mock diff")
+    }
+}

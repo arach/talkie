@@ -27,6 +27,8 @@ struct ComposeNextView: View {
     @ObservedObject private var theme = ThemeManager.shared
     @EnvironmentObject private var chrome: ShellChrome
     @StateObject private var compose: ComposeStore
+    @FocusState private var keyboardFieldFocused: Bool
+    @State private var keyboardBridgeText: String = ""
 
     init(documentID: String = "mock", store: ComposeStore? = nil) {
         self.documentID = documentID
@@ -73,8 +75,21 @@ struct ComposeNextView: View {
                 state: compose.state,
                 onAccept: { compose.acceptDiff() },
                 onDiscard: { compose.discardDiff() },
-                onRefine: { compose.discardDiff() }
+                onRefine: { compose.discardDiff() },
+                onVoice: { compose.toggleVoiceCommand() },
+                onKeyboard: { compose.toggleKeyboard() }
             )
+
+            TextField("", text: $keyboardBridgeText)
+                .focused($keyboardFieldFocused)
+                .textInputAutocapitalization(.sentences)
+                .autocorrectionDisabled(false)
+                .frame(width: 1, height: 1)
+                .opacity(0.01)
+                .accessibilityHidden(true)
+        }
+        .onChange(of: compose.keyboardFocusRequested) { _, _ in
+            keyboardFieldFocused = true
         }
     }
 }
@@ -469,16 +484,13 @@ private struct QuickTransforms: View {
         .padding(.vertical, 6)
         .opacity(muted ? 0.5 : 1)
         .overlay(
+            // Single top hairline separates QUICK from the document
+            // card above. The action tray below flows visually as
+            // the same footer cluster — no divider between them.
             Rectangle()
                 .fill(theme.currentTheme.chrome.edgeFaint)
                 .frame(height: theme.currentTheme.chrome.hairlineWidth),
             alignment: .top
-        )
-        .overlay(
-            Rectangle()
-                .fill(theme.currentTheme.chrome.edgeFaint)
-                .frame(height: theme.currentTheme.chrome.hairlineWidth),
-            alignment: .bottom
         )
     }
 }
@@ -490,6 +502,8 @@ private struct ActionTray: View {
     let onAccept: () -> Void
     let onDiscard: () -> Void
     let onRefine: () -> Void
+    let onVoice: () -> Void
+    let onKeyboard: () -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
 
@@ -504,9 +518,9 @@ private struct ActionTray: View {
             .padding(.vertical, 10)
         } else {
             HStack {
-                trayButton(systemImage: "dot.radiowaves.left.and.right") { /* voice cmd — also via shell long-press */ }
+                trayButton(systemImage: "dot.radiowaves.left.and.right", accessibilityLabel: "Voice command", action: onVoice)
                 Spacer()
-                trayButton(systemImage: "keyboard") { /* keyboard */ }
+                trayButton(systemImage: "keyboard", accessibilityLabel: "Keyboard", action: onKeyboard)
             }
             .padding(.horizontal, 24)
             .padding(.top, 4)
@@ -537,7 +551,7 @@ private struct ActionTray: View {
     }
 
     @ViewBuilder
-    private func trayButton(systemImage: String, action: @escaping () -> Void) -> some View {
+    private func trayButton(systemImage: String, accessibilityLabel: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 17, weight: .regular))
@@ -551,5 +565,6 @@ private struct ActionTray: View {
                 )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
     }
 }

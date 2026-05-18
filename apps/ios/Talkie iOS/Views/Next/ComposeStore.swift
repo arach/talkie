@@ -19,6 +19,7 @@ final class ComposeStore: ObservableObject {
     @Published var lastCommandTranscript: String?
     @Published var generatingETA: String?
     @Published var pendingDiff: Diff?
+    @Published var keyboardFocusRequested: Bool = false
 
     let modelLabel: String = "Sonnet 4.6"
     let documentID: String
@@ -28,6 +29,8 @@ final class ComposeStore: ObservableObject {
     private var note: ComposeNote?
     private var dictationTask: Task<Void, Never>?
     private var commandTask: Task<Void, Never>?
+    private var voiceCommandTask: Task<Void, Never>?
+    private var isVoiceCommandCapturing = false
     private var isMockDocument: Bool { documentID == "mock" }
 
     init(documentID: String) {
@@ -68,6 +71,7 @@ final class ComposeStore: ObservableObject {
     deinit {
         dictationTask?.cancel()
         commandTask?.cancel()
+        voiceCommandTask?.cancel()
     }
 
     func toggleDictation() {
@@ -87,6 +91,41 @@ final class ComposeStore: ObservableObject {
         } else {
             beginDictation()
         }
+    }
+
+
+    func toggleVoiceCommand() {
+        if isMockDocument {
+            voiceCommandTask?.cancel()
+
+            if state == .listening {
+                voiceCommandReceived("tighten the second paragraph")
+                return
+            }
+
+            pendingDiff = nil
+            livePartialTranscript = nil
+            lastCommandTranscript = "tighten the second paragraph"
+            generatingETA = "~3s"
+            state = .listening
+
+            voiceCommandTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(450))
+                guard let self, !Task.isCancelled, self.state == .listening else { return }
+                self.voiceCommandReceived("tighten the second paragraph")
+            }
+            return
+        }
+
+        if isVoiceCommandCapturing {
+            finishVoiceCommandCapture()
+        } else {
+            beginVoiceCommandCapture()
+        }
+    }
+
+    func toggleKeyboard() {
+        keyboardFocusRequested.toggle()
     }
 
     func voiceCommandReceived(_ text: String) {
@@ -174,6 +213,53 @@ final class ComposeStore: ObservableObject {
             case .polish:  return "polish the tone"
             case .connect: return "connect the ideas more clearly"
             case .grammar: return "fix any grammar issues"
+            }
+        }
+    }
+
+
+    private func beginVoiceCommandCapture() {
+        dictationTask?.cancel()
+        voiceCommandTask?.cancel()
+        pendingDiff = nil
+        livePartialTranscript = nil
+        lastCommandTranscript = nil
+        generatingETA = "~3s"
+        state = .listening
+        isVoiceCommandCapturing = true
+
+        voiceCommandTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.recorder.startRecording()
+        }
+    }
+
+    private func finishVoiceCommandCapture() {
+        guard isVoiceCommandCapturing else { return }
+        isVoiceCommandCapturing = false
+        voiceCommandTask?.cancel()
+
+        voiceCommandTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.recorder.stopRecording()
+            let recordingURL = self.recorder.currentRecordingURL
+            self.recorder.finalizeRecording()
+
+            guard let recordingURL else {
+                self.state = .idle
+                return
+            }
+
+            do {
+                let transcript = try await TranscriptionService.shared.transcribe(audioURL: recordingURL, useCase: .keyboard)
+                let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty {
+                    self.state = .idle
+                } else {
+                    self.voiceCommandReceived(trimmed)
+                }
+            } catch {
+                self.state = .idle
             }
         }
     }
