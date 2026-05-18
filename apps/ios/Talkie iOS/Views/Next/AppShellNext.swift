@@ -85,6 +85,7 @@ struct AppShellNext<Content: View>: View {
         case .connectionCenter: return "connection"
         case .onboarding: return "onboarding"
         case .webBrowser: return "browser"
+        case .keyboardActivation: return "keyboard"
         }
     }
 
@@ -118,6 +119,8 @@ struct AppShellNext<Content: View>: View {
             OnboardingNext()
         case .webBrowser:
             WebCaptureBrowserNext()
+        case .keyboardActivation:
+            KeyboardActivationNext()
         }
     }
 }
@@ -139,8 +142,7 @@ final class AppShellRouter: ObservableObject {
         case connectionCenter
         case onboarding
         case webBrowser
-        // Still to re-port from donor (deleted earlier fabrications):
-        // .keyboardActivation → live status/transcript view
+        case keyboardActivation
     }
 
     @Published var surface: Surface = .home
@@ -170,6 +172,8 @@ final class AppShellRouter: ObservableObject {
             openOnboarding()
         } else if args.contains("--browser") {
             openWebBrowser()
+        } else if args.contains("--keyboard") {
+            openKeyboardActivation()
         }
     }
 
@@ -232,6 +236,11 @@ final class AppShellRouter: ObservableObject {
     func openWebBrowser() {
         activeComposeStore = nil
         surface = .webBrowser
+    }
+
+    func openKeyboardActivation() {
+        activeComposeStore = nil
+        surface = .keyboardActivation
     }
 
     func submitVoiceCommand(_ transcript: String) {
