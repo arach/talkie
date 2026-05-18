@@ -12,6 +12,7 @@ import SwiftUI
 struct AppShellNext<Content: View>: View {
     @StateObject private var chrome = ShellChrome()
     @StateObject private var router = AppShellRouter.shared
+    @StateObject private var recordingSheet = RecordingSheetController.shared
     @EnvironmentObject private var theme: ThemeManager
 
     private let content: () -> Content
@@ -52,6 +53,9 @@ struct AppShellNext<Content: View>: View {
         }
         .environmentObject(chrome)
         .environmentObject(router)
+        .sheet(isPresented: $recordingSheet.isPresented) {
+            RecordingSheetNext()
+        }
         .onAppear {
             chrome.voiceCommandHandler = { transcript in
                 AppShellRouter.shared.submitVoiceCommand(transcript)

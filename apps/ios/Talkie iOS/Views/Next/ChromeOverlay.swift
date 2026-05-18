@@ -152,7 +152,7 @@ private struct TrayFAB: View {
 
     var body: some View {
         Button(action: {
-            // TODO M1+: open recording sheet.
+            RecordingSheetController.shared.isPresented = true
         }) {
             ZStack {
                 Circle().fill(theme.currentTheme.chrome.accent)
