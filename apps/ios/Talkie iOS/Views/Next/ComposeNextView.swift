@@ -520,6 +520,15 @@ private struct ActionTray: View {
             HStack {
                 trayButton(systemImage: "dot.radiowaves.left.and.right", accessibilityLabel: "Voice command", action: onVoice)
                 Spacer()
+                // Edit cluster — cut · cursor · paste. Cursor button
+                // still useful for jumping around the doc; cut/paste
+                // are the real wins on mobile edits.
+                HStack(spacing: 14) {
+                    trayButton(systemImage: "scissors", accessibilityLabel: "Cut") { /* TODO M3: cut */ }
+                    trayButton(systemImage: "arrow.up.and.down.and.arrow.left.and.right", accessibilityLabel: "Cursor") { /* TODO M3: cursor jump */ }
+                    trayButton(systemImage: "doc.on.clipboard", accessibilityLabel: "Paste") { /* TODO M3: paste */ }
+                }
+                Spacer()
                 trayButton(systemImage: "keyboard", accessibilityLabel: "Keyboard", action: onKeyboard)
             }
             .padding(.horizontal, 24)
