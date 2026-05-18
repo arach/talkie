@@ -21,22 +21,22 @@ struct ListeningBubble: View {
             WaveformBars(color: theme.currentTheme.chrome.accent)
                 .frame(width: 16, height: 16)
 
-            Text("Hold · Listening")
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                .tracking(1.8)
-                .foregroundStyle(theme.currentTheme.chrome.accent)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Hold · Listening")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .tracking(1.8)
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                Text("Release to send")
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .tracking(1.6)
+                    .foregroundStyle(theme.colors.textTertiary)
+            }
 
-            // Placeholder snippet — M2 swaps for live transcription.
-            Text("\u{201C}tighten the second paragraph\u{2026}\u{201D}")
-                .font(.system(size: 13))
-                .italic()
-                .foregroundStyle(theme.colors.textPrimary.opacity(0.8))
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        .frame(minWidth: 168, alignment: .leading)
         .background(
             // Theme-aware corner radius — Tactical's chromeCorner:0
             // gives sharp square edges; Lift's :8 gives soft cards.
