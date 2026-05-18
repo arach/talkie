@@ -352,8 +352,7 @@ private struct InlineMicButton: View {
             .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
         }
         .buttonStyle(.plain)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-        .padding(.trailing, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .padding(.bottom, 12)
     }
 }
@@ -490,12 +489,11 @@ private struct ActionTray: View {
             HStack {
                 trayButton(systemImage: "dot.radiowaves.left.and.right") { /* voice cmd — also via shell long-press */ }
                 Spacer()
-                cursorPad
-                Spacer()
                 trayButton(systemImage: "keyboard") { /* keyboard */ }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 24)
+            .padding(.top, 4)
+            .padding(.bottom, 18)
         }
     }
 
@@ -536,24 +534,5 @@ private struct ActionTray: View {
                 )
         }
         .buttonStyle(.plain)
-    }
-
-    private var cursorPad: some View {
-        VStack(spacing: 2) {
-            Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
-                .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(theme.colors.textSecondary)
-                .frame(width: 36, height: 36)
-                .background(
-                    Circle()
-                        .fill(theme.colors.cardBackground)
-                        .overlay(Circle().strokeBorder(theme.currentTheme.chrome.edgeFaint,
-                                                       lineWidth: theme.currentTheme.chrome.hairlineWidth))
-                )
-            Text("· CURSOR")
-                .font(.system(size: 7, weight: .semibold, design: .monospaced))
-                .tracking(1.5)
-                .foregroundStyle(theme.colors.textTertiary)
-        }
     }
 }
