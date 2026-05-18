@@ -13,7 +13,6 @@ struct AppShellNext<Content: View>: View {
     @StateObject private var chrome = ShellChrome()
     @StateObject private var router = AppShellRouter.shared
     @StateObject private var recordingSheet = RecordingSheetController.shared
-    @StateObject private var settingsSheet = SettingsSheetController.shared
     @EnvironmentObject private var theme: ThemeManager
 
     private let content: () -> Content
@@ -62,9 +61,6 @@ struct AppShellNext<Content: View>: View {
         .sheet(isPresented: $recordingSheet.isPresented) {
             RecordingSheetNext()
         }
-        .sheet(isPresented: $settingsSheet.isPresented) {
-            SettingsView()
-        }
         .onAppear {
             chrome.voiceCommandHandler = { transcript in
                 AppShellRouter.shared.submitVoiceCommand(transcript)
@@ -86,6 +82,7 @@ struct AppShellNext<Content: View>: View {
         case .dictationHistory: return "dictations"
         case .dictationOverlayDemo: return "overlay"
         case .signIn: return "signin"
+        case .connectionCenter: return "connection"
         }
     }
 
@@ -113,6 +110,8 @@ struct AppShellNext<Content: View>: View {
             MinimalDictationOverlayDemoSurface()
         case .signIn:
             SignInNext()
+        case .connectionCenter:
+            ConnectionCenterNext()
         }
     }
 }
@@ -131,6 +130,7 @@ final class AppShellRouter: ObservableObject {
         case dictationHistory
         case dictationOverlayDemo
         case signIn
+        case connectionCenter
         // Still to re-port from donor (deleted earlier fabrications):
         // .keyboardActivation → live status/transcript view
         // .connectionCenter   → connection-type rows
@@ -159,6 +159,8 @@ final class AppShellRouter: ObservableObject {
             openDictationOverlayDemo()
         } else if args.contains("--signin") {
             openSignIn()
+        } else if args.contains("--connection") {
+            openConnectionCenter()
         }
     }
 
@@ -206,6 +208,11 @@ final class AppShellRouter: ObservableObject {
     func openSignIn() {
         activeComposeStore = nil
         surface = .signIn
+    }
+
+    func openConnectionCenter() {
+        activeComposeStore = nil
+        surface = .connectionCenter
     }
 
     func submitVoiceCommand(_ transcript: String) {
