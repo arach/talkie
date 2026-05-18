@@ -62,7 +62,7 @@ private struct HomeHeader: View {
                 .tracking(3.2)
                 .foregroundStyle(theme.colors.textPrimary.opacity(0.78))
             Spacer()
-            Button(action: { AppShellRouter.shared.openAppearance() }) {
+            Button(action: { SettingsSheetController.shared.isPresented = true }) {
                 Image(systemName: "gearshape")
                     .font(.system(size: 13))
                     .foregroundStyle(theme.colors.textTertiary)
