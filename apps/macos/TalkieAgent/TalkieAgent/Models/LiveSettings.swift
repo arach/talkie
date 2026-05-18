@@ -56,14 +56,27 @@ enum VisualTheme: String, CaseIterable, Codable {
     case live = "live"          // Maps to talkiePro
     case midnight = "midnight"  // Maps to talkiePro (legacy)
     case terminal = "terminal"
-    case minimal = "minimal"
+    case darkMatte = "darkMatte"
+    case light = "light"
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        // Migrate retired rawValues
+        switch raw {
+        case "minimal": self = .light
+        case "liquidGlass": self = .midnight
+        default:
+            self = VisualTheme(rawValue: raw) ?? .live
+        }
+    }
 
     var displayName: String {
         switch self {
         case .live: return "Pro"
         case .midnight: return "Pro"
         case .terminal: return "Terminal"
-        case .minimal: return "Minimal"
+        case .darkMatte: return "Dark Matte"
+        case .light: return "Light"
         }
     }
 
@@ -72,7 +85,8 @@ enum VisualTheme: String, CaseIterable, Codable {
         case .live: return "Professional dark theme"
         case .midnight: return "Professional dark theme"
         case .terminal: return "Clean monospace, sharp corners"
-        case .minimal: return "Light and subtle"
+        case .darkMatte: return "Dark with warm matte undertones"
+        case .light: return "Clean light mode with neutral surfaces"
         }
     }
 
@@ -82,7 +96,8 @@ enum VisualTheme: String, CaseIterable, Codable {
         case .live: return .blue
         case .midnight: return .blue
         case .terminal: return .gray    // No gimmicks
-        case .minimal: return .gray
+        case .darkMatte: return .orange
+        case .light: return .orange
         }
     }
 
@@ -92,7 +107,8 @@ enum VisualTheme: String, CaseIterable, Codable {
         case .live: return .dark
         case .midnight: return .dark
         case .terminal: return .dark
-        case .minimal: return .system
+        case .darkMatte: return .dark
+        case .light: return .light
         }
     }
 
@@ -106,8 +122,18 @@ enum VisualTheme: String, CaseIterable, Codable {
         case .terminal:
             // Ghostty-style: black bg, light gray text, subtle gray accent
             return (Color.black, Color(white: 0.85), Color(white: 0.5))
-        case .minimal:
-            return (Color(white: 0.96), Color(white: 0.2), Color.gray)
+        case .darkMatte:
+            return (
+                Color(red: 0.0449, green: 0.0333, blue: 0.0242),
+                Color(red: 0.8603, green: 0.8416, blue: 0.8171),
+                Color(red: 0.8326, green: 0.5895, blue: 0.2837)
+            )
+        case .light:
+            return (
+                Color(red: 0.9737, green: 0.9737, blue: 0.9737),
+                Color(red: 0.0625, green: 0.0697, blue: 0.0774),
+                Color(red: 0.8961, green: 0.5104, blue: 0.0706)
+            )
         }
     }
 }

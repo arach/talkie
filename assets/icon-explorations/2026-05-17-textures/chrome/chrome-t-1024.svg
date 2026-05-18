@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="brass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#D4C4A0"/>
+      <stop offset="18%"  stop-color="#8A7650"/>
+      <stop offset="35%"  stop-color="#C9B580"/>
+      <stop offset="50%"  stop-color="#F0E4C8"/>
+      <stop offset="65%"  stop-color="#9A8660"/>
+      <stop offset="82%"  stop-color="#705830"/>
+      <stop offset="100%" stop-color="#C0A870"/>
+    </linearGradient>
+    <filter id="specular">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="1" result="blur"/>
+      <feSpecularLighting in="blur" surfaceScale="8" specularConstant="1.2" specularExponent="25" lighting-color="#FFFFFF" result="spec">
+        <fePointLight x="190" y="-200" z="300"/>
+      </feSpecularLighting>
+      <feComposite in="spec" in2="SourceGraphic" operator="in" result="specClip"/>
+      <feMerge>
+        <feMergeNode in="SourceGraphic"/>
+        <feMergeNode in="specClip"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="1024" height="1024" fill="#0E0D0A"/>
+  <g transform="translate(194.56, 0)" filter="url(#specular)">
+    <text x="317.44" y="880.64" font-size="798.72" text-anchor="middle" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" fill="url(#brass)">t</text>
+  </g>
+</svg>

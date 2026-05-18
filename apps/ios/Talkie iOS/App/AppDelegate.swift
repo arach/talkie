@@ -404,11 +404,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
     /// Fetch the PushNotification record to get memoId for deep linking
     private func fetchPushNotificationRecord(recordID: CKRecord.ID) {
-        #if targetEnvironment(simulator)
-        AppLogger.app.info("[Push] Skipping CloudKit notification fetch on simulator")
-        return
-        #else
-        let container = CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier)
+        guard let container = CloudKitContainerProvider.container() else {
+            let reason = CloudKitContainerProvider.unavailableReason ?? "CloudKit unavailable"
+            AppLogger.app.warning("[Push] Skipping notification record fetch: \(reason)")
+            return
+        }
+
         let privateDB = container.privateCloudDatabase
 
         privateDB.fetch(withRecordID: recordID) { record, error in
@@ -430,7 +431,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                 }
             }
         }
-        #endif
     }
 
     /// Memo ID from the most recent push notification (for deep linking on tap)
@@ -440,11 +440,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         cloudKitSubscriptionSetUp = true
         AppLogger.app.info("[Push] Setting up CloudKit subscriptions...")
 
-        #if targetEnvironment(simulator)
-        AppLogger.app.info("[Push] Skipping CloudKit subscriptions on simulator")
-        return
-        #else
-        let container = CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier)
+        guard let container = CloudKitContainerProvider.container() else {
+            let reason = CloudKitContainerProvider.unavailableReason ?? "CloudKit unavailable"
+            AppLogger.app.warning("[Push] Skipping CloudKit subscription setup: \(reason)")
+            return
+        }
+
         let privateDB = container.privateCloudDatabase
 
         // Create a subscription to the Core Data CloudKit zone
@@ -458,7 +459,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         // Set up query subscription for PushNotification records (visible push notification from macOS)
         let pushNotificationSubscriptionID = "talkie-ios-push-notification"
         setupPushNotificationSubscription(database: privateDB, subscriptionID: pushNotificationSubscriptionID, zoneID: zoneID)
-        #endif
     }
 
     private func setupZoneSubscription(database: CKDatabase, subscriptionID: String, zoneID: CKRecordZone.ID) {
@@ -604,7 +604,13 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             return
             #else
             // Fetch the record to get memoId
-            let container = CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier)
+            guard let container = CloudKitContainerProvider.container() else {
+                let reason = CloudKitContainerProvider.unavailableReason ?? "CloudKit unavailable"
+                AppLogger.app.warning("[Push] Skipping tapped notification fetch: \(reason)")
+                completionHandler()
+                return
+            }
+
             let privateDB = container.privateCloudDatabase
 
             privateDB.fetch(withRecordID: recordID) { [weak self] record, error in

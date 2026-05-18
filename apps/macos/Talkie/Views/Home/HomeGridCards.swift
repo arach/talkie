@@ -2007,7 +2007,7 @@ private struct SystemStatusCardView: View {
     }
 
     private func openAccessibilitySettings() {
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+        PermissionsManager.shared.openAccessibilitySettings()
     }
 }
 

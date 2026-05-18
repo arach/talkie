@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <pattern id="unlitgrid" width="10" height="10" patternUnits="userSpaceOnUse">
+      <circle cx="5" cy="5" r="3" fill="#3A372F" opacity="0.3"/>
+    </pattern>
+  </defs>
+
+  <!-- Background -->
+  <rect width="128" height="128" fill="#0E0D0A"/>
+
+  <!-- Unlit dot grid -->
+  <rect width="128" height="128" fill="url(#unlitgrid)"/>
+
+  <!-- 3x3 cluster of lit dots, centered -->
+  <!-- dotSize=8, gap=3, cluster size = 8*3 + 3*2 = 30 -->
+  <!-- offset = (128 - 30) / 2 = 49 -->
+  <g transform="translate(49, 49)">
+    <!-- Row 1 -->
+    <circle cx="4"  cy="4"  r="4" fill="#E8B547"/>
+    <circle cx="15" cy="4"  r="4" fill="#E8B547"/>
+    <circle cx="26" cy="4"  r="4" fill="#E8B547"/>
+    <!-- Row 2 -->
+    <circle cx="4"  cy="15" r="4" fill="#E8B547"/>
+    <circle cx="15" cy="15" r="4" fill="#E8B547"/>
+    <circle cx="26" cy="15" r="4" fill="#E8B547"/>
+    <!-- Row 3 -->
+    <circle cx="4"  cy="26" r="4" fill="#E8B547"/>
+    <circle cx="15" cy="26" r="4" fill="#E8B547"/>
+    <circle cx="26" cy="26" r="4" fill="#E8B547"/>
+  </g>
+</svg>

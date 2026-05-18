@@ -56,8 +56,14 @@ class iCloudSyncProvider: SyncProvider {
         #if targetEnvironment(simulator)
         return false
         #else
-        await withCheckedContinuation { continuation in
-            CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier).accountStatus { status, _ in
+        guard let container = CloudKitContainerProvider.container() else {
+            let reason = CloudKitContainerProvider.unavailableReason ?? "CloudKit unavailable"
+            log.info("iCloud unavailable: \(reason)")
+            return false
+        }
+
+        return await withCheckedContinuation { continuation in
+            container.accountStatus { status, _ in
                 continuation.resume(returning: status == .available)
             }
         }

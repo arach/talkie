@@ -308,7 +308,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         Task { @MainActor in
             // When embedded as a Login Item inside Talkie.app, mic permission belongs to
             // the parent app — no separate Agent entry appears in System Settings.
-            // Only check independently when running standalone (dev builds from DerivedData).
+            // Only check independently when running standalone (dev builds).
             let hasMicrophone = Self.isEmbeddedHelper || MicrophonePermission.isGranted
 
             // Check accessibility permission (required for autopaste).
@@ -325,7 +325,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
     }
 
     /// True when running as an embedded Login Item inside another .app bundle (prod).
-    /// False when launched standalone from DerivedData (dev).
+    /// False when launched standalone (dev).
     private static let isEmbeddedHelper: Bool = {
         let components = Bundle.main.bundlePath.components(separatedBy: "/")
         return components.filter { $0.hasSuffix(".app") }.count > 1
@@ -358,8 +358,9 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
                 PermissionManager.shared.openSettings(for: .accessibility)
             }
 
-            NSLog("[TalkieAgentXPC] Accessibility permission request result: \(refreshed)")
-            reply(refreshed || granted)
+            let result = refreshed || granted
+            NSLog("[TalkieAgentXPC] Accessibility permission request result: \(result)")
+            reply(result)
         }
     }
 

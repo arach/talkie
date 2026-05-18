@@ -1543,29 +1543,15 @@ struct StatusBar: View {
     }
 
     private func openTalkieAgent() {
-        let agentBundleIds = [
-            "to.talkie.app.agent",
-            "to.talkie.app.agent.dev"
-        ]
-
-        for bundleId in agentBundleIds {
-            if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) {
-                NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
-                return
-            }
+        let stableURL = TalkieHelper.agent.userInstalledAppURL(for: TalkieEnvironment.current)
+        if FileManager.default.fileExists(atPath: stableURL.path) {
+            NSWorkspace.shared.openApplication(at: stableURL, configuration: NSWorkspace.OpenConfiguration())
+            return
         }
 
-        let possiblePaths = [
-            "/Applications/TalkieAgent.app",
-            "\(NSHomeDirectory())/Applications/TalkieAgent.app"
-        ]
-
-        for path in possiblePaths {
-            let url = URL(fileURLWithPath: path)
-            if FileManager.default.fileExists(atPath: path) {
-                NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
-                return
-            }
+        let bundleId = TalkieHelper.agent.bundleId(for: TalkieEnvironment.current)
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) {
+            NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
         }
     }
 

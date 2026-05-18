@@ -13,8 +13,11 @@ import TalkieKit
 extension NSNotification.Name {
     static let navigateToSection = NSNotification.Name("navigateToSection")
     static let showCommandPalette = NSNotification.Name("showCommandPalette")
+    static let toggleCommandPalette = NSNotification.Name("toggleCommandPalette")
     static let showContentSearch = NSNotification.Name("showContentSearch")
     static let showKeyboardHelp = NSNotification.Name("showKeyboardHelp")
+    static let showVoiceCommand = NSNotification.Name("showVoiceCommand")
+    static let toggleAppSidebar = NSNotification.Name("toggleAppSidebar")
     static let toggleKeyboardHintOverlay = NSNotification.Name("toggleKeyboardHintOverlay")
     static let showReportSheet = NSNotification.Name("showReportSheet")
 }

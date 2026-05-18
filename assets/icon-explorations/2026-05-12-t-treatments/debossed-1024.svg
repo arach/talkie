@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <style>@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500');</style>
+    <filter id="db" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur in="SourceAlpha" stdDeviation="3" result="bl"/><feOffset dx="2" dy="3" result="off"/><feFlood flood-color="#0E0D0A" flood-opacity="0.5" result="c"/><feComposite in="c" in2="off" operator="in" result="sh"/><feOffset in="SourceAlpha" dx="-1.5" dy="-2" result="off2"/><feGaussianBlur in="off2" stdDeviation="2" result="bl2"/><feFlood flood-color="#F4EFE6" flood-opacity="0.3" result="c2"/><feComposite in="c2" in2="bl2" operator="in" result="hi"/><feMerge><feMergeNode in="sh"/><feMergeNode in="hi"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="1024" height="1024" fill="#C4B49A"/>
+  <g transform="translate(195, 0)">
+    <text x="317.44" y="880.64" text-anchor="middle" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="500" font-size="798.72" fill="#B8A88E" filter="url(#db)">t</text>
+  </g>
+</svg>

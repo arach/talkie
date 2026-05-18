@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Background -->
+  <rect width="128" height="128" fill="#F4EFE6"/>
+
+  <!-- Tape Tan circle -->
+  <circle cx="62" cy="63" r="12" fill="#7A6E5C" opacity="0.7"/>
+
+  <!-- Hot Mic circle, offset -->
+  <circle cx="66" cy="65" r="10" fill="#FF5346" opacity="0.5"/>
+</svg>

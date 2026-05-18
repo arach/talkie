@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs/>
+
+  <!-- Background: Canvas -->
+  <rect width="1024" height="1024" fill="#0E0D0A"/>
+
+  <!-- Monoline T — single uniform-weight stroke, no fill -->
+  <!-- "Instrument needle" taken literally: precise, minimal, geometric -->
+  <g fill="none" stroke="#F4EFE6" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Crossbar: forward-leaning, slightly asymmetric -->
+    <line x1="195" y1="358" x2="829" y2="340"/>
+    <!-- Stem: clean vertical -->
+    <line x1="512" y1="349" x2="512" y2="740"/>
+    <!-- Hook: subtle leftward curve at base -->
+    <path d="M 512 740 Q 512 785 478 798 Q 448 808 442 780"/>
+  </g>
+
+  <!-- Hot Mic dot — same stroke weight, hollow -->
+  <circle cx="775" cy="288" r="28" fill="none" stroke="#E68A3C" stroke-width="8"/>
+
+  <!-- Needle tip accent: tiny filled dot at hook terminus -->
+  <circle cx="442" cy="780" r="5" fill="#F4EFE6"/>
+</svg>

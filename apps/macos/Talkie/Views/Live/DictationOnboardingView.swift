@@ -425,10 +425,7 @@ struct DictationOnboardingView: View {
 
     private func requestAccessibilityPermission() {
         if !AXIsProcessTrusted() {
-            // Open System Settings
-            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                NSWorkspace.shared.open(url)
-            }
+            PermissionsManager.shared.openAccessibilitySettings()
         }
     }
 

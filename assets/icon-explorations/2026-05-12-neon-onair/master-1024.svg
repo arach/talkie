@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Neon glow filter -->
+    <filter id="neon-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur1"/>
+      <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur2"/>
+      <feMerge>
+        <feMergeNode in="blur1"/>
+        <feMergeNode in="blur2"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <!-- Intense dot glow -->
+    <filter id="dot-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="20" result="blur1"/>
+      <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur2"/>
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur3"/>
+      <feMerge>
+        <feMergeNode in="blur1"/>
+        <feMergeNode in="blur2"/>
+        <feMergeNode in="blur3"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background: deep dark canvas -->
+  <rect width="1024" height="1024" fill="#0A0908"/>
+
+  <!-- Ambient warm glow behind T -->
+  <ellipse cx="512" cy="480" rx="320" ry="280" fill="#E68A3C" opacity="0.04"/>
+
+  <!-- Neon T outline — ON AIR lamp style -->
+  <g fill="none" stroke="#E68A3C" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" filter="url(#neon-glow)">
+    <!-- Crossbar: forward-leaning -->
+    <line x1="185" y1="350" x2="839" y2="332"/>
+    <!-- Stem -->
+    <line x1="512" y1="345" x2="512" y2="750"/>
+    <!-- Hook -->
+    <path d="M 512 750 Q 512 790 480 800 Q 450 808 445 785" fill="none"/>
+  </g>
+
+  <!-- Brighter core stroke (double-line neon effect) -->
+  <g fill="none" stroke="#FBBE72" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9">
+    <line x1="185" y1="350" x2="839" y2="332"/>
+    <line x1="512" y1="345" x2="512" y2="750"/>
+    <path d="M 512 750 Q 512 790 480 800 Q 450 808 445 785" fill="none"/>
+  </g>
+
+  <!-- Hot Mic dot — blazing neon -->
+  <circle cx="780" cy="280" r="32" fill="#E68A3C" filter="url(#dot-glow)"/>
+  <circle cx="780" cy="280" r="16" fill="#FCEBD5"/>
+</svg>

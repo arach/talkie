@@ -12,6 +12,7 @@
 		F85C0120CF164EFE94283C33 /* ScopeContextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71CD7FC165C34D5BAF3E366B /* ScopeContextView.swift */; };
 		75F8183FCB2E47F58FBE6385 /* ScopeLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACE6C6FDCE0E434D86206FB6 /* ScopeLibraryView.swift */; };
 		F4747F36A4AC429ABD84A7F1 /* ScopeStatsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8E906378B5E425D8377541F /* ScopeStatsScreen.swift */; };
+		8DFFB10F40FD4C53A561E5FA /* ScopeLearnScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE3183F3350F4488961CE4DA /* ScopeLearnScreen.swift */; };
 		2323D610E7C24439A3447FBE /* StatsCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01725996407D448FB38A9BD2 /* StatsCache.swift */; };
 		B00AD33E59874ED29D2233B0 /* ScopeWorkflowStepCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19E80E0B71394B66BEF56B71 /* ScopeWorkflowStepCard.swift */; };
 		A977D907A9F344DAB208C424 /* ScopeDraftsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 409F048DACD9412483B4B67C /* ScopeDraftsScreen.swift */; };
@@ -350,6 +351,7 @@
 		AA2464695252852A49D8CBD7 /* ExtensionToastOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = B533E79B172CA37245144B98 /* ExtensionToastOverlay.swift */; };
 		AA75F17818D76889AA3C4371 /* IngestWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12CC2B44BD5528C92CC62F86 /* IngestWatcher.swift */; };
 		AAD83E8B0554313E0E5B46BD /* PermissionsSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5055A80B989BF64EDB1299CF /* PermissionsSettings.swift */; };
+		B1C2D3E4F5061728394A5B6C /* AccessibilityInstallAssistant.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* AccessibilityInstallAssistant.swift */; };
 		AB23CC2060860E94499A1919 /* ImportPayloadConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F73CCDFECA3D7A46C0132431 /* ImportPayloadConverter.swift */; };
 		ABAAAE8C3A95529AFFB4E546 /* OnboardingSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07826AE2BBCA9FAD1F663024 /* OnboardingSettings.swift */; };
 		AC3CA013906723835202D212 /* WorkflowRunModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DB876A29F7F55B18465450A /* WorkflowRunModel.swift */; };
@@ -512,6 +514,7 @@
 		71CD7FC165C34D5BAF3E366B /* ScopeContextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeContextView.swift; sourceTree = "<group>"; };
 		ACE6C6FDCE0E434D86206FB6 /* ScopeLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeLibraryView.swift; sourceTree = "<group>"; };
 		F8E906378B5E425D8377541F /* ScopeStatsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeStatsScreen.swift; sourceTree = "<group>"; };
+		DE3183F3350F4488961CE4DA /* ScopeLearnScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeLearnScreen.swift; sourceTree = "<group>"; };
 		01725996407D448FB38A9BD2 /* StatsCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsCache.swift; sourceTree = "<group>"; };
 		19E80E0B71394B66BEF56B71 /* ScopeWorkflowStepCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeWorkflowStepCard.swift; sourceTree = "<group>"; };
 		409F048DACD9412483B4B67C /* ScopeDraftsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeDraftsScreen.swift; sourceTree = "<group>"; };
@@ -669,6 +672,7 @@
 		4E46A5885BA07F1A04FDD14B /* CaptureRadialPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureRadialPanel.swift; sourceTree = "<group>"; };
 		4E669BA8831BCB459CDFFDA7 /* AppManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppManager.swift; sourceTree = "<group>"; };
 		4F4992B45B1A31E2B8AF4B8A /* OverlayStylePreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayStylePreviews.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B5C /* AccessibilityInstallAssistant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityInstallAssistant.swift; sourceTree = "<group>"; };
 		5055A80B989BF64EDB1299CF /* PermissionsSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsSettings.swift; sourceTree = "<group>"; };
 		50B29D65C38BFB0A50E1DC0F /* MemoRecordingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoRecordingController.swift; sourceTree = "<group>"; };
 		5119499741D6595812AB1D5B /* SemanticFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SemanticFilter.swift; sourceTree = "<group>"; };
@@ -1039,6 +1043,14 @@
 			path = Stats;
 			sourceTree = "<group>";
 		};
+		BDBEFCABA4EB455AB15B0BF1 /* Learn */ = {
+			isa = PBXGroup;
+			children = (
+				DE3183F3350F4488961CE4DA /* ScopeLearnScreen.swift */,
+			);
+			path = Learn;
+			sourceTree = "<group>";
+		};
 		07F14E9974574A7AB6ADAC8E /* Drafts */ = {
 			isa = PBXGroup;
 			children = (
@@ -1307,6 +1319,7 @@
 			children = (
 				906F2CC473F44082A66EF380 /* Library */,
 				6ED596180D474DFB8250F60C /* Stats */,
+				BDBEFCABA4EB455AB15B0BF1 /* Learn */,
 				07F14E9974574A7AB6ADAC8E /* Drafts */,
 				A2EDA2E38649627130FC8C77 /* AppNavigation.swift */,
 				BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */,
@@ -1609,6 +1622,7 @@
 				D6071BA445AB04C3F3127A0C /* NotchSettingsView.swift */,
 				07826AE2BBCA9FAD1F663024 /* OnboardingSettings.swift */,
 				7E79F058BAA2B67146EE791D /* OutputSettings.swift */,
+				A1B2C3D4E5F60718293A4B5C /* AccessibilityInstallAssistant.swift */,
 				5055A80B989BF64EDB1299CF /* PermissionsSettings.swift */,
 				FDDE4E10FB667DA80E5BD1E5 /* QuickActionsSettings.swift */,
 				B6A2AA3D0376EDA1A44A3C31 /* QuickOpenSettings.swift */,
@@ -2209,6 +2223,7 @@
 				F85C0120CF164EFE94283C33 /* ScopeContextView.swift in Sources */,
 				75F8183FCB2E47F58FBE6385 /* ScopeLibraryView.swift in Sources */,
 				F4747F36A4AC429ABD84A7F1 /* ScopeStatsScreen.swift in Sources */,
+				8DFFB10F40FD4C53A561E5FA /* ScopeLearnScreen.swift in Sources */,
 				2323D610E7C24439A3447FBE /* StatsCache.swift in Sources */,
 				B00AD33E59874ED29D2233B0 /* ScopeWorkflowStepCard.swift in Sources */,
 				A977D907A9F344DAB208C424 /* ScopeDraftsScreen.swift in Sources */,
@@ -2467,6 +2482,7 @@
 				96021A8ACFAE0D35CCF24EB8 /* PendingActionsManager.swift in Sources */,
 				D8D3E2EF1A316C3EB4590B14 /* PendingActionsScreen.swift in Sources */,
 				96612B2E80986C017E8F0481 /* PerformanceInstrumentation.swift in Sources */,
+				B1C2D3E4F5061728394A5B6C /* AccessibilityInstallAssistant.swift in Sources */,
 				AAD83E8B0554313E0E5B46BD /* PermissionsSettings.swift in Sources */,
 				519BBE720E920B03F91C4DE5 /* PermissionsSetupView.swift in Sources */,
 				795E5A9E2D74DCDD5DD2D468 /* Persistence.swift in Sources */,

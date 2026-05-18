@@ -62,13 +62,12 @@ final class AppEnvironment {
         }
     }
 
-    /// Find the best build of a helper app
-    /// In debug mode: prefers debug builds from DerivedData
-    /// In release mode: uses /Applications install
+    /// Find the best build of a helper app.
+    /// Debug builds prefer the stable user-local dev install produced by run.sh.
     func findApp(_ app: HelperApp) -> URL? {
         var foundPath: URL?
 
-        // Debug mode: search DerivedData
+        // Debug mode: use stable dev installs before any registered app lookup.
         if isDebug {
             foundPath = findDebugBuild(for: app)
             if let path = foundPath {
@@ -104,6 +103,27 @@ final class AppEnvironment {
     // MARK: - Private Helpers
 
     private func findDebugBuild(for app: HelperApp) -> URL? {
+        let stableURL = TalkieEnvironment.current.userInstalledAppURL(named: app.appName)
+        if FileManager.default.fileExists(atPath: stableURL.path) {
+            return stableURL
+        }
+
+        if let repoRoot = LocalCheckoutLocator.talkieRepositoryRootURL(compileTimeFilePath: #filePath) {
+            let repoBuildURL = repoRoot
+                .appendingPathComponent("build")
+                .appendingPathComponent("macos")
+                .appendingPathComponent(String(app.appName.dropLast(4)))
+                .appendingPathComponent("Build/Products/Debug")
+                .appendingPathComponent(app.appName)
+            if FileManager.default.fileExists(atPath: repoBuildURL.path) {
+                return repoBuildURL
+            }
+        }
+
+        guard allowsDerivedDataFallback else {
+            return nil
+        }
+
         let derivedDataPath = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Developer/Xcode/DerivedData")
 
@@ -123,6 +143,11 @@ final class AppEnvironment {
         }
 
         return nil
+    }
+
+    private var allowsDerivedDataFallback: Bool {
+        ProcessInfo.processInfo.environment["TALKIE_ALLOW_DERIVEDDATA_FALLBACK"] == "1"
+            || UserDefaults.standard.bool(forKey: "AppEnvironment.allowDerivedDataFallback")
     }
 
     // MARK: - Process Management

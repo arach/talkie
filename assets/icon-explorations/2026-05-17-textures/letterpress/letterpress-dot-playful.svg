@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <filter id="letterpress-playful" x="-20%" y="-20%" width="150%" height="150%" color-interpolation-filters="sRGB">
+      <!-- 1. Paper grain -->
+      <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="4" seed="42" result="grain"/>
+
+      <!-- 2. Ink bleed -->
+      <feMorphology in="SourceGraphic" operator="dilate" radius="1.5" result="bleed"/>
+
+      <!-- 3. Directional shadow offset -->
+      <feOffset in="bleed" dx="1" dy="2" result="shifted"/>
+
+      <!-- 4. Soft shadow blur -->
+      <feGaussianBlur in="shifted" stdDeviation="1.5" result="blurred"/>
+
+      <!-- 5. Colored shadow -->
+      <feFlood flood-color="#0E0D0A" flood-opacity="0.15" result="shadowColor"/>
+      <feComposite in="shadowColor" in2="blurred" operator="in" result="shadow"/>
+
+      <!-- 6. Merge shadow + bleed -->
+      <feMerge result="merged">
+        <feMergeNode in="shadow"/>
+        <feMergeNode in="bleed"/>
+      </feMerge>
+
+      <!-- 7. Multiply blend with grain -->
+      <feBlend in="merged" in2="grain" mode="multiply" result="final"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="128" height="128" fill="#F4EFE6"/>
+
+  <!-- Playful dot -->
+  <circle
+    cx="64"
+    cy="64"
+    r="16"
+    fill="#0E0D0A"
+    filter="url(#letterpress-playful)"
+  />
+</svg>

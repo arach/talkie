@@ -291,4 +291,142 @@ export const SCHEMES: Scheme[] = [
       "--scheme-bezel-shadow": "rgba(0, 0, 0, 0.08)",
     },
   },
+
+  // ── Light-touch siblings ─────────────────────────────────────────
+  // Two lineages of progressively-lighter surfaces designed to recede
+  // into the cream canvas (#FBFBFA) without disappearing:
+  //
+  //   cool: ALUMINUM → PORCELAIN → PEARL
+  //   warm: PAPER    → VELLUM    → CHIFFON
+  //
+  // Each step is ~15 units lighter than the previous on the bg axis.
+  // Edges + glow soften proportionally so the surface stays a panel,
+  // not a void. Use the lightest variants when the bay should *recede*
+  // into the page rather than punctuate it.
+
+  // PORCELAIN — ALUMINUM, ~15 units lighter.
+  {
+    key: "porcelain",
+    name: "PORCELAIN",
+    swatch: "#D49236",
+    bgHex: "#EAEEF1",
+    vars: {
+      "--scheme-bg": "#EAEEF1",
+      "--scheme-strip-top":
+        "linear-gradient(to bottom, #F2F5F7 0%, #E8ECEF 60%, #DCE0E4 100%)",
+      "--scheme-strip-bottom":
+        "linear-gradient(to bottom, #E0E4E8 0%, #EAEEF1 55%, #F0F3F6 100%)",
+      "--scheme-graticule": "rgba(212, 146, 54, 0.08)",
+      "--scheme-ink": "#2A2E32",
+      "--scheme-ink-faint": "#5C6168",
+      "--scheme-ink-subtle": "#787D84",
+      "--scheme-accent": "#D49236",
+      "--scheme-accent-glow": "rgba(212, 146, 54, 0.14)",
+      "--scheme-accent-ring": "rgba(212, 146, 54, 0.05)",
+      "--scheme-trace": "#D49236",
+      "--scheme-rec": "#C43A1C",
+      "--scheme-rec-glow": "rgba(196, 58, 28, 0.28)",
+      "--scheme-sparkle": "#C43A1C",
+      "--scheme-edge": "rgba(20, 24, 28, 0.10)",
+      "--scheme-edge-strong": "rgba(20, 24, 28, 0.24)",
+      "--scheme-details-bg": "rgba(20, 24, 28, 0.03)",
+      "--scheme-bezel-highlight": "rgba(255, 255, 255, 0.55)",
+      "--scheme-bezel-shadow": "rgba(0, 0, 0, 0.06)",
+    },
+  },
+  // VELLUM — PAPER, ~15 units lighter.
+  {
+    key: "vellum",
+    name: "VELLUM",
+    swatch: "#9A6A22",
+    bgHex: "#F4EFE0",
+    vars: {
+      "--scheme-bg": "#F4EFE0",
+      "--scheme-strip-top":
+        "linear-gradient(to bottom, #F8F3E5 0%, #F0EBDB 60%, #E8E2D0 100%)",
+      "--scheme-strip-bottom":
+        "linear-gradient(to bottom, #ECE6D6 0%, #F4EFE0 55%, #F9F4E6 100%)",
+      "--scheme-graticule": "rgba(154, 106, 34, 0.08)",
+      "--scheme-ink": "#2A2520",
+      "--scheme-ink-faint": "#6B5D4F",
+      "--scheme-ink-subtle": "#857664",
+      "--scheme-accent": "#9A6A22",
+      "--scheme-accent-glow": "rgba(154, 106, 34, 0.12)",
+      "--scheme-accent-ring": "rgba(154, 106, 34, 0.05)",
+      "--scheme-trace": "#9A6A22",
+      "--scheme-rec": "#B53620",
+      "--scheme-rec-glow": "rgba(181, 54, 32, 0.28)",
+      "--scheme-sparkle": "#B53620",
+      "--scheme-edge": "rgba(60, 40, 20, 0.12)",
+      "--scheme-edge-strong": "rgba(154, 106, 34, 0.36)",
+      "--scheme-details-bg": "rgba(60, 40, 20, 0.03)",
+      "--scheme-bezel-highlight": "rgba(255, 255, 255, 0.55)",
+      "--scheme-bezel-shadow": "rgba(0, 0, 0, 0.06)",
+    },
+  },
+
+  // PEARL — PORCELAIN, ~15 units lighter. The lightest cool surface we
+  // ship — barely-there sheen on top of the cream canvas. Cool tint
+  // distinguishes it from a near-white warm surface (CHIFFON).
+  {
+    key: "pearl",
+    name: "PEARL",
+    swatch: "#D49236",
+    bgHex: "#F5F8FA",
+    vars: {
+      "--scheme-bg": "#F5F8FA",
+      "--scheme-strip-top":
+        "linear-gradient(to bottom, #FBFCFE 0%, #F2F5F7 60%, #E5E9ED 100%)",
+      "--scheme-strip-bottom":
+        "linear-gradient(to bottom, #ECEFF2 0%, #F5F8FA 55%, #FBFDFE 100%)",
+      "--scheme-graticule": "rgba(212, 146, 54, 0.06)",
+      "--scheme-ink": "#2A2E32",
+      "--scheme-ink-faint": "#6E737B",
+      "--scheme-ink-subtle": "#8A8F96",
+      "--scheme-accent": "#D49236",
+      "--scheme-accent-glow": "rgba(212, 146, 54, 0.12)",
+      "--scheme-accent-ring": "rgba(212, 146, 54, 0.04)",
+      "--scheme-trace": "#D49236",
+      "--scheme-rec": "#C43A1C",
+      "--scheme-rec-glow": "rgba(196, 58, 28, 0.24)",
+      "--scheme-sparkle": "#C43A1C",
+      "--scheme-edge": "rgba(20, 24, 28, 0.08)",
+      "--scheme-edge-strong": "rgba(20, 24, 28, 0.18)",
+      "--scheme-details-bg": "rgba(20, 24, 28, 0.02)",
+      "--scheme-bezel-highlight": "rgba(255, 255, 255, 0.65)",
+      "--scheme-bezel-shadow": "rgba(0, 0, 0, 0.04)",
+    },
+  },
+  // CHIFFON — VELLUM, ~15 units lighter. The lightest warm surface we
+  // ship — a creamy gauze just barely warmer than the canvas. Use when
+  // the bay should melt into the page entirely.
+  {
+    key: "chiffon",
+    name: "CHIFFON",
+    swatch: "#9A6A22",
+    bgHex: "#FAF5E8",
+    vars: {
+      "--scheme-bg": "#FAF5E8",
+      "--scheme-strip-top":
+        "linear-gradient(to bottom, #FDF8EB 0%, #F5F0E2 60%, #ECE7D6 100%)",
+      "--scheme-strip-bottom":
+        "linear-gradient(to bottom, #F0ECDE 0%, #F8F3E6 55%, #FDF9EC 100%)",
+      "--scheme-graticule": "rgba(154, 106, 34, 0.06)",
+      "--scheme-ink": "#2A2520",
+      "--scheme-ink-faint": "#7B6E60",
+      "--scheme-ink-subtle": "#928576",
+      "--scheme-accent": "#9A6A22",
+      "--scheme-accent-glow": "rgba(154, 106, 34, 0.10)",
+      "--scheme-accent-ring": "rgba(154, 106, 34, 0.04)",
+      "--scheme-trace": "#9A6A22",
+      "--scheme-rec": "#B53620",
+      "--scheme-rec-glow": "rgba(181, 54, 32, 0.24)",
+      "--scheme-sparkle": "#B53620",
+      "--scheme-edge": "rgba(60, 40, 20, 0.10)",
+      "--scheme-edge-strong": "rgba(154, 106, 34, 0.32)",
+      "--scheme-details-bg": "rgba(60, 40, 20, 0.02)",
+      "--scheme-bezel-highlight": "rgba(255, 255, 255, 0.65)",
+      "--scheme-bezel-shadow": "rgba(0, 0, 0, 0.04)",
+    },
+  },
 ];

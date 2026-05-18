@@ -170,7 +170,7 @@ public enum TalkieEnvironment: String, CaseIterable, Sendable {
         case .production:
             return "/Applications/Talkie.app"
         case .dev:
-            return "~/Library/Developer/Xcode/DerivedData/.../Talkie.app"
+            return userInstalledAppURL(named: "Talkie.app").path
         }
     }
 
@@ -224,6 +224,22 @@ public enum TalkieEnvironment: String, CaseIterable, Sendable {
     public var appSupportDirectory: URL {
         URL.applicationSupportDirectory
             .appendingPathComponent(appSupportDirectoryName)
+    }
+
+    /// Stable user-local app install directory for this environment.
+    ///
+    /// Dev builds use this as their runnable location so Accessibility, launchd,
+    /// and runtime manifests all point at one path instead of whichever DerivedData
+    /// build happened to be newest.
+    public var userInstalledApplicationsDirectory: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Applications", isDirectory: true)
+            .appendingPathComponent(appSupportDirectoryName, isDirectory: true)
+    }
+
+    public func userInstalledAppURL(named appName: String) -> URL {
+        userInstalledApplicationsDirectory
+            .appendingPathComponent(appName, isDirectory: true)
     }
 
     /// Database directory for this environment

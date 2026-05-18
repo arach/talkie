@@ -123,7 +123,7 @@ struct ScopeStatsScreen: View {
     }
 
     private var heroTitleHead: String {
-        if totalDictations == 0 { return "Nothing on tape" }
+        if totalDictations == 0 { return "No dictations yet" }
         if totalDictations == 1 { return "1 dictation" }
         return "\(formatNumber(totalDictations)) dictations"
     }
@@ -131,7 +131,7 @@ struct ScopeStatsScreen: View {
     private var heroTrailing: String {
         let words = wordsFormatted(totalWords)
         let streakStr = streak > 1 ? "\(streak)-DAY STREAK"
-            : streak == 1 ? "1 DAY ON THE LINE"
+            : streak == 1 ? "1-DAY STREAK"
             : nil
         if let streakStr {
             return "\(words) WORDS · \(streakStr) · LAST 30 DAYS"
@@ -346,7 +346,7 @@ struct ScopeStatsScreen: View {
                 if activityData.isEmpty {
                     HStack(spacing: 10) {
                         PhosphorDot(color: ScopeAmber.solid.opacity(0.5), size: 5)
-                        Text("NO ACTIVITY ON TAPE")
+                        Text("NO ACTIVITY · 13 WEEKS")
                             .font(ScopeType.eyebrow)
                             .tracking(ScopeType.Tracking.wide)
                             .foregroundStyle(ScopeInk.faint)
@@ -525,7 +525,7 @@ struct ScopeStatsScreen: View {
             if recent.isEmpty {
                 HStack(spacing: 10) {
                     PhosphorDot(color: ScopeAmber.solid.opacity(0.6), size: 5)
-                    Text("NO SIGNAL · WAITING FOR INPUT")
+                    Text("NO CAPTURES YET")
                         .font(ScopeType.eyebrow)
                         .tracking(ScopeType.Tracking.wide)
                         .foregroundStyle(ScopeInk.faint)
@@ -568,7 +568,7 @@ struct ScopeStatsScreen: View {
             arrow
             footerNode(pin: "S2", label: "Actions ran", detail: formatNumber(workflowRunsCount))
             arrow
-            footerNode(pin: "S3", label: "Where it lives", detail: "Local · GRDB", dim: true)
+            footerNode(pin: "S3", label: "Storage", detail: "Local · GRDB", dim: true)
         }
         .padding(.top, 6)
     }

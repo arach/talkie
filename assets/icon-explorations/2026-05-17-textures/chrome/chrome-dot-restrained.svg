@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <radialGradient id="brassRadial" cx="40%" cy="35%" r="60%">
+      <stop offset="0%"   stop-color="#F0E4C8"/>
+      <stop offset="35%"  stop-color="#C9B580"/>
+      <stop offset="65%"  stop-color="#8A7650"/>
+      <stop offset="100%" stop-color="#604820"/>
+    </radialGradient>
+  </defs>
+  <rect width="128" height="128" fill="#0E0D0A"/>
+  <circle cx="64" cy="64" r="10" fill="url(#brassRadial)"/>
+</svg>

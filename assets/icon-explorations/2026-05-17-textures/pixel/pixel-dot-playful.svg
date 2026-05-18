@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <rect width="128" height="128" fill="#0E0D0A"/>
+  <g transform="translate(36, 36)">
+    <!-- Row 1 -->
+    <rect x="0"  y="0"  width="12" height="12" fill="#F4EFE6"/>
+    <rect x="14" y="0"  width="12" height="12" fill="#FF5346"/>
+    <rect x="28" y="0"  width="12" height="12" fill="#F4EFE6"/>
+    <!-- Row 2 -->
+    <rect x="0"  y="14" width="12" height="12" fill="#F4EFE6"/>
+    <rect x="14" y="14" width="12" height="12" fill="#F4EFE6"/>
+    <rect x="28" y="14" width="12" height="12" fill="#F4EFE6"/>
+    <!-- Row 3 -->
+    <rect x="0"  y="28" width="12" height="12" fill="#F4EFE6"/>
+    <rect x="14" y="28" width="12" height="12" fill="#F4EFE6"/>
+    <rect x="28" y="28" width="12" height="12" fill="#F4EFE6"/>
+  </g>
+</svg>
