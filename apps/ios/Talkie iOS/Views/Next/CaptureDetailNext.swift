@@ -291,12 +291,15 @@ struct CaptureDetailNext: View {
                 action: { /* TODO: persist */ }
             )
             actionChip(
-                label: "Compose with this ›",
+                label: "Compose ›",
                 isPrimary: true,
                 action: { AppShellRouter.shared.openCompose(documentID: store.capture.id) }
             )
         }
-        .padding(.horizontal, 12)
+        // Leading inset clears the shell voice button (bottom-left,
+        // 48pt + 20pt padding).
+        .padding(.leading, 72)
+        .padding(.trailing, 12)
         .padding(.top, 8)
         .padding(.bottom, 18)
         .overlay(
