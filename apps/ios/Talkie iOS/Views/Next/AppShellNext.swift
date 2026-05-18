@@ -81,6 +81,7 @@ struct AppShellNext<Content: View>: View {
         case .memoDetail(let m): return "memo:\(m)"
         case .dictationHistory: return "dictations"
         case .dictationOverlayDemo: return "overlay"
+        case .signIn: return "signin"
         }
     }
 
@@ -106,6 +107,8 @@ struct AppShellNext<Content: View>: View {
             DictationHistoryNext()
         case .dictationOverlayDemo:
             MinimalDictationOverlayDemoSurface()
+        case .signIn:
+            SignInNext()
         }
     }
 }
@@ -123,12 +126,12 @@ final class AppShellRouter: ObservableObject {
         case memoDetail(memoID: String)
         case dictationHistory
         case dictationOverlayDemo
-        // Removed (fabricated, did not match donor):
-        // .keyboardActivation → live status/transcript view, not setup checklist
-        // .connectionCenter   → connection-type rows, not metrics hero
-        // .onboarding         → 3 feature pages w/ iCloud auth, not 4-slide flow
-        // .signIn             → multi-step sign-in w/ pending/inProgress states
-        // .webBrowser         → URL bar + voice search + history, not reader-mode pill
+        case signIn
+        // Still to re-port from donor (deleted earlier fabrications):
+        // .keyboardActivation → live status/transcript view
+        // .connectionCenter   → connection-type rows
+        // .onboarding         → 3 feature pages w/ iCloud auth
+        // .webBrowser         → URL bar + voice search + history
     }
 
     @Published var surface: Surface = .home
@@ -150,6 +153,8 @@ final class AppShellRouter: ObservableObject {
             openDictationHistory()
         } else if args.contains("--overlay") {
             openDictationOverlayDemo()
+        } else if args.contains("--signin") {
+            openSignIn()
         }
     }
 
@@ -192,6 +197,11 @@ final class AppShellRouter: ObservableObject {
     func openDictationOverlayDemo() {
         activeComposeStore = nil
         surface = .dictationOverlayDemo
+    }
+
+    func openSignIn() {
+        activeComposeStore = nil
+        surface = .signIn
     }
 
     func submitVoiceCommand(_ transcript: String) {
