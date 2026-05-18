@@ -14,7 +14,18 @@ import SwiftUI
 
 struct ChromeOverlay: View {
     @EnvironmentObject private var chrome: ShellChrome
+    @EnvironmentObject private var router: AppShellRouter
     @ObservedObject private var theme = ThemeManager.shared
+
+    /// Compose has its own bottom voice/keyboard tray + inline mic,
+    /// so the universal create-tray (Camera · Mic · Compose) and the
+    /// bottom-right Keyboard pill would just duplicate. On Compose
+    /// the chrome shrinks to its nav corners (Done + Settings) and
+    /// the shell voice button handles long-press voice commands.
+    private var showCreateTray: Bool {
+        if case .compose = router.surface { return false }
+        return true
+    }
 
     var body: some View {
         ZStack {
@@ -35,17 +46,17 @@ struct ChromeOverlay: View {
                 // TODO M1+: surface real settings.
             }
 
-            // Bottom-right — keyboard (input mode switch).
-            CornerSlot(
-                position: .bottomTrailing,
-                glyph: AnyView(Image(systemName: "keyboard").font(.system(size: 13, weight: .regular))),
-                label: "Keyboard"
-            ) {
-                // TODO M2: hand off to system keyboard.
-            }
+            if showCreateTray {
+                CornerSlot(
+                    position: .bottomTrailing,
+                    glyph: AnyView(Image(systemName: "keyboard").font(.system(size: 13, weight: .regular))),
+                    label: "Keyboard"
+                ) {
+                    // TODO M2: hand off to system keyboard.
+                }
 
-            // Liquid-glass tray — bottom-center create actions.
-            LiquidGlassTray()
+                LiquidGlassTray()
+            }
         }
     }
 }
