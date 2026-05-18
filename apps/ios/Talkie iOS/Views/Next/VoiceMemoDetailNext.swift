@@ -211,10 +211,11 @@ struct VoiceMemoDetailNext: View {
                     playbackCard
                         .padding(.horizontal, 12)
 
-                    if let summary = store.memo.summary {
-                        summaryCard(summary)
-                            .padding(.horizontal, 12)
-                    }
+                    // NOTE: Legacy VoiceMemoDetailView surfaces a lot
+                    // more — title edit, transcript edit, version
+                    // history, share, AI title gen, reminders, mac
+                    // workflows. Not brought across yet. This shell
+                    // stops at meta + playback + transcript display.
 
                     transcriptSection
                         .padding(.horizontal, 12)

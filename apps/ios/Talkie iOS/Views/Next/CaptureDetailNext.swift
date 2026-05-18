@@ -75,9 +75,12 @@ struct CaptureDetailNext: View {
                             .padding(.top, 4)
                     }
 
-                    metadataBlock
-                        .padding(.horizontal, 12)
-                        .padding(.top, 4)
+                    // NOTE: The legacy CaptureDetailView surfaces a lot
+                    // more — audio player (when capture has audio),
+                    // image viewer (when capture has photo/scan), AI
+                    // commands sheet, sync state, full compose hand-off.
+                    // None of that is brought across yet. This shell
+                    // intentionally stops at hero + body for now.
 
                     Spacer(minLength: 100)
                 }
@@ -230,50 +233,6 @@ struct CaptureDetailNext: View {
                                       lineWidth: theme.currentTheme.chrome.hairlineWidth)
                 )
         )
-    }
-
-    // MARK: - Metadata
-
-    private var metadataBlock: some View {
-        VStack(spacing: 0) {
-            metadataRow(label: "Source",     value: sourceLabel)
-            divider
-            metadataRow(label: "Captured",   value: store.capture.capturedAt)
-            divider
-            metadataRow(label: "Status",     value: "Saved · Local")
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(theme.colors.cardBackground)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(theme.currentTheme.chrome.edgeFaint,
-                                      lineWidth: theme.currentTheme.chrome.hairlineWidth)
-                )
-        )
-    }
-
-    private var divider: some View {
-        Rectangle()
-            .fill(theme.currentTheme.chrome.edgeSubtle)
-            .frame(height: theme.currentTheme.chrome.hairlineWidth)
-            .padding(.leading, 14)
-    }
-
-    private func metadataRow(label: String, value: String) -> some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .tracking(1.4)
-                .foregroundStyle(theme.colors.textTertiary)
-                .textCase(.uppercase)
-            Spacer()
-            Text(value)
-                .font(.system(size: 13))
-                .foregroundStyle(theme.colors.textSecondary)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
     }
 
     // MARK: - Action bar

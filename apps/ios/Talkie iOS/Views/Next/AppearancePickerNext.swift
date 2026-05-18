@@ -2,14 +2,21 @@
 //  AppearancePickerNext.swift
 //  Talkie iOS
 //
-//  Phase 3 paint — Next-style theme browser. Five preview cards
-//  (Scope · Midnight · Tactical · Ghost · Lift), each rendered with
-//  the actual chrome tokens for that theme so the selection is a
-//  real visual comparison, not a label list. Tapping a card swaps
-//  ThemeManager.shared.currentTheme.
+//  INTENTIONAL REDESIGN — not a port. The legacy SettingsView's
+//  appearance section is a radio-button list inside the larger
+//  settings tree. This surface deliberately redesigns it as a
+//  standalone theme browser with preview cards that render each
+//  theme's actual chrome tokens — selection becomes a visual
+//  comparison, not a label list.
 //
-//  The full Settings surface remains in the legacy SettingsView for
-//  now; this is the entry point Home routes to.
+//  Caveats:
+//  - The rest of the legacy Settings tree (Bridge, Keyboard, AI
+//    providers, etc.) is not surfaced here. Routed-from-Home gear
+//    intentionally lands on appearance only for now.
+//  - The chrome miniatures are a design vocabulary, not a port.
+//
+//  Five themes (Scope · Midnight · Tactical · Ghost · Lift). Tap
+//  swaps ThemeManager.shared.currentTheme.
 //
 
 import SwiftUI

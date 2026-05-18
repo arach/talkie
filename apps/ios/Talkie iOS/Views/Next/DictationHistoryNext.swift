@@ -26,7 +26,9 @@ final class DictationHistoryFeed: ObservableObject {
         let timestamp: String     // "9:34 AM"
         let preview: String
         let wordCount: Int
-        let appName: String?      // "Messages", "Notes", etc.
+        // NOTE: KeyboardDictation in the donor doesn't track the
+        // source app; the per-app tag was invented. Left off until
+        // / unless the data layer actually carries it.
     }
 
     init() {
@@ -36,16 +38,16 @@ final class DictationHistoryFeed: ObservableObject {
 
     static let mockSections: [DaySection] = [
         DaySection(id: "today", label: "Today", entries: [
-            Entry(id: "t1", timestamp: "9:34 AM", preview: "thanks for the breakdown — let's talk through it tomorrow", wordCount: 11, appName: "Messages"),
-            Entry(id: "t2", timestamp: "8:12 AM", preview: "moving the meeting to 4pm if that works for everyone", wordCount: 10, appName: "Slack"),
-            Entry(id: "t3", timestamp: "7:51 AM", preview: "need to refactor the auth flow before we ship the migration", wordCount: 11, appName: "Notes"),
+            Entry(id: "t1", timestamp: "9:34 AM", preview: "thanks for the breakdown — let's talk through it tomorrow", wordCount: 11),
+            Entry(id: "t2", timestamp: "8:12 AM", preview: "moving the meeting to 4pm if that works for everyone", wordCount: 10),
+            Entry(id: "t3", timestamp: "7:51 AM", preview: "need to refactor the auth flow before we ship the migration", wordCount: 11),
         ]),
         DaySection(id: "yesterday", label: "Yesterday", entries: [
-            Entry(id: "y1", timestamp: "4:22 PM", preview: "quick reminder to drop the docs in the channel", wordCount: 9, appName: "Slack"),
-            Entry(id: "y2", timestamp: "11:08 AM", preview: "the api rate limits hit us again on the analytics export", wordCount: 11, appName: "Notes"),
+            Entry(id: "y1", timestamp: "4:22 PM", preview: "quick reminder to drop the docs in the channel", wordCount: 9),
+            Entry(id: "y2", timestamp: "11:08 AM", preview: "the api rate limits hit us again on the analytics export", wordCount: 11),
         ]),
         DaySection(id: "mon", label: "Monday", entries: [
-            Entry(id: "m1", timestamp: "3:14 PM", preview: "follow up on the figma comments before standup tomorrow", wordCount: 9, appName: "Linear"),
+            Entry(id: "m1", timestamp: "3:14 PM", preview: "follow up on the figma comments before standup tomorrow", wordCount: 9),
         ]),
     ]
 }
@@ -161,19 +163,11 @@ struct DictationHistoryNext: View {
                 }
 
                 HStack(alignment: .top, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(entry.timestamp)
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
-                            .monospacedDigit()
-                            .foregroundStyle(theme.colors.textTertiary)
-                        if let app = entry.appName {
-                            Text(app.uppercased())
-                                .font(.system(size: 7, weight: .semibold, design: .monospaced))
-                                .tracking(1.2)
-                                .foregroundStyle(theme.colors.textTertiary.opacity(0.7))
-                        }
-                    }
-                    .frame(width: 60, alignment: .leading)
+                    Text(entry.timestamp)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .monospacedDigit()
+                        .foregroundStyle(theme.colors.textTertiary)
+                        .frame(width: 60, alignment: .leading)
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(entry.preview)

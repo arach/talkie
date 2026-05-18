@@ -80,11 +80,6 @@ struct AppShellNext<Content: View>: View {
         case .captureDetail(let c): return "capture:\(c)"
         case .memoDetail(let m): return "memo:\(m)"
         case .dictationHistory: return "dictations"
-        case .connectionCenter: return "connection"
-        case .onboarding: return "onboarding"
-        case .keyboardActivation: return "keyboard"
-        case .signIn: return "signin"
-        case .webBrowser: return "browser"
         case .dictationOverlayDemo: return "overlay"
         }
     }
@@ -109,16 +104,6 @@ struct AppShellNext<Content: View>: View {
             VoiceMemoDetailNext(memoID: memoID)
         case .dictationHistory:
             DictationHistoryNext()
-        case .connectionCenter:
-            ConnectionCenterNext()
-        case .onboarding:
-            OnboardingNext()
-        case .keyboardActivation:
-            KeyboardActivationNext()
-        case .signIn:
-            SignInNext()
-        case .webBrowser:
-            WebCaptureBrowserNext()
         case .dictationOverlayDemo:
             MinimalDictationOverlayDemoSurface()
         }
@@ -137,12 +122,13 @@ final class AppShellRouter: ObservableObject {
         case captureDetail(captureID: String)
         case memoDetail(memoID: String)
         case dictationHistory
-        case connectionCenter
-        case onboarding
-        case keyboardActivation
-        case signIn
-        case webBrowser
         case dictationOverlayDemo
+        // Removed (fabricated, did not match donor):
+        // .keyboardActivation → live status/transcript view, not setup checklist
+        // .connectionCenter   → connection-type rows, not metrics hero
+        // .onboarding         → 3 feature pages w/ iCloud auth, not 4-slide flow
+        // .signIn             → multi-step sign-in w/ pending/inProgress states
+        // .webBrowser         → URL bar + voice search + history, not reader-mode pill
     }
 
     @Published var surface: Surface = .home
@@ -162,16 +148,6 @@ final class AppShellRouter: ObservableObject {
             openMemoDetail(memoID: "mock")
         } else if args.contains("--dictations") {
             openDictationHistory()
-        } else if args.contains("--connection") {
-            openConnectionCenter()
-        } else if args.contains("--onboarding") {
-            openOnboarding()
-        } else if args.contains("--keyboard") {
-            openKeyboardActivation()
-        } else if args.contains("--signin") {
-            openSignIn()
-        } else if args.contains("--browser") {
-            openWebBrowser()
         } else if args.contains("--overlay") {
             openDictationOverlayDemo()
         }
@@ -211,31 +187,6 @@ final class AppShellRouter: ObservableObject {
     func openDictationHistory() {
         activeComposeStore = nil
         surface = .dictationHistory
-    }
-
-    func openConnectionCenter() {
-        activeComposeStore = nil
-        surface = .connectionCenter
-    }
-
-    func openOnboarding() {
-        activeComposeStore = nil
-        surface = .onboarding
-    }
-
-    func openKeyboardActivation() {
-        activeComposeStore = nil
-        surface = .keyboardActivation
-    }
-
-    func openSignIn() {
-        activeComposeStore = nil
-        surface = .signIn
-    }
-
-    func openWebBrowser() {
-        activeComposeStore = nil
-        surface = .webBrowser
     }
 
     func openDictationOverlayDemo() {
