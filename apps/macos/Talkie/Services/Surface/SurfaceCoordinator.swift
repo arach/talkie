@@ -191,7 +191,7 @@ final class SurfaceCoordinator {
                 beginRecording(phase: .active)
             }
 
-        case .idle, .cameraLoading, .trayBadge:
+        case .idle, .cameraLoading:
             if case .recording = state {
                 endRecording()
             }

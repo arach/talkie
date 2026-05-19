@@ -15,7 +15,6 @@ enum NotchDisplayIntent: Int, Comparable, CaseIterable {
     case recording = 0       // Highest — Agent is recording/transcribing
     case cameraLoading = 1   // Camera session initializing
     case screenRecording = 2 // Screen recording stop pill
-    case trayBadge = 3       // Tray has items
     case idle = 4            // Nothing active (lowest)
 
     static func < (lhs: NotchDisplayIntent, rhs: NotchDisplayIntent) -> Bool {
@@ -30,6 +29,5 @@ enum NotchIntentPayload {
     case recording(state: LiveState, audioLevel: Float, elapsedTime: TimeInterval)
     case cameraLoading
     case screenRecording(startTime: Date)
-    case trayBadge(screenshotCount: Int, clipCount: Int)
     case idle
 }
