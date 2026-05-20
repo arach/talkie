@@ -56,33 +56,37 @@ private struct HomeHeader: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
+        // Gear is 40×40 with the same chrome as the corner Settings
+        // complication (`ChromeOverlay.CornerSlot`) so when the shell
+        // summons, the gear stays visually in place — it doesn't shift
+        // size or move. Right-edge inset matches the corner slot
+        // padding (20pt) so x-coordinates line up.
         HStack {
-            Color.clear.frame(width: 28, height: 28)
+            Color.clear.frame(width: 40, height: 40)
             Spacer()
             Text("TALKIE")
                 .talkieType(.wordmark)
                 .foregroundStyle(theme.colors.textPrimary.opacity(0.78))
             Spacer()
             Button(action: { AppShellRouter.shared.openSettings() }) {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 13))
-                    .foregroundStyle(theme.colors.textTertiary)
-                    .frame(width: 28, height: 28)
-                    .background(
-                        Circle()
-                            .fill(theme.colors.cardBackground)
-                            .overlay(
-                                Circle().strokeBorder(
-                                    theme.currentTheme.chrome.edgeFaint,
-                                    lineWidth: theme.currentTheme.chrome.hairlineWidth
-                                )
-                            )
+                ZStack {
+                    Circle().fill(theme.colors.cardBackground)
+                    Circle().strokeBorder(
+                        theme.currentTheme.chrome.edgeFaint,
+                        lineWidth: theme.currentTheme.chrome.hairlineWidth
                     )
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(theme.colors.textSecondary)
+                }
+                .frame(width: 40, height: 40)
+                .shadow(color: .black.opacity(0.10), radius: 4, y: 2)
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 20)
+        .padding(.top, 6)
+        .padding(.bottom, 8)
     }
 }
 

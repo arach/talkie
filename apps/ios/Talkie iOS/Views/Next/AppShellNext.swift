@@ -99,6 +99,10 @@ struct AppShellNext<Content: View>: View {
         case .library: return "library"
         case .appearance: return "appearance"
         case .settings: return "settings"
+        case .terminal: return "terminal"
+        case .cameraCapture: return "camera"
+        case .bridgeDetail: return "bridgeDetail"
+        case .askAI: return "askAI"
         case .captureDetail(let c): return "capture:\(c)"
         case .memoDetail(let m): return "memo:\(m)"
         case .dictationHistory: return "dictations"
@@ -145,6 +149,14 @@ struct AppShellNext<Content: View>: View {
             WebCaptureBrowserNext()
         case .keyboardActivation:
             KeyboardActivationNext()
+        case .terminal:
+            TerminalNext()
+        case .cameraCapture:
+            CameraCaptureNext()
+        case .bridgeDetail:
+            BridgeDetailNext()
+        case .askAI:
+            AskAINext()
         }
     }
 }
@@ -173,6 +185,12 @@ final class AppShellRouter: ObservableObject {
         case onboarding
         case webBrowser
         case keyboardActivation
+        // Phase-1 feature surfaces — stubs land here, fleshed out by
+        // dedicated Codex streams.
+        case terminal
+        case cameraCapture
+        case bridgeDetail
+        case askAI
     }
 
     @Published var surface: Surface = .home
@@ -207,6 +225,14 @@ final class AppShellRouter: ObservableObject {
             openWebBrowser()
         } else if args.contains("--keyboard") {
             openKeyboardActivation()
+        } else if args.contains("--terminal") {
+            openTerminal()
+        } else if args.contains("--camera") {
+            openCameraCapture()
+        } else if args.contains("--bridge") {
+            openBridgeDetail()
+        } else if args.contains("--askai") {
+            openAskAI()
         }
     }
 
@@ -247,6 +273,10 @@ final class AppShellRouter: ObservableObject {
     func openOnboarding()           { push(.onboarding) }
     func openWebBrowser()           { push(.webBrowser) }
     func openKeyboardActivation()   { push(.keyboardActivation) }
+    func openTerminal()             { push(.terminal) }
+    func openCameraCapture()        { push(.cameraCapture) }
+    func openBridgeDetail()         { push(.bridgeDetail) }
+    func openAskAI()                { push(.askAI) }
 
     func submitVoiceCommand(_ transcript: String) {
         guard case .compose = surface else { return }

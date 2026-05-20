@@ -43,7 +43,7 @@ struct ChromeOverlay: View {
                 glyph: AnyView(Image(systemName: "gearshape").font(.system(size: 15, weight: .regular))),
                 label: "Settings"
             ) {
-                // TODO M1+: surface real settings.
+                AppShellRouter.shared.openSettings()
             }
 
             if showCreateTray {
@@ -52,7 +52,7 @@ struct ChromeOverlay: View {
                     glyph: AnyView(Image(systemName: "keyboard").font(.system(size: 13, weight: .regular))),
                     label: "Keyboard"
                 ) {
-                    // TODO M2: hand off to system keyboard.
+                    AppShellRouter.shared.openKeyboardActivation()
                 }
 
                 LiquidGlassTray()
@@ -87,8 +87,8 @@ private struct CornerSlot: View {
         .accessibilityLabel(label)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: position)
         .padding(.horizontal, 20)
-        .padding(.top, position.isTop ? 12 : 0)
-        .padding(.bottom, position.isBottom ? 22 : 0)
+        .padding(.top, position.isTop ? 6 : 0)
+        .padding(.bottom, position.isBottom ? 6 : 0)
     }
 }
 
@@ -101,14 +101,18 @@ private struct LiquidGlassTray: View {
             TraySlot(
                 glyph: AnyView(Image(systemName: "camera").font(.system(size: 17, weight: .regular))),
                 label: "Camera"
-            ) { /* TODO M2 */ }
+            ) {
+                AppShellRouter.shared.openCameraCapture()
+            }
 
             TrayFAB()
 
             TraySlot(
                 glyph: AnyView(Image(systemName: "sparkles").font(.system(size: 15, weight: .regular))),
-                label: "Compose"
-            ) { /* TODO M2 */ }
+                label: "Ask AI"
+            ) {
+                AppShellRouter.shared.openAskAI()
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -123,7 +127,7 @@ private struct LiquidGlassTray: View {
         )
         .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .padding(.bottom, 22)
+        .padding(.bottom, 6)
     }
 }
 
