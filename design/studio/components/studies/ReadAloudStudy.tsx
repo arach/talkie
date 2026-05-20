@@ -27,7 +27,25 @@ export const READALOUD_VARIANTS: { key: ReadAloudVariant; label: string }[] = [
   { key: "queue", label: "Queue" },
 ];
 
-export function ReadAloudStudy({ variant }: { variant: ReadAloudVariant }) {
+/// What's being read aloud. Text gets a chunked follow-along; image
+/// / URL / PDF get a reference line + "Open original" link instead
+/// of trying to embed a preview.
+export type SourceKind = "text" | "image" | "url" | "pdf";
+
+export const SOURCE_KINDS: { key: SourceKind; label: string }[] = [
+  { key: "text", label: "Text memo" },
+  { key: "image", label: "Image scan" },
+  { key: "url", label: "URL" },
+  { key: "pdf", label: "PDF" },
+];
+
+export function ReadAloudStudy({
+  variant,
+  sourceKind = "text",
+}: {
+  variant: ReadAloudVariant;
+  sourceKind?: SourceKind;
+}) {
   // Source viewer is optional — default ON when something is playing
   // so the listener can follow along; togglable per session.
   const [showSource, setShowSource] = useState(true);
@@ -45,9 +63,10 @@ export function ReadAloudStudy({ variant }: { variant: ReadAloudVariant }) {
         {variant === "idle" && <IdleState />}
         {variant !== "idle" && (
           <>
-            <NowReading variant={variant} />
+            <NowReading variant={variant} kind={sourceKind} />
             <SourceViewer
               expanded={showSource}
+              kind={sourceKind}
               onToggle={() => setShowSource((v) => !v)}
             />
           </>
@@ -202,7 +221,14 @@ function SourceRow({
 // Now Reading + Transport
 // ─────────────────────────────────────────────────────────────
 
-function NowReading({ variant }: { variant: "playing" | "queue" }) {
+function NowReading({
+  variant,
+  kind,
+}: {
+  variant: "playing" | "queue";
+  kind: SourceKind;
+}) {
+  const meta = NOW_PLAYING[kind];
   return (
     <div className="flex flex-col gap-3 pt-2">
       <span
@@ -225,7 +251,7 @@ function NowReading({ variant }: { variant: "playing" | "queue" }) {
           fontSize: 19,
         }}
       >
-        Conference Bio
+        {meta.title}
       </div>
       <span
         className="text-[10px] font-medium uppercase"
@@ -235,7 +261,7 @@ function NowReading({ variant }: { variant: "playing" | "queue" }) {
           letterSpacing: "0.22em",
         }}
       >
-        COMPOSE · 31 WORDS · 0:24 / 1:08
+        {meta.meta}
       </span>
 
       <Waveform />
@@ -244,6 +270,25 @@ function NowReading({ variant }: { variant: "playing" | "queue" }) {
     </div>
   );
 }
+
+const NOW_PLAYING: Record<SourceKind, { title: string; meta: string }> = {
+  text: {
+    title: "Conference Bio",
+    meta: "COMPOSE · 31 WORDS · 0:24 / 1:08",
+  },
+  image: {
+    title: "Scope dashboard notes",
+    meta: "SCAN · 142 CHARS · 0:11 / 0:38",
+  },
+  url: {
+    title: "Apple's vision for the next OS",
+    meta: "URL · DARINGFIREBALL.NET · 1:02 / 4:18",
+  },
+  pdf: {
+    title: "On Bullshit · Frankfurt",
+    meta: "PDF · 12 PAGES · 3:14 / 28:42",
+  },
+};
 
 function Waveform() {
   // 32-bar pseudo-waveform; first ~14 bars "played" (accent), rest faint.
@@ -330,21 +375,13 @@ function TransportButton({
 
 function SourceViewer({
   expanded,
+  kind,
   onToggle,
 }: {
   expanded: boolean;
+  kind: SourceKind;
   onToggle: () => void;
 }) {
-  // Pseudo-paragraph chunks. Index 1 (zero-based) is "currently
-  // reading" — matches the waveform's ~14/32 playback progress.
-  const chunks = [
-    "I'm a designer working at the intersection of voice interfaces and instrument-grade tooling.",
-    "My background spans broadcast audio, editorial publishing, and software product design.",
-    "I'm currently exploring how voice-first capture can fit into desk and pocket workflows without giving up the precision of a hardware console.",
-    "Talk to me about voice UI, instrument vocabulary, channel-label semantics, or anything radio.",
-  ];
-  const playingIdx = 1;
-
   return (
     <div className="mt-4">
       <button
@@ -360,7 +397,7 @@ function SourceViewer({
             letterSpacing: "0.22em",
           }}
         >
-          SOURCE
+          SOURCE · {kind.toUpperCase()}
         </span>
         <div className="flex-1" />
         <span
@@ -377,32 +414,191 @@ function SourceViewer({
 
       {expanded && (
         <div
-          className="mt-3 rounded-md p-3"
+          className="mt-3 rounded-md"
           style={{
             background: "var(--theme-paper)",
             border: "0.5px solid var(--theme-edge-faint)",
           }}
         >
-          <div className="flex flex-col gap-2.5">
-            {chunks.map((c, i) => (
-              <SourceChunk
-                key={i}
-                text={c}
-                state={
-                  i < playingIdx
-                    ? "played"
-                    : i === playingIdx
-                      ? "playing"
-                      : "upcoming"
-                }
-              />
-            ))}
-          </div>
+          <SourceStamp kind={kind} />
+          {kind === "text" ? <SourceTranscript /> : <SourceReference kind={kind} />}
         </div>
       )}
     </div>
   );
 }
+
+/// Sits at the top of the source card — type glyph, filename / URL,
+/// and an "Open original" link. Same regardless of source kind so
+/// non-text sources have a predictable handoff.
+function SourceStamp({ kind }: { kind: SourceKind }) {
+  const meta = SOURCE_STAMP[kind];
+  return (
+    <div
+      className="flex items-center gap-2 px-3 py-2.5"
+      style={{ borderBottom: "0.5px solid var(--theme-edge-faint)" }}
+    >
+      <span
+        aria-hidden
+        className="inline-flex h-5 w-5 items-center justify-center"
+        style={{ color: "var(--theme-amber)" }}
+      >
+        {meta.icon}
+      </span>
+      <span
+        className="flex-1 truncate text-[11px]"
+        style={{
+          color: "var(--theme-ink)",
+          fontFamily: "var(--theme-font-mono)",
+        }}
+      >
+        {meta.path}
+      </span>
+      <button
+        className="flex items-center gap-0.5 text-[10px] font-medium uppercase"
+        style={{
+          color: "var(--theme-amber)",
+          fontFamily: "var(--theme-font-mono)",
+          letterSpacing: "0.20em",
+        }}
+      >
+        OPEN ›
+      </button>
+    </div>
+  );
+}
+
+function SourceTranscript() {
+  // Pseudo-paragraph chunks. Index 1 (zero-based) is "currently
+  // reading" — matches the waveform's ~14/32 playback progress.
+  const chunks = [
+    "I'm a designer working at the intersection of voice interfaces and instrument-grade tooling.",
+    "My background spans broadcast audio, editorial publishing, and software product design.",
+    "I'm currently exploring how voice-first capture can fit into desk and pocket workflows without giving up the precision of a hardware console.",
+    "Talk to me about voice UI, instrument vocabulary, channel-label semantics, or anything radio.",
+  ];
+  const playingIdx = 1;
+
+  return (
+    <div className="flex flex-col gap-2.5 p-3">
+      {chunks.map((c, i) => (
+        <SourceChunk
+          key={i}
+          text={c}
+          state={
+            i < playingIdx
+              ? "played"
+              : i === playingIdx
+                ? "playing"
+                : "upcoming"
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
+/// For non-text sources, render a reference (no embedded preview).
+/// Shows the OCR / extracted-text excerpt that's actually being
+/// spoken, plus the link to open the original.
+function SourceReference({ kind }: { kind: Exclude<SourceKind, "text"> }) {
+  const ref = SOURCE_REFERENCE[kind];
+  return (
+    <div className="flex flex-col gap-2 p-3">
+      <span
+        className="text-[10px] font-medium uppercase"
+        style={{
+          color: "var(--theme-ink-faint)",
+          fontFamily: "var(--theme-font-mono)",
+          letterSpacing: "0.22em",
+        }}
+      >
+        {ref.eyebrow}
+      </span>
+      <p
+        className="m-0 text-[12.5px] leading-relaxed"
+        style={{
+          color: "var(--theme-ink-faint)",
+          fontStyle: "italic",
+          fontFamily: "var(--theme-font-body)",
+        }}
+      >
+        “{ref.excerpt}…”
+      </p>
+    </div>
+  );
+}
+
+const SOURCE_STAMP: Record<
+  SourceKind,
+  { icon: React.ReactNode; path: string }
+> = {
+  text: {
+    icon: (
+      <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none">
+        <rect x={3} y={2.5} width={9.5} height={11} rx={1} stroke="currentColor" strokeWidth={1} />
+        <line x1={5} y1={6} x2={10.5} y2={6} stroke="currentColor" strokeWidth={1} strokeLinecap="round" />
+        <line x1={5} y1={8.5} x2={10.5} y2={8.5} stroke="currentColor" strokeWidth={1} strokeLinecap="round" />
+        <line x1={5} y1={11} x2={8.5} y2={11} stroke="currentColor" strokeWidth={1} strokeLinecap="round" />
+      </svg>
+    ),
+    path: "conference-bio.txt",
+  },
+  image: {
+    icon: (
+      <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none">
+        <rect x={2.5} y={3} width={11} height={10} rx={1} stroke="currentColor" strokeWidth={1} />
+        <circle cx={6} cy={6.5} r={1.2} stroke="currentColor" strokeWidth={1} />
+        <path d="M 2.5 11.5 L 6 8.5 L 9 10.5 L 13.5 6.5" stroke="currentColor" strokeWidth={1} strokeLinejoin="round" fill="none" />
+      </svg>
+    ),
+    path: "scope-dashboard.png",
+  },
+  url: {
+    icon: (
+      <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none">
+        <path
+          d="M 6 9 L 10 5 M 5.2 8.5 a 2.2 2.2 0 0 1 0 -3.1 l 1.2 -1.2 a 2.2 2.2 0 0 1 3.1 3.1 l -0.5 0.5 M 9.8 6.5 a 2.2 2.2 0 0 1 0 3.1 l -1.2 1.2 a 2.2 2.2 0 0 1 -3.1 -3.1 l 0.5 -0.5"
+          stroke="currentColor"
+          strokeWidth={1}
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
+    path: "daringfireball.net/2026/05/apple-vision",
+  },
+  pdf: {
+    icon: (
+      <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none">
+        <path d="M 4 2.5 L 10 2.5 L 12.5 5 L 12.5 13.5 L 4 13.5 z" stroke="currentColor" strokeWidth={1} strokeLinejoin="round" />
+        <path d="M 10 2.5 L 10 5 L 12.5 5" stroke="currentColor" strokeWidth={1} />
+        <text x={5.5} y={11.5} fontFamily="monospace" fontSize="3.5" fill="currentColor">PDF</text>
+      </svg>
+    ),
+    path: "on-bullshit-frankfurt.pdf",
+  },
+};
+
+const SOURCE_REFERENCE: Record<
+  Exclude<SourceKind, "text">,
+  { eyebrow: string; excerpt: string }
+> = {
+  image: {
+    eyebrow: "OCR EXCERPT · 142 CHARS",
+    excerpt:
+      "the trace band should anchor to the bottom of the sheet so the chrome reads as one panel rather than two",
+  },
+  url: {
+    eyebrow: "ARTICLE EXCERPT",
+    excerpt:
+      "Apple's next OS quietly trades chrome for content, but the new defaults expose more of the system's editorial voice than ever before",
+  },
+  pdf: {
+    eyebrow: "PAGE 3 OF 12",
+    excerpt:
+      "It is impossible for someone to lie unless he thinks he knows the truth. Producing bullshit requires no such conviction",
+  },
+};
 
 function SourceChunk({
   text,
