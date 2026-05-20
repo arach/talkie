@@ -99,6 +99,13 @@ const STUDIES = [
     blurb:
       "TTS playback surface — instrument-style transport, voice / rate / pitch controls, source picker, multi-item queue. Idle / playing / queue states. Audio-output counterpart to Camera.",
   },
+  {
+    slug: "architecture",
+    name: "Architecture",
+    kind: "Site map",
+    blurb:
+      "Every routable surface in the Next shell, grouped by domain. Inbound + outbound entry counts, orphan flags, proposed wires to close gaps. v2 (in flight): canvas-based UX journey map with embedded mini-views.",
+  },
 ];
 
 export default function Landing() {
