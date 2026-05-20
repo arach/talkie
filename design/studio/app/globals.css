@@ -13,6 +13,35 @@
  *      arbitrary-value `animate-[...]` utilities.
  * ────────────────────────────────────────────────────────────────── */
 
+
+/* HudsonKit compatibility tokens for the studio's Tailwind v3 pipeline.
+ * Hudson's published CSS bundle is Tailwind v4-flavored; importing it directly
+ * in this app trips Tailwind v3's @layer validation. These variables let the
+ * Hudson chrome/window primitives render while the SDK packaging is smoothed. */
+:root {
+  --background: #080b10;
+  --foreground: #e5edf5;
+  --card: #10151d;
+  --muted: #1b2430;
+  --muted-foreground: #8b9aab;
+  --border: #263241;
+  --input: #314052;
+  --ring: #22d3ee;
+  --accent: #22d3ee;
+  --success: #34d399;
+  --warning: #f59e0b;
+  --destructive: #ef4444;
+  --hud-accent: #22d3ee;
+  --hud-chrome-border: rgba(148, 163, 184, 0.22);
+  --hud-chrome-border-subtle: rgba(148, 163, 184, 0.14);
+  --hud-shadow-nav: 0 10px 40px rgba(0,0,0,0.35);
+  --hud-shadow-panel: 0 18px 60px rgba(0,0,0,0.42);
+  --hud-shadow-bar: 0 -8px 32px rgba(0,0,0,0.45);
+  --hud-shadow-minimap: 0 14px 48px rgba(0,0,0,0.46);
+  --hud-canvas-dot-minor: rgba(148, 163, 184, 0.12);
+  --hud-canvas-dot-major: rgba(148, 163, 184, 0.22);
+}
+
 html, body {
   background: theme('colors.studio.canvas');
   color: theme('colors.studio.ink');

@@ -12,7 +12,11 @@
   "dependencies": {
     "next": "^16.0.10",
     "react": "^19.2.3",
-    "react-dom": "^19.2.3"
+    "react-dom": "^19.2.3",
+    "hudsonkit": "file:../../../Hudson/packages/web/hudsonkit",
+    "lucide-react": "^0.574.0",
+    "motion": "^12.0.0",
+    "@base-ui-components/react": "^1.0.0-rc.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
