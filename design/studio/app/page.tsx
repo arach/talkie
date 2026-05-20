@@ -92,6 +92,13 @@ const STUDIES = [
     blurb:
       "Agentic loop surface — multi-turn prompt/response with channel-labelled turns (T01/T02…), agent presets, telemetry meta. Idle / thinking / multi-turn states.",
   },
+  {
+    slug: "read-aloud",
+    name: "Read Aloud",
+    kind: "Surface study",
+    blurb:
+      "TTS playback surface — instrument-style transport, voice / rate / pitch controls, source picker, multi-item queue. Idle / playing / queue states. Audio-output counterpart to Camera.",
+  },
 ];
 
 export default function Landing() {
