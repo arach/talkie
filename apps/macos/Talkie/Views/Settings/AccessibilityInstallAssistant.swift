@@ -132,11 +132,23 @@ final class AccessibilityInstallAssistant {
     private init() {}
 
     func present(target: AccessibilityInstallTarget, permission: PermissionKind = .accessibility) {
-        if target == .talkie, permission == .accessibility {
-            Self.promptForCurrentProcessAccessibilityIfNeeded()
+        // Trigger the system permission prompt. The OS dialog is what
+        // opens System Settings — we don't open it ourselves. If the
+        // user dismisses the prompt, Settings doesn't open, and our
+        // panel never appears (which is the desired UX — no panel
+        // hovering before the user agreed to go to Settings).
+        switch permission {
+        case .accessibility:
+            if target == .talkie {
+                Self.promptForCurrentProcessAccessibilityIfNeeded()
+            } else {
+                // Agent case — the system prompt is for the helper
+                // process, so we have to open the pane explicitly.
+                openSettingsPane(for: permission)
+            }
+        case .screenRecording:
+            _ = CGRequestScreenCaptureAccess()
         }
-
-        openSettingsPane(for: permission)
 
         let content = AccessibilityInstallAssistantView(
             target: target,
@@ -147,39 +159,66 @@ final class AccessibilityInstallAssistant {
             onClose: { [weak self] in self?.close() }
         )
 
+        let existingPanel: NSPanel
         if let panel {
             panel.contentViewController = NSHostingController(rootView: content)
-            position(panel)
-            NSApp.activate(ignoringOtherApps: true)
-            panel.orderFrontRegardless()
-            panel.makeKey()
-            return
+            existingPanel = panel
+        } else {
+            let panel = AccessibilityInstallAssistantPanel(
+                contentRect: NSRect(x: 0, y: 0, width: 430, height: 286),
+                styleMask: [.titled, .closable, .utilityWindow, .fullSizeContentView],
+                backing: .buffered,
+                defer: false
+            )
+            panel.title = "\(permission.displayName) Setup"
+            panel.titleVisibility = .hidden
+            panel.titlebarAppearsTransparent = true
+            panel.isMovableByWindowBackground = false
+            panel.isReleasedWhenClosed = false
+            panel.hidesOnDeactivate = false
+            panel.becomesKeyOnlyIfNeeded = false
+            panel.acceptsMouseMovedEvents = true
+            panel.level = .floating
+            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
+            panel.contentViewController = NSHostingController(rootView: content)
+            panel.setContentSize(NSSize(width: 430, height: 286))
+            self.panel = panel
+            existingPanel = panel
         }
 
-        let panel = AccessibilityInstallAssistantPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 430, height: 286),
-            styleMask: [.titled, .closable, .utilityWindow, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
-        panel.title = "\(permission.displayName) Setup"
-        panel.titleVisibility = .hidden
-        panel.titlebarAppearsTransparent = true
-        panel.isMovableByWindowBackground = false
-        panel.isReleasedWhenClosed = false
-        panel.hidesOnDeactivate = false
-        panel.becomesKeyOnlyIfNeeded = false
-        panel.acceptsMouseMovedEvents = true
-        panel.level = .floating
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
-        panel.contentViewController = NSHostingController(rootView: content)
-        panel.setContentSize(NSSize(width: 430, height: 286))
+        // Wait for System Settings to become the frontmost app
+        // before showing the panel. This means the user has actually
+        // engaged with the OS prompt and chosen to open Settings —
+        // not just that some Settings window happens to be open in
+        // the background.
+        //
+        // If 30 seconds pass without Settings coming forward (user
+        // dismissed the prompt, or the prompt never appeared), we
+        // bail silently. The panel stays hidden. The user can click
+        // GRANT again to re-trigger the flow.
+        Task { @MainActor [weak self] in
+            let didActivate = await Self.waitForSystemSettingsFrontmost(timeout: 30.0)
+            guard let self, didActivate else { return }
+            self.position(existingPanel)
+            NSApp.activate(ignoringOtherApps: true)
+            existingPanel.orderFrontRegardless()
+            existingPanel.makeKey()
+        }
+    }
 
-        self.panel = panel
-        position(panel)
-        NSApp.activate(ignoringOtherApps: true)
-        panel.orderFrontRegardless()
-        panel.makeKey()
+    /// Polls every 150ms for System Settings to be the frontmost
+    /// application. Returns `true` as soon as that happens, or
+    /// `false` if the timeout elapses first.
+    private static func waitForSystemSettingsFrontmost(timeout: TimeInterval) async -> Bool {
+        let start = Date()
+        while Date().timeIntervalSince(start) < timeout {
+            if NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+                == "com.apple.systempreferences" {
+                return true
+            }
+            try? await Task.sleep(for: .milliseconds(150))
+        }
+        return false
     }
 
     private func close() {
@@ -760,13 +799,22 @@ private final class NativeAppFileDragCardView: NSView, NSDraggingSource {
     }
 
     private func startDrag(with event: NSEvent) {
-        let pasteboardItem = TalkieInternalDrag.pasteboardItem(for: appURL)
-        NSLog("🟢 AccessibilityInstallAssistant drag appURL=\(appURL.path) exists=\(FileManager.default.fileExists(atPath: appURL.path)) types=\(pasteboardItem.types.map(\.rawValue))")
+        // System Settings (and other external receivers) need the file URL
+        // as the binary NSURL representation, plus the legacy
+        // NSFilenamesPboardType and com.apple.application-bundle hints to
+        // recognize it as a draggable .app bundle. NSURL conforms to
+        // NSPasteboardWriting and writes all of these correctly.
+        //
+        // Previously we routed through TalkieInternalDrag.pasteboardItem,
+        // which only wrote `public.file-url` as a string + an internal
+        // marker — System Settings accepted the drop but never added the
+        // app, because the payload wasn't in the format it expects.
+        NSLog("🟢 AccessibilityInstallAssistant drag appURL=\(appURL.path) exists=\(FileManager.default.fileExists(atPath: appURL.path))")
 
         isDragging = true
         dragStartLocation = nil
 
-        let draggingItem = NSDraggingItem(pasteboardWriter: pasteboardItem)
+        let draggingItem = NSDraggingItem(pasteboardWriter: appURL as NSURL)
         let imageSize = NSSize(width: 64, height: 64)
         let imageFrame = NSRect(
             x: bounds.midX - imageSize.width / 2,
