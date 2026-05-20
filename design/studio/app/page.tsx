@@ -106,6 +106,13 @@ const STUDIES = [
     blurb:
       "Every routable surface in the Next shell, grouped by domain. Inbound + outbound entry counts, orphan flags, proposed wires to close gaps. v2 (in flight): canvas-based UX journey map with embedded mini-views.",
   },
+  {
+    slug: "completion",
+    name: "Feature Completion",
+    kind: "Roadmap",
+    blurb:
+      "Release-train view of the rebuild — M1 (Next shell + Phase 1 + Phase 2) shipped, M2 entry-point wires queued, M3 polish, M4 missing donor surfaces, M5 new scope (share ext, widget, watch), M6 system polish.",
+  },
 ];
 
 export default function Landing() {
