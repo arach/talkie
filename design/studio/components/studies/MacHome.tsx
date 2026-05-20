@@ -130,12 +130,29 @@ const TRENDING_THEMES = [
   { tag: "Design notes",   count: 2, max: 8 },
 ];
 
-// 24h event ticks for the Today widget — hour positions on the day
-// where something is scheduled.
-const TODAY_EVENTS = [
-  { hour: 9.5,  label: "09:30 · Design review" },
-  { hour: 11,   label: "11:00 · Standup" },
-  { hour: 14,   label: "14:00 · Bay polish merge" },
+// Learn hooks for the Discovery row's Learn widget — small "did you
+// know" snippets that surface Talkie features. Replaces the Today
+// calendar (felt informational rather than delightful). Material vocab
+// mirrors the RecapCard pattern in ScopeLearnScreen.swift.
+const LEARN_HOOKS = [
+  {
+    eyebrow: "Voice edit",
+    hook: "Talk back to a memo.",
+    detail: "Hit ⌃⇧⌘ E during playback to dictate an edit in place.",
+    action: "Try it",
+  },
+  {
+    eyebrow: "Smart actions",
+    hook: "Fix grammar with a chip.",
+    detail: "Compose has one-tap chips for grammar, concise, and tone.",
+    action: "See compose",
+  },
+  {
+    eyebrow: "Tray",
+    hook: "Hyper+S, anywhere.",
+    detail: "Screenshots drain into your next memo unless you pin them.",
+    action: "How it works",
+  },
 ];
 
 /**
@@ -709,7 +726,7 @@ function DiscoveryRow() {
   return (
     <SectionBlock eyebrow="Discovery">
       <div className="grid grid-cols-3 gap-4">
-        <TodayWidget />
+        <LearnWidget />
         <ShortcutsWidget />
         <TrendingWidget />
       </div>
@@ -717,63 +734,28 @@ function DiscoveryRow() {
   );
 }
 
-function TodayWidget() {
-  // Mini 24h timeline ribbon — ticks every 2 hours, event dots at
-  // their hour position. Reads as a day-at-a-glance map.
+// Learn widget — replaced the Today calendar. Surfaces a rotating
+// "did you know" hook from the Learn screen's RecapCard vocabulary:
+// eyebrow + serif hook + body + action. Reads as editorial discovery
+// (not a dashboard widget) so it lifts the midsection.
+function LearnWidget() {
+  const hook = LEARN_HOOKS[0];
   return (
-    <WidgetCard title="Today" eyebrow="Calendar">
-      <div className="flex flex-col gap-3">
-        <div className="relative h-7 select-none">
-          {/* 24h baseline */}
-          <div
-            className="absolute left-0 right-0 top-3 h-px"
-            style={{ background: "#E0DCD3" }}
-          />
-          {/* hour ticks every 4h */}
-          {[0, 4, 8, 12, 16, 20, 24].map((h) => {
-            const left = `${(h / 24) * 100}%`;
-            return (
-              <div key={h} className="absolute top-2.5 -translate-x-1/2" style={{ left }}>
-                <div className="h-1 w-px bg-studio-edge" />
-                <div className="mt-1 font-mono text-[7px] tracking-[0.06em] text-studio-ink-faint">
-                  {h.toString().padStart(2, "0")}
-                </div>
-              </div>
-            );
-          })}
-          {/* event dots */}
-          {TODAY_EVENTS.map((e, i) => {
-            const left = `${(e.hour / 24) * 100}%`;
-            return (
-              <div
-                key={i}
-                className="absolute top-1.5 -translate-x-1/2"
-                style={{ left }}
-                title={e.label}
-              >
-                <span
-                  aria-hidden
-                  className="block h-3 w-3 rounded-full"
-                  style={{
-                    background: "#9A6A22",
-                    boxShadow: "0 0 0 2px #FBFBFA",
-                  }}
-                />
-              </div>
-            );
-          })}
+    <WidgetCard title="Learn" eyebrow="Did you know">
+      <button className="group flex flex-col gap-2 text-left">
+        <div className="font-mono text-[8.5px] uppercase tracking-[0.22em]" style={{ color: "#9A6A22" }}>
+          · {hook.eyebrow}
         </div>
-        <div className="flex flex-col gap-1 text-[11px]">
-          {TODAY_EVENTS.map((e, i) => (
-            <div key={i} className="flex justify-between text-studio-ink-faint">
-              <span className="font-mono text-[10px] text-studio-ink tracking-[0.02em]">
-                {e.label.split(" · ")[0]}
-              </span>
-              <span>{e.label.split(" · ")[1]}</span>
-            </div>
-          ))}
+        <div className="font-display text-[15px] font-medium leading-snug tracking-tight text-studio-ink">
+          {hook.hook}
         </div>
-      </div>
+        <div className="text-[11px] leading-snug text-studio-ink-faint">
+          {hook.detail}
+        </div>
+        <div className="mt-auto pt-1.5 text-[9px] font-mono uppercase tracking-[0.22em] text-[#9A6A22] group-hover:text-[#7A521A]">
+          {hook.action} →
+        </div>
+      </button>
     </WidgetCard>
   );
 }

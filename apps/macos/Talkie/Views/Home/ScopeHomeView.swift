@@ -497,7 +497,7 @@ struct ScopeHomeView: View {
         VStack(alignment: .leading, spacing: 14) {
             Eyebrow("Discovery")
             HStack(spacing: 16) {
-                TodayWidget()
+                LearnWidget()
                 ShortcutsWidget()
                 TrendingWidget()
             }
@@ -1746,6 +1746,79 @@ private struct RoutinesPanel: View {
 
 /// Today — small 24h timeline with event dots. Reads as a day-at-a-
 /// glance map, not a list. Sample events for now.
+// Learn widget — replaced the Today calendar. Surfaces a rotating
+// "did you know" hook from the Learn screen's RecapCard vocabulary:
+// eyebrow + serif hook + body + action. Reads as editorial discovery
+// rather than a dashboard widget, lifting the midsection.
+private struct LearnWidget: View {
+    private struct Hook { let eyebrow: String; let hook: String; let detail: String; let action: String }
+    private let hooks: [Hook] = [
+        .init(
+            eyebrow: "Voice edit",
+            hook: "Talk back to a memo.",
+            detail: "Hit ⌃⇧⌘ E during playback to dictate an edit in place.",
+            action: "Try it"
+        ),
+        .init(
+            eyebrow: "Smart actions",
+            hook: "Fix grammar with a chip.",
+            detail: "Compose has one-tap chips for grammar, concise, and tone.",
+            action: "See compose"
+        ),
+        .init(
+            eyebrow: "Tray",
+            hook: "Hyper+S, anywhere.",
+            detail: "Screenshots drain into your next memo unless you pin them.",
+            action: "How it works"
+        ),
+    ]
+
+    // Stable random pick per session — feels alive without flicker.
+    @State private var pickIndex: Int = 0
+    @State private var isHovered: Bool = false
+
+    var body: some View {
+        let hook = hooks[pickIndex % hooks.count]
+        DiscoveryWidgetCard(title: "Learn", eyebrow: "Did you know") {
+            Button(action: { NavigationState.shared.navigate(to: .liveDashboard) }) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("· " + hook.eyebrow.uppercased())
+                        .font(.system(size: 8.5, weight: .semibold, design: .monospaced))
+                        .tracking(2.4)
+                        .foregroundStyle(Color.hex("9A6A22"))
+                    Text(hook.hook)
+                        .font(.system(size: 15, weight: .medium, design: .serif))
+                        .tracking(-0.2)
+                        .foregroundStyle(ScopeInk.primary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    Text(hook.detail)
+                        .font(.system(size: 11))
+                        .foregroundStyle(ScopeInk.faint)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    Spacer(minLength: 4)
+                    HStack(spacing: 4) {
+                        Text(hook.action.uppercased())
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .tracking(2.2)
+                        Text("→").font(.system(size: 10))
+                    }
+                    .foregroundStyle(isHovered ? Color.hex("7A521A") : Color.hex("9A6A22"))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .onHover { isHovered = $0 }
+            .onAppear {
+                pickIndex = Int.random(in: 0..<hooks.count)
+            }
+        }
+    }
+}
+
+// Legacy TodayWidget — dead from the Discovery row, kept for any
+// callers we might have missed. Will be removed in a cleanup pass.
 private struct TodayWidget: View {
     private struct Event { let hour: Double; let label: String }
     private let events: [Event] = [
