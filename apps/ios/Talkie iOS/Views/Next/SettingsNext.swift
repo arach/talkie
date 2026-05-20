@@ -25,10 +25,15 @@
 //  variant "inspector" with the rail-on-left layout.
 //
 
+import Security
 import SwiftUI
 
 struct SettingsNext: View {
     @ObservedObject private var theme = ThemeManager.shared
+    @ObservedObject private var iCloudStatus = iCloudStatusManager.shared
+    @ObservedObject private var parakeetManager = ParakeetModelManager.shared
+    @State private var appSettings = TalkieAppSettings.shared
+    @State private var bridgeManager = BridgeManager.shared
     @State private var active: InspectorTab
 
     enum InspectorTab: String, CaseIterable, Identifiable {
@@ -209,27 +214,27 @@ struct SettingsNext: View {
 
     private var voicePanel: some View {
         VStack(alignment: .leading, spacing: 0) {
-            field("Engine", "Parakeet 0.4", hint: "On-device · 392 MB")
-            field("Input device", "Built-in mic")
-            field("Sample rate", "48 kHz")
-            field("Channels", "Mono")
-            field("Gain", "+3 dB", hint: "Auto-leveled when low")
-            field("Pre-roll", "200 ms")
-            field("Noise gate", "Soft")
+            field("Engine", appSettings.transcriptionMemoEngine.displayName, hint: appSettings.preferredParakeetModel.shortDescription)
+            field("Input device", "System default")
+            field("Sample rate", "System") // TODO: no TalkieAppSettings key exists yet.
+            field("Channels", "System") // TODO: no TalkieAppSettings key exists yet.
+            field("Gain", "Auto") // TODO: no TalkieAppSettings key exists yet.
+            field("Pre-roll", "System") // TODO: no TalkieAppSettings key exists yet.
+            field("Noise gate", "System") // TODO: no TalkieAppSettings key exists yet.
             metricStrip(
                 title: "ENGINE TELEMETRY",
-                metrics: [("LATENCY", "180ms"), ("WER", "3.2%"), ("LOADED", "12s")]
+                metrics: [("LATENCY", "—"), ("WER", "—"), ("LOADED", parakeetManager.statusDescription.uppercased())]
             )
         }
     }
 
     private var lookPanel: some View {
         VStack(alignment: .leading, spacing: 0) {
-            field("Theme", theme.currentTheme.rawValue.capitalized)
-            field("Density", "Standard")
-            field("Accent intensity", "0.85")
+            field("Theme", theme.currentTheme.displayName)
+            field("Density", "Standard") // TODO: no TalkieAppSettings key exists yet.
+            field("Accent intensity", "Theme") // TODO: no TalkieAppSettings key exists yet.
             field("Wordmark style", "Mono")
-            field("Reduce motion", "System")
+            field("Reduce motion", theme.appearanceMode.displayName) // TODO: no dedicated motion key exists yet.
 
             // Theme picker — labeled chip swatches under a THEMES eyebrow.
             // Two themes share the indigo accent (Ghost / Lift), so the
@@ -279,31 +284,35 @@ struct SettingsNext: View {
                 )
         }
         .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            theme.apply(theme: t)
+        }
     }
 
     private var connectPanel: some View {
         VStack(alignment: .leading, spacing: 0) {
-            field("iCloud sync", "On", hint: "Last sync 2 min ago")
-            field("Mac Bridge", "Paired · Mini", hint: "art@mini.local · 192.168.1.42")
-            field("Account", "art@…", hint: "Sign in with Apple")
+            field("iCloud sync", appSettings.iCloudSyncEnabled ? "On" : "Off", hint: iCloudStatus.status.title)
+            field("Mac Bridge", bridgeStatusValue, hint: bridgeStatusHint)
+            field("Account", nativeAccountValue, hint: "Sign in with Apple")
             metricStrip(
                 title: "LINK HEALTH",
-                metrics: [("RTT", "12ms"), ("SENT", "4.2k"), ("QUEUED", "0")]
+                metrics: [("RTT", "—"), ("SENT", "—"), ("QUEUED", "—")]
             )
-            actionRow("Re-pair Mac", tone: .neutral)
-            actionRow("Sign out", tone: .warn)
+            actionRow("Re-pair Mac", tone: .neutral) { Task { await bridgeManager.connect() } }
+            actionRow("Sign out", tone: .warn) { resetAuthState() }
         }
     }
 
     private var keysPanel: some View {
         VStack(alignment: .leading, spacing: 0) {
-            field("Dictation engine", "On-device")
-            field("Auto-format", "Smart", hint: "Sentences + lists")
-            field("Punctuation", "Inferred")
-            field("Auto-capitalize", "On")
-            field("Trailing space", "Smart")
-            field("Voice activation", "Long-press")
-            field("Haptic feedback", "Soft")
+            field("Dictation engine", appSettings.transcriptionKeyboardEngine.displayName)
+            field("Auto-format", appSettings.keyboardModeEnabled ? "Keyboard mode" : "Default", hint: appSettings.keyboardActiveLayout)
+            field("Punctuation", "Inferred") // TODO: no TalkieAppSettings key exists yet.
+            field("Auto-capitalize", appSettings.keyboardAutoCapitalizeEnabled ? "On" : "Off")
+            field("Trailing space", "Smart") // TODO: no TalkieAppSettings key exists yet.
+            field("Voice activation", appSettings.keyboardLEDIndicatorsEnabled ? "Indicators on" : "Indicators off")
+            field("Haptic feedback", appSettings.keyboardHapticFeedbackEnabled ? "On" : "Off")
         }
     }
 
@@ -314,12 +323,12 @@ struct SettingsNext: View {
                 .foregroundStyle(theme.colors.textTertiary)
                 .padding(.bottom, 10)
 
-            actionRow("Reset onboarding", tone: .neutral)
-            actionRow("Reset auth state", tone: .neutral)
-            actionRow("Reset resume tooltip", tone: .neutral)
-            actionRow("Open log viewer", tone: .accent)
-            actionRow("Dump shared store", tone: .neutral)
-            actionRow("Force iCloud refresh", tone: .neutral)
+            actionRow("Reset onboarding", tone: .neutral) { appSettings.hasSeenOnboarding = false }
+            actionRow("Reset auth state", tone: .neutral) { resetAuthState() }
+            actionRow("Reset resume tooltip", tone: .neutral) { appSettings.hasSeenResumeTooltip = false }
+            actionRow("Open log viewer", tone: .accent) { AppLogger.app.info("SettingsNext log viewer requested; no LogViewerSheet is available in this target") }
+            actionRow("Dump shared store", tone: .neutral) { dumpSharedStore() }
+            actionRow("Force iCloud refresh", tone: .neutral) { iCloudStatus.checkStatus() }
         }
     }
 
@@ -327,9 +336,9 @@ struct SettingsNext: View {
         VStack(alignment: .leading, spacing: 0) {
             field("Version", Bundle.main.shortVersion)
             field("Build", Bundle.main.buildNumber)
-            field("Channel", "Debug")
-            field("Engine bundle", "parakeet-0.4-en")
-            field("Mac bridge protocol", "v2.1")
+            field("Channel", iosChannel)
+            field("Engine bundle", appSettings.preferredParakeetModel.huggingFaceRepo)
+            field("Mac bridge protocol", "talkie-bridge-v1")
         }
     }
 
@@ -374,22 +383,27 @@ struct SettingsNext: View {
 
     private enum ActionTone { case neutral, accent, warn }
 
-    private func actionRow(_ label: String, tone: ActionTone) -> some View {
-        HStack {
-            Text(label)
-                .talkieType(.fieldLabel)
-                .foregroundStyle(theme.colors.textPrimary)
-            Spacer()
-            Text("RUN")
-                .talkieType(.chipLabel)
-                .foregroundStyle(actionColor(tone))
+    private func actionRow(_ label: String, tone: ActionTone, action: (() -> Void)? = nil) -> some View {
+        Button {
+            action?()
+        } label: {
+            HStack {
+                Text(label)
+                    .talkieType(.fieldLabel)
+                    .foregroundStyle(theme.colors.textPrimary)
+                Spacer()
+                Text("RUN")
+                    .talkieType(.chipLabel)
+                    .foregroundStyle(actionColor(tone))
+            }
+            .frame(height: 44)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(theme.currentTheme.chrome.edgeFaint)
+                    .frame(height: 1)
+            }
         }
-        .frame(height: 44)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(theme.currentTheme.chrome.edgeFaint)
-                .frame(height: 1)
-        }
+        .buttonStyle(.plain)
     }
 
     private func actionColor(_ tone: ActionTone) -> Color {
@@ -446,6 +460,54 @@ struct SettingsNext: View {
                     .fill(theme.currentTheme.chrome.edgeFaint)
                     .frame(height: 1)
             }
+        }
+    }
+
+    // MARK: - Live data helpers
+
+    private var bridgeStatusValue: String {
+        guard bridgeManager.isPaired else { return "Not paired" }
+        if let name = bridgeManager.pairedMacDisplayName {
+            return "\(bridgeManager.status.rawValue) · \(name)"
+        }
+        return bridgeManager.status.rawValue
+    }
+
+    private var bridgeStatusHint: String {
+        var parts: [String] = []
+        if let hostname = bridgeManager.pairedHostname { parts.append(hostname) }
+        if let port = bridgeManager.pairedPort { parts.append(String(port)) }
+        if let last = bridgeManager.lastSuccessfulContactAt {
+            parts.append(last.formatted(.relative(presentation: .named)))
+        }
+        return parts.isEmpty ? bridgeManager.errorMessage ?? bridgeManager.activeRouteDescription : parts.joined(separator: " · ")
+    }
+
+    private var nativeAccountValue: String {
+        UserDefaults.standard.bool(forKey: SignInStore.signedInDefaultsKey) ? "Signed in" : "Not signed in"
+    }
+
+    private var iosChannel: String {
+        (Bundle.main.object(forInfoDictionaryKey: "TALKIE_IOS_CHANNEL") as? String) ?? "—"
+    }
+
+    private func resetAuthState() {
+        let query: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: "to.talkie.native-apple-auth"
+        ]
+        SecItemDelete(query as CFDictionary)
+        UserDefaults.standard.set(false, forKey: SignInStore.signedInDefaultsKey)
+        AppLogger.app.info("[Auth] Native Apple sign-in state reset from SettingsNext")
+    }
+
+    private func dumpSharedStore() {
+        let configuration = TalkieAppConfigurationStore.shared.configuration
+        if let data = try? JSONEncoder().encode(configuration),
+           let dump = String(data: data, encoding: .utf8) {
+            AppLogger.app.info("SettingsNext shared store dump", detail: dump)
+        } else {
+            AppLogger.app.warning("SettingsNext shared store dump failed")
         }
     }
 
