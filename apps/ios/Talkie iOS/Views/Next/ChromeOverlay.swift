@@ -4,8 +4,10 @@
 //
 //  Summoned chrome layer. Three corner pills (Done top-left,
 //  Settings top-right, Keyboard bottom-right) + a liquid-glass
-//  bottom tray (Camera · Browse · Mic FAB · Ask AI). Bottom-left
-//  is left empty — that's where the voice button lives.
+//  bottom tray (Camera · Browse · Mic FAB · Ask AI · Terminal).
+//  Bottom-left is left empty — that's where the voice button
+//  lives. Tray slot counts stay odd so the mic FAB stays the
+//  visual center; pair additions across the FAB, never one-sided.
 //
 //  Design ref: design/studio/app/complications/ (variant `full`).
 //
@@ -92,14 +94,16 @@ private struct CornerSlot: View {
     }
 }
 
-/// Bottom-center liquid-glass nav: Camera · Browse · Mic FAB · Ask AI.
-/// Camera + Browse group as capture-source inputs to the left of the
-/// FAB; Ask AI sits to the right as the intelligence affordance.
+/// Bottom-center liquid-glass nav: Camera · Browse · Mic FAB · Ask AI
+/// · Terminal. Left of the FAB groups capture-source inputs (Camera
+/// + Browse); right pairs intelligence (Ask AI) with the power-user
+/// dev affordance (Terminal). The FAB stays the visual center —
+/// slot count is kept odd by convention.
 private struct LiquidGlassTray: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 14) {
             TraySlot(
                 glyph: AnyView(Image(systemName: "camera").font(.system(size: 17, weight: .regular))),
                 label: "Camera"
@@ -121,6 +125,13 @@ private struct LiquidGlassTray: View {
                 label: "Ask AI"
             ) {
                 AppShellRouter.shared.openAskAI()
+            }
+
+            TraySlot(
+                glyph: AnyView(Image(systemName: "terminal").font(.system(size: 15, weight: .regular))),
+                label: "Terminal"
+            ) {
+                AppShellRouter.shared.openTerminal()
             }
         }
         .padding(.horizontal, 14)
