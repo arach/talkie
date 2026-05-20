@@ -872,8 +872,12 @@ struct RecordingTranscriptCard: View {
                     DocumentBody(
                         text: text,
                         duration: recording.duration,
-                        wordCount: recording.wordCount,
-                        metadataGroups: documentMetadataGroups
+                        wordCount: recording.wordCount
+                        // metadataGroups intentionally omitted — TOMarginRail
+                        // (rendered at TalkieView.scrollContent level) now
+                        // owns the right-margin metadata aside. Passing
+                        // groups here would produce a second right column
+                        // alongside the rail.
                     )
                 }
             }

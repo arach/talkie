@@ -150,19 +150,40 @@ struct TalkieView: View {
         // chiffon paper (hairlines, player rail) while body content keeps
         // a comfortable measure.
         AnyView(
-            VStack(alignment: .leading, spacing: 0) {
-                // Fixed header zone — clears the chrome bar's overlay
-                // footprint (pill capsule + shadow) so the masthead slug
-                // doesn't touch the bar's bottom edge.
-                Color.clear
-                    .frame(height: PageLayout.headerHeight + 18)
+            GeometryReader { proxy in
+                let canShowRail = proxy.size.width >= TOMarginRail.collapseBelow
 
-                detailContent
+                VStack(alignment: .leading, spacing: 0) {
+                    // Fixed header zone — clears the chrome bar's overlay
+                    // footprint (pill capsule + shadow) so the masthead
+                    // slug doesn't touch the bar's bottom edge.
+                    Color.clear
+                        .frame(height: PageLayout.headerHeight + 18)
+
+                    if canShowRail {
+                        // 1fr / 220pt grid. Detail content keeps its
+                        // measure; rail occupies the right margin. The
+                        // gate is a hard hide/show — no animation on
+                        // resize, because flicker is worse than a clean
+                        // jump.
+                        HStack(alignment: .top, spacing: 40) {
+                            detailContent
+                                .frame(maxWidth: contentColumnMaxWidth, alignment: .leading)
+                            TOMarginRail(recording: recording)
+                                .frame(width: TOMarginRail.preferredWidth, alignment: .leading)
+                                .padding(.trailing, MastheadPadding.horizontal)
+                        }
+                        .padding(.leading, 0)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        detailContent
+                            .frame(maxWidth: contentColumnMaxWidth, alignment: .leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(.top, 0)
+                .padding(.bottom, PageLayout.bottomPadding)
             }
-            .frame(maxWidth: contentColumnMaxWidth, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, 0)
-            .padding(.bottom, PageLayout.bottomPadding)
         )
     }
 

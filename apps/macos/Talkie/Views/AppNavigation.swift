@@ -383,25 +383,10 @@ struct AppNavigation: View {
                 ChromeBarPageHeaderOverlay()
                     .allowsHitTesting(false)
             }
-            .overlay(alignment: .topTrailing) {
-                // Settings gear — pinned to the window's top-right. Stays
-                // out of the SwiftUI toolbar mechanism because placement
-                // there resolves inconsistently inside SidebarColumns.
-                Button {
-                    nav.navigate(to: .settings)
-                } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundColor(Theme.current.foregroundSecondary)
-                        .padding(8)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .focusEffectDisabled()
-                .help("Settings (⌘,)")
-                .padding(.top, 6)
-                .padding(.trailing, 12)
-            }
+            // Settings gear has moved to the status bar (bottom-left,
+            // next to SyncStatusIcon). The window's top-right is now
+            // clear, which gives the chrome bar's pill + each surface's
+            // header chrome room to breathe.
             .overlay(alignment: .bottomTrailing) {
                 AgentHealthBanner()
                     .padding(.trailing, Spacing.md)
@@ -425,12 +410,14 @@ struct AppNavigation: View {
         navigationSplitViewCore
             .navigationSplitViewStyle(.balanced)
             .overlay(alignment: .top) {
-                // Structural horizontal rule at the header datum (44pt).
-                // Decorative line that visually connects columns.
+                // Structural horizontal rule, offset to clear the chrome
+                // bar pill + its drop shadow. Sits just above where the
+                // page's own eyebrow row begins so it reads as a page rule
+                // rather than a line cutting through the pill capsule.
                 Rectangle()
                     .fill(Theme.current.foreground.opacity(0.06))
                     .frame(height: 0.5)
-                    .offset(y: PageLayout.headerHeight)
+                    .offset(y: PageLayout.headerHeight + 14)
                     .allowsHitTesting(false)
             }
             .toolbarBackground(
@@ -1032,7 +1019,10 @@ struct AppNavigation: View {
                     }
                 case .notes:
                     if SettingsManager.shared.isScopeTheme {
-                        ScopeLibraryView(initialTypeFilter: .notes)
+                        // Scope ships Notes as its own surface — a two-
+                        // column Sheaf of editorial cards on cream paper.
+                        // See design/studio/app/mac-notes (Variant II).
+                        ScopeNotesScreen()
                     } else {
                         RecordingsScreen(initialTypeFilter: RecordingTypeFilter.notes)
                     }

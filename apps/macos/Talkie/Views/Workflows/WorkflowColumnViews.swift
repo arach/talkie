@@ -160,6 +160,10 @@ struct WorkflowDetailColumn: View {
                     onDuplicate: duplicateCurrentWorkflow,
                     onRun: { showingMemoSelector = true }
                 )
+            } else if settings.isScopeTheme {
+                // Skills landing — the no-selection state in Scope theme.
+                // Source of truth: design/studio/app/mac-skills.
+                ScopeSkillsLandingView()
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "rectangle.stack")

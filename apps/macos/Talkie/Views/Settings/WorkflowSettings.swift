@@ -13,6 +13,7 @@ private let logger = Logger(subsystem: "to.talkie.app.mac", category: "Views")
 // MARK: - Workflows View
 struct WorkflowsView: View {
     private let workflowService = WorkflowService.shared
+    @AppStorage("SkillsSlackWebhookURL") private var slackWebhookURL: String = ""
 
     var body: some View {
         SettingsPageContainer {
@@ -110,6 +111,41 @@ struct WorkflowsView: View {
                 .padding(12)
                 .background(Theme.current.surface1)
                 .cornerRadius(CornerRadius.sm)
+            }
+            .settingsSectionCard(padding: Spacing.lg)
+
+            // MARK: - Skill Integrations
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.orange)
+                        .frame(width: 3, height: 14)
+
+                    Text("SKILL INTEGRATIONS")
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+
+                    Spacer()
+
+                    Text(slackWebhookURL.isEmpty ? "NOT CONFIGURED" : "CONFIGURED")
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(slackWebhookURL.isEmpty
+                                         ? Theme.current.foregroundSecondary
+                                         : .orange.opacity(0.85))
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Slack webhook URL")
+                        .font(Theme.current.fontSMMedium)
+                        .foregroundColor(Theme.current.foreground)
+                    Text("Used by Daily Standup and any skill with a slack.post DO target. Paste a Slack Incoming Webhook URL.")
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(.secondary.opacity(0.8))
+                        .fixedSize(horizontal: false, vertical: true)
+                    TextField("https://hooks.slack.com/services/…", text: $slackWebhookURL)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 12, design: .monospaced))
+                }
             }
             .settingsSectionCard(padding: Spacing.lg)
 

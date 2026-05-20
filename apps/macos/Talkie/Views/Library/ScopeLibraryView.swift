@@ -706,7 +706,10 @@ struct ScopeLibraryView: View {
                 })
                 .id(recording.id)
             } else {
-                inspectorEmpty
+                ScopeLibraryEmptyState(
+                    recordings: viewModel.recordings,
+                    onSelectRecording: { id in selectedRecordingIDs = [id] }
+                )
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

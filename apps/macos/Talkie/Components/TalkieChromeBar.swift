@@ -143,15 +143,20 @@ struct TalkieChromeBar: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(
+            // Paper frame / border / drop shadow only appear when the
+            // strip is revealed. At rest the pill stands alone — no
+            // surrounding container competing for attention.
             RoundedRectangle(cornerRadius: ChromeMetrics.barRadius)
                 .fill(ChromeTone.paper)
+                .opacity(header.hovered ? 1 : 0)
         )
         .overlay(
             RoundedRectangle(cornerRadius: ChromeMetrics.barRadius)
                 .strokeBorder(ChromeTone.edge, lineWidth: 0.5)
+                .opacity(header.hovered ? 1 : 0)
         )
-        .shadow(color: Color.black.opacity(0.08), radius: 10, y: 4)
-        .shadow(color: Color.black.opacity(0.04), radius: 3, y: 1)
+        .shadow(color: Color.black.opacity(header.hovered ? 0.08 : 0), radius: 10, y: 4)
+        .shadow(color: Color.black.opacity(header.hovered ? 0.04 : 0), radius: 3, y: 1)
         .onHover { hovering in
             withAnimation(.spring(response: ChromeMetrics.popResponse,
                                   dampingFraction: ChromeMetrics.popDamping)) {
@@ -208,11 +213,9 @@ private struct TalkieChromePill: View {
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .tracking(2.0)
                         .foregroundStyle(ChromeTone.cream)
-
-                    Text("⌘K")
-                        .font(.system(size: 9, design: .monospaced))
-                        .tracking(0.4)
-                        .foregroundStyle(ChromeTone.cream.opacity(0.5))
+                    // No shortcut hint in the idle label — the brand
+                    // word IS the affordance. If we later want a hint,
+                    // ⌘T (record) is more honest than ⌘K (search).
                 }
             }
             .padding(.horizontal, 14)

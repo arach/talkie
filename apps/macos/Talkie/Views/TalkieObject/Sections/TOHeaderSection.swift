@@ -37,6 +37,18 @@ struct TOHeaderSection: View {
 
     private let repository = TalkieObjectRepository()
 
+    /// Tracks which tool button (if any) is currently hovered. Drives the
+    /// idle → ink contrast jump that the studio's `ToolButton` does on
+    /// hover; the Swift port previously collapsed both states into a
+    /// single dim foreground, which is why the buttons read as faint
+    /// chrome instead of interactive controls.
+    @State private var hoveredLabel: String? = nil
+    @State private var overflowHovered: Bool = false
+
+    /// Briefly flips the Copy chip to "COPIED" after a successful copy,
+    /// then reverts. Mirrors the studio's `studioCopyButton` pattern.
+    @State private var copied: Bool = false
+
     // MARK: - Body
     //
     // Composition (studio MacMemoDetail.tsx — one-to-one):
@@ -294,6 +306,9 @@ struct TOHeaderSection: View {
     @ViewBuilder
     private var readingActions: some View {
         HStack(spacing: 4) {
+            toolButton(label: copied ? "COPIED" : "COPY") {
+                copyTranscript()
+            }
             toolButton(label: "Share") {
                 shareRecording()
             }
@@ -308,19 +323,44 @@ struct TOHeaderSection: View {
         }
     }
 
-    /// Studio toolbar button — mono-cased, no background. Hover bumps the
-    /// text from foregroundSecondary up to foreground.
+    /// Studio toolbar button — mono-cased, no background.
+    /// Idle = `foregroundSecondary` at full opacity; hover = `foreground`
+    /// with the weight bumped from `.regular` to `.medium`. The contrast
+    /// jump is the affordance; the studio's `ToolButton` does exactly
+    /// this on `:hover`.
     private func toolButton(label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        let active = hoveredLabel == label
+        return Button(action: action) {
             Text(label.uppercased())
-                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .font(.system(size: 10, weight: active ? .medium : .regular, design: .monospaced))
                 .tracking(1.8)
-                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.65))
+                .foregroundColor(active ? Theme.current.foreground : Theme.current.foregroundSecondary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
+                .animation(.easeOut(duration: 0.12), value: active)
         }
         .buttonStyle(.plain)
+        .onHover { isHovering in
+            hoveredLabel = isHovering ? label : (hoveredLabel == label ? nil : hoveredLabel)
+        }
         .help(label)
+    }
+
+    /// Copies the recording's text to the pasteboard and briefly flips
+    /// the chip to "COPIED" so the action reads as confirmed.
+    private func copyTranscript() {
+        guard let text = recording.text, !text.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        withAnimation(.easeOut(duration: 0.12)) {
+            copied = true
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1400))
+            withAnimation(.easeOut(duration: 0.18)) {
+                copied = false
+            }
+        }
     }
 
     private var overflowMenu: some View {
@@ -358,12 +398,14 @@ struct TOHeaderSection: View {
             }
         } label: {
             Text("⋯")
-                .font(.system(size: 13, weight: .regular))
-                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.65))
+                .font(.system(size: 13, weight: overflowHovered ? .medium : .regular))
+                .foregroundColor(overflowHovered ? Theme.current.foreground : Theme.current.foregroundSecondary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
+                .animation(.easeOut(duration: 0.12), value: overflowHovered)
         }
         .menuStyle(.borderlessButton)
+        .onHover { overflowHovered = $0 }
         .fixedSize()
     }
 

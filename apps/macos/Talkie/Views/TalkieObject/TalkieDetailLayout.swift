@@ -112,16 +112,18 @@ extension TalkieObjectType {
             ]
 
         case .note:
-            // Media gallery dropped from the hero slot — it was the
-            // ugly dark fullBleed band at the top of the pane. Playback
-            // dropped — TalkieView pins it as a fixed footer.
+            // Notes are content-first. The transcript editor IS the
+            // note; everything else is supplementary. Previous recipe
+            // had actionBar (Command / Fix Grammar / Concise /
+            // Professional chips), mediaGallery, a Scratchpad
+            // (`.notes` slot), and workflowRuns — that whole stack made
+            // a note look like a Compose surface, not a note.
+            //
+            // Filtered to: the note's text + its attachments. Sections
+            // self-gate, so attachments only render when there's data.
             return [
-                SectionSlot(.transcript,     mode: .editor,  chrome: .inline),
-                SectionSlot(.actionBar,      mode: .compact, chrome: .inline),
-                SectionSlot(.mediaGallery,   mode: .compact, chrome: .inline),
-                SectionSlot(.attachments,    mode: .gallery, chrome: .card),
-                SectionSlot(.notes,          mode: .editor,  chrome: .inline),
-                SectionSlot(.workflowRuns,   mode: .compact, chrome: .card),
+                SectionSlot(.transcript,  mode: .editor,  chrome: .inline),
+                SectionSlot(.attachments, mode: .gallery, chrome: .card),
             ]
 
         case .segment:

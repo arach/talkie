@@ -42,6 +42,51 @@ private enum ScopeFont {
     }
 }
 
+// MARK: - Stage disc (V2 typeset pipeline marker)
+
+private enum StageDiscState {
+    case done, active, pending
+}
+
+private struct StageDisc: View {
+    let state: StageDiscState
+
+    var body: some View {
+        let size: CGFloat = 9
+        switch state {
+        case .done:
+            Circle()
+                .fill(ScopeAmber.solid)
+                .frame(width: size, height: size)
+        case .active:
+            // Ring + half-fill — matches the studio mock's SVG: outline
+            // circle with the right semicircle filled.
+            ZStack {
+                Circle()
+                    .stroke(ScopeAmber.solid, lineWidth: 1.2)
+                Path { p in
+                    let half = size / 2
+                    p.move(to: CGPoint(x: half, y: 0))
+                    p.addArc(
+                        center: CGPoint(x: half, y: half),
+                        radius: half - 0.6,
+                        startAngle: .degrees(-90),
+                        endAngle: .degrees(90),
+                        clockwise: false
+                    )
+                    p.closeSubpath()
+                }
+                .fill(ScopeAmber.solid)
+            }
+            .frame(width: size, height: size)
+        case .pending:
+            Circle()
+                .stroke(ScopeInk.faint.opacity(0.45), lineWidth: 1)
+                .frame(width: size, height: size)
+        }
+    }
+}
+
 // MARK: - Pipeline stages
 
 /// The four stages of the compose pipeline — used to light up the
@@ -132,21 +177,21 @@ struct ScopeDraftsScreen: View {
         VStack(spacing: 0) {
             hero
 
-            // Pinned workbench — signal monitor + editor bay flex with the
-            // window. 480pt floor keeps small windows from getting a
-            // cramped editor; `maxHeight: .infinity` lets it grow to fill
-            // available space on larger windows.
-            VStack(alignment: .leading, spacing: 22) {
+            // Pinned workbench — V2 strips the card chrome so the
+            // signal header, editor page, and action bar all stack as
+            // sibling sections on cream paper (not nested in a bay).
+            VStack(alignment: .leading, spacing: 18) {
                 signalMonitor
                 editorBay
-                    .frame(minHeight: 480, maxHeight: .infinity)
+                    .frame(minHeight: 420, maxHeight: .infinity)
+                actionBar
             }
             .padding(.horizontal, 32)
             .padding(.top, 12)
             .padding(.bottom, 8)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
 
-            // Scrollable accessory rail — transforms + ownership strip
+            // Scrollable accessory rail — transforms + ownership byline
             // sit below the fold. The pinned workbench eats the rest.
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
@@ -209,181 +254,139 @@ struct ScopeDraftsScreen: View {
         return wordCount == 1 ? "1 WORD" : "\(wordCount) WORDS"
     }
 
-    // MARK: - Signal monitor (dark bichromatic strip)
+    // MARK: - Signal header (typeset, cream paper)
 
-    /// The instrument bay: dark panel with four stage pins. Active
-    /// stage glows amber. Right-hand chrome shows the loaded model
-    /// and a live duration counter when applicable. Sized as a status
-    /// strip — earns enough height for two readable rows, no more.
+    /// V2 — the dark instrument panel is gone. The signal header is now
+    /// a typeset row on cream paper: eyebrow + italic byline on the
+    /// left, model picker + word count on the right; a hairline; then
+    /// the pipeline as a quiet row of typeset stage discs.
+    ///
+    /// Mirrors `design/studio/components/studies/MacCompose.tsx`
+    /// `SignalHeader` exactly.
     private var signalMonitor: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(ScopePanel.bg)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(ScopePanel.Edge.normal, lineWidth: 1)
-                )
-            GraticuleBackground(pitch: 24, color: ScopePanel.traceFaint, opacity: 0.45)
-                .mask(RoundedRectangle(cornerRadius: 6))
+        VStack(alignment: .leading, spacing: 0) {
+            monitorHeader
 
-            VStack(spacing: 0) {
-                monitorHeader
-                monitorPipeline
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            Rectangle()
+                .fill(ScopeInk.faint.opacity(0.18))
+                .frame(height: 0.5)
+                .padding(.top, 12)
+
+            monitorPipeline
+                .padding(.top, 12)
         }
-        .frame(height: 78)
-        .shadow(color: .black.opacity(0.16), radius: 18, y: 8)
     }
 
     private var monitorHeader: some View {
-        HStack(spacing: 8) {
-            PhosphorDot(
-                color: editorState.isProcessing ? ScopePanel.trace : ScopePanel.trace.opacity(0.55),
-                size: 5
-            )
-            Text("SIGNAL")
-                .font(ScopeType.chrome)
-                .tracking(ScopeType.Tracking.extraWide)
-                .foregroundStyle(ScopePanel.inkDim)
-            Text("·")
-                .font(ScopeType.chrome)
-                .foregroundStyle(ScopePanel.inkSubtle)
-            Text("TALKIE.COMPOSE")
-                .font(ScopeType.chrome)
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text("· COMPOSE · D-0024 ·")
+                .font(ScopeType.eyebrow)
                 .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(ScopePanel.inkFaint)
-            Spacer()
-            Text(monitorChromeRight)
-                .font(ScopeType.chrome)
-                .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(ScopePanel.inkSubtle)
+                .foregroundStyle(ScopeInk.faint)
+
+            Text(monitorByline)
+                .font(ScopeFont.display(size: 13).italic())
+                .foregroundStyle(ScopeInk.faint)
                 .lineLimit(1)
-                .truncationMode(.middle)
-        }
-        .padding(.horizontal, 14)
-        .padding(.top, 8)
-        .padding(.bottom, 6)
-        .background(ScopePanel.stripTop)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(ScopePanel.Edge.subtle)
-                .frame(height: 1)
-                .padding(.horizontal, 14)
+                .truncationMode(.tail)
+
+            Spacer(minLength: 12)
+
+            HStack(spacing: 10) {
+                modelPicker
+                Text(wordCountChrome)
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.faint)
+                    .monospacedDigit()
+            }
         }
     }
 
-    private var monitorChromeRight: String {
-        var parts: [String] = []
-        if let provider = resolvedProviderName?.uppercased() {
-            parts.append(provider)
-        }
-        if let model = resolvedModelName {
-            parts.append(model.uppercased())
-        }
+    private var monitorByline: String {
         if dictationOwnsCapture {
-            let ds = String(format: "%.1fS", dictationDuration)
-            parts.append(ds)
+            return String(format: "live dictation · %.1fs", dictationDuration)
         }
-        if parts.isEmpty { parts.append("NO MODEL LOADED") }
-        return parts.joined(separator: " · ")
+        if editorState.isProcessing {
+            return "revising · model in flight"
+        }
+        if editorState.text.isEmpty {
+            return "open · awaiting first capture"
+        }
+        return "open · in progress"
+    }
+
+    private var wordCountChrome: String {
+        if editorState.text.isEmpty { return "0 WORDS" }
+        return wordCount == 1 ? "1 WORD" : "\(wordCount) WORDS"
     }
 
     private var monitorPipeline: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 12) {
             ForEach(Array(ComposeStage.allCases.enumerated()), id: \.offset) { idx, stage in
                 stagePin(stage, isActive: stage == activeStage)
                 if idx < ComposeStage.allCases.count - 1 {
                     pipelineConnector(isLit: stage.rawValue < activeStage.rawValue)
                 }
             }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 6)
-        .frame(maxHeight: .infinity)
-    }
 
-    private func stagePin(_ stage: ComposeStage, isActive: Bool) -> some View {
-        let isPast = stage.rawValue < activeStage.rawValue
-        let pinColor: Color = isActive
-            ? ScopePanel.trace
-            : (isPast ? ScopePanel.trace.opacity(0.62) : ScopePanel.inkFaint)
-        let labelColor: Color = isActive
-            ? ScopePanel.ink
-            : (isPast ? ScopePanel.inkDim : ScopePanel.inkFaint)
-        let pinStroke: Color = isActive
-            ? ScopePanel.Edge.strong
-            : (isPast ? ScopePanel.Edge.normal : ScopePanel.Edge.subtle)
-        let pinFill: Color = isActive
-            ? ScopePanel.trace.opacity(0.10)
-            : (isPast ? ScopePanel.trace.opacity(0.04) : .clear)
+            Spacer(minLength: 12)
 
-        return HStack(spacing: 7) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(pinFill)
-                RoundedRectangle(cornerRadius: 2)
-                    .stroke(pinStroke, lineWidth: 0.5)
-                Text(stage.pin)
-                    .font(ScopeType.channel)
-                    .tracking(ScopeType.Tracking.wide)
-                    .foregroundStyle(pinColor)
-                    .modifier(PhosphorGlow(
-                        color: ScopePanel.trace,
-                        enabled: isActive,
-                        radius: 3,
-                        opacity: 0.50
-                    ))
-            }
-            .frame(width: 22, height: 16)
-
-            Text(stage.label)
+            Text("⌃⇧⌘R · revise")
                 .font(ScopeType.chrome)
                 .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(labelColor)
-
-            if isActive {
-                Circle()
-                    .fill(ScopePanel.trace)
-                    .frame(width: 4, height: 4)
-                    .shadow(color: ScopePanel.traceGlow, radius: 3)
-            }
+                .foregroundStyle(ScopeInk.subtle)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// V2 — typeset stage marker. Filled amber disc for done, ring-with-
+    /// half-fill for active, hollow ink ring for pending. Label sits to
+    /// the right and inherits the same state-driven contrast.
+    private func stagePin(_ stage: ComposeStage, isActive: Bool) -> some View {
+        let isPast = stage.rawValue < activeStage.rawValue
+        let state: StageDiscState = isActive ? .active : (isPast ? .done : .pending)
+        let labelColor: Color = isActive
+            ? ScopeAmber.solid
+            : (isPast ? ScopeInk.primary : ScopeInk.faint)
+        let weight: Font.Weight = isActive ? .semibold : .regular
+
+        return HStack(spacing: 8) {
+            StageDisc(state: state)
+
+            Text(stage.label.capitalized)
+                .font(.system(size: 10, weight: weight, design: .monospaced))
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(labelColor)
+        }
         .animation(ScopeMotion.crossfade, value: isActive)
     }
 
+    /// V2 — thin amber hairline when the next stage is reached, otherwise
+    /// a faint ink hairline. No gradient, no glow.
     private func pipelineConnector(isLit: Bool) -> some View {
-        LinearGradient(
-            colors: [
-                isLit ? ScopePanel.trace.opacity(0.55) : ScopePanel.traceFaint,
-                isLit ? ScopePanel.trace : ScopePanel.traceDim,
-                isLit ? ScopePanel.trace.opacity(0.55) : ScopePanel.traceFaint,
-            ],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
-        .frame(width: 28, height: 1)
-        .shadow(color: isLit ? ScopePanel.traceGlow : .clear, radius: 3)
-        .padding(.horizontal, 2)
+        Rectangle()
+            .fill(isLit ? ScopeAmber.solid.opacity(0.5) : ScopeInk.faint.opacity(0.32))
+            .frame(width: 32, height: 0.5)
     }
 
-    // MARK: - Editor bay
+    // MARK: - Editor page (V2)
 
-    /// The paper editor — sits on `ScopeCanvas.surface` with a graticule
-    /// underlay so it reads as instrument-paper, not a flat card. Header
-    /// row carries channel chrome (CH-IN model selector, word count
-    /// readout); footer row carries voice prompt and quick chips.
+    /// V2 — no card chrome. The editor is a sheet of paper bracketed by
+    /// hairlines, with a brass marginal rule down the left of the text.
+    /// No graticule, no rounded corners, no card border. Mirrors
+    /// `MacMemoDetail` document body so the editorial language stays
+    /// consistent across surfaces.
     private var editorBay: some View {
         VStack(spacing: 0) {
             editorChromeBar
 
-            ZStack {
-                Rectangle().fill(ScopeEdge.faint).frame(height: 1)
-            }
-            .frame(height: 1)
+            // Top page rule
+            Rectangle()
+                .fill(ScopeInk.faint.opacity(0.18))
+                .frame(height: 0.5)
+                .padding(.top, 8)
 
-            // Editor / review surface
+            // Editor / review surface — marginal rule lives inside.
             Group {
                 if editorState.isReviewing, let diff = editorState.currentDiff {
                     reviewingContent(diff: diff)
@@ -391,51 +394,45 @@ struct ScopeDraftsScreen: View {
                     editingContent
                 }
             }
+            .padding(.top, 14)
 
-            // Command feedback strip (shows when a voice prompt is in flight)
+            // Command feedback strip (shows when a voice prompt is in
+            // flight). Sits inside the page, between the body and the
+            // bottom rule.
             if pendingInstruction != nil || editorState.isProcessing {
-                Rectangle().fill(ScopeEdge.faint).frame(height: 1)
+                Rectangle()
+                    .fill(ScopeInk.faint.opacity(0.10))
+                    .frame(height: 0.5)
                 commandFeedbackBar
             }
 
-            Rectangle().fill(ScopeEdge.faint).frame(height: 1)
-
-            actionBar
+            // Bottom page rule
+            Rectangle()
+                .fill(ScopeInk.faint.opacity(0.18))
+                .frame(height: 0.5)
+                .padding(.top, 6)
         }
-        .background {
-            ZStack {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(ScopeCanvas.surface)
-                GraticuleBackground(pitch: 24, color: ScopeTrace.faint, opacity: 0.35)
-                    .mask(RoundedRectangle(cornerRadius: 6))
-            }
-        }
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(ScopeEdge.normal, lineWidth: 1)
-        )
     }
 
-    /// Top chrome row of the editor bay — model picker on the left
-    /// (styled as a channel tag), word count + clear on the right.
+    /// V2 — the editor chrome row sits ABOVE the page rules as a typeset
+    /// slug, not as a chrome strip with its own background. Model picker
+    /// has moved up to the signal header; this row carries the draft
+    /// title slug and a couple of contextual actions.
     private var editorChromeBar: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 6) {
-                Text("CH-IN")
-                    .font(ScopeType.channel)
-                    .tracking(ScopeType.Tracking.wide)
-                    .foregroundStyle(ScopeInk.subtle)
-                modelPicker
-            }
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text("· DRAFT")
+                .font(ScopeType.eyebrow)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(Color.hex("9A6A22"))
 
-            Spacer()
+            Text(editorSlugTitle)
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopeInk.subtle)
+                .lineLimit(1)
+                .truncationMode(.tail)
 
-            if !editorState.text.isEmpty {
-                Text("\(wordCount) WORDS")
-                    .font(ScopeType.chrome)
-                    .tracking(ScopeType.Tracking.wide)
-                    .foregroundStyle(ScopeInk.faint)
-            }
+            Spacer(minLength: 12)
 
             if editorState.isProcessing {
                 HStack(spacing: 6) {
@@ -444,29 +441,18 @@ struct ScopeDraftsScreen: View {
                         .font(ScopeType.channel)
                         .tracking(ScopeType.Tracking.wide)
                         .foregroundStyle(ScopeAmber.solid)
-                        .phosphorGlow(radius: 3, opacity: 0.32)
                 }
             }
 
             if editorState.currentNoteId != nil {
                 Button(action: startNewNote) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 9, weight: .semibold))
-                        Text("NEW")
-                            .font(ScopeType.channel)
-                            .tracking(ScopeType.Tracking.wide)
-                    }
-                    .foregroundStyle(ScopeInk.muted)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 2)
-                            .stroke(ScopeEdge.normal, lineWidth: 0.5)
-                    )
+                    Text("NEW DRAFT")
+                        .font(ScopeType.channel)
+                        .tracking(ScopeType.Tracking.wide)
+                        .foregroundStyle(ScopeInk.faint)
                 }
                 .buttonStyle(.plain)
-                .help("Start a new note")
+                .help("Start a new draft")
             }
 
             if !editorState.text.isEmpty && !editorState.isReviewing {
@@ -480,31 +466,60 @@ struct ScopeDraftsScreen: View {
                 .help("Clear text")
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
     }
 
-    /// Editor surface — TalkieTextEditor wrapped in the floating
-    /// dictation pill. Cream paper, serif-ish body via system font;
-    /// dictation pill remains the standard floating component.
+    /// Quiet slug text — first line of the draft or a placeholder. Lives
+    /// inline with the chrome row so it reads as a typeset draft byline.
+    private var editorSlugTitle: String {
+        let trimmed = editorState.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return "untitled draft" }
+        let firstLine = trimmed.components(separatedBy: .newlines).first ?? trimmed
+        let snippet = firstLine.prefix(64)
+        return snippet.lowercased()
+    }
+
+    /// V2.1 — editor surface as a sheet of paper. Brass marginal rule
+    /// on the left of the text column (matches `MacMemoDetail.documentBody`),
+    /// a subtle paper background tint so the writing area has a visible
+    /// boundary, and the dictation pill floating at the bottom-center
+    /// (kept after user feedback — the pill was the right affordance,
+    /// the typeset hint was an over-correction).
     private var editingContent: some View {
         ZStack(alignment: .bottom) {
-            TalkieTextEditor(
-                text: $editorState.text,
-                selectedRange: $editorState.selectedRange,
-                font: NSFont.systemFont(ofSize: 14 * settings.contentFontSize.scale),
-                textColor: NSColor(ScopeInk.primary),
-                insertionPointColor: NSColor(ScopeAmber.solid)
-            )
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .padding(.bottom, 50)
-            .frame(minHeight: 240, maxHeight: .infinity)
+            HStack(alignment: .top, spacing: 18) {
+                // Brass marginal rule
+                Rectangle()
+                    .fill(Color.hex("9A6A22").opacity(0.30))
+                    .frame(width: 0.5)
+                    .padding(.vertical, 6)
 
-            if editorState.isTransformingSelection {
-                selectionIndicator
+                // Text column with a subtle paper background so the
+                // writing area reads as a sheet, not as unbounded canvas.
+                ZStack(alignment: .topTrailing) {
+                    Rectangle()
+                        .fill(ScopeCanvas.surface.opacity(0.55))
+
+                    TalkieTextEditor(
+                        text: $editorState.text,
+                        selectedRange: $editorState.selectedRange,
+                        font: NSFont.systemFont(ofSize: 14 * settings.contentFontSize.scale),
+                        textColor: NSColor(ScopeInk.primary),
+                        insertionPointColor: NSColor(ScopeAmber.solid)
+                    )
+                    .padding(.horizontal, 14)
+                    .padding(.top, 14)
+                    .padding(.bottom, 56)
+                    .frame(minHeight: 240, maxHeight: .infinity)
+
+                    if editorState.isTransformingSelection {
+                        selectionIndicator
+                    }
+                }
             }
+            .padding(.horizontal, 4)
 
+            // Floating dictation pill — bottom-center, the previous
+            // affordance the user explicitly asked back for.
             DictationPill(
                 state: $dictationPillState,
                 duration: $dictationDuration,
@@ -798,49 +813,62 @@ struct ScopeDraftsScreen: View {
         .padding(.vertical, 10)
     }
 
-    /// Primary voice-command affordance. On the whiter canvas it reads
-    /// as a lit-amber-tinted button rather than a dark slab — same brass
-    /// family as the right-hand COPY, so the row brackets cleanly
-    /// (amber-tint → tools → amber-solid).
+    /// Primary voice-command affordance. V2.1 — bigger, more contrasty
+    /// per user note that it's the loudest verb in the action bar and
+    /// should read like it. Sits next to the smart-action chips and
+    /// brackets the row on the left.
     private var voicePromptButton: some View {
         let recordingRed = Color(red: 0.72, green: 0.32, blue: 0.18)
         let isActive = isRecordingInstruction || isTranscribingInstruction
 
         return Button(action: toggleVoicePrompt) {
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 if isTranscribingInstruction {
-                    BrailleSpinner(size: 10)
+                    BrailleSpinner(size: 12)
                         .foregroundColor(ScopeAmber.solid)
                 } else if isRecordingInstruction {
                     Image(systemName: "stop.fill")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                 } else {
                     Image(systemName: "mic.fill")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                 }
 
                 Text(isRecordingInstruction ? "STOP" : "COMMAND")
-                    .font(ScopeType.channel)
+                    .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
                     .tracking(ScopeType.Tracking.wide)
+
+                Text("⌃⇧⌘C")
+                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                    .tracking(0.6)
+                    .foregroundStyle(
+                        isRecordingInstruction
+                            ? ScopePanel.ink.opacity(0.55)
+                            : ScopeAmber.solid.opacity(0.55)
+                    )
             }
             .foregroundStyle(
                 isRecordingInstruction
                     ? ScopePanel.ink
                     : (voicePromptDisabled ? ScopeInk.subtle : ScopeAmber.solid)
             )
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
             .background(
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(isRecordingInstruction ? recordingRed : ScopeAmber.tint)
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(
+                        isRecordingInstruction
+                            ? recordingRed
+                            : ScopeAmber.solid.opacity(0.12)
+                    )
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 3)
+                RoundedRectangle(cornerRadius: 4)
                     .stroke(
                         isRecordingInstruction
                             ? recordingRed.opacity(0.85)
-                            : ScopeAmber.solid.opacity(0.55),
-                        lineWidth: 0.5
+                            : ScopeAmber.solid.opacity(0.72),
+                        lineWidth: 1
                     )
             )
             .shadow(
@@ -881,76 +909,141 @@ struct ScopeDraftsScreen: View {
         .disabled(disabled)
     }
 
-    // MARK: - Action rail (full grid below editor)
+    // MARK: - Action list (V2 — typeset two-column, no cards)
 
-    /// A wider grid of smart actions. Each cell mirrors the homepage
-    /// capture-mode card shape but at a smaller size — icon badge,
-    /// channel pin, name, hint copy.
+    /// V2 — drops the white-card grid in favor of a typeset list. Each
+    /// row is `serif name | flexible hint | APPLY →`, two columns on
+    /// wide canvases, one column when narrow. Whole row lifts on hover
+    /// with an amber tint; APPLY arrow only appears on hover. Reads as
+    /// a menu of operations in a notebook, not a control panel.
     private var actionRail: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                Eyebrow("Transforms")
-                Spacer()
-                Text("\(availableActions.count) AVAILABLE")
-                    .font(ScopeType.chrome)
+        // V2.1 — only truly inactive states (model in flight) gray the
+        // rows. A draft with no text yet leaves the rows visually active
+        // so the action menu always reads as a live affordance; the tap
+        // is a no-op when there's no text to operate on.
+        let disabled = editorState.isProcessing
+        let count = availableActions.count
+        let half = (count + 1) / 2
+        let leftCol = Array(availableActions.prefix(half))
+        let rightCol = Array(availableActions.dropFirst(half))
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 14) {
+                Text("· SMART ACTIONS")
+                    .font(ScopeType.eyebrow)
                     .tracking(ScopeType.Tracking.wide)
-                    .foregroundStyle(ScopeInk.subtle)
+                    .foregroundStyle(ScopeInk.faint)
+
+                Rectangle()
+                    .fill(ScopeInk.faint.opacity(0.18))
+                    .frame(height: 0.5)
+
+                Text("\(count) operations · pick one to apply")
+                    .font(ScopeFont.display(size: 13).italic())
+                    .foregroundStyle(ScopeInk.faint)
             }
 
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 10),
-                    GridItem(.flexible(), spacing: 10),
-                    GridItem(.flexible(), spacing: 10),
-                    GridItem(.flexible(), spacing: 10),
-                ],
-                spacing: 10
-            ) {
-                ForEach(Array(availableActions.enumerated()), id: \.element.id) { idx, action in
-                    ActionCell(
-                        action: action,
-                        channel: String(format: "T-%02d", idx + 1),
-                        disabled: editorState.isProcessing || editorState.text.isEmpty,
-                        onTap: {
-                            Task { await editorState.requestRevision(instruction: action.defaultPrompt) }
-                        }
-                    )
-                }
+            HStack(alignment: .top, spacing: 36) {
+                actionColumn(actions: leftCol, disabled: disabled)
+                actionColumn(actions: rightCol, disabled: disabled)
             }
         }
     }
 
-    // MARK: - Signal-path strip
-
-    /// Small architectural footer — input → model → output. Data labels,
-    /// no narrative. The pins (P1/P2/P3) and the path between them carry
-    /// the meaning; the captions report state.
-    private var ownershipStrip: some View {
-        HStack(spacing: 14) {
-            ownershipNode(pin: "P1", label: "Input", detail: "local · this device")
-            SignalPath(color: ScopeAmber.solid, width: 24)
-            ownershipNode(pin: "P2", label: "Model", detail: resolvedModelName?.uppercased() ?? "NOT SELECTED")
-            SignalPath(color: ScopeAmber.solid, width: 24)
-            ownershipNode(pin: "P3", label: "Output", detail: "copy · memo")
-        }
-        .padding(.top, 6)
-    }
-
-    private func ownershipNode(pin: String, label: String, detail: String) -> some View {
-        HStack(spacing: 8) {
-            ChannelLabel(pin)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(ScopeInk.primary)
-                Text(detail)
-                    .font(ScopeType.chrome)
-                    .tracking(ScopeType.Tracking.wide)
-                    .foregroundStyle(ScopeInk.subtle)
-                    .lineLimit(1)
+    @ViewBuilder
+    private func actionColumn(actions: [SmartAction], disabled: Bool) -> some View {
+        VStack(spacing: 0) {
+            ForEach(actions, id: \.id) { action in
+                ActionListRow(
+                    action: action,
+                    disabled: disabled,
+                    onTap: {
+                        guard !editorState.text.isEmpty else { return }
+                        Task { await editorState.requestRevision(instruction: action.defaultPrompt) }
+                    }
+                )
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Ownership byline (V2)
+
+    /// V2 — the P1/P2/P3 boxed signal-path strip collapses to a single
+    /// italic line. The two model nodes are brass amber; the device /
+    /// output anchors are ink-strong. Reads as an editorial colophon
+    /// rather than instrument panel chrome.
+    private var ownershipStrip: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Rectangle()
+                .fill(ScopeInk.faint.opacity(0.10))
+                .frame(height: 0.5)
+                .padding(.bottom, 10)
+
+            ownershipByline
+        }
+        .padding(.top, 4)
+    }
+
+    private var ownershipByline: some View {
+        let brass = Color.hex("9A6A22")
+        let hostname = Host.current().localizedName ?? "Mac"
+        let asrName = prettyASRModel(settings.liveTranscriptionModelId)
+        let providerName = resolvedProviderName ?? "local"
+        let modelName = resolvedModelName ?? "no model selected"
+
+        let italicFont = ScopeFont.display(size: 14).italic()
+        let mediumFont = ScopeFont.display(size: 14, medium: true)
+
+        // Build the line in a single AttributedString so the typography
+        // flows as one editorial colophon — italic faint for connective
+        // tissue, brass for technology names, ink for the host + output
+        // anchors.
+        func italic(_ s: String) -> AttributedString {
+            var a = AttributedString(s)
+            a.foregroundColor = ScopeInk.faint
+            a.font = italicFont
+            return a
+        }
+        func ink(_ s: String) -> AttributedString {
+            var a = AttributedString(s)
+            a.foregroundColor = ScopeInk.primary
+            a.font = mediumFont
+            return a
+        }
+        func brassed(_ s: String) -> AttributedString {
+            var a = AttributedString(s)
+            a.foregroundColor = brass
+            a.font = mediumFont
+            return a
+        }
+
+        var text = italic("recorded on ")
+        text.append(ink(hostname))
+        text.append(italic(" via "))
+        text.append(brassed(asrName))
+        text.append(italic(", edits via "))
+        text.append(brassed(providerName))
+        text.append(italic(" · "))
+        text.append(brassed(modelName))
+        text.append(italic(", filed to "))
+        text.append(ink("Library · Notes"))
+        text.append(italic("."))
+
+        return Text(text)
+            .lineSpacing(2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Pretty-print an ASR model id like "parakeet:v3" → "Parakeet v3".
+    /// Mirrors the heuristic in `TOSharedComponents.prettyModel` so the
+    /// two surfaces agree on how to spell model names.
+    private func prettyASRModel(_ raw: String) -> String {
+        let parts = raw.split(separator: ":").map(String.init)
+        guard parts.count == 2 else { return raw.capitalized }
+        let family = parts[0].capitalized
+        let version = parts[1]
+        return "\(family) \(version)"
     }
 
     // MARK: - Model picker
@@ -1306,6 +1399,52 @@ private struct ActionCell: View {
                     }
                 }
             )
+    }
+}
+
+// MARK: - Action list row (V2)
+
+/// Typeset action row used by the V2 actionRail. Renders name + an
+/// `APPLY →` hover affordance on a single typeset row, no card chrome.
+private struct ActionListRow: View {
+    let action: SmartAction
+    let disabled: Bool
+    let onTap: () -> Void
+
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(alignment: .firstTextBaseline, spacing: 14) {
+                Text(action.name)
+                    .font(ScopeFont.display(size: 15))
+                    .foregroundStyle(disabled ? ScopeInk.muted : ScopeInk.primary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Text(disabled ? "OFFLINE" : "APPLY →")
+                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(disabled ? ScopeInk.subtle : ScopeAmber.solid)
+                    .opacity(hovered || disabled ? 1 : 0)
+            }
+            .padding(.horizontal, 4)
+            .padding(.vertical, 10)
+            .background(
+                Rectangle()
+                    .fill(hovered && !disabled ? ScopeAmber.tintSubtle : Color.clear)
+            )
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(ScopeInk.faint.opacity(0.10))
+                    .frame(height: 0.5)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .onHover { hovered = $0 }
+        .animation(.easeOut(duration: 0.12), value: hovered)
     }
 }
 
