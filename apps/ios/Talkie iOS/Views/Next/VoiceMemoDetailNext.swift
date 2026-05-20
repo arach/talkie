@@ -335,9 +335,13 @@ struct VoiceMemoDetailNext: View {
     private var transcriptSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                .talkieType(.channelLabelTiny)
+                Text("· TRANSCRIPT")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary)
                 Spacer()
-                .talkieType(.channelLabelTiny)
+                Text("\(wordCount) WORDS")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary)
             }
             .padding(.horizontal, 4)
 
