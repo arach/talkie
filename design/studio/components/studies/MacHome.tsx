@@ -83,37 +83,35 @@ const CANONICAL: Record<string, string> = {
   Scope:  "chiffon",
 };
 
-// Two-pane Recent data — left pane covers Voice (Memos + Dictations),
-// right pane covers Content (Captures + Notes). Each row is a single
-// glance: glyph + line + meta + time. Lines are intentionally long so
-// truncation behavior is visible at the smaller stamp widths.
+// Real-content fixtures — sourced from a live Home snapshot 2026-05-20.
+// Iterating in studio against the actual shipped state (rather than
+// invented mocks) lets us see how the composition rests under real
+// dictation lengths, screenshot dimensions, and stretches where one
+// type runs empty. Update freely as iteration continues.
 
 const RECENT_MEMOS = [
-  { line: "Walking thoughts on scope reintegration vs simplification — keep the bay, drop instrument chrome elsewhere", meta: "0:42", when: "9:04 PM" },
-  { line: "Quick voice memo about the chrome bar pill alignment — must stay centered or the strip drifts asymmetric", meta: "0:38", when: "Yesterday" },
+  { line: "Ooh, I love the way this recording sheet uh looks on top of our screen. So elegant.", meta: "0:18", when: "5:14 PM" },
 ];
 
 const RECENT_DICTATIONS = [
-  { line: "implement all of them and then give us toggles in the same screen using the designer shortcut", meta: "186 words", when: "9:34 AM" },
-  { line: "Let's come up with a few treatments that make this look and feel better or at least make best", meta: "142 words", when: "9:28 AM" },
-  { line: "Alright, so it's much nicer visually than it was. I think in general the rule of thumb is like", meta: "98 words", when: "8:37 PM" },
+  { line: "I don't know. So what I had in mind with the way we could break things down or up actually is to take a lot more kind of visual elegance and content from the materials in Learn, which I re…", meta: "90 words", when: "7:39 PM" },
+  { line: "The app looks great and yeah basically the app looks great.", meta: "11 words", when: "7:33 PM" },
+  { line: "Might be a good moment to make sure that we're committing often and that we're able to push and start building towards a pull request.", meta: "25 words", when: "7:05 PM" },
 ];
 
-// Captures intentionally empty — demos the empty-state CTA pattern.
-// Real data would look like:
-//   { line: "Bay variant comparison — 9 schemes in studio", meta: "1280×757", when: "8:26 PM" }
-const RECENT_CAPTURES: { line: string; meta: string; when: string }[] = [];
-
-const RECENT_NOTES = [
-  { title: "Studio → native handoff tooling", body: "Token export, Swift-hint annotations, spec overlay. Rejected: animation curve mapping. Start with token export.", attachments: 0, when: "Today" },
-  { title: "Theme → scheme bindings (light mode)", body: "Modern → PORCELAIN. Scope → CHIFFON. Sibling ladders for each family.", attachments: 1, when: "Yesterday" },
-  { title: "Talkie button — no-sidebar variant won", body: "Mac surfaces anchor the Talkie button in window chrome center, no icon rail.", attachments: 2, when: "Mon" },
+const RECENT_CAPTURES = [
+  { line: "Built-in Display", meta: "2560×1664", when: "May 11" },
+  { line: "crop", meta: "1843×433", when: "Apr 23" },
 ];
+
+// Notes intentionally empty — the live Home snapshot showed none this
+// week. Demonstrates how the CTA-empty pattern reads in practice.
+const RECENT_NOTES: { title: string; body: string; attachments: number; when: string }[] = [];
 
 const WORKFLOW_RUNS = [
-  { name: "Summarize standup", at: "9:31 AM", status: "ok" as const },
-  { name: "Dictation → Linear", at: "9:14 AM", status: "ok" as const },
-  { name: "Compose draft",      at: "Yesterday", status: "stale" as const },
+  { name: "Hey Talkie",  at: "Dec 26", status: "ok" as const },
+  { name: "Transcribe",  at: "Dec 26", status: "ok" as const },
+  { name: "Hey Talkie",  at: "Dec 26", status: "ok" as const },
 ];
 
 const SHORTCUTS = [
