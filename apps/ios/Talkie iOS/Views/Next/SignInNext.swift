@@ -65,7 +65,6 @@ final class SignInStore: NSObject, ObservableObject {
 
                 _ = try? await CKContainer.default().accountStatus()
                 UserDefaults.standard.set(true, forKey: Self.signedInDefaultsKey)
-                UserDefaults.standard.set(credential.user, forKey: "nativeAppleUserIdentifier")
                 updateStep(2, status: .completed, detail: "Ready for iCloud sync")
 
                 AppLogger.app.info("[Auth] Native Sign in with Apple complete")
