@@ -73,6 +73,7 @@ struct ScopeHomeView: View {
 
     @State private var memosStore = MemosViewModel.shared
     @State private var dictationStore = DictationStore.shared
+    @State private var recordingsVM = RecordingsViewModel.shared
     @State private var workflowExecutor = WorkflowExecutor.shared
     @State private var screenshotTray = ScreenshotTray.shared
     @State private var clipTray = ClipTray.shared
@@ -95,10 +96,9 @@ struct ScopeHomeView: View {
         return VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 36) {
-                    captureModes
                     agentPanel
+                    recentTwoPane
                     routinesStrip
-                    signalTable
                     discoveryRow
                     systemStatusRail
                     ownershipStrip
@@ -115,6 +115,9 @@ struct ScopeHomeView: View {
             ChromeBarHeader.shared.set(title: "Today", subtitle: heroTrailing)
             await memosStore.loadStats()
             await workflowExecutor.refreshHomeHistory()
+            if recordingsVM.recordings.isEmpty {
+                await recordingsVM.loadRecordings()
+            }
         }
         .onChange(of: streak) { _, _ in
             ChromeBarHeader.shared.subtitle = heroTrailing
@@ -222,6 +225,195 @@ struct ScopeHomeView: View {
         if trayItemCount == 0 { return "Hyper+S armed" }
         if trayItemCount == 1 { return "1 in tray" }
         return "\(trayItemCount) in tray"
+    }
+
+    // MARK: - Recent two-pane (Voice + Content)
+    //
+    // Ported from studio MacHome v4. Replaces the older mixed
+    // signalTable + captureModes pair: each Recent sub-band has a
+    // CTA-empty fallback ("● Start a memo · ⌃⇧⌘ M") that doubles as
+    // the start-it action, so there's no separate Capture Modes row
+    // duplicating the affordance.
+
+    private var recentTwoPane: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Eyebrow("Recent")
+            RecentTwoPaneSection(
+                voiceSections: [
+                    RecentSection(
+                        id: "memos",
+                        eyebrow: "Memos",
+                        count: countLabel(recentMemos.count, "today"),
+                        libraryLabel: "ALL MEMOS",
+                        onLibrary: { NavigationState.shared.navigate(to: .recordings) },
+                        rows: recentMemos.prefix(3).map { obj in
+                            RecentRow(
+                                id: obj.id,
+                                glyph: "●",
+                                line: rowLine(for: obj),
+                                body: nil,
+                                meta: durationLabel(obj.duration),
+                                when: whenLabel(obj.createdAt),
+                                onTap: { NavigationState.shared.navigate(to: .recordings, params: ["recordingId": obj.id.uuidString]) }
+                            )
+                        },
+                        emptyCTA: RecentCTA(
+                            glyph: "●",
+                            label: "Start a memo",
+                            kbd: ["⌃", "⇧", "⌘", "M"],
+                            onTap: onStartRecording
+                        )
+                    ),
+                    RecentSection(
+                        id: "dictations",
+                        eyebrow: "Dictations",
+                        count: countLabel(recentDictations.count, "today"),
+                        libraryLabel: "ALL DICTATIONS",
+                        onLibrary: { NavigationState.shared.navigate(to: .dictations) },
+                        rows: recentDictations.prefix(3).map { obj in
+                            RecentRow(
+                                id: obj.id,
+                                glyph: "○",
+                                line: rowLine(for: obj),
+                                body: nil,
+                                meta: wordCountLabel(obj.text),
+                                when: whenLabel(obj.createdAt),
+                                onTap: { NavigationState.shared.navigate(to: .dictations, params: ["recordingId": obj.id.uuidString]) }
+                            )
+                        },
+                        emptyCTA: RecentCTA(
+                            glyph: "○",
+                            label: "Dictate",
+                            kbd: ["⌃", "⇧", "⌘", "D"],
+                            onTap: {}
+                        )
+                    ),
+                ],
+                contentSections: [
+                    RecentSection(
+                        id: "captures",
+                        eyebrow: "Captures",
+                        count: countLabel(recentTrayItems.count, "today"),
+                        libraryLabel: "ALL CAPTURES",
+                        onLibrary: { NavigationState.shared.navigate(to: .screenshots) },
+                        rows: recentTrayItems.prefix(3).map { item in
+                            RecentRow(
+                                id: item.id,
+                                glyph: "▢",
+                                line: trayLine(for: item),
+                                body: nil,
+                                meta: trayMeta(for: item),
+                                when: whenLabel(item.capturedAt),
+                                onTap: {}
+                            )
+                        },
+                        emptyCTA: RecentCTA(
+                            glyph: "▢",
+                            label: "Capture screen",
+                            kbd: ["⌃", "⇧", "⌘", "S"],
+                            onTap: {}
+                        )
+                    ),
+                    RecentSection(
+                        id: "notes",
+                        eyebrow: "Notes",
+                        count: countLabel(recentNotes.count, "this week"),
+                        libraryLabel: "ALL NOTES",
+                        onLibrary: { NavigationState.shared.navigate(to: .notes) },
+                        rows: recentNotes.prefix(3).map { obj in
+                            RecentRow(
+                                id: obj.id,
+                                glyph: "¶",
+                                line: noteTitle(for: obj),
+                                body: noteBodyExcerpt(for: obj),
+                                meta: "",
+                                when: whenLabel(obj.createdAt),
+                                onTap: { NavigationState.shared.navigate(to: .notes, params: ["recordingId": obj.id.uuidString]) }
+                            )
+                        },
+                        emptyCTA: RecentCTA(
+                            glyph: "¶",
+                            label: "Write a note",
+                            kbd: ["⌃", "⇧", "⌘", "N"],
+                            onTap: {}
+                        )
+                    ),
+                ]
+            )
+        }
+    }
+
+    // MARK: Recent data sources
+
+    private var recentMemos: [TalkieObject] {
+        recordingsVM.recordings
+            .filter { $0.type == .memo && $0.deletedAt == nil }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+    private var recentDictations: [TalkieObject] {
+        recordingsVM.recordings
+            .filter { $0.type == .dictation && $0.deletedAt == nil }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+    private var recentNotes: [TalkieObject] {
+        recordingsVM.recordings
+            .filter { $0.type == .note && $0.deletedAt == nil }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+    private var recentTrayItems: [TrayItem] {
+        TrayItem.allItems().sorted { $0.capturedAt > $1.capturedAt }
+    }
+
+    // MARK: Recent row helpers
+
+    private func rowLine(for obj: TalkieObject) -> String {
+        let text = (obj.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.isEmpty { return obj.title ?? "Untitled" }
+        return text
+    }
+    private func noteTitle(for obj: TalkieObject) -> String {
+        if let title = obj.title, !title.isEmpty { return title }
+        let text = (obj.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let firstLine = text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: true).first.map(String.init) ?? ""
+        return firstLine.isEmpty ? "Untitled note" : firstLine
+    }
+    private func noteBodyExcerpt(for obj: TalkieObject) -> String? {
+        let text = (obj.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let parts = text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: true)
+        guard parts.count > 1 else { return nil }
+        return String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    private func durationLabel(_ seconds: Double) -> String {
+        let total = max(0, Int(seconds))
+        return String(format: "%d:%02d", total / 60, total % 60)
+    }
+    private func wordCountLabel(_ text: String?) -> String {
+        let words = (text ?? "").split { $0.isWhitespace }.count
+        return "\(words) WORDS"
+    }
+    private func trayLine(for item: TrayItem) -> String {
+        if let preview = item.previewText, !preview.isEmpty { return preview }
+        if let context = item.contextLabel, !context.isEmpty { return context }
+        return item.modeIcon
+    }
+    private func trayMeta(for item: TrayItem) -> String {
+        if item.isText { return "TEXT" }
+        return "\(item.width)×\(item.height)"
+    }
+    private func whenLabel(_ date: Date) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(date) {
+            return date.formatted(date: .omitted, time: .shortened)
+        }
+        if cal.isDateInYesterday(date) { return "Yesterday" }
+        if let days = cal.dateComponents([.day], from: date, to: Date()).day, days < 7 {
+            return date.formatted(.dateTime.weekday(.abbreviated))
+        }
+        return date.formatted(.dateTime.month(.abbreviated).day())
+    }
+    private func countLabel(_ n: Int, _ suffix: String) -> String {
+        if n == 0 { return "none \(suffix)" }
+        return "\(n) \(suffix)"
     }
 
     // MARK: - Routines strip (Workflows · Console)

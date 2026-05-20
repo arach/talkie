@@ -126,6 +126,7 @@
 		3CBEBDA0E5DF221EE0CFFB72 /* NotchComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E15BAC232E8C3DB3A7A10309 /* NotchComposer.swift */; };
 		3D89EC2E4B25A0037B692ABF /* ScreenshotCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8884D4B5347C59E03279248 /* ScreenshotCaptureService.swift */; };
 		3E1DAA775DC367D8AB5EF36A /* CoreDataSyncGateway.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1046D8C24CCE29517631C266 /* CoreDataSyncGateway.swift */; };
+		40BC059387169E058DFE4F83 /* RecentTwoPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B5404AF48CBBD359B22D276 /* RecentTwoPane.swift */; };
 		414905D45E0EEBB7E5576687 /* RoutingMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81D70D944B76B52D29595E4F /* RoutingMode.swift */; };
 		41583C0915F4155ED47AF12D /* MemosViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B77DD31A8614224637F33F74 /* MemosViewModel.swift */; };
 		41FD313341F9D8B2DA47C3F6 /* WorkflowMigrationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 512D7F2FA056C79CFC358FE6 /* WorkflowMigrationService.swift */; };
@@ -804,6 +805,7 @@
 		890A7C8CEFE2B934F8D361D7 /* AIResultsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIResultsViews.swift; sourceTree = "<group>"; };
 		8AB0A81EE0443BF8C7DFD1E1 /* ServerSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerSettingsView.swift; sourceTree = "<group>"; };
 		8AEDF572189FD04145A6A9F5 /* ActionEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionEditorSheet.swift; sourceTree = "<group>"; };
+		8B5404AF48CBBD359B22D276 /* RecentTwoPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentTwoPane.swift; sourceTree = "<group>"; };
 		8BBD4953DE5769771084519A /* TOSegmentsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TOSegmentsSection.swift; sourceTree = "<group>"; };
 		8BE296D21341CAE84E30BDB5 /* MemoModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoModel.swift; sourceTree = "<group>"; };
 		8BEA405CD1A0CFE5AE81D9FD /* WorkflowWorld.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowWorld.swift; sourceTree = "<group>"; };
@@ -1240,6 +1242,7 @@
 				2521096E0BC62683EABC8C28 /* HomeTrendingWidget.swift */,
 				BE7472FE99F4E724E5679325 /* HomeWidgetProtocol.swift */,
 				7E0149979F95CDB33CE69D1D /* HomeWidgets.swift */,
+				8B5404AF48CBBD359B22D276 /* RecentTwoPane.swift */,
 				4F848CB165D409F9DE1643E4 /* SchemeTokens.swift */,
 				F73856ACA0F8904F9932B692 /* ScopeHomeView.swift */,
 				96DB04C77840B11707683ED0 /* SystemStatusHUD.swift */,
@@ -2550,6 +2553,7 @@
 				EBD4A1D4BD2A236B33DDCF19 /* QuickOpenService.swift in Sources */,
 				871EC1E845E8071556467FFC /* QuickOpenSettings.swift in Sources */,
 				D54B8A9CC18B7A08B29CC46C /* RadioButtonRow.swift in Sources */,
+				40BC059387169E058DFE4F83 /* RecentTwoPane.swift in Sources */,
 				2A820E3AE37B022C136E3167 /* Recording.swift in Sources */,
 				7F9CFE69CCA6C6F8FF813537 /* RecordingCompanionSurface.swift in Sources */,
 				9662442F2916D4480C663D35 /* RecordingController.swift in Sources */,
