@@ -29,7 +29,10 @@
     "check:package": "bun -e \"JSON.parse(await Bun.file('package.json').text()); console.log('package.json ok')\"",
     "test": "xcodebuild -workspace TalkieSuite.xcworkspace -scheme Talkie -configuration Debug -destination 'platform=macOS' test",
     "test:agent": "xcodebuild -workspace TalkieSuite.xcworkspace -scheme TalkieAgent -configuration Debug -destination 'platform=macOS' test",
-    "clean": "rm -rf build/macos"
+    "clean": "rm -rf build/macos",
+    "studio": "cd design/studio && bun run dev",
+    "studio:build": "cd design/studio && bun run build",
+    "studio:install": "cd design/studio && bun install"
   },
   "engines": {
     "bun": ">=1.3.0"
