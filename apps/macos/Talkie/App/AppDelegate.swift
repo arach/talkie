@@ -882,6 +882,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             exit(0)
         }
 
+        cliHandler.register(
+            "test-skill-file-format",
+            description: "Run parser/serializer tests for bundled .skill.md files"
+        ) { _ in
+            print("")
+            SkillFileFormatTests.runAll()
+            exit(0)
+        }
+
     }
 
     // MARK: - URL Handling

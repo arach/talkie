@@ -46,6 +46,8 @@ struct WorkflowContext {
 
     func resolve(_ template: String) -> String {
         var result = template
+        result = result.replacingOccurrences(of: "{{TRANSCRIPT_JSON}}", with: jsonStringLiteral(transcript))
+        result = result.replacingOccurrences(of: "{{TITLE_JSON}}", with: jsonStringLiteral(sanitizeForFilename(title)))
         result = result.replacingOccurrences(of: "{{TRANSCRIPT}}", with: transcript)
         result = result.replacingOccurrences(of: "{{TITLE}}", with: sanitizeForFilename(title))
         result = result.replacingOccurrences(of: "{{DATE}}", with: Self.dateFormatter.string(from: date))
@@ -53,20 +55,32 @@ struct WorkflowContext {
 
         // Replace output keys
         for (key, value) in outputs {
+            result = result.replacingOccurrences(of: "{{\(key)_JSON}}", with: jsonStringLiteral(value))
             result = result.replacingOccurrences(of: "{{\(key)}}", with: value)
         }
 
         // Handle PREVIOUS_OUTPUT - use the last output based on insertion order
         if let lastKey = outputOrder.last, let lastOutput = outputs[lastKey] {
+            result = result.replacingOccurrences(of: "{{PREVIOUS_OUTPUT_JSON}}", with: jsonStringLiteral(lastOutput))
             result = result.replacingOccurrences(of: "{{PREVIOUS_OUTPUT}}", with: lastOutput)
         }
 
         // Handle OUTPUT - same as PREVIOUS_OUTPUT for backward compatibility
         if let lastKey = outputOrder.last, let lastOutput = outputs[lastKey] {
+            result = result.replacingOccurrences(of: "{{OUTPUT_JSON}}", with: jsonStringLiteral(lastOutput))
             result = result.replacingOccurrences(of: "{{OUTPUT}}", with: lastOutput)
         }
 
         return result
+    }
+
+    /// Encode a string as a JSON string literal for webhook body templates.
+    private func jsonStringLiteral(_ input: String) -> String {
+        guard let data = try? JSONEncoder().encode(input),
+              let encoded = String(data: data, encoding: .utf8) else {
+            return "\"\""
+        }
+        return encoded
     }
 
     /// Sanitize a string to be safe for use in filenames
@@ -1140,7 +1154,7 @@ class WorkflowExecutor {
     // MARK: - Webhook Step Execution
     private func executeWebhookStep(_ config: WebhookStepConfig, context: WorkflowContext) async throws -> String {
         // Resolve URL (may contain credential placeholders)
-        var resolvedUrl = context.resolve(config.url)
+        var resolvedUrl = try resolveUserDefaultsPlaceholders(in: context.resolve(config.url))
 
         // Handle credential placeholder in URL (e.g., for Telegram bot token)
         if let credentialMatch = resolvedUrl.range(of: #"\{\{CREDENTIAL:([A-F0-9-]+)\}\}"#, options: .regularExpression) {
@@ -1161,7 +1175,7 @@ class WorkflowExecutor {
 
         // Add headers
         for (key, value) in config.headers {
-            request.setValue(context.resolve(value), forHTTPHeaderField: key)
+            request.setValue(try resolveUserDefaultsPlaceholders(in: context.resolve(value)), forHTTPHeaderField: key)
         }
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
@@ -1187,7 +1201,7 @@ class WorkflowExecutor {
 
         // Custom body template if provided
         if let template = config.bodyTemplate {
-            let resolved = context.resolve(template)
+            let resolved = try resolveUserDefaultsPlaceholders(in: context.resolve(template))
             if let data = resolved.data(using: .utf8),
                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                 body.merge(json) { _, new in new }
@@ -1205,6 +1219,40 @@ class WorkflowExecutor {
         }
 
         return String(data: data, encoding: .utf8) ?? ""
+    }
+
+    /// Resolve `{{USERDEFAULTS:KeyName}}` placeholders in skill-backed webhook configs.
+    /// This keeps starter `.skill.md` files bundle-safe while allowing Phase 1 secrets
+    /// to live in local defaults, e.g. `SkillsSlackWebhookURL`.
+    private func resolveUserDefaultsPlaceholders(in value: String) throws -> String {
+        let pattern = #"\{\{USERDEFAULTS:([A-Za-z0-9_.-]+)\}\}"#
+        let regex = try NSRegularExpression(pattern: pattern)
+        let nsValue = value as NSString
+        let matches = regex.matches(
+            in: value,
+            range: NSRange(location: 0, length: nsValue.length)
+        )
+
+        guard !matches.isEmpty else { return value }
+
+        var resolved = value
+        for match in matches.reversed() {
+            let placeholder = nsValue.substring(with: match.range(at: 0))
+            let key = nsValue.substring(with: match.range(at: 1))
+            let configuredValue = UserDefaults.standard
+                .string(forKey: key)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            guard let configuredValue, !configuredValue.isEmpty else {
+                throw WorkflowError.executionFailed(
+                    "Missing webhook URL. Set UserDefaults key '\(key)' before running this skill."
+                )
+            }
+
+            resolved = resolved.replacingOccurrences(of: placeholder, with: configuredValue)
+        }
+
+        return resolved
     }
 
     /// Apply authentication to a webhook request

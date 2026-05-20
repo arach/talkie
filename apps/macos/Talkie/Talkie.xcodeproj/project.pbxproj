@@ -57,6 +57,7 @@
 		169AB59BC4641ED01BF19EDA /* WorkflowDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6320567449625417C05E9521 /* WorkflowDefinition.swift */; };
 		171D9DADA39FE8860C4C772B /* WorkflowEditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ADF1981CBD0A5623B584FAF /* WorkflowEditorViewModel.swift */; };
 		173832AE4C1BC9810E43C059 /* RecordingOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39C3C6CDE470BD80318145F0 /* RecordingOverlay.swift */; };
+		1983717E71A4067AF9B8121B /* SkillFileFormatTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F7A88AF3698D96DF3002BCA /* SkillFileFormatTests.swift */; };
 		19ADDD55F0A4518DFAAFC9D7 /* CloudKitSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D64DBBEBBB07D9C047A7F626 /* CloudKitSyncManager.swift */; };
 		1A8F5D9F276CB44D5CFC58FF /* RevisionHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471E110F35559B71C11DE870 /* RevisionHistoryView.swift */; };
 		1CE0C38EF6DD14564DB091E2 /* ConsoleTabEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF527A524858B4E6AA7F5E26 /* ConsoleTabEditor.swift */; };
@@ -183,6 +184,7 @@
 		5CBBC212A591778A4B9E9EF4 /* SettingsStoryboardGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 747E93097A0C9385E2389936 /* SettingsStoryboardGenerator.swift */; };
 		5CC35CD8780D5A38BAEB70B4 /* ScopeWorkflowStepCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 303B4D4D4E0011096E5BD4C9 /* ScopeWorkflowStepCard.swift */; };
 		5D2167DDD5C88A2730AACCDC /* LiveModePitchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D68F7EFD60374ADEAD947E8 /* LiveModePitchView.swift */; };
+		58BF1D84ACCAF53969917ABC /* SkillFileFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EDF90D87F3E432B3BFFD5DE /* SkillFileFormat.swift */; };
 		5DB732D6B11894C37834F50D /* SmartAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6750768BD528CE7669474713 /* SmartAction.swift */; };
 		5ED5CB96D2ACD4788FE85612 /* MigrationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D338AEFAB1A498A74B32F595 /* MigrationManager.swift */; };
 		5F69E9294236AA4A916A79B0 /* ParakeetModelViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E2BC91C2122C795E52E3758 /* ParakeetModelViews.swift */; };
@@ -562,6 +564,7 @@
 		1C368F29870833A22EA1F5E0 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		1CA4D081810489C92BBDC5C2 /* LiquidGlassTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassTabs.swift; sourceTree = "<group>"; };
 		1E86CC06D6DBB0F19A12367D /* settings-03-quick-actions.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "settings-03-quick-actions.png"; sourceTree = "<group>"; };
+		1F7A88AF3698D96DF3002BCA /* SkillFileFormatTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/SkillFileFormatTests.swift; sourceTree = "<group>"; };
 		1F7FD04D4DF21D0FEAF9A237 /* CameraBubbleController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraBubbleController.swift; sourceTree = "<group>"; };
 		1FC0E8871AF3568BD0A6DAF1 /* ServiceSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceSetupView.swift; sourceTree = "<group>"; };
 		20D24FE1F81720CC4E6F9728 /* PendingActionsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingActionsManager.swift; sourceTree = "<group>"; };
@@ -656,6 +659,7 @@
 		4AB3F77AA2B23FD9AF76A698 /* WFKIT_USAGE_EXAMPLES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = WFKIT_USAGE_EXAMPLES.md; sourceTree = "<group>"; };
 		4DB876A29F7F55B18465450A /* WorkflowRunModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowRunModel.swift; sourceTree = "<group>"; };
 		4DE6D960ECC5B682EB15EE43 /* TranscriptVersionModel+CloudKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TranscriptVersionModel+CloudKit.swift"; sourceTree = "<group>"; };
+		4EDF90D87F3E432B3BFFD5DE /* SkillFileFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillFileFormat.swift; sourceTree = "<group>"; };
 		4E46A5885BA07F1A04FDD14B /* CaptureRadialPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureRadialPanel.swift; sourceTree = "<group>"; };
 		4E669BA8831BCB459CDFFDA7 /* AppManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppManager.swift; sourceTree = "<group>"; };
 		4F4992B45B1A31E2B8AF4B8A /* OverlayStylePreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayStylePreviews.swift; sourceTree = "<group>"; };
@@ -1556,6 +1560,8 @@
 				75EDCF1634C7AEDAAB6BCA80 /* ExecutionBackend.swift */,
 				7BC24D654BAC9F767187582F /* LocalSwiftBackend.swift */,
 				B0D7A667503549B6652DB0E5 /* SimpleWorkflowLoader.swift */,
+				4EDF90D87F3E432B3BFFD5DE /* SkillFileFormat.swift */,
+				1F7A88AF3698D96DF3002BCA /* SkillFileFormatTests.swift */,
 				93CA8FB3CB08FEF2F6B4A917 /* TalkieWorkflowConverter.swift */,
 				DCEE257B3F23FA688379E9D3 /* TalkieWorkflowSchema.swift */,
 				8C69CE9634E7DC4E79F02F7F /* VERCEL_MIGRATION_COMPLETE.md */,
@@ -2389,6 +2395,7 @@
 				3230DC53F69A3C9FE1ED51CE /* HotkeyRegistry.swift in Sources */,
 				AB23CC2060860E94499A1919 /* ImportPayloadConverter.swift in Sources */,
 				35C601B29558935A962E8AFF /* ImportPayloadConverterTests.swift in Sources */,
+				1983717E71A4067AF9B8121B /* SkillFileFormatTests.swift in Sources */,
 				89E601CFF5087F56E03CE0EF /* ImportedWorkflow.swift in Sources */,
 				AA75F17818D76889AA3C4371 /* IngestWatcher.swift in Sources */,
 				96A3BAF8C8B1398D60032DB2 /* InterstitialOnlyApp.swift in Sources */,
@@ -2674,6 +2681,7 @@
 				A19A82945CDCAD47AAA4B467 /* WorkflowControlPlaneClient.swift in Sources */,
 				71572642AB0E024BC1E6023C /* WorkflowControlPlaneService.swift in Sources */,
 				169AB59BC4641ED01BF19EDA /* WorkflowDefinition.swift in Sources */,
+				58BF1D84ACCAF53969917ABC /* SkillFileFormat.swift in Sources */,
 				171D9DADA39FE8860C4C772B /* WorkflowEditorViewModel.swift in Sources */,
 				CCF05568545775736E13D4A9 /* WorkflowEventModel.swift in Sources */,
 				4E8DA6F51463650780FAC5F3 /* WorkflowExecutor.swift in Sources */,

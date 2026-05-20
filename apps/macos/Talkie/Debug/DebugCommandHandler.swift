@@ -71,6 +71,9 @@ class DebugCommandHandler {
         case "test-workflow-import":
             testWorkflowImport()
 
+        case "test-skill-file-format":
+            testSkillFileFormat()
+
         case "help":
             printHelp()
             exit(0)
@@ -338,6 +341,12 @@ class DebugCommandHandler {
         exit(0)
     }
 
+    private func testSkillFileFormat() {
+        print("")
+        SkillFileFormatTests.runAll()
+        exit(0)
+    }
+
     private func printHelp() {
         print("""
         Talkie Debug Commands
@@ -389,6 +398,9 @@ class DebugCommandHandler {
           test-workflow-import
               Run ImportPayloadConverter tests to verify URL workflow
               import converts to core WorkflowDefinition correctly.
+
+          test-skill-file-format
+              Run parser/serializer tests for bundled .skill.md files.
 
           help
               Show this help message
