@@ -60,12 +60,12 @@ const MILESTONES: Milestone[] = [
     blurb:
       "Wire the orphan surfaces and round out the connections — small surgical edits, no new features.",
     items: [
-      { code: "W01", title: "Listen-anywhere", detail: "Action chip on CaptureDetail · VoiceMemoDetail · AskAI (post-response) → openReadAloud().", status: "next", size: "s", risk: "low" },
-      { code: "W02", title: "Sign in from Settings", detail: "SettingsNext CONNECT panel → 'Sign in with Apple' row when account empty.", status: "next", size: "s", risk: "low" },
-      { code: "W03", title: "Browse tray slot", detail: "ChromeOverlay tray → 'Browse' button (globe glyph) → openWebBrowser(). Tray grows to 4 slots.", status: "next", size: "s", risk: "low" },
-      { code: "W04", title: "Connection detail link", detail: "SettingsNext CONNECT panel → 'View connections detail ›' row → openConnectionCenter().", status: "next", size: "xs", risk: "low" },
-      { code: "W05", title: "Dictation History in Library", detail: "LibraryNextView → add 'Dictations' filter tab → openDictationHistory().", status: "next", size: "s", risk: "low" },
-      { code: "W06", title: "Retire Appearance", detail: "Delete AppearancePickerNext.swift + Surface enum case + router method + launch arg.", status: "next", size: "xs", risk: "low" },
+      { code: "W01", title: "Listen-anywhere", detail: "Action chip on CaptureDetail · VoiceMemoDetail · AskAI (post-response) → openReadAloud(source:). Declares ReadAloudSource payload on AppShellRouter; Codex wires player.bind consumption.", status: "shipped", size: "s" },
+      { code: "W02", title: "Sign in from Settings", detail: "SettingsNext CONNECT panel → conditional 'Sign in with Apple' row when account empty (replaces 'Sign out' when signed out).", status: "shipped", size: "s" },
+      { code: "W03", title: "Browse tray slot", detail: "ChromeOverlay tray grew to 4 slots: Camera · Browse · Mic FAB · Ask AI. Browse globe glyph → openWebBrowser().", status: "shipped", size: "s" },
+      { code: "W04", title: "Connection detail link", detail: "SettingsNext CONNECT panel → 'View connections detail ›' nav row → openConnectionCenter(). New navRow primitive for chevron-style navigation.", status: "shipped", size: "xs" },
+      { code: "W05", title: "Dictation History in Library", detail: "LibraryNextView Dictations tab → 'View full dictation history ›' link card → openDictationHistory().", status: "shipped", size: "s" },
+      { code: "W06", title: "Retire Appearance", detail: "Deleted AppearancePickerNext.swift + Surface.appearance + openAppearance() + --appearance launch arg. Home gear now routes only to Settings.", status: "shipped", size: "xs" },
       { code: "W07", title: "Architecture canvas v2", detail: "Studio /architecture upgrade to canvas-based UX journey map with embedded mini-views.", status: "in-flight", size: "m", owner: "codex-talkie-canvas" },
     ],
   },

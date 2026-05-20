@@ -11,14 +11,14 @@
 //  - "Details" card — Type / Words / Captured / Site (if bookmark) /
 //    Shared Via (if bookmark) / Source URL (if any) / Mac Sync row
 //    with synced badge or retry button + sync error.
-//  - Bottom CaptureActionTray with TTS playback, AI Commands sheet,
-//    Open in Compose.
-//  - Toolbar: Done (stops playback), Copy with checkmark feedback.
+//  - Bottom CaptureActionTray with Listen (routes to ReadAloud),
+//    AI Commands sheet, Open in Compose.
+//  - Toolbar: Done, Copy with checkmark feedback.
 //
 //  This port carries the visual shape and field set. Wires that
-//  belong to Codex (image loading via MemoAttachmentStore, real
-//  TTS via SpeechSynthesisService, AI commands sheet, Mac sync
-//  retry against BridgeManager) are placeholders here.
+//  belong to Codex (image loading via MemoAttachmentStore, AI
+//  commands sheet, Mac sync retry against BridgeManager) are
+//  placeholders here.
 //
 
 import SwiftUI
@@ -228,7 +228,6 @@ struct CaptureDetailNext: View {
     @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var store: CaptureDetailStore
     @State private var showCopied = false
-    @State private var isPlayingTTS = false
     @State private var aiCommandsCapture: Capture?
 
     init(captureID: String? = nil) {
@@ -266,10 +265,6 @@ struct CaptureDetailNext: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .capturesDidChange)) { _ in
             store.refresh()
-        }
-        .onDisappear {
-            SpeechSynthesisService.shared.stop()
-            isPlayingTTS = false
         }
     }
 
@@ -471,10 +466,13 @@ struct CaptureDetailNext: View {
 
     private var actionTray: some View {
         HStack(spacing: 8) {
-            trayChip(systemImage: isPlayingTTS ? "stop.circle" : "play.circle",
-                     label: isPlayingTTS ? "Stop" : "Listen") {
-                SpeechSynthesisService.shared.toggleReadout(store.capture.bodyText)
-                isPlayingTTS = SpeechSynthesisService.shared.isSpeaking
+            trayChip(systemImage: "play.circle", label: "Listen") {
+                AppShellRouter.shared.openReadAloud(source: ReadAloudSource(
+                    title: store.capture.siteName ?? "Capture",
+                    text: store.capture.bodyText,
+                    meta: "CAPTURE · \(store.capture.wordCount) WORDS",
+                    sourceURL: store.capture.sourceURL.flatMap(URL.init(string:))
+                ))
             }
             trayChip(systemImage: "sparkles", label: "AI") {
                 aiCommandsCapture = store.sourceCapture

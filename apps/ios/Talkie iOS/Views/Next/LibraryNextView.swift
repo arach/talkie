@@ -50,6 +50,13 @@ struct LibraryNextView: View {
                     )
                     .padding(.horizontal, 12)
 
+                    if activeTab == .dictations {
+                        FullHistoryLink {
+                            AppShellRouter.shared.openDictationHistory()
+                        }
+                        .padding(.horizontal, 12)
+                    }
+
                     SearchBar(placeholder: searchPlaceholder)
                         .padding(.horizontal, 12)
 
@@ -317,6 +324,44 @@ private struct EmptyTabState: View {
         case .dictations: return "Dictate from the keyboard or Compose"
         case .items:      return "Share links or scans into Talkie"
         }
+    }
+}
+
+// MARK: - Full history link (Dictations tab only)
+
+/// Bridges Library's in-place Dictations filter to the dedicated
+/// DictationHistoryNext surface — keyboard-dictation entries with
+/// pagination, swipe actions, and richer detail than the filtered
+/// memo list.
+private struct FullHistoryLink: View {
+    let action: () -> Void
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: "text.cursor")
+                    .font(.system(size: 12))
+                    .foregroundStyle(theme.colors.textTertiary)
+                Text("View full dictation history")
+                    .talkieType(.preview)
+                    .foregroundStyle(theme.colors.textPrimary)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(theme.colors.textTertiary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(theme.colors.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                  lineWidth: theme.currentTheme.chrome.hairlineWidth)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 

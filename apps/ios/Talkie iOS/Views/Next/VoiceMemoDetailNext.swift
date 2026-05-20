@@ -358,6 +358,14 @@ struct VoiceMemoDetailNext: View {
     private var actionBar: some View {
         HStack(spacing: 8) {
             actionChip(label: "Share", isPrimary: false) { /* TODO */ }
+            actionChip(label: "Listen", isPrimary: false) {
+                AppShellRouter.shared.openReadAloud(source: ReadAloudSource(
+                    title: store.memo.title,
+                    text: store.memo.transcript,
+                    meta: "MEMO · \(wordCount) WORDS · \(store.memo.durationLabel)",
+                    sourceURL: nil
+                ))
+            }
             actionChip(label: "Refine ›", isPrimary: true) { AppShellRouter.shared.openCompose(documentID: store.memo.id) }
         }
         .padding(.leading, 72)

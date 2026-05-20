@@ -4,8 +4,8 @@
 //
 //  Summoned chrome layer. Three corner pills (Done top-left,
 //  Settings top-right, Keyboard bottom-right) + a liquid-glass
-//  bottom tray (Camera · Mic FAB · Compose). Bottom-left is left
-//  empty — that's where the voice button lives.
+//  bottom tray (Camera · Browse · Mic FAB · Ask AI). Bottom-left
+//  is left empty — that's where the voice button lives.
 //
 //  Design ref: design/studio/app/complications/ (variant `full`).
 //
@@ -92,17 +92,26 @@ private struct CornerSlot: View {
     }
 }
 
-/// Bottom-center liquid-glass nav: Camera · Mic FAB · Compose.
+/// Bottom-center liquid-glass nav: Camera · Browse · Mic FAB · Ask AI.
+/// Camera + Browse group as capture-source inputs to the left of the
+/// FAB; Ask AI sits to the right as the intelligence affordance.
 private struct LiquidGlassTray: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        HStack(spacing: 18) {
+        HStack(spacing: 16) {
             TraySlot(
                 glyph: AnyView(Image(systemName: "camera").font(.system(size: 17, weight: .regular))),
                 label: "Camera"
             ) {
                 AppShellRouter.shared.openCameraCapture()
+            }
+
+            TraySlot(
+                glyph: AnyView(Image(systemName: "globe").font(.system(size: 16, weight: .regular))),
+                label: "Browse"
+            ) {
+                AppShellRouter.shared.openWebBrowser()
             }
 
             TrayFAB()

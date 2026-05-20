@@ -97,7 +97,6 @@ struct AppShellNext<Content: View>: View {
         case .home: return "home"
         case .compose(let d): return "compose:\(d)"
         case .library: return "library"
-        case .appearance: return "appearance"
         case .settings: return "settings"
         case .terminal: return "terminal"
         case .cameraCapture: return "camera"
@@ -128,8 +127,6 @@ struct AppShellNext<Content: View>: View {
             )
         case .library:
             LibraryNextView()
-        case .appearance:
-            AppearancePickerNext()
         case .settings:
             SettingsNext()
         case .captureDetail(let captureID):
@@ -177,7 +174,6 @@ final class AppShellRouter: ObservableObject {
         case home
         case compose(documentID: String)
         case library
-        case appearance
         case settings
         case captureDetail(captureID: String)
         case memoDetail(memoID: String)
@@ -200,6 +196,11 @@ final class AppShellRouter: ObservableObject {
 
     @Published var surface: Surface = .home
     @Published var activeComposeStore: ComposeStore?
+    /// Source payload set by callers of `openReadAloud(source:)` so the
+    /// ReadAloud surface can read foreign content (capture, memo,
+    /// askAI response) instead of its placeholder items. Codex wires
+    /// `ReadAloudPlayer.bind` to consume + clear this on appear.
+    @Published var pendingReadAloudSource: ReadAloudSource?
     @Published var transitionDirection: TransitionDirection = .forward
 
     private init() {
@@ -208,8 +209,6 @@ final class AppShellRouter: ObservableObject {
             openCompose(documentID: "mock")
         } else if args.contains("--library") {
             openLibrary()
-        } else if args.contains("--appearance") {
-            openAppearance()
         } else if args.contains("--settings") {
             openSettings()
         } else if args.contains("--capture") {
@@ -265,7 +264,6 @@ final class AppShellRouter: ObservableObject {
     }
 
     func openLibrary()              { push(.library) }
-    func openAppearance()           { push(.appearance) }
     func openSettings()             { push(.settings) }
     func openCaptureDetail(captureID: String) {
         push(.captureDetail(captureID: captureID))
@@ -284,12 +282,30 @@ final class AppShellRouter: ObservableObject {
     func openCameraCapture()        { push(.cameraCapture) }
     func openBridgeDetail()         { push(.bridgeDetail) }
     func openAskAI()                { push(.askAI) }
-    func openReadAloud()            { push(.readAloud) }
+    func openReadAloud(source: ReadAloudSource? = nil) {
+        pendingReadAloudSource = source
+        push(.readAloud)
+    }
 
     func submitVoiceCommand(_ transcript: String) {
         guard case .compose = surface else { return }
         activeComposeStore?.voiceCommandReceived(transcript)
     }
+}
+
+/// Payload routed into the ReadAloud surface from any "Listen"
+/// affordance. Lightweight by design — the player on the other side
+/// renders title/meta and feeds `text` to the speech service.
+struct ReadAloudSource: Equatable {
+    /// Display title shown in the NowReadingPanel.
+    let title: String
+    /// Full text spoken by the synthesizer.
+    let text: String
+    /// Optional channel-label eyebrow, e.g. "MEMO · 142 WORDS · 0:24".
+    let meta: String?
+    /// Original source URL when the content came from the web; the
+    /// player exposes "Open original" when present.
+    let sourceURL: URL?
 }
 
 /// Observable state for the shell chrome system. Owns the

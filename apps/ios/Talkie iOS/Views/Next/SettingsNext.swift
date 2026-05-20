@@ -299,8 +299,13 @@ struct SettingsNext: View {
                 title: "LINK HEALTH",
                 metrics: [("RTT", "—"), ("SENT", "—"), ("QUEUED", "—")]
             )
+            navRow("View connections detail") { AppShellRouter.shared.openConnectionCenter() }
             actionRow("Re-pair Mac", tone: .neutral) { Task { await bridgeManager.connect() } }
-            actionRow("Sign out", tone: .warn) { resetAuthState() }
+            if isNativelySignedIn {
+                actionRow("Sign out", tone: .warn) { resetAuthState() }
+            } else {
+                actionRow("Sign in with Apple", tone: .accent) { AppShellRouter.shared.openSignIn() }
+            }
         }
     }
 
@@ -382,6 +387,30 @@ struct SettingsNext: View {
     }
 
     private enum ActionTone { case neutral, accent, warn }
+
+    /// Navigation row — same 44pt chrome as actionRow but trails a
+    /// chevron instead of "RUN". Use for rows that push to another
+    /// surface (e.g. ConnectionCenter), not rows that fire an action.
+    private func navRow(_ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Text(label)
+                    .talkieType(.fieldLabel)
+                    .foregroundStyle(theme.colors.textPrimary)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(theme.colors.textTertiary)
+            }
+            .frame(height: 44)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(theme.currentTheme.chrome.edgeFaint)
+                    .frame(height: 1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
 
     private func actionRow(_ label: String, tone: ActionTone, action: (() -> Void)? = nil) -> some View {
         Button {
@@ -483,8 +512,12 @@ struct SettingsNext: View {
         return parts.isEmpty ? bridgeManager.errorMessage ?? bridgeManager.activeRouteDescription : parts.joined(separator: " · ")
     }
 
+    private var isNativelySignedIn: Bool {
+        UserDefaults.standard.bool(forKey: SignInStore.signedInDefaultsKey)
+    }
+
     private var nativeAccountValue: String {
-        UserDefaults.standard.bool(forKey: SignInStore.signedInDefaultsKey) ? "Signed in" : "Not signed in"
+        isNativelySignedIn ? "Signed in" : "Not signed in"
     }
 
     private var iosChannel: String {

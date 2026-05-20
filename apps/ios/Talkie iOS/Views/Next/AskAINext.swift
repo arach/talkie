@@ -519,6 +519,10 @@ private struct AskAITurnRow: View {
                     .foregroundStyle(theme.colors.textPrimary)
                     .lineSpacing(3)
                     .textSelection(.enabled)
+
+                if turn.speaker == .talkie {
+                    listenChip
+                }
             }
         }
         .padding(.horizontal, 16)
@@ -528,6 +532,36 @@ private struct AskAITurnRow: View {
                 .fill(theme.currentTheme.chrome.edgeFaint)
                 .frame(height: theme.currentTheme.chrome.hairlineWidth)
         }
+    }
+
+    private var listenChip: some View {
+        Button {
+            AppShellRouter.shared.openReadAloud(source: ReadAloudSource(
+                title: "Ask AI · \(turn.code)",
+                text: turn.body,
+                meta: "ASK AI · \(turn.model ?? turn.providerName ?? "TALKIE")",
+                sourceURL: nil
+            ))
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "play.circle")
+                    .font(.system(size: 11, weight: .medium))
+                Text("Listen")
+                    .talkieType(.chipLabel)
+            }
+            .foregroundStyle(theme.currentTheme.chrome.accent)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(
+                Capsule()
+                    .strokeBorder(
+                        theme.currentTheme.chrome.accent.opacity(0.6),
+                        lineWidth: theme.currentTheme.chrome.hairlineWidth
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 4)
     }
 
     private var metaText: String {
