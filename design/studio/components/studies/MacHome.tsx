@@ -722,41 +722,105 @@ function RecentRowView({ row, tint }: { row: RecentRow; tint: string }) {
 // visual treatment so they read as distinct surfaces, not three flat
 // lists.
 
+// "Did you know" row — full-width editorial section pulled from the
+// Learn screen's RecapCard vocabulary. Three cards per row: an
+// outline glyph + serif hook on top, body excerpt, hairline divider,
+// amber action with arrow. Reads as curated discovery — not
+// dashboard chrome — so the midsection actually rests.
+//
+// The previous Shortcuts/Trending widgets were informational tiles;
+// they didn't belong on the editorial midsection. Discovered through
+// the Settings shortcuts pane / search.
 function DiscoveryRow() {
   return (
-    <SectionBlock eyebrow="Discovery">
+    <SectionBlock eyebrow="Did you know">
       <div className="grid grid-cols-3 gap-4">
-        <LearnWidget />
-        <ShortcutsWidget />
-        <TrendingWidget />
+        {LEARN_HOOKS.map((hook, i) => (
+          <DidYouKnowCard key={i} hook={hook} />
+        ))}
       </div>
     </SectionBlock>
   );
 }
 
-// Learn widget — replaced the Today calendar. Surfaces a rotating
-// "did you know" hook from the Learn screen's RecapCard vocabulary:
-// eyebrow + serif hook + body + action. Reads as editorial discovery
-// (not a dashboard widget) so it lifts the midsection.
-function LearnWidget() {
-  const hook = LEARN_HOOKS[0];
+function DidYouKnowCard({
+  hook,
+}: {
+  hook: (typeof LEARN_HOOKS)[number];
+}) {
   return (
-    <WidgetCard title="Learn" eyebrow="Did you know">
-      <button className="group flex flex-col gap-2 text-left">
-        <div className="font-mono text-[8.5px] uppercase tracking-[0.22em]" style={{ color: "#9A6A22" }}>
-          · {hook.eyebrow}
-        </div>
-        <div className="font-display text-[15px] font-medium leading-snug tracking-tight text-studio-ink">
+    <button className="group flex h-full flex-col gap-3 rounded-md border border-studio-edge bg-white/40 px-5 py-5 text-left transition-colors hover:border-studio-ink/40">
+      <div className="flex items-start gap-3">
+        <DidYouKnowGlyph eyebrow={hook.eyebrow} />
+        <div className="flex-1 font-display text-[15px] font-medium leading-snug tracking-tight text-studio-ink">
           {hook.hook}
         </div>
-        <div className="text-[11px] leading-snug text-studio-ink-faint">
-          {hook.detail}
-        </div>
-        <div className="mt-auto pt-1.5 text-[9px] font-mono uppercase tracking-[0.22em] text-[#9A6A22] group-hover:text-[#7A521A]">
+      </div>
+      <div className="text-[11px] leading-relaxed text-studio-ink-faint line-clamp-2">
+        {hook.detail}
+      </div>
+      <div className="mt-auto pt-3 border-t border-studio-edge/60">
+        <div
+          className="text-[9px] font-mono uppercase tracking-[0.22em] group-hover:text-[#7A521A] transition-colors"
+          style={{ color: "#9A6A22" }}
+        >
           {hook.action} →
         </div>
-      </button>
-    </WidgetCard>
+      </div>
+    </button>
+  );
+}
+
+// Outline glyph tile — quiet brass square with a different icon per
+// hook. Mirrors the RecapGlyphShape pattern from ScopeLearnScreen.
+function DidYouKnowGlyph({ eyebrow }: { eyebrow: string }) {
+  const icon = (() => {
+    if (eyebrow.toLowerCase().includes("voice")) return <VoiceEditGlyph />;
+    if (eyebrow.toLowerCase().includes("smart")) return <SmartActionsGlyph />;
+    if (eyebrow.toLowerCase().includes("tray")) return <TrayGlyph />;
+    return <VoiceEditGlyph />;
+  })();
+  return (
+    <div
+      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[3px]"
+      style={{ background: "rgba(196,125,28,0.06)", border: "0.5px solid rgba(196,125,28,0.18)" }}
+    >
+      {icon}
+    </div>
+  );
+}
+
+function VoiceEditGlyph() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+      <g fill="none" stroke="#9A6A22" strokeWidth="0.85" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M 3 7 L 5 7 M 9 7 L 11 7" />
+        <path d="M 5 4 L 5 10 M 7 5 L 7 9 M 9 4 L 9 10" />
+      </g>
+    </svg>
+  );
+}
+
+function SmartActionsGlyph() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+      <g fill="none" stroke="#9A6A22" strokeWidth="0.85" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M 3 4.5 L 11 4.5 M 3 7 L 8 7 M 3 9.5 L 9 9.5" />
+        <path d="M 10 6.5 L 11.5 8 L 10 9.5" />
+      </g>
+    </svg>
+  );
+}
+
+function TrayGlyph() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+      <g fill="none" stroke="#9A6A22" strokeWidth="0.85" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3.5" width="8" height="5" rx="1" />
+        <path d="M 5 10.5 L 9 10.5" />
+        <circle cx="7" cy="6" r="0.8" fill="#9A6A22" />
+      </g>
+    </svg>
   );
 }
 

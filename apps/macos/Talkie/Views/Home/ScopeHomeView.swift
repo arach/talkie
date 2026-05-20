@@ -493,13 +493,32 @@ struct ScopeHomeView: View {
     // recurring-theme aggregator. Shortcuts is the only one mostly
     // real today (HotkeyManager registrations).
 
+    // "Did you know" row — editorial 3-card section pulled from the
+    // Learn screen's RecapCard vocabulary. Replaces the prior Discovery
+    // row (calendar/shortcuts/trending) which read as dashboard tiles
+    // rather than restful curated content.
     private var discoveryRow: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Eyebrow("Discovery")
-            HStack(spacing: 16) {
-                LearnWidget()
-                ShortcutsWidget()
-                TrendingWidget()
+            Eyebrow("Did you know")
+            HStack(alignment: .top, spacing: 16) {
+                DidYouKnowCard(
+                    glyph: .voiceEdit,
+                    hook: "Talk back to a memo.",
+                    detail: "Hit ⌃⇧⌘ E during playback to dictate an edit in place.",
+                    action: "Try it"
+                )
+                DidYouKnowCard(
+                    glyph: .smartActions,
+                    hook: "Fix grammar with a chip.",
+                    detail: "Compose has one-tap chips for grammar, concise, and tone.",
+                    action: "See compose"
+                )
+                DidYouKnowCard(
+                    glyph: .tray,
+                    hook: "Hyper+S, anywhere.",
+                    detail: "Screenshots drain into your next memo unless you pin them.",
+                    action: "How it works"
+                )
             }
         }
     }
@@ -1746,73 +1765,110 @@ private struct RoutinesPanel: View {
 
 /// Today — small 24h timeline with event dots. Reads as a day-at-a-
 /// glance map, not a list. Sample events for now.
-// Learn widget — replaced the Today calendar. Surfaces a rotating
-// "did you know" hook from the Learn screen's RecapCard vocabulary:
-// eyebrow + serif hook + body + action. Reads as editorial discovery
-// rather than a dashboard widget, lifting the midsection.
-private struct LearnWidget: View {
-    private struct Hook { let eyebrow: String; let hook: String; let detail: String; let action: String }
-    private let hooks: [Hook] = [
-        .init(
-            eyebrow: "Voice edit",
-            hook: "Talk back to a memo.",
-            detail: "Hit ⌃⇧⌘ E during playback to dictate an edit in place.",
-            action: "Try it"
-        ),
-        .init(
-            eyebrow: "Smart actions",
-            hook: "Fix grammar with a chip.",
-            detail: "Compose has one-tap chips for grammar, concise, and tone.",
-            action: "See compose"
-        ),
-        .init(
-            eyebrow: "Tray",
-            hook: "Hyper+S, anywhere.",
-            detail: "Screenshots drain into your next memo unless you pin them.",
-            action: "How it works"
-        ),
-    ]
+// "Did you know" card — full-width editorial card pulled from the
+// Learn screen's RecapCard vocabulary. Outline glyph + serif hook on
+// top, body excerpt, hairline divider, amber action with arrow.
+// Three per row in the Home midsection.
+private struct DidYouKnowCard: View {
+    enum Glyph { case voiceEdit, smartActions, tray }
+    let glyph: Glyph
+    let hook: String
+    let detail: String
+    let action: String
 
-    // Stable random pick per session — feels alive without flicker.
-    @State private var pickIndex: Int = 0
     @State private var isHovered: Bool = false
 
     var body: some View {
-        let hook = hooks[pickIndex % hooks.count]
-        DiscoveryWidgetCard(title: "Learn", eyebrow: "Did you know") {
-            Button(action: { NavigationState.shared.navigate(to: .liveDashboard) }) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("· " + hook.eyebrow.uppercased())
-                        .font(.system(size: 8.5, weight: .semibold, design: .monospaced))
-                        .tracking(2.4)
-                        .foregroundStyle(Color.hex("9A6A22"))
-                    Text(hook.hook)
+        Button(action: { NavigationState.shared.navigate(to: .liveDashboard) }) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
+                    glyphTile
+                    Text(hook)
                         .font(.system(size: 15, weight: .medium, design: .serif))
                         .tracking(-0.2)
                         .foregroundStyle(ScopeInk.primary)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
-                    Text(hook.detail)
-                        .font(.system(size: 11))
-                        .foregroundStyle(ScopeInk.faint)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                    Spacer(minLength: 4)
-                    HStack(spacing: 4) {
-                        Text(hook.action.uppercased())
-                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                            .tracking(2.2)
-                        Text("→").font(.system(size: 10))
-                    }
-                    .foregroundStyle(isHovered ? Color.hex("7A521A") : Color.hex("9A6A22"))
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                Text(detail)
+                    .font(.system(size: 11))
+                    .foregroundStyle(ScopeInk.faint)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .lineSpacing(2)
+                Spacer(minLength: 6)
+                Rectangle().fill(ScopeEdge.faint).frame(height: 0.5)
+                HStack(spacing: 4) {
+                    Text(action.uppercased())
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .tracking(2.4)
+                    Text("→").font(.system(size: 10))
+                }
+                .foregroundStyle(isHovered ? Color.hex("7A521A") : Color.hex("9A6A22"))
             }
-            .buttonStyle(.plain)
-            .onHover { isHovered = $0 }
-            .onAppear {
-                pickIndex = Int.random(in: 0..<hooks.count)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.white.opacity(0.40))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .stroke(isHovered ? ScopeInk.subtle : ScopeEdge.subtle, lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+    }
+
+    private var glyphTile: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(Color(red: 0.769, green: 0.490, blue: 0.110).opacity(0.06))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .stroke(Color(red: 0.769, green: 0.490, blue: 0.110).opacity(0.18), lineWidth: 0.5)
+                )
+            glyphIcon
+        }
+        .frame(width: 28, height: 28)
+    }
+
+    @ViewBuilder
+    private var glyphIcon: some View {
+        let brass = Color.hex("9A6A22")
+        switch glyph {
+        case .voiceEdit:
+            Path { p in
+                p.move(to: .init(x: 6, y: 14));   p.addLine(to: .init(x: 10, y: 14))
+                p.move(to: .init(x: 18, y: 14));  p.addLine(to: .init(x: 22, y: 14))
+                p.move(to: .init(x: 10, y: 8));   p.addLine(to: .init(x: 10, y: 20))
+                p.move(to: .init(x: 14, y: 10));  p.addLine(to: .init(x: 14, y: 18))
+                p.move(to: .init(x: 18, y: 8));   p.addLine(to: .init(x: 18, y: 20))
             }
+            .stroke(brass, style: StrokeStyle(lineWidth: 0.85, lineCap: .round, lineJoin: .round))
+            .frame(width: 28, height: 28)
+        case .smartActions:
+            Path { p in
+                p.move(to: .init(x: 6, y: 9));    p.addLine(to: .init(x: 22, y: 9))
+                p.move(to: .init(x: 6, y: 14));   p.addLine(to: .init(x: 16, y: 14))
+                p.move(to: .init(x: 6, y: 19));   p.addLine(to: .init(x: 18, y: 19))
+                p.move(to: .init(x: 20, y: 13));  p.addLine(to: .init(x: 23, y: 16)); p.addLine(to: .init(x: 20, y: 19))
+            }
+            .stroke(brass, style: StrokeStyle(lineWidth: 0.85, lineCap: .round, lineJoin: .round))
+            .frame(width: 28, height: 28)
+        case .tray:
+            ZStack {
+                Path { p in
+                    p.addRoundedRect(in: CGRect(x: 6, y: 7, width: 16, height: 10), cornerSize: CGSize(width: 2, height: 2))
+                    p.move(to: .init(x: 10, y: 21)); p.addLine(to: .init(x: 18, y: 21))
+                }
+                .stroke(brass, style: StrokeStyle(lineWidth: 0.85, lineCap: .round, lineJoin: .round))
+                Circle().fill(brass).frame(width: 2, height: 2).offset(x: 0, y: -2)
+            }
+            .frame(width: 28, height: 28)
         }
     }
 }
