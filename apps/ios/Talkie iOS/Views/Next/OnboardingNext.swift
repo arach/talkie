@@ -30,6 +30,7 @@ import SwiftUI
 
 struct OnboardingNext: View {
     @ObservedObject private var theme = ThemeManager.shared
+    @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @State private var currentPage: Int = 0
     @State private var iCloudStatus: CKAccountStatus = .couldNotDetermine
 
@@ -127,8 +128,8 @@ struct OnboardingNext: View {
     }
 
     private func complete() {
-        // Codex wires the @AppStorage hasSeenOnboarding flag (same
-        // key as the donor) so re-launch doesn't re-show this.
+        hasSeenOnboarding = true
+        UserDefaults.standard.set(true, forKey: "hasSeenOnboarding")
         AppShellRouter.shared.openHome()
     }
 
@@ -136,10 +137,20 @@ struct OnboardingNext: View {
         #if targetEnvironment(simulator)
         iCloudStatus = .couldNotDetermine
         #else
-        // Codex wires the real CKContainer accountStatus call
-        // against TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier.
-        iCloudStatus = .couldNotDetermine
+        CKContainer.default().accountStatus { status, _ in
+            Task { @MainActor in
+                iCloudStatus = status
+            }
+        }
         #endif
+    }
+
+    private func tryRecord() {
+        complete()
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(300))
+            RecordingSheetController.shared.isPresented = true
+        }
     }
 
     // MARK: - Welcome page
@@ -406,7 +417,7 @@ struct OnboardingNext: View {
             .padding(.horizontal, 4)
 
             // TAP TO TRY record affordance
-            Button(action: complete) {
+            Button(action: tryRecord) {
                 VStack(spacing: 6) {
                     ZStack {
                         Circle()

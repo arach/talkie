@@ -17,27 +17,186 @@
 //  - Privacy footer
 //
 
+import AuthenticationServices
+import CloudKit
+import Security
 import SwiftUI
 
 @MainActor
-final class SignInStore: ObservableObject {
+final class SignInStore: NSObject, ObservableObject {
     @Published var isSigningIn: Bool = false
     @Published var errorMessage: String?
     @Published var showInfo: Bool = false
     @Published var authSteps: [AuthStepDisplay] = []
 
+    static let signedInDefaultsKey = "nativeAppleSignInCompleted"
+
+    private var continuation: CheckedContinuation<ASAuthorizationAppleIDCredential, Error>?
+
     struct AuthStepDisplay: Identifiable {
         let id = UUID()
         let name: String
-        let detail: String?
-        let status: Status
+        var detail: String?
+        var status: Status
 
         enum Status { case pending, inProgress, completed, failed }
     }
 
-    // Codex wires this against the rebuild's native auth path
-    // (ASAuthorization / AuthenticationServices), NOT against
-    // AuthManager — the Clerk dependency is being removed.
+    func signInWithApple() {
+        guard !isSigningIn else { return }
+
+        isSigningIn = true
+        errorMessage = nil
+        authSteps = [
+            AuthStepDisplay(name: "Request credentials", detail: "Sign in with Apple", status: .inProgress),
+            AuthStepDisplay(name: "Validate", detail: "Verify Apple identity", status: .pending),
+            AuthStepDisplay(name: "Provision iCloud sync", detail: "Check CloudKit account", status: .pending)
+        ]
+
+        Task { @MainActor in
+            do {
+                let credential = try await requestAppleCredential()
+                updateStep(0, status: .completed)
+                updateStep(1, status: .inProgress)
+
+                try saveCredential(credential)
+                updateStep(1, status: .completed, detail: "Credential saved")
+                updateStep(2, status: .inProgress)
+
+                _ = try? await CKContainer.default().accountStatus()
+                UserDefaults.standard.set(true, forKey: Self.signedInDefaultsKey)
+                UserDefaults.standard.set(credential.user, forKey: "nativeAppleUserIdentifier")
+                updateStep(2, status: .completed, detail: "Ready for iCloud sync")
+
+                AppLogger.app.info("[Auth] Native Sign in with Apple complete")
+                AppShellRouter.shared.openHome()
+            } catch let error as ASAuthorizationError where error.code == .canceled {
+                authSteps = []
+            } catch {
+                markCurrentStepFailed()
+                errorMessage = error.localizedDescription
+                AppLogger.app.error("[Auth] Native Sign in with Apple failed: \(error)")
+            }
+
+            isSigningIn = false
+        }
+    }
+
+    private func requestAppleCredential() async throws -> ASAuthorizationAppleIDCredential {
+        try await withCheckedThrowingContinuation { continuation in
+            self.continuation = continuation
+
+            let request = ASAuthorizationAppleIDProvider().createRequest()
+            request.requestedScopes = [.fullName, .email]
+
+            let controller = ASAuthorizationController(authorizationRequests: [request])
+            controller.delegate = self
+            controller.presentationContextProvider = self
+            controller.performRequests()
+        }
+    }
+
+    private func updateStep(_ index: Int, status: AuthStepDisplay.Status, detail: String? = nil) {
+        guard authSteps.indices.contains(index) else { return }
+        authSteps[index].status = status
+        if let detail {
+            authSteps[index].detail = detail
+        }
+    }
+
+    private func markCurrentStepFailed() {
+        guard let index = authSteps.firstIndex(where: { $0.status == .inProgress }) else { return }
+        updateStep(index, status: .failed, detail: "Failed")
+    }
+
+    private func saveCredential(_ credential: ASAuthorizationAppleIDCredential) throws {
+        let payload = NativeAppleCredential(
+            userIdentifier: credential.user,
+            email: credential.email,
+            givenName: credential.fullName?.givenName,
+            familyName: credential.fullName?.familyName,
+            identityToken: credential.identityToken?.base64EncodedString(),
+            authorizationCode: credential.authorizationCode?.base64EncodedString(),
+            updatedAt: Date()
+        )
+
+        let data = try JSONEncoder().encode(payload)
+        let query: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: "to.talkie.native-apple-auth",
+            kSecAttrAccount: credential.user
+        ]
+
+        let updateStatus = SecItemUpdate(query as CFDictionary, [kSecValueData: data] as CFDictionary)
+        if updateStatus == errSecSuccess {
+            return
+        }
+
+        var attributes = query
+        attributes[kSecValueData] = data
+        attributes[kSecAttrAccessible] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+
+        SecItemDelete(query as CFDictionary)
+        let addStatus = SecItemAdd(attributes as CFDictionary, nil)
+        guard addStatus == errSecSuccess else {
+            throw NativeSignInError.keychainSaveFailed(addStatus)
+        }
+    }
+
+    private struct NativeAppleCredential: Codable {
+        let userIdentifier: String
+        let email: String?
+        let givenName: String?
+        let familyName: String?
+        let identityToken: String?
+        let authorizationCode: String?
+        let updatedAt: Date
+    }
+
+    private enum NativeSignInError: LocalizedError {
+        case missingCredential
+        case keychainSaveFailed(OSStatus)
+
+        var errorDescription: String? {
+            switch self {
+            case .missingCredential:
+                return "Apple did not return a usable credential."
+            case .keychainSaveFailed(let status):
+                return "Could not save Apple credential (status \(status))."
+            }
+        }
+    }
+}
+
+extension SignInStore: ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    nonisolated func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        Task { @MainActor in
+            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
+                continuation?.resume(throwing: NativeSignInError.missingCredential)
+                continuation = nil
+                return
+            }
+
+            continuation?.resume(returning: credential)
+            continuation = nil
+        }
+    }
+
+    nonisolated func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        Task { @MainActor in
+            continuation?.resume(throwing: error)
+            continuation = nil
+        }
+    }
+
+    nonisolated func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        MainActor.assumeIsolated {
+            UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap(\.windows)
+                .first { $0.isKeyWindow } ?? ASPresentationAnchor()
+        }
+    }
 }
 
 struct SignInNext: View {
@@ -269,12 +428,7 @@ struct SignInNext: View {
     // MARK: - Apple button (single provider, matches donor)
 
     private var appleButton: some View {
-        Button(action: {
-            // TODO M3+ wire: direct Sign in with Apple via
-            // ASAuthorization (AuthenticationServices framework).
-            // The rebuild intentionally avoids Clerk — no AuthManager
-            // call here.
-        }) {
+        Button(action: store.signInWithApple) {
             HStack(spacing: 10) {
                 if store.isSigningIn {
                     ProgressView()

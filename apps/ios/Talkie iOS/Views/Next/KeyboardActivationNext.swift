@@ -28,29 +28,106 @@
 //
 
 import SwiftUI
+import TalkieMobileKit
 
 @MainActor
 final class KeyboardActivationStore: ObservableObject {
-    @Published var phase: Phase = .ready
-    @Published var keyboardModeEnabled: Bool = true
+    @Published var phase: Phase = .idle
+    @Published var keyboardModeEnabled: Bool = false
     @Published var recordingDuration: TimeInterval = 0
     @Published var lastTranscript: String?
     @Published var errorMessage: String?
     @Published var returnInfoDismissed: Bool = false
+
+    private let headlessService = HeadlessDictationService.shared
+    private let sharedStore = DictationSharedStore.shared
+    private let bridge = KeyboardBridge.shared
+    private var checker = DictationReadinessChecker()
+    private var recordingStartTime: Date?
+    private var screenshotPhaseOverride = false
 
     enum Phase: String {
         case idle, arming, ready, recording, stopping, transcribing, done, error
     }
 
     init() {
-        // Codex wires phase polling against DictationSharedState.shared.
-        // Paint uses .ready by default; --kbdPhase arg switches.
         let args = ProcessInfo.processInfo.arguments
         if let i = args.firstIndex(of: "--kbdPhase"), i + 1 < args.count {
             self.phase = Phase(rawValue: args[i + 1]) ?? .ready
+            self.keyboardModeEnabled = true
+            self.screenshotPhaseOverride = true
+            // Seed mock transcript so the .done state has content for screenshot/UI test modes.
+            self.lastTranscript = "moving the meeting to 4pm if that works for everyone — let me know"
+        } else {
+            refreshFromLiveState()
         }
-        // Seed mock transcript so the .done state has content.
-        self.lastTranscript = "moving the meeting to 4pm if that works for everyone — let me know"
+    }
+
+    func onAppear() {
+        refreshFromLiveState()
+        checker.evaluate()
+    }
+
+    func tick() {
+        guard !screenshotPhaseOverride else { return }
+        refreshFromLiveState()
+        checker.evaluate()
+    }
+
+    func startDictation() {
+        headlessService.handleDictationRequest()
+        refreshFromLiveState()
+    }
+
+    func stopDictation() {
+        if let sessionId = sharedStore.activeSessionId {
+            _ = sharedStore.keyboardRequestStop(sessionId: sessionId)
+        }
+        bridge.requestStopRecording()
+        refreshFromLiveState()
+    }
+
+    func performRecovery(_ action: RecoveryAction) {
+        checker.perform(action)
+        refreshFromLiveState()
+    }
+
+    private func refreshFromLiveState() {
+        let sharedPhase = sharedStore.phase
+        let nextPhase = Phase(rawValue: sharedPhase.rawValue) ?? .idle
+
+        if phase != nextPhase {
+            handleTransition(to: nextPhase)
+        }
+
+        phase = nextPhase
+        keyboardModeEnabled = headlessService.isActive
+        errorMessage = sharedStore.lastError?.message
+
+        if let text = sharedStore.lastResult?.text, !text.isEmpty {
+            lastTranscript = text
+        }
+
+        updateRecordingDuration(for: nextPhase)
+    }
+
+    private func handleTransition(to newPhase: Phase) {
+        if newPhase == .recording {
+            let phaseStart = sharedStore.phaseUpdatedAt
+            recordingStartTime = phaseStart > 0 ? Date(timeIntervalSince1970: phaseStart) : Date()
+        } else if newPhase != .recording {
+            recordingStartTime = nil
+        }
+    }
+
+    private func updateRecordingDuration(for currentPhase: Phase) {
+        if currentPhase == .recording,
+           let recordingStartTime,
+           headlessService.isRecording || bridge.isRecordingInProgress() {
+            recordingDuration = Date().timeIntervalSince(recordingStartTime)
+        } else if currentPhase != .recording {
+            recordingDuration = 0
+        }
     }
 }
 
@@ -83,6 +160,10 @@ struct KeyboardActivationNext: View {
                     .padding(.horizontal, 16)
                     .padding(.bottom, 16)
             }
+        }
+        .onAppear { store.onAppear() }
+        .onReceive(Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()) { _ in
+            store.tick()
         }
     }
 
@@ -245,7 +326,7 @@ struct KeyboardActivationNext: View {
                     .foregroundStyle(theme.colors.textSecondary)
             }
 
-            Button(action: { /* TODO M3+: headlessService.handleDictationRequest() */ }) {
+            Button(action: store.startDictation) {
                 HStack(spacing: 6) {
                     Image(systemName: "mic.fill")
                         .font(.system(size: 11, weight: .semibold))
@@ -278,7 +359,7 @@ struct KeyboardActivationNext: View {
                     .monospacedDigit()
             }
 
-            Button(action: { /* TODO M3+: stop dictation */ }) {
+            Button(action: store.stopDictation) {
                 HStack(spacing: 6) {
                     Image(systemName: "stop.fill")
                         .font(.system(size: 11, weight: .semibold))
@@ -334,12 +415,10 @@ struct KeyboardActivationNext: View {
 
             HStack(spacing: 6) {
                 techButton("Settings", icon: "gear") {
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        UIApplication.shared.open(url)
-                    }
+                    store.performRecovery(.openSettings)
                 }
                 techButton("Retry", icon: "arrow.clockwise") {
-                    // TODO M3+: checker.perform(.retryConnection)
+                    store.performRecovery(.retryConnection)
                 }
             }
         }
@@ -442,7 +521,8 @@ struct KeyboardActivationNext: View {
         UIPasteboard.general.string = text
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         withAnimation(.easeInOut(duration: 0.2)) { copiedToClipboard = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1_200))
             withAnimation(.easeInOut(duration: 0.2)) { copiedToClipboard = false }
         }
     }
