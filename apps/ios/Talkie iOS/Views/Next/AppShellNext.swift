@@ -103,6 +103,7 @@ struct AppShellNext<Content: View>: View {
         case .cameraCapture: return "camera"
         case .bridgeDetail: return "bridgeDetail"
         case .askAI: return "askAI"
+        case .readAloud: return "readAloud"
         case .captureDetail(let c): return "capture:\(c)"
         case .memoDetail(let m): return "memo:\(m)"
         case .dictationHistory: return "dictations"
@@ -157,6 +158,8 @@ struct AppShellNext<Content: View>: View {
             BridgeDetailNext()
         case .askAI:
             AskAINext()
+        case .readAloud:
+            ReadAloudNext()
         }
     }
 }
@@ -191,6 +194,8 @@ final class AppShellRouter: ObservableObject {
         case cameraCapture
         case bridgeDetail
         case askAI
+        // Phase-2 — TTS playback / read-aloud surface.
+        case readAloud
     }
 
     @Published var surface: Surface = .home
@@ -233,6 +238,8 @@ final class AppShellRouter: ObservableObject {
             openBridgeDetail()
         } else if args.contains("--askai") {
             openAskAI()
+        } else if args.contains("--readaloud") {
+            openReadAloud()
         }
     }
 
@@ -277,6 +284,7 @@ final class AppShellRouter: ObservableObject {
     func openCameraCapture()        { push(.cameraCapture) }
     func openBridgeDetail()         { push(.bridgeDetail) }
     func openAskAI()                { push(.askAI) }
+    func openReadAloud()            { push(.readAloud) }
 
     func submitVoiceCommand(_ transcript: String) {
         guard case .compose = surface else { return }
