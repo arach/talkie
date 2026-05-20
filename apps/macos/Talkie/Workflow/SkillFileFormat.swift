@@ -527,11 +527,19 @@ private extension SkillFileFormat {
             type: .saveFile,
             config: .saveFile(SaveFileStepConfig(
                 filename: fieldMap["filename"] ?? "{{DATE}}-{{TITLE}}.md",
-                directory: nil,
+                directory: fieldMap["directory"] ?? defaultLibraryNotesDirectory,
                 content: "{{PREVIOUS_OUTPUT}}"
             )),
             outputKey: "library_note"
         )
+    }
+
+    static var defaultLibraryNotesDirectory: String {
+        URL.applicationSupportDirectory
+            .appending(path: "Talkie", directoryHint: .isDirectory)
+            .appending(path: "Library", directoryHint: .isDirectory)
+            .appending(path: "notes", directoryHint: .isDirectory)
+            .path
     }
 
     static func fallbackLLMStep(action: String, fields: [BodyField]) -> WorkflowStep {

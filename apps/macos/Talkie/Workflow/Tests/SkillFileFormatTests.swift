@@ -14,6 +14,7 @@ enum SkillFileFormatTests {
         testFrontmatterOnlyParsesWithEmptySteps()
         testBodyOnlyThrows()
         testBundledDailyStandupStarterParses()
+        testBundledStarterRoundTrips()
         print("✅ SkillFileFormat tests completed")
     }
 
@@ -120,6 +121,38 @@ enum SkillFileFormatTests {
         } catch {
             fail("Bundled Daily Standup parse threw: \(error)")
         }
+    }
+
+    private static func testBundledStarterRoundTrips() {
+        let starterNames = [
+            "daily-standup",
+            "log-bug",
+            "capture-thought"
+        ]
+
+        for starterName in starterNames {
+            do {
+                guard let url = Bundle.main.url(
+                    forResource: starterName,
+                    withExtension: "skill.md",
+                    subdirectory: "Resources/Starters"
+                ) else {
+                    fail("Expected bundled Resources/Starters/\(starterName).skill.md")
+                    continue
+                }
+
+                let markdown = try String(contentsOf: url, encoding: .utf8)
+                let definition = try parseSkillFile(markdown)
+                let serialized = serializeSkill(definition)
+                let reparsed = try parseSkillFile(serialized)
+                let reserialized = serializeSkill(reparsed)
+                expect(serialized == reserialized, "Expected bundled \(starterName) serialize(parse(x)) to be stable")
+            } catch {
+                fail("Bundled \(starterName) round-trip threw: \(error)")
+            }
+        }
+
+        print("  ✓ bundled starters round-trip")
     }
 
     private static func expect(_ condition: @autoclosure () -> Bool, _ message: String) {
