@@ -1,39 +1,61 @@
 "use client";
 
 /**
- * Mac Compose — full window composition.
+ * Mac Compose — full window composition (V2).
  *
  * Shipping Swift: `apps/macos/Talkie/Views/Drafts/ScopeDraftsScreen.swift`.
  * Internally called "Drafts" but surfaced as "Compose" in the sidebar.
- * It is **not** a list — it's a single focused editor with:
  *
- *   1. Signal monitor — 78pt dark instrument panel up top, with a
- *      4-stage pipeline (CAPTURE → TRANSCRIPT → REVISE → SHIP).
- *   2. Editor bay — chrome bar (CH-IN label + model picker + word count
- *      + revising flag) over a cream textarea with a floating
- *      dictation pill at the bottom-center.
- *   3. Action bar — three smart-action chips, plus COMMAND voice
- *      prompt, plus SAVE / COPY on the right.
- *   4. Action rail — scrollable 4-col grid of all smart actions below
- *      the fold (Compose's "kitchen sink" of operations).
- *   5. Ownership strip — P1 (input device) → P2 (model) → P3 (output).
+ * V1 had a dark gunmetal SignalMonitor (`#0E1518` panel, teal `#5FE3C9`
+ * pipeline pins, instrument-bay chrome). That was the same instrument-
+ * cosplay direction the recording state's V1 wore — it doesn't speak
+ * Scope's cream paper editorial language. V2 recasts the whole surface:
  *
- * Swift has no `GeometryReader` here, so the layout is whatever flex +
- * fixed paddings produce. Stamping at 820 surfaces the points where it
- * runs out of room: pipeline pin gaps collapse, the action chip row
- * truncates, the action grid drops from 4 columns to 2.
+ *   A. Signal monitor → typeset header on cream. Pipeline becomes a
+ *      quiet typeset row (filled / half / empty discs with mono labels),
+ *      not a phosphor readout.
+ *   B. Two-pill conflict resolved. The chrome bar's TALKIE pill is the
+ *      only recording anchor; the editor's "Dictate" pill is gone.
+ *   C. Editor bay → page. Hairlines top/bottom, brass marginal rule on
+ *      the left, no card chrome, no graticule underlay. Writing on
+ *      paper, not into a textarea widget.
+ *   D. Action grid → typeset list. Two-column editorial list, each row
+ *      label + hint + amber APPLY caret; whole row lifts on hover.
+ *   E. Ownership strip → byline. Single italic Newsreader sentence:
+ *      "Recorded on MacBook Pro via Parakeet v3, polished with Claude
+ *      Sonnet 4.6, filed to Library."
  */
 
 import React from "react";
 
+// ─── Tokens ──────────────────────────────────────────────────────────
+
+const CREAM       = "#FBFBFA";
+const PAPER       = "#F4F1EA";
+const INK         = "#2A2620";
+const INK_FAINT   = "rgba(42,38,32,0.55)";
+const INK_FAINTER = "rgba(42,38,32,0.32)";
+const INK_RULE    = "rgba(42,38,32,0.18)";
+const INK_RULE_S  = "rgba(42,38,32,0.10)";
+const AMBER       = "#C47D1C";
+const BRASS       = "#9A6A22";
+const EDGE        = "#E0DCD3";
+
 // ─── Stub content ────────────────────────────────────────────────────
 
-const PIPELINE = [
-  { key: "capture",    label: "Capture",    short: "S1", active: true,  done: true  },
-  { key: "transcript", label: "Transcript", short: "S2", active: true,  done: true  },
-  { key: "revise",     label: "Revise",     short: "S3", active: true,  done: false },
-  { key: "ship",       label: "Ship",       short: "S4", active: false, done: false },
-] as const;
+type Stage = {
+  key: string;
+  label: string;
+  short: string;
+  state: "done" | "active" | "pending";
+};
+
+const PIPELINE: Stage[] = [
+  { key: "capture",    label: "Capture",    short: "S1", state: "done"    },
+  { key: "transcript", label: "Transcript", short: "S2", state: "done"    },
+  { key: "revise",     label: "Revise",     short: "S3", state: "active"  },
+  { key: "ship",       label: "Ship",       short: "S4", state: "pending" },
+];
 
 const SMART_ACTIONS = [
   { key: "refine",    label: "Refine",      hint: "tighten, clarify, keep voice" },
@@ -58,302 +80,296 @@ export function MacCompose({ width = 1180 }: { width?: number } = {}) {
   const padX = compact ? 22 : width >= 1300 ? 40 : 32;
 
   return (
-    <div style={{ width, background: "#FBFBFA" }} className="flex flex-col">
-      <SignalMonitor padX={padX} compact={compact} />
-      <div style={{ paddingLeft: padX, paddingRight: padX, paddingTop: 18, paddingBottom: 18 }}>
-        <EditorBay compact={compact} />
+    <div style={{ width, background: CREAM }} className="flex flex-col">
+      <SignalHeader padX={padX} compact={compact} />
+      <div style={{ paddingLeft: padX, paddingRight: padX, paddingTop: 24, paddingBottom: 24 }}>
+        <EditorPage compact={compact} />
         <ActionBar compact={compact} />
         <div className="h-9" />
-        <ActionGrid compact={compact} />
+        <ActionList compact={compact} />
         <div className="h-7" />
-        <OwnershipStrip />
+        <OwnershipByline />
       </div>
     </div>
   );
 }
 
-// ─── Signal monitor (top dark panel) ─────────────────────────────────
+// ─── A. Signal header (typeset, cream paper) ─────────────────────────
 
-function SignalMonitor({ padX, compact }: { padX: number; compact: boolean }) {
+function SignalHeader({ padX, compact }: { padX: number; compact: boolean }) {
   return (
     <div
       style={{
-        background: "#0E1518",
-        borderBottom: "1px solid #1A2326",
         paddingLeft: padX,
         paddingRight: padX,
+        paddingTop: 18,
+        paddingBottom: 18,
+        background: CREAM,
       }}
     >
-      {/* Header row */}
-      <div className="flex items-center gap-3 pt-3">
-        <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: "#5FE3C9", boxShadow: "0 0 6px #5FE3C988" }} />
-        <span className="font-mono text-[9px] uppercase tracking-[0.26em]" style={{ color: "#5FE3C9" }}>
-          · SIGNAL · TALKIE.COMPOSE
+      {/* Top row — eyebrow + metadata */}
+      <div className="flex items-baseline gap-3">
+        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.32em]" style={{ color: INK_FAINT }}>
+          · COMPOSE · D-0024 ·
         </span>
-
         {!compact && (
-          <span className="font-mono text-[9px] uppercase tracking-[0.22em]" style={{ color: "#5FE3C988" }}>
-            · D-0024 · open since 9:31 AM
+          <span className="font-display italic" style={{ color: INK_FAINT, fontSize: 13 }}>
+            open since 9:31 AM · 6:14 dictation
           </span>
         )}
 
-        <div className="ml-auto flex items-center gap-3 font-mono text-[9px] uppercase tracking-[0.22em]" style={{ color: "#5FE3C988" }}>
-          <span style={{ color: "#5FE3C9" }}>✦ CLAUDE SONNET 4.6</span>
-          <span className="opacity-50">|</span>
-          <span>412 WORDS · 6:14 DICT</span>
+        <div className="ml-auto flex items-baseline gap-3">
+          <button
+            className="flex items-baseline gap-1.5 rounded-[2px] px-2 py-0.5 hover:bg-[rgba(196,125,28,0.05)]"
+            style={{ border: `0.5px solid ${EDGE}` }}
+          >
+            <span style={{ color: BRASS, fontSize: 10 }}>✦</span>
+            <span className="font-mono text-[10px] font-medium" style={{ color: INK }}>
+              Claude Sonnet 4.6
+            </span>
+            <span className="font-mono text-[9px]" style={{ color: INK_FAINTER }}>
+              ▾
+            </span>
+          </button>
+          <span className="font-mono text-[10px] uppercase tracking-[0.22em] tabular-nums" style={{ color: INK_FAINT }}>
+            412 words
+          </span>
         </div>
       </div>
 
+      {/* Top hairline */}
+      <div className="mt-3.5" style={{ height: 0.5, background: INK_RULE }} />
+
       {/* Pipeline row */}
-      <div className="flex items-center gap-3 pt-3 pb-3.5">
+      <div className="mt-4 flex items-center gap-3">
         {PIPELINE.map((stage, i) => (
           <React.Fragment key={stage.key}>
-            <PipelinePin stage={stage} compact={compact} />
-            {i < PIPELINE.length - 1 && <PipelineConnector active={!!PIPELINE[i + 1].active} compact={compact} />}
+            <PipelineStage stage={stage} compact={compact} />
+            {i < PIPELINE.length - 1 && (
+              <PipelineRule done={PIPELINE[i + 1].state !== "pending"} compact={compact} />
+            )}
           </React.Fragment>
         ))}
-        <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.22em]" style={{ color: "#5FE3C988" }}>
-          ⌃⇧⌘ R · revise
+
+        <span
+          className="ml-auto font-mono text-[9px] uppercase tracking-[0.22em]"
+          style={{ color: INK_FAINTER }}
+        >
+          ⌃⇧⌘R · revise
         </span>
       </div>
     </div>
   );
 }
 
-function PipelinePin({
-  stage,
-  compact,
-}: {
-  stage: (typeof PIPELINE)[number];
-  compact: boolean;
-}) {
-  const amber = "#E89A3C";
-  const teal = "#5FE3C9";
-  const fillColor = stage.done ? teal : stage.active ? amber : "#3A4248";
-  const labelColor = stage.done ? `${teal}` : stage.active ? `${amber}` : "#5A6066";
+function PipelineStage({ stage, compact }: { stage: Stage; compact: boolean }) {
+  const labelColor =
+    stage.state === "done"
+      ? INK
+      : stage.state === "active"
+      ? AMBER
+      : INK_FAINTER;
+
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-2">
+      <StageDisc state={stage.state} />
       <span
-        className="font-mono text-[8px] uppercase tracking-[0.22em]"
-        style={{ color: labelColor }}
+        className="font-mono text-[10px] uppercase tracking-[0.22em]"
+        style={{ color: labelColor, fontWeight: stage.state === "active" ? 600 : 400 }}
       >
-        {stage.short}
+        {compact ? stage.short : stage.label}
       </span>
-      <span
-        aria-hidden
-        className="h-2 w-2 rounded-full"
-        style={{
-          background: fillColor,
-          boxShadow: stage.active ? `0 0 8px ${fillColor}99` : "none",
-        }}
-      />
-      {!compact && (
-        <span
-          className="font-mono text-[9px] uppercase tracking-[0.22em]"
-          style={{ color: labelColor }}
-        >
-          {stage.label.toUpperCase()}
-        </span>
-      )}
     </div>
   );
 }
 
-function PipelineConnector({ active, compact }: { active: boolean; compact: boolean }) {
-  const w = compact ? 28 : 56;
+function StageDisc({ state }: { state: Stage["state"] }) {
+  const size = 9;
+  if (state === "done") {
+    return (
+      <span
+        aria-hidden
+        className="inline-block rounded-full"
+        style={{ width: size, height: size, background: AMBER }}
+      />
+    );
+  }
+  if (state === "active") {
+    // Ring + half-fill: outline ring with amber, inner half via clip-path
+    return (
+      <svg width={size} height={size} viewBox="0 0 9 9" aria-hidden>
+        <circle cx="4.5" cy="4.5" r="3.6" fill="none" stroke={AMBER} strokeWidth="1.2" />
+        <path d="M 4.5 0.9 A 3.6 3.6 0 0 1 4.5 8.1 Z" fill={AMBER} />
+      </svg>
+    );
+  }
   return (
     <span
       aria-hidden
-      className="h-px"
+      className="inline-block rounded-full"
       style={{
-        width: w,
-        background: active ? "#E89A3C66" : "#3A4248",
+        width: size,
+        height: size,
+        border: `1px solid ${INK_FAINTER}`,
+        background: "transparent",
       }}
     />
   );
 }
 
-// ─── Editor bay ──────────────────────────────────────────────────────
-
-function EditorBay({ compact }: { compact: boolean }) {
+function PipelineRule({ done, compact }: { done: boolean; compact: boolean }) {
+  const w = compact ? 22 : 48;
   return (
-    <div
-      className="overflow-hidden rounded-md"
+    <span
+      aria-hidden
       style={{
-        background: "#FDFAF1",
-        border: "0.5px solid #E0DCD3",
-        boxShadow: "0 1px 0 rgba(255,255,255,0.5) inset, 0 1px 2px rgba(0,0,0,0.04)",
+        width: w,
+        height: 0.5,
+        background: done ? AMBER : INK_FAINTER,
+        opacity: done ? 0.5 : 0.5,
       }}
-    >
-      <EditorChromeBar compact={compact} />
-      <EditorSurface compact={compact} />
+    />
+  );
+}
+
+// ─── C. Editor page (hairlines + marginal rule, no card chrome) ─────
+
+function EditorPage({ compact }: { compact: boolean }) {
+  return (
+    <div>
+      {/* Editor chrome row — sits ABOVE the page rules, no card frame */}
+      <EditorChromeRow compact={compact} />
+
+      {/* Top page rule */}
+      <div className="mt-3" style={{ height: 0.5, background: INK_RULE }} />
+
+      {/* Page body — text with marginal rule, no container */}
+      <div className="relative pt-7 pb-9">
+        <div className="flex">
+          {/* Left marginal rule — brass amber, 30% (matches memo detail) */}
+          <span
+            aria-hidden
+            className="self-stretch"
+            style={{ width: 0.5, background: `${BRASS}55`, marginRight: 20 }}
+          />
+
+          {/* Text column */}
+          <div className="flex-1" style={{ paddingRight: compact ? 0 : 24 }}>
+            {DRAFT_TEXT.map((p, i) => (
+              <p
+                key={i}
+                className="m-0 mb-4 font-display"
+                style={{
+                  color: INK,
+                  fontSize: 15,
+                  lineHeight: 1.7,
+                  letterSpacing: "-0.001em",
+                }}
+              >
+                {p}
+              </p>
+            ))}
+
+            {/* Active cursor hint — typeset, not a floating pill */}
+            <div
+              className="mt-5 inline-flex items-baseline gap-2 font-mono text-[10px] uppercase tracking-[0.22em]"
+              style={{ color: INK_FAINTER }}
+            >
+              <span style={{ color: AMBER }}>▍</span>
+              <span>cursor</span>
+              <span style={{ color: INK_FAINTER }}>·</span>
+              <span>hold</span>
+              <span style={{ color: INK_FAINT, fontWeight: 600 }}>⌃⇧⌘ D</span>
+              <span>to dictate inline</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom page rule */}
+      <div style={{ height: 0.5, background: INK_RULE }} />
     </div>
   );
 }
 
-function EditorChromeBar({ compact }: { compact: boolean }) {
+function EditorChromeRow({ compact }: { compact: boolean }) {
   return (
-    <div
-      className="flex items-center gap-3 px-4 py-2"
-      style={{ background: "#F4F1EA", borderBottom: "0.5px solid #E0DCD3" }}
-    >
-      <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-[#9A6A22]">
-        · CH-IN
+    <div className="flex items-baseline gap-3">
+      <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.32em]" style={{ color: BRASS }}>
+        · DRAFT
       </span>
-      <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-studio-ink-faint">
-        D-0024
+      <span className="font-mono text-[9px] uppercase tracking-[0.22em]" style={{ color: INK_FAINTER }}>
+        chiffon scheme & system status rail
       </span>
 
-      <button
-        className="flex items-center gap-1.5 rounded-[3px] px-2 py-1 text-[10px] font-medium text-studio-ink"
-        style={{ border: "0.5px solid #2A2620", background: "#FFFFFF" }}
-      >
-        <span className="text-[#9A6A22]">✦</span>
-        <span>Claude Sonnet 4.6</span>
-        <span className="text-studio-ink-faint">▾</span>
-      </button>
-
-      <div className="ml-auto flex items-center gap-3 font-mono text-[9px] uppercase tracking-[0.18em] text-studio-ink-faint">
-        <span>412 words</span>
+      <div className="ml-auto flex items-baseline gap-3 font-mono text-[9px] uppercase tracking-[0.22em]" style={{ color: INK_FAINT }}>
         {!compact && (
           <>
-            <span className="opacity-50">|</span>
             <span className="flex items-center gap-1.5">
-              <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: "#E89A3C", boxShadow: "0 0 4px #E89A3C99" }} />
-              <span className="text-[#9A6A22]">REVISING</span>
+              <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: AMBER }} />
+              <span style={{ color: BRASS }}>REVISING</span>
             </span>
+            <span style={{ color: INK_FAINTER }}>·</span>
           </>
         )}
-        <span className="opacity-50">|</span>
-        <button className="rounded-[2px] border border-studio-edge px-2 py-0.5 hover:border-studio-ink hover:text-studio-ink">
-          NEW
+        <button className="hover:text-studio-ink" style={{ color: INK_FAINT }}>
+          NEW DRAFT
         </button>
       </div>
     </div>
   );
 }
 
-function EditorSurface({ compact }: { compact: boolean }) {
-  return (
-    <div className="relative" style={{ minHeight: compact ? 360 : 440 }}>
-      {/* Graticule underlay */}
-      <GraticuleBackground />
-
-      {/* Text content */}
-      <div className="relative px-7 pt-6 pb-20">
-        {DRAFT_TEXT.map((p, i) => (
-          <p key={i} className="mb-4 text-[14px] leading-[1.7] text-studio-ink">
-            {p}
-          </p>
-        ))}
-      </div>
-
-      {/* Dictation pill — floating bottom-center */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
-        <DictationPill />
-      </div>
-    </div>
-  );
-}
-
-function GraticuleBackground() {
-  return (
-    <svg
-      aria-hidden
-      className="absolute inset-0 h-full w-full"
-      style={{ opacity: 0.05 }}
-    >
-      <defs>
-        <pattern id="cgrid" width="24" height="24" patternUnits="userSpaceOnUse">
-          <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#9A6A22" strokeWidth="0.4" />
-        </pattern>
-      </defs>
-      <rect width="100%" height="100%" fill="url(#cgrid)" />
-    </svg>
-  );
-}
-
-function DictationPill() {
-  return (
-    <button
-      className="flex items-center gap-2.5 rounded-full px-4 py-2"
-      style={{
-        background: "#FFFFFF",
-        border: "0.5px solid #C47D1C",
-        boxShadow: "0 4px 14px rgba(196,125,28,0.18), 0 0 0 4px rgba(196,125,28,0.06)",
-      }}
-    >
-      <span aria-hidden className="flex h-6 w-6 items-center justify-center rounded-full" style={{ background: "#C47D1C" }}>
-        <svg width="11" height="14" viewBox="0 0 11 14" aria-hidden>
-          <rect x="3.5" y="0.5" width="4" height="8" rx="2" fill="#FFFFFF" />
-          <path d="M 1 6.5 v 1 a 4.5 4.5 0 0 0 9 0 v -1" fill="none" stroke="#FFFFFF" strokeWidth="1" />
-          <line x1="5.5" y1="11" x2="5.5" y2="13" stroke="#FFFFFF" strokeWidth="1" />
-        </svg>
-      </span>
-      <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-studio-ink">
-        Dictate
-      </span>
-      <span className="font-mono text-[9px] tracking-[0.06em] text-studio-ink-faint">
-        ⌃⇧⌘ D
-      </span>
-    </button>
-  );
-}
-
-// ─── Action bar ──────────────────────────────────────────────────────
+// ─── D. Action bar (above the list) ──────────────────────────────────
 
 function ActionBar({ compact }: { compact: boolean }) {
   const visibleActions = compact ? SMART_ACTIONS.slice(0, 2) : SMART_ACTIONS.slice(0, 3);
+
   return (
-    <div className="mt-4 flex items-center gap-2.5">
-      {/* COMMAND voice button */}
+    <div className="mt-5 flex items-baseline gap-3">
+      {/* Inline COMMAND affordance — text + hotkey, no pill */}
       <button
-        className="flex items-center gap-2 rounded-[4px] px-3 py-2"
-        style={{
-          background: "#FFFFFF",
-          border: "0.5px solid #C47D1C",
-          color: "#7A521A",
-        }}
+        className="flex items-baseline gap-2 rounded-[2px] px-2 py-1 hover:bg-[rgba(196,125,28,0.06)]"
+        style={{ border: `0.5px solid ${INK_RULE}` }}
       >
-        <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: "#C47D1C", boxShadow: "0 0 6px #C47D1C99" }} />
-        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.22em]">
-          COMMAND
+        <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.24em]" style={{ color: BRASS }}>
+          ⌘ COMMAND
         </span>
-        <span className="font-mono text-[9px] tracking-[0.06em] opacity-60">
-          ⌃⇧⌘ C
+        <span className="font-mono text-[9px]" style={{ color: INK_FAINTER }}>
+          ⌃⇧⌘C
         </span>
       </button>
 
-      <span className="h-5 w-px" style={{ background: "#E0DCD3" }} />
+      <span style={{ width: 0.5, height: 14, background: INK_RULE }} />
 
-      {/* Smart action chips */}
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-baseline gap-1.5">
         {visibleActions.map((a) => (
           <button
             key={a.key}
-            className="rounded-[3px] px-2 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.18em]"
-            style={{ border: "0.5px solid #E0DCD3", color: "#3F3A33" }}
+            className="rounded-[2px] px-2 py-1 hover:bg-[rgba(196,125,28,0.06)]"
           >
-            {a.label.toUpperCase()}
+            <span className="font-mono text-[9.5px] font-semibold uppercase tracking-[0.20em]" style={{ color: INK }}>
+              {a.label.toUpperCase()}
+            </span>
           </button>
         ))}
         {compact && (
-          <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-studio-ink-faint">
-            +{SMART_ACTIONS.length - visibleActions.length} ↓
+          <span className="font-mono text-[9px] uppercase tracking-[0.18em]" style={{ color: INK_FAINTER }}>
+            + {SMART_ACTIONS.length - visibleActions.length} more ↓
           </span>
         )}
       </div>
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex items-baseline gap-3">
         <button
-          className="rounded-[3px] px-3 py-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.22em] text-studio-ink"
-          style={{ border: "0.5px solid #E0DCD3" }}
+          className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] hover:text-studio-ink"
+          style={{ color: INK_FAINT }}
         >
           COPY
         </button>
         <button
-          className="rounded-[3px] px-3 py-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.22em]"
-          style={{ background: "#2A2620", color: "#FBFBFA" }}
+          className="rounded-[3px] px-3 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.22em]"
+          style={{ background: INK, color: CREAM }}
         >
           SAVE TO LIBRARY →
         </button>
@@ -362,100 +378,106 @@ function ActionBar({ compact }: { compact: boolean }) {
   );
 }
 
-// ─── Action grid (below the fold) ────────────────────────────────────
+// ─── D. Action list (typeset, two-column, no cards) ──────────────────
 
-function ActionGrid({ compact }: { compact: boolean }) {
-  const cols = compact ? 2 : 4;
+function ActionList({ compact }: { compact: boolean }) {
+  const half = Math.ceil(SMART_ACTIONS.length / 2);
+  const leftCol = SMART_ACTIONS.slice(0, half);
+  const rightCol = SMART_ACTIONS.slice(half);
+
   return (
-    <div>
-      <div className="mb-3 flex items-baseline gap-3">
-        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.22em] text-studio-ink-faint">
-          · Smart actions
+    <section>
+      <div className="flex items-baseline gap-3">
+        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.32em]" style={{ color: INK_FAINT }}>
+          · SMART ACTIONS
         </span>
-        <span className="flex-1 border-t border-studio-edge/60" />
-        <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-studio-ink-faint">
-          {SMART_ACTIONS.length} available · scroll for more ↓
+        <span style={{ flex: 1, height: 0.5, background: INK_RULE }} />
+        <span className="font-display italic" style={{ color: INK_FAINT, fontSize: 13 }}>
+          {SMART_ACTIONS.length} operations · pick one to apply
         </span>
       </div>
+
       <div
-        className="grid gap-2"
-        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+        className="mt-3 grid"
+        style={{
+          gridTemplateColumns: compact ? "1fr" : "1fr 1fr",
+          columnGap: 36,
+        }}
       >
-        {SMART_ACTIONS.map((a) => (
-          <ActionCell key={a.key} action={a} />
-        ))}
+        <div>
+          {leftCol.map((a) => (
+            <ActionRow key={a.key} action={a} />
+          ))}
+        </div>
+        {!compact && (
+          <div>
+            {rightCol.map((a) => (
+              <ActionRow key={a.key} action={a} />
+            ))}
+          </div>
+        )}
+        {compact && (
+          <div className="hidden">
+            {/* hidden — list is single column on compact */}
+          </div>
+        )}
+        {compact && rightCol.length > 0 && (
+          <div>
+            {rightCol.map((a) => (
+              <ActionRow key={a.key} action={a} />
+            ))}
+          </div>
+        )}
       </div>
-    </div>
+    </section>
   );
 }
 
-function ActionCell({ action }: { action: (typeof SMART_ACTIONS)[number] }) {
+function ActionRow({ action }: { action: (typeof SMART_ACTIONS)[number] }) {
   return (
     <button
-      className="flex flex-col gap-1 rounded-md p-3 text-left"
+      className="group grid w-full items-baseline border-b py-2.5 transition-colors hover:bg-[rgba(196,125,28,0.04)]"
       style={{
-        background: "#FFFFFF",
-        border: "0.5px solid #E0DCD3",
-        boxShadow: "0 1px 0 rgba(255,255,255,0.5) inset",
+        gridTemplateColumns: "120px 1fr 56px",
+        columnGap: 14,
+        borderColor: INK_RULE_S,
       }}
     >
-      <div className="flex items-baseline gap-2">
-        <span className="font-display text-[14px] font-medium text-studio-ink">
-          {action.label}
-        </span>
-        <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.22em] text-[#9A6A22]">
-          APPLY →
-        </span>
-      </div>
-      <div className="text-[11px] text-studio-ink-faint">
+      <span className="text-left font-display" style={{ color: INK, fontSize: 15, letterSpacing: "-0.002em" }}>
+        {action.label}
+      </span>
+      <span className="text-left" style={{ color: INK_FAINT, fontSize: 12.5 }}>
         {action.hint}
-      </div>
+      </span>
+      <span
+        className="text-right font-mono text-[9.5px] uppercase tracking-[0.22em] opacity-0 transition-opacity group-hover:opacity-100"
+        style={{ color: AMBER }}
+      >
+        APPLY →
+      </span>
     </button>
   );
 }
 
-// ─── Ownership strip (footer) ───────────────────────────────────────
+// ─── E. Ownership byline (single italic line, no boxes) ──────────────
 
-function OwnershipStrip() {
+function OwnershipByline() {
   return (
-    <div
-      className="grid grid-cols-3 gap-3 rounded-md px-4 py-3"
-      style={{ background: "#F4F1EA", border: "0.5px solid #E0DCD3" }}
-    >
-      <OwnershipCol pin="P1" eyebrow="Input" value="MacBook Pro" detail="Parakeet v3 · local" />
-      <OwnershipCol pin="P2" eyebrow="Model" value="Claude Sonnet 4.6" detail="Anthropic · API" />
-      <OwnershipCol pin="P3" eyebrow="Output" value="Library · Memos" detail="Local · Cmd+S" />
-    </div>
-  );
-}
-
-function OwnershipCol({
-  pin,
-  eyebrow,
-  value,
-  detail,
-}: {
-  pin: string;
-  eyebrow: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <div className="flex items-baseline gap-2">
-        <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-[#9A6A22]">
-          {pin}
-        </span>
-        <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-studio-ink-faint">
-          · {eyebrow}
-        </span>
-      </div>
-      <div className="font-display text-[13px] font-medium text-studio-ink">
-        {value}
-      </div>
-      <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-studio-ink-faint">
-        {detail}
-      </div>
+    <div className="border-t pt-3" style={{ borderColor: INK_RULE_S }}>
+      <p
+        className="m-0 font-display italic"
+        style={{
+          color: INK_FAINT,
+          fontSize: 14,
+          lineHeight: 1.5,
+          letterSpacing: "0.005em",
+        }}
+      >
+        Recorded on <strong style={{ fontStyle: "normal", color: INK }}>MacBook Pro</strong>{" "}
+        via <span style={{ color: BRASS, fontStyle: "normal" }}>Parakeet v3</span>, polished with{" "}
+        <span style={{ color: BRASS, fontStyle: "normal" }}>Claude Sonnet 4.6</span>, filed to{" "}
+        <strong style={{ fontStyle: "normal", color: INK }}>Library</strong>.
+      </p>
     </div>
   );
 }
