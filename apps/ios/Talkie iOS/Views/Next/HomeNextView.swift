@@ -13,6 +13,10 @@
 //  Spec: design/studio/app/home/SWIFT_PORT.md
 //  Visual reference: design/studio/app/home/page.tsx
 //
+//  Type system: TalkieTypeStyle tokens (see TalkieType.swift).
+//  No raw .font(.system(...)) calls here — channel labels, body
+//  serif, and instrument readouts all flow through .talkieType(...).
+//
 
 import SwiftUI
 
@@ -55,14 +59,11 @@ private struct HomeHeader: View {
         HStack {
             Color.clear.frame(width: 28, height: 28)
             Spacer()
-            // TALKIE wordmark — SF Mono, tight tracking. Reads as
-            // channel-label vocabulary, not magazine title.
             Text("TALKIE")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .tracking(3.2)
+                .talkieType(.wordmark)
                 .foregroundStyle(theme.colors.textPrimary.opacity(0.78))
             Spacer()
-            Button(action: { AppShellRouter.shared.openAppearance() }) {
+            Button(action: { AppShellRouter.shared.openSettings() }) {
                 Image(systemName: "gearshape")
                     .font(.system(size: 13))
                     .foregroundStyle(theme.colors.textTertiary)
@@ -98,25 +99,22 @@ private struct StationCard: View {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("PICK UP")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .tracking(2.6)
+                        .talkieType(.channelLabel)
                         .foregroundStyle(theme.currentTheme.chrome.accent)
 
                     if let pickUp {
                         Text(pickUp.title)
-                            .font(.system(size: 22, weight: .medium))
-                            .tracking(-0.4)
+                            .talkieType(.headline)
                             .foregroundStyle(theme.colors.textPrimary)
                             .lineLimit(1)
                             .truncationMode(.tail)
 
                         Text(pickUp.meta)
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                            .tracking(1.8)
+                            .talkieType(.metaMono)
                             .foregroundStyle(theme.colors.textTertiary)
                     } else {
                         Text("Nothing recent")
-                            .font(.system(size: 18))
+                            .talkieType(.headlineSecondary)
                             .foregroundStyle(theme.colors.textSecondary)
                     }
                 }
@@ -125,11 +123,11 @@ private struct StationCard: View {
 
                 if let pickUp {
                     Button(action: pickUp.continueAction) {
-                        Text("Continue ›")
-                            .font(.system(size: 11, weight: .semibold))
+                        Text("CONTINUE ›")
+                            .talkieType(.chipLabel)
                             .foregroundStyle(theme.colors.cardBackground)
                             .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
+                            .padding(.vertical, 7)
                             .background(Capsule().fill(theme.currentTheme.chrome.accent))
                     }
                     .buttonStyle(.plain)
@@ -162,17 +160,13 @@ private struct ActionBus: View {
                     .fill(theme.currentTheme.chrome.accent)
                     .frame(width: 5, height: 5)
                 Text(tally.eyebrow)
-                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                    .tracking(1.8)
+                    .talkieType(.channelLabelSmall)
                     .foregroundStyle(theme.currentTheme.chrome.accent)
-                    .textCase(.uppercase)
                 Spacer()
                 if let cta = tally.cta {
                     Text(cta)
-                        .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                        .tracking(1.8)
+                        .talkieType(.channelLabelSmall)
                         .foregroundStyle(theme.colors.textTertiary)
-                        .textCase(.uppercase)
                 }
             }
             .padding(.horizontal, 12)
@@ -183,15 +177,11 @@ private struct ActionBus: View {
                     ForEach(Array(tally.cells.enumerated()), id: \.offset) { idx, cell in
                         VStack(spacing: 4) {
                             Text(cell.value)
-                                .font(.system(size: 24, weight: .medium))
-                                .monospacedDigit()
+                                .talkieType(.instrumentReadout)
                                 .foregroundStyle(theme.currentTheme.chrome.accent)
-                                .tracking(-0.5)
                             Text(cell.label)
-                                .font(.system(size: 7.5, weight: .semibold, design: .monospaced))
-                                .tracking(1.8)
+                                .talkieType(.channelLabelTiny)
                                 .foregroundStyle(theme.colors.textTertiary)
-                                .textCase(.uppercase)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
@@ -227,25 +217,15 @@ private struct RecentSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Text("· RECENT")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .tracking(2.6)
+                Text("· RECENT · \(items.count)")
+                    .talkieType(.channelLabel)
                     .foregroundStyle(theme.currentTheme.chrome.accent)
-                    .textCase(.uppercase)
-
-                Text("\(items.count)")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(theme.currentTheme.chrome.accent)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 1)
-                    .background(Capsule().fill(theme.currentTheme.chrome.accentTint))
 
                 Spacer()
 
                 Button(action: { AppShellRouter.shared.openLibrary() }) {
                     Text("ALL ›")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .tracking(1.8)
+                        .talkieType(.chipLabel)
                         .foregroundStyle(theme.colors.textTertiary)
                 }
                 .buttonStyle(.plain)
@@ -291,22 +271,20 @@ private struct RecentRow: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             Text(item.title)
-                                .font(.system(size: 15, weight: .medium))
+                                .talkieType(.listTitle)
                                 .foregroundStyle(theme.colors.textPrimary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
-                                .tracking(-0.05)
                                 .frame(maxWidth: .infinity, alignment: .leading)
 
                             Text(item.relativeTime)
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                .monospacedDigit()
+                                .talkieType(.timestamp)
                                 .foregroundStyle(theme.colors.textTertiary)
                         }
 
                         if let preview = item.preview {
                             Text(preview)
-                                .font(.system(size: 12.5))
+                                .talkieType(.preview)
                                 .foregroundStyle(theme.colors.textSecondary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)

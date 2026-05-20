@@ -57,6 +57,13 @@ const STUDIES = [
     blurb:
       "Color schemes and treatment toggles for the macOS Home agent bay. 9 schemes × 6 treatments.",
   },
+  {
+    slug: "settings",
+    name: "Settings",
+    kind: "Pattern study",
+    blurb:
+      "Three directional sketches for Talkie's Settings surface — Console (dense single scroll), Stations (spatial card grid), Inspector (desktop-style chips + panel). Fresh ideas, no donor crutch.",
+  },
 ];
 
 export default function Landing() {

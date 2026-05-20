@@ -29,11 +29,13 @@ struct AppShellNext<Content: View>: View {
 
             // Screen content — fills the shell at all times. The id
             // ties identity to the current surface so SwiftUI runs
-            // the transition between distinct screens.
+            // the transition between distinct screens. The transition
+            // direction comes from the router so home←sub-surface
+            // (pop) feels different from home→sub-surface (push).
             screenContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .id(surfaceID)
-                .transition(.opacity.combined(with: .move(edge: .trailing)))
+                .transition(surfaceTransition)
                 .animation(.easeOut(duration: 0.24), value: surfaceID)
 
             // Chrome overlay (corners + tray) — fades in when expanded
@@ -68,6 +70,25 @@ struct AppShellNext<Content: View>: View {
         }
     }
 
+    /// Direction-aware push/pop transition. Forward (push): new
+    /// surface slides IN from trailing edge, previous slides OUT to
+    /// leading edge. Backward (pop): mirror — new from leading,
+    /// previous to trailing. Both halves carry an opacity fade.
+    private var surfaceTransition: AnyTransition {
+        switch router.transitionDirection {
+        case .forward:
+            return .asymmetric(
+                insertion: .opacity.combined(with: .move(edge: .trailing)),
+                removal:   .opacity.combined(with: .move(edge: .leading))
+            )
+        case .backward:
+            return .asymmetric(
+                insertion: .opacity.combined(with: .move(edge: .leading)),
+                removal:   .opacity.combined(with: .move(edge: .trailing))
+            )
+        }
+    }
+
     /// Stable identity per surface so SwiftUI fires the transition
     /// between distinct screens (different cases = different ids).
     /// Compose includes the doc id so swapping docs animates too.
@@ -77,6 +98,7 @@ struct AppShellNext<Content: View>: View {
         case .compose(let d): return "compose:\(d)"
         case .library: return "library"
         case .appearance: return "appearance"
+        case .settings: return "settings"
         case .captureDetail(let c): return "capture:\(c)"
         case .memoDetail(let m): return "memo:\(m)"
         case .dictationHistory: return "dictations"
@@ -103,6 +125,8 @@ struct AppShellNext<Content: View>: View {
             LibraryNextView()
         case .appearance:
             AppearancePickerNext()
+        case .settings:
+            SettingsNext()
         case .captureDetail(let captureID):
             CaptureDetailNext(captureID: captureID)
         case .memoDetail(let memoID):
@@ -129,11 +153,17 @@ struct AppShellNext<Content: View>: View {
 final class AppShellRouter: ObservableObject {
     static let shared = AppShellRouter()
 
+    enum TransitionDirection {
+        case forward   // push: new from trailing, old to leading
+        case backward  // pop:  new from leading,  old to trailing
+    }
+
     enum Surface: Equatable {
         case home
         case compose(documentID: String)
         case library
         case appearance
+        case settings
         case captureDetail(captureID: String)
         case memoDetail(memoID: String)
         case dictationHistory
@@ -147,6 +177,7 @@ final class AppShellRouter: ObservableObject {
 
     @Published var surface: Surface = .home
     @Published var activeComposeStore: ComposeStore?
+    @Published var transitionDirection: TransitionDirection = .forward
 
     private init() {
         let args = ProcessInfo.processInfo.arguments
@@ -156,6 +187,8 @@ final class AppShellRouter: ObservableObject {
             openLibrary()
         } else if args.contains("--appearance") {
             openAppearance()
+        } else if args.contains("--settings") {
+            openSettings()
         } else if args.contains("--capture") {
             openCaptureDetail(captureID: "mock")
         } else if args.contains("--memo") {
@@ -177,71 +210,43 @@ final class AppShellRouter: ObservableObject {
         }
     }
 
+    /// Home is the root. Routing TO home is a pop (backward);
+    /// routing to anything else is a push (forward).
+    private func push(_ next: Surface) {
+        transitionDirection = .forward
+        activeComposeStore = nil
+        surface = next
+    }
+
     func openHome() {
+        transitionDirection = .backward
         activeComposeStore = nil
         surface = .home
     }
 
     func openCompose(documentID: String) {
         let store = ComposeStore(documentID: documentID)
+        transitionDirection = .forward
         activeComposeStore = store
         surface = .compose(documentID: documentID)
     }
 
-    func openLibrary() {
-        activeComposeStore = nil
-        surface = .library
-    }
-
-    func openAppearance() {
-        activeComposeStore = nil
-        surface = .appearance
-    }
-
+    func openLibrary()              { push(.library) }
+    func openAppearance()           { push(.appearance) }
+    func openSettings()             { push(.settings) }
     func openCaptureDetail(captureID: String) {
-        activeComposeStore = nil
-        surface = .captureDetail(captureID: captureID)
+        push(.captureDetail(captureID: captureID))
     }
-
     func openMemoDetail(memoID: String) {
-        activeComposeStore = nil
-        surface = .memoDetail(memoID: memoID)
+        push(.memoDetail(memoID: memoID))
     }
-
-    func openDictationHistory() {
-        activeComposeStore = nil
-        surface = .dictationHistory
-    }
-
-    func openDictationOverlayDemo() {
-        activeComposeStore = nil
-        surface = .dictationOverlayDemo
-    }
-
-    func openSignIn() {
-        activeComposeStore = nil
-        surface = .signIn
-    }
-
-    func openConnectionCenter() {
-        activeComposeStore = nil
-        surface = .connectionCenter
-    }
-
-    func openOnboarding() {
-        activeComposeStore = nil
-        surface = .onboarding
-    }
-
-    func openWebBrowser() {
-        activeComposeStore = nil
-        surface = .webBrowser
-    }
-
-    func openKeyboardActivation() {
-        activeComposeStore = nil
-        surface = .keyboardActivation
-    }
+    func openDictationHistory()     { push(.dictationHistory) }
+    func openDictationOverlayDemo() { push(.dictationOverlayDemo) }
+    func openSignIn()               { push(.signIn) }
+    func openConnectionCenter()     { push(.connectionCenter) }
+    func openOnboarding()           { push(.onboarding) }
+    func openWebBrowser()           { push(.webBrowser) }
+    func openKeyboardActivation()   { push(.keyboardActivation) }
 
     func submitVoiceCommand(_ transcript: String) {
         guard case .compose = surface else { return }
