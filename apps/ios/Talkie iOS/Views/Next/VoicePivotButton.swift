@@ -69,7 +69,11 @@ struct VoicePivotButton: View {
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         .padding(.leading, 20)
-        .padding(.bottom, 22)
+        // 16pt bottom inset puts this 48pt button's vertical center at
+        // ~40pt above the bottom edge — same Y as the LiquidGlassTray
+        // center and the bottom-right Keyboard CornerSlot. The three
+        // read as one horizontal chrome band, not a staircase.
+        .padding(.bottom, 16)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint("Tap to summon controls. Long-press to talk.")
     }

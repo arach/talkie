@@ -60,9 +60,13 @@ private struct HomeHeader: View {
         // complication (`ChromeOverlay.CornerSlot`) so when the shell
         // summons, the gear stays visually in place — it doesn't shift
         // size or move. Right-edge inset matches the corner slot
-        // padding (20pt) so x-coordinates line up.
+        // padding (20pt) so x-coordinates line up. Left side mirrors
+        // that 40pt footprint with a row of three ambient status
+        // pixels (Mac · iCloud · Account) so the wordmark stays
+        // centered while the chrome carries live system state.
         HStack {
-            Color.clear.frame(width: 40, height: 40)
+            AmbientStatusRow()
+                .frame(width: 40, height: 40)
             Spacer()
             Text("TALKIE")
                 .talkieType(.wordmark)
@@ -87,6 +91,100 @@ private struct HomeHeader: View {
         .padding(.horizontal, 20)
         .padding(.top, 6)
         .padding(.bottom, 8)
+    }
+}
+
+// MARK: - Ambient status row (Mac · iCloud · Account)
+
+/// Three small status pixels at the top-left of Home. Each pixel
+/// reflects a different system connection — paired Mac bridge,
+/// iCloud sync, and the native Sign-in-with-Apple account. Tap any
+/// pixel to drill into the relevant detail surface (sign-in routes
+/// to SignIn when signed out, ConnectionCenter otherwise).
+private struct AmbientStatusRow: View {
+    @State private var bridgeManager = BridgeManager.shared
+    @ObservedObject private var iCloudStatus = iCloudStatusManager.shared
+
+    var body: some View {
+        HStack(spacing: 0) {
+            StatusPixel(state: macPixelState) {
+                AppShellRouter.shared.openConnectionCenter()
+            }
+            StatusPixel(state: iCloudPixelState) {
+                AppShellRouter.shared.openConnectionCenter()
+            }
+            StatusPixel(state: signInPixelState) {
+                if isSignedIn {
+                    AppShellRouter.shared.openConnectionCenter()
+                } else {
+                    AppShellRouter.shared.openSignIn()
+                }
+            }
+        }
+    }
+
+    private var macPixelState: StatusPixel.State {
+        switch bridgeManager.status {
+        case .connected:    return .good
+        case .connecting:   return .transient
+        case .error:        return .error
+        case .disconnected: return bridgeManager.isPaired ? .transient : .dim
+        }
+    }
+
+    private var iCloudPixelState: StatusPixel.State {
+        switch iCloudStatus.status {
+        case .available:                                        return .good
+        case .checking, .temporarilyUnavailable,
+             .couldNotDetermine:                                return .transient
+        case .noAccount, .restricted:                           return .dim
+        case .error:                                            return .error
+        }
+    }
+
+    private var signInPixelState: StatusPixel.State {
+        isSignedIn ? .good : .dim
+    }
+
+    private var isSignedIn: Bool {
+        UserDefaults.standard.bool(forKey: SignInStore.signedInDefaultsKey)
+    }
+}
+
+private struct StatusPixel: View {
+    enum State { case good, transient, dim, error }
+
+    let state: State
+    let action: () -> Void
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Color.clear
+                Circle()
+                    .fill(fillColor)
+                    .frame(width: 6, height: 6)
+                    .overlay(
+                        Circle()
+                            .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                          lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                    )
+            }
+            .frame(width: 13, height: 40)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var fillColor: Color {
+        switch state {
+        case .good:      return Color(red: 0.36, green: 0.74, blue: 0.50)
+        case .transient: return theme.currentTheme.chrome.accent
+        case .dim:       return theme.colors.textTertiary.opacity(0.45)
+        case .error:     return Color(red: 0.85, green: 0.46, blue: 0.34)
+        }
     }
 }
 

@@ -90,7 +90,12 @@ private struct CornerSlot: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: position)
         .padding(.horizontal, 20)
         .padding(.top, position.isTop ? 6 : 0)
-        .padding(.bottom, position.isBottom ? 6 : 0)
+        // Bottom corner slots sit 20pt above the edge so their 40pt
+        // circles share a center-Y (~40pt) with the LiquidGlassTray
+        // and the bottom-left VoicePivotButton. Top corners keep the
+        // tighter 6pt inset since the top band has no tray to align
+        // against.
+        .padding(.bottom, position.isBottom ? 20 : 0)
     }
 }
 
