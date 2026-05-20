@@ -35,11 +35,13 @@ import Observation
 enum RecordingCompanionVariant: String, CaseIterable {
     case wave
     case frontispiece
+    case hud
 
     var label: String {
         switch self {
         case .wave: return "Wave"
         case .frontispiece: return "Frontispiece"
+        case .hud: return "HUD"
         }
     }
 }
@@ -56,8 +58,15 @@ struct RecordingCompanionSurface: View {
         RecordingCompanionVariant(rawValue: variantRaw) ?? .wave
     }
 
+    /// Holds the surface visible past `.complete` so the transition into
+    /// the emergent transcript has room to play out before dismissal.
+    @State private var holdAfterComplete: Bool = false
+
     private var isVisible: Bool {
-        controller.state.isRecording || controller.state.isPreparing
+        let state = controller.state
+        if state.isRecording || state.isPreparing || state.isProcessing { return true }
+        if case .complete = state { return holdAfterComplete }
+        return false
     }
 
     var body: some View {
@@ -67,7 +76,30 @@ struct RecordingCompanionSurface: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .center)))
             }
         }
-        .animation(.easeInOut(duration: 0.28), value: isVisible)
+        .animation(.easeInOut(duration: 0.36), value: isVisible)
+        .onChange(of: controller.state.signalToken) { _, newValue in
+            handleStateChange(token: newValue)
+        }
+    }
+
+    private func handleStateChange(token: String) {
+        if token == "complete" {
+            // Keep the surface mounted while the transcript emerges, then
+            // fade. The total hold is decay (~400ms) + emergence (~1100ms)
+            // + post-hold (~900ms) so the user has a beat to read the
+            // settled transcript before it dismisses.
+            holdAfterComplete = true
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(2400))
+                if case .complete = controller.state {
+                    holdAfterComplete = false
+                }
+            }
+        } else if token != "complete" {
+            // Any non-complete state (idle / recording / preparing /
+            // processing / error) — drop the post-complete hold.
+            holdAfterComplete = false
+        }
     }
 
     @ViewBuilder
@@ -77,18 +109,39 @@ struct RecordingCompanionSurface: View {
             WaveOnlyContent(controller: controller)
         case .frontispiece:
             FrontispieceContent(controller: controller)
+        case .hud:
+            RecordingHUDView()
         }
     }
 }
 
 // MARK: - Wave-only variant
 
+/// Phases of the recording → memo transition. Driven by `MemoRecordingController.state`
+/// transitions; mapped at `syncPhase()`.
+private enum TransitionPhase {
+    case recording   // wave at audio amplitude
+    case stopping    // wave amplitude decaying to 0
+    case settling    // wave is now a flat baseline; transcription in flight
+    case emerging    // transcript revealing left→right along the baseline
+    case complete    // transcript fully revealed; surface holds before dismissal
+}
+
 private struct WaveOnlyContent: View {
     let controller: MemoRecordingController
 
-    // Smoothed audio level. Updated by a low-rate task; the wave reads
-    // this so amplitude breathes instead of snapping with each frame.
-    @State private var smoothedLevel: CGFloat = 0
+    // Visible amplitude. Smoothing task writes during .recording only;
+    // explicit withAnimation drives it to 0 during .stopping.
+    @State private var amplitude: CGFloat = 0.30
+
+    // Where in the transition we are.
+    @State private var phase: TransitionPhase = .recording
+
+    // Progress of the left→right text reveal (0 = hidden, 1 = full).
+    @State private var emergeProgress: CGFloat = 0
+
+    // Transcript captured from `.complete(MemoModel)`.
+    @State private var transcript: String = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -98,7 +151,7 @@ private struct WaveOnlyContent: View {
 
             VStack(spacing: 28) {
                 eyebrow
-                animatedWave
+                waveAndTranscript
                 captionRow
             }
             .padding(.horizontal, 80)
@@ -110,17 +163,22 @@ private struct WaveOnlyContent: View {
         }
         .frame(maxWidth: 980)
         .task { await runSmoothing() }
+        .onChange(of: controller.state.signalToken) { _, _ in
+            syncPhase()
+        }
+        .onAppear { syncPhase() }
     }
 
     // MARK: - Pieces
 
     private var eyebrow: some View {
         HStack(spacing: 12) {
-            RecDot()
-            Text("RECORDING")
+            RecDot(active: phase == .recording)
+            Text(eyebrowVerb)
                 .font(RecordingCompanionFonts.mono(size: 10))
                 .tracking(3.6)
                 .foregroundColor(RecordingCompanionTokens.inkFaint)
+                .animation(.easeOut(duration: 0.24), value: eyebrowVerb)
             Text("·")
                 .font(RecordingCompanionFonts.mono(size: 10))
                 .foregroundColor(RecordingCompanionTokens.inkFainter)
@@ -139,36 +197,107 @@ private struct WaveOnlyContent: View {
         .allowsHitTesting(false)
     }
 
+    private var eyebrowVerb: String {
+        switch phase {
+        case .recording: return "RECORDING"
+        case .stopping, .settling, .emerging: return "TRANSCRIBING"
+        case .complete: return "MEMO"
+        }
+    }
+
+    /// The wave and the emerging transcript share the same vertical slot,
+    /// so as the wave collapses into a baseline the text appears in the
+    /// same place — the wave literally becomes the writing.
+    private var waveAndTranscript: some View {
+        ZStack {
+            animatedWave
+            emergingTranscript
+        }
+        .frame(width: 880, height: 196)
+        .allowsHitTesting(false)
+    }
+
     private var animatedWave: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { context in
             let t = context.date.timeIntervalSinceReferenceDate
-            // Constant phase speed — wave traverses at a steady rate,
-            // so motion reads as travel, not erratic excitement.
             let phaseSpeed: CGFloat = 1.5
-            // Amplitude is the only audio-reactive parameter, and it
-            // reads off the smoothed level so voice modulation breathes.
-            let amp: CGFloat = 0.30 + smoothedLevel * 0.50
 
             InkFlourishShape(
-                amplitude: amp,
+                amplitude: amplitude,
                 phase: CGFloat(t) * phaseSpeed
             )
-            .stroke(amberGradient, lineWidth: 2.4)
-            .shadow(color: RecordingCompanionTokens.amberGlow.opacity(0.34), radius: 3)
-            .frame(width: 880, height: 196)
+            .stroke(amberGradient, lineWidth: waveStroke)
+            .shadow(color: RecordingCompanionTokens.amberGlow.opacity(waveGlow), radius: 3)
         }
-        .allowsHitTesting(false)
+    }
+
+    /// Stroke thins slightly as the wave settles so the transition into a
+    /// quiet baseline feels deliberate rather than abrupt.
+    private var waveStroke: CGFloat {
+        switch phase {
+        case .recording: return 2.4
+        case .stopping: return 2.0
+        case .settling, .emerging, .complete: return 1.2
+        }
+    }
+
+    private var waveGlow: Double {
+        switch phase {
+        case .recording: return 0.34
+        case .stopping: return 0.20
+        case .settling, .emerging, .complete: return 0.0
+        }
+    }
+
+    /// Transcript text reveals along the wave's baseline via a left→right
+    /// mask scale paired with a 6pt baseline rise. Mirrors the studio
+    /// mock's `clip-path` + `translateY` pattern.
+    private var emergingTranscript: some View {
+        Text(transcript)
+            .font(RecordingCompanionFonts.serif(size: 22))
+            .foregroundColor(RecordingCompanionTokens.ink)
+            .multilineTextAlignment(.center)
+            .lineLimit(3)
+            .truncationMode(.tail)
+            .frame(maxWidth: 720)
+            .padding(.horizontal, 16)
+            .offset(y: (1 - emergeProgress) * 6)
+            .opacity(emergeProgress > 0 ? Double(emergeProgress) : 0)
+            .mask(
+                GeometryReader { geo in
+                    Rectangle()
+                        .frame(
+                            width: max(0, geo.size.width * emergeProgress),
+                            height: geo.size.height
+                        )
+                }
+            )
     }
 
     private var captionRow: some View {
         HStack {
-            Text("\(timeString) · RECORDING MEMO")
+            Text(captionText)
                 .font(RecordingCompanionFonts.mono(size: 10))
                 .tracking(2.8)
                 .foregroundColor(RecordingCompanionTokens.inkFaint)
+                .animation(.easeOut(duration: 0.24), value: captionText)
                 .allowsHitTesting(false)
             Spacer()
-            StopButton(action: stopRecording)
+            if phase == .recording {
+                StopButton(action: stopRecording)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.24), value: phase == .recording)
+    }
+
+    private var captionText: String {
+        switch phase {
+        case .recording: return "\(timeString) · RECORDING MEMO"
+        case .stopping: return "\(timeString) · STOPPING"
+        case .settling: return "\(timeString) · TRANSCRIBING…"
+        case .emerging: return "\(timeString) · TRANSCRIBING…"
+        case .complete: return "\(timeString) · MEMO FILED"
         }
     }
 
@@ -196,17 +325,86 @@ private struct WaveOnlyContent: View {
         )
     }
 
+    // MARK: - Phase machine
+
+    /// Maps `controller.state` to our local `phase` and runs the right
+    /// animations on each transition.
+    @MainActor
+    private func syncPhase() {
+        switch controller.state {
+        case .preparing, .recording:
+            // Amplitude is driven by the smoothing task below; nothing to
+            // do here besides ensuring phase is correct.
+            if phase != .recording {
+                phase = .recording
+                emergeProgress = 0
+                transcript = ""
+            }
+
+        case .processing:
+            guard phase == .recording else { return }
+            // Decay the wave amplitude to zero — the wave settles INTO a
+            // baseline rather than disappearing. The smoothing task gates
+            // on phase so it stops fighting the animation.
+            phase = .stopping
+            withAnimation(.easeOut(duration: 0.42)) {
+                amplitude = 0
+            }
+            // After the decay completes, mark settling. The wave is now a
+            // flat baseline at midY (amplitude = 0 → all yOffsets = 0).
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(420))
+                if phase == .stopping {
+                    phase = .settling
+                }
+            }
+
+        case .complete(let memo):
+            // Transcript is in. Begin the emergence reveal — text fills in
+            // along the baseline left→right.
+            transcript = memo.transcription ?? ""
+            // If somehow we skipped processing (extremely fast pipeline),
+            // collapse amplitude immediately.
+            if amplitude > 0.01 {
+                withAnimation(.easeOut(duration: 0.20)) {
+                    amplitude = 0
+                }
+            }
+            phase = .emerging
+            withAnimation(.timingCurve(0.22, 0.61, 0.36, 1.0, duration: 1.10)) {
+                emergeProgress = 1
+            }
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(1100))
+                if phase == .emerging {
+                    phase = .complete
+                }
+            }
+
+        case .idle, .error:
+            phase = .recording
+            amplitude = 0.30
+            emergeProgress = 0
+            transcript = ""
+        }
+    }
+
     // MARK: - Smoothing
 
     @MainActor
     private func runSmoothing() async {
-        // Exponential moving average. α=0.90 at ~60Hz gives a ~150ms
-        // time constant — fast enough to feel responsive, slow enough
-        // to read as breathing, not jumping.
+        // Exponential moving average — only writes amplitude during
+        // .recording. In every other phase the explicit transitions own
+        // the value, so the wave can settle / hold cleanly.
         while !Task.isCancelled {
             try? await Task.sleep(for: .milliseconds(16))
+            guard phase == .recording else { continue }
             let target = CGFloat(min(max(controller.audioLevel, 0), 1))
-            smoothedLevel = smoothedLevel * 0.90 + target * 0.10
+            // 0.30 floor + 0.50 boost = amp range 0.30 → 0.80. The
+            // amplitude state holds the actual rendered value; we smooth
+            // toward the target each tick.
+            let desired = 0.30 + target * 0.50
+            amplitude = amplitude * 0.90 + desired * 0.10
         }
     }
 }
@@ -393,14 +591,21 @@ private struct StopButton: View {
 // MARK: - Recording dot
 
 private struct RecDot: View {
+    var active: Bool = true
+
     var body: some View {
         Circle()
             .fill(Color(red: 0.753, green: 0.227, blue: 0.165))     // #C03A2A
+            .opacity(active ? 1 : 0.55)
             .frame(width: 8, height: 8)
             .overlay(
                 Circle()
-                    .stroke(Color(red: 0.753, green: 0.227, blue: 0.165).opacity(0.25), lineWidth: 2)
+                    .stroke(
+                        Color(red: 0.753, green: 0.227, blue: 0.165).opacity(active ? 0.25 : 0),
+                        lineWidth: 2
+                    )
             )
+            .animation(.easeOut(duration: 0.3), value: active)
     }
 }
 
