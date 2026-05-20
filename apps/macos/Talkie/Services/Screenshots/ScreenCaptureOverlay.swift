@@ -23,8 +23,14 @@ final class ScreenCaptureOverlay {
     func selectRegion() async -> CGRect? {
         await withCheckedContinuation { continuation in
             let view = OverlayView(mode: .region)
-            view.onRegionSelected = { continuation.resume(returning: $0) }
-            view.onCancelled = { continuation.resume(returning: nil) }
+            var didResume = false
+            let resume: (CGRect?) -> Void = { result in
+                guard !didResume else { return }
+                didResume = true
+                continuation.resume(returning: result)
+            }
+            view.onRegionSelected = { resume($0) }
+            view.onCancelled = { resume(nil) }
             showOverlay(with: view)
         }
     }
@@ -32,8 +38,14 @@ final class ScreenCaptureOverlay {
     func selectWindow() async -> CGWindowID? {
         await withCheckedContinuation { continuation in
             let view = OverlayView(mode: .window)
-            view.onWindowSelected = { continuation.resume(returning: $0) }
-            view.onCancelled = { continuation.resume(returning: nil) }
+            var didResume = false
+            let resume: (CGWindowID?) -> Void = { result in
+                guard !didResume else { return }
+                didResume = true
+                continuation.resume(returning: result)
+            }
+            view.onWindowSelected = { resume($0) }
+            view.onCancelled = { resume(nil) }
             showOverlay(with: view)
         }
     }

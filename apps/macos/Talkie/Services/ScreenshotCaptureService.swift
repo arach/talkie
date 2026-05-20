@@ -391,10 +391,11 @@ final class ScreenshotCaptureService {
             let filter = SCContentFilter(desktopIndependentWindow: window)
             let config = SCStreamConfiguration()
             let scale = CGFloat(filter.pointPixelScale)
-            config.width = max(1, Int(filter.contentRect.width * scale))
-            config.height = max(1, Int(filter.contentRect.height * scale))
+            config.width = max(1, Int((filter.contentRect.width * scale).rounded(.toNearestOrAwayFromZero)))
+            config.height = max(1, Int((filter.contentRect.height * scale).rounded(.toNearestOrAwayFromZero)))
             config.scalesToFit = false
             config.showsCursor = false
+            config.capturesAudio = false
 
             return try await SCScreenshotManager.captureImage(
                 contentFilter: filter,
@@ -439,11 +440,12 @@ final class ScreenshotCaptureService {
             let filter = SCContentFilter(display: display, excludingWindows: [])
             let config = SCStreamConfiguration()
             let scale = nsScreen.backingScaleFactor
-            config.width = max(1, Int(screenRect.width * scale))
-            config.height = max(1, Int(screenRect.height * scale))
+            config.width = max(1, Int((screenRect.width * scale).rounded(.toNearestOrAwayFromZero)))
+            config.height = max(1, Int((screenRect.height * scale).rounded(.toNearestOrAwayFromZero)))
             config.sourceRect = displayLocalRect
             config.scalesToFit = false
             config.showsCursor = false
+            config.capturesAudio = false
 
             return try await SCScreenshotManager.captureImage(
                 contentFilter: filter,
