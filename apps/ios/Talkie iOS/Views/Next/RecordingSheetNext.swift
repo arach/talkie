@@ -77,8 +77,7 @@ struct RecordingSheetNext: View {
                 .font(.system(size: 24, weight: .medium))
                 .foregroundStyle(theme.currentTheme.chrome.accent)
             Text("· ARMING")
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                .tracking(2)
+                .talkieType(.channelLabelTiny)
                 .foregroundStyle(theme.colors.textSecondary)
         }
         .padding(.top, 30)
@@ -102,15 +101,12 @@ struct RecordingSheetNext: View {
             HStack(spacing: 10) {
                 RecordingPulse(color: theme.currentTheme.chrome.accent, size: 8)
                 Text(timeString(recorder.recordingDuration))
-                    .font(.system(size: 26, weight: .medium, design: .monospaced))
-                    .monospacedDigit()
+                    .talkieType(.instrumentReadout)
                     .foregroundStyle(theme.colors.textPrimary)
-                    .tracking(-1)
             }
 
             Text("· REC · HQ · 44.1k · MEMO")
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                .tracking(1.6)
+                .talkieType(.channelLabelTiny)
                 .foregroundStyle(theme.colors.textTertiary)
 
             Spacer()
@@ -146,18 +142,16 @@ struct RecordingSheetNext: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("· READY TO SAVE")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .tracking(1.8)
+                    .talkieType(.channelLabelTiny)
                     .foregroundStyle(theme.currentTheme.chrome.accent)
                 Spacer()
                 Text(timeString(savedDuration))
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
-                    .monospacedDigit()
+                    .talkieType(.instrumentReadoutSmall)
                     .foregroundStyle(theme.colors.textTertiary)
             }
 
             TextField("Title (optional)", text: $title)
-                .font(.system(size: 17, weight: .medium))
+                .talkieType(.headlineSecondary)
                 .foregroundStyle(theme.colors.textPrimary)
                 .textFieldStyle(.plain)
                 .padding(.horizontal, 12)
@@ -182,7 +176,7 @@ struct RecordingSheetNext: View {
             HStack(spacing: 10) {
                 Button(action: discardRecording) {
                     Text("Discard")
-                        .font(.system(size: 13, weight: .medium))
+                        .talkieType(.preview)
                         .foregroundStyle(theme.colors.textSecondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -195,7 +189,7 @@ struct RecordingSheetNext: View {
 
                 Button(action: persistMemo) {
                     Text("Save memo")
-                        .font(.system(size: 13, weight: .semibold))
+                        .talkieType(.preview)
                         .foregroundStyle(theme.colors.cardBackground)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -215,8 +209,7 @@ struct RecordingSheetNext: View {
         VStack(spacing: 14) {
             ProgressView().scaleEffect(0.9)
             Text("· SAVING")
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                .tracking(2)
+                .talkieType(.channelLabelTiny)
                 .foregroundStyle(theme.colors.textSecondary)
         }
         .padding(.top, 40)
@@ -228,7 +221,7 @@ struct RecordingSheetNext: View {
                 .font(.system(size: 30))
                 .foregroundStyle(theme.currentTheme.chrome.accent)
             Text("Memo saved")
-                .font(.system(size: 15, weight: .medium))
+                .talkieType(.listTitle)
                 .foregroundStyle(theme.colors.textPrimary)
         }
         .padding(.top, 40)
@@ -334,13 +327,12 @@ struct RecordingSheetNext: View {
     private func metadataRow(label: String, value: String) -> some View {
         HStack {
             Text(label)
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .tracking(1.4)
+                .talkieType(.channelLabelSmall)
                 .foregroundStyle(theme.colors.textTertiary)
                 .textCase(.uppercase)
             Spacer()
             Text(value)
-                .font(.system(size: 13))
+                .talkieType(.preview)
                 .foregroundStyle(theme.colors.textSecondary)
         }
     }
@@ -364,8 +356,7 @@ struct RecordingSheetNext: View {
                 .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
 
                 Text(label)
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .tracking(1.2)
+                    .talkieType(.channelLabelTiny)
                     .foregroundStyle(theme.colors.textTertiary)
                     .textCase(.uppercase)
             }

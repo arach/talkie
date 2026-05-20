@@ -279,7 +279,7 @@ struct CaptureDetailNext: View {
         HStack {
             Button(action: { AppShellRouter.shared.openHome() }) {
                 Text("Done")
-                    .font(.system(size: 14, weight: .medium))
+                    .talkieType(.preview)
                     .foregroundStyle(theme.colors.textPrimary)
             }
             .buttonStyle(.plain)
@@ -287,8 +287,7 @@ struct CaptureDetailNext: View {
             Spacer()
 
             Text("Capture")
-                .font(.system(size: 17, weight: .semibold))
-                .tracking(-0.4)
+                .talkieType(.headlineSecondary)
                 .foregroundStyle(theme.colors.textPrimary)
 
             Spacer()
@@ -298,7 +297,7 @@ struct CaptureDetailNext: View {
                     Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
                         .font(.system(size: 13))
                     Text(showCopied ? "Copied" : "Copy")
-                        .font(.system(size: 13, weight: .medium))
+                        .talkieType(.preview)
                 }
                 .foregroundStyle(showCopied ? .green : theme.currentTheme.chrome.accent)
             }
@@ -337,15 +336,13 @@ struct CaptureDetailNext: View {
     private var contentCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("· CONTENT")
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                .tracking(2)
+                .talkieType(.channelLabelTiny)
                 .foregroundStyle(theme.colors.textTertiary)
 
             Text(store.capture.bodyText)
-                .font(.system(size: 15))
+                .talkieType(.listTitle)
                 .lineSpacing(4)
                 .foregroundStyle(theme.colors.textPrimary)
-                .tracking(-0.05)
                 .textSelection(.enabled)
         }
         .padding(14)
@@ -366,8 +363,7 @@ struct CaptureDetailNext: View {
     private var detailsCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("· DETAILS")
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                .tracking(2)
+                .talkieType(.channelLabelTiny)
                 .foregroundStyle(theme.colors.textTertiary)
                 .padding(.horizontal, 14)
                 .padding(.top, 14)
@@ -409,13 +405,13 @@ struct CaptureDetailNext: View {
                 .frame(width: 16)
 
             Text(label)
-                .font(.system(size: 13))
+                .talkieType(.preview)
                 .foregroundStyle(theme.colors.textSecondary)
 
             Spacer(minLength: 12)
 
             Text(value)
-                .font(.system(size: 13, design: monospaced ? .monospaced : .default))
+                .talkieType(monospaced ? .fieldValue : .preview)
                 .foregroundStyle(theme.colors.textPrimary)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -433,14 +429,14 @@ struct CaptureDetailNext: View {
                     .frame(width: 16)
 
                 Text("Mac Sync")
-                    .font(.system(size: 13))
+                    .talkieType(.preview)
                     .foregroundStyle(theme.colors.textSecondary)
 
                 Spacer()
 
                 if store.capture.syncedToMac {
                     Text("Synced")
-                        .font(.system(size: 13, weight: .medium))
+                        .talkieType(.preview)
                         .foregroundStyle(.green)
                 } else {
                     Button(action: { store.retrySync() }) {
@@ -454,7 +450,7 @@ struct CaptureDetailNext: View {
                                     .font(.system(size: 11, weight: .semibold))
                             }
                             Text(store.isSyncing ? "Syncing…" : "Retry")
-                                .font(.system(size: 13, weight: .medium))
+                                .talkieType(.preview)
                         }
                         .foregroundStyle(.orange)
                     }
@@ -464,7 +460,7 @@ struct CaptureDetailNext: View {
             }
             if let err = store.capture.syncError {
                 Text(err)
-                    .font(.system(size: 11))
+                    .talkieType(.hint)
                     .foregroundStyle(.red)
                     .padding(.leading, 26)
             }
@@ -504,7 +500,7 @@ struct CaptureDetailNext: View {
         Button(action: action) {
             HStack(spacing: 5) {
                 Image(systemName: systemImage).font(.system(size: 12))
-                Text(label).font(.system(size: 12, weight: .medium))
+                Text(label).talkieType(.fieldLabel)
             }
             .foregroundStyle(theme.colors.textSecondary)
             .padding(.horizontal, 12)
@@ -520,7 +516,7 @@ struct CaptureDetailNext: View {
     private func primaryChip(label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(.system(size: 12, weight: .semibold))
+                .talkieType(.fieldLabel)
                 .foregroundStyle(theme.colors.cardBackground)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)

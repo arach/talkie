@@ -65,8 +65,7 @@ struct OnboardingNext: View {
             Spacer()
             Button(action: complete) {
                 Text("SKIP")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .tracking(1)
+                    .talkieType(.channelLabel)
                     .foregroundStyle(theme.colors.textTertiary)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 4)
@@ -176,10 +175,10 @@ struct OnboardingNext: View {
 
             HStack(spacing: 8) {
                 Text("VOICE")
-                    .font(.system(size: 36, weight: .black))
+                    .talkieType(.headline)
                     .foregroundStyle(theme.colors.textPrimary)
                 Text("+ AI")
-                    .font(.system(size: 36, weight: .black))
+                    .talkieType(.headline)
                     .foregroundStyle(theme.currentTheme.chrome.accent)
                     .shadow(color: theme.currentTheme.chrome.accentGlow,
                             radius: theme.currentTheme.chrome.glowRadius)
@@ -199,7 +198,7 @@ struct OnboardingNext: View {
                     Image(systemName: "lock.fill")
                         .font(.system(size: 9))
                     Text("On-device. Private. Yours.")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .talkieType(.channelLabel)
                 }
                 .foregroundStyle(theme.colors.textTertiary)
             }
@@ -209,9 +208,9 @@ struct OnboardingNext: View {
 
             VStack(spacing: 4) {
                 Text("usetalkie.com")
-                    .font(.system(size: 10, design: .monospaced))
+                    .talkieType(.timestamp)
                 Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")")
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .talkieType(.channelLabelTiny)
                     .opacity(0.7)
             }
             .foregroundStyle(theme.colors.textTertiary)
@@ -222,13 +221,12 @@ struct OnboardingNext: View {
 
     private func taglineWord(_ word: String) -> some View {
         Text(word)
-            .font(.system(size: 13, weight: .semibold, design: .monospaced))
-            .tracking(1.6)
+            .talkieType(.channelLabelSmall)
             .foregroundStyle(theme.colors.textSecondary)
     }
     private var taglineSep: some View {
         Text("·")
-            .font(.system(size: 13, design: .monospaced))
+            .talkieType(.fieldValue)
             .foregroundStyle(theme.colors.textTertiary)
     }
 
@@ -259,7 +257,7 @@ struct OnboardingNext: View {
                             .fill(theme.currentTheme.chrome.accent)
                             .frame(width: 6, height: 6)
                         Text("REC")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .talkieType(.channelLabelTiny)
                             .foregroundStyle(theme.currentTheme.chrome.accent)
                     }
                 }
@@ -267,10 +265,10 @@ struct OnboardingNext: View {
 
             VStack(spacing: 8) {
                 Text("Capture Your Voice")
-                    .font(.system(size: 20, weight: .bold))
+                    .talkieType(.headlineSecondary)
                     .foregroundStyle(theme.colors.textPrimary)
                 Text("Record memos, dictate into any app,\nor let the keyboard type as you speak.\nAll on-device. Always ready.")
-                    .font(.system(size: 14))
+                    .talkieType(.preview)
                     .foregroundStyle(theme.colors.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(4)
@@ -311,8 +309,7 @@ struct OnboardingNext: View {
                 HStack(spacing: 6) {
                     Image(systemName: "lock.fill").font(.system(size: 8))
                     Text("USER OWNED DATA")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .tracking(2)
+                        .talkieType(.channelLabelTiny)
                 }
                 .foregroundStyle(theme.currentTheme.chrome.accent)
                 .padding(.horizontal, 12)
@@ -341,10 +338,10 @@ struct OnboardingNext: View {
 
             VStack(spacing: 8) {
                 Text("The Magic of Sync")
-                    .font(.system(size: 20, weight: .bold))
+                    .talkieType(.headlineSecondary)
                     .foregroundStyle(theme.colors.textPrimary)
                 Text("Record anywhere on your iPhone.\nSync locally, via iCloud, or direct to Mac.\nMac processes with on-device AI.\nAll encrypted, all yours.")
-                    .font(.system(size: 14))
+                    .talkieType(.preview)
                     .foregroundStyle(theme.colors.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(4)
@@ -354,7 +351,7 @@ struct OnboardingNext: View {
             HStack(spacing: 5) {
                 Image(systemName: "info.circle").font(.system(size: 10))
                 Text("Works perfectly fine locally without iCloud")
-                    .font(.system(size: 10, design: .monospaced))
+                    .talkieType(.timestamp)
             }
             .foregroundStyle(theme.colors.textTertiary)
 
@@ -371,8 +368,7 @@ struct OnboardingNext: View {
                 .foregroundStyle(theme.colors.textPrimary)
                 .frame(width: 48, height: 48)
             Text(label)
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                .tracking(1.2)
+                .talkieType(.channelLabelTiny)
                 .foregroundStyle(theme.colors.textTertiary)
         }
         .frame(maxWidth: .infinity)
@@ -390,8 +386,7 @@ struct OnboardingNext: View {
             Spacer()
 
             Text("· SYSTEM STATUS")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .tracking(2.4)
+                .talkieType(.channelLabel)
                 .foregroundStyle(theme.colors.textTertiary)
 
             // System status panel — donor uses AnimatedStatusRow with
@@ -430,8 +425,7 @@ struct OnboardingNext: View {
                             .foregroundStyle(theme.colors.cardBackground)
                     }
                     Text("TAP TO TRY")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .tracking(2)
+                        .talkieType(.chipLabel)
                         .foregroundStyle(theme.colors.textTertiary)
                 }
             }
@@ -445,7 +439,7 @@ struct OnboardingNext: View {
                     HStack(spacing: 4) {
                         Image(systemName: "icloud.slash").font(.system(size: 10))
                         Text("Enable iCloud for sync")
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .talkieType(.channelLabelSmall)
                         Image(systemName: "arrow.up.right").font(.system(size: 9, weight: .bold))
                     }
                     .foregroundStyle(theme.colors.textTertiary)
@@ -456,8 +450,7 @@ struct OnboardingNext: View {
             Button(action: complete) {
                 HStack(spacing: 8) {
                     Text("GET STARTED")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .tracking(2)
+                        .talkieType(.chipLabel)
                     Image(systemName: "arrow.right").font(.system(size: 12, weight: .bold))
                 }
                 .foregroundStyle(theme.colors.cardBackground)
@@ -479,14 +472,13 @@ struct OnboardingNext: View {
                 .foregroundStyle(active ? theme.currentTheme.chrome.accent : theme.colors.textTertiary)
 
             Text(label)
-                .font(.system(size: 13, weight: .medium))
+                .talkieType(.preview)
                 .foregroundStyle(theme.colors.textPrimary)
 
             Spacer()
 
             Text(value)
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .tracking(1)
+                .talkieType(.channelLabelSmall)
                 .foregroundStyle(highlight && active
                     ? theme.currentTheme.chrome.accent
                     : theme.colors.textSecondary)
@@ -506,7 +498,7 @@ struct OnboardingNext: View {
                 .foregroundStyle(theme.currentTheme.chrome.accent)
                 .frame(width: 20)
             Text(text)
-                .font(.system(size: 12, weight: .medium))
+                .talkieType(.fieldLabel)
                 .foregroundStyle(theme.colors.textSecondary)
         }
     }

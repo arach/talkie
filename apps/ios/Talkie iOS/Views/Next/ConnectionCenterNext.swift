@@ -259,7 +259,7 @@ struct ConnectionCenterNext: View {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14))
                     Text("Done")
-                        .font(.system(size: 13, weight: .medium))
+                        .talkieType(.preview)
                 }
                 .foregroundStyle(theme.colors.textSecondary)
             }
@@ -268,8 +268,7 @@ struct ConnectionCenterNext: View {
             Spacer()
 
             Text("Connections")
-                .font(.system(size: 17, weight: .semibold))
-                .tracking(-0.4)
+                .talkieType(.headlineSecondary)
                 .foregroundStyle(theme.colors.textPrimary)
 
             Spacer()
@@ -295,11 +294,11 @@ struct ConnectionCenterNext: View {
                 .foregroundStyle(theme.currentTheme.chrome.accent)
 
             Text("Connection Center")
-                .font(.system(size: 18, weight: .semibold))
+                .talkieType(.headlineSecondary)
                 .foregroundStyle(theme.colors.textPrimary)
 
             Text("Talkie works offline by default. Add connections to sync and access your memos across devices.")
-                .font(.system(size: 14))
+                .talkieType(.preview)
                 .foregroundStyle(theme.colors.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
@@ -312,10 +311,10 @@ struct ConnectionCenterNext: View {
     private var footerSection: some View {
         VStack(spacing: 4) {
             Text("Each connection is optional and additive.")
-                .font(.system(size: 12))
+                .talkieType(.fieldLabel)
                 .foregroundStyle(theme.colors.textTertiary)
             Text("Your memos are always stored locally first.")
-                .font(.system(size: 12))
+                .talkieType(.fieldLabel)
                 .foregroundStyle(theme.colors.textTertiary)
         }
         .padding(.top, 14)
@@ -374,10 +373,10 @@ private struct ConnectionRowNext: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.title)
-                        .font(.system(size: 15, weight: .medium))
+                        .talkieType(.listTitle)
                         .foregroundStyle(theme.colors.textPrimary)
                     Text(row.status.displayText)
-                        .font(.system(size: 12))
+                        .talkieType(.fieldLabel)
                         .foregroundStyle(theme.colors.textSecondary)
                 }
 
@@ -386,7 +385,7 @@ private struct ConnectionRowNext: View {
                 if row.kind != .local && !row.status.isConnected, let label = actionLabel {
                     HStack(spacing: 4) {
                         Text(label)
-                            .font(.system(size: 12, weight: .medium))
+                            .talkieType(.fieldLabel)
                         Image(systemName: "chevron.right")
                             .font(.system(size: 10, weight: .semibold))
                     }

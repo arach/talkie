@@ -182,8 +182,7 @@ struct KeyboardActivationNext: View {
             Spacer()
 
             Text("· KEYBOARD MODE")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .tracking(2.4)
+                .talkieType(.channelLabel)
                 .foregroundStyle(theme.colors.textTertiary)
 
             Spacer()
@@ -196,8 +195,7 @@ struct KeyboardActivationNext: View {
                     .fill(store.keyboardModeEnabled ? .green : theme.colors.textTertiary.opacity(0.4))
                     .frame(width: 6, height: 6)
                 Text(store.keyboardModeEnabled ? "ON" : "OFF")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .tracking(1)
+                    .talkieType(.channelLabelTiny)
                     .foregroundStyle(theme.colors.textSecondary)
             }
             .padding(.horizontal, 8)
@@ -225,7 +223,7 @@ struct KeyboardActivationNext: View {
             if let transcript = store.lastTranscript, store.phase == .done {
                 ScrollView(.vertical, showsIndicators: false) {
                     Text(transcript)
-                        .font(.system(size: 13))
+                        .talkieType(.preview)
                         .foregroundStyle(theme.colors.textSecondary)
                         .multilineTextAlignment(.leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -285,8 +283,7 @@ struct KeyboardActivationNext: View {
             HStack(spacing: 8) {
                 ProgressView().scaleEffect(0.7)
                 Text("INITIALIZING")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .tracking(2.4)
+                    .talkieType(.channelLabel)
                     .foregroundStyle(theme.colors.textTertiary)
             }
 
@@ -305,11 +302,11 @@ struct KeyboardActivationNext: View {
                 .fill(active ? Color.green.opacity(0.8) : theme.colors.textTertiary.opacity(0.4))
                 .frame(width: 5, height: 5)
             Text(label)
-                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .talkieType(.timestamp)
                 .foregroundStyle(active ? theme.colors.textSecondary : theme.colors.textTertiary)
             Spacer()
             Text(active ? "OK" : "…")
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .talkieType(.channelLabelTiny)
                 .foregroundStyle(active ? Color.green.opacity(0.7) : theme.colors.textTertiary)
         }
         .frame(maxWidth: 180)
@@ -322,7 +319,7 @@ struct KeyboardActivationNext: View {
                     .fill(.green)
                     .frame(width: 10, height: 10)
                 Text("Ready")
-                    .font(.system(size: 15, weight: .medium))
+                    .talkieType(.listTitle)
                     .foregroundStyle(theme.colors.textSecondary)
             }
 
@@ -331,7 +328,7 @@ struct KeyboardActivationNext: View {
                     Image(systemName: "mic.fill")
                         .font(.system(size: 11, weight: .semibold))
                     Text("Start Dictation")
-                        .font(.system(size: 13, weight: .medium))
+                        .talkieType(.preview)
                 }
                 .foregroundStyle(theme.currentTheme.chrome.accent)
                 .padding(.horizontal, 20)
@@ -354,7 +351,7 @@ struct KeyboardActivationNext: View {
                     .shadow(color: .red.opacity(0.6),
                             radius: theme.currentTheme.chrome.glowRadius)
                 Text(formatDuration(store.recordingDuration))
-                    .font(.system(size: 15, weight: .medium, design: .monospaced))
+                    .talkieType(.instrumentReadoutSmall)
                     .foregroundStyle(theme.colors.textSecondary)
                     .monospacedDigit()
             }
@@ -364,7 +361,7 @@ struct KeyboardActivationNext: View {
                     Image(systemName: "stop.fill")
                         .font(.system(size: 11, weight: .semibold))
                     Text("End Dictation")
-                        .font(.system(size: 13, weight: .medium))
+                        .talkieType(.preview)
                 }
                 .foregroundStyle(.red)
                 .padding(.horizontal, 20)
@@ -382,7 +379,7 @@ struct KeyboardActivationNext: View {
         HStack(spacing: 8) {
             ProgressView().scaleEffect(0.7)
             Text(processingLabel)
-                .font(.system(size: 14))
+                .talkieType(.preview)
                 .foregroundStyle(theme.colors.textSecondary)
         }
     }
@@ -397,7 +394,7 @@ struct KeyboardActivationNext: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.green)
             Text("Done")
-                .font(.system(size: 14))
+                .talkieType(.preview)
                 .foregroundStyle(theme.colors.textSecondary)
         }
     }
@@ -405,11 +402,10 @@ struct KeyboardActivationNext: View {
     private func errorView(_ message: String) -> some View {
         VStack(spacing: 10) {
             Text("· ERROR")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .tracking(1.5)
+                .talkieType(.channelLabel)
                 .foregroundStyle(.red)
             Text(message)
-                .font(.system(size: 12))
+                .talkieType(.fieldLabel)
                 .foregroundStyle(theme.colors.textTertiary)
                 .multilineTextAlignment(.center)
 
@@ -430,8 +426,7 @@ struct KeyboardActivationNext: View {
                 Image(systemName: icon)
                     .font(.system(size: 9, weight: .semibold, design: .monospaced))
                 Text(label.uppercased())
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .tracking(0.5)
+                    .talkieType(.channelLabelTiny)
             }
             .foregroundStyle(theme.colors.textSecondary)
             .padding(.horizontal, 10)
@@ -481,10 +476,10 @@ struct KeyboardActivationNext: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Switch back to your app to continue")
-                    .font(.system(size: 12, weight: .medium))
+                    .talkieType(.fieldLabel)
                     .foregroundStyle(theme.colors.textSecondary)
                 Text("iOS doesn't allow keyboard extensions to switch apps automatically. This is an Apple platform limitation.")
-                    .font(.system(size: 11))
+                    .talkieType(.hint)
                     .foregroundStyle(theme.colors.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }

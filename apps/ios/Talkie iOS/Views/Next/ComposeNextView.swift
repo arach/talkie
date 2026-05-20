@@ -111,7 +111,7 @@ private struct ComposeHeader: View {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14))
                     Text(backLabel)
-                        .font(.system(size: 13, weight: .medium))
+                        .talkieType(.preview)
                 }
                 .foregroundStyle(theme.colors.textSecondary)
             }
@@ -121,8 +121,7 @@ private struct ComposeHeader: View {
 
             VStack(spacing: 2) {
                 Text(state == .diff ? "· COMPOSE WITH · v1 → v2" : "· COMPOSE WITH")
-                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                    .tracking(1.92)
+                    .talkieType(.channelLabelTiny)
                     .foregroundStyle(theme.colors.textTertiary)
 
                 Button(action: { /* TODO: model picker */ }) {
@@ -131,9 +130,8 @@ private struct ComposeHeader: View {
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(theme.currentTheme.chrome.accent)
                         Text(modelLabel)
-                            .font(.system(size: 15, weight: .medium))
+                            .talkieType(.listTitle)
                             .foregroundStyle(theme.colors.textPrimary)
-                            .tracking(-0.3)
                         Image(systemName: "chevron.down")
                             .font(.system(size: 9, weight: .semibold))
                             .foregroundStyle(theme.colors.textTertiary)
@@ -248,9 +246,8 @@ private struct ParagraphView: View {
                         .italic()
                 } ?? Text(""))
             )
-            .font(.system(size: 15))
+            .talkieType(.listTitle)
             .lineSpacing(4)
-            .tracking(-0.07)
 
             if showCaret {
                 BlinkingCaret(color: accent)
@@ -291,12 +288,11 @@ private struct ListeningStrip: View {
             .frame(width: 16, height: 12)
 
             Text("LISTENING")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .tracking(2)
+                .talkieType(.channelLabel)
                 .foregroundStyle(theme.currentTheme.chrome.accent)
 
             Text("\u{201C}\(commandText)\u{2026}\u{201D}")
-                .font(.system(size: 12))
+                .talkieType(.fieldLabel)
                 .italic()
                 .foregroundStyle(theme.colors.textSecondary)
                 .lineLimit(2)
@@ -325,12 +321,11 @@ private struct GeneratingStrip: View {
         HStack(spacing: 8) {
             ProgressView().scaleEffect(0.6)
             Text("Sonnet 4.6 · iterating")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .tracking(1.8)
+                .talkieType(.channelLabel)
                 .foregroundStyle(theme.colors.textSecondary)
             Spacer()
             Text(eta)
-                .font(.system(size: 10, design: .monospaced))
+                .talkieType(.timestamp)
                 .foregroundStyle(theme.colors.textTertiary)
         }
         .padding(.horizontal, 12)
@@ -400,13 +395,11 @@ struct DiffInline: View {
             // v1 — what's being replaced
             VStack(alignment: .leading, spacing: 6) {
                 Text("v1")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .tracking(1.6)
+                    .talkieType(.channelLabelTiny)
                     .foregroundStyle(Color.red.opacity(0.75))
                 Text(diff.original)
-                    .font(.system(size: 15))
+                    .talkieType(.listTitle)
                     .lineSpacing(4)
-                    .tracking(-0.07)
                     .foregroundStyle(theme.colors.textTertiary)
                     .strikethrough(true, color: Color.red.opacity(0.45))
             }
@@ -414,13 +407,11 @@ struct DiffInline: View {
             // v2 — proposed
             VStack(alignment: .leading, spacing: 6) {
                 Text("v2 · just now")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .tracking(1.6)
+                    .talkieType(.channelLabelTiny)
                     .foregroundStyle(theme.currentTheme.chrome.accent)
                 Text(diff.proposed)
-                    .font(.system(size: 15))
+                    .talkieType(.listTitle)
                     .lineSpacing(4)
-                    .tracking(-0.07)
                     .foregroundStyle(theme.colors.textPrimary)
                     .padding(8)
                     .background(
@@ -436,8 +427,7 @@ struct DiffInline: View {
                     .foregroundStyle(theme.currentTheme.chrome.accent)
                 Spacer()
             }
-            .font(.system(size: 10, weight: .semibold, design: .monospaced))
-            .tracking(1.5)
+            .talkieType(.channelLabel)
             .padding(.top, 2)
         }
     }
@@ -454,14 +444,13 @@ private struct QuickTransforms: View {
     var body: some View {
         HStack(spacing: 6) {
             Text("· QUICK")
-                .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                .tracking(1.8)
+                .talkieType(.channelLabelTiny)
                 .foregroundStyle(theme.colors.textTertiary)
 
             ForEach(ComposeStore.QuickTransform.allCases, id: \.self) { transform in
                 Button(action: { onTap(transform) }) {
                     Text(transform.label)
-                        .font(.system(size: 11, weight: .medium))
+                        .talkieType(.fieldLabel)
                         .foregroundStyle(theme.colors.textSecondary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
@@ -541,7 +530,7 @@ private struct ActionTray: View {
     private func actionChip(label: String, active: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(.system(size: 11, weight: .semibold))
+                .talkieType(.fieldLabel)
                 .foregroundStyle(active ? theme.colors.cardBackground : theme.colors.textSecondary)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 7)

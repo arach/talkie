@@ -36,13 +36,11 @@ struct AppearancePickerNext: View {
 
                     HStack(spacing: 6) {
                         Text("· THEME")
-                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                            .tracking(2.4)
+                            .talkieType(.channelLabelTiny)
                             .foregroundStyle(theme.colors.textTertiary)
                         Spacer()
                         Text(theme.currentTheme.displayName.uppercased())
-                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                            .tracking(2)
+                            .talkieType(.channelLabelTiny)
                             .foregroundStyle(theme.currentTheme.chrome.accent)
                     }
                     .padding(.horizontal, 16)
@@ -75,7 +73,7 @@ struct AppearancePickerNext: View {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14))
                     Text("Done")
-                        .font(.system(size: 13, weight: .medium))
+                        .talkieType(.preview)
                 }
                 .foregroundStyle(theme.colors.textSecondary)
             }
@@ -84,8 +82,7 @@ struct AppearancePickerNext: View {
             Spacer()
 
             Text("Appearance")
-                .font(.system(size: 17, weight: .semibold))
-                .tracking(-0.4)
+                .talkieType(.headlineSecondary)
                 .foregroundStyle(theme.colors.textPrimary)
 
             Spacer()
@@ -111,8 +108,7 @@ private struct AppearanceModeRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("· APPEARANCE MODE")
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                .tracking(2.4)
+                .talkieType(.channelLabelTiny)
                 .foregroundStyle(theme.colors.textTertiary)
                 .padding(.horizontal, 4)
 
@@ -124,7 +120,7 @@ private struct AppearanceModeRow: View {
                             Image(systemName: mode.icon)
                                 .font(.system(size: 11, weight: .medium))
                             Text(mode.displayName)
-                                .font(.system(size: 12, weight: .medium))
+                                .talkieType(.fieldLabel)
                         }
                         .foregroundStyle(isActive
                             ? theme.colors.cardBackground
@@ -177,7 +173,7 @@ private struct ThemePreviewCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 6) {
                         Text(themeOption.displayName)
-                            .font(.system(size: 16, weight: .semibold))
+                            .talkieType(.listTitle)
                             .foregroundStyle(theme.colors.textPrimary)
                         if isActive {
                             Image(systemName: "checkmark.circle.fill")
@@ -187,7 +183,7 @@ private struct ThemePreviewCard: View {
                     }
 
                     Text(themeOption.description)
-                        .font(.system(size: 12))
+                        .talkieType(.fieldLabel)
                         .foregroundStyle(theme.colors.textSecondary)
                         .multilineTextAlignment(.leading)
                         .lineLimit(2)
@@ -238,8 +234,7 @@ private struct ThemeTokenChip: View {
 
     var body: some View {
         Text(label)
-            .font(.system(size: 8, weight: .semibold, design: .monospaced))
-            .tracking(1.4)
+            .talkieType(.channelLabelTiny)
             .foregroundStyle(value.chrome.accent.opacity(0.85))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)

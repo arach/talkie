@@ -215,18 +215,17 @@ struct SignInNext: View {
                     .padding(.bottom, 18)
 
                 Text("· CONNECT YOUR DEVICES")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .tracking(2.4)
+                    .talkieType(.channelLabel)
                     .foregroundStyle(theme.colors.textTertiary)
                     .padding(.bottom, 6)
 
                 Text("Sync across iPhone and Mac")
-                    .font(.system(size: 18, weight: .semibold))
+                    .talkieType(.headlineSecondary)
                     .foregroundStyle(theme.colors.textPrimary)
                     .padding(.bottom, 10)
 
                 Text("Create a free account to sync memos\nbetween your iPhone and Mac.")
-                    .font(.system(size: 15, weight: .light))
+                    .talkieType(.listTitle)
                     .foregroundStyle(theme.colors.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(4)
@@ -309,7 +308,7 @@ struct SignInNext: View {
                 Image(systemName: "info.circle")
                     .font(.system(size: 13, weight: .light))
                 Text("What's included?")
-                    .font(.system(size: 13, weight: .light))
+                    .talkieType(.preview)
                 Image(systemName: store.showInfo ? "chevron.up" : "chevron.down")
                     .font(.system(size: 10, weight: .light))
             }
@@ -335,7 +334,7 @@ struct SignInNext: View {
                 .foregroundStyle(theme.colors.success)
                 .frame(width: 20)
             Text(text)
-                .font(.system(size: 13, weight: .light))
+                .talkieType(.preview)
                 .foregroundStyle(theme.colors.textSecondary)
         }
     }
@@ -347,8 +346,7 @@ struct SignInNext: View {
             ForEach(Array(store.authSteps.enumerated()), id: \.element.id) { idx, step in
                 HStack(spacing: 10) {
                     Text(String(format: "S%02d", idx + 1))
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                        .tracking(1.4)
+                        .talkieType(.channelLabelTiny)
                         .foregroundStyle(stepIsActive(step) ? theme.currentTheme.chrome.accent : theme.colors.textTertiary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -361,11 +359,11 @@ struct SignInNext: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(step.name)
-                            .font(.system(size: 13, weight: .medium))
+                            .talkieType(.preview)
                             .foregroundStyle(stepColor(step.status))
                         if let detail = step.detail {
                             Text(detail)
-                                .font(.system(size: 11, weight: .light))
+                                .talkieType(.hint)
                                 .foregroundStyle(theme.colors.textTertiary)
                         }
                     }
@@ -418,7 +416,7 @@ struct SignInNext: View {
                 .font(.system(size: 14))
                 .foregroundStyle(.red)
             Text(message)
-                .font(.system(size: 13, weight: .light))
+                .talkieType(.preview)
                 .foregroundStyle(.red)
                 .lineLimit(2)
         }
@@ -438,8 +436,7 @@ struct SignInNext: View {
                         .font(.system(size: 16, weight: .medium))
                 }
                 Text(store.isSigningIn ? "CONNECTING..." : "CONTINUE WITH APPLE")
-                    .font(.system(size: 13, weight: .bold))
-                    .tracking(2)
+                    .talkieType(.preview)
             }
             .foregroundStyle(theme.colors.cardBackground)
             .frame(maxWidth: .infinity)
@@ -462,7 +459,7 @@ struct SignInNext: View {
             Image(systemName: "lock.shield")
                 .font(.system(size: 10))
             Text("Your data stays on your devices and your iCloud.")
-                .font(.system(size: 10, design: .monospaced))
+                .talkieType(.timestamp)
         }
         .foregroundStyle(theme.colors.textTertiary.opacity(0.7))
     }

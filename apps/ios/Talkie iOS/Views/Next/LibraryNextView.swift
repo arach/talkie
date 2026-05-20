@@ -86,7 +86,7 @@ private struct LibraryHeader: View {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14))
                     Text("Done")
-                        .font(.system(size: 13, weight: .medium))
+                        .talkieType(.preview)
                 }
                 .foregroundStyle(theme.colors.textSecondary)
             }
@@ -95,15 +95,13 @@ private struct LibraryHeader: View {
             Spacer()
 
             Text("Library")
-                .font(.system(size: 17, weight: .semibold))
-                .tracking(-0.4)
+                .talkieType(.headlineSecondary)
                 .foregroundStyle(theme.colors.textPrimary)
 
             Spacer()
 
             Text("\(count) / \(total)")
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .monospacedDigit()
+                .talkieType(.channelLabelSmall)
                 .foregroundStyle(theme.colors.textTertiary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
@@ -151,8 +149,7 @@ private struct TabRow: View {
         }) {
             VStack(spacing: 4) {
                 Text(tab.label)
-                    .font(.system(size: 13, weight: .medium))
-                    .tracking(-0.05)
+                    .talkieType(.preview)
                     .foregroundStyle(isActive
                         ? theme.currentTheme.chrome.accent
                         : theme.colors.textTertiary)
@@ -189,15 +186,13 @@ private struct LibraryListCard: View {
 
                 HStack(spacing: 6) {
                     Text("· EARLIER · THIS WEEK")
-                        .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                        .tracking(1.8)
+                        .talkieType(.channelLabelTiny)
                         .foregroundStyle(theme.currentTheme.chrome.accent)
                         .textCase(.uppercase)
                     Spacer()
                     if earlierCount > 0 {
                         Text("\(earlierCount) MORE")
-                            .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                            .tracking(1.8)
+                            .talkieType(.channelLabelTiny)
                             .foregroundStyle(theme.colors.textTertiary)
                     }
                 }
@@ -249,20 +244,18 @@ private struct LibraryRow: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             Text(item.title)
-                                .font(.system(size: 15, weight: .medium))
+                                .talkieType(.listTitle)
                                 .foregroundStyle(theme.colors.textPrimary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
-                                .tracking(-0.05)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             Text(item.relativeTime)
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                .monospacedDigit()
+                                .talkieType(.channelLabel)
                                 .foregroundStyle(theme.colors.textTertiary)
                         }
                         if let preview = item.preview {
                             Text(preview)
-                                .font(.system(size: 12.5))
+                                .talkieType(.preview)
                                 .foregroundStyle(theme.colors.textSecondary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
@@ -307,11 +300,10 @@ private struct EmptyTabState: View {
     var body: some View {
         VStack(spacing: 6) {
             Text("Nothing here yet")
-                .font(.system(size: 14, weight: .medium))
+                .talkieType(.preview)
                 .foregroundStyle(theme.colors.textSecondary)
             Text(hint)
-                .font(.system(size: 11, weight: .regular, design: .monospaced))
-                .tracking(0.4)
+                .talkieType(.fieldValue)
                 .foregroundStyle(theme.colors.textTertiary)
                 .multilineTextAlignment(.center)
         }
@@ -341,7 +333,7 @@ private struct SearchBar: View {
                 .font(.system(size: 13))
                 .foregroundStyle(theme.colors.textTertiary)
             TextField(placeholder, text: $query)
-                .font(.system(size: 13))
+                .talkieType(.preview)
                 .foregroundStyle(theme.colors.textPrimary)
                 .textFieldStyle(.plain)
         }

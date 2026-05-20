@@ -236,7 +236,7 @@ struct VoiceMemoDetailNext: View {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14))
                     Text("Memos")
-                        .font(.system(size: 13, weight: .medium))
+                        .talkieType(.preview)
                 }
                 .foregroundStyle(theme.colors.textSecondary)
             }
@@ -245,8 +245,7 @@ struct VoiceMemoDetailNext: View {
             Spacer()
 
             Text("Memo")
-                .font(.system(size: 17, weight: .semibold))
-                .tracking(-0.4)
+                .talkieType(.headlineSecondary)
                 .foregroundStyle(theme.colors.textPrimary)
 
             Spacer()
@@ -267,8 +266,7 @@ struct VoiceMemoDetailNext: View {
     private var metaRow: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(store.memo.title)
-                .font(.system(size: 22, weight: .semibold))
-                .tracking(-0.4)
+                .talkieType(.headline)
                 .foregroundStyle(theme.colors.textPrimary)
 
             HStack(spacing: 6) {
@@ -276,8 +274,7 @@ struct VoiceMemoDetailNext: View {
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(theme.currentTheme.chrome.accent)
                 Text("· MEMO · \(store.memo.createdAtLabel.uppercased()) · \(store.memo.durationLabel)")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .tracking(1.6)
+                    .talkieType(.channelLabelTiny)
                     .foregroundStyle(theme.colors.textTertiary)
             }
         }
@@ -318,8 +315,7 @@ struct VoiceMemoDetailNext: View {
             )
 
             Text("\(store.currentTimeLabel) / \(store.memo.durationLabel)")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .tracking(0.5)
+                .talkieType(.channelLabel)
                 .foregroundStyle(theme.colors.textTertiary)
                 .frame(width: 78, alignment: .trailing)
                 .monospacedDigit()
@@ -339,17 +335,16 @@ struct VoiceMemoDetailNext: View {
     private var transcriptSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Text("· TRANSCRIPT").font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(2).foregroundStyle(theme.colors.textTertiary)
+                .talkieType(.channelLabelTiny)
                 Spacer()
-                Text("\(wordCount) WORDS").font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1.6).foregroundStyle(theme.colors.textTertiary)
+                .talkieType(.channelLabelTiny)
             }
             .padding(.horizontal, 4)
 
             Text(store.memo.transcript)
-                .font(.system(size: 15))
+                .talkieType(.listTitle)
                 .lineSpacing(5)
                 .foregroundStyle(theme.colors.textPrimary)
-                .tracking(-0.05)
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 10).fill(theme.colors.cardBackground).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: theme.currentTheme.chrome.hairlineWidth)))
@@ -371,7 +366,7 @@ struct VoiceMemoDetailNext: View {
     private func actionChip(label: String, isPrimary: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(.system(size: 12, weight: .semibold))
+                .talkieType(.fieldLabel)
                 .foregroundStyle(isPrimary ? theme.colors.cardBackground : theme.colors.textSecondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)

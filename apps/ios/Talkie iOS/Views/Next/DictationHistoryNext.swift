@@ -75,7 +75,7 @@ struct DictationHistoryNext: View {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14))
                     Text("Done")
-                        .font(.system(size: 13, weight: .medium))
+                        .talkieType(.preview)
                 }
                 .foregroundStyle(theme.colors.textSecondary)
             }
@@ -84,15 +84,13 @@ struct DictationHistoryNext: View {
             Spacer()
 
             Text("Dictations")
-                .font(.system(size: 17, weight: .semibold))
-                .tracking(-0.4)
+                .talkieType(.headlineSecondary)
                 .foregroundStyle(theme.colors.textPrimary)
 
             Spacer()
 
             Text("\(feed.totalCount)")
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .monospacedDigit()
+                .talkieType(.channelLabelSmall)
                 .foregroundStyle(theme.currentTheme.chrome.accent)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
@@ -147,7 +145,7 @@ struct DictationHistoryNext: View {
                         Image(systemName: "arrow.down")
                             .font(.system(size: 10, weight: .semibold))
                         Text("Load \(min(10, feed.entries.count - feed.displayLimit)) more")
-                            .font(.system(size: 13))
+                            .talkieType(.preview)
                         Spacer()
                     }
                     .foregroundStyle(theme.colors.textSecondary)
@@ -170,11 +168,10 @@ struct DictationHistoryNext: View {
                 .font(.system(size: 32, weight: .light))
                 .foregroundStyle(theme.colors.textTertiary)
             Text("· NO DICTATIONS")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .tracking(2)
+                .talkieType(.channelLabel)
                 .foregroundStyle(theme.colors.textTertiary)
             Text("Use the keyboard to add dictations")
-                .font(.system(size: 13))
+                .talkieType(.preview)
                 .foregroundStyle(theme.colors.textTertiary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -211,7 +208,7 @@ private struct DictationEntryRow: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(entry.text)
-                    .font(.system(size: 14, weight: .medium))
+                    .talkieType(.preview)
                     .foregroundStyle(theme.colors.textPrimary)
                     .lineLimit(1)
 
@@ -223,7 +220,7 @@ private struct DictationEntryRow: View {
                     Text(formatTimestamp(entry.timestamp))
                     Spacer()
                 }
-                .font(.system(size: 10))
+                .talkieType(.hint)
                 .foregroundStyle(theme.colors.textTertiary)
             }
 

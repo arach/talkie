@@ -160,7 +160,7 @@ struct WebCaptureBrowserNext: View {
         HStack {
             Button(action: { AppShellRouter.shared.openHome() }) {
                 Text("Cancel")
-                    .font(.system(size: 14, weight: .medium))
+                    .talkieType(.preview)
                     .foregroundStyle(theme.colors.textSecondary)
             }
             .buttonStyle(.plain)
@@ -169,12 +169,11 @@ struct WebCaptureBrowserNext: View {
 
             VStack(spacing: 1) {
                 Text("Browse & Capture")
-                    .font(.system(size: 15, weight: .semibold))
-                    .tracking(-0.3)
+                    .talkieType(.listTitle)
                     .foregroundStyle(theme.colors.textPrimary)
                 if let title = store.currentTitle, !urlFieldFocused {
                     Text(title)
-                        .font(.system(size: 10, design: .monospaced))
+                        .talkieType(.timestamp)
                         .foregroundStyle(theme.colors.textTertiary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -189,7 +188,7 @@ struct WebCaptureBrowserNext: View {
                         ProgressView().scaleEffect(0.6)
                     }
                     Text("Capture")
-                        .font(.system(size: 14, weight: .semibold))
+                        .talkieType(.preview)
                 }
                 .foregroundStyle(store.hasContent && !store.isCapturing
                     ? theme.currentTheme.chrome.accent
@@ -252,7 +251,7 @@ struct WebCaptureBrowserNext: View {
 
             if store.voiceSearchState == .recording {
                 Text(store.urlBarText.isEmpty ? "Listening…" : store.urlBarText)
-                    .font(.system(size: 14))
+                    .talkieType(.preview)
                     .foregroundStyle(store.urlBarText.isEmpty
                         ? theme.colors.textTertiary
                         : theme.colors.textPrimary)
@@ -260,7 +259,7 @@ struct WebCaptureBrowserNext: View {
                     .lineLimit(1)
             } else {
                 TextField("Search or enter URL", text: $store.urlBarText)
-                    .font(.system(size: 14))
+                    .talkieType(.preview)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.webSearch)
@@ -303,11 +302,11 @@ struct WebCaptureBrowserNext: View {
             Button("Stop") {
                 voiceSearch.stop(insertTranscript: true)
             }
-            .font(.system(size: 13, weight: .semibold))
+            .talkieType(.preview)
             .foregroundStyle(.red)
         } else if urlFieldFocused {
             Button("Done") { urlFieldFocused = false }
-                .font(.system(size: 13, weight: .semibold))
+                .talkieType(.preview)
                 .foregroundStyle(theme.currentTheme.chrome.accent)
         } else {
             Button(action: { webState.reload() }) {
@@ -350,12 +349,11 @@ struct WebCaptureBrowserNext: View {
         VStack(spacing: 0) {
             HStack {
                 Text("· HISTORY")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .tracking(2)
+                    .talkieType(.channelLabelTiny)
                     .foregroundStyle(theme.colors.textTertiary)
                 Spacer()
                 Text("\(store.history.count)")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .talkieType(.channelLabelTiny)
                     .foregroundStyle(theme.colors.textTertiary)
             }
             .padding(.horizontal, 14)
@@ -393,12 +391,12 @@ struct WebCaptureBrowserNext: View {
                 VStack(alignment: .leading, spacing: 1) {
                     if let title = entry.title {
                         Text(title)
-                            .font(.system(size: 14, weight: .medium))
+                            .talkieType(.preview)
                             .foregroundStyle(theme.colors.textPrimary)
                             .lineLimit(1)
                     }
                     Text(entry.url)
-                        .font(.system(size: 11, design: .monospaced))
+                        .talkieType(.fieldValue)
                         .foregroundStyle(theme.colors.textTertiary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -421,7 +419,7 @@ struct WebCaptureBrowserNext: View {
 
     private func emptyHint(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 12, weight: .medium))
+            .talkieType(.fieldLabel)
             .foregroundStyle(theme.colors.textTertiary)
             .padding(20)
             .frame(maxWidth: .infinity)
