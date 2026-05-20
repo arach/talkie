@@ -6,7 +6,7 @@ export default function Architecture() {
     <StudioPage
       eyebrow="Architecture · Site map"
       title="Architecture"
-      help="every routable Next surface · domain-grouped · inbound + outbound entry counts · orphans flagged · proposed wires below. v2 (in-flight via codex-talkie-canvas) upgrades this to a canvas-based journey map with embedded mini-views."
+      help="every routable Next surface · zoomable canvas journey map · embedded mini-views · inbound + outbound flows · orphans flagged · proposed wires below."
     >
       <ArchitectureMap />
     </StudioPage>
