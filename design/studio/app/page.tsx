@@ -64,6 +64,34 @@ const STUDIES = [
     blurb:
       "Three directional sketches for Talkie's Settings surface — Console (dense single scroll), Stations (spatial card grid), Inspector (desktop-style chips + panel). Fresh ideas, no donor crutch.",
   },
+  {
+    slug: "terminal",
+    name: "Terminal",
+    kind: "Surface study",
+    blurb:
+      "SSH session list — saved hosts with status dots, last-connected timestamps, source labels. Populated + empty states. Mirrors iOS TerminalNext.",
+  },
+  {
+    slug: "bridge-detail",
+    name: "Mac Bridge Detail",
+    kind: "Surface study",
+    blurb:
+      "Replaces the legacy BridgeSettingsView sheet. Status + link-health metric strip + saved sessions + actions. Paired and unpaired states. Mirrors iOS BridgeDetailNext.",
+  },
+  {
+    slug: "camera",
+    name: "Camera",
+    kind: "Surface study",
+    blurb:
+      "Full-screen camera capture with cropping marks, status pill, shutter FAB. Preview / captured / denied states. Mirrors iOS CameraCaptureNext.",
+  },
+  {
+    slug: "ask-ai",
+    name: "Ask AI",
+    kind: "Surface study",
+    blurb:
+      "Agentic loop surface — multi-turn prompt/response with channel-labelled turns (T01/T02…), agent presets, telemetry meta. Idle / thinking / multi-turn states.",
+  },
 ];
 
 export default function Landing() {
