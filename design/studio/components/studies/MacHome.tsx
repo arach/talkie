@@ -197,8 +197,6 @@ export function MacHome({ width = 1100 }: { width?: number } = {}) {
           <RecentTwoPane />
           <RoutinesStrip />
           <DiscoveryRow />
-          <SystemStatusRail scheme={bayScheme} />
-          <OwnershipStrip />
         </div>
       </div>
       {recording ? <RecordingHUD schemeKey={hudScheme} /> : null}

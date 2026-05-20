@@ -100,8 +100,6 @@ struct ScopeHomeView: View {
                     recentTwoPane
                     routinesStrip
                     discoveryRow
-                    systemStatusRail
-                    ownershipStrip
                 }
                 .padding(.horizontal, 32)
                 .padding(.top, ScopeTopBandLayout.height + ScopeTopBandLayout.topInset + 8)
