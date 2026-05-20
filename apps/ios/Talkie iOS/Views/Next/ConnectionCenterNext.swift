@@ -20,11 +20,19 @@
 //  gray / orange / red).
 //
 
+import Combine
+import Observation
 import SwiftUI
 
 @MainActor
 final class ConnectionCenterStore: ObservableObject {
     @Published var rows: [Row]
+    @Published private(set) var currentStatuses: [Row.Kind: Row.Status] = [:]
+
+    private let iCloudStatus = iCloudStatusManager.shared
+    private let appSettings = TalkieAppSettings.shared
+    private let bridgeManager = BridgeManager.shared
+    private var cancellables = Set<AnyCancellable>()
 
     struct Row: Identifiable {
         let id: Kind
@@ -78,29 +86,144 @@ final class ConnectionCenterStore: ObservableObject {
     }
 
     init() {
-        self.rows = Self.mockRows
+        self.rows = []
+        rebuildRows()
+        bindUpdates()
+        trackObservationBackedState()
     }
 
-    // Codex wires against iCloudStatusManager + TalkieAppSettings +
-    // BridgeManager — same status-resolution logic the donor's
-    // `status(for:)` function performs.
+    func status(for kind: Row.Kind) -> Row.Status {
+        currentStatuses[kind] ?? Self.status(
+            for: kind,
+            iCloudStatus: iCloudStatus.status,
+            iCloudSyncEnabled: appSettings.iCloudSyncEnabled,
+            bridgeIsPaired: bridgeManager.isPaired,
+            bridgeStatus: bridgeManager.status
+        )
+    }
 
-    static let mockRows: [Row] = [
-        Row(id: .local, kind: .local,
-            title: "Local Storage", description: "Your memos on this device",
-            icon: "iphone", status: .active),
-        Row(id: .iCloud, kind: .iCloud,
-            title: "iCloud", description: "Sync across Apple devices",
-            icon: "icloud", status: .notSignedIn),
-        Row(id: .macBridge, kind: .macBridge,
-            title: "Mac Bridge", description: "Connect to Talkie on Mac",
-            icon: "desktopcomputer", status: .notSetUp),
-    ]
+    func setICloudSyncEnabled(_ enabled: Bool) {
+        appSettings.iCloudSyncEnabled = enabled
+        rebuildRows()
+    }
+
+    private func bindUpdates() {
+        iCloudStatus.$status
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.rebuildRows() }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
+            .merge(with: NotificationCenter.default.publisher(for: .bridgeDidConnect))
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.rebuildRows() }
+            .store(in: &cancellables)
+    }
+
+    private func trackObservationBackedState() {
+        withObservationTracking {
+            _ = appSettings.iCloudSyncEnabled
+            _ = bridgeManager.isPaired
+            _ = bridgeManager.status
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.rebuildRows()
+                self?.trackObservationBackedState()
+            }
+        }
+    }
+
+    private func rebuildRows() {
+        let statuses = Dictionary(
+            uniqueKeysWithValues: Row.Kind.allCases.map { kind in
+                (kind, Self.status(
+                    for: kind,
+                    iCloudStatus: iCloudStatus.status,
+                    iCloudSyncEnabled: appSettings.iCloudSyncEnabled,
+                    bridgeIsPaired: bridgeManager.isPaired,
+                    bridgeStatus: bridgeManager.status
+                ))
+            }
+        )
+
+        currentStatuses = statuses
+        rows = Row.Kind.allCases.map { kind in
+            Row(
+                id: kind,
+                kind: kind,
+                title: kind.title,
+                description: kind.description,
+                icon: kind.icon,
+                status: statuses[kind] ?? .notAvailable
+            )
+        }
+    }
+
+    private static func status(
+        for kind: Row.Kind,
+        iCloudStatus: iCloudStatus,
+        iCloudSyncEnabled: Bool,
+        bridgeIsPaired: Bool,
+        bridgeStatus: BridgeManager.ConnectionStatus
+    ) -> Row.Status {
+        switch kind {
+        case .local:
+            return .active
+        case .iCloud:
+            switch iCloudStatus {
+            case .available:
+                return iCloudSyncEnabled ? .connected : .disabled
+            case .noAccount:
+                return .notSignedIn
+            case .checking:
+                return .syncing(count: 0)
+            default:
+                return .notAvailable
+            }
+        case .macBridge:
+            guard bridgeIsPaired else { return .notSetUp }
+            switch bridgeStatus {
+            case .connected:
+                return .connected
+            case .connecting:
+                return .syncing(count: 0)
+            case .disconnected, .error:
+                return .error("Disconnected")
+            }
+        }
+    }
+}
+
+private extension ConnectionCenterStore.Row.Kind {
+    var title: String {
+        switch self {
+        case .local: return "Local Storage"
+        case .iCloud: return "iCloud"
+        case .macBridge: return "Mac Bridge"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .local: return "Your memos on this device"
+        case .iCloud: return "Sync across Apple devices"
+        case .macBridge: return "Connect to Talkie on Mac"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .local: return "iphone"
+        case .iCloud: return "icloud"
+        case .macBridge: return "desktopcomputer"
+        }
+    }
 }
 
 struct ConnectionCenterNext: View {
     @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var store = ConnectionCenterStore()
+    @State private var showingBridgeSettings = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -125,6 +248,11 @@ struct ConnectionCenterNext: View {
                 .padding(.vertical, 12)
             }
             .scrollIndicators(.hidden)
+        }
+        .sheet(isPresented: $showingBridgeSettings) {
+            NavigationStack {
+                BridgeSettingsView()
+            }
         }
     }
 
@@ -207,15 +335,20 @@ struct ConnectionCenterNext: View {
             // Always active; no action.
             break
         case .iCloud:
-            // Donor opens Settings (UIApplication.openSettingsURLString)
-            // when not signed in. Codex bridges the real flow.
-            if let url = URL(string: UIApplication.openSettingsURLString) {
-                UIApplication.shared.open(url)
+            switch store.status(for: .iCloud) {
+            case .notSignedIn:
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            case .disabled:
+                store.setICloudSyncEnabled(true)
+            case .connected:
+                store.setICloudSyncEnabled(false)
+            default:
+                break
             }
         case .macBridge:
-            // Donor pushes BridgeSettingsView. No Next port yet —
-            // routing to Home as a soft fallback.
-            AppShellRouter.shared.openHome()
+            showingBridgeSettings = true
         }
     }
 }

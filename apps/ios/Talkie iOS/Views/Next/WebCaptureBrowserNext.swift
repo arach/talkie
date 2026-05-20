@@ -22,6 +22,7 @@
 //
 
 import SwiftUI
+import TalkieMobileKit
 
 @MainActor
 final class WebCaptureBrowserStore: ObservableObject {
@@ -37,40 +38,73 @@ final class WebCaptureBrowserStore: ObservableObject {
     @Published var voiceSearchError: String?
     @Published var history: [HistoryEntry] = []
 
+    private let browseHistory = BrowseHistory.shared
+
     enum VoiceSearchState { case idle, recording, transcribing }
 
     struct HistoryEntry: Identifiable {
-        let id = UUID()
+        let id: UUID
         let url: String
         let title: String?
+        let domain: String?
         let lastVisited: Date
+
+        init(entry: BrowseHistoryEntry) {
+            self.id = entry.id
+            self.url = entry.url
+            self.title = entry.title
+            self.domain = entry.domain
+            self.lastVisited = entry.visitedAt
+        }
     }
 
     init() {
-        // Codex wires the live WebViewState + BrowseHistory store.
-        // Mocks for paint:
-        self.currentURL = "https://arxiv.org/abs/2403.09919"
-        self.currentTitle = "Speculative decoding for long context"
-        self.canGoBack = true
-        self.hasContent = true
-        self.history = [
-            HistoryEntry(url: "https://news.ycombinator.com",        title: "Hacker News",        lastVisited: Date().addingTimeInterval(-3600)),
-            HistoryEntry(url: "https://linear.app/team/issue/INF-412", title: "INF-412 · Linear", lastVisited: Date().addingTimeInterval(-7200)),
-            HistoryEntry(url: "https://arxiv.org/abs/2403.09919",   title: "Speculative decoding for long context", lastVisited: Date().addingTimeInterval(-86400)),
-        ]
+        refreshHistory()
+    }
+
+    func bind(webState: WebViewState) {
+        currentURL = webState.currentURL?.absoluteString
+        currentTitle = webState.currentTitle
+        isLoading = webState.isLoading
+        canGoBack = webState.canGoBack
+        canGoForward = webState.canGoForward
+        hasContent = webState.hasContent
+    }
+
+    func refreshHistory() {
+        history = browseHistory.recentEntries().map(HistoryEntry.init(entry:))
+    }
+
+    func recordHistory(url: String, title: String?) {
+        browseHistory.record(url: url, title: title)
+        refreshHistory()
     }
 
     func suggestions(for query: String) -> [HistoryEntry] {
-        guard !query.isEmpty else { return [] }
-        let q = query.lowercased()
-        return history.filter { $0.url.lowercased().contains(q) || ($0.title ?? "").lowercased().contains(q) }
+        browseHistory.suggestions(for: query).map(HistoryEntry.init(entry:))
+    }
+
+    func updateVoiceSearchState(_ state: InlineDictationController.State) {
+        switch state {
+        case .idle:
+            voiceSearchState = .idle
+        case .recording:
+            voiceSearchState = .recording
+        case .transcribing:
+            voiceSearchState = .transcribing
+        }
     }
 }
 
 struct WebCaptureBrowserNext: View {
+    var initialURL: URL?
+
     @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var store = WebCaptureBrowserStore()
+    @StateObject private var webState = WebViewState()
     @FocusState private var urlFieldFocused: Bool
+
+    private let voiceSearch = InlineDictationController()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -89,7 +123,34 @@ struct WebCaptureBrowserNext: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onAppear {
-            store.urlBarText = store.currentURL ?? ""
+            store.bind(webState: webState)
+            store.urlBarText = webState.currentURL?.absoluteString ?? store.currentURL ?? ""
+            store.refreshHistory()
+            wireVoiceSearch()
+        }
+        .onChange(of: webState.currentURL) { _, url in
+            store.bind(webState: webState)
+            if !urlFieldFocused && store.voiceSearchState == .idle {
+                store.urlBarText = url?.absoluteString ?? ""
+            }
+        }
+        .onChange(of: webState.currentTitle) { _, title in
+            store.bind(webState: webState)
+            if let url = webState.currentURL?.absoluteString {
+                store.recordHistory(url: url, title: title)
+            }
+        }
+        .onChange(of: webState.isLoading) { _, _ in store.bind(webState: webState) }
+        .onChange(of: webState.canGoBack) { _, _ in store.bind(webState: webState) }
+        .onChange(of: webState.canGoForward) { _, _ in store.bind(webState: webState) }
+        .onChange(of: webState.hasContent) { _, _ in store.bind(webState: webState) }
+        .onChange(of: urlFieldFocused) { _, focused in
+            if focused {
+                if store.voiceSearchState == .recording {
+                    voiceSearch.stop(insertTranscript: false)
+                }
+                store.urlBarText = webState.currentURL?.absoluteString ?? store.urlBarText
+            }
         }
     }
 
@@ -151,8 +212,8 @@ struct WebCaptureBrowserNext: View {
 
     private var urlBar: some View {
         HStack(spacing: 8) {
-            navIcon("chevron.left", enabled: store.canGoBack) { /* TODO M3+: store.goBack() */ }
-            navIcon("chevron.right", enabled: store.canGoForward) { /* TODO M3+: store.goForward() */ }
+            navIcon("chevron.left", enabled: store.canGoBack) { webState.goBack() }
+            navIcon("chevron.right", enabled: store.canGoForward) { webState.goForward() }
 
             urlPill
 
@@ -240,8 +301,7 @@ struct WebCaptureBrowserNext: View {
     private var trailingControl: some View {
         if store.voiceSearchState == .recording {
             Button("Stop") {
-                // TODO M3+: voiceSearch.stop(insertTranscript: true)
-                store.voiceSearchState = .idle
+                voiceSearch.stop(insertTranscript: true)
             }
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(.red)
@@ -250,7 +310,7 @@ struct WebCaptureBrowserNext: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(theme.currentTheme.chrome.accent)
         } else {
-            Button(action: { /* TODO M3+: store.reload() */ }) {
+            Button(action: { webState.reload() }) {
                 Image(systemName: "arrow.clockwise")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(theme.colors.textSecondary)
@@ -259,25 +319,12 @@ struct WebCaptureBrowserNext: View {
         }
     }
 
-    // MARK: - WKWebView placeholder
+    // MARK: - WKWebView
 
     private var webViewBody: some View {
-        ZStack {
-            theme.colors.background
-            // TODO M3+: WebViewRepresentable(state: ..., initialURL: ...)
-            VStack(spacing: 12) {
-                Image(systemName: "globe")
-                    .font(.system(size: 40, weight: .light))
-                    .foregroundStyle(theme.colors.textTertiary)
-                Text("· WKWebView slot")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .tracking(1.8)
-                    .foregroundStyle(theme.colors.textTertiary)
-                Text("Wired in M3 — paint frame only for now")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(theme.colors.textTertiary.opacity(0.7))
-            }
-        }
+        WebViewRepresentable(state: webState, initialURL: initialURL)
+            .background(theme.colors.background)
+            .ignoresSafeArea(edges: .bottom)
     }
 
     // MARK: - Autocomplete suggestions
@@ -383,30 +430,89 @@ struct WebCaptureBrowserNext: View {
     // MARK: - Actions (stubs Codex wires)
 
     private func navigateTo(_ urlString: String) {
-        // TODO M3+: parse + WebViewState.load(URL(...)).
-        store.currentURL = urlString
-        store.urlBarText = urlString
+        let trimmed = urlString.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+
+        let url: URL?
+        if trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") {
+            url = URL(string: trimmed)
+        } else if trimmed.contains(".") && !trimmed.contains(" ") {
+            url = URL(string: "https://" + trimmed)
+        } else {
+            let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? trimmed
+            url = URL(string: "https://www.google.com/search?q=\(encoded)")
+        }
+
+        if let url {
+            webState.load(url)
+            store.currentURL = url.absoluteString
+            store.urlBarText = url.absoluteString
+        }
     }
 
     private func toggleVoiceSearch() {
-        // TODO M3+: bind to the InlineDictationController used by
-        // the donor (voiceSearch instance). For now flip the state
-        // so the visual transitions are observable.
-        switch store.voiceSearchState {
-        case .idle:        store.voiceSearchState = .recording
-        case .recording:   store.voiceSearchState = .transcribing
-        case .transcribing: store.voiceSearchState = .idle
+        if store.voiceSearchState == .recording {
+            voiceSearch.stop(insertTranscript: true)
+        } else {
+            urlFieldFocused = false
+            store.urlBarText = ""
+            Task { await voiceSearch.start() }
         }
     }
 
     private func capture() {
-        // TODO M3+: capture flow against CaptureStore + bookmark
-        // metadata extraction.
         store.isCapturing = true
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 600_000_000)
+
+        webState.extractContent { result in
             store.isCapturing = false
-            AppShellRouter.shared.openHome()
+            guard let result else { return }
+
+            let sourceURL = result.url
+            let host = URL(string: sourceURL)?.host
+            let bookmark = CaptureBookmark(
+                url: sourceURL,
+                canonicalURL: sourceURL,
+                host: host,
+                title: result.title,
+                siteName: host,
+                sourceApplicationName: "Talkie Browser",
+                sourceDevice: "iPhone",
+                ingestionMethod: "web-browser"
+            )
+
+            let capture = Capture(
+                sourceType: "url",
+                text: result.text,
+                title: result.title ?? host ?? "Bookmark",
+                sourceURL: sourceURL,
+                bookmark: bookmark
+            )
+
+            CaptureStore.shared.add(capture)
+            CaptureSyncService.shared.syncIfConnected()
+            AppShellRouter.shared.openCaptureDetail(captureID: capture.id.uuidString)
         }
+    }
+
+    private func wireVoiceSearch() {
+        voiceSearch.onStateChange = { state in
+            store.updateVoiceSearchState(state)
+        }
+        voiceSearch.onTranscript = { transcript in
+            store.urlBarText = transcript
+            navigateTo(transcript)
+        }
+        voiceSearch.onError = { error in
+            store.voiceSearchError = error
+        }
+        store.updateVoiceSearchState(voiceSearch.currentState)
+    }
+
+    private func relativeTime(_ date: Date) -> String {
+        let interval = Date().timeIntervalSince(date)
+        if interval < 60 { return "now" }
+        if interval < 3600 { return "\(Int(interval / 60))m" }
+        if interval < 86400 { return "\(Int(interval / 3600))h" }
+        return "\(Int(interval / 86400))d"
     }
 }
