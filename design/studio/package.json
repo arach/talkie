@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "tokens:export": "bun run scripts/export-tokens.ts",
+    "swift:hints": "bun run scripts/swift-hints.ts"
   },
   "dependencies": {
     "next": "^16.0.10",

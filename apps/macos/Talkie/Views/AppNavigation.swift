@@ -114,7 +114,7 @@ struct AppNavigation: View {
     // Sidebar display mode
     @AppStorage("app.sidebar.iconsOnly") private var appSidebarIconsOnly = false
     @State private var didPrepareConsoleRegistry = false
-    @AppStorage("sidebar.isHidden") private var sidebarHidden = false
+    @AppStorage("sidebar.isHidden") private var sidebarHidden = true
     @AppStorage("sidebar.expandedLabelWidth") private var storedExpandedLabelWidth: Double = Double(SidebarLayout.labelWidth)
     @State private var expandedLabelWidth: Double
     @AppStorage(SidebarStyleStorage.surfaceKey) private var surfaceStyleRaw = SidebarSurfaceStyle.default.rawValue
@@ -362,10 +362,45 @@ struct AppNavigation: View {
             .overlay(alignment: .topLeading) {
                 SidebarTooltipOverlay()
             }
+            .overlay(alignment: .center) {
+                // Big-screen recording companion. Renders on the cream
+                // canvas while a memo recording is active; the title-bar
+                // pill is the always-on baseline. Sits beneath the chrome
+                // bar in z-order so the bar / page header stay readable.
+                RecordingCompanionSurface()
+                    .padding(.top, PageLayout.headerHeight)
+            }
             .overlay(alignment: .top) {
-                GlobalActionBar()
-                    .padding(.top, 7)
+                TalkieChromeBar()
+                    .padding(.top, 10)
                     .offset(x: (sidebarHidden ? 0 : sidebarTransition.width.ideal) / 2)
+            }
+            .overlay(alignment: .top) {
+                // Page-header proxy. Renders above the chrome bar in z-order
+                // so the page title + chrome line stay visible where they
+                // would otherwise be overwritten by the bar's capsule. The
+                // page publishes its content via `ChromeBarHeader.shared`.
+                ChromeBarPageHeaderOverlay()
+                    .allowsHitTesting(false)
+            }
+            .overlay(alignment: .topTrailing) {
+                // Settings gear — pinned to the window's top-right. Stays
+                // out of the SwiftUI toolbar mechanism because placement
+                // there resolves inconsistently inside SidebarColumns.
+                Button {
+                    nav.navigate(to: .settings)
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                        .padding(8)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .focusEffectDisabled()
+                .help("Settings (⌘,)")
+                .padding(.top, 6)
+                .padding(.trailing, 12)
             }
             .overlay(alignment: .bottomTrailing) {
                 AgentHealthBanner()
@@ -1415,9 +1450,7 @@ extension View {
                 alert.addButton(withTitle: "Cancel")
 
                 if alert.runModal() == .alertFirstButtonReturn {
-                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
-                        NSWorkspace.shared.open(url)
-                    }
+                    PermissionsManager.shared.openMicrophoneSettings()
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .showEngineRequiredToast)) { _ in

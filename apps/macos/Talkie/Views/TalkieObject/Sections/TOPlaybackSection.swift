@@ -51,44 +51,46 @@ struct TOPlaybackSection: View {
     }
 
     // MARK: - Player
+    //
+    // Typesetter's bar at the foot of the document. No "PLAYBACK" header
+    // (the player IS the affordance), no card chrome — a warm cream band
+    // with a top hairline that reads as embedded in the page. Matches
+    // design/studio/components/studies/MacMemoDetail.tsx PlayerRail.
 
     private var playerSection: some View {
         let resolvedDuration = duration > 0 ? duration : recording.duration
-        let playbackProgress = resolvedDuration > 0 ? min(max(currentTime / resolvedDuration, 0), 1) : 0
 
-        return VStack(alignment: .leading, spacing: Spacing.sm) {
-            HStack {
-                Text("PLAYBACK")
-                    .font(settings.fontXSMedium)
-                    .tracking(Tracking.wide)
-                    .foregroundColor(Theme.current.foregroundSecondary)
-
-                Spacer()
-
-                Button {
-                    onRevealAudio()
-                } label: {
-                    Image(systemName: "folder")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(Theme.current.foregroundSecondary)
-                        .frame(width: 24, height: 24)
-                        .background(
-                            RoundedRectangle(cornerRadius: 5)
-                                .fill(Theme.current.foreground.opacity(0.06))
-                        )
+        // Studio mock pads the player rail with 36pt horizontal (`px-9`)
+        // and 16pt vertical (`py-4`) inside the warm-cream band. The
+        // negative outer margin cancels the parent's 36pt body padding so
+        // the band runs edge-to-edge of the chiffon paper.
+        // The playback footer is rendered by TalkieView's `bodyContent`
+        // VStack — outside the body's 36pt padding wrap. So it's already
+        // edge-to-edge on the chiffon pane; no negative outer margin
+        // needed.
+        return AudioPlayerCard(
+            isPlaying: isPlaying,
+            currentTime: currentTime,
+            duration: max(resolvedDuration, 0),
+            onTogglePlayback: onTogglePlayback,
+            onSeek: onSeek,
+            noInternalPadding: true
+        )
+        .padding(.horizontal, 36)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity)
+        .background(
+            Color.hex("F2EDDE")
+                .overlay(alignment: .top) {
+                    // Studio's inset 0 1px 0 rgba(255,255,255,0.6) — a
+                    // paper-fold highlight just under the top hairline.
+                    Color.white.opacity(0.6).frame(height: 0.5).offset(y: 0.5)
                 }
-                .buttonStyle(.plain)
-                .help("Reveal in Finder")
-            }
-
-            AudioPlayerCard(
-                isPlaying: isPlaying,
-                currentTime: currentTime,
-                duration: max(resolvedDuration, 0),
-                onTogglePlayback: onTogglePlayback,
-                onSeek: onSeek
-            )
-            .modifier(TechnicalCardModifier(cornerRadius: CornerRadius.card))
+        )
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Color.hex("1A1612").opacity(0.18))
+                .frame(height: 0.5)
         }
     }
 

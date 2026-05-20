@@ -106,30 +106,61 @@ struct TalkieView: View {
     @MainActor
     private var bodyContent: AnyView {
         AnyView(
-            ScrollView(.vertical, showsIndicators: true) {
-                scrollContent
+            VStack(spacing: 0) {
+                ScrollView(.vertical, showsIndicators: true) {
+                    scrollContent
+                }
+                playbackFooter
             }
         )
     }
 
+    /// Fixed footer at the bottom of the chiffon pane — the typesetter's
+    /// bar from the studio mock. Pinned regardless of recipe order so the
+    /// player is always at the foot of the document, edge-to-edge.
+    /// Self-gates: renders nothing if the recording has no audio.
+    @MainActor
+    @ViewBuilder
+    private var playbackFooter: some View {
+        if recording.hasAudio || fetchedAudioURL != nil {
+            TOPlaybackSection(
+                slot: SectionSlot(.playback, mode: .hero, chrome: .fullBleed),
+                recording: recording,
+                settings: settings,
+                isPlaying: isPlaying,
+                currentTime: currentTime,
+                duration: duration,
+                fetchedAudioURL: fetchedAudioURL,
+                onTogglePlayback: { togglePlayback() },
+                onSeek: { seekTo($0) },
+                onVolumeChange: { _ in },
+                onRevealAudio: { revealAudioInFinder() },
+                onFetchFromiCloud: { Task { await fetchAudioFromiCloud() } },
+                isFetchingAudio: isFetchingAudio,
+                fetchAudioError: fetchAudioError
+            )
+        }
+    }
+
     @MainActor
     private var scrollContent: AnyView {
+        // No outer horizontal padding — each top-tier section (toolbar
+        // slug, masthead, body, playback) controls its own 36pt internal
+        // padding so the studio composition can run edge-to-edge of the
+        // chiffon paper (hairlines, player rail) while body content keeps
+        // a comfortable measure.
         AnyView(
             VStack(alignment: .leading, spacing: 0) {
-                // Fixed header zone — aligns with sidebar/list primary band
+                // Fixed header zone — clears the chrome bar's overlay
+                // footprint (pill capsule + shadow) so the masthead slug
+                // doesn't touch the bar's bottom edge.
                 Color.clear
-                    .frame(height: PageLayout.headerHeight)
-
-                // Metadata cells — sits directly under the structural line,
-                // aligned with the filter bar in the list column
-                TOMetadataRow(recording: recording, settings: settings)
-                    .padding(.bottom, Spacing.md)
+                    .frame(height: PageLayout.headerHeight + 18)
 
                 detailContent
             }
             .frame(maxWidth: contentColumnMaxWidth, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, PageLayout.horizontalPadding)
             .padding(.top, 0)
             .padding(.bottom, PageLayout.bottomPadding)
         )
@@ -141,11 +172,18 @@ struct TalkieView: View {
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 headerSection
                 recipeSections
-                deleteButton
+                    .padding(.horizontal, MastheadPadding.horizontal)
 
                 Spacer()
             }
         )
+    }
+
+    /// Shared horizontal padding for body content (recipe sections, delete
+    /// button). Top-tier studio sections (toolbar, masthead, playback)
+    /// manage their own internal padding and may run edge-to-edge.
+    private enum MastheadPadding {
+        static let horizontal: CGFloat = 36
     }
 
     @MainActor
@@ -191,22 +229,6 @@ struct TalkieView: View {
         AnyView(sectionRouter(for: detailSlots[index]))
     }
 
-    @MainActor
-    private var deleteButton: some View {
-        HStack {
-            Spacer()
-            Button(role: .destructive) {
-                showDeleteConfirmation = true
-            } label: {
-                Label("Delete", systemImage: "trash")
-                    .font(settings.fontXS)
-                    .foregroundColor(Theme.current.foregroundMuted)
-            }
-            .buttonStyle(.plain)
-            .help("Delete this item")
-        }
-    }
-
     // MARK: - Body
 
     var body: some View {
@@ -236,19 +258,20 @@ struct TalkieView: View {
             return true
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Warm chiffon paper — the detail pane reads as "document on a
+        // desk", distinct from the cool white Library list. Values
+        // mirror design/studio/components/studies/MacMemoDetail.tsx
+        // (DetailPane background gradient).
         .background(
-            ZStack {
-                Theme.current.background
-                LinearGradient(
-                    colors: [
-                        Theme.current.foreground.opacity(0.02),
-                        Color.clear,
-                        Theme.current.background.opacity(0.02)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            }
+            LinearGradient(
+                gradient: Gradient(stops: [
+                    .init(color: Color.hex("FAF7EF"), location: 0.0),
+                    .init(color: Color.hex("FAF6EB"), location: 0.6),
+                    .init(color: Color.hex("F7F2E5"), location: 1.0),
+                ]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
         )
         // Lifecycle
         .onAppear {

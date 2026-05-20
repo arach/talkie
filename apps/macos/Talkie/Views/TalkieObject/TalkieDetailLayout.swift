@@ -83,35 +83,43 @@ extension TalkieObjectType {
     var detailRecipe: [SectionSlot] {
         switch self {
         case .memo:
+            // actionBar + workflow pills dropped from the recipe — the
+            // toolbar slug at the top of TOHeaderSection now carries
+            // Copy/Share/Export/⋯ (and the workflow picker lives in the
+            // overflow menu). Keeping the action pills below the body
+            // duplicated those affordances and orphaned the workflow
+            // icons in dead space.
+            //
+            // Playback dropped — TalkieView pins it as a fixed footer.
+            // textProvenance dropped — its data lives in the right-margin
+            // metadata column alongside the masthead.
             return [
                 SectionSlot(.transcript,    mode: .reader,  chrome: .card),
-                SectionSlot(.actionBar,     mode: .compact, chrome: .inline),
-                SectionSlot(.playback,      mode: .hero,    chrome: .card),
                 SectionSlot(.segments,      mode: .compact, chrome: .card),
                 SectionSlot(.workflowRuns,  mode: .compact, chrome: .card),
                 SectionSlot(.mediaGallery,  mode: .compact, chrome: .card),
-                SectionSlot(.textProvenance, mode: .compact, chrome: .card),
                 SectionSlot(.notes,         mode: .editor,  chrome: .inline),
                 SectionSlot(.attachments,   mode: .compact, chrome: .card),
             ]
 
         case .dictation:
+            // actionBar + refinement dropped (refinement is dev tooling,
+            // not part of the editorial reading view). dictationContext
+            // already dropped from the hero slot — its data lives in the
+            // right-margin metadata column.
             return [
-                SectionSlot(.dictationContext, mode: .hero,    chrome: .card),
                 SectionSlot(.transcript,       mode: .reader,  chrome: .card),
-                SectionSlot(.actionBar,        mode: .compact, chrome: .inline),
-                SectionSlot(.refinement,       mode: .compact, chrome: .inline),
-                SectionSlot(.playback,         mode: .compact, chrome: .card),
             ]
 
         case .note:
+            // Media gallery dropped from the hero slot — it was the
+            // ugly dark fullBleed band at the top of the pane. Playback
+            // dropped — TalkieView pins it as a fixed footer.
             return [
-                SectionSlot(.mediaGallery,   mode: .hero,    chrome: .fullBleed),
                 SectionSlot(.transcript,     mode: .editor,  chrome: .inline),
                 SectionSlot(.actionBar,      mode: .compact, chrome: .inline),
-                SectionSlot(.textProvenance, mode: .compact, chrome: .card),
+                SectionSlot(.mediaGallery,   mode: .compact, chrome: .inline),
                 SectionSlot(.attachments,    mode: .gallery, chrome: .card),
-                SectionSlot(.playback,       mode: .compact, chrome: .card),
                 SectionSlot(.notes,          mode: .editor,  chrome: .inline),
                 SectionSlot(.workflowRuns,   mode: .compact, chrome: .card),
             ]
@@ -119,15 +127,13 @@ extension TalkieObjectType {
         case .segment:
             return [
                 SectionSlot(.transcript,    mode: .reader,  chrome: .card),
-                SectionSlot(.playback,      mode: .compact, chrome: .card),
             ]
 
         case .selection:
             return [
-                SectionSlot(.mediaGallery,     mode: .hero,    chrome: .fullBleed),
                 SectionSlot(.transcript,       mode: .reader,  chrome: .card),
                 SectionSlot(.actionBar,        mode: .compact, chrome: .inline),
-                SectionSlot(.textProvenance,   mode: .compact, chrome: .card),
+                SectionSlot(.mediaGallery,     mode: .compact, chrome: .inline),
                 SectionSlot(.readout,          mode: .compact, chrome: .card),
                 SectionSlot(.refinement,       mode: .compact, chrome: .inline),
                 SectionSlot(.dictationContext, mode: .hero,    chrome: .card),
@@ -137,10 +143,9 @@ extension TalkieObjectType {
 
         case .capture:
             return [
-                SectionSlot(.mediaGallery,   mode: .hero,    chrome: .fullBleed),
                 SectionSlot(.transcript,     mode: .editor,  chrome: .inline),
                 SectionSlot(.actionBar,      mode: .compact, chrome: .inline),
-                SectionSlot(.textProvenance, mode: .compact, chrome: .card),
+                SectionSlot(.mediaGallery,   mode: .compact, chrome: .inline),
                 SectionSlot(.attachments,    mode: .gallery, chrome: .card),
                 SectionSlot(.workflowRuns,   mode: .compact, chrome: .card),
                 SectionSlot(.notes,          mode: .editor,  chrome: .inline),

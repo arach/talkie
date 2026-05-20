@@ -414,10 +414,7 @@ struct DictationOnboardingView: View {
                 }
             }
         } else if status == .denied {
-            // Open System Settings
-            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
-                NSWorkspace.shared.open(url)
-            }
+            PermissionsManager.shared.openMicrophoneSettings()
         } else {
             hasMicPermission = true
         }

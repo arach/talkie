@@ -205,7 +205,6 @@ struct ScopeLibraryView: View {
 
     private var listColumn: some View {
         VStack(spacing: 0) {
-            heroHeader
             topComponent
             if viewModel.isLoading && viewModel.recordings.isEmpty {
                 loadingState
@@ -222,52 +221,27 @@ struct ScopeLibraryView: View {
         .frame(maxHeight: .infinity, alignment: .top)
     }
 
-    // MARK: - Header strip
-    //
-    // Universal 44pt top band — title names the active filter, trailing
-    // chrome states totals, record button anchors the right edge.
-    // Baseline-aligned with the sidebar wordmark via `ScopeTopBand`.
-
-    private var heroHeader: some View {
-        ScopeTopBand(
-            title: "Library",
-            breadcrumb: filterBreadcrumb,
-            chrome: "\(viewModel.totalCount) ON FILE"
-        ) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showingRecordingView = true
-                }
-            } label: {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(ScopeAmber.solid)
-                    .frame(width: 24, height: 24)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4)
-                            .stroke(ScopeEdge.normal, lineWidth: 1)
-                    )
-                    .background(
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(ScopeAmber.tintSubtle)
-                    )
+    private var newRecordingButton: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showingRecordingView = true
             }
-            .buttonStyle(.plain)
-            .help("New recording")
+        } label: {
+            Image(systemName: "mic.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(ScopeAmber.solid)
+                .frame(width: 22, height: 22)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(ScopeAmber.tintSubtle)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(ScopeAmber.solid.opacity(0.30), lineWidth: 0.5)
+                )
         }
-    }
-
-    /// Secondary title shown after the "›" chevron embellishment when a
-    /// specific filter is active. On `.all` we return nil so just the
-    /// section name "Library" reads — no breadcrumb noise.
-    private var filterBreadcrumb: String? {
-        switch typeFilter {
-        case .all:        return nil
-        case .memos:      return "Memos"
-        case .dictations: return "Dictations"
-        case .notes:      return "Notes"
-        case .captures:   return "Captures"
-        }
+        .buttonStyle(.plain)
+        .help("New recording")
     }
 
     // MARK: - Filter ribbon
@@ -315,108 +289,94 @@ struct ScopeLibraryView: View {
         )
     }
 
-    /// Filter ribbon — locked to Patch Bay. The other ribbon variants
-    /// have been removed; their treatments are preserved only in git
-    /// history. Patch Bay is the brass LED dot family above each label
-    /// with an inline count and an amber underline on the active option.
+    /// Library list header — title row + filter pills + search row.
     @ViewBuilder
     private var topComponent: some View {
+        VStack(spacing: 8) {
+            titleRow
+            filterRow
+            searchRow
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 10)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(ScopeEdge.faint)
+                .frame(height: 0.5)
+        }
+    }
+
+    private var titleRow: some View {
         let counts = filterCounts()
-        patchBayRibbon(counts: counts)
-            .padding(.horizontal, 32)
-            .padding(.top, 18)
-            .padding(.bottom, 14)
-            .animation(.smooth(duration: 0.4), value: viewModel.recordings.count)
-    }
+        return HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(titleForCurrentFilter)
+                .font(.system(size: 15, weight: .medium, design: .serif))
+                .foregroundStyle(ScopeInk.primary)
+                .tracking(-0.2)
 
-    /// The text-field + magnifier + clear-button — shared by every
-    /// variant so search styling stays consistent regardless of which
-    /// filter treatment is in use.
-    private var searchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 11, weight: .medium))
+            Spacer(minLength: 8)
+
+            Text(metaForCurrentFilter(counts: counts))
+                .font(.system(size: 9, weight: .regular, design: .monospaced))
+                .tracking(1.6)
                 .foregroundStyle(ScopeInk.faint)
-            TextField("Search the library…", text: $searchText)
-                .textFieldStyle(.plain)
-                .font(.system(size: 12))
-                .foregroundStyle(ScopeInk.dim)
-            if !searchText.isEmpty {
-                Button {
-                    searchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11))
-                        .foregroundStyle(ScopeInk.subtle)
-                }
-                .buttonStyle(.plain)
-            }
         }
     }
 
-    // MARK: Filter ribbon — Patch Bay (brass LED dots, no container)
-
-    private func patchBayRibbon(counts: FilterCounts) -> some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 0) {
-                ForEach(RecordingTypeFilter.allCases, id: \.self) { option in
-                    patchBaySegment(option, count: counts.count(for: option))
-                        .frame(maxWidth: .infinity)
-                }
-            }
-            .overlay(alignment: .bottom) {
-                Rectangle()
-                    .fill(ScopeEdge.faint)
-                    .frame(height: 0.5)
-            }
-
-            searchField
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(ScopeCanvas.surface)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(ScopeEdge.faint, lineWidth: 0.5)
-                )
+    /// "Library" when no specific filter is active; otherwise the
+    /// filter's name (Memos / Dictations / Notes / Captures).
+    private var titleForCurrentFilter: String {
+        switch typeFilter {
+        case .all:        return "Library"
+        case .memos:      return "Memos"
+        case .dictations: return "Dictations"
+        case .notes:      return "Notes"
+        case .captures:   return "Captures"
         }
     }
 
-    private func patchBaySegment(_ option: RecordingTypeFilter, count: Int) -> some View {
+    /// "{n} · 7D" — total count for the active filter, with the studio's
+    /// "7d" recency hint. Mono caps, faint.
+    private func metaForCurrentFilter(counts: FilterCounts) -> String {
+        "\(counts.count(for: typeFilter)) · 7D"
+    }
+
+    private var filterRow: some View {
+        let counts = filterCounts()
+        return HStack(spacing: 0) {
+            ForEach(RecordingTypeFilter.allCases, id: \.self) { option in
+                filterPill(option, count: counts.count(for: option))
+            }
+            Spacer(minLength: 8)
+        }
+    }
+
+    private func filterPill(_ option: RecordingTypeFilter, count: Int) -> some View {
         let isSelected = typeFilter == option
         return Button {
             typeFilter = option
         } label: {
-            VStack(spacing: 6) {
-                Circle()
-                    .fill(isSelected ? ScopeAmber.solid : Color.clear)
-                    .frame(width: 4, height: 4)
-                    .overlay(
-                        Circle()
-                            .stroke(
-                                isSelected ? Color.clear : ScopeAmber.solid.opacity(0.35),
-                                lineWidth: 0.5
-                            )
+            HStack(spacing: 5) {
+                Text(option.label.uppercased())
+                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                    .tracking(1.8)
+                    .foregroundColor(
+                        isSelected
+                            ? ScopeInk.primary
+                            : ScopeInk.faint
                     )
-                    .shadow(color: isSelected ? ScopeAmber.glow : .clear, radius: 3)
-                HStack(spacing: 6) {
-                    Text(option.label.uppercased())
-                        .font(ScopeType.eyebrow)
-                        .tracking(ScopeType.Tracking.wide)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
-                    Text("\(count)")
-                        .font(.system(size: 10, weight: .regular, design: .monospaced))
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
-                        .frame(minWidth: 14, alignment: .trailing)
-                        .foregroundStyle(isSelected ? ScopeAmber.solid.opacity(0.75) : ScopeInk.subtle)
-                }
-                .foregroundStyle(isSelected ? ScopeAmber.solid : ScopeInk.faint)
+                Text("\(count)")
+                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundColor(
+                        isSelected
+                            ? ScopeAmber.solid.opacity(0.75)
+                            : ScopeInk.subtle
+                    )
             }
-            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
             .overlay(alignment: .bottom) {
                 Rectangle()
                     .fill(isSelected ? ScopeAmber.solid : Color.clear)
@@ -426,6 +386,52 @@ struct ScopeLibraryView: View {
         }
         .buttonStyle(.plain)
     }
+
+    private var searchRow: some View {
+        HStack(spacing: 8) {
+            searchField
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.white)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(ScopeEdge.faint, lineWidth: 0.5)
+                )
+            newRecordingButton
+        }
+    }
+
+    /// The text-field + magnifier + clear-button — shared by every
+    /// variant so search styling stays consistent regardless of which
+    /// filter treatment is in use.
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            // Mono-cased glyph instead of SF Symbol magnifier — reads as
+            // editorial chrome, matches studio LibraryListGutter search.
+            Text("⌕")
+                .font(.system(size: 11, weight: .regular, design: .monospaced))
+                .foregroundStyle(ScopeInk.faint)
+            TextField("Search the library…", text: $searchText)
+                .textFieldStyle(.plain)
+                .font(.system(size: 11))
+                .foregroundStyle(ScopeInk.dim)
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Text("×")
+                        .font(.system(size: 13, weight: .regular, design: .monospaced))
+                        .foregroundStyle(ScopeInk.subtle)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    // MARK: Filter ribbon — Patch Bay (brass LED dots, no container)
 
     // MARK: - Recordings list
 
@@ -678,33 +684,32 @@ struct ScopeLibraryView: View {
     // `readoutBodyVariant` — same chrome, different instruments.
 
     private var inspectorColumn: some View {
-        VStack(spacing: 0) {
-            libraryReadoutPanel
-                .padding(.horizontal, 24)
-                .padding(.top, 24)
-                .padding(.bottom, 18)
-            Rectangle().fill(ScopeEdge.faint).frame(height: 0.5)
-
-            Group {
-                if selectedRecordingIDs.count > 1 {
-                    MultiSelectInspector(
-                        count: selectedRecordingIDs.count,
-                        itemName: "recordings",
-                        onClearSelection: { selectedRecordingIDs.removeAll() }
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if let recording = selectedRecording {
-                    TalkieView(recording: recording, onDelete: {
-                        Task { await viewModel.deleteRecording(recording) }
-                        selectedRecordingIDs.remove(recording.id)
-                    })
-                    .id(recording.id)
-                } else {
-                    inspectorEmpty
-                }
+        // The readout "bay" (dashboard-style stats card with phosphor
+        // chrome) has been removed — it competed with the editorial
+        // document framing the studio mock established and the user
+        // (rightly) called it "the stupid and ugly bay". The detail
+        // pane now goes straight to the document: TalkieView when a
+        // recording is selected, a quiet editorial empty state when
+        // nothing's selected.
+        Group {
+            if selectedRecordingIDs.count > 1 {
+                MultiSelectInspector(
+                    count: selectedRecordingIDs.count,
+                    itemName: "recordings",
+                    onClearSelection: { selectedRecordingIDs.removeAll() }
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let recording = selectedRecording {
+                TalkieView(recording: recording, onDelete: {
+                    Task { await viewModel.deleteRecording(recording) }
+                    selectedRecordingIDs.remove(recording.id)
+                })
+                .id(recording.id)
+            } else {
+                inspectorEmpty
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     /// Dispatches the readout body by the active variant and wraps it

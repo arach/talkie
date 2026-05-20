@@ -466,7 +466,7 @@ final class ScreenshotCaptureService {
     private func showPermissionAlert() {
         let alert = NSAlert()
         alert.messageText = "Screen Recording Permission Required"
-        alert.informativeText = "Talkie needs Screen Recording permission to capture screenshots. Please enable it in System Settings > Privacy & Security > Screen Recording."
+        alert.informativeText = "Talkie needs Screen Recording permission to capture screenshots. Please enable it in System Settings → Privacy & Security → Screen Recording."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Open System Settings")
         alert.addButton(withTitle: "Cancel")

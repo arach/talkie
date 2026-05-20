@@ -2,8 +2,15 @@
 //  TOHeaderSection.swift
 //  Talkie
 //
-//  Header section — title, type badge, metadata row, edit controls.
-//  Always present for every TalkieObject.
+//  Editorial masthead for a TalkieObject detail pane.
+//  Eyebrow row (· TYPE ····· DATE) → serif headline → mono byline
+//  (provenance · duration). Replaces the dashboard-style metric pills
+//  + four-column metadata grid the older detail header carried.
+//
+//  Deeper technical metadata (model, confidence, perf timings, audio
+//  peaks, file paths) belongs in the right-margin metadata column —
+//  see design/studio/components/studies/MacMemoDetail.tsx for the
+//  canonical composition.
 //
 
 import SwiftUI
@@ -29,83 +36,355 @@ struct TOHeaderSection: View {
     var onTitleChange: (() -> Void)? = nil
 
     private let repository = TalkieObjectRepository()
-    private var metadataFont: Font { settings.fontSM }
-    private var headerFont: Font {
-        settings.fontTitleMedium
-    }
 
     // MARK: - Body
+    //
+    // Composition (studio MacMemoDetail.tsx — one-to-one):
+    //   Toolbar (printer's slug) — sequence · type ……… Star · Pin · Share · Export · ⋯
+    //   Hairline
+    //   Masthead — eyebrow row · serif headline 34pt · byline (provenance · duration)
 
     var body: some View {
         if isAlwaysEditable {
             // Notes: no title header — the NoteComposeCard first line IS the title.
             EmptyView()
         } else {
-            // Memos, dictations, segments: show title + controls
-            HStack(alignment: .top, spacing: Spacing.sm) {
-                if isEditing {
-                    TextField("Title", text: $editedTitle)
-                        .font(headerFont)
-                        .foregroundColor(Theme.current.foreground)
-                        .textFieldStyle(.plain)
-                        .focused($titleFieldFocused)
-                        .onChange(of: editedTitle) { _, _ in onTitleChange?() }
-                } else {
-                    Text(headerTitle)
-                        .font(headerFont)
-                        .foregroundColor(Theme.current.foreground)
-                        .lineLimit(2)
-                }
-
-                Spacer(minLength: 0)
-
-                if isEditing {
-                    HStack(spacing: Spacing.sm) {
-                        Button("Cancel") { onCancelEdit() }
-                            .buttonStyle(.plain)
-                            .foregroundColor(Theme.current.foregroundSecondary)
-
-                        Button("Save") { onSaveEdit() }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.small)
-                            .disabled(!isDirty)
-                    }
-                } else {
-                    HStack(spacing: Spacing.xs) {
-                        if let onOpenInCompose {
-                            Button(action: onOpenInCompose) {
-                                Image(systemName: "square.and.pencil")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(Theme.current.foregroundSecondary)
-                                    .frame(width: 28, height: 28)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(Theme.current.foreground.opacity(0.08))
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                            .help("Open in Compose")
-                        }
-
-                        Button(action: { onToggleEdit() }) {
-                            Image(systemName: "pencil")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(Theme.current.foregroundSecondary)
-                                .frame(width: 28, height: 28)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(Theme.current.foreground.opacity(0.08))
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .help("Edit")
-                    }
-                }
+            VStack(alignment: .leading, spacing: 0) {
+                toolbarSlug
+                hairline
+                masthead
+                    .padding(.horizontal, MastheadLayout.horizontalPadding)
+                    .padding(.top, MastheadLayout.topPadding)
+                    .padding(.bottom, MastheadLayout.bottomPadding)
             }
         }
     }
 
-    // Metadata row removed — now in TOMetadataRow
+    // MARK: - Layout constants
+    //
+    // Mirrors design/studio/components/studies/MacMemoDetail.tsx
+    // `px-9` (36px horizontal), `pt-8 pb-6` (32 top / 24 bottom on masthead),
+    // `px-9 py-3` (36 horizontal / 12 vertical on toolbar).
+    private enum MastheadLayout {
+        static let horizontalPadding: CGFloat = 36
+        static let topPadding: CGFloat = 32
+        static let bottomPadding: CGFloat = 24
+        static let toolbarVerticalPadding: CGFloat = 10
+    }
+
+    // MARK: - Toolbar slug
+
+    @ViewBuilder
+    private var toolbarSlug: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text(sequenceLabel)
+                .font(.system(size: 9, weight: .regular, design: .monospaced))
+                .tracking(2.0)
+                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.55))
+
+            Text("· \(recording.type.displayName.uppercased())")
+                .font(.system(size: 9, weight: .regular, design: .monospaced))
+                .tracking(1.6)
+                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.55))
+
+            Spacer(minLength: 8)
+
+            if isEditing {
+                editingActions
+            } else {
+                readingActions
+            }
+        }
+        .padding(.horizontal, MastheadLayout.horizontalPadding)
+        .padding(.vertical, MastheadLayout.toolbarVerticalPadding)
+    }
+
+    private var hairline: some View {
+        Rectangle()
+            .fill(Theme.current.foreground.opacity(0.10))
+            .frame(height: 0.5)
+    }
+
+    /// "M-CB0B" / "D-3792" — type letter prefix + first four hex chars
+    /// of the UUID. Reads like a catalog number without exposing the
+    /// full UUID.
+    private var sequenceLabel: String {
+        let prefix: String
+        switch recording.type {
+        case .memo:      prefix = "M"
+        case .dictation: prefix = "D"
+        case .note:      prefix = "N"
+        case .capture:   prefix = "C"
+        case .segment:   prefix = "S"
+        case .selection: prefix = "X"
+        }
+        let head = String(recording.id.uuidString.prefix(4))
+        return "\(prefix)-\(head)"
+    }
+
+    // MARK: - Masthead
+
+    private var masthead: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            eyebrowRow
+                .padding(.bottom, 8)
+            headlineView
+            if !isEditing, let lead = leadParagraph {
+                standfirstView(lead)
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
+            } else {
+                Color.clear.frame(height: 12)
+            }
+            bylineRow
+        }
+    }
+
+    /// Editorial standfirst — the lead paragraph promoted out of the
+    /// body and into the masthead area, so the page has a magazine deck
+    /// reading between headline and byline. Studio mock's body lead
+    /// becomes the masthead's standfirst here.
+    private var leadParagraph: String? {
+        guard let text = recording.text else { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        // First paragraph by double-newline, falling back to first
+        // newline-bounded chunk, then to the whole string.
+        let byDouble = trimmed
+            .components(separatedBy: "\n\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if let first = byDouble.first { return first }
+        let bySingle = trimmed
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return bySingle.first ?? trimmed
+    }
+
+    private func standfirstView(_ lead: String) -> some View {
+        let cue = Text("0:00 · ")
+            .font(.system(size: 10, weight: .regular, design: .monospaced))
+            .tracking(2.0)
+            .foregroundColor(Color.hex("9A6A22"))
+
+        let prose = Text(lead)
+            .font(standfirstFont)
+            .foregroundColor(Theme.current.foreground)
+            .tracking(-0.1)
+
+        return (cue + prose)
+            .lineSpacing(8)
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var standfirstFont: Font {
+        for name in ["Newsreader-Regular", "Newsreader"] {
+            #if os(macOS)
+            if NSFont(name: name, size: 18) != nil {
+                return .custom(name, size: 18)
+            }
+            #endif
+        }
+        return .system(size: 18, weight: .regular, design: .serif)
+    }
+
+    // MARK: - Eyebrow
+
+    private var eyebrowRow: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text("· \(recording.type.displayName.uppercased())")
+                .font(.system(size: 9, weight: .regular, design: .monospaced))
+                .tracking(2.0)
+                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.60))
+
+            Rectangle()
+                .fill(Theme.current.foreground.opacity(0.12))
+                .frame(height: 0.5)
+
+            Text(eyebrowDate(recording.createdAt))
+                .font(.system(size: 9, weight: .regular, design: .monospaced))
+                .tracking(2.0)
+                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.60))
+        }
+    }
+
+    // MARK: - Headline
+
+    private var headlineView: some View {
+        Group {
+            if isEditing {
+                TextField("Title", text: $editedTitle)
+                    .font(serifHeadlineFont)
+                    .foregroundColor(Theme.current.foreground)
+                    .textFieldStyle(.plain)
+                    .focused($titleFieldFocused)
+                    .onChange(of: editedTitle) { _, _ in onTitleChange?() }
+            } else {
+                Text(headerTitle)
+                    .font(serifHeadlineFont)
+                    .foregroundColor(Theme.current.foreground)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+                    .tracking(-0.6)            // ~ -0.018em at 34pt
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.top, 4)
+    }
+
+    private var serifHeadlineFont: Font {
+        // Prefer Newsreader (bundled in Resources/Fonts) so the headline
+        // matches the studio mock literally. SwiftUI's `.serif` design
+        // would otherwise resolve to New York at this size.
+        for name in ["Newsreader-Medium", "Newsreader-Regular", "Newsreader"] {
+            #if os(macOS)
+            if NSFont(name: name, size: 34) != nil {
+                return .custom(name, size: 34)
+            }
+            #endif
+        }
+        return .system(size: 34, weight: .medium, design: .serif)
+    }
+
+    // MARK: - Byline
+
+    private var bylineRow: some View {
+        HStack(spacing: 8) {
+            Text(recording.source.displayName.uppercased())
+                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .tracking(1.6)
+                .foregroundColor(Theme.current.foreground)
+
+            if recording.duration > 0 {
+                Text("·")
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.55))
+                Text(formatDuration(recording.duration))
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .tracking(1.6)
+                    .foregroundColor(Theme.current.foreground)
+                    .monospacedDigit()
+            }
+        }
+        .padding(.top, 4)
+    }
+
+    // MARK: - Toolbar Actions
+
+    @ViewBuilder
+    private var editingActions: some View {
+        HStack(spacing: 8) {
+            Button("Cancel") { onCancelEdit() }
+                .buttonStyle(.plain)
+                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .tracking(1.6)
+                .foregroundColor(Theme.current.foregroundSecondary)
+
+            Button("Save") { onSaveEdit() }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .disabled(!isDirty)
+        }
+    }
+
+    @ViewBuilder
+    private var readingActions: some View {
+        HStack(spacing: 4) {
+            toolButton(label: "Share") {
+                shareRecording()
+            }
+            toolButton(label: "Export") {
+                exportRecording()
+            }
+            Rectangle()
+                .fill(Theme.current.foreground.opacity(0.16))
+                .frame(width: 0.5, height: 12)
+                .padding(.horizontal, 4)
+            overflowMenu
+        }
+    }
+
+    /// Studio toolbar button — mono-cased, no background. Hover bumps the
+    /// text from foregroundSecondary up to foreground.
+    private func toolButton(label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label.uppercased())
+                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .tracking(1.8)
+                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.65))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+        }
+        .buttonStyle(.plain)
+        .help(label)
+    }
+
+    private var overflowMenu: some View {
+        Menu {
+            Button(action: onToggleEdit) { Label("Edit", systemImage: "pencil") }
+
+            Menu("Change Type") {
+                ForEach(TalkieObjectType.allCases, id: \.self) { newType in
+                    Button {
+                        changeType(to: newType)
+                    } label: {
+                        Label(newType.displayName, systemImage: newType.icon)
+                    }
+                    .disabled(recording.type == newType)
+                }
+            }
+
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(recording.id.uuidString, forType: .string)
+            } label: {
+                Label("Copy ID", systemImage: "number")
+            }
+
+            if let onOpenInCompose {
+                Button(action: onOpenInCompose) {
+                    Label("Open in Compose", systemImage: "square.and.pencil")
+                }
+            }
+
+            Divider()
+
+            Button(role: .destructive, action: onDelete) {
+                Label("Delete", systemImage: "trash")
+            }
+        } label: {
+            Text("⋯")
+                .font(.system(size: 13, weight: .regular))
+                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.65))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+
+    // MARK: - Share / Export
+
+    private func shareRecording() {
+        guard let text = recording.text else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+    }
+
+    private func exportRecording() {
+        guard let text = recording.text, !text.isEmpty else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.plainText]
+        panel.nameFieldStringValue = (recording.title ?? recording.id.uuidString.prefix(8).description) + ".txt"
+        if panel.runModal() == .OK, let url = panel.url {
+            try? text.write(to: url, atomically: true, encoding: .utf8)
+        }
+    }
 
     // MARK: - Computed
 
@@ -132,113 +411,6 @@ struct TOHeaderSection: View {
         case .capture:
             return "Untitled Capture"
         }
-    }
-
-    private var provenanceIcon: String {
-        if recording.isDictation {
-            return "mic.fill"
-        } else {
-            switch recording.source {
-            case .iphone: return "iphone"
-            case .watch: return "applewatch"
-            case .mac: return "desktopcomputer"
-            case .live: return "mic.fill"
-            }
-        }
-    }
-
-    // MARK: - Type Badge
-
-    @State private var showingTypePicker = false
-
-    private var typeBadgePill: some View {
-        let typeColor: Color = switch recording.type {
-        case .memo: .blue
-        case .dictation: .cyan
-        case .note: .orange
-        case .segment: .gray
-        case .selection: .teal
-        case .capture: .pink
-        }
-
-        return Menu {
-            ForEach(TalkieObjectType.allCases, id: \.self) { recordingType in
-                Button {
-                    changeType(to: recordingType)
-                } label: {
-                    Label(recordingType.displayName, systemImage: recordingType.icon)
-                }
-                .disabled(recording.type == recordingType)
-            }
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: recording.type.icon)
-                    .font(settings.fontXS)
-
-                Text(recording.type.displayName)
-                    .font(settings.fontXSMedium)
-
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 8, weight: .semibold))
-                    .opacity(0.6)
-            }
-            .foregroundColor(typeColor)
-            .padding(.horizontal, Spacing.sm)
-            .padding(.vertical, Spacing.xs)
-            .background(
-                Capsule()
-                    .fill(typeColor.opacity(0.15))
-            )
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-    }
-
-    private var promotedBadge: some View {
-        HStack(spacing: Spacing.xxs) {
-            Image(systemName: "arrow.up.circle.fill")
-                .font(settings.fontXS)
-            Text("Promoted")
-                .font(settings.fontXSMedium)
-        }
-        .foregroundColor(.green.opacity(0.8))
-        .padding(.horizontal, Spacing.xs)
-        .padding(.vertical, Spacing.xxs)
-        .background(Capsule().fill(Color.green.opacity(0.1)))
-    }
-
-    private var metadataDivider: some View {
-        Text("\u{00B7}")
-            .font(metadataFont)
-            .foregroundColor(Theme.current.foregroundMuted)
-    }
-
-    private var overflowMenu: some View {
-        Menu {
-            if let onOpenInCompose {
-                Button(action: onOpenInCompose) {
-                    Label("Open in Compose", systemImage: "square.and.pencil")
-                }
-                Divider()
-            }
-
-            Button(role: .destructive) {
-                onDelete()
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(Theme.current.foregroundSecondary)
-                .frame(width: 28, height: 28)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Theme.current.foreground.opacity(0.08))
-                )
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
     }
 
     // MARK: - Actions
@@ -272,6 +444,32 @@ struct TOHeaderSection: View {
 
     // MARK: - Formatting
 
+    /// Eyebrow date — "TODAY · 10:58 AM", "YESTERDAY · 4:32 PM", "MAY 18 · 9:14 AM",
+    /// uppercase to read as caps chrome rather than prose.
+    private func eyebrowDate(_ date: Date) -> String {
+        let calendar = Calendar.current
+        let formatter = DateFormatter()
+        let prefix: String
+        if calendar.isDateInToday(date) {
+            prefix = "TODAY"
+        } else if calendar.isDateInYesterday(date) {
+            prefix = "YESTERDAY"
+        } else if calendar.isDate(date, equalTo: Date(), toGranularity: .weekOfYear) {
+            formatter.dateFormat = "EEE"
+            prefix = formatter.string(from: date).uppercased()
+        } else if calendar.isDate(date, equalTo: Date(), toGranularity: .year) {
+            formatter.dateFormat = "MMM d"
+            prefix = formatter.string(from: date).uppercased()
+        } else {
+            formatter.dateFormat = "MMM d, yyyy"
+            prefix = formatter.string(from: date).uppercased()
+        }
+        formatter.dateFormat = "h:mm a"
+        return "\(prefix) · \(formatter.string(from: date).uppercased())"
+    }
+
+    /// Headline / title fallback — same logic as before, used when the
+    /// recording has no user-set title.
     private func formatDateProminent(_ date: Date) -> String {
         let calendar = Calendar.current
         let formatter = DateFormatter()
@@ -288,13 +486,6 @@ struct TOHeaderSection: View {
             formatter.dateFormat = "MMM d, yyyy 'at' h:mm a"
         }
 
-        return formatter.string(from: date)
-    }
-
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
         return formatter.string(from: date)
     }
 

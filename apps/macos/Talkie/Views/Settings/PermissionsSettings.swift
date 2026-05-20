@@ -346,9 +346,7 @@ class PermissionsManager {
     }
 
     func openAccessibilitySettingsPane() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-            NSWorkspace.shared.open(url)
-        }
+        openAccessibilityInstallAssistant(for: .talkie)
     }
 
     func openAccessibilitySettings() {

@@ -29,6 +29,14 @@ const STUDIES: Study[] = [
       "Replacement for the data-listing Stats page — an interstitial that surfaces what Talkie can do. Hero · Ask Talkie agent box · Did-you-know feature recap · feature atlas · integrations · what's new.",
   },
   {
+    slug: "mac-memo-detail",
+    name: "Memo Detail",
+    kind: "Composition study",
+    platform: "macOS",
+    blurb:
+      "Right-hand pane of the Library split view, redesigned as an editorial document. Masthead replaces the metric pills + four-column grid; transcript gets gutter timecodes + margin highlights; player rail sits as a typesetter's bar at the foot.",
+  },
+  {
     slug: "agent-bay",
     name: "Agent Bay",
     kind: "Scheme study",

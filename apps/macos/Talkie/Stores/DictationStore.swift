@@ -313,6 +313,12 @@ final class DictationStore {
         }
     }
 
+    /// Dictations loaded in memory whose timestamp falls on the current local day.
+    var todayCount: Int {
+        let calendar = Calendar.current
+        return dictations.filter { calendar.isDateInToday($0.timestamp) }.count
+    }
+
     /// TTL in hours - default 48 hours
     var ttlHours: Int = 48
 

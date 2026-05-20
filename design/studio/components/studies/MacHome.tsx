@@ -95,22 +95,28 @@ const TODAY_EVENTS = [
   { hour: 14,   label: "14:00 · Bay polish merge" },
 ];
 
-export function MacHome() {
+/**
+ * MacHome accepts a `width` prop so the same composition can be stamped
+ * inside `<MacWindowFrame>` at multiple widths (820 / 1180 / 1440).
+ *
+ * The outer card chrome (shadow, border, background) used to live here
+ * but moved to MacWindowFrame so all mac studies share the same window
+ * presentation. When MacHome is used standalone (no frame), the caller
+ * should wrap it in its own frame — see app/mac-home/page.tsx.
+ */
+export function MacHome({ width = 1100 }: { width?: number } = {}) {
   const [bayKey, setBayKey] = useState<string>("chiffon");
   const bayScheme = BAY_SCHEMES.find((s) => s.key === bayKey) ?? BAY_SCHEMES[0];
 
+  // Inner horizontal padding scales subtly with width — 24px at the
+  // compact 820 size (so the 3-col Capture / Discovery rows still
+  // breathe), 32px at standard, 40px at wide.
+  const padX = width < 900 ? 24 : width >= 1300 ? 40 : 32;
+
   return (
-    <div
-      className="mx-auto rounded-md"
-      style={{
-        width: "1100px",
-        background: "#FBFBFA",
-        boxShadow: "0 8px 30px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04)",
-        border: "0.5px solid #E0DCD3",
-      }}
-    >
+    <div style={{ width }}>
       <TopBand />
-      <div className="px-8 pt-4 pb-8">
+      <div style={{ paddingLeft: padX, paddingRight: padX, paddingTop: 16, paddingBottom: 32 }}>
         <div className="flex flex-col gap-9">
           <Hero />
           <CaptureModes />

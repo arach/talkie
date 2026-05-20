@@ -656,12 +656,97 @@ struct RecordingTranscriptCard: View {
         recording.timedTranscription != nil || recording.isMemo || recording.isDictation || recording.isSelection
     }
 
+    /// Right-margin metadata aside groups. Only surface useful-but-not-
+    /// core technical particulars — model + confidence, perf timings, and
+    /// (for dictations) the originating app context. Notes/captures
+    /// don't get an aside; their content sits in the gallery instead.
+    private var documentMetadataGroups: [DocumentMetadataGroup] {
+        guard recording.isMemo || recording.isDictation || recording.isSelection else { return [] }
+        var groups: [DocumentMetadataGroup] = []
+
+        // Transcription: model (brass accent) + peak amplitude (proxy for confidence)
+        var transcription: [DocumentMetadataRow] = []
+        if let model = recording.transcriptionModel, !model.isEmpty {
+            transcription.append(.init(label: "model", value: prettyModel(model), accent: true))
+        }
+        if let peak = recording.metadata?.audio?.peakAmplitude {
+            transcription.append(.init(label: "peak", value: formatAmplitude(peak)))
+        }
+        if !transcription.isEmpty {
+            groups.append(.init(title: "Transcription", rows: transcription))
+        }
+
+        // Timing: end-to-end + in-app
+        var timing: [DocumentMetadataRow] = []
+        if let endToEnd = recording.metadata?.performance?.endToEndMs {
+            timing.append(.init(label: "end-to-end", value: formatMs(endToEnd)))
+        }
+        if let inApp = recording.metadata?.performance?.inAppMs {
+            timing.append(.init(label: "in-app", value: formatMs(inApp)))
+        }
+        if !timing.isEmpty {
+            groups.append(.init(title: "Timing", rows: timing))
+        }
+
+        // Context (dictations): captured-in app, terminal cwd. Quiet, gray.
+        if recording.isDictation || recording.isSelection {
+            var context: [DocumentMetadataRow] = []
+            if let appName = recording.metadata?.app?.name, !appName.isEmpty {
+                context.append(.init(label: "captured in", value: appName))
+            }
+            if let cwd = recording.metadata?.context?.terminalWorkingDir, !cwd.isEmpty {
+                context.append(.init(label: "cwd", value: shortPath(cwd)))
+            }
+            if !context.isEmpty {
+                groups.append(.init(title: "Context", rows: context))
+            }
+        }
+
+        return groups
+    }
+
+    private func prettyModel(_ raw: String) -> String {
+        // "parakeet:v3" → "Parakeet v3", "whisper:openai_whisper-small" → "Whisper small"
+        let parts = raw.split(separator: ":", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { return raw }
+        let family = parts[0].prefix(1).uppercased() + parts[0].dropFirst()
+        let variant = parts[1]
+            .replacingOccurrences(of: "openai_whisper-", with: "")
+            .replacingOccurrences(of: "distil-whisper_distil-", with: "")
+            .replacingOccurrences(of: "_", with: " ")
+        return "\(family) \(variant)"
+    }
+
+    private func formatAmplitude(_ value: Float) -> String {
+        String(format: "%.2f", value)
+    }
+
+    private func formatMs(_ ms: Int) -> String {
+        if ms < 1000 { return "\(ms) ms" }
+        return String(format: "%.2f s", Double(ms) / 1000.0)
+    }
+
+    private func shortPath(_ path: String) -> String {
+        let home = NSHomeDirectory()
+        let collapsed = path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
+        if collapsed.count <= 24 { return collapsed }
+        return "…" + collapsed.suffix(22)
+    }
+
+    // Document mode: default read view, no card chrome. The transcript
+    // reads as an editorial document sitting on the chiffon paper —
+    // serif lead, paragraph breaks, marginal rule, end slug.
+    //
+    // Boxed mode: editing or JSON. The card chrome returns so the user
+    // sees they're inside a control surface.
+    private var documentMode: Bool { !isEditing && !showJSON }
+
     var body: some View {
         VStack(spacing: 0) {
             if !isEditing {
                 if hasTranscriptionData {
                     tabToggle
-                } else {
+                } else if !documentMode {
                     HStack {
                         Spacer()
                         copyButton
@@ -680,72 +765,91 @@ struct RecordingTranscriptCard: View {
                 toolTray
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: isTechnical ? CornerRadius.card : CornerRadius.md))
+        .clipShape(RoundedRectangle(cornerRadius: documentMode ? 0 : (isTechnical ? CornerRadius.card : CornerRadius.md)))
         .overlay {
-            // Notes are always editable — use subtle border, not accent highlight
-            let showAccent = isEditing && !recording.isNote
-            if isTechnical {
-                RoundedRectangle(cornerRadius: CornerRadius.card)
-                    .strokeBorder(
-                        showAccent ? Color.accentColor.opacity(0.4) : TechnicalStyle.borderLevel1,
-                        lineWidth: settings.currentBorderWidth
-                    )
+            if documentMode {
+                EmptyView()
             } else {
-                RoundedRectangle(cornerRadius: CornerRadius.md)
-                    .stroke((showAccent ? Color.accentColor : Theme.current.foreground).opacity(showAccent ? 0.28 : 0.12), lineWidth: showAccent ? 1 : BorderWidth.thin)
+                // Notes are always editable — use subtle border, not accent highlight
+                let showAccent = isEditing && !recording.isNote
+                if isTechnical {
+                    RoundedRectangle(cornerRadius: CornerRadius.card)
+                        .strokeBorder(
+                            showAccent ? Color.accentColor.opacity(0.4) : TechnicalStyle.borderLevel1,
+                            lineWidth: settings.currentBorderWidth
+                        )
+                } else {
+                    RoundedRectangle(cornerRadius: CornerRadius.md)
+                        .stroke((showAccent ? Color.accentColor : Theme.current.foreground).opacity(showAccent ? 0.28 : 0.12), lineWidth: showAccent ? 1 : BorderWidth.thin)
+                }
             }
         }
     }
 
     // MARK: - Tab Toggle
 
+    // Studio-style text/JSON toggle: two quiet mono-caps buttons, the
+    // active one underlined with brass amber. Copy lives in the masthead
+    // toolbar (Share) — duplicating it here orphaned the affordance and
+    // gave the user three Copy paths for the same content.
     private var tabToggle: some View {
-        HStack {
-            Spacer()
-
-            HStack(spacing: 0) {
-                tabButton("Text", icon: "text.alignleft", isSelected: !showJSON) {
-                    withAnimation(.easeInOut(duration: 0.15)) { showJSON = false }
-                }
-
-                tabButton("JSON", icon: "curlybraces", isSelected: showJSON) {
-                    withAnimation(.easeInOut(duration: 0.15)) { showJSON = true }
-                }
+        HStack(spacing: 4) {
+            Spacer(minLength: 8)
+            studioTabButton("Text", isSelected: !showJSON) {
+                withAnimation(.easeInOut(duration: 0.15)) { showJSON = false }
             }
-            .padding(2)
-            .background(
-                Capsule()
-                    .fill(Theme.current.foreground.opacity(0.04))
-            )
-
-            Spacer()
-
-            copyButton
-                .padding(.trailing, Spacing.sm)
+            studioTabButton("JSON", isSelected: showJSON) {
+                withAnimation(.easeInOut(duration: 0.15)) { showJSON = true }
+            }
         }
-        .padding(.vertical, isTechnical ? Spacing.xs : Spacing.sm)
+        // Parent already supplies 36pt horizontal in documentMode via
+        // `recipeSections` padding. Adding our own would double-indent.
+        .padding(.horizontal, documentMode ? 0 : Spacing.md)
+        .padding(.vertical, documentMode ? 6 : Spacing.sm)
         .background(
-            isTechnical ? TechnicalStyle.surface1 : Theme.current.foreground.opacity(0.02)
+            documentMode
+                ? Color.clear
+                : (isTechnical ? TechnicalStyle.surface1 : Theme.current.foreground.opacity(0.02))
         )
     }
 
-    private func tabButton(_ label: String, icon: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+    private func studioTabButton(_ label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: Spacing.xxs) {
-                Image(systemName: icon)
-                    .font(settings.fontXS)
-                Text(label)
-                    .font(settings.fontXSMedium)
+            VStack(spacing: 4) {
+                Text(label.uppercased())
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .tracking(1.8)
+                    .foregroundColor(
+                        isSelected
+                            ? Theme.current.foreground
+                            : Theme.current.foregroundSecondary.opacity(0.55)
+                    )
+                Rectangle()
+                    .fill(isSelected ? Color.hex("9A6A22") : Color.clear)
+                    .frame(height: 1)
             }
-            .foregroundColor(isSelected ? Theme.current.foreground : Theme.current.foregroundSecondary)
-            .padding(.horizontal, Spacing.sm)
-            .padding(.vertical, Spacing.xs)
-            .background(
-                Capsule()
-                    .fill(isSelected ? Theme.current.foreground.opacity(0.09) : Color.clear)
-            )
+            .padding(.horizontal, 8)
+            .padding(.top, 2)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private var studioCopyButton: some View {
+        Button(action: copyContent) {
+            Text(copied ? "COPIED" : "COPY")
+                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .tracking(1.8)
+                .foregroundColor(
+                    copied
+                        ? Color.green.opacity(0.75)
+                        : Theme.current.foregroundSecondary.opacity(0.65)
+                )
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+        }
+        .buttonStyle(.plain)
+        .help("Copy to clipboard")
     }
 
     // MARK: - Content Area
@@ -765,19 +869,22 @@ struct RecordingTranscriptCard: View {
                 } else if showJSON {
                     jsonContent
                 } else {
-                    Text(text)
-                        .font(settings.contentFontBody)
-                        .foregroundColor(Theme.current.foreground)
-                        .textSelection(.enabled)
-                        .lineSpacing(4)
-                        .padding(Spacing.md)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    DocumentBody(
+                        text: text,
+                        duration: recording.duration,
+                        wordCount: recording.wordCount,
+                        metadataGroups: documentMetadataGroups
+                    )
                 }
             }
-            .background(
-                Rectangle()
-                    .fill(Theme.current.foreground.opacity((isEditing && !recording.isNote) ? 0.06 : 0.04))
-            )
+            .background {
+                if documentMode {
+                    Color.clear
+                } else {
+                    Rectangle()
+                        .fill(Theme.current.foreground.opacity((isEditing && !recording.isNote) ? 0.06 : 0.04))
+                }
+            }
             .contextMenu {
                 Button {
                     copyContent()
@@ -854,16 +961,16 @@ struct RecordingTranscriptCard: View {
         }
         .padding(.horizontal, Spacing.md)
         .padding(.vertical, isTechnical ? 6 : 8)
-        .background(
-            Group {
-                if isTechnical {
-                    TechnicalStyle.surface1
-                } else {
-                    Rectangle()
-                        .fill(Theme.current.foreground.opacity(0.02))
-                }
+        .background {
+            if documentMode {
+                Color.clear
+            } else if isTechnical {
+                TechnicalStyle.surface1
+            } else {
+                Rectangle()
+                    .fill(Theme.current.foreground.opacity(0.02))
             }
-        )
+        }
         .onHover { toolTrayHovered = $0 }
     }
 
@@ -1029,6 +1136,207 @@ struct RecordingTranscriptCard: View {
     }
 }
 
+// MARK: - Document Body
+//
+// The transcript rendered as an editorial document — not a wall of mono
+// in a card, but paragraphs on the page. Lead paragraph in serif
+// display at a larger size; subsequent paragraphs in the body sans at
+// comfortable measure. Brass marginal rule on the left, end-of-document
+// slug at the bottom.
+//
+// Mirrors design/studio/components/studies/MacMemoDetail.tsx Body().
+
+struct DocumentMetadataRow {
+    let label: String
+    let value: String
+    var accent: Bool = false
+}
+
+struct DocumentMetadataGroup {
+    let title: String
+    let rows: [DocumentMetadataRow]
+}
+
+struct DocumentBody: View {
+    let text: String
+    let duration: TimeInterval
+    let wordCount: Int
+    /// Optional right-margin metadata aside. Renders the editor's caption
+    /// — grouped technical particulars — alongside the body in a 1fr/220pt
+    /// grid. Mirrors studio Body() aside.
+    var metadataGroups: [DocumentMetadataGroup] = []
+    /// Optional opener cue rendered before the lead paragraph (e.g.
+    /// "0:00 ·"). Renders in brass mono caps, inline with the lead.
+    var leadCue: String? = nil
+
+    /// Split the transcript into paragraphs. Double-newline wins; if
+    /// the model gave us one block (common for short dictations), we
+    /// fall back to single newlines, then to one paragraph.
+    private var paragraphs: [String] {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let byDouble = trimmed
+            .components(separatedBy: "\n\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if byDouble.count > 1 { return byDouble }
+
+        let bySingle = trimmed
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return bySingle.isEmpty ? [trimmed] : bySingle
+    }
+
+    private var formattedDuration: String {
+        let total = max(Int(duration.rounded()), 0)
+        let m = total / 60
+        let s = total % 60
+        return String(format: "%d:%02d", m, s)
+    }
+
+    private static func serif(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        for name in ["Newsreader-Regular", "Newsreader"] {
+            #if os(macOS)
+            if NSFont(name: name, size: size) != nil {
+                return .custom(name, size: size)
+            }
+            #endif
+        }
+        return .system(size: size, weight: weight, design: .serif)
+    }
+
+    /// Whether the body has visible content (paragraphs beyond the
+    /// masthead standfirst). Single-paragraph recordings have their
+    /// whole transcript in the standfirst — the body is silent.
+    private var hasBodyContent: Bool {
+        paragraphs.count > 1
+    }
+
+    var body: some View {
+        // For single-paragraph recordings the lead lives in the masthead
+        // and the body has nothing to say. Render only the aside (or
+        // nothing) — no orphan marginal rule, no end slug floating in
+        // whitespace.
+        //
+        // Horizontal padding is supplied by the parent (TalkieView's
+        // `recipeSections` 36pt body gutter) — DON'T add internal
+        // horizontal padding or content double-indents to 72pt.
+        Group {
+            if hasBodyContent {
+                HStack(alignment: .top, spacing: 40) {
+                    documentColumn
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if !metadataGroups.isEmpty {
+                        metadataAside
+                            .frame(width: 220, alignment: .leading)
+                    }
+                }
+                .padding(.top, 8)
+                .padding(.bottom, 40)
+            } else if !metadataGroups.isEmpty {
+                HStack(alignment: .top, spacing: 40) {
+                    Spacer(minLength: 0)
+                        .frame(maxWidth: .infinity)
+                    metadataAside
+                        .frame(width: 220, alignment: .leading)
+                }
+                .padding(.top, 0)
+                .padding(.bottom, 24)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var documentColumn: some View {
+        // Lead paragraph has been promoted to the masthead (TOHeaderSection
+        // standfirst). The body renders only paragraphs 2…n and the end
+        // slug.
+        let rest = Array(paragraphs.dropFirst())
+
+        return HStack(alignment: .top, spacing: 20) {
+            // Marginal rule — printed-page gutter.
+            Rectangle()
+                .fill(Color.hex("9A6A22").opacity(0.30))
+                .frame(width: 0.5)
+                .padding(.vertical, 4)
+
+            VStack(alignment: .leading, spacing: 18) {
+                ForEach(Array(rest.enumerated()), id: \.offset) { _, p in
+                    Text(p)
+                        .font(.system(size: 14))
+                        .lineSpacing(6)
+                        .foregroundColor(Theme.current.foreground)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                endSlug
+                    .padding(.top, 12)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var endSlug: some View {
+        HStack(spacing: 10) {
+            Rectangle()
+                .fill(Theme.current.foreground.opacity(0.22))
+                .frame(width: 22, height: 0.5)
+            Text("END · \(formattedDuration) · \(wordCount) WORDS")
+                .font(.system(size: 9, weight: .regular, design: .monospaced))
+                .tracking(2.0)
+                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.65))
+            Rectangle()
+                .fill(Theme.current.foreground.opacity(0.10))
+                .frame(height: 0.5)
+        }
+    }
+
+    // MARK: - Metadata aside
+
+    private var metadataAside: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            ForEach(Array(metadataGroups.enumerated()), id: \.offset) { gi, group in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("· \(group.title.uppercased())")
+                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                        .tracking(2.2)
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(0.55))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(Array(group.rows.enumerated()), id: \.offset) { _, row in
+                            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                                Text(row.label.lowercased())
+                                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                                    .tracking(1.6)
+                                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.60))
+                                Spacer(minLength: 8)
+                                Text(row.value)
+                                    .font(.system(size: 11, weight: .regular, design: .monospaced))
+                                    .monospacedDigit()
+                                    .foregroundColor(
+                                        row.accent
+                                            ? Color.hex("9A6A22")
+                                            : Theme.current.foreground
+                                    )
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
+                        }
+                    }
+
+                    if gi < metadataGroups.count - 1 {
+                        Rectangle()
+                            .fill(Theme.current.foreground.opacity(0.08))
+                            .frame(height: 0.5)
+                            .padding(.top, 4)
+                    }
+                }
+            }
+        }
+        .padding(.top, 8)
+    }
+}
+
 // MARK: - Syntax Highlighted JSON
 
 struct SyntaxHighlightedJSON: View {
@@ -1170,6 +1478,9 @@ struct AudioPlayerCard: View {
     let onTogglePlayback: () -> Void
     let onSeek: (Double) -> Void
     var onVolumeChange: ((Float) -> Void)? = nil
+    /// When true, the card renders with no internal padding so a wrapping
+    /// band can supply its own (used by the full-bleed playback footer).
+    var noInternalPadding: Bool = false
 
     @State private var isPlayButtonHovered = false
     @State private var showVolumeSlider = false
@@ -1327,8 +1638,8 @@ struct AudioPlayerCard: View {
                 .help("Adjust volume")
             }
         }
-        .padding(.horizontal, Spacing.md)
-        .padding(.vertical, Spacing.sm)
+        .padding(.horizontal, noInternalPadding ? 0 : Spacing.md)
+        .padding(.vertical, noInternalPadding ? 0 : Spacing.sm)
         .onAppear {
             volume = SettingsManager.shared.playbackVolume
         }

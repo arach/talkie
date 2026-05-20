@@ -84,11 +84,7 @@ final class OnboardingManager: ObservableObject {
     }
 
     func openAccessibilitySettings() {
-        // Use system prompt - shows dialog and opens Settings with app pre-highlighted
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        _ = AXIsProcessTrustedWithOptions(options)
-
-        // Start polling for permission grant
+        PermissionManager.shared.requestAccessibility()
         startAccessibilityPolling()
     }
 

@@ -15,7 +15,9 @@ interface SchemeCardProps {
 
 export function SchemeCard({ scheme, children }: SchemeCardProps) {
   return (
+    // swift: VStack(alignment: .leading, spacing: 10)
     <div className="flex flex-col gap-2.5">
+      {/* swift: HStack(alignment: .firstTextBaseline, spacing: 10) — eyebrow row, 9px caps */}
       <div className="flex items-baseline gap-2.5 text-[9px] font-semibold uppercase tracking-eyebrow text-studio-ink-faint">
         <span
           aria-hidden

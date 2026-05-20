@@ -61,7 +61,7 @@ enum PermissionType: String, CaseIterable, Identifiable {
         case .microphone:
             return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
         case .accessibility:
-            return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+            return nil
         }
     }
 }
@@ -245,15 +245,14 @@ class PermissionManager: ObservableObject {
     }
 
     func requestAccessibility() {
-        // Show system prompt — opens dialog and pre-adds app to Accessibility list
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        _ = AXIsProcessTrustedWithOptions(options)
-        openSettings(for: .accessibility)
+        AccessibilityInstallAssistant.shared.present()
+        startPolling()
     }
 
     func openSettings(for permission: PermissionType) {
-        // Always open the relevant System Settings pane too.
-        if let url = permission.settingsURL {
+        if permission == .accessibility {
+            AccessibilityInstallAssistant.shared.present()
+        } else if let url = permission.settingsURL {
             openSystemSettings(url)
         }
 
@@ -594,34 +593,34 @@ struct PermissionSettingsRow: View {
     }
 
     var body: some View {
-        Button(action: onRequest) {
-            HStack(spacing: Spacing.md) {
-                Image(systemName: status == .granted ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 18))
-                    .foregroundColor(status == .granted ? .green : TalkieTheme.textTertiary)
+        HStack(spacing: Spacing.md) {
+            Image(systemName: status == .granted ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 18))
+                .foregroundColor(status == .granted ? .green : TalkieTheme.textTertiary)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(permission.title)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(TalkieTheme.textPrimary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(permission.title)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(TalkieTheme.textPrimary)
 
-                    HStack(spacing: 6) {
-                        Text(permission.shortDescription)
-                            .font(.system(size: 11))
-                            .foregroundColor(TalkieTheme.textTertiary)
+                HStack(spacing: 6) {
+                    Text(permission.shortDescription)
+                        .font(.system(size: 11))
+                        .foregroundColor(TalkieTheme.textTertiary)
 
-                        Text("•")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(TalkieTheme.textTertiary.opacity(0.7))
+                    Text("•")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(TalkieTheme.textTertiary.opacity(0.7))
 
-                        Text(status.label)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(status.color.opacity(0.9))
-                    }
+                    Text(status.label)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(status.color.opacity(0.9))
                 }
+            }
 
-                Spacer()
+            Spacer()
 
+            Button(action: onRequest) {
                 HStack(spacing: 6) {
                     Text(actionLabel)
                         .font(.system(size: 11, weight: .semibold))
@@ -636,15 +635,14 @@ struct PermissionSettingsRow: View {
                         .fill(isHovered ? Color.accentColor : Color.accentColor.opacity(0.12))
                 )
             }
-            .padding(.horizontal, Spacing.md)
-            .padding(.vertical, Spacing.sm)
-            .background(
-                RoundedRectangle(cornerRadius: CornerRadius.sm)
-                    .fill(status != .granted ? Color.orange.opacity(0.04) : Color.clear)
-            )
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: CornerRadius.sm)
+                .fill(status != .granted ? Color.orange.opacity(0.04) : Color.clear)
+        )
         .onHover { isHovered = $0 }
     }
 }

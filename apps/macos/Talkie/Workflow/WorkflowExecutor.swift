@@ -15,6 +15,7 @@ import CryptoKit
 import TalkieKit
 
 private let logger = Logger(subsystem: "to.talkie.app.mac", category: "WorkflowExecutor")
+private let workflowUILog = Log(.ui)
 // MARK: - Workflow Execution Context
 
 struct WorkflowContext {
@@ -97,11 +98,50 @@ struct WorkflowContext {
 @Observable
 class WorkflowExecutor {
     static let shared = WorkflowExecutor()
+    private nonisolated static let homeHistoryLimit = 3
 
     private let registry = LLMProviderRegistry.shared
     private let settings = SettingsManager.shared
 
+    private(set) var homeRecentSuccessfulRuns: [WorkflowRunModel] = []
+    private(set) var homeSuccessfulRunsTodayCount = 0
+
     private init() {}
+
+    func refreshHomeHistory(limit: Int = WorkflowExecutor.homeHistoryLimit) async {
+        do {
+            let runs = try await LocalRepository().allWorkflowRuns()
+            let successfulRuns = runs.filter { $0.status == .completed }
+            let calendar = Calendar.current
+
+            homeRecentSuccessfulRuns = Array(successfulRuns.prefix(limit))
+            homeSuccessfulRunsTodayCount = successfulRuns.filter {
+                calendar.isDateInToday($0.runDate)
+            }.count
+        } catch is CancellationError {
+        } catch {
+            workflowUILog.warning("Failed to refresh home workflow history", detail: error.localizedDescription)
+            homeRecentSuccessfulRuns = []
+            homeSuccessfulRunsTodayCount = 0
+        }
+    }
+
+    private func applyHomeWorkflowRun(_ run: WorkflowRunModel, limit: Int = WorkflowExecutor.homeHistoryLimit) {
+        guard run.status == .completed else { return }
+
+        let calendar = Calendar.current
+        let wasAlreadyCountedToday = homeRecentSuccessfulRuns.contains {
+            $0.id == run.id && calendar.isDateInToday($0.runDate)
+        }
+        var updatedRuns = homeRecentSuccessfulRuns.filter { $0.id != run.id }
+        updatedRuns.append(run)
+        updatedRuns.sort { $0.runDate > $1.runDate }
+        homeRecentSuccessfulRuns = Array(updatedRuns.prefix(limit))
+
+        if calendar.isDateInToday(run.runDate), !wasAlreadyCountedToday {
+            homeSuccessfulRunsTodayCount += 1
+        }
+    }
 
     private struct SidecarWorkflowContextPayload: Codable {
         let transcript: String
@@ -639,6 +679,7 @@ class WorkflowExecutor {
                 )
                 try await repository.saveWorkflowRun(workflowRun)
                 logger.info("✅ [Event Sourcing] Saved workflow run")
+                applyHomeWorkflowRun(workflowRun)
 
                 // 2. Create workflow steps
                 var eventSequence = 0

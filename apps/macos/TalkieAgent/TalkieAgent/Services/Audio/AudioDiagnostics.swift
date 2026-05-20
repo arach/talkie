@@ -603,19 +603,11 @@ final class AudioDiagnostics: ObservableObject {
     private func openPrivacySettings() -> FixResult {
         logger.info("Opening Privacy settings for microphone")
 
-        // Open Privacy & Security > Microphone
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
-            NSWorkspace.shared.open(url)
-            return FixResult(
-                fix: .grantPermission,
-                success: true,
-                message: "Opening Privacy settings..."
-            )
-        }
+        PermissionManager.shared.openSettings(for: .microphone)
         return FixResult(
             fix: .grantPermission,
-            success: false,
-            message: "Could not open Privacy settings"
+            success: true,
+            message: "Opening Privacy settings..."
         )
     }
 

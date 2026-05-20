@@ -13,6 +13,18 @@ const LINKS = [
   { href: "/recording-sheet", label: "Recording Sheet" },
   { href: "/agent-bay", label: "Agent Bay" },
   { href: "/iphone-themes", label: "iPhone Themes" },
+  { href: "/mac-home", label: "Mac · Home" },
+  { href: "/mac-home-wide", label: "Mac · Home Wide" },
+  { href: "/mac-memo-wide", label: "Mac · Memo Wide" },
+  { href: "/mac-dictation-wide", label: "Mac · Dictation Wide" },
+  { href: "/mac-library", label: "Mac · Library" },
+  { href: "/mac-compose", label: "Mac · Compose" },
+  { href: "/mac-memo-detail", label: "Mac · Memo Detail" },
+  { href: "/mac-talkie-button", label: "Mac · Talkie Button" },
+  { href: "/mac-recording-state", label: "Mac · Recording" },
+  { href: "/mac-record-to-memo", label: "Mac · Record → Memo" },
+  { href: "/mac-library-empty", label: "Mac · Library Empty" },
+  { href: "/mac-notch-settings", label: "Mac · Notch Settings" },
 ];
 
 export function StudioNav() {

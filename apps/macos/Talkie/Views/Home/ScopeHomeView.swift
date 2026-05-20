@@ -43,8 +43,6 @@ private enum ScopeFont {
 
 struct ScopeHomeView: View {
     let unifiedActivity: [UnifiedActivityItem]
-    let todayMemos: Int
-    let todayDictations: Int
     let totalWords: Int
     let streak: Int
 
@@ -60,7 +58,6 @@ struct ScopeHomeView: View {
     @AppStorage("scopeAgentBay.sparkline") private var baySparkline: Bool = true
     @AppStorage("scopeAgentBay.waveform")  private var bayWaveform: Bool = false
     @AppStorage("scopeAgentBay.compact")   private var bayCompact: Bool = true
-    @AppStorage("scopeAgentBay.ambient")   private var bayAmbient: Bool = false
     @AppStorage("scopeAgentBay.bezel")     private var bayBezel: Bool = false
     @AppStorage("scopeAgentBay.heatmap")   private var bayHeatmap: Bool = false
     @AppStorage("scopeAgentBay.timeline")  private var bayTimeline: Bool = false
@@ -74,18 +71,30 @@ struct ScopeHomeView: View {
     // and should land on the Scope canonical, not the original amber.
     private var currentScheme: BayScheme { BayScheme(rawValue: bayScheme) ?? .chiffon }
 
+    @State private var memosStore = MemosViewModel.shared
+    @State private var dictationStore = DictationStore.shared
+    @State private var workflowExecutor = WorkflowExecutor.shared
+    @State private var screenshotTray = ScreenshotTray.shared
+    @State private var clipTray = ClipTray.shared
+    @State private var selectionTray = SelectionTray.shared
+
+    private var todayMemos: Int { memosStore.todayCount }
+    private var todayDictations: Int { dictationStore.todayCount }
     private var todayTotal: Int { todayMemos + todayDictations }
+    private var trayItemCount: Int {
+        _ = screenshotTray.items
+        _ = clipTray.items
+        _ = selectionTray.items
+        return TrayItem.allItems().count
+    }
 
     var body: some View {
         #if DEBUG
         let _ = FrameRateMonitor.shared.recordBodyAccess("ScopeHomeView")
         #endif
         return VStack(spacing: 0) {
-            ScopeTopBand(title: "Today", chrome: heroTrailing)
-
             ScrollView {
                 VStack(alignment: .leading, spacing: 36) {
-                    hero
                     captureModes
                     agentPanel
                     routinesStrip
@@ -95,13 +104,27 @@ struct ScopeHomeView: View {
                     ownershipStrip
                 }
                 .padding(.horizontal, 32)
-                .padding(.top, 16)
+                .padding(.top, ScopeTopBandLayout.height + ScopeTopBandLayout.topInset + 8)
                 .padding(.bottom, 32)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(ScopeCanvas.canvas)
+        .task {
+            ChromeBarHeader.shared.set(title: "Today", subtitle: heroTrailing)
+            await memosStore.loadStats()
+            await workflowExecutor.refreshHomeHistory()
+        }
+        .onChange(of: streak) { _, _ in
+            ChromeBarHeader.shared.subtitle = heroTrailing
+        }
+        .onChange(of: totalWords) { _, _ in
+            ChromeBarHeader.shared.subtitle = heroTrailing
+        }
+        .onDisappear {
+            ChromeBarHeader.shared.clear()
+        }
     }
 
     // MARK: - Hero
@@ -174,7 +197,7 @@ struct ScopeHomeView: View {
                     glyph: .crosshair,
                     eyebrow: "Capture",
                     channel: "CH-03",
-                    state: "Hyper+S armed",       // TODO: wire to TrayState
+                    state: captureStateTray,
                     action: "CAPTURE",
                     hint: "⌃⇧⌘ S",
                     onTap: {}
@@ -183,9 +206,8 @@ struct ScopeHomeView: View {
         }
     }
 
-    /// Stub state lines for the capture cards. Stays factual (counts /
-    /// last-time) rather than editorial. TODO: wire to MemoStats /
-    /// DictationStore / TrayBadge live state.
+    /// State lines for the capture cards. Stays factual (counts /
+    /// last-time) rather than editorial.
     private var captureStateMemo: String {
         if todayMemos == 0 { return "Ready" }
         if todayMemos == 1 { return "1 today" }
@@ -196,6 +218,11 @@ struct ScopeHomeView: View {
         if todayDictations == 1 { return "1 today" }
         return "\(todayDictations) today"
     }
+    private var captureStateTray: String {
+        if trayItemCount == 0 { return "Hyper+S armed" }
+        if trayItemCount == 1 { return "1 in tray" }
+        return "\(trayItemCount) in tray"
+    }
 
     // MARK: - Routines strip (Workflows · Console)
     //
@@ -204,9 +231,7 @@ struct ScopeHomeView: View {
     // cream canvas so they read as cousins of the Capture Mode cards,
     // not as competing dark slabs with the bay.
     //
-    // Data is stubbed at this stage. TODO: wire Workflows to
-    // WorkflowRunsStore (or equivalent); wire Console to the active
-    // ConsoleRegistry tabs.
+    // Console data remains stubbed until an active ConsoleRegistry lands.
 
     private var routinesStrip: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -214,12 +239,8 @@ struct ScopeHomeView: View {
             HStack(spacing: 16) {
                 RoutinesPanel(
                     title: "Workflows",
-                    trailing: "3 ran today",
-                    rows: [
-                        .init(leading: .filled, label: "Summarize standup",  trailing: "9:31 AM"),
-                        .init(leading: .filled, label: "Dictation → Linear", trailing: "9:14 AM"),
-                        .init(leading: .hollow, label: "Compose draft",      trailing: "Yesterday"),
-                    ],
+                    trailing: workflowRunsTodayText,
+                    rows: workflowRunRows,
                     footer: "MANAGE WORKFLOWS"
                 )
                 RoutinesPanel(
@@ -234,6 +255,39 @@ struct ScopeHomeView: View {
                 )
             }
         }
+    }
+
+    private var workflowRunsTodayText: String {
+        let count = workflowExecutor.homeSuccessfulRunsTodayCount
+        if count == 1 { return "1 ran today" }
+        return "\(count) ran today"
+    }
+
+    private var workflowRunRows: [RoutinesPanel.Row] {
+        let rows = workflowExecutor.homeRecentSuccessfulRuns.prefix(3).map { run in
+            RoutinesPanel.Row(
+                leading: .filled,
+                label: run.workflowName,
+                trailing: workflowRunTimeText(run.runDate)
+            )
+        }
+
+        if rows.isEmpty {
+            return [.init(leading: .hollow, label: "Ready", trailing: "")]
+        }
+
+        return rows
+    }
+
+    private func workflowRunTimeText(_ date: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) {
+            return date.formatted(date: .omitted, time: .shortened)
+        }
+        if calendar.isDateInYesterday(date) {
+            return "Yesterday"
+        }
+        return date.formatted(.dateTime.month(.abbreviated).day())
     }
 
     // MARK: - Discovery row (Today · Shortcuts · Trending)
@@ -266,8 +320,9 @@ struct ScopeHomeView: View {
     // recessed footer; on CHIFFON (Scope canonical) it's a barely-
     // there cream strip.
     //
-    // TODO: wire phosphor dots to live service state
-    // (ServiceManager.agent / .sync / .updater).
+    // AGENT / ICLOUD source launch-agent status; BRIDGE source is
+    // the local XPC connection to TalkieAgent. UPDATES stays stubbed
+    // until an updater source exists.
 
     private var systemStatusRail: some View {
         SystemStatusRail(scheme: currentScheme)
@@ -306,28 +361,12 @@ struct ScopeHomeView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
 
-                if bayAmbient {
-                    AmbientScanline(scheme: scheme)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-
                 VStack(alignment: .leading, spacing: 0) {
                     panelHeader(scheme: scheme)
                     panelBody(scheme: scheme)
                     panelFooter(scheme: scheme)
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                if bayHeatmap {
-                    // Floats in the body's negative space, anchored to
-                    // the top-right corner just below the header rail
-                    // — keeps the rail at its natural height.
-                    ActivityHeatmap(scheme: scheme)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                        .padding(.top, 40)
-                        .padding(.trailing, 18)
-                        .allowsHitTesting(false)
-                }
 
                 if bayBrackets {
                     BayCornerBrackets(color: scheme.edgeStrong)
@@ -381,11 +420,7 @@ struct ScopeHomeView: View {
 
     private func panelHeader(scheme: BayScheme) -> some View {
         HStack(spacing: 8) {
-            if bayAmbient {
-                BreathingDot(color: scheme.trace, size: 6)
-            } else {
-                PhosphorDot(color: scheme.trace, size: 6)
-            }
+            PhosphorDot(color: scheme.trace, size: 6)
             Text("RUNNING · AG-01 / TALKIE.AGENT")
                 .font(ScopeType.chrome)
                 .tracking(ScopeType.Tracking.wide)
@@ -414,7 +449,13 @@ struct ScopeHomeView: View {
                 tileDivider(scheme: scheme)
                 statTile(scheme: scheme, seed: 1, value: "\(todayDictations)", label: "DICTATIONS · TODAY")
                 tileDivider(scheme: scheme)
-                statTile(scheme: scheme, seed: 2, value: streak > 0 ? "\(streak)d" : "0d", label: "STREAK")
+                statTile(
+                    scheme: scheme,
+                    seed: 2,
+                    value: streak > 0 ? "\(streak)d" : "0d",
+                    label: "STREAK",
+                    extra: (bayHeatmap && !bayCompact) ? AnyView(ActivityHeatmap(scheme: scheme)) : nil
+                )
                 tileDivider(scheme: scheme)
                 statTile(scheme: scheme, seed: 3, value: wordsFormatted, label: "TOTAL WORDS")
             }
@@ -437,7 +478,7 @@ struct ScopeHomeView: View {
             .padding(.vertical, 18)
     }
 
-    private func statTile(scheme: BayScheme, seed: Int, value: String, label: String) -> some View {
+    private func statTile(scheme: BayScheme, seed: Int, value: String, label: String, extra: AnyView? = nil) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(value)
                 .font(ScopeFont.display(size: bayCompact ? 26 : 34))
@@ -448,7 +489,10 @@ struct ScopeHomeView: View {
                 .font(ScopeType.chrome)
                 .tracking(ScopeType.Tracking.wide)
                 .foregroundStyle(scheme.inkFaint)
-            if baySparkline {
+            if let extra {
+                extra
+                    .padding(.top, 4)
+            } else if baySparkline {
                 StatSparkline(seed: seed, scheme: scheme)
                     .frame(height: bayCompact ? 12 : 16)
                     .padding(.top, 2)
@@ -510,7 +554,6 @@ struct ScopeHomeView: View {
                     bayChip("SPARKLINE", isOn: baySparkline) { baySparkline.toggle() }
                     bayChip("WAVEFORM",  isOn: bayWaveform)  { bayWaveform.toggle() }
                     bayChip("COMPACT",   isOn: bayCompact)   { bayCompact.toggle() }
-                    bayChip("AMBIENT",   isOn: bayAmbient)   { bayAmbient.toggle() }
                     bayChip("BEZEL",     isOn: bayBezel)     { bayBezel.toggle() }
                     bayChip("HEATMAP",   isOn: bayHeatmap)   { bayHeatmap.toggle() }
                     bayChip("TIMELINE",  isOn: bayTimeline)  { bayTimeline.toggle() }
@@ -521,7 +564,6 @@ struct ScopeHomeView: View {
                         baySparkline = true
                         bayWaveform = false
                         bayCompact = true
-                        bayAmbient = false
                         bayBezel = false
                         bayHeatmap = false
                         bayTimeline = false
@@ -1017,55 +1059,6 @@ private struct BackgroundWaveform: View {
                 }
             }
             .stroke(scheme.trace.opacity(0.18), lineWidth: 0.75)
-        }
-    }
-}
-
-/// Treatment 5a — slow breathing on the running dot. TimelineView is
-/// scoped to the dot only so the parent body doesn't re-evaluate.
-private struct BreathingDot: View {
-    let color: Color
-    let size: CGFloat
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { ctx in
-            let t = ctx.date.timeIntervalSinceReferenceDate
-            let phase = (sin(t * .pi / 1.5) + 1) / 2   // 0…1, ~3s cycle
-            let opacity = 0.55 + phase * 0.45           // 0.55 … 1.0
-            Circle()
-                .fill(color)
-                .frame(width: size, height: size)
-                .opacity(opacity)
-                .shadow(color: color.opacity(0.30 + phase * 0.30), radius: size * 0.6)
-        }
-    }
-}
-
-/// Treatment 5b — slow CRT scanline drifting top→bottom across the
-/// panel. ~14s cycle so it reads as ambient, not motion noise.
-private struct AmbientScanline: View {
-    let scheme: BayScheme
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 24.0, paused: false)) { ctx in
-            GeometryReader { geo in
-                let t = ctx.date.timeIntervalSinceReferenceDate
-                let cycle = 14.0
-                let progress = (t.truncatingRemainder(dividingBy: cycle)) / cycle
-                let y = CGFloat(progress) * geo.size.height
-                LinearGradient(
-                    stops: [
-                        .init(color: .clear, location: 0.0),
-                        .init(color: scheme.trace.opacity(0.10), location: 0.5),
-                        .init(color: .clear, location: 1.0)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 36)
-                .offset(y: y - 18)
-                .allowsHitTesting(false)
-            }
         }
     }
 }
@@ -1752,13 +1745,21 @@ private struct DiscoveryWidgetCard<Content: View>: View {
 private struct SystemStatusRail: View {
     let scheme: BayScheme
 
+    @State private var serviceManager = ServiceManager.shared
+
     var body: some View {
-        HStack(spacing: 18) {
-            phosphor(label: "AGENT",   detail: "AG-01 · RUNNING", state: .ok)
+        let launchAgentInfos = serviceManager.launchAgentInfos
+        let agentInfo = launchAgentInfo(named: "TalkieAgent", in: launchAgentInfos)
+        let syncInfo = launchAgentInfo(named: "TalkieSync", in: launchAgentInfos)
+        let _ = serviceManager.live.isRunning
+        let _ = serviceManager.sync.isRunning
+
+        return HStack(spacing: 18) {
+            phosphor(label: "AGENT",   detail: agentDetail(agentInfo), state: launchAgentDotState(agentInfo))
             divider
-            phosphor(label: "BRIDGE",  detail: "LOCAL · CONNECTED", state: .ok)
+            phosphor(label: "BRIDGE",  detail: bridgeDetail, state: bridgeDotState)
             divider
-            phosphor(label: "ICLOUD",  detail: "SYNCED", state: .ok)
+            phosphor(label: "ICLOUD",  detail: iCloudDetail(syncInfo), state: launchAgentDotState(syncInfo))
             divider
             phosphor(label: "UPDATES", detail: "CURRENT", state: .muted)
             Spacer()
@@ -1778,6 +1779,39 @@ private struct SystemStatusRail: View {
     }
 
     private enum DotState { case ok, warn, muted }
+
+    private func launchAgentInfo(named displayName: String, in infos: [LaunchAgentInfo]) -> LaunchAgentInfo? {
+        infos.first { $0.displayName == displayName }
+    }
+
+    private func agentDetail(_ info: LaunchAgentInfo?) -> String {
+        "AG-01 · \(launchAgentStatusText(info, loadedText: "RUNNING"))"
+    }
+
+    private var bridgeDetail: String {
+        serviceManager.live.isXPCConnected ? "LOCAL · CONNECTED" : "LOCAL · OFFLINE"
+    }
+
+    private func iCloudDetail(_ info: LaunchAgentInfo?) -> String {
+        launchAgentStatusText(info, loadedText: "SYNCED")
+    }
+
+    private var bridgeDotState: DotState {
+        serviceManager.live.isXPCConnected ? .ok : .warn
+    }
+
+    private func launchAgentStatusText(_ info: LaunchAgentInfo?, loadedText: String) -> String {
+        guard let info, info.isInstalled else { return "NOT INSTALLED" }
+        return info.isLoaded ? loadedText : "INSTALLED"
+    }
+
+    private func launchAgentDotState(_ info: LaunchAgentInfo?) -> DotState {
+        switch info?.statusColor {
+        case "green": return .ok
+        case "orange": return .warn
+        default: return .muted
+        }
+    }
 
     private func phosphor(label: String, detail: String, state: DotState) -> some View {
         HStack(spacing: 6) {
@@ -1810,8 +1844,25 @@ private struct SystemStatusRail: View {
     }
 
     private var uptimeChrome: String {
-        // TODO: wire to ProcessInfo / launchd state. Stub matches
-        // Mac Home study.
-        "PID \(ProcessInfo.processInfo.processIdentifier) · UPTIME 4H"
+        let uptime = CFAbsoluteTimeGetCurrent() - StartupProfiler.shared.processStart
+        return "PID \(ProcessInfo.processInfo.processIdentifier) · UPTIME \(Self.uptimeText(uptime))"
+    }
+
+    private static func uptimeText(_ uptime: TimeInterval) -> String {
+        let totalMinutes = max(0, Int(uptime / 60))
+        if totalMinutes < 1 { return "0M" }
+        if totalMinutes < 60 { return "\(totalMinutes)M" }
+
+        let totalHours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+        if totalHours < 24 {
+            if minutes == 0 { return "\(totalHours)H" }
+            return "\(totalHours)H \(minutes)M"
+        }
+
+        let days = totalHours / 24
+        let hours = totalHours % 24
+        if hours == 0 { return "\(days)D" }
+        return "\(days)D \(hours)H"
     }
 }

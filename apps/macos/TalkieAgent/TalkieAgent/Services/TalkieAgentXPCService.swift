@@ -350,17 +350,14 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
                 detail: "bundle=\(Bundle.main.bundleIdentifier ?? "unknown"), executable=\(Bundle.main.executableURL?.path ?? "unknown")"
             )
 
-            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-            let granted = AXIsProcessTrustedWithOptions(options)
             let refreshed = AccessibilityCache.shared.preflight()
 
             if !refreshed {
-                PermissionManager.shared.openSettings(for: .accessibility)
+                PermissionManager.shared.requestAccessibility()
             }
 
-            let result = refreshed || granted
-            NSLog("[TalkieAgentXPC] Accessibility permission request result: \(result)")
-            reply(result)
+            NSLog("[TalkieAgentXPC] Accessibility permission request result: \(refreshed)")
+            reply(refreshed)
         }
     }
 
