@@ -223,7 +223,6 @@ private extension ConnectionCenterStore.Row.Kind {
 struct ConnectionCenterNext: View {
     @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var store = ConnectionCenterStore()
-    @State private var showingBridgeSettings = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -248,11 +247,6 @@ struct ConnectionCenterNext: View {
                 .padding(.vertical, 12)
             }
             .scrollIndicators(.hidden)
-        }
-        .sheet(isPresented: $showingBridgeSettings) {
-            NavigationStack {
-                BridgeSettingsView()
-            }
         }
     }
 
@@ -348,7 +342,7 @@ struct ConnectionCenterNext: View {
                 break
             }
         case .macBridge:
-            showingBridgeSettings = true
+            AppShellRouter.shared.openBridgeDetail()
         }
     }
 }
