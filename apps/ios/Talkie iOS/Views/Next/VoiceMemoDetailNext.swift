@@ -220,12 +220,14 @@ struct VoiceMemoDetailNext: View {
                     transcriptSection
                         .padding(.horizontal, 12)
 
-                    Spacer(minLength: 100)
+                    actionBar
+                        .padding(.horizontal, 12)
+                        .padding(.top, 4)
+
+                    Spacer(minLength: 120)   // breathing room above the chrome tray
                 }
             }
             .scrollIndicators(.hidden)
-
-            actionBar
         }
     }
 
@@ -355,6 +357,11 @@ struct VoiceMemoDetailNext: View {
         }
     }
 
+    /// Inline action row — lives at the foot of the scrollable content
+    /// rather than pinned to the screen bottom. Short memos: chips
+    /// sit right under the transcript card. Long memos: chips scroll
+    /// to the bottom of the content. Either way they never start
+    /// stacked on top of the chrome tray.
     private var actionBar: some View {
         HStack(spacing: 8) {
             actionChip(label: "Share", isPrimary: false) { /* TODO */ }
@@ -368,11 +375,6 @@ struct VoiceMemoDetailNext: View {
             }
             actionChip(label: "Refine ›", isPrimary: true) { AppShellRouter.shared.openCompose(documentID: store.memo.id) }
         }
-        .padding(.leading, 72)
-        .padding(.trailing, 12)
-        .padding(.top, 8)
-        .padding(.bottom, 18)
-        .overlay(Rectangle().fill(theme.currentTheme.chrome.edgeFaint).frame(height: theme.currentTheme.chrome.hairlineWidth), alignment: .top)
     }
 
     private func actionChip(label: String, isPrimary: Bool, action: @escaping () -> Void) -> some View {

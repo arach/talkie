@@ -41,7 +41,14 @@ struct BridgeDetailNext: View {
                     .background(theme.currentTheme.chrome.edgeFaint)
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 18) {
+                        PairingPhaseBanner(phase: currentPhase)
+
+                        if let errorMessage = bridgeManager.errorMessage,
+                           bridgeManager.status == .error {
+                            ErrorBanner(message: errorMessage) { reconnect() }
+                        }
+
                         statusSection
                         pairingSection
                         sessionsSection
@@ -436,5 +443,237 @@ struct BridgeDetailNext: View {
             await bridgeManager.retry()
             isReconnecting = false
         }
+    }
+
+    // MARK: - Pairing phase derivation
+
+    /// Derives the current pairing phase from BridgeManager + local
+    /// UI state. The banner uses this to highlight the active step
+    /// and mark previous steps as done.
+    private var currentPhase: PairingPhase {
+        if bridgeManager.status == .error {
+            return .error
+        }
+        if bridgeManager.status == .connected {
+            return .connected
+        }
+        if bridgeManager.awaitingPairingApproval || bridgeManager.status == .connecting {
+            return .handshake
+        }
+        if pairingNearbyMacID != nil || showingQRPairing {
+            return .pair
+        }
+        return .discover
+    }
+}
+
+// MARK: - Pairing phase banner
+
+private enum PairingPhase: Int, CaseIterable {
+    case discover, pair, handshake, connected, error
+
+    var label: String {
+        switch self {
+        case .discover:  return "DISCOVER"
+        case .pair:      return "PAIR"
+        case .handshake: return "HANDSHAKE"
+        case .connected: return "LINKED"
+        case .error:     return "ERROR"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .discover:  return "antenna.radiowaves.left.and.right"
+        case .pair:      return "qrcode"
+        case .handshake: return "key.horizontal"
+        case .connected: return "checkmark.circle.fill"
+        case .error:     return "exclamationmark.triangle.fill"
+        }
+    }
+}
+
+private struct PairingPhaseBanner: View {
+    let phase: PairingPhase
+    @ObservedObject private var theme = ThemeManager.shared
+
+    private static let progression: [PairingPhase] = [.discover, .pair, .handshake, .connected]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("· FLOW")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary)
+                Spacer()
+                Text(activeLabel)
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(activeColor)
+            }
+            .padding(.horizontal, 4)
+
+            HStack(spacing: 0) {
+                ForEach(Array(Self.progression.enumerated()), id: \.offset) { idx, step in
+                    PhaseChip(label: step.label,
+                              icon: step.icon,
+                              state: chipState(for: step))
+                    if idx < Self.progression.count - 1 {
+                        connector(beforeIndex: idx)
+                    }
+                }
+            }
+        }
+    }
+
+    private var activeLabel: String {
+        phase == .error ? "Error — tap retry below" : phase.label
+    }
+
+    private var activeColor: Color {
+        switch phase {
+        case .error:     return Color(red: 0.85, green: 0.46, blue: 0.34)
+        case .connected: return Color(red: 0.36, green: 0.74, blue: 0.50)
+        default:         return theme.currentTheme.chrome.accent
+        }
+    }
+
+    private func chipState(for step: PairingPhase) -> PhaseChip.State {
+        if phase == .error { return step.rawValue < activeIndex ? .done : .pending }
+        if step.rawValue < activeIndex { return .done }
+        if step.rawValue == activeIndex { return .active }
+        return .pending
+    }
+
+    private func connector(beforeIndex idx: Int) -> some View {
+        let isDone = idx < activeIndex
+        return Rectangle()
+            .fill(isDone
+                  ? Color(red: 0.36, green: 0.74, blue: 0.50).opacity(0.7)
+                  : theme.currentTheme.chrome.edgeFaint)
+            .frame(height: 1)
+            .frame(maxWidth: .infinity)
+    }
+
+    private var activeIndex: Int {
+        switch phase {
+        case .discover:  return 0
+        case .pair:      return 1
+        case .handshake: return 2
+        case .connected: return 3
+        case .error:     return 2  // error sits at the handshake step
+        }
+    }
+}
+
+private struct PhaseChip: View {
+    enum State { case pending, active, done }
+
+    let label: String
+    let icon: String
+    let state: State
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        VStack(spacing: 4) {
+            ZStack {
+                Circle()
+                    .fill(fill)
+                    .frame(width: 22, height: 22)
+                    .overlay(
+                        Circle()
+                            .strokeBorder(stroke,
+                                          lineWidth: state == .active ? 1.5 : theme.currentTheme.chrome.hairlineWidth)
+                    )
+                Image(systemName: icon)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(glyphColor)
+            }
+            Text(label)
+                .talkieType(.channelLabelTiny)
+                .foregroundStyle(labelColor)
+        }
+    }
+
+    private var fill: Color {
+        switch state {
+        case .pending: return Color.clear
+        case .active:  return theme.currentTheme.chrome.accent.opacity(0.12)
+        case .done:    return Color(red: 0.36, green: 0.74, blue: 0.50).opacity(0.18)
+        }
+    }
+
+    private var stroke: Color {
+        switch state {
+        case .pending: return theme.currentTheme.chrome.edgeFaint
+        case .active:  return theme.currentTheme.chrome.accent
+        case .done:    return Color(red: 0.36, green: 0.74, blue: 0.50)
+        }
+    }
+
+    private var glyphColor: Color {
+        switch state {
+        case .pending: return theme.colors.textTertiary
+        case .active:  return theme.currentTheme.chrome.accent
+        case .done:    return Color(red: 0.36, green: 0.74, blue: 0.50)
+        }
+    }
+
+    private var labelColor: Color {
+        switch state {
+        case .active: return theme.colors.textPrimary
+        default:      return theme.colors.textTertiary
+        }
+    }
+}
+
+// MARK: - Error banner
+
+private struct ErrorBanner: View {
+    let message: String
+    let onRetry: () -> Void
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color(red: 0.85, green: 0.46, blue: 0.34))
+                .padding(.top, 2)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Connection error")
+                    .talkieType(.fieldLabel)
+                    .foregroundStyle(theme.colors.textPrimary)
+                Text(message)
+                    .talkieType(.preview)
+                    .foregroundStyle(theme.colors.textSecondary)
+            }
+            Spacer(minLength: 8)
+            Button(action: onRetry) {
+                Text("RETRY")
+                    .talkieType(.chipLabel)
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .strokeBorder(theme.currentTheme.chrome.accent.opacity(0.6),
+                                          lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(theme.colors.cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(Color(red: 0.85, green: 0.46, blue: 0.34).opacity(0.45),
+                                      lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                )
+        )
     }
 }

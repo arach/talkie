@@ -75,12 +75,12 @@ const MILESTONES: Milestone[] = [
     blurb:
       "Incremental polish on the just-shipped surfaces — replace shims, tighten flows, add the missing affordances.",
     items: [
-      { code: "P01", title: "ReadAloud real range callback", detail: "Replace local timer shim with AVSpeechSynthesizerDelegate.willSpeakRangeOfSpeechString for chunk highlight.", status: "queued", size: "s", risk: "med" },
-      { code: "P02", title: "AskAI multi-turn persistence", detail: "Session state survives surface close + reopen. Save turns to local store.", status: "queued", size: "m", risk: "low" },
-      { code: "P03", title: "Camera OCR confidence", detail: "Show OCR confidence per chunk in CameraCapture preview. Re-shoot affordance for low-confidence scans.", status: "queued", size: "m", risk: "low" },
-      { code: "P04", title: "Bridge pairing flow", detail: "Tighten BridgeDetail pairing UX — discovery → QR scan → handshake → confirmation, with error states.", status: "queued", size: "m", risk: "med" },
-      { code: "P05", title: "Home ambient status pixels", detail: "Add Mac connected / iCloud sync / sign-in state indicators to Home header. Tap → ConnectionCenter / SignIn.", status: "queued", size: "s", risk: "low" },
-      { code: "P06", title: "AskAI next-action chips", detail: "Each TALKIE response gets 'Save as memo · Listen · Refine' chips beneath it.", status: "queued", size: "s", risk: "low" },
+      { code: "P01", title: "ReadAloud real range callback", detail: "Replace local timer shim with AVSpeechSynthesizerDelegate.willSpeakRangeOfSpeechString for chunk highlight.", status: "queued", size: "s", risk: "med", owner: "codex (pending)" },
+      { code: "P02", title: "AskAI multi-turn persistence", detail: "Session state survives surface close + reopen. Save turns to local store.", status: "queued", size: "m", risk: "low", owner: "codex (pending)" },
+      { code: "P03", title: "Camera OCR confidence", detail: "ScanPreviewOverlay with per-chunk confidence pills (HIGH/MED/LOW bands), low-confidence row tint, and a Reshoot affordance. Inserts a confirm step between OCR and save. Codex still needs to wire real Vision per-observation confidence into OCRChunk.", status: "shipped", size: "m" },
+      { code: "P04", title: "Bridge pairing flow", detail: "PairingPhaseBanner across the top of BridgeDetailNext shows Discover → Pair → Handshake → Linked progression, derived live from BridgeManager state. ErrorBanner with inline RETRY for failure states.", status: "shipped", size: "m" },
+      { code: "P05", title: "Home ambient status pixels", detail: "AmbientStatusRow at top-left of HomeNextView: three pixels (Mac · iCloud · Account) reactive to BridgeManager + iCloudStatusManager + SignInStore. Tap routes to ConnectionCenter (sign-in pixel → SignIn when signed out).", status: "shipped", size: "s" },
+      { code: "P06", title: "AskAI next-action chips", detail: "Save as memo · Listen · Refine row beneath every completed TALKIE turn. Declares router contracts openComposeSeeded(text:) + saveAsMemo(text:) with pendingComposeSeed / pendingNewMemoText payloads for Codex to wire downstream.", status: "shipped", size: "s" },
     ],
   },
   {

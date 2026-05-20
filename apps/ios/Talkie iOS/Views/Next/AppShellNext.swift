@@ -201,6 +201,15 @@ final class AppShellRouter: ObservableObject {
     /// askAI response) instead of its placeholder items. Codex wires
     /// `ReadAloudPlayer.bind` to consume + clear this on appear.
     @Published var pendingReadAloudSource: ReadAloudSource?
+    /// Seed text routed into the next Compose surface. Set by callers
+    /// of `openComposeSeeded(text:)` (e.g. AskAI's Refine chip). Codex
+    /// wires `ComposeStore.init` to consume + clear this on appear so
+    /// the new document opens with the seed already populated.
+    @Published var pendingComposeSeed: String?
+    /// Text payload for "Save as memo" actions (e.g. AskAI's Save chip).
+    /// Codex wires VoiceMemoStore to create a memo from the payload
+    /// and route to its detail surface. Paint side just sets this.
+    @Published var pendingNewMemoText: String?
     @Published var transitionDirection: TransitionDirection = .forward
 
     private init() {
@@ -285,6 +294,22 @@ final class AppShellRouter: ObservableObject {
     func openReadAloud(source: ReadAloudSource? = nil) {
         pendingReadAloudSource = source
         push(.readAloud)
+    }
+
+    /// Open a new Compose document seeded with `text`. Caller doesn't
+    /// pick the document ID — this generates one and stashes the seed
+    /// on the router for ComposeStore to consume.
+    func openComposeSeeded(text: String) {
+        pendingComposeSeed = text
+        openCompose(documentID: "seeded-\(UUID().uuidString.prefix(8))")
+    }
+
+    /// "Save as memo" pipeline entry. Codex wires the actual memo
+    /// creation (VoiceMemoStore + route to the new memo). Paint side
+    /// just signals intent — the chip stays visible whether or not
+    /// the wiring is live yet.
+    func saveAsMemo(text: String) {
+        pendingNewMemoText = text
     }
 
     func submitVoiceCommand(_ transcript: String) {

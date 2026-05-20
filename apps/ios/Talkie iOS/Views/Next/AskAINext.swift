@@ -521,7 +521,7 @@ private struct AskAITurnRow: View {
                     .textSelection(.enabled)
 
                 if turn.speaker == .talkie {
-                    listenChip
+                    nextActionRow
                 }
             }
         }
@@ -534,19 +534,37 @@ private struct AskAITurnRow: View {
         }
     }
 
-    private var listenChip: some View {
-        Button {
-            AppShellRouter.shared.openReadAloud(source: ReadAloudSource(
-                title: "Ask AI · \(turn.code)",
-                text: turn.body,
-                meta: "ASK AI · \(turn.model ?? turn.providerName ?? "TALKIE")",
-                sourceURL: nil
-            ))
-        } label: {
+    /// Save as memo · Listen · Refine — the canonical post-response
+    /// affordance row that lets the user act on a TALKIE turn without
+    /// leaving the surface. Each chip routes through AppShellRouter
+    /// so the surface itself stays paint-only.
+    private var nextActionRow: some View {
+        HStack(spacing: 6) {
+            nextActionChip(systemImage: "tray.and.arrow.down", label: "Save as memo") {
+                AppShellRouter.shared.saveAsMemo(text: turn.body)
+            }
+            nextActionChip(systemImage: "play.circle", label: "Listen") {
+                AppShellRouter.shared.openReadAloud(source: ReadAloudSource(
+                    title: "Ask AI · \(turn.code)",
+                    text: turn.body,
+                    meta: "ASK AI · \(turn.model ?? turn.providerName ?? "TALKIE")",
+                    sourceURL: nil
+                ))
+            }
+            nextActionChip(systemImage: "pencil.line", label: "Refine") {
+                AppShellRouter.shared.openComposeSeeded(text: turn.body)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 4)
+    }
+
+    private func nextActionChip(systemImage: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             HStack(spacing: 5) {
-                Image(systemName: "play.circle")
+                Image(systemName: systemImage)
                     .font(.system(size: 11, weight: .medium))
-                Text("Listen")
+                Text(label)
                     .talkieType(.chipLabel)
             }
             .foregroundStyle(theme.currentTheme.chrome.accent)
@@ -561,7 +579,6 @@ private struct AskAITurnRow: View {
             )
         }
         .buttonStyle(.plain)
-        .padding(.top, 4)
     }
 
     private var metaText: String {

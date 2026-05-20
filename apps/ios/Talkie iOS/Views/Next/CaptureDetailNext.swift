@@ -253,12 +253,14 @@ struct CaptureDetailNext: View {
                     detailsCard
                         .padding(.horizontal, 12)
 
-                    Spacer(minLength: 100)
+                    actionTray
+                        .padding(.horizontal, 12)
+                        .padding(.top, 4)
+
+                    Spacer(minLength: 120)   // breathing room above the chrome tray
                 }
             }
             .scrollIndicators(.hidden)
-
-            actionTray
         }
         .sheet(item: $aiCommandsCapture) { capture in
             CaptureAICommandsSheet(capture: capture)
@@ -464,6 +466,9 @@ struct CaptureDetailNext: View {
 
     // MARK: - Action tray (Listen · AI commands · Compose)
 
+    /// Inline action row — lives at the foot of the scrollable content,
+    /// not pinned to the screen bottom. Stays close to the content
+    /// instead of starting stacked on top of the chrome tray.
     private var actionTray: some View {
         HStack(spacing: 8) {
             trayChip(systemImage: "play.circle", label: "Listen") {
@@ -482,16 +487,6 @@ struct CaptureDetailNext: View {
                 AppShellRouter.shared.openCompose(documentID: store.capture.id)
             }
         }
-        .padding(.leading, 72)
-        .padding(.trailing, 12)
-        .padding(.top, 8)
-        .padding(.bottom, 18)
-        .overlay(
-            Rectangle()
-                .fill(theme.currentTheme.chrome.edgeFaint)
-                .frame(height: theme.currentTheme.chrome.hairlineWidth),
-            alignment: .top
-        )
     }
 
     private func trayChip(systemImage: String, label: String, action: @escaping () -> Void) -> some View {

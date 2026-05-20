@@ -47,8 +47,19 @@ struct CameraCaptureNext: View {
                     .overlay(cameraGradient)
             }
 
-            chrome
+            if let preview = camera.scanPreview {
+                ScanPreviewOverlay(
+                    preview: preview,
+                    onReshoot: { camera.discardPreview() },
+                    onSave:    { camera.confirmAndSave() }
+                )
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                .zIndex(1)
+            } else {
+                chrome
+            }
         }
+        .animation(.easeOut(duration: 0.22), value: camera.scanPreview != nil)
         .task {
             await camera.prepare()
         }
@@ -210,6 +221,46 @@ struct CameraCaptureNext: View {
     }
 }
 
+/// One OCR-recognized segment with its Vision confidence score.
+/// Codex wires real per-observation confidence from
+/// `VNRecognizedText.confidence`; paint side currently mocks a
+/// deterministic gradient so the visual treatment is exercisable.
+struct OCRChunk: Identifiable, Equatable {
+    let id = UUID()
+    let text: String
+    /// 0.0 = no confidence, 1.0 = perfect. Vision returns the same
+    /// 0..1 range, so this can be wired through verbatim.
+    let confidence: Double
+
+    enum Band { case high, medium, low }
+    var band: Band {
+        switch confidence {
+        case 0.80...:  return .high
+        case 0.55..<0.80: return .medium
+        default:       return .low
+        }
+    }
+}
+
+/// Snapshot of an OCR pass awaiting user confirmation. Held by the
+/// model after `processCapturedPhoto` finishes; cleared on either
+/// confirmAndSave (proceeds to CaptureDetail) or discardPreview
+/// (returns to the live camera).
+struct ScanPreview: Equatable {
+    let image: UIImage
+    let chunks: [OCRChunk]
+    /// Joined text fallback for downstream save / OCR consumers that
+    /// don't need chunk granularity.
+    var combinedText: String { chunks.map(\.text).joined(separator: "\n") }
+    /// True when any chunk falls below the medium-confidence band —
+    /// drives the "consider reshooting" coaching banner.
+    var hasLowConfidence: Bool { chunks.contains { $0.band == .low } }
+
+    static func == (lhs: ScanPreview, rhs: ScanPreview) -> Bool {
+        lhs.image === rhs.image && lhs.chunks == rhs.chunks
+    }
+}
+
 @MainActor
 private final class CameraCaptureNextModel: NSObject, ObservableObject {
     enum PermissionState {
@@ -224,6 +275,9 @@ private final class CameraCaptureNextModel: NSObject, ObservableObject {
     @Published var isProcessing = false
     @Published var showingAlert = false
     @Published var alertMessage = ""
+    /// Set after a photo is captured and OCR'd. Non-nil = the
+    /// ScanPreviewOverlay is showing; user must confirm or reshoot.
+    @Published var scanPreview: ScanPreview?
 
     let session = AVCaptureSession()
 
@@ -385,15 +439,34 @@ private final class CameraCaptureNextModel: NSObject, ObservableObject {
             ocrText = ""
         }
 
+        // Build the preview snapshot. Once Codex wires real
+        // per-observation confidence from Vision, replace
+        // `mockChunks(from:)` with the real chunk array; the rest of
+        // the flow (overlay, confirm, save) stays unchanged.
+        let chunks = Self.mockChunks(from: ocrText)
+        statusMessage = nil
+        isProcessing = false
+        scanPreview = ScanPreview(image: image, chunks: chunks)
+    }
+
+    /// Persist the pending preview as a capture, sync, and route to
+    /// CaptureDetail. Called from the ScanPreviewOverlay's Save chip.
+    func confirmAndSave() {
+        guard let preview = scanPreview else { return }
+        scanPreview = nil
+
+        let combined = preview.combinedText
         let captureID = UUID()
-        let storedData = normalizedJPEGData(from: image) ?? data
+        let storedData = normalizedJPEGData(from: preview.image)
+            ?? preview.image.jpegData(compressionQuality: 0.92)
+            ?? Data()
         let imageFilename = CaptureStore.shared.saveImage(storedData, id: captureID)
-        let title = Self.title(from: ocrText, timestamp: Date())
+        let title = Self.title(from: combined, timestamp: Date())
 
         let capture = Capture(
             id: captureID,
             sourceType: "scan",
-            text: ocrText,
+            text: combined,
             title: title,
             imageFilename: imageFilename
         )
@@ -402,8 +475,49 @@ private final class CameraCaptureNextModel: NSObject, ObservableObject {
         CaptureSyncService.shared.syncIfConnected()
 
         statusMessage = "Saved scan"
-        isProcessing = false
         AppShellRouter.shared.openCaptureDetail(captureID: capture.id.uuidString)
+    }
+
+    /// Discard the pending preview and return to the live camera.
+    /// Called from the ScanPreviewOverlay's Reshoot chip.
+    func discardPreview() {
+        scanPreview = nil
+        statusMessage = nil
+    }
+
+    /// Paint-side mock that splits OCR text into chunks with a
+    /// deterministic confidence gradient. Each chunk's confidence
+    /// dips with position so demos always include at least one
+    /// medium/low band to exercise the reshoot affordance.
+    private static func mockChunks(from text: String) -> [OCRChunk] {
+        let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return [] }
+
+        // Split on sentence boundaries, falling back to lines, then
+        // to a single chunk for very short scans.
+        let sentences = cleaned
+            .split(whereSeparator: { ".!?".contains($0) })
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        let segments: [String]
+        if sentences.count > 1 {
+            segments = sentences
+        } else {
+            let lines = cleaned
+                .split(whereSeparator: \.isNewline)
+                .map { String($0).trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+            segments = lines.count > 1 ? lines : [cleaned]
+        }
+
+        return segments.enumerated().map { idx, body in
+            // Gradient: first chunk ~0.93, last chunk ~0.55. Keeps the
+            // mock honest — there's almost always one wobbly chunk.
+            let step = segments.count > 1 ? Double(idx) / Double(segments.count - 1) : 0
+            let confidence = 0.93 - step * 0.38
+            return OCRChunk(text: body, confidence: max(0.35, confidence))
+        }
     }
 
     private func finishWithError(_ message: String) {
@@ -542,6 +656,221 @@ private extension UIImage {
 
         return UIGraphicsImageRenderer(size: size, format: format).image { _ in
             draw(in: CGRect(origin: .zero, size: size))
+        }
+    }
+}
+
+// MARK: - Scan preview overlay (chunks + confidence + reshoot / save)
+
+/// Full-bleed overlay shown between OCR completion and the save
+/// step. Lets the user review each recognized chunk against its
+/// confidence band, then either commit to a capture or discard and
+/// re-frame the shot.
+private struct ScanPreviewOverlay: View {
+    let preview: ScanPreview
+    let onReshoot: () -> Void
+    let onSave: () -> Void
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        ZStack {
+            theme.colors.background.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                header
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Image(uiImage: preview.image)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxHeight: 220)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                                  lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                            )
+                            .padding(.horizontal, 12)
+                            .padding(.top, 12)
+
+                        if preview.hasLowConfidence {
+                            lowConfidenceBanner
+                                .padding(.horizontal, 12)
+                        }
+
+                        HStack(spacing: 6) {
+                            Text("· RECOGNIZED · \(preview.chunks.count) CHUNKS")
+                                .talkieType(.channelLabelTiny)
+                                .foregroundStyle(theme.colors.textTertiary)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 4)
+
+                        VStack(spacing: 0) {
+                            ForEach(Array(preview.chunks.enumerated()), id: \.element.id) { idx, chunk in
+                                ChunkRow(chunk: chunk, showDivider: idx > 0)
+                            }
+                        }
+                        .background(theme.colors.cardBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                              lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                        )
+                        .padding(.horizontal, 12)
+
+                        actionRow
+                            .padding(.horizontal, 12)
+                            .padding(.top, 6)
+
+                        Spacer(minLength: 100)
+                    }
+                }
+                .scrollIndicators(.hidden)
+            }
+        }
+    }
+
+    private var header: some View {
+        HStack {
+            Text("REVIEW SCAN")
+                .talkieType(.channelLabel)
+                .foregroundStyle(theme.colors.textTertiary)
+            Spacer()
+            Text("\(preview.chunks.count)")
+                .talkieType(.channelLabelSmall)
+                .foregroundStyle(theme.colors.textTertiary)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(theme.currentTheme.chrome.edgeFaint)
+                .frame(height: theme.currentTheme.chrome.hairlineWidth)
+        }
+    }
+
+    private var lowConfidenceBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Color(red: 0.85, green: 0.46, blue: 0.34))
+            Text("Some chunks scored low. Reshoot for a cleaner scan.")
+                .talkieType(.preview)
+                .foregroundStyle(theme.colors.textSecondary)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(theme.colors.cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(Color(red: 0.85, green: 0.46, blue: 0.34).opacity(0.45),
+                                      lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                )
+        )
+    }
+
+    private var actionRow: some View {
+        HStack(spacing: 10) {
+            Button(action: onReshoot) {
+                HStack(spacing: 5) {
+                    Image(systemName: "camera.rotate")
+                        .font(.system(size: 12, weight: .medium))
+                    Text("Reshoot")
+                        .talkieType(.fieldLabel)
+                }
+                .foregroundStyle(theme.colors.textSecondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .background(
+                    Capsule().strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                           lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                )
+            }
+            .buttonStyle(.plain)
+
+            Button(action: onSave) {
+                Text("Save scan ›")
+                    .talkieType(.fieldLabel)
+                    .foregroundStyle(theme.colors.cardBackground)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 11)
+                    .background(Capsule().fill(theme.currentTheme.chrome.accent))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+private struct ChunkRow: View {
+    let chunk: OCRChunk
+    let showDivider: Bool
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if showDivider {
+                Rectangle()
+                    .fill(theme.currentTheme.chrome.edgeSubtle)
+                    .frame(height: theme.currentTheme.chrome.hairlineWidth)
+                    .padding(.leading, 14)
+            }
+            HStack(alignment: .top, spacing: 8) {
+                Text(chunk.text)
+                    .talkieType(.preview)
+                    .foregroundStyle(textColor)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                confidencePill
+                    .padding(.top, 1)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(rowTint)
+        }
+    }
+
+    private var textColor: Color {
+        switch chunk.band {
+        case .high, .medium: return theme.colors.textPrimary
+        case .low:           return theme.colors.textSecondary
+        }
+    }
+
+    private var rowTint: Color {
+        switch chunk.band {
+        case .low: return Color(red: 0.85, green: 0.46, blue: 0.34).opacity(0.07)
+        default:   return Color.clear
+        }
+    }
+
+    private var confidencePill: some View {
+        let pct = Int((chunk.confidence * 100).rounded())
+        return Text("\(pct)%")
+            .talkieType(.channelLabelTiny)
+            .foregroundStyle(pillColor)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                Capsule()
+                    .strokeBorder(pillColor.opacity(0.55),
+                                  lineWidth: theme.currentTheme.chrome.hairlineWidth)
+            )
+    }
+
+    private var pillColor: Color {
+        switch chunk.band {
+        case .high:   return Color(red: 0.36, green: 0.74, blue: 0.50)
+        case .medium: return theme.currentTheme.chrome.accent
+        case .low:    return Color(red: 0.85, green: 0.46, blue: 0.34)
         }
     }
 }
