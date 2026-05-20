@@ -194,8 +194,9 @@ class DeepLinkManager: ObservableObject {
             }
 
         case "auth":
-            // ClerkKit handles OAuth callbacks internally; this is a no-op
-            AppLogger.app.info("Deep link: auth callback (handled by ClerkKit)")
+            // Legacy Clerk OAuth callback URL — Apple Sign-In uses
+            // ASAuthorization's native completion path, not a deep link.
+            AppLogger.app.info("Deep link: auth callback (no-op; native ASAuthorization in use)")
 
         default:
             AppLogger.app.warning("Unknown deep link: \(url.absoluteString)")

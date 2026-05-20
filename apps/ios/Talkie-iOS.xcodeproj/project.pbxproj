@@ -16,7 +16,6 @@
 		53AF328B2F26B2E40000561A /* TalkieKeys.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 53AF32842F26B2E30000561A /* TalkieKeys.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		53AF32922F26B4640000561A /* TalkieMobileKit in Frameworks */ = {isa = PBXBuildFile; productRef = 53AF32912F26B4640000561A /* TalkieMobileKit */; };
 		53AF32942F26B5090000561A /* TalkieMobileKit in Frameworks */ = {isa = PBXBuildFile; productRef = 53AF32932F26B5090000561A /* TalkieMobileKit */; };
-		53B400032F3D0003004170DE /* ClerkKit in Frameworks */ = {isa = PBXBuildFile; productRef = 53B400022F3D0002004170DE /* ClerkKit */; };
 		53B43EC32EDB539200C09544 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 53B43EC22EDB539100C09544 /* WidgetKit.framework */; };
 		53B43EC52EDB539200C09544 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 53B43EC42EDB539200C09544 /* SwiftUI.framework */; };
 		53B43ED62EDB539400C09544 /* TalkieWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 53B43EC02EDB539100C09544 /* TalkieWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -239,7 +238,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				53A917A72F2C5465004170DE /* FluidAudio in Frameworks */,
-				53B400032F3D0003004170DE /* ClerkKit in Frameworks */,
 				54D200012F70000100000001 /* TermBridgeKit in Frameworks */,
 				54C100012F60000100000001 /* NIOCore in Frameworks */,
 				54C100022F60000100000001 /* NIOSSH in Frameworks */,
@@ -415,7 +413,6 @@
 			packageProductDependencies = (
 				53AF32932F26B5090000561A /* TalkieMobileKit */,
 				53A917A62F2C5465004170DE /* FluidAudio */,
-				53B400022F3D0002004170DE /* ClerkKit */,
 				54D200032F70000100000001 /* TermBridgeKit */,
 				54C100072F60000100000001 /* NIOCore */,
 				54C100082F60000100000001 /* NIOSSH */,
@@ -596,7 +593,6 @@
 			packageReferences = (
 				53AF32902F26B4640000561A /* XCLocalSwiftPackageReference "TalkieMobileKit" */,
 				53A917A52F2C52CB004170DE /* XCRemoteSwiftPackageReference "FluidAudio" */,
-				53B400012F3D0001004170DE /* XCRemoteSwiftPackageReference "clerk-ios" */,
 				54D200022F70000100000001 /* XCRemoteSwiftPackageReference "TermBridgeKit" */,
 				54C100042F60000100000001 /* XCRemoteSwiftPackageReference "swift-nio" */,
 				54C100052F60000100000001 /* XCRemoteSwiftPackageReference "swift-nio-ssh" */,
@@ -1490,14 +1486,6 @@
 				version = 0.13.6;
 			};
 		};
-		53B400012F3D0001004170DE /* XCRemoteSwiftPackageReference "clerk-ios" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/clerk/clerk-ios.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.0.0;
-			};
-		};
 		54C100042F60000100000001 /* XCRemoteSwiftPackageReference "swift-nio" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/apple/swift-nio.git";
@@ -1546,11 +1534,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 53AF32902F26B4640000561A /* XCLocalSwiftPackageReference "TalkieMobileKit" */;
 			productName = TalkieMobileKit;
-		};
-		53B400022F3D0002004170DE /* ClerkKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 53B400012F3D0001004170DE /* XCRemoteSwiftPackageReference "clerk-ios" */;
-			productName = ClerkKit;
 		};
 		54C100072F60000100000001 /* NIOCore */ = {
 			isa = XCSwiftPackageProductDependency;

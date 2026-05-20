@@ -8,8 +8,28 @@
 
 import SwiftUI
 import CoreData
+import TalkieMobileKit
 
 #if DEBUG
+
+struct DebugInfoRow: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 13))
+                .foregroundColor(.textSecondary)
+            Spacer()
+            Text(value)
+                .font(.system(size: 13, design: .monospaced))
+                .foregroundColor(.textPrimary)
+        }
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.sm)
+    }
+}
 
 /// Debug button for use in navigation toolbar - shows sheet with debug panel
 /// Usage: ToolbarItem(placement: .topBarTrailing) { DebugToolbarButton { YourContent() } }

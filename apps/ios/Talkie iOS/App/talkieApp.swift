@@ -8,7 +8,6 @@
 import SwiftUI
 import BackgroundTasks
 import CoreData
-import ClerkKit
 import TalkieMobileKit
 
 @main
@@ -24,7 +23,6 @@ struct talkieApp: App {
     private let themeManager = ThemeManager.shared
 
     // First launch detection
-    @State private var showOnboarding = false
     private static let isScreenshotMode = ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT")
     @State private var screenshotSplashVisible: Bool = {
         // Show splash overlay unless --screenshotSkipSplash is passed
@@ -49,13 +47,6 @@ struct talkieApp: App {
         _ = TalkieAppConfigurationStore.shared.synchronizePinnedWorkflowMirror()
         applyScreenshotThemeOverrideIfNeeded()
 
-        // Configure Clerk authentication (auto-restores existing sessions)
-        #if DEBUG
-        Clerk.configure(publishableKey: "pk_test_c3VwcmVtZS1zdGFsbGlvbi05LmNsZXJrLmFjY291bnRzLmRldiQ")
-        #else
-        Clerk.configure(publishableKey: "pk_live_Y2xlcmsudXNldGFsa2llLmNvbSQ")
-        #endif
-
         // Initialize ConnectionManager and register sync providers (async, non-blocking)
         Task {
             let manager = ConnectionManager.shared
@@ -75,25 +66,16 @@ struct talkieApp: App {
                 if let controller = persistenceController, mainInterfaceVisible {
                     // Database ready - show main content
                     AppShellNext { HomeNextView() }
-                        .environment(Clerk.shared)
                         .environment(\.managedObjectContext, controller.container.viewContext)
                         .environmentObject(deepLinkManager)
                         .environmentObject(themeManager)
                         .onAppear {
                             if !appSettings.hasSeenOnboarding && !Self.isScreenshotMode {
-                                showOnboarding = true
+                                AppShellRouter.shared.openOnboarding()
                             }
                         }
                         .onReceive(NotificationCenter.default.publisher(for: Self.showOnboardingNotification)) { _ in
-                            showOnboarding = true
-                        }
-                        .fullScreenCover(isPresented: $showOnboarding) {
-                            OnboardingView(
-                                hasSeenOnboarding: $appSettings.hasSeenOnboarding,
-                                onStartRecording: {
-                                    deepLinkManager.pendingAction = .record
-                                }
-                            )
+                            AppShellRouter.shared.openOnboarding()
                         }
                         .transition(.opacity)
                 } else {
@@ -133,7 +115,7 @@ struct talkieApp: App {
                 appSettings.refreshPinnedWorkflowMirror()
             }
             .task {
-                // Load database (ClerkKit auto-restores auth sessions on configure)
+                // Load database
                 let loadStart = Date()
                 let controller = await PersistenceController.loadAsync()
                 let loadDuration = Date().timeIntervalSince(loadStart)
