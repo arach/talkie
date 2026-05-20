@@ -26,8 +26,10 @@ actor ScreenshotService {
 
             let filter = SCContentFilter(desktopIndependentWindow: window)
             let config = SCStreamConfiguration()
-            config.width = Int(window.frame.width) * 2  // Retina
-            config.height = Int(window.frame.height) * 2
+            let scale = CGFloat(filter.pointPixelScale)
+            config.width = max(1, Int(filter.contentRect.width * scale))
+            config.height = max(1, Int(filter.contentRect.height * scale))
+            config.scalesToFit = false
             config.showsCursor = false
             config.capturesAudio = false
 

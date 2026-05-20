@@ -326,16 +326,8 @@ final class ScreenshotCaptureService {
         }
         CapturePerformanceMonitor.shared.mark("overlay.region.selected")
 
-        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
-        let captureRect = CGRect(
-            x: selectedRect.origin.x,
-            y: primaryHeight - selectedRect.origin.y - selectedRect.height,
-            width: selectedRect.width,
-            height: selectedRect.height
-        )
-
         CapturePerformanceMonitor.shared.mark("capture.region.read.begin")
-        let image = await captureScreenRegion(screenRect: captureRect)
+        let image = await captureScreenRegion(screenRect: selectedRect)
         guard let image else {
             CapturePerformanceMonitor.shared.mark("capture.region.read.failed")
             log.error("Region capture failed: unable to capture selected rect")
