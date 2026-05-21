@@ -112,6 +112,7 @@ struct AppShellNext<Content: View>: View {
         case .aiCredentials: return "aiCredentials"
         case .workflows: return "workflows"
         case .syncConflicts: return "syncConflicts"
+        case .workspaces: return "workspaces"
         case .captureDetail(let c): return "capture:\(c)"
         case .memoDetail(let m): return "memo:\(m)"
         case .dictationHistory: return "dictations"
@@ -174,6 +175,8 @@ struct AppShellNext<Content: View>: View {
             WorkflowsNext()
         case .syncConflicts:
             SyncConflictNext()
+        case .workspaces:
+            WorkspaceSwitcherNext()
         }
     }
 }
@@ -217,6 +220,8 @@ final class AppShellRouter: ObservableObject {
         case workflows
         // M5 — iCloud sync conflict resolution surface.
         case syncConflicts
+        // M5 — multi-account workspace switcher.
+        case workspaces
     }
 
     @Published var surface: Surface = .home
@@ -281,6 +286,8 @@ final class AppShellRouter: ObservableObject {
             openWorkflows()
         } else if args.contains("--syncconflicts") {
             openSyncConflicts()
+        } else if args.contains("--workspaces") {
+            openWorkspaces()
         }
     }
 
@@ -332,6 +339,7 @@ final class AppShellRouter: ObservableObject {
     func openAICredentials() { push(.aiCredentials) }
     func openWorkflows() { push(.workflows) }
     func openSyncConflicts() { push(.syncConflicts) }
+    func openWorkspaces() { push(.workspaces) }
 
     /// Open a new Compose document seeded with `text`. Caller doesn't
     /// pick the document ID — this generates one and stashes the seed
