@@ -810,6 +810,28 @@ final class BridgeManager {
         return response
     }
 
+    func executeCLI(
+        command: String,
+        timeout: Int = 30_000
+    ) async throws -> CLIResponse {
+        guard isPaired else {
+            throw BridgeError.notConfigured
+        }
+
+        if status != .connected {
+            await connect()
+        }
+
+        guard status == .connected else {
+            throw BridgeError.connectionFailed
+        }
+
+        let response = try await client.executeCLI(command: command, timeout: timeout)
+        lastSuccessfulContactAt = .now
+        updateActiveMacContactDate(.now)
+        return response
+    }
+
     func composeRevision(
         text: String,
         instruction: String

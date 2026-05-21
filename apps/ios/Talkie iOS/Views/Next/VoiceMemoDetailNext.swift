@@ -379,6 +379,7 @@ struct VoiceMemoDetailNext: View {
     @State private var transcriptEditError: String?
     @State private var showingDeleteConfirmation: Bool = false
     @State private var showingShareSheet: Bool = false
+    @State private var showingCLISheet: Bool = false
     @FocusState private var titleFieldFocused: Bool
 
     init(memoID: String? = nil) {
@@ -399,10 +400,9 @@ struct VoiceMemoDetailNext: View {
                         .padding(.horizontal, 12)
 
                     // NOTE: Legacy VoiceMemoDetailView surfaces a lot
-                    // more — title edit, transcript edit, version
-                    // history, share, AI title gen, reminders, mac
-                    // workflows. Not brought across yet. This shell
-                    // stops at meta + playback + transcript display.
+                    // more — version history, reminders, mac workflows,
+                    // and OCR. Parity slices now restore title/transcript
+                    // editing, sharing, and memo-scoped CLI commands.
 
                     transcriptSection
                         .padding(.horizontal, 12)
@@ -438,6 +438,9 @@ struct VoiceMemoDetailNext: View {
         .sheet(isPresented: $showingShareSheet) {
             VoiceMemoShareSheet(items: store.shareItems())
         }
+        .sheet(isPresented: $showingCLISheet) {
+            MemoCLISheetNext(memo: store.memo)
+        }
         .alert("Delete memo?", isPresented: $showingDeleteConfirmation) {
             Button("Delete", role: .destructive, action: deleteMemo)
             Button("Cancel", role: .cancel) {}
@@ -470,6 +473,9 @@ struct VoiceMemoDetailNext: View {
             Menu {
                 Button("Share", systemImage: "square.and.arrow.up") {
                     showingShareSheet = true
+                }
+                Button("Run CLI", systemImage: "terminal") {
+                    showingCLISheet = true
                 }
                 if store.canEditTranscript {
                     Button("Edit transcript", systemImage: "text.quote", action: beginTranscriptEdit)
@@ -920,6 +926,9 @@ struct VoiceMemoDetailNext: View {
                     meta: "MEMO · \(wordCount) WORDS · \(store.memo.durationLabel)",
                     sourceURL: nil
                 ))
+            }
+            actionChip(label: "CLI", isPrimary: false) {
+                showingCLISheet = true
             }
             actionChip(label: "Refine ›", isPrimary: true) { AppShellRouter.shared.openCompose(documentID: store.memo.id) }
         }

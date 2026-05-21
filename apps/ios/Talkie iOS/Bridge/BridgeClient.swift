@@ -1144,7 +1144,7 @@ struct CLIRequest: Codable {
     let timeout: Int?
 }
 
-struct CLIResponse: Codable {
+struct CLIResponse: Codable, Sendable {
     let success: Bool
     let output: String?
     let error: String?
