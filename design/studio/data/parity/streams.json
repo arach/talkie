@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T19:57:06.342Z",
+  "updatedAt": "2026-05-21T19:58:01.621Z",
   "streams": [
     {
       "key": "C1",
@@ -570,8 +570,8 @@
       "key": "C4",
       "title": "Settings · Onboarding · Sign-In",
       "scope": "SettingsNext, OnboardingNext, SignInNext, AICredentialsNext, WorkspaceSwitcherNext",
-      "owner": "talkie-codex-c4",
-      "status": "in-flight",
+      "owner": null,
+      "status": "done",
       "lockedAt": "2026-05-21T19:42:13.352Z",
       "notes": [
         {
@@ -867,6 +867,19 @@
           "message": "Rebased landed ref: SignInNext still surfaces CloudKit accountStatus in step 3 detail/warning state after native Apple Sign In.",
           "findingKey": "C4::SignInView::CloudKit provisioning result",
           "ref": "2b1ef06"
+        },
+        {
+          "ts": "2026-05-21T19:58:01.593Z",
+          "agent": "talkie-codex-c4",
+          "level": "info",
+          "message": "PR updated for C4 Settings sections and sign-in wiring: https://github.com/arach/talkie/pull/19",
+          "ref": "https://github.com/arach/talkie/pull/19"
+        },
+        {
+          "ts": "2026-05-21T19:58:01.608Z",
+          "agent": "talkie-codex-c4",
+          "level": "info",
+          "message": "C4 done summary: ported Companion, Recording, Text-to-Speech, Remote Access, CloudKit provisioning result, and AI provider resolver fallback. KeyboardSettingsView block remains DEFER per user decisions."
         }
       ]
     },
