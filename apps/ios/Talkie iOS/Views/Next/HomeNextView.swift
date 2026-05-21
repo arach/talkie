@@ -421,6 +421,8 @@ private struct StationCard: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
+
+            QuickEntriesBar()
         }
         .background(theme.colors.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -430,6 +432,64 @@ private struct StationCard: View {
                               lineWidth: theme.currentTheme.chrome.hairlineWidth)
         )
         .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+    }
+}
+
+/// Bottom band of the PICK UP card. Originally the stat tally
+/// (LAST 7 DAYS · 3 CAPTURES + 3-cell readout), removed because it
+/// was decoration not action. This band keeps the same visual
+/// composition — full-width strip, hairline above, divided cells —
+/// but each cell is a quick-entry verb (Compose · Ask AI · Scan).
+private struct QuickEntriesBar: View {
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        HStack(spacing: 0) {
+            entryCell(label: "COMPOSE", icon: "square.and.pencil") {
+                AppShellRouter.shared.openCompose(documentID: "blank-\(UUID().uuidString.prefix(8))")
+            }
+            divider
+            entryCell(label: "ASK AI", icon: "sparkles") {
+                AppShellRouter.shared.openAskAI()
+            }
+            divider
+            entryCell(label: "SCAN", icon: "camera") {
+                AppShellRouter.shared.openCameraCapture()
+            }
+        }
+        .frame(height: 56)
+        .background(theme.colors.background)
+        .overlay(
+            Rectangle()
+                .fill(theme.currentTheme.chrome.edgeFaint)
+                .frame(height: theme.currentTheme.chrome.hairlineWidth),
+            alignment: .top
+        )
+    }
+
+    private func entryCell(label: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                Text(label)
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label.capitalized)
+        .accessibilityHint("Opens \(label.lowercased())")
+    }
+
+    private var divider: some View {
+        Rectangle()
+            .fill(theme.currentTheme.chrome.edgeFaint)
+            .frame(width: theme.currentTheme.chrome.hairlineWidth)
+            .padding(.vertical, 10)
     }
 }
 
