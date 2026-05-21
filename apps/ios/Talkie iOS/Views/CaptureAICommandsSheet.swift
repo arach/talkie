@@ -48,6 +48,7 @@ private struct CaptureAICommandExecution {
 
 struct CaptureAICommandsSheet: View {
     let capture: Capture
+    let onExecutionSaved: () -> Void
 
     @Environment(\.dismiss) private var dismiss
     @FocusState private var isInstructionFocused: Bool
@@ -96,6 +97,11 @@ struct CaptureAICommandsSheet: View {
             prompt: "If an author or creator is mentioned, give me a short background summary of their work."
         ),
     ]
+
+    init(capture: Capture, onExecutionSaved: @escaping () -> Void = {}) {
+        self.capture = capture
+        self.onExecutionSaved = onExecutionSaved
+    }
 
     var body: some View {
         NavigationStack {
@@ -689,6 +695,7 @@ struct CaptureAICommandsSheet: View {
                             createdAt: execution.createdAt
                         )
                     )
+                    onExecutionSaved()
                     errorMessage = nil
                     instruction = command
                     isRunning = false

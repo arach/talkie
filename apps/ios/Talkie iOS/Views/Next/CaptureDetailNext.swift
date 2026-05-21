@@ -276,8 +276,12 @@ struct CaptureDetailNext: View {
             }
         }
         .animation(.easeInOut(duration: 0.18), value: isShowingImageViewer)
-        .sheet(item: $aiCommandsCapture) { capture in
-            CaptureAICommandsSheet(capture: capture)
+        .sheet(item: $aiCommandsCapture, onDismiss: {
+            store.refresh()
+        }) { capture in
+            CaptureAICommandsSheet(capture: capture) {
+                store.refresh()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .capturesDidChange)) { _ in
             store.refresh()
