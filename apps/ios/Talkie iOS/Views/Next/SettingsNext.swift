@@ -304,7 +304,6 @@ struct SettingsNext: View {
                 valueOff: "Off",
                 hint: "Voice isolation"
             )
-
             sectionHeader("TEXT-TO-SPEECH")
             cycleRow(
                 "Provider",
