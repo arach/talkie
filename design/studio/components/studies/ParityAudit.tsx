@@ -543,10 +543,23 @@ const TAG_TONE: Record<Tag, { color: string; bg: string }> = {
 
 export function ParityAudit({ streams }: { streams: Stream[] }) {
   const router = useRouter();
+  const [activityFilter, setActivityFilter] = useState<string | null>(null);
   const streamsByKey = useMemo(
     () => Object.fromEntries(streams.map((s) => [s.key, s])),
     [streams],
   );
+
+  // Flatten every note across every stream, tagged with its clusterKey,
+  // sorted newest-first. Drives both the cluster strip (latest per cluster)
+  // and the activity feed below.
+  const allActivity = useMemo(() => {
+    const rows: (StreamNote & { clusterKey: string })[] = [];
+    for (const s of streams) {
+      for (const n of s.notes) rows.push({ ...n, clusterKey: s.key });
+    }
+    rows.sort((a, b) => (a.ts < b.ts ? 1 : -1));
+    return rows;
+  }, [streams]);
 
   const all = CLUSTERS.flatMap((c) => c.subsurfaces.flatMap((s) => s.findings));
   const counts = {
@@ -639,6 +652,18 @@ export function ParityAudit({ streams }: { streams: Stream[] }) {
 
   return (
     <div className="flex flex-col gap-10">
+      <ClusterStrip
+        streams={streams}
+        activeKey={activityFilter}
+        onSelect={(k) => setActivityFilter(k === activityFilter ? null : k)}
+      />
+
+      <ActivityStream
+        activity={allActivity}
+        filter={activityFilter}
+        onFilter={setActivityFilter}
+      />
+
       <div className="grid grid-cols-5 gap-4 rounded-md border border-studio-edge p-4">
         <Stat label="Findings" value={String(counts.total)} />
         <Stat label="Missing" value={String(counts.missing)} tone="coral" />
@@ -697,6 +722,214 @@ export function ParityAudit({ streams }: { streams: Stream[] }) {
           postNote={postAndRefresh}
         />
       ))}
+    </div>
+  );
+}
+
+function timeAgo(iso: string): string {
+  const then = new Date(iso).getTime();
+  const now = Date.now();
+  const delta = Math.max(0, now - then);
+  const s = Math.floor(delta / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 48) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
+const CLUSTER_TITLES: Record<string, string> = Object.fromEntries(
+  CLUSTERS.map((c) => [c.key, c.label.split("·").slice(1).join("·").trim()]),
+);
+
+function ClusterStrip({
+  streams,
+  activeKey,
+  onSelect,
+}: {
+  streams: Stream[];
+  activeKey: string | null;
+  onSelect: (key: string) => void;
+}) {
+  const byKey = Object.fromEntries(streams.map((s) => [s.key, s]));
+  return (
+    <div className="grid grid-cols-6 gap-2">
+      {CLUSTERS.map((c) => {
+        const stream = byKey[c.key];
+        const notes = stream?.notes ?? [];
+        const last = notes.length > 0
+          ? [...notes].sort((a, b) => (a.ts < b.ts ? 1 : -1))[0]
+          : null;
+        const status = stream?.status ?? "queued";
+        const statusTone = STREAM_STATUS_TONE[status];
+        const isActive = activeKey === c.key;
+        return (
+          <button
+            key={c.key}
+            type="button"
+            onClick={() => onSelect(c.key)}
+            className="flex flex-col gap-1.5 rounded-md border p-2.5 text-left transition-colors"
+            style={{
+              borderColor: isActive ? "var(--studio-ink, #222)" : undefined,
+              backgroundColor: isActive ? "rgba(0,0,0,0.04)" : undefined,
+            }}
+          >
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-eyebrow font-mono text-studio-ink">
+                {c.key}
+              </span>
+              <span
+                className="rounded-full px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-eyebrow font-mono"
+                style={{ color: statusTone.color, border: `1px solid ${statusTone.color}` }}
+              >
+                {statusTone.label}
+              </span>
+            </div>
+            <div className="text-[10px] leading-tight text-studio-ink-faint truncate">
+              {CLUSTER_TITLES[c.key]}
+            </div>
+            <div className="text-[9px] font-mono text-studio-ink-faint">
+              {stream?.owner ?? "unclaimed"}
+            </div>
+            {last ? (
+              <div className="mt-0.5 flex flex-col gap-0.5 border-t border-studio-edge pt-1.5">
+                <div className="text-[9px] font-mono text-studio-ink-faint">
+                  {timeAgo(last.ts)} · {last.level}
+                </div>
+                <div className="text-[10px] leading-snug text-studio-ink line-clamp-2">
+                  {last.message}
+                </div>
+              </div>
+            ) : (
+              <div className="mt-0.5 border-t border-studio-edge pt-1.5 text-[10px] text-studio-ink-faint italic">
+                no activity
+              </div>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ActivityStream({
+  activity,
+  filter,
+  onFilter,
+}: {
+  activity: (StreamNote & { clusterKey: string })[];
+  filter: string | null;
+  onFilter: (key: string | null) => void;
+}) {
+  const filtered = filter
+    ? activity.filter((n) => n.clusterKey === filter)
+    : activity;
+  const rows = filtered.slice(0, 50);
+
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-studio-edge p-4">
+      <div className="flex items-baseline justify-between gap-4 flex-wrap">
+        <span className="text-[9px] font-semibold uppercase tracking-eyebrow font-mono text-studio-ink">
+          · Activity
+        </span>
+        <div className="flex items-center gap-1 flex-wrap">
+          <FilterPill
+            label="ALL"
+            active={filter === null}
+            onClick={() => onFilter(null)}
+          />
+          {CLUSTERS.map((c) => (
+            <FilterPill
+              key={c.key}
+              label={c.key}
+              active={filter === c.key}
+              onClick={() => onFilter(c.key === filter ? null : c.key)}
+            />
+          ))}
+        </div>
+      </div>
+      <div className="text-[9px] tabular-nums font-mono text-studio-ink-faint">
+        {filtered.length} note{filtered.length === 1 ? "" : "s"} · showing{" "}
+        {rows.length}
+      </div>
+      <div className="flex flex-col">
+        {rows.length === 0 ? (
+          <div className="text-[11px] text-studio-ink-faint italic py-2">
+            no activity in this stream yet
+          </div>
+        ) : (
+          rows.map((n, i) => <ActivityRow key={`${n.ts}-${i}`} note={n} />)
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FilterPill({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-eyebrow font-mono transition-colors"
+      style={{
+        color: active ? "#fff" : "var(--studio-ink, #222)",
+        backgroundColor: active ? "var(--studio-ink, #222)" : "transparent",
+        border: `1px solid var(--studio-edge, #ddd)`,
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function ActivityRow({ note }: { note: StreamNote & { clusterKey: string } }) {
+  const tone = NOTE_LEVEL_TONE[note.level];
+  return (
+    <div className="flex items-baseline gap-2 py-1.5 border-b border-studio-edge text-[11px] leading-snug flex-wrap last:border-b-0">
+      <span className="rounded px-1 py-0.5 text-[8px] font-mono uppercase tracking-eyebrow text-studio-ink-faint shrink-0">
+        {note.clusterKey}
+      </span>
+      <span
+        className="rounded-full px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-eyebrow font-mono shrink-0"
+        style={{ color: tone, border: `1px solid ${tone}` }}
+      >
+        {note.level}
+      </span>
+      {note.proposedDecision && (
+        <span
+          className="rounded-full px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-eyebrow font-mono shrink-0"
+          style={{
+            color: DECISION_TONE[note.proposedDecision],
+            border: `1px solid ${DECISION_TONE[note.proposedDecision]}`,
+          }}
+        >
+          ↪ {note.proposedDecision}
+        </span>
+      )}
+      <span className="font-mono text-[9px] text-studio-ink-faint shrink-0">
+        {timeAgo(note.ts)} · {note.agent}
+      </span>
+      {note.findingKey && (
+        <span className="font-mono text-[10px] text-studio-ink-faint truncate max-w-[260px]">
+          {note.findingKey.split("::").slice(-1)[0]}
+        </span>
+      )}
+      <span className="text-studio-ink flex-1 min-w-[200px]">{note.message}</span>
+      {note.ref && (
+        <span className="font-mono text-[10px] text-studio-ink-faint shrink-0">
+          {note.ref}
+        </span>
+      )}
     </div>
   );
 }
