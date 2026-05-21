@@ -721,6 +721,29 @@ final class BridgeManager {
         return response
     }
 
+    func activateCompanionApp(_ app: CompanionAppSwitcherApp) async throws -> CompanionTriggerResponse {
+        guard isPaired else {
+            throw BridgeError.notConfigured
+        }
+
+        if status != .connected {
+            await connect()
+        }
+
+        guard status == .connected else {
+            throw BridgeError.connectionFailed
+        }
+
+        let response = try await client.companionActivateApp(
+            processIdentifier: app.processIdentifier,
+            bundleIdentifier: app.bundleIdentifier
+        )
+        lastSuccessfulContactAt = .now
+        updateActiveMacContactDate(.now)
+        await refreshCompanionState()
+        return response
+    }
+
     func sendMessageWithImage(sessionId: String, text: String, image: UIImage) async throws {
         try await sendMessage(sessionId: sessionId, text: text)
     }
@@ -1217,7 +1240,6 @@ final class BridgeManager {
             updateCompanionEventStreamStatus(true)
             if let snapshot = envelope.snapshot {
                 await applyCompanionState(snapshot)
-                DeckMirrorStore.shared.set(board: snapshot.commandDeck)
             }
         case "companion:error":
             log.debug("Companion events stream reported error: \(envelope.error ?? "unknown error")")
@@ -1230,6 +1252,8 @@ final class BridgeManager {
         if companionState != nextState {
             companionState = nextState
         }
+
+        DeckMirrorStore.shared.apply(companionState: nextState)
 
         try? await reportDeviceSetupStateIfNeeded()
     }

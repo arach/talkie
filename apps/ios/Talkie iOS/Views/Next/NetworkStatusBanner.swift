@@ -98,7 +98,7 @@ struct NetworkStatusBanner: View {
         switch status {
         case .ok: return ""
         case .offline:
-            return "Talkie can't reach the network. Reconnect to send Ask AI prompts or sync captures."
+            return "Talkie can't reach the network. Reconnect to sync captures, reach cloud services, or talk to your Mac."
         case .requestFailed(let message):
             return message
         }

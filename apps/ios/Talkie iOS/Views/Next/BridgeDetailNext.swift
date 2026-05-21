@@ -2,33 +2,28 @@
 //  BridgeDetailNext.swift
 //  Talkie iOS
 //
-//  STUB — Phase-1 placeholder. To be implemented by a dedicated
-//  Codex stream:
-//    - Replace the legacy `BridgeSettingsView` sheet (the last donor
-//      surface alive in the new system, opened from
-//      `ConnectionCenterNext`'s Mac Bridge row).
-//    - Live status from `BridgeManager` (already published).
-//    - Pairing flow: nearby Mac discovery via `NearbyMacBrowser`,
-//      QR-pair flow via `SSHPrivateKeyQRCodePayload`.
-//    - Session list (saved hosts) → row links into `TerminalNext`.
-//    - Visual: SettingsNext-style sections (status header + action
-//      rows), TalkieTypeStyle tokens.
-//    - After this lands, `BridgeSettingsView`, `SessionListView`,
-//      `SessionDetailView`, `DebugToolbar` (if no other callers)
-//      can be retired — final donor cleanup.
+//  Unified Next bridge detail surface.
+//
+//  Replaces the legacy `BridgeSettingsView` entry point with live
+//  `BridgeManager` status, nearby Mac discovery, QR pairing, saved
+//  terminal sessions, Claude session history, and
+//  SettingsNext-style action rows.
 //
 
 import SwiftUI
 
 struct BridgeDetailNext: View {
     @ObservedObject private var theme = ThemeManager.shared
+    @ObservedObject private var reachability = NetworkReachability.shared
     @State private var bridgeManager = BridgeManager.shared
+    @State private var macStatusObserver = MacStatusObserver.shared
     @State private var nearbyBrowser = NearbyMacBrowser.shared
     @State private var savedHosts: [SSHTerminalSavedHost] = []
     @State private var showingQRPairing = false
     @State private var showingForgetConfirmation = false
     @State private var pairingNearbyMacID: String?
     @State private var isReconnecting = false
+    @State private var presentingSession: ClaudeSession?
 
     var body: some View {
         ZStack {
@@ -52,6 +47,11 @@ struct BridgeDetailNext: View {
                             PairingPhaseBanner(phase: currentPhase)
                         }
 
+                        if bridgeNetworkStatus != .ok {
+                            NetworkStatusBanner(status: bridgeNetworkStatus, onRetry: reconnect)
+                                .transition(.opacity)
+                        }
+
                         if let errorMessage = bridgeManager.errorMessage,
                            bridgeManager.status == .error {
                             ErrorBanner(message: errorMessage) { reconnect() }
@@ -69,20 +69,30 @@ struct BridgeDetailNext: View {
                 .scrollIndicators(.hidden)
             }
         }
+        .animation(.easeInOut(duration: 0.18), value: bridgeNetworkStatus)
         .task {
             savedHosts = SSHTerminalSavedHostStore().load()
             nearbyBrowser.start()
+            macStatusObserver.startObserving()
+            await macStatusObserver.refresh()
             if bridgeManager.status == .connected {
                 await bridgeManager.refreshSessions()
             }
         }
         .onDisappear {
             nearbyBrowser.stop()
+            macStatusObserver.stopObserving()
         }
         .fullScreenCover(isPresented: $showingQRPairing, onDismiss: reloadSavedHosts) {
             SSHPrivateKeyQRCodeImportView { _ in
                 reloadSavedHosts()
             }
+        }
+        .sheet(item: $presentingSession) { session in
+            NavigationStack {
+                SessionDetailView(session: session)
+            }
+            .presentationDetents([.large])
         }
         .alert("Forget Mac Bridge pairing?", isPresented: $showingForgetConfirmation) {
             Button("Cancel", role: .cancel) { }
@@ -127,6 +137,15 @@ struct BridgeDetailNext: View {
         section("STATUS") {
             field("State", statusTitle, hint: activeMacHint)
             field("Last seen", lastSeenText, hint: bridgeManager.activeRouteDescription)
+
+            if bridgeManager.status != .connected,
+               let cloudStatus = cloudFallbackStatus {
+                field(
+                    "Cloud fallback",
+                    cloudFallbackValue(for: cloudStatus),
+                    hint: cloudFallbackHint(for: cloudStatus)
+                )
+            }
 
             if let errorMessage = bridgeManager.errorMessage,
                bridgeManager.status == .error || bridgeManager.awaitingPairingApproval {
@@ -173,11 +192,31 @@ struct BridgeDetailNext: View {
 
     private var sessionsSection: some View {
         section("SESSIONS") {
+            if bridgeManager.sessions.isEmpty {
+                passiveRow(
+                    "Claude sessions",
+                    value: bridgeManager.status == .connected ? "None" : "Offline",
+                    hint: "Reconnect to load Mac session history"
+                )
+            } else {
+                ForEach(bridgeManager.sessions) { session in
+                    actionRow(
+                        session.project,
+                        value: session.isLive ? "LIVE" : "OPEN",
+                        tone: session.isLive ? .accent : .neutral
+                    ) {
+                        presentingSession = session
+                    } hint: {
+                        sessionHint(session)
+                    }
+                }
+            }
+
             if savedHosts.isEmpty {
-                passiveRow("Saved hosts", value: "None", hint: "Scan an SSH access QR to add a terminal")
+                passiveRow("Terminal hosts", value: "None", hint: "Scan an SSH access QR to add a terminal")
             } else {
                 ForEach(savedHosts) { host in
-                    actionRow(host.previewTitle, value: "OPEN", tone: .accent) {
+                    actionRow("Terminal · \(host.previewTitle)", value: "OPEN", tone: .accent) {
                         AppShellRouter.shared.openTerminal()
                     } hint: {
                         host.previewSubtitle
@@ -410,6 +449,61 @@ struct BridgeDetailNext: View {
         bridgeManager.awaitingPairingApproval ? "1" : "0"
     }
 
+    private var bridgeNetworkStatus: NetworkStatus {
+        if bridgeManager.hasPairedMacs,
+           bridgeManager.status != .connected,
+           reachability.status == .offline {
+            return .offline
+        }
+
+        return .ok
+    }
+
+    private var cloudFallbackStatus: MacStatusObserver.MacStatusInfo? {
+        let freshStatuses = macStatusObserver.macStatuses.filter { !$0.isStale }
+
+        if let matchedStatus = freshStatuses.first(where: cloudStatusMatchesPairedMac) {
+            return matchedStatus
+        }
+
+        return freshStatuses.first(where: { $0.isAvailable })
+    }
+
+    private func cloudStatusMatchesPairedMac(_ status: MacStatusObserver.MacStatusInfo) -> Bool {
+        guard let cloudHostname = normalizedMacLookupToken(status.hostname) else { return false }
+        let pairedTokens = pairedMacLookupTokens
+        guard !pairedTokens.isEmpty else { return false }
+
+        return pairedTokens.contains { token in
+            cloudHostname == token ||
+            cloudHostname.localizedStandardContains(token) ||
+            token.localizedStandardContains(cloudHostname)
+        }
+    }
+
+    private var pairedMacLookupTokens: [String] {
+        [
+            bridgeManager.pairedHostname,
+            bridgeManager.pairedMacDisplayName,
+            bridgeManager.activePairedMac?.pairedMacName
+        ]
+        .compactMap(normalizedMacLookupToken)
+    }
+
+    private func normalizedMacLookupToken(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let token = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return token.isEmpty ? nil : token
+    }
+
+    private func cloudFallbackValue(for status: MacStatusObserver.MacStatusInfo) -> String {
+        status.isAvailable ? "Cloud available" : status.statusDescription
+    }
+
+    private func cloudFallbackHint(for status: MacStatusObserver.MacStatusInfo) -> String {
+        "\(status.statusDescription) · \(status.timeSinceLastSeen)"
+    }
+
     private var reconnectTitle: String {
         if isReconnecting || bridgeManager.status == .connecting {
             return "Reconnecting"
@@ -432,6 +526,11 @@ struct BridgeDetailNext: View {
 
     private func reloadSavedHosts() {
         savedHosts = SSHTerminalSavedHostStore().load()
+    }
+
+    private func sessionHint(_ session: ClaudeSession) -> String {
+        let messageLabel = session.messageCount == 1 ? "1 message" : "\(session.messageCount) messages"
+        return "\(messageLabel) · \(session.lastSeen)"
     }
 
     private func pair(_ mac: NearbyMacBrowser.NearbyMac) {
