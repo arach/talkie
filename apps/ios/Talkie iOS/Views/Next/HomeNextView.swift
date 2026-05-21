@@ -65,8 +65,12 @@ private struct HomeHeader: View {
         // pixels (Mac · iCloud · Account) so the wordmark stays
         // centered while the chrome carries live system state.
         HStack {
-            AmbientStatusRow()
-                .frame(width: 40, height: 40)
+            // Single Mac connection complication on the left.
+            // Hidden entirely when no Mac is paired. Frame stays
+            // 40pt tall so the header keeps its rhythm even when
+            // the chip is absent (Spacer takes over).
+            MacConnectionChip()
+                .frame(minHeight: 40, alignment: .leading)
             Spacer()
             Text("TALKIE")
                 .talkieType(.wordmark)
@@ -97,12 +101,160 @@ private struct HomeHeader: View {
 
 // MARK: - Ambient status row (Mac · iCloud · Account)
 
-/// Three small status pixels at the top-left of Home. Each pixel
-/// reflects a different system connection — paired Mac bridge,
-/// iCloud sync, and the native Sign-in-with-Apple account. Tap any
-/// pixel to drill into the relevant detail surface (sign-in routes
-/// to SignIn when signed out, ConnectionCenter otherwise).
-private struct AmbientStatusRow: View {
+/// Single Mac connection complication at the top-left of Home.
+/// Replaces the prior four-pixel AmbientStatusRow — fingers can't
+/// reliably hit 6pt dots, and the row was visually noisy without
+/// being useful. This chip uses the `point.3.connected.trianglepath`
+/// SF Symbol (same one ConnectionCenterNext uses as its hero) and
+/// adapts based on bridge + deck state:
+///
+///   - Connected + deck snapshot available → tap opens DeckMirrorNext
+///   - Any other paired state                → tap opens ConnectionCenter
+///   - Not paired                            → chip hidden entirely
+///
+/// Account sign-in and iCloud sync pixels were removed from the
+/// home header — both live in Settings → CONNECT where they can be
+/// acted on. They didn't earn the home real estate.
+private struct MacConnectionChip: View {
+    @State private var bridgeManager = BridgeManager.shared
+    @ObservedObject private var deck = DeckMirrorStore.shared
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        if bridgeManager.isPaired {
+            Button(action: handleTap) {
+                HStack(spacing: 6) {
+                    Image(systemName: "point.3.connected.trianglepath.dotted")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(iconColor)
+                    Text(chipLabel)
+                        .talkieType(.channelLabelSmall)
+                        .foregroundStyle(labelColor)
+                        .lineLimit(1)
+                    if showsChevron {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(theme.colors.textTertiary)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(theme.colors.cardBackground)
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(
+                                    borderColor,
+                                    lineWidth: theme.currentTheme.chrome.hairlineWidth
+                                )
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityHint(accessibilityHint)
+        }
+    }
+
+    // MARK: - State derivation
+
+    private var hasDeckBoard: Bool {
+        guard let board = deck.board else { return false }
+        return !board.spaces.isEmpty
+    }
+
+    private var isConnected: Bool {
+        bridgeManager.status == .connected
+    }
+
+    private func handleTap() {
+        if isConnected && hasDeckBoard {
+            AppShellRouter.shared.openDeck()
+        } else {
+            AppShellRouter.shared.openConnectionCenter()
+        }
+    }
+
+    private var showsChevron: Bool {
+        isConnected && hasDeckBoard
+    }
+
+    // MARK: - Visual treatment per state
+
+    private var chipLabel: String {
+        if bridgeManager.awaitingPairingApproval {
+            return "PENDING APPROVAL"
+        }
+        switch bridgeManager.status {
+        case .connected:
+            if hasDeckBoard { return "DECK" }
+            let name = bridgeManager.pairedMacDisplayName ?? "MAC"
+            return name.uppercased()
+        case .connecting:
+            return "CONNECTING…"
+        case .disconnected:
+            return "MAC · OFFLINE"
+        case .error:
+            return "MAC · ERROR"
+        }
+    }
+
+    private var iconColor: Color {
+        if bridgeManager.status == .error {
+            return Color(red: 0.85, green: 0.46, blue: 0.34)
+        }
+        if isConnected {
+            return hasDeckBoard
+                ? theme.currentTheme.chrome.accent
+                : Color(red: 0.36, green: 0.74, blue: 0.50)
+        }
+        return theme.colors.textTertiary
+    }
+
+    private var labelColor: Color {
+        if bridgeManager.status == .error {
+            return Color(red: 0.85, green: 0.46, blue: 0.34)
+        }
+        if isConnected && hasDeckBoard {
+            return theme.colors.textPrimary
+        }
+        return theme.colors.textSecondary
+    }
+
+    private var borderColor: Color {
+        if bridgeManager.status == .error {
+            return Color(red: 0.85, green: 0.46, blue: 0.34).opacity(0.5)
+        }
+        if isConnected && hasDeckBoard {
+            return theme.currentTheme.chrome.accent.opacity(0.55)
+        }
+        return theme.currentTheme.chrome.edgeFaint
+    }
+
+    private var accessibilityLabel: String {
+        let mac = bridgeManager.pairedMacDisplayName ?? "Mac"
+        if bridgeManager.awaitingPairingApproval { return "\(mac), pending approval" }
+        switch bridgeManager.status {
+        case .connected:
+            return hasDeckBoard ? "\(mac) deck" : "\(mac) connected"
+        case .connecting: return "\(mac) connecting"
+        case .disconnected: return "\(mac) offline"
+        case .error: return "\(mac) error"
+        }
+    }
+
+    private var accessibilityHint: String {
+        isConnected && hasDeckBoard ? "Opens deck" : "Opens connection center"
+    }
+}
+
+/// Legacy ambient row primitives below this point are no longer
+/// used in HomeNextView's header. Kept as private types so any
+/// downstream/per-test reference doesn't break — to be removed once
+/// the new chip is verified.
+private struct AmbientStatusRow_legacy: View {
     @State private var bridgeManager = BridgeManager.shared
     @ObservedObject private var iCloudStatus = iCloudStatusManager.shared
 
@@ -123,10 +275,6 @@ private struct AmbientStatusRow: View {
                     AppShellRouter.shared.openSignIn()
                 }
             }
-            // Deck pixel — only renders when paired with a Mac. State
-            // tracks the locally-mirrored DeckBoardSnapshot: good when
-            // a board is in hand, transient when paired but no
-            // snapshot yet, error when the bridge errored.
             if bridgeManager.isPaired {
                 StatusPixel(state: deckPixelState, label: "Mac deck", value: deckPixelLabel) {
                     AppShellRouter.shared.openDeck()
