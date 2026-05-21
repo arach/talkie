@@ -96,6 +96,20 @@ final class KeyboardActivationStore: ObservableObject {
         refreshFromLiveState()
     }
 
+    func toggleKeyboardMode() {
+        if screenshotPhaseOverride {
+            keyboardModeEnabled.toggle()
+            return
+        }
+
+        if headlessService.isActive {
+            headlessService.deactivate(explicit: true)
+        } else {
+            headlessService.activate()
+        }
+        refreshFromLiveState()
+    }
+
     func performRecovery(_ action: RecoveryAction) {
         checker.perform(action)
         refreshFromLiveState()
@@ -197,24 +211,27 @@ struct KeyboardActivationNext: View {
 
             Spacer()
 
-            // Keyboard mode indicator — donor uses a real toggle
-            // bound to HeadlessDictationService.isActive. Visual
-            // pill here; Codex wires the binding.
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(store.keyboardModeEnabled ? .green : theme.colors.textTertiary.opacity(0.4))
-                    .frame(width: 6, height: 6)
-                Text(store.keyboardModeEnabled ? "ON" : "OFF")
-                    .talkieType(.channelLabelTiny)
-                    .foregroundStyle(theme.colors.textSecondary)
+            Button(action: store.toggleKeyboardMode) {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(store.keyboardModeEnabled ? .green : theme.colors.textTertiary.opacity(0.4))
+                        .frame(width: 6, height: 6)
+                    Text(store.keyboardModeEnabled ? "ON" : "OFF")
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(theme.colors.textSecondary)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                      lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                )
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(
-                Capsule()
-                    .strokeBorder(theme.currentTheme.chrome.edgeFaint,
-                                  lineWidth: theme.currentTheme.chrome.hairlineWidth)
-            )
+            .buttonStyle(.plain)
+            .accessibilityLabel(store.keyboardModeEnabled ? "Disable keyboard mode" : "Enable keyboard mode")
+            .accessibilityValue(store.keyboardModeEnabled ? "On" : "Off")
+            .accessibilityHint("Toggles Talkie keyboard dictation mode.")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
