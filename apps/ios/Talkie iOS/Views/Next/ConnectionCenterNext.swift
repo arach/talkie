@@ -222,6 +222,7 @@ private extension ConnectionCenterStore.Row.Kind {
 
 struct ConnectionCenterNext: View {
     @ObservedObject private var theme = ThemeManager.shared
+    @ObservedObject private var reachability = NetworkReachability.shared
     @StateObject private var store = ConnectionCenterStore()
 
     var body: some View {
@@ -232,6 +233,11 @@ struct ConnectionCenterNext: View {
                 VStack(spacing: 18) {
                     heroSection
                         .padding(.top, 8)
+
+                    if connectionNetworkStatus != .ok {
+                        NetworkStatusBanner(status: connectionNetworkStatus, onRetry: openBridgeDetail)
+                            .padding(.horizontal, 12)
+                    }
 
                     VStack(spacing: 8) {
                         ForEach(store.rows) { row in
@@ -248,6 +254,24 @@ struct ConnectionCenterNext: View {
             }
             .scrollIndicators(.hidden)
         }
+    }
+
+    private var connectionNetworkStatus: NetworkStatus {
+        let bridgeStatus = store.status(for: .macBridge)
+        if reachability.status == .offline,
+           case .error = bridgeStatus {
+            return .offline
+        }
+
+        if case .error(let message) = bridgeStatus {
+            return .requestFailed(message: "Mac Bridge: \(message)")
+        }
+
+        return .ok
+    }
+
+    private func openBridgeDetail() {
+        AppShellRouter.shared.openBridgeDetail()
     }
 
     // MARK: - Header
@@ -341,7 +365,7 @@ struct ConnectionCenterNext: View {
                 break
             }
         case .macBridge:
-            AppShellRouter.shared.openBridgeDetail()
+            openBridgeDetail()
         }
     }
 }

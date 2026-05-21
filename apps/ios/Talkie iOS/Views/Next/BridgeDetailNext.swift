@@ -6,9 +6,8 @@
 //
 //  Replaces the legacy `BridgeSettingsView` entry point with live
 //  `BridgeManager` status, nearby Mac discovery, QR pairing, saved
-//  terminal sessions, and SettingsNext-style action rows. Session
-//  message history remains a separate donor gap tracked by the C5
-//  parity audit.
+//  terminal sessions, Claude session history, and
+//  SettingsNext-style action rows.
 //
 
 import SwiftUI
@@ -24,6 +23,7 @@ struct BridgeDetailNext: View {
     @State private var showingForgetConfirmation = false
     @State private var pairingNearbyMacID: String?
     @State private var isReconnecting = false
+    @State private var presentingSession: ClaudeSession?
 
     var body: some View {
         ZStack {
@@ -87,6 +87,12 @@ struct BridgeDetailNext: View {
             SSHPrivateKeyQRCodeImportView { _ in
                 reloadSavedHosts()
             }
+        }
+        .sheet(item: $presentingSession) { session in
+            NavigationStack {
+                SessionDetailView(session: session)
+            }
+            .presentationDetents([.large])
         }
         .alert("Forget Mac Bridge pairing?", isPresented: $showingForgetConfirmation) {
             Button("Cancel", role: .cancel) { }
@@ -186,11 +192,31 @@ struct BridgeDetailNext: View {
 
     private var sessionsSection: some View {
         section("SESSIONS") {
+            if bridgeManager.sessions.isEmpty {
+                passiveRow(
+                    "Claude sessions",
+                    value: bridgeManager.status == .connected ? "None" : "Offline",
+                    hint: "Reconnect to load Mac session history"
+                )
+            } else {
+                ForEach(bridgeManager.sessions) { session in
+                    actionRow(
+                        session.project,
+                        value: session.isLive ? "LIVE" : "OPEN",
+                        tone: session.isLive ? .accent : .neutral
+                    ) {
+                        presentingSession = session
+                    } hint: {
+                        sessionHint(session)
+                    }
+                }
+            }
+
             if savedHosts.isEmpty {
-                passiveRow("Saved hosts", value: "None", hint: "Scan an SSH access QR to add a terminal")
+                passiveRow("Terminal hosts", value: "None", hint: "Scan an SSH access QR to add a terminal")
             } else {
                 ForEach(savedHosts) { host in
-                    actionRow(host.previewTitle, value: "OPEN", tone: .accent) {
+                    actionRow("Terminal · \(host.previewTitle)", value: "OPEN", tone: .accent) {
                         AppShellRouter.shared.openTerminal()
                     } hint: {
                         host.previewSubtitle
@@ -500,6 +526,11 @@ struct BridgeDetailNext: View {
 
     private func reloadSavedHosts() {
         savedHosts = SSHTerminalSavedHostStore().load()
+    }
+
+    private func sessionHint(_ session: ClaudeSession) -> String {
+        let messageLabel = session.messageCount == 1 ? "1 message" : "\(session.messageCount) messages"
+        return "\(messageLabel) · \(session.lastSeen)"
     }
 
     private func pair(_ mac: NearbyMacBrowser.NearbyMac) {

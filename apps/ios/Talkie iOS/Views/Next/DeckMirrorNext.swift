@@ -15,6 +15,7 @@ import SwiftUI
 struct DeckMirrorNext: View {
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var deck = DeckMirrorStore.shared
+    @ObservedObject private var reachability = NetworkReachability.shared
     @State private var bridgeManager = BridgeManager.shared
     @State private var selectedSpaceID: String?
     @State private var showingAppSwitcher = false
@@ -119,6 +120,16 @@ struct DeckMirrorNext: View {
             if let space = currentSpace(in: board) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
+                        if deckNetworkStatus != .ok {
+                            NetworkStatusBanner(status: deckNetworkStatus, onRetry: retryBridge)
+                                .padding(.horizontal, 16)
+                        }
+
+                        if let result = deck.lastTriggerResult {
+                            triggerResultBanner(result)
+                                .padding(.horizontal, 16)
+                        }
+
                         if let error = deck.lastErrorMessage {
                             errorBanner(error)
                                 .padding(.horizontal, 16)
@@ -139,30 +150,39 @@ struct DeckMirrorNext: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 14) {
-            Spacer(minLength: 60)
-
-            ZStack {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(theme.currentTheme.chrome.accent.opacity(0.10))
-                    .frame(width: 68, height: 68)
-                Image(systemName: "square.grid.3x3")
-                    .font(.system(size: 24, weight: .light))
-                    .foregroundStyle(theme.currentTheme.chrome.accent)
+        VStack(spacing: 0) {
+            if deckNetworkStatus != .ok {
+                NetworkStatusBanner(status: deckNetworkStatus, onRetry: retryBridge)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 14)
             }
 
-            Text("Deck not available")
-                .talkieType(.headlineSecondary)
-                .foregroundStyle(theme.colors.textPrimary)
+            VStack(spacing: 14) {
+                Spacer(minLength: 60)
 
-            Text(emptyStateMessage)
-                .talkieType(.preview)
-                .foregroundStyle(theme.colors.textTertiary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 36)
-                .fixedSize(horizontal: false, vertical: true)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(theme.currentTheme.chrome.accent.opacity(0.10))
+                        .frame(width: 68, height: 68)
+                    Image(systemName: "square.grid.3x3")
+                        .font(.system(size: 24, weight: .light))
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                }
 
-            Spacer()
+                Text("Deck not available")
+                    .talkieType(.headlineSecondary)
+                    .foregroundStyle(theme.colors.textPrimary)
+
+                Text(emptyStateMessage)
+                    .talkieType(.preview)
+                    .foregroundStyle(theme.colors.textTertiary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 36)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -235,6 +255,11 @@ struct DeckMirrorNext: View {
     private func tileView(_ tile: DeckTile) -> some View {
         let isFiring = deck.firingSlotID == tile.slotID
         let isEmpty = tile.slotID == nil
+        let triggerResult = triggerResult(for: tile)
+        let isResultTile = triggerResult != nil
+        let isActive = isFiring || isResultTile
+        let activeColor = triggerResult.map(triggerResultColor) ?? theme.currentTheme.chrome.accent
+
         return Button(action: {
             guard let slot = tile.slotID else { return }
             deck.fire(slotID: slot)
@@ -245,7 +270,7 @@ struct DeckMirrorNext: View {
                     .foregroundStyle(
                         isEmpty
                             ? theme.colors.textTertiary.opacity(0.45)
-                            : theme.currentTheme.chrome.accent
+                            : activeColor
                     )
                     .frame(height: 24)
 
@@ -272,15 +297,15 @@ struct DeckMirrorNext: View {
             .background(
                 RoundedRectangle(cornerRadius: 10)
                     .fill(
-                        isFiring
-                            ? theme.currentTheme.chrome.accent.opacity(0.22)
+                        isActive
+                            ? activeColor.opacity(0.22)
                             : theme.colors.cardBackground.opacity(isEmpty ? 0.4 : 1)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
                             .strokeBorder(
-                                isFiring
-                                    ? theme.currentTheme.chrome.accent
+                                isActive
+                                    ? activeColor
                                     : (isEmpty
                                         ? theme.currentTheme.chrome.edgeFaint.opacity(0.5)
                                         : theme.currentTheme.chrome.edgeFaint),
@@ -294,14 +319,24 @@ struct DeckMirrorNext: View {
                     )
             )
             .shadow(
-                color: isFiring ? theme.currentTheme.chrome.accentGlow : .clear,
-                radius: isFiring ? 4 : 0
+                color: isActive ? activeColor.opacity(0.45) : .clear,
+                radius: isActive ? 4 : 0
             )
         }
         .buttonStyle(.plain)
         .disabled(isEmpty || deck.firingSlotID != nil)
         .accessibilityLabel(isEmpty ? "Empty slot" : tile.label)
         .accessibilityHint(isEmpty ? "" : "Fires on the Mac")
+    }
+
+    private func triggerResult(for tile: DeckTile) -> DeckMirrorStore.TriggerResult? {
+        guard let slotID = tile.slotID,
+              let result = deck.lastTriggerResult,
+              result.slotID == slotID else {
+            return nil
+        }
+
+        return result
     }
 
     // MARK: - App switcher
@@ -346,6 +381,89 @@ struct DeckMirrorNext: View {
             }
 
             activatingAppID = nil
+        }
+    }
+
+    private var deckNetworkStatus: NetworkStatus {
+        if bridgeManager.isPaired,
+           bridgeManager.status != .connected,
+           reachability.status == .offline {
+            return .offline
+        }
+
+        if bridgeManager.status == .error,
+           let message = bridgeManager.errorMessage {
+            return .requestFailed(message: message)
+        }
+
+        return .ok
+    }
+
+    private func retryBridge() {
+        Task {
+            await bridgeManager.retry()
+        }
+    }
+
+    private func triggerResultBanner(_ result: DeckMirrorStore.TriggerResult) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: triggerResultIcon(result))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(triggerResultColor(result))
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(triggerResultTitle(result))
+                    .talkieType(.fieldLabel)
+                    .foregroundStyle(theme.colors.textPrimary)
+                Text(result.message)
+                    .talkieType(.preview)
+                    .foregroundStyle(theme.colors.textSecondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(theme.colors.cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(
+                            triggerResultColor(result).opacity(0.45),
+                            lineWidth: theme.currentTheme.chrome.hairlineWidth
+                        )
+                )
+        )
+    }
+
+    private func triggerResultTitle(_ result: DeckMirrorStore.TriggerResult) -> String {
+        switch result.outcome {
+        case .pending: return "Sending to Mac"
+        case .running: return "Running on Mac"
+        case .succeeded: return "Mac shortcut complete"
+        case .failed: return "Mac shortcut failed"
+        }
+    }
+
+    private func triggerResultIcon(_ result: DeckMirrorStore.TriggerResult) -> String {
+        switch result.outcome {
+        case .pending, .running: return "bolt.horizontal.circle"
+        case .succeeded: return "checkmark.circle.fill"
+        case .failed: return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private func triggerResultColor(_ result: DeckMirrorStore.TriggerResult) -> Color {
+        switch result.outcome {
+        case .pending, .running:
+            return theme.currentTheme.chrome.accent
+        case .succeeded:
+            return Color(red: 0.36, green: 0.74, blue: 0.50)
+        case .failed:
+            return Color(red: 0.85, green: 0.46, blue: 0.34)
         }
     }
 

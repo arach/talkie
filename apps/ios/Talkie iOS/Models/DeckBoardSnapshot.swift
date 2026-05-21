@@ -57,6 +57,26 @@ struct DeckTile: Codable, Equatable, Identifiable {
 final class DeckMirrorStore: ObservableObject {
     static let shared = DeckMirrorStore()
 
+    struct TriggerResult: Equatable, Identifiable {
+        enum Outcome: Equatable {
+            case pending
+            case running
+            case succeeded
+            case failed
+        }
+
+        let slotID: String
+        let outcome: Outcome
+        let message: String
+        let completedAt: Date
+
+        var id: String { "\(slotID)-\(completedAt.timeIntervalSince1970)" }
+
+        var isTerminal: Bool {
+            outcome == .succeeded || outcome == .failed
+        }
+    }
+
     /// Current board as ingested from the Mac. nil = no snapshot yet
     /// (paired but Mac hasn't shipped state, or unpaired).
     @Published private(set) var board: DeckBoardSnapshot?
@@ -65,6 +85,12 @@ final class DeckMirrorStore: ObservableObject {
     @Published private(set) var firingSlotID: String?
     /// Set when the last fire failed; UI shows an inline banner.
     @Published private(set) var lastErrorMessage: String?
+    /// Last optimistic or Mac-confirmed trigger result. UI surfaces this
+    /// as transient feedback and highlights the matching tile.
+    @Published private(set) var lastTriggerResult: TriggerResult?
+
+    private var triggerResultResetTask: Task<Void, Never>?
+    private var lastRecentResultKey: String?
 
     private init() {}
 
@@ -74,6 +100,34 @@ final class DeckMirrorStore: ObservableObject {
         self.board = board
     }
 
+    func apply(companionState: CompanionStateResponse?) {
+        set(board: companionState?.commandDeck)
+
+        if let runtimeState = companionState?.shortcutStates?.first {
+            let message = runtimeState.detail ?? runtimeState.phase.displayName
+            setTriggerResult(
+                slotID: runtimeState.shortcutId,
+                outcome: .running,
+                message: message,
+                autoResetAfter: nil
+            )
+            return
+        }
+
+        guard let recentResult = companionState?.recentResults?.first else { return }
+        let key = "\(recentResult.shortcutId)-\(recentResult.completedAt)"
+        guard key != lastRecentResultKey else { return }
+
+        lastRecentResultKey = key
+        setTriggerResult(
+            slotID: recentResult.shortcutId,
+            outcome: .succeeded,
+            message: recentResult.resultText,
+            completedAt: Self.date(from: recentResult.completedAt),
+            autoResetAfter: .seconds(4)
+        )
+    }
+
     /// Fire a slot on the paired Mac via the bridge. Keeps
     /// `firingSlotID` set for the duration of the round-trip so the
     /// deck tile still pulses while the Mac handles the command.
@@ -81,17 +135,95 @@ final class DeckMirrorStore: ObservableObject {
         guard firingSlotID == nil else { return }
         firingSlotID = slotID
         lastErrorMessage = nil
+        setTriggerResult(
+            slotID: slotID,
+            outcome: .pending,
+            message: "Sent to Mac…",
+            autoResetAfter: nil
+        )
         Task { @MainActor in
             defer { firingSlotID = nil }
 
             do {
-                let response = try await BridgeManager.shared.client.companionTrigger(shortcutId: slotID)
+                let response = try await BridgeManager.shared.triggerCompanionShortcut(slotID)
                 if response.ok == false {
-                    lastErrorMessage = response.error ?? response.message ?? "Mac did not handle \(slotID)."
+                    let message = response.error ?? response.message ?? "Mac did not handle \(slotID)."
+                    lastErrorMessage = message
+                    setTriggerResult(
+                        slotID: slotID,
+                        outcome: .failed,
+                        message: message,
+                        autoResetAfter: .seconds(6)
+                    )
+                } else if let runtimeState = response.runtimeState {
+                    setTriggerResult(
+                        slotID: runtimeState.shortcutId,
+                        outcome: .running,
+                        message: runtimeState.detail ?? runtimeState.phase.displayName,
+                        autoResetAfter: .seconds(4)
+                    )
+                } else {
+                    setTriggerResult(
+                        slotID: response.handledShortcutId ?? slotID,
+                        outcome: .succeeded,
+                        message: response.message ?? "Shortcut triggered on Mac.",
+                        autoResetAfter: .seconds(4)
+                    )
                 }
             } catch {
-                lastErrorMessage = error.localizedDescription
+                let message = error.localizedDescription
+                lastErrorMessage = message
+                setTriggerResult(
+                    slotID: slotID,
+                    outcome: .failed,
+                    message: message,
+                    autoResetAfter: .seconds(6)
+                )
             }
+        }
+    }
+
+    private func setTriggerResult(
+        slotID: String,
+        outcome: TriggerResult.Outcome,
+        message: String,
+        completedAt: Date = .now,
+        autoResetAfter delay: Duration?
+    ) {
+        lastTriggerResult = TriggerResult(
+            slotID: slotID,
+            outcome: outcome,
+            message: message,
+            completedAt: completedAt
+        )
+        scheduleTriggerResultReset(after: delay)
+    }
+
+    private func scheduleTriggerResultReset(after delay: Duration?) {
+        triggerResultResetTask?.cancel()
+        guard let delay else { return }
+
+        triggerResultResetTask = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                self?.lastTriggerResult = nil
+                self?.triggerResultResetTask = nil
+            }
+        }
+    }
+
+    private static func date(from value: String) -> Date {
+        ISO8601DateFormatter().date(from: value) ?? .now
+    }
+}
+
+private extension CompanionShortcutRuntimeState.Phase {
+    var displayName: String {
+        switch self {
+        case .preparing: return "Preparing…"
+        case .recording: return "Recording on Mac…"
+        case .processing: return "Processing on Mac…"
         }
     }
 }
