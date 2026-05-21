@@ -19,11 +19,11 @@ import { StudioPage } from "@/components/StudioPage";
  *                    as a monumental pullquote with byline. Most poetic.
  */
 
-const TALKIE_INK = "#2A2620";
-const TALKIE_INK_FAINT = "rgba(42,38,32,0.55)";
-const TALKIE_INK_FAINTER = "rgba(42,38,32,0.32)";
-const TALKIE_CREAM = "#FBFBFA";
-const TALKIE_PAPER = "#F4F1EA";
+const TALKIE_INK = "#232423";
+const TALKIE_INK_FAINT = "rgba(35,36,35,0.55)";
+const TALKIE_INK_FAINTER = "rgba(35,36,35,0.32)";
+const TALKIE_CREAM = "#F8F8F7";
+const TALKIE_PAPER = "#E7E7E6";
 const SCOPE_AMBER = "#C47D1C";
 
 // Mock memo data — used across all three variants.
@@ -218,7 +218,7 @@ function CombinedSurface() {
       {/* mid rule — divides the two stacked pages */}
       <div
         className="mt-10"
-        style={{ height: 0.5, background: "rgba(42,38,32,0.18)" }}
+        style={{ height: 0.5, background: "rgba(35,36,35,0.18)" }}
       />
 
       {/* ── Week section ────────────────────────────────────────── */}
@@ -226,7 +226,7 @@ function CombinedSurface() {
 
       {/* footer */}
       <div className="mt-auto pt-9">
-        <div style={{ height: 0.5, background: "rgba(42,38,32,0.18)" }} />
+        <div style={{ height: 0.5, background: "rgba(35,36,35,0.18)" }} />
         <div
           className="flex items-baseline justify-between pt-3 font-mono text-[10px] uppercase tracking-[0.28em]"
           style={{ color: TALKIE_INK_FAINT }}
@@ -279,7 +279,7 @@ function CombinedTodaySection() {
       {/* hairline */}
       <div
         className="mt-6"
-        style={{ height: 0.5, background: "rgba(42,38,32,0.14)" }}
+        style={{ height: 0.5, background: "rgba(35,36,35,0.14)" }}
       />
 
       {/* today's memos — full width, 3-column */}
@@ -290,7 +290,7 @@ function CombinedTodaySection() {
             className="group grid items-baseline border-b py-3 transition-colors hover:bg-[rgba(196,125,28,0.04)]"
             style={{
               gridTemplateColumns: "92px 1fr 56px",
-              borderColor: "rgba(42,38,32,0.06)",
+              borderColor: "rgba(35,36,35,0.06)",
               columnGap: 20,
             }}
           >
@@ -354,7 +354,7 @@ function CombinedWeekSection({
       {/* hairline */}
       <div
         className="mt-4"
-        style={{ height: 0.5, background: "rgba(42,38,32,0.14)" }}
+        style={{ height: 0.5, background: "rgba(35,36,35,0.14)" }}
       />
 
       {/* week rows — full width, 5-column */}
@@ -365,7 +365,7 @@ function CombinedWeekSection({
             className="group grid items-baseline border-b py-3 transition-colors hover:bg-[rgba(196,125,28,0.04)]"
             style={{
               gridTemplateColumns: "92px 80px 110px 1fr 56px",
-              borderColor: "rgba(42,38,32,0.06)",
+              borderColor: "rgba(35,36,35,0.06)",
               columnGap: 20,
             }}
           >
@@ -468,7 +468,7 @@ function DaybookSurface() {
       {/* hairline */}
       <div
         className="mt-9"
-        style={{ height: 0.5, background: "rgba(42,38,32,0.18)" }}
+        style={{ height: 0.5, background: "rgba(35,36,35,0.18)" }}
       />
 
       {/* today index */}
@@ -479,7 +479,7 @@ function DaybookSurface() {
             className="grid items-baseline border-b py-3"
             style={{
               gridTemplateColumns: "72px 1fr 72px",
-              borderColor: "rgba(42,38,32,0.08)",
+              borderColor: "rgba(35,36,35,0.08)",
             }}
           >
             <span
@@ -511,7 +511,7 @@ function DaybookSurface() {
 
       {/* bottom rule */}
       <div className="mt-auto pt-9">
-        <div style={{ height: 0.5, background: "rgba(42,38,32,0.18)" }} />
+        <div style={{ height: 0.5, background: "rgba(35,36,35,0.18)" }} />
         <div
           className="flex items-baseline justify-between pt-3 font-mono text-[10px] uppercase tracking-[0.28em]"
           style={{ color: TALKIE_INK_FAINT }}
@@ -567,7 +567,7 @@ function ContentsSurface() {
         {/* hairline */}
         <div
           className="mt-7"
-          style={{ height: 0.5, background: "rgba(42,38,32,0.20)" }}
+          style={{ height: 0.5, background: "rgba(35,36,35,0.20)" }}
         />
 
         {/* rows */}
@@ -630,7 +630,7 @@ function ContentsRow({
       className="group grid items-baseline border-b py-3 transition-colors hover:bg-[rgba(196,125,28,0.04)]"
       style={{
         gridTemplateColumns: "92px 76px 110px 1fr 56px",
-        borderColor: "rgba(42,38,32,0.08)",
+        borderColor: "rgba(35,36,35,0.08)",
         columnGap: 20,
       }}
     >
@@ -725,7 +725,7 @@ function PullquoteSurface() {
       {/* hairline */}
       <div
         className="mt-9"
-        style={{ height: 0.5, background: "rgba(42,38,32,0.18)" }}
+        style={{ height: 0.5, background: "rgba(35,36,35,0.18)" }}
       />
 
       {/* monumental opening quote glyph + pullquote */}
@@ -780,7 +780,7 @@ function PullquoteSurface() {
 
       {/* bottom hairline + nav */}
       <div className="mt-auto pt-9">
-        <div style={{ height: 0.5, background: "rgba(42,38,32,0.18)" }} />
+        <div style={{ height: 0.5, background: "rgba(35,36,35,0.18)" }} />
         <div
           className="flex items-baseline justify-between pt-3 font-mono text-[10px] uppercase tracking-[0.28em]"
           style={{ color: TALKIE_INK_FAINT }}

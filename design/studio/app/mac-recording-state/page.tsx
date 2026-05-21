@@ -22,11 +22,11 @@ import { StudioPage } from "@/components/StudioPage";
  *                          beneath as a footnote.
  */
 
-const TALKIE_INK = "#2A2620";
-const TALKIE_INK_FAINT = "rgba(42,38,32,0.55)";
-const TALKIE_INK_FAINTER = "rgba(42,38,32,0.32)";
-const TALKIE_CREAM = "#FBFBFA";
-const TALKIE_PAPER = "#F4F1EA";
+const TALKIE_INK = "#232423";
+const TALKIE_INK_FAINT = "rgba(35,36,35,0.55)";
+const TALKIE_INK_FAINTER = "rgba(35,36,35,0.32)";
+const TALKIE_CREAM = "#F8F8F7";
+const TALKIE_PAPER = "#E7E7E6";
 const SCOPE_AMBER = "#C47D1C";
 const SCOPE_AMBER_GLOW = "#E89A3C";
 const REC_RED = "#C03A2A";
@@ -148,7 +148,7 @@ function ChromeRow({ children }: { children: React.ReactNode }) {
       className="flex items-center justify-center gap-3 rounded-md px-6 py-3"
       style={{
         background: TALKIE_PAPER,
-        border: `0.5px solid #E0DCD3`,
+        border: `0.5px solid #DEDEDD`,
         minHeight: 52,
       }}
     >
@@ -215,7 +215,7 @@ function FrontispieceSurface() {
     >
       {/* top hairline */}
       <div
-        style={{ height: 0.5, background: "rgba(42,38,32,0.18)" }}
+        style={{ height: 0.5, background: "rgba(35,36,35,0.18)" }}
       />
 
       <div className="flex flex-col items-center gap-7 py-12">
@@ -266,7 +266,7 @@ function FrontispieceSurface() {
 
       {/* bottom hairline */}
       <div
-        style={{ height: 0.5, background: "rgba(42,38,32,0.18)" }}
+        style={{ height: 0.5, background: "rgba(35,36,35,0.18)" }}
       />
 
       {/* below-rule meta */}

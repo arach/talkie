@@ -32,13 +32,13 @@ import React, { useState } from "react";
 
 const AMBER = "#C47D1C";
 const AMBER_GLOW = "#E89A3C";
-const INK = "#2A2620";
+const INK = "#232423";
 const INK_DIM = "#5A554C";
-const INK_FAINT = "#A8A29E";
-const EDGE = "#E0DCD3";
-const EDGE_FAINT = "#ECE7DD";
-const CREAM = "#FBFBFA";
-const PAPER = "#F4F1EA";
+const INK_FAINT = "#A4A4A6";
+const EDGE = "#DEDEDD";
+const EDGE_FAINT = "#E6E6E5";
+const CREAM = "#F8F8F7";
+const PAPER = "#E7E7E6";
 
 // ─── Setting types ───────────────────────────────────────────────────
 
@@ -431,7 +431,7 @@ function HoverTab({
                 onClick={() => update("hoverSensitivity", p.value)}
                 className="flex items-center gap-3 rounded-[4px] px-3 py-2 text-left"
                 style={{
-                  background: active ? "#F2EFE6" : "transparent",
+                  background: active ? "#EAEAE9" : "transparent",
                   border: `0.5px solid ${active ? INK : EDGE}`,
                 }}
               >
@@ -748,7 +748,7 @@ function NotchScreen({
         style={{
           width: SCREEN_WIDTH,
           height: SCREEN_HEIGHT,
-          background: "linear-gradient(180deg, #E0DCD3 0%, #C8C2B6 100%)",
+          background: "linear-gradient(180deg, #DEDEDD 0%, #BBBBBA 100%)",
           border: `0.5px solid ${INK_DIM}`,
         }}
       >
@@ -760,7 +760,7 @@ function NotchScreen({
               key={i}
               className="block h-1.5 rounded-full"
               style={{
-                background: "#FBFBFA",
+                background: "#F8F8F7",
                 width: `${[88, 64, 76, 92, 58, 70, 84, 50, 80][i]}%`,
               }}
             />

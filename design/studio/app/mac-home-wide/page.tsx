@@ -40,7 +40,7 @@ export default function MacHomeWideStudy() {
   const active = lightSchemes.find((s) => s.key === activeKey) ?? null;
 
   return (
-    <div className="min-h-screen overflow-x-auto" style={{ background: "#FBFBFA" }}>
+    <div className="min-h-screen overflow-x-auto" style={{ background: "#F8F8F7" }}>
       <SchemeBar
         width={FULLSCREEN_WIDTH}
         schemes={lightSchemes}
@@ -70,14 +70,14 @@ function SchemeBar({ width, schemes, activeKey, onSelect }: SchemeBarProps) {
   return (
     <div
       className="flex items-baseline gap-5 border-b border-studio-edge px-7 py-3 font-mono text-[9px] uppercase tracking-[0.20em]"
-      style={{ width, background: "#F4F1EA" }}
+      style={{ width, background: "#E7E7E6" }}
     >
       <span className="text-studio-ink-faint">· Mac Home · Fullscreen · Scheme</span>
       <div className="flex items-center gap-3">
         <SchemeChip
           label="Canvas"
-          swatch="#FBFBFA"
-          bgHex="#FBFBFA"
+          swatch="#F8F8F7"
+          bgHex="#F8F8F7"
           active={activeKey === null}
           onClick={() => onSelect(null)}
         />

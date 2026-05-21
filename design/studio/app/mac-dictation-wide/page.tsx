@@ -21,7 +21,7 @@ const FULLSCREEN_WIDTH = 2560;
 
 export default function MacDictationWideStudy() {
   return (
-    <div className="overflow-x-auto" style={{ background: "#FBFBFA" }}>
+    <div className="overflow-x-auto" style={{ background: "#F8F8F7" }}>
       <FullscreenSection
         label="DICTATION · ~80 words · transcript-first reading"
       >
@@ -73,7 +73,7 @@ function FullscreenSection({
     <section style={{ width: FULLSCREEN_WIDTH, minHeight: "100vh" }} className="flex flex-col">
       <div
         className="flex items-baseline justify-between border-b border-studio-edge px-7 py-2 font-mono text-[9px] uppercase tracking-[0.20em] text-studio-ink-faint"
-        style={{ background: "#F4F1EA" }}
+        style={{ background: "#E7E7E6" }}
       >
         <span>· {label}</span>
         <span>{FULLSCREEN_WIDTH}px × 100vh</span>
@@ -88,7 +88,7 @@ function WideSplitView({ children }: { children: React.ReactNode }) {
     <div className="flex flex-1" style={{ minHeight: 0 }}>
       <IconRail selected="library" />
       <LibraryListGutter />
-      <div className="flex-1 flex flex-col" style={{ background: "#FAF7EF", minHeight: 0 }}>
+      <div className="flex-1 flex flex-col" style={{ background: "#F1F1F0", minHeight: 0 }}>
         {children}
       </div>
     </div>
@@ -122,7 +122,7 @@ function DictationSheet({
       style={{
         flex: 1,
         background:
-          "linear-gradient(180deg, #FAF7EF 0%, #FAF6EB 60%, #F7F2E5 100%)",
+          "linear-gradient(180deg, #F1F1F0 0%, #EFEFEE 60%, #E9E9E8 100%)",
       }}
     >
       {/* Toolbar slug */}

@@ -60,7 +60,7 @@ export function MacWindowFrame({
   size,
   title,
   children,
-  background = "#FBFBFA",
+  background = "#F8F8F7",
 }: MacWindowFrameProps) {
   return (
     <section className="mx-auto flex flex-col items-center gap-3" style={{ width: size.width }}>
@@ -71,7 +71,7 @@ export function MacWindowFrame({
           width: size.width,
           background,
           boxShadow: "0 8px 30px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04)",
-          border: "0.5px solid #E0DCD3",
+          border: "0.5px solid #DEDEDD",
         }}
       >
         <WindowChrome title={title} />
@@ -100,12 +100,12 @@ function WindowChrome({ title }: { title: string }) {
   return (
     <div
       className="flex items-center gap-2 border-b px-4 py-2.5"
-      style={{ borderColor: "#E0DCD3", background: "#F4F1EA" }}
+      style={{ borderColor: "#DEDEDD", background: "#E7E7E6" }}
     >
       <div className="flex gap-1.5">
-        <span className="h-3 w-3 rounded-full" style={{ background: "#E0DCD3" }} />
-        <span className="h-3 w-3 rounded-full" style={{ background: "#E0DCD3" }} />
-        <span className="h-3 w-3 rounded-full" style={{ background: "#E0DCD3" }} />
+        <span className="h-3 w-3 rounded-full" style={{ background: "#DEDEDD" }} />
+        <span className="h-3 w-3 rounded-full" style={{ background: "#DEDEDD" }} />
+        <span className="h-3 w-3 rounded-full" style={{ background: "#DEDEDD" }} />
       </div>
       <div className="mx-auto text-[9px] font-mono uppercase tracking-[0.20em] text-studio-ink-faint">
         {title}

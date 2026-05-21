@@ -47,8 +47,11 @@ const GROUPS: NavGroup[] = [
       { href: "/mac-memo-detail", label: "Memo" },
       { href: "/mac-memo-wide", label: "Memo Wide" },
       { href: "/mac-dictation-wide", label: "Dictation" },
+      { href: "/mac-dictation-detail", label: "Dictation Detail" },
       { href: "/mac-compose", label: "Compose" },
       { href: "/mac-notes", label: "Notes" },
+      { href: "/mac-note-detail", label: "Note Detail" },
+      { href: "/mac-capture-detail", label: "Capture Detail" },
       { href: "/mac-onboarding", label: "Onboarding" },
       { href: "/mac-recording-state", label: "Recording" },
       { href: "/mac-record-to-memo", label: "Rec → Memo" },
@@ -134,8 +137,8 @@ function CoverageCTA({
       className={cn(
         "inline-flex items-center gap-1.5 rounded-[3px] border px-2 py-1 transition-colors",
         active
-          ? "border-[#2A2620] bg-[#F2F2F1] text-[#2A2620]"
-          : "border-[#E0DCD3] text-studio-ink-faint hover:border-[#9A6A22] hover:text-[#9A6A22]"
+          ? "border-[#232423] bg-[#ECECEB] text-[#232423]"
+          : "border-[#DEDEDD] text-studio-ink-faint hover:border-[#9A6A22] hover:text-[#9A6A22]"
       )}
     >
       <span

@@ -141,16 +141,16 @@ function PaneFrame({
       className="rounded-md overflow-hidden"
       style={{
         width: "1180px",
-        background: "#FBFBFA",
+        background: "#F8F8F7",
         boxShadow: "0 8px 30px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04)",
-        border: "0.5px solid #E0DCD3",
+        border: "0.5px solid #DEDEDD",
       }}
     >
       <WindowChrome />
       <div className="flex" style={{ minHeight: "780px" }}>
         {withRail && <IconRail selected="library" minHeight={780} />}
         <LibraryListGutter nothingSelected={nothingSelected} />
-        <div className="flex-1" style={{ background: "#FAF7EF" }}>
+        <div className="flex-1" style={{ background: "#F1F1F0" }}>
           {children}
         </div>
       </div>
@@ -165,12 +165,12 @@ function WindowChrome() {
   return (
     <div
       className="flex items-center gap-2 border-b px-4 py-2.5"
-      style={{ borderColor: "#E0DCD3", background: "#F4F1EA" }}
+      style={{ borderColor: "#DEDEDD", background: "#E7E7E6" }}
     >
       <div className="flex gap-1.5">
-        <span className="h-3 w-3 rounded-full" style={{ background: "#E0DCD3" }} />
-        <span className="h-3 w-3 rounded-full" style={{ background: "#E0DCD3" }} />
-        <span className="h-3 w-3 rounded-full" style={{ background: "#E0DCD3" }} />
+        <span className="h-3 w-3 rounded-full" style={{ background: "#DEDEDD" }} />
+        <span className="h-3 w-3 rounded-full" style={{ background: "#DEDEDD" }} />
+        <span className="h-3 w-3 rounded-full" style={{ background: "#DEDEDD" }} />
       </div>
       <div className="ml-auto text-[9px] font-mono uppercase tracking-[0.20em] text-studio-ink-faint">
         Talkie · Library
@@ -198,11 +198,11 @@ export function LibraryListGutter({ nothingSelected = false }: { nothingSelected
   return (
     <div
       className="flex flex-col border-r"
-      style={{ width: "300px", background: "#FBFBFA", borderColor: "#E0DCD3" }}
+      style={{ width: "300px", background: "#F8F8F7", borderColor: "#DEDEDD" }}
     >
       <div
         className="flex items-center gap-2 border-b px-4 py-3"
-        style={{ borderColor: "#E0DCD3" }}
+        style={{ borderColor: "#DEDEDD" }}
       >
         <div className="font-display text-[15px] font-medium tracking-tight text-studio-ink">
           Library
@@ -214,7 +214,7 @@ export function LibraryListGutter({ nothingSelected = false }: { nothingSelected
       <div className="px-3 py-2">
         <div
           className="flex items-center gap-2 rounded-[3px] border px-2.5 py-1.5"
-          style={{ borderColor: "#E0DCD3", background: "#FFFFFF" }}
+          style={{ borderColor: "#DEDEDD", background: "#FFFFFF" }}
         >
           <span className="font-mono text-[10px] text-studio-ink-faint">⌕</span>
           <span className="text-[11px] text-studio-ink-faint">Search the library…</span>
@@ -226,20 +226,20 @@ export function LibraryListGutter({ nothingSelected = false }: { nothingSelected
             key={i}
             className="flex items-baseline gap-3 border-b px-4 py-2.5 last:border-b-0"
             style={{
-              borderColor: "#E0DCD3",
-              background: r.current ? "#F2EFE6" : "transparent",
+              borderColor: "#DEDEDD",
+              background: r.current ? "#EAEAE9" : "transparent",
             }}
           >
             <span
               className="font-mono text-[8px] uppercase tracking-[0.20em]"
-              style={{ color: r.current ? "#9A6A22" : "#A8A29E" }}
+              style={{ color: r.current ? "#9A6A22" : "#A4A4A6" }}
             >
               D
             </span>
             <span
               className="flex-1 truncate text-[12px]"
               style={{
-                color: r.current ? "#2A2620" : "#5A554C",
+                color: r.current ? "#232423" : "#5A554C",
                 fontWeight: r.current ? 500 : 400,
               }}
             >
@@ -252,7 +252,7 @@ export function LibraryListGutter({ nothingSelected = false }: { nothingSelected
         ))}
         <div
           className="mt-2 px-4 py-2 text-[9px] font-mono uppercase tracking-[0.20em] text-studio-ink-faint"
-          style={{ borderTop: "0.5px solid #E0DCD3" }}
+          style={{ borderTop: "0.5px solid #DEDEDD" }}
         >
           · Earlier · this week
         </div>
@@ -274,7 +274,7 @@ export function DetailPane() {
         // bay floor, but a touch warmer to read as "document" rather
         // than "surface".
         background:
-          "linear-gradient(180deg, #FAF7EF 0%, #FAF6EB 60%, #F7F2E5 100%)",
+          "linear-gradient(180deg, #F1F1F0 0%, #EFEFEE 60%, #E9E9E8 100%)",
       }}
     >
       <Toolbar />
@@ -298,7 +298,7 @@ function EmptyDetailPane() {
       className="flex h-full flex-col"
       style={{
         background:
-          "linear-gradient(180deg, #FAF7EF 0%, #FAF6EB 60%, #F7F2E5 100%)",
+          "linear-gradient(180deg, #F1F1F0 0%, #EFEFEE 60%, #E9E9E8 100%)",
       }}
     >
       <EmptyToolbar />
@@ -605,7 +605,7 @@ function PlayerRail() {
     <div
       className="mt-auto flex items-center gap-5 px-9 py-4"
       style={{
-        background: "#F2EDDE",
+        background: "#DCDCDB",
         borderTop: "0.5px solid rgba(26,22,18,0.18)",
         boxShadow: "inset 0 1px 0 rgba(255,255,255,0.6)",
       }}
@@ -684,7 +684,7 @@ function PlayerRail() {
 function PlayButton() {
   return (
     <button
-      className="flex h-9 w-9 items-center justify-center rounded-full border transition-colors hover:bg-[#FAF7EF]"
+      className="flex h-9 w-9 items-center justify-center rounded-full border transition-colors hover:bg-[#F1F1F0]"
       style={{
         borderColor: "rgba(26,22,18,0.30)",
         background: "#FBFAF4",
@@ -694,7 +694,7 @@ function PlayButton() {
       aria-label="Play"
     >
       <svg width="11" height="12" viewBox="0 0 11 12" aria-hidden>
-        <path d="M 1 0.5 L 10 6 L 1 11.5 Z" fill="#2A2620" />
+        <path d="M 1 0.5 L 10 6 L 1 11.5 Z" fill="#232423" />
       </svg>
     </button>
   );
@@ -703,7 +703,7 @@ function PlayButton() {
 function TransportButton({ label }: { label: string }) {
   return (
     <button
-      className="flex h-9 min-w-[36px] items-center justify-center rounded-[3px] border px-2 transition-colors hover:bg-[#FAF7EF]"
+      className="flex h-9 min-w-[36px] items-center justify-center rounded-[3px] border px-2 transition-colors hover:bg-[#F1F1F0]"
       style={{
         borderColor: "rgba(26,22,18,0.16)",
         background: "transparent",

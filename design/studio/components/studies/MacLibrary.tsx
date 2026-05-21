@@ -87,7 +87,7 @@ export function MacLibrary({ width = 1180 }: { width?: number } = {}) {
   const listWidth = compact ? width : Math.max(440, Math.min(560, width - 720));
 
   return (
-    <div style={{ width, background: "#FBFBFA" }}>
+    <div style={{ width, background: "#F8F8F7" }}>
       <HeaderBand width={width} />
       <div className="flex" style={{ minHeight: compact ? 540 : 720 }}>
         <ListColumn width={compact ? width : listWidth} />
@@ -108,7 +108,7 @@ export function MacLibrary({ width = 1180 }: { width?: number } = {}) {
 function HeaderBand({ width }: { width: number }) {
   const padX = width < 900 ? 18 : width >= 1300 ? 28 : 22;
   return (
-    <div style={{ borderBottom: "0.5px solid #E0DCD3", background: "#F4F1EA" }}>
+    <div style={{ borderBottom: "0.5px solid #DEDEDD", background: "#E7E7E6" }}>
       <div style={{ paddingLeft: padX, paddingRight: padX, paddingTop: 14, paddingBottom: 10 }}>
         {/* Title row */}
         <div className="flex items-baseline gap-3">
@@ -136,7 +136,7 @@ function HeaderBand({ width }: { width: number }) {
         <div className="mt-2.5">
           <div
             className="flex items-center gap-2 rounded-[3px] px-2.5 py-1.5"
-            style={{ border: "0.5px solid #E0DCD3", background: "#FFFFFF" }}
+            style={{ border: "0.5px solid #DEDEDD", background: "#FFFFFF" }}
           >
             <span className="font-mono text-[10px] text-studio-ink-faint">⌕</span>
             <span className="text-[11px] text-studio-ink-faint">Search title, transcript, or channel…</span>
@@ -158,9 +158,9 @@ function FilterPill({
     <button
       className="flex items-baseline gap-1.5 rounded-[3px] px-2 py-1"
       style={{
-        border: `0.5px solid ${active ? "#2A2620" : "transparent"}`,
+        border: `0.5px solid ${active ? "#232423" : "transparent"}`,
         background: active ? "#FFFFFF" : "transparent",
-        color: active ? "#2A2620" : "#7A746C",
+        color: active ? "#232423" : "#76767A",
       }}
     >
       <span className="text-[10px] font-semibold uppercase tracking-[0.18em]">
@@ -168,7 +168,7 @@ function FilterPill({
       </span>
       <span
         className="font-mono text-[9px] tracking-[0.06em]"
-        style={{ color: active ? "#9A6A22" : "#A8A29E" }}
+        style={{ color: active ? "#9A6A22" : "#A4A4A6" }}
       >
         {filter.count}
       </span>
@@ -190,7 +190,7 @@ function ListColumn({ width }: { width: number }) {
   const buckets = Array.from(new Set(ROWS.map((r) => r.bucket)));
   return (
     <div
-      style={{ width, background: "#FBFBFA", borderRight: "0.5px solid #E0DCD3" }}
+      style={{ width, background: "#F8F8F7", borderRight: "0.5px solid #DEDEDD" }}
       className="flex flex-col"
     >
       {buckets.map((b) => (
@@ -209,7 +209,7 @@ function BucketHeader({ label, count }: { label: string; count: number }) {
   return (
     <div
       className="flex items-center gap-2 px-4 py-2"
-      style={{ borderBottom: "0.5px solid #E0DCD3", background: "#F8F5EC" }}
+      style={{ borderBottom: "0.5px solid #DEDEDD", background: "#ECECEB" }}
     >
       <span className="font-mono text-[8px] uppercase tracking-[0.28em] text-studio-ink-faint">
         · {label}
@@ -224,8 +224,8 @@ function BucketHeader({ label, count }: { label: string; count: number }) {
 const KIND_GLYPH: Record<LibKind, { letter: string; tint: string }> = {
   dictation: { letter: "D", tint: "#E89A3C" },
   memo:      { letter: "M", tint: "#9A6A22" },
-  note:      { letter: "N", tint: "#6B7A75" },
-  capture:   { letter: "C", tint: "#5A7A86" },
+  note:      { letter: "N", tint: "#767674" },
+  capture:   { letter: "C", tint: "#5C5E5C" },
 };
 
 function LibraryRow({ row }: { row: (typeof ROWS)[number] }) {
@@ -234,8 +234,8 @@ function LibraryRow({ row }: { row: (typeof ROWS)[number] }) {
     <div
       className="flex items-center gap-3 px-4 py-2.5"
       style={{
-        borderBottom: "0.5px solid #ECE7DD",
-        background: row.selected ? "#F2EFE6" : "transparent",
+        borderBottom: "0.5px solid #E6E6E5",
+        background: row.selected ? "#EAEAE9" : "transparent",
       }}
     >
       {/* Channel letter */}
@@ -256,7 +256,7 @@ function LibraryRow({ row }: { row: (typeof ROWS)[number] }) {
         <div
           className="truncate text-[12.5px]"
           style={{
-            color: row.selected ? "#2A2620" : "#3F3A33",
+            color: row.selected ? "#232423" : "#3A3A38",
             fontWeight: row.selected ? 500 : 400,
           }}
         >
@@ -286,7 +286,7 @@ function LibraryRow({ row }: { row: (typeof ROWS)[number] }) {
 // gets the amber stroke; everyone else gets the faded ink.
 function MiniWave({ selected }: { selected: boolean }) {
   const peaks = [3, 6, 9, 5, 8, 4, 7, 3, 6, 8, 5, 7, 4, 6, 3, 5];
-  const stroke = selected ? "#9A6A22" : "#A8A29E";
+  const stroke = selected ? "#9A6A22" : "#A4A4A6";
   return (
     <svg width="56" height="10" viewBox="0 0 56 10" aria-hidden>
       {peaks.map((p, i) => (
@@ -310,12 +310,12 @@ function DividerHandle() {
   return (
     <div
       className="relative flex items-stretch"
-      style={{ width: 6, background: "#FBFBFA" }}
+      style={{ width: 6, background: "#F8F8F7" }}
     >
       <span
         aria-hidden
         className="my-auto block h-8 w-px"
-        style={{ background: "#E0DCD3" }}
+        style={{ background: "#DEDEDD" }}
       />
     </div>
   );
@@ -329,7 +329,7 @@ function Inspector({ width }: { width: number }) {
     <div
       style={{
         width,
-        background: "linear-gradient(180deg, #FAF7EF 0%, #FAF6EB 60%, #F7F2E5 100%)",
+        background: "linear-gradient(180deg, #F1F1F0 0%, #EFEFEE 60%, #E9E9E8 100%)",
       }}
       className="flex flex-col"
     >
@@ -503,14 +503,14 @@ function InspectorPlayerRail({ padX }: { padX: number }) {
         paddingRight: padX,
         paddingTop: 10,
         paddingBottom: 12,
-        background: "#F2EDDE",
+        background: "#DCDCDB",
         borderTop: "0.5px solid rgba(26,22,18,0.10)",
       }}
       className="flex items-center gap-3"
     >
       <button
         className="flex h-7 w-7 items-center justify-center rounded-full text-[12px]"
-        style={{ background: "#C47D1C", color: "#FBFBFA", boxShadow: "0 0 0 2px rgba(196,125,28,0.18)" }}
+        style={{ background: "#C47D1C", color: "#F8F8F7", boxShadow: "0 0 0 2px rgba(196,125,28,0.18)" }}
       >
         ▶
       </button>
@@ -536,7 +536,7 @@ function PlayerWave() {
           y={(22 - p) / 2}
           width={2.5}
           height={p}
-          fill={i < PLAYED ? "#C47D1C" : "#C8C2B6"}
+          fill={i < PLAYED ? "#C47D1C" : "#BBBBBA"}
           opacity={i < PLAYED ? 0.9 : 0.55}
         />
       ))}
@@ -550,7 +550,7 @@ function FooterBar({ compact }: { compact: boolean }) {
   return (
     <div
       className="flex items-center gap-3 px-4 py-2"
-      style={{ borderTop: "0.5px solid #E0DCD3", background: "#F4F1EA" }}
+      style={{ borderTop: "0.5px solid #DEDEDD", background: "#E7E7E6" }}
     >
       <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-studio-ink-faint">
         · 436 captures · 11 visible

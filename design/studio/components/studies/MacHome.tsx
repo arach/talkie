@@ -238,9 +238,9 @@ function TopBand({
                   onClick={() => onPickHudScheme(k)}
                   className="flex items-center gap-1.5 rounded-[3px] border px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] transition-colors"
                   style={{
-                    borderColor: active ? "#2A2620" : "#E0DCD3",
-                    color: active ? "#2A2620" : "#7A746C",
-                    background: active ? "#F2F2F1" : "transparent",
+                    borderColor: active ? "#232423" : "#DEDEDD",
+                    color: active ? "#232423" : "#76767A",
+                    background: active ? "#ECECEB" : "transparent",
                   }}
                 >
                   <span
@@ -262,8 +262,8 @@ function TopBand({
           onClick={onToggleRecord}
           className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-semibold uppercase tracking-eyebrow transition-colors"
           style={{
-            borderColor: recording ? "#C43A1C" : "#E0DCD3",
-            color: recording ? "#C43A1C" : "#2A2620",
+            borderColor: recording ? "#C43A1C" : "#DEDEDD",
+            color: recording ? "#C43A1C" : "#232423",
             background: recording ? "rgba(196,58,28,0.06)" : "transparent",
           }}
         >
@@ -319,9 +319,9 @@ function BayBlock({
                     title={canonical ? `${group.label} canonical` : undefined}
                     className="relative flex items-center gap-1.5 rounded-[3px] border px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] transition-colors"
                     style={{
-                      borderColor: active ? "#2A2620" : "#E0DCD3",
-                      color: active ? "#2A2620" : "#7A746C",
-                      background: active ? "#F2F2F1" : "transparent",
+                      borderColor: active ? "#232423" : "#DEDEDD",
+                      color: active ? "#232423" : "#76767A",
+                      background: active ? "#ECECEB" : "transparent",
                     }}
                   >
                     <span
@@ -335,8 +335,8 @@ function BayBlock({
                         aria-hidden
                         className="absolute -top-1 -right-1 h-1.5 w-1.5 rounded-full"
                         style={{
-                          background: "#2A2620",
-                          boxShadow: "0 0 0 1.5px #FBFBFA",
+                          background: "#232423",
+                          boxShadow: "0 0 0 1.5px #F8F8F7",
                         }}
                       />
                     ) : null}
@@ -347,7 +347,7 @@ function BayBlock({
                 <span
                   aria-hidden
                   className="ml-1 h-3 w-px"
-                  style={{ background: "#E0DCD3" }}
+                  style={{ background: "#DEDEDD" }}
                 />
               ) : null}
             </div>
@@ -459,7 +459,7 @@ function Panel({
 // both surface a caption/title with a meta column.
 
 const VOICE_TINT = "#9A6A22";   // brass
-const CONTENT_TINT = "#6B7A75"; // slate
+const CONTENT_TINT = "#767674"; // slate
 
 function RecentTwoPane() {
   return (
@@ -655,7 +655,7 @@ function EmptyCTARow({
   tint: string;
 }) {
   return (
-    <button className="group flex items-center gap-3 border-t border-studio-edge/40 px-4 py-2.5 text-left hover:bg-[#F2F2F1]/50 first:border-t-0">
+    <button className="group flex items-center gap-3 border-t border-studio-edge/40 px-4 py-2.5 text-left hover:bg-[#ECECEB]/50 first:border-t-0">
       <span
         className="font-mono text-[11px] leading-none"
         style={{ color: tint }}
@@ -683,7 +683,7 @@ function EmptyCTARow({
 
 function RecentRowView({ row, tint }: { row: RecentRow; tint: string }) {
   return (
-    <button className="group flex items-start gap-3 border-t border-studio-edge/40 px-4 py-2 text-left hover:bg-[#F2F2F1]/50 first:border-t-0">
+    <button className="group flex items-start gap-3 border-t border-studio-edge/40 px-4 py-2 text-left hover:bg-[#ECECEB]/50 first:border-t-0">
       <span
         className="pt-0.5 font-mono text-[11px] leading-none"
         style={{ color: tint }}
@@ -854,7 +854,7 @@ function TrendingWidget() {
           return (
             <div key={t.tag} className="flex items-baseline gap-3 text-[11px]">
               <span className="w-[120px] truncate text-studio-ink">{t.tag}</span>
-              <div className="relative h-1.5 flex-1 overflow-hidden rounded-[1px]" style={{ background: "#EAE6DC" }}>
+              <div className="relative h-1.5 flex-1 overflow-hidden rounded-[1px]" style={{ background: "#DEDEDC" }}>
                 <div
                   className="absolute inset-y-0 left-0"
                   style={{ width: `${pct}%`, background: "#9A6A22" }}

@@ -26,17 +26,17 @@ import { StudioPage } from "@/components/StudioPage";
  * row with Skip / Back / Continue.
  */
 
-const CREAM       = "#FBFBFA";
-const PAPER       = "#F4F1EA";
-const INK         = "#2A2620";
-const INK_FAINT   = "rgba(42,38,32,0.55)";
-const INK_FAINTER = "rgba(42,38,32,0.32)";
-const INK_RULE    = "rgba(42,38,32,0.18)";
-const INK_RULE_S  = "rgba(42,38,32,0.10)";
+const CREAM       = "#F8F8F7";
+const PAPER       = "#E7E7E6";
+const INK         = "#232423";
+const INK_FAINT   = "rgba(35,36,35,0.55)";
+const INK_FAINTER = "rgba(35,36,35,0.32)";
+const INK_RULE    = "rgba(35,36,35,0.18)";
+const INK_RULE_S  = "rgba(35,36,35,0.10)";
 const AMBER       = "#C47D1C";
 const AMBER_TINT  = "rgba(196,125,28,0.08)";
 const BRASS       = "#9A6A22";
-const EDGE        = "#E0DCD3";
+const EDGE        = "#DEDEDD";
 
 const STEPS = ["I", "II", "III", "IV"] as const;
 type StepIndex = 0 | 1 | 2 | 3;

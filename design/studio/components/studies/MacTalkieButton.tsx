@@ -39,11 +39,11 @@ import { IconRail } from "./primitives/IconRail";
 
 const AMBER = "#C47D1C";
 const AMBER_GLOW = "#E89A3C";
-const INK = "#2A2620";
+const INK = "#232423";
 const INK_FAINT = "rgba(26,22,18,0.45)";
-const EDGE = "#E0DCD3";
-const CREAM = "#FBFBFA";
-const PAPER = "#F4F1EA";
+const EDGE = "#DEDEDD";
+const CREAM = "#F8F8F7";
+const PAPER = "#E7E7E6";
 
 // ─── Composition root ────────────────────────────────────────────────
 
@@ -476,7 +476,7 @@ function PaletteSheet() {
               <div
                 className="flex items-center gap-3 px-4 py-2"
                 style={{
-                  background: selected ? "#F2EFE6" : "transparent",
+                  background: selected ? "#EAEAE9" : "transparent",
                   borderLeft: selected ? `2px solid ${AMBER}` : "2px solid transparent",
                 }}
               >
@@ -485,7 +485,7 @@ function PaletteSheet() {
                 </span>
                 <span
                   className="flex-1 text-[12px]"
-                  style={{ color: selected ? INK : "#3F3A33", fontWeight: selected ? 500 : 400 }}
+                  style={{ color: selected ? INK : "#3A3A38", fontWeight: selected ? 500 : 400 }}
                 >
                   {r.label}
                 </span>
@@ -752,7 +752,7 @@ function InteractiveStrip({
   return (
     <div
       style={{
-        background: "#FAF7EF",
+        background: "#F1F1F0",
         maxHeight: revealed ? 44 : 0,
         borderBottom: revealed ? `0.5px solid ${EDGE}` : "0.5px solid transparent",
         overflow: "hidden",
@@ -806,13 +806,13 @@ function InteractiveStripItem({
       className="flex items-center justify-center gap-1.5 rounded-[3px] py-1"
       style={{
         width: STRIP_SLOT_WIDTH,
-        background: hovered ? "#F2EFE6" : "transparent",
+        background: hovered ? "#EAEAE9" : "transparent",
         color: active ? INK : "#5A554C",
         borderBottom: item.selected ? `1.5px solid ${AMBER}` : "1.5px solid transparent",
         transition: "background 120ms ease, color 120ms ease",
       }}
     >
-      <span className="font-mono text-[11px]" style={{ color: active ? AMBER : "#A8A29E" }}>
+      <span className="font-mono text-[11px]" style={{ color: active ? AMBER : "#A4A4A6" }}>
         {item.icon}
       </span>
       <span className="font-mono text-[9.5px] font-semibold uppercase tracking-[0.18em]">

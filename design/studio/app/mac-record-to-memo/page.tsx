@@ -23,11 +23,11 @@ import { StudioPage } from "@/components/StudioPage";
  *                    margin metadata)                                 (500ms)
  */
 
-const TALKIE_INK = "#2A2620";
-const TALKIE_INK_FAINT = "rgba(42,38,32,0.55)";
-const TALKIE_INK_FAINTER = "rgba(42,38,32,0.32)";
-const TALKIE_CREAM = "#FBFBFA";
-const TALKIE_PAPER = "#F4F1EA";
+const TALKIE_INK = "#232423";
+const TALKIE_INK_FAINT = "rgba(35,36,35,0.55)";
+const TALKIE_INK_FAINTER = "rgba(35,36,35,0.32)";
+const TALKIE_CREAM = "#F8F8F7";
+const TALKIE_PAPER = "#E7E7E6";
 const SCOPE_AMBER = "#C47D1C";
 const SCOPE_AMBER_GLOW = "#E89A3C";
 const REC_RED = "#C03A2A";
@@ -152,7 +152,7 @@ function PhaseLegend({ phase }: { phase: Phase }) {
               background: active
                 ? "rgba(196,125,28,0.12)"
                 : reached
-                ? "rgba(42,38,32,0.04)"
+                ? "rgba(35,36,35,0.04)"
                 : "transparent",
               color: active
                 ? SCOPE_AMBER
@@ -178,7 +178,7 @@ function Stage({ phase }: { phase: Phase }) {
       className="relative overflow-hidden rounded-lg"
       style={{
         background: TALKIE_CREAM,
-        border: `0.5px solid rgba(42,38,32,0.10)`,
+        border: `0.5px solid rgba(35,36,35,0.10)`,
         minHeight: 540,
       }}
     >
@@ -234,7 +234,7 @@ function RecordingCompanion({ phase }: { phase: Phase }) {
       }}
     >
       {/* Top hairline */}
-      <div style={{ height: 0.5, background: "rgba(42,38,32,0.16)" }} />
+      <div style={{ height: 0.5, background: "rgba(35,36,35,0.16)" }} />
 
       <div
         className="flex flex-col items-center gap-7 py-9"
@@ -265,7 +265,7 @@ function RecordingCompanion({ phase }: { phase: Phase }) {
       </div>
 
       {/* Bottom hairline */}
-      <div style={{ height: 0.5, background: "rgba(42,38,32,0.16)" }} />
+      <div style={{ height: 0.5, background: "rgba(35,36,35,0.16)" }} />
     </div>
   );
 }
@@ -548,7 +548,7 @@ function MemoDetailLayout() {
       {/* Player rail — pinned to bottom of the canvas (mt-auto) */}
       <div
         className="mt-auto flex items-center gap-4 border-t pt-4"
-        style={{ borderColor: "rgba(42,38,32,0.10)" }}
+        style={{ borderColor: "rgba(35,36,35,0.10)" }}
       >
         <div
           className="font-mono text-[10px] uppercase tracking-[0.22em]"
@@ -614,7 +614,7 @@ function ChromeBarMock({ phase }: { phase: Phase }) {
       className="flex items-center justify-center"
       style={{
         background: TALKIE_PAPER,
-        borderBottom: "0.5px solid #E0DCD3",
+        borderBottom: "0.5px solid #DEDEDD",
         height: 58,
       }}
     >

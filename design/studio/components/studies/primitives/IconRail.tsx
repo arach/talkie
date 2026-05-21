@@ -22,10 +22,10 @@ import React from "react";
 
 const AMBER = "#C47D1C";
 const AMBER_GLOW = "#E89A3C";
-const INK = "#2A2620";
-const EDGE = "#E0DCD3";
-const CREAM = "#FBFBFA";
-const PAPER = "#F4F1EA";
+const INK = "#232423";
+const EDGE = "#DEDEDD";
+const CREAM = "#F8F8F7";
+const PAPER = "#E7E7E6";
 
 const ITEMS: { icon: string; label: string; selectedKey: string; badge?: string }[] = [
   { icon: "⌂", label: "Home",       selectedKey: "home" },

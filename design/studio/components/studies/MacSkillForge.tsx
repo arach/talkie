@@ -25,16 +25,16 @@ import React from "react";
 
 // ─── Tokens (match MacCompose palette) ───────────────────────────────
 
-const CREAM       = "#FBFBFA";
-const PAPER       = "#F4F1EA";
-const INK         = "#2A2620";
-const INK_FAINT   = "rgba(42,38,32,0.55)";
-const INK_FAINTER = "rgba(42,38,32,0.32)";
-const INK_RULE    = "rgba(42,38,32,0.18)";
-const INK_RULE_S  = "rgba(42,38,32,0.10)";
+const CREAM       = "#F8F8F7";
+const PAPER       = "#E7E7E6";
+const INK         = "#232423";
+const INK_FAINT   = "rgba(35,36,35,0.55)";
+const INK_FAINTER = "rgba(35,36,35,0.32)";
+const INK_RULE    = "rgba(35,36,35,0.18)";
+const INK_RULE_S  = "rgba(35,36,35,0.10)";
 const AMBER       = "#C47D1C";
 const BRASS       = "#9A6A22";
-const EDGE        = "#E0DCD3";
+const EDGE        = "#DEDEDD";
 
 // ─── Stub skill content (shared across all three framings) ───────────
 
@@ -495,7 +495,7 @@ function MarkupEditor({
           left: 0,
           width: 32,
           borderRight: `1px solid ${INK_RULE_S}`,
-          background: "rgba(42,38,32,0.02)",
+          background: "rgba(35,36,35,0.02)",
           paddingTop: 14,
         }}
       >

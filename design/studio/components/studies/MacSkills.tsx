@@ -29,13 +29,13 @@ import React from "react";
 
 // ─── Tokens ──────────────────────────────────────────────────────────
 
-const CREAM       = "#FBFBFA";
-const PAPER       = "#F4F1EA";
-const INK         = "#2A2620";
-const INK_FAINT   = "rgba(42,38,32,0.55)";
-const INK_FAINTER = "rgba(42,38,32,0.32)";
-const INK_RULE    = "rgba(42,38,32,0.18)";
-const INK_RULE_S  = "rgba(42,38,32,0.10)";
+const CREAM       = "#F8F8F7";
+const PAPER       = "#E7E7E6";
+const INK         = "#232423";
+const INK_FAINT   = "rgba(35,36,35,0.55)";
+const INK_FAINTER = "rgba(35,36,35,0.32)";
+const INK_RULE    = "rgba(35,36,35,0.18)";
+const INK_RULE_S  = "rgba(35,36,35,0.10)";
 const AMBER       = "#C47D1C";
 const BRASS       = "#9A6A22";
 const AMBER_SOFT  = "rgba(196,125,28,0.08)";
@@ -536,7 +536,7 @@ function VoicePreview() {
           background: "#0E1518",
           borderRadius: 6,
           padding: "14px 14px 16px 14px",
-          color: "#E8E4D8",
+          color: "#DDDDDC",
           position: "relative",
           overflow: "hidden",
         }}
@@ -560,7 +560,7 @@ function VoicePreview() {
         </div>
         <div
           className="font-display"
-          style={{ fontSize: 14, lineHeight: 1.3, color: "#F4F1EA", marginBottom: 6 }}
+          style={{ fontSize: 14, lineHeight: 1.3, color: "#E7E7E6", marginBottom: 6 }}
         >
           say <span style={{ color: AMBER, fontWeight: 500 }}>“standup”</span>
         </div>
@@ -863,7 +863,7 @@ function MarkupEditor({ lines, height }: { lines: Line[]; height: number }) {
           left: 0,
           width: 32,
           borderRight: `1px solid ${INK_RULE_S}`,
-          background: "rgba(42,38,32,0.02)",
+          background: "rgba(35,36,35,0.02)",
           paddingTop: 14,
         }}
       >

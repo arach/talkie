@@ -286,7 +286,7 @@ function AuditCard({ item, tone }: { item: AuditItem; tone: SeverityTone }) {
 
 function FirstMovesBlock() {
   return (
-    <div className="mt-2 rounded-sm border border-studio-edge bg-[#FAF7EF] p-5">
+    <div className="mt-2 rounded-sm border border-studio-edge bg-[#F1F1F0] p-5">
       <div className="mb-3 flex items-baseline gap-2">
         <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-[#C47D1C]">
           · Three first moves
