@@ -8,11 +8,13 @@
 
 import Combine
 import CoreData
+import PhotosUI
 import SwiftUI
 
 @MainActor
 final class VoiceMemoDetailStore: ObservableObject {
     @Published var memo: MemoDisplay
+    @Published var attachments: [MemoImageAttachment] = []
 
     struct MemoDisplay {
         let id: String
@@ -55,6 +57,44 @@ final class VoiceMemoDetailStore: ObservableObject {
                 self?.refreshPlayback(isPlaying: isPlaying, currentTime: currentTime, playerDuration: playerDuration)
             }
             .store(in: &cancellables)
+
+        reloadAttachments()
+    }
+
+    // MARK: - Attachments
+
+    var memoUUID: UUID? {
+        UUID(uuidString: memo.id) ?? sourceMemo?.id
+    }
+
+    func reloadAttachments() {
+        guard let uuid = memoUUID else {
+            attachments = []
+            return
+        }
+        attachments = MemoAttachmentStore.shared.attachments(for: uuid)
+    }
+
+    @discardableResult
+    func addAttachment(data: Data, originalName: String? = nil) -> MemoImageAttachment? {
+        guard let uuid = memoUUID else { return nil }
+        let attachment = MemoAttachmentStore.shared.saveImage(
+            data: data,
+            preferredName: originalName,
+            memoID: uuid
+        )
+        reloadAttachments()
+        return attachment
+    }
+
+    func removeAttachment(_ attachment: MemoImageAttachment) {
+        guard let uuid = memoUUID else { return }
+        MemoAttachmentStore.shared.delete(attachment, memoID: uuid)
+        reloadAttachments()
+    }
+
+    func image(for attachment: MemoImageAttachment) -> UIImage? {
+        MemoAttachmentStore.shared.image(for: attachment)
     }
 
     func togglePlayback() {
@@ -193,6 +233,9 @@ private extension VoiceMemoDetailStore.MemoDisplay {
 struct VoiceMemoDetailNext: View {
     @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var store: VoiceMemoDetailStore
+    @State private var pickerItem: PhotosPickerItem?
+    @State private var isPickerActive: Bool = false
+    @State private var previewAttachment: MemoImageAttachment?
 
     init(memoID: String? = nil) {
         _store = StateObject(wrappedValue: VoiceMemoDetailStore(memoID: memoID))
@@ -220,6 +263,9 @@ struct VoiceMemoDetailNext: View {
                     transcriptSection
                         .padding(.horizontal, 12)
 
+                    attachmentsSection
+                        .padding(.horizontal, 12)
+
                     actionBar
                         .padding(.horizontal, 12)
                         .padding(.top, 4)
@@ -228,6 +274,19 @@ struct VoiceMemoDetailNext: View {
                 }
             }
             .scrollIndicators(.hidden)
+        }
+        .photosPicker(isPresented: $isPickerActive, selection: $pickerItem, matching: .images)
+        .onChange(of: pickerItem) { _, newValue in
+            guard let newValue else { return }
+            Task {
+                if let data = try? await newValue.loadTransferable(type: Data.self) {
+                    _ = store.addAttachment(data: data)
+                }
+                pickerItem = nil
+            }
+        }
+        .sheet(item: $previewAttachment) { attachment in
+            attachmentPreview(attachment)
         }
     }
 
@@ -354,6 +413,164 @@ struct VoiceMemoDetailNext: View {
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 10).fill(theme.colors.cardBackground).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: theme.currentTheme.chrome.hairlineWidth)))
+        }
+    }
+
+    private var attachmentsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("· ATTACHMENTS")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary)
+                if !store.attachments.isEmpty {
+                    Text("\(store.attachments.count)")
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(theme.colors.textTertiary)
+                }
+                Spacer()
+                Button(action: { isPickerActive = true }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("ADD")
+                            .talkieType(.channelLabelTiny)
+                    }
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(theme.currentTheme.chrome.accent.opacity(0.5),
+                                          lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 4)
+
+            if store.attachments.isEmpty {
+                emptyAttachmentsTile
+            } else {
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 100), spacing: 8)],
+                    spacing: 8
+                ) {
+                    ForEach(store.attachments) { attachment in
+                        attachmentTile(attachment)
+                    }
+                }
+            }
+        }
+    }
+
+    private var emptyAttachmentsTile: some View {
+        Button(action: { isPickerActive = true }) {
+            VStack(spacing: 8) {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                Text("Add screenshots or photos")
+                    .talkieType(.preview)
+                    .foregroundStyle(theme.colors.textPrimary)
+                Text("Keep visual context with the memo.")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 22)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(theme.colors.cardBackground.opacity(0.6))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .strokeBorder(
+                                theme.currentTheme.chrome.edgeFaint,
+                                style: StrokeStyle(
+                                    lineWidth: theme.currentTheme.chrome.hairlineWidth,
+                                    dash: [5, 3]
+                                )
+                            )
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func attachmentTile(_ attachment: MemoImageAttachment) -> some View {
+        ZStack(alignment: .topTrailing) {
+            Button(action: { previewAttachment = attachment }) {
+                Group {
+                    if let image = store.image(for: attachment) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else {
+                        ZStack {
+                            theme.colors.cardBackground
+                            Image(systemName: "photo")
+                                .font(.system(size: 18))
+                                .foregroundStyle(theme.colors.textTertiary)
+                        }
+                    }
+                }
+                .frame(height: 108)
+                .frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                      lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                )
+            }
+            .buttonStyle(.plain)
+
+            Button(action: { store.removeAttachment(attachment) }) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(theme.colors.cardBackground)
+                    .background(
+                        Circle()
+                            .fill(Color.black.opacity(0.55))
+                            .frame(width: 18, height: 18)
+                    )
+            }
+            .buttonStyle(.plain)
+            .padding(5)
+        }
+    }
+
+    @ViewBuilder
+    private func attachmentPreview(_ attachment: MemoImageAttachment) -> some View {
+        ZStack {
+            theme.colors.background.ignoresSafeArea()
+            VStack(spacing: 16) {
+                HStack {
+                    Text(attachment.originalName.uppercased())
+                        .talkieType(.channelLabel)
+                        .foregroundStyle(theme.colors.textTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Text(attachment.formattedSize)
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(theme.colors.textTertiary)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+
+                if let image = store.image(for: attachment) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .padding(.horizontal, 16)
+                } else {
+                    Text("Could not load image.")
+                        .talkieType(.preview)
+                        .foregroundStyle(theme.colors.textSecondary)
+                }
+
+                Spacer(minLength: 24)
+            }
         }
     }
 

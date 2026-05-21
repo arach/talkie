@@ -104,6 +104,8 @@ struct AppShellNext<Content: View>: View {
         case .askAI: return "askAI"
         case .readAloud: return "readAloud"
         case .feedback: return "feedback"
+        case .aiCredentials: return "aiCredentials"
+        case .workflows: return "workflows"
         case .captureDetail(let c): return "capture:\(c)"
         case .memoDetail(let m): return "memo:\(m)"
         case .dictationHistory: return "dictations"
@@ -160,6 +162,10 @@ struct AppShellNext<Content: View>: View {
             ReadAloudNext()
         case .feedback:
             FeedbackNext()
+        case .aiCredentials:
+            AICredentialsNext()
+        case .workflows:
+            WorkflowsNext()
         }
     }
 }
@@ -197,6 +203,10 @@ final class AppShellRouter: ObservableObject {
         case readAloud
         // M4 — user feedback / bug report surface.
         case feedback
+        // M4 — manage API keys for cloud AI providers.
+        case aiCredentials
+        // M4 — workflows hub (templates / schedules / history).
+        case workflows
     }
 
     @Published var surface: Surface = .home
@@ -255,6 +265,10 @@ final class AppShellRouter: ObservableObject {
             openReadAloud()
         } else if args.contains("--feedback") {
             openFeedback()
+        } else if args.contains("--aikeys") {
+            openAICredentials()
+        } else if args.contains("--workflows") {
+            openWorkflows()
         }
     }
 
@@ -303,6 +317,8 @@ final class AppShellRouter: ObservableObject {
         push(.readAloud)
     }
     func openFeedback() { push(.feedback) }
+    func openAICredentials() { push(.aiCredentials) }
+    func openWorkflows() { push(.workflows) }
 
     /// Open a new Compose document seeded with `text`. Caller doesn't
     /// pick the document ID — this generates one and stashes the seed
