@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T23:42:18.033Z",
+  "updatedAt": "2026-05-21T23:43:02.045Z",
   "streams": [
     {
       "key": "C1",
@@ -1883,6 +1883,30 @@
           "level": "progress",
           "message": "Starting TTS slice: replace placeholder skip buttons with sentence/chunk seek transport.",
           "findingKey": "C3::TTS hooks in memo detail::Transport with skip + seek"
+        },
+        {
+          "ts": "2026-05-21T23:43:02.011Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Landed live ReadAloudSource binding for memo/capture/AskAI sources; player resets source metadata and chunk state when opened from memo detail.",
+          "findingKey": "C3::TTS hooks in memo detail::Surface model",
+          "ref": "98b55eb"
+        },
+        {
+          "ts": "2026-05-21T23:43:02.029Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Landed absolute AVSpeechSynthesizer range tracking after seeks so SourceTranscript highlights played/current/upcoming chunks reliably.",
+          "findingKey": "C3::TTS hooks in memo detail::Range-of-speech highlighting",
+          "ref": "98b55eb"
+        },
+        {
+          "ts": "2026-05-21T23:43:02.045Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Landed sentence/chunk skip buttons plus a seek slider in ReadAloudNext transport.",
+          "findingKey": "C3::TTS hooks in memo detail::Transport with skip + seek",
+          "ref": "98b55eb"
         }
       ]
     },
@@ -2447,7 +2471,7 @@
           "agent": "talkie-codex-c5",
           "level": "landed",
           "message": "Landed acknowledgment: BridgeDetailNext is the unified bridge detail surface for status, pairing, sessions, and actions.",
-          "findingKey": "C5::BridgeSettingsView + SessionListView + SessionDetailView::Three surfaces → one",
+          "findingKey": "C5::BridgeSettingsView + SessionListView + SessionDetailView::Three surfaces \u2192 one",
           "ref": "apps/ios/Talkie iOS/Views/Next/BridgeDetailNext.swift:15"
         },
         {
@@ -2463,7 +2487,7 @@
           "agent": "talkie-codex-c5",
           "level": "landed",
           "message": "Landed acknowledgment: DeckMirrorNext renders from DeckBoardSnapshot/DeckMirrorStore instead of owning the donor runtime.",
-          "findingKey": "C5::CompanionShortcutModeView (runtime)::Runtime → snapshot",
+          "findingKey": "C5::CompanionShortcutModeView (runtime)::Runtime \u2192 snapshot",
           "ref": "apps/ios/Talkie iOS/Models/DeckBoardSnapshot.swift:24"
         },
         {
@@ -2471,7 +2495,7 @@
           "agent": "talkie-codex-c5",
           "level": "landed",
           "message": "Landed acknowledgment: MacCoachCard is embedded in BridgeDetailNext and replaces the standalone Mac availability tab.",
-          "findingKey": "C5::MacAvailabilityCoachView::Standalone tab → embedded card",
+          "findingKey": "C5::MacAvailabilityCoachView::Standalone tab \u2192 embedded card",
           "ref": "apps/ios/Talkie iOS/Views/Next/BridgeDetailNext.swift:40"
         },
         {
