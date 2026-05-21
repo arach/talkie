@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T19:56:39.086Z",
+  "updatedAt": "2026-05-21T19:57:06.342Z",
   "streams": [
     {
       "key": "C1",
@@ -843,6 +843,30 @@
           "message": "Landed resolver wiring: TalkieAIProviderResolver now falls back to AICredentialStore Keychain keys for direct OpenAI/Groq providers before legacy OpenAI speech-key fallback.",
           "findingKey": "C4::AICredentialsNext::Provider resolver wiring",
           "ref": "9589fde"
+        },
+        {
+          "ts": "2026-05-21T19:57:06.316Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Rebased landed ref: SettingsNext CONNECT panel Auto-open Command Deck toggle remains bound to TalkieAppSettings.followComputerShortcutMode.",
+          "findingKey": "C4::SettingsView::COMPANION section",
+          "ref": "06582d4"
+        },
+        {
+          "ts": "2026-05-21T19:57:06.329Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Rebased landed ref: DEBUG-gated SSH Terminal nav row remains in SettingsNext CONNECT panel alongside Connection Center.",
+          "findingKey": "C4::SettingsView::REMOTE ACCESS section",
+          "ref": "9df33aa"
+        },
+        {
+          "ts": "2026-05-21T19:57:06.342Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Rebased landed ref: SignInNext still surfaces CloudKit accountStatus in step 3 detail/warning state after native Apple Sign In.",
+          "findingKey": "C4::SignInView::CloudKit provisioning result",
+          "ref": "2b1ef06"
         }
       ]
     },
