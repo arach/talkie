@@ -46,6 +46,15 @@ final class ComposeStore: ObservableObject {
             self.document = Self.document(from: note)
         } else if let dictation = Self.fetchKeyboardDictation(id: documentID) {
             self.document = Self.document(from: dictation)
+        } else if let capture = Self.fetchCapture(id: documentID) {
+            let note = Self.createNote(from: capture, context: context)
+            self.note = note
+            self.document = Self.document(from: note)
+        } else if let seed = AppShellRouter.shared.pendingComposeSeed {
+            AppShellRouter.shared.pendingComposeSeed = nil
+            let note = Self.createSeededNote(id: documentID, text: seed, context: context)
+            self.note = note
+            self.document = Self.document(from: note)
         } else if let note = Self.fetchLatestNote(context: context) {
             self.note = note
             self.document = Self.document(from: note)
@@ -430,6 +439,43 @@ final class ComposeStore: ObservableObject {
         let text = dictation.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let title = title(from: text, fallback: "Keyboard dictation")
         return Document(title: title, paragraphs: text.isEmpty ? [""] : [text])
+    }
+
+    private static func fetchCapture(id: String) -> Capture? {
+        guard let uuid = UUID(uuidString: id) else { return nil }
+        CaptureStore.shared.reload()
+        return CaptureStore.shared.all().first { $0.id == uuid }
+    }
+
+    private static func createNote(from capture: Capture, context: NSManagedObjectContext) -> ComposeNote {
+        let note = ComposeNote(context: context)
+        note.id = capture.id
+        note.createdAt = capture.timestamp
+        note.lastModified = Date()
+        note.title = cleanCaptureTitle(capture)
+        note.content = capture.text
+        save(context)
+        return note
+    }
+
+    private static func createSeededNote(id: String, text: String, context: NSManagedObjectContext) -> ComposeNote {
+        let note = ComposeNote(context: context)
+        note.id = UUID(uuidString: id) ?? UUID()
+        note.createdAt = Date()
+        note.lastModified = Date()
+        note.title = title(from: text, fallback: "Untitled note")
+        note.content = text
+        save(context)
+        return note
+    }
+
+    private static func cleanCaptureTitle(_ capture: Capture) -> String {
+        if let title = capture.title?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !title.isEmpty {
+            return title
+        }
+
+        return title(from: capture.text, fallback: "Capture")
     }
 
     private static func title(from text: String, fallback: String) -> String {

@@ -16,14 +16,14 @@ import VisionKit
 
 struct CameraCaptureNext: View {
     private let initialURL: URL?
-    private let onCaptureSaved: ((Capture) -> Void)?
+    private let onCaptureSaved: ((String) -> Void)?
 
     @StateObject private var camera = CameraCaptureNextModel()
     @ObservedObject private var theme = ThemeManager.shared
     @State private var fallbackPhotoItem: PhotosPickerItem?
     @State private var isShowingDocumentScanner = false
 
-    init(initialURL: URL? = nil, onCaptureSaved: ((Capture) -> Void)? = nil) {
+    init(initialURL: URL? = nil, onCaptureSaved: ((String) -> Void)? = nil) {
         self.initialURL = initialURL
         self.onCaptureSaved = onCaptureSaved
     }
@@ -610,7 +610,7 @@ private final class CameraCaptureNextModel: NSObject, ObservableObject {
     /// user has hand-corrected the scan before saving (M02 path).
     func confirmAndSave(
         editedText: String? = nil,
-        onCaptureSaved: ((Capture) -> Void)? = nil
+        onCaptureSaved: ((String) -> Void)? = nil
     ) {
         guard let preview = scanPreview else { return }
         scanPreview = nil
@@ -641,7 +641,7 @@ private final class CameraCaptureNextModel: NSObject, ObservableObject {
 
         statusMessage = "Saved scan"
         if let onCaptureSaved {
-            onCaptureSaved(capture)
+            onCaptureSaved(capture.id.uuidString)
         } else {
             AppShellRouter.shared.openCaptureDetail(captureID: capture.id.uuidString)
         }

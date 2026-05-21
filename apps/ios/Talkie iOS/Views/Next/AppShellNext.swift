@@ -104,6 +104,7 @@ struct AppShellNext<Content: View>: View {
         case .library: return "library"
         case .settings: return "settings"
         case .terminal: return "terminal"
+        case .captureCompose: return "captureCompose"
         case .cameraCapture: return "camera"
         case .bridgeDetail: return "bridgeDetail"
         case .askAI: return "askAI"
@@ -161,6 +162,10 @@ struct AppShellNext<Content: View>: View {
             KeyboardActivationNext()
         case .terminal:
             TerminalNext()
+        case .captureCompose:
+            CaptureComposeNextView { captureID in
+                AppShellRouter.shared.openCompose(documentID: captureID)
+            }
         case .cameraCapture:
             CameraCaptureNext()
         case .bridgeDetail:
@@ -213,6 +218,7 @@ final class AppShellRouter: ObservableObject {
         // Phase-1 feature surfaces — stubs land here, fleshed out by
         // dedicated Codex streams.
         case terminal
+        case captureCompose
         case cameraCapture
         case bridgeDetail
         case askAI
@@ -280,6 +286,8 @@ final class AppShellRouter: ObservableObject {
             openKeyboardActivation()
         } else if args.contains("--terminal") {
             openTerminal()
+        } else if args.contains("--captureCompose") {
+            openCaptureCompose()
         } else if args.contains("--camera") {
             openCameraCapture()
         } else if args.contains("--bridge") {
@@ -342,6 +350,7 @@ final class AppShellRouter: ObservableObject {
     func openWebBrowser()           { push(.webBrowser) }
     func openKeyboardActivation()   { push(.keyboardActivation) }
     func openTerminal()             { push(.terminal) }
+    func openCaptureCompose()       { push(.captureCompose) }
     func openCameraCapture()        { push(.cameraCapture) }
     func openBridgeDetail()         { push(.bridgeDetail) }
     func openAskAI()                { push(.askAI) }
@@ -362,7 +371,7 @@ final class AppShellRouter: ObservableObject {
     /// on the router for ComposeStore to consume.
     func openComposeSeeded(text: String) {
         pendingComposeSeed = text
-        openCompose(documentID: "seeded-\(UUID().uuidString.prefix(8))")
+        openCompose(documentID: UUID().uuidString)
     }
 
     /// "Save as memo" pipeline entry. Codex wires the actual memo

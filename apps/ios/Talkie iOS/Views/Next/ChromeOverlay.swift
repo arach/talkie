@@ -110,10 +110,10 @@ private struct LiquidGlassTray: View {
     var body: some View {
         HStack(spacing: 14) {
             TraySlot(
-                glyph: AnyView(Image(systemName: "camera").font(.system(size: 17, weight: .regular))),
-                label: "Camera"
+                glyph: AnyView(Image(systemName: "square.and.arrow.down").font(.system(size: 17, weight: .regular))),
+                label: "Capture"
             ) {
-                AppShellRouter.shared.openCameraCapture()
+                AppShellRouter.shared.openCaptureCompose()
             }
 
             TraySlot(
