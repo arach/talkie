@@ -30,6 +30,7 @@ struct ComposeNextView: View {
     @StateObject private var compose: ComposeStore
     @FocusState private var keyboardFieldFocused: Bool
     @State private var keyboardBridgeText: String = ""
+    @State private var showingNotesList = false
 
     init(documentID: String = "mock", store: ComposeStore? = nil) {
         self.documentID = documentID
@@ -49,8 +50,11 @@ struct ComposeNextView: View {
             ComposeHeader(
                 backLabel: backTitle,
                 modelLabel: compose.modelLabel,
+                revisionPath: compose.revisionPath,
                 state: compose.state,
-                onBack: { AppShellRouter.shared.openHome() }
+                onBack: { AppShellRouter.shared.openHome() },
+                onSelectRevisionPath: { compose.selectRevisionPath($0) },
+                onShowNotes: { showingNotesList = true }
             )
 
             DocumentBody(
@@ -64,6 +68,15 @@ struct ComposeNextView: View {
             )
             .padding(.horizontal, 12)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if !compose.appliedRevisions.isEmpty {
+                RevisionHistoryRollup(
+                    revisions: compose.appliedRevisions,
+                    onRestore: { compose.restoreRevision($0) }
+                )
+                .padding(.horizontal, 12)
+                .padding(.bottom, 6)
+            }
 
             if compose.state != .diff {
                 QuickTransforms(
@@ -96,6 +109,9 @@ struct ComposeNextView: View {
             guard newPhase == .inactive || newPhase == .background else { return }
             compose.autosave()
         }
+        .sheet(isPresented: $showingNotesList) {
+            ComposeNotesListSheet(activeID: documentID)
+        }
     }
 }
 
@@ -104,8 +120,11 @@ struct ComposeNextView: View {
 private struct ComposeHeader: View {
     let backLabel: String
     let modelLabel: String
+    let revisionPath: ComposeStore.RevisionPath
     let state: ComposeState
     let onBack: () -> Void
+    let onSelectRevisionPath: (ComposeStore.RevisionPath) -> Void
+    let onShowNotes: () -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
 
@@ -129,9 +148,25 @@ private struct ComposeHeader: View {
                     .talkieType(.channelLabelTiny)
                     .foregroundStyle(theme.colors.textTertiary)
 
-                Button(action: { /* TODO: model picker */ }) {
+                Menu {
+                    Section("Revision path") {
+                        ForEach(ComposeStore.RevisionPath.allCases) { path in
+                            Button {
+                                onSelectRevisionPath(path)
+                            } label: {
+                                Label(path.title, systemImage: path.systemImage)
+                            }
+                        }
+                    }
+
+                    Button {
+                        onShowNotes()
+                    } label: {
+                        Label("Open notes", systemImage: "list.bullet.rectangle")
+                    }
+                } label: {
                     HStack(spacing: 3) {
-                        Image(systemName: "sparkles")
+                        Image(systemName: revisionPath.systemImage)
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(theme.currentTheme.chrome.accent)
                         Text(modelLabel)
@@ -145,19 +180,19 @@ private struct ComposeHeader: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Choose model · \(modelLabel)")
+                .accessibilityLabel("Choose revision path · \(modelLabel)")
             }
 
             Spacer()
 
-            Button(action: {}) {
+            Button(action: onShowNotes) {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 16))
                     .foregroundStyle(theme.colors.textTertiary)
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("More options")
+            .accessibilityLabel("Open notes")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -489,6 +524,161 @@ private struct QuickTransforms: View {
                 .frame(height: theme.currentTheme.chrome.hairlineWidth),
             alignment: .top
         )
+    }
+}
+
+// MARK: - Revision strip
+
+private struct RevisionHistoryRollup: View {
+    let revisions: [ComposeNoteStore.RevisionRecord]
+    let onRestore: (ComposeNoteStore.RevisionRecord) -> Void
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text("· VERSIONS")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary)
+                Spacer(minLength: 4)
+                Text("\(revisions.count) APPLIED")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(revisions.prefix(8).enumerated(), id: \.element.id) { index, revision in
+                        Button {
+                            onRestore(revision)
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text("R\((index + 1), format: .number.precision(.integerLength(2)))")
+                                    .talkieType(.channelLabelTiny)
+                                    .foregroundStyle(index == 0 ? theme.currentTheme.chrome.accent : theme.colors.textTertiary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(revision.instruction)
+                                        .talkieType(.fieldLabel)
+                                        .foregroundStyle(theme.colors.textPrimary)
+                                        .lineLimit(1)
+                                    Text("\(revision.providerName) · \(revision.scope)")
+                                        .talkieType(.timestamp)
+                                        .foregroundStyle(theme.colors.textTertiary)
+                                        .lineLimit(1)
+                                }
+                            }
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 7)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(theme.colors.cardBackground)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .strokeBorder(
+                                                index == 0 ? theme.currentTheme.chrome.accentStrong : theme.currentTheme.chrome.edgeFaint,
+                                                lineWidth: theme.currentTheme.chrome.hairlineWidth
+                                            )
+                                    )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Restore revision \(index + 1), \(revision.instruction)")
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+            .scrollClipDisabled()
+        }
+        .padding(.top, 4)
+        .padding(.bottom, 2)
+    }
+}
+
+// MARK: - Notes list
+
+private struct ComposeNotesListSheet: View {
+    let activeID: String
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var notes: [ComposeNoteStore.NoteSummary] = []
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Button {
+                        openNewNote()
+                    } label: {
+                        Label("New note", systemImage: "square.and.pencil")
+                    }
+                }
+
+                Section("Notes") {
+                    if notes.isEmpty {
+                        Text("No saved notes yet.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(notes) { note in
+                            Button {
+                                open(note)
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: note.id == activeID ? "checkmark.circle.fill" : "doc.text")
+                                        .foregroundStyle(note.id == activeID ? theme.currentTheme.chrome.accent : theme.colors.textTertiary)
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(note.title)
+                                            .foregroundStyle(theme.colors.textPrimary)
+                                            .lineLimit(1)
+                                        Text(note.preview)
+                                            .foregroundStyle(theme.colors.textTertiary)
+                                            .lineLimit(2)
+                                        Text(note.modifiedLabel)
+                                            .font(.caption2)
+                                            .foregroundStyle(theme.colors.textTertiary)
+                                    }
+                                }
+                                .padding(.vertical, 3)
+                            }
+                        }
+                        .onDelete(perform: delete)
+                    }
+                }
+            }
+            .navigationTitle("Compose notes")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+            }
+            .onAppear(perform: reload)
+            .onReceive(NotificationCenter.default.publisher(for: .composeNotesDidChange)) { _ in
+                reload()
+            }
+        }
+    }
+
+    private func reload() {
+        notes = ComposeNoteStore.all()
+    }
+
+    private func open(_ note: ComposeNoteStore.NoteSummary) {
+        dismiss()
+        AppShellRouter.shared.openCompose(documentID: note.id)
+    }
+
+    private func openNewNote() {
+        let note = ComposeNoteStore.create()
+        guard let id = note.id?.uuidString else { return }
+        dismiss()
+        AppShellRouter.shared.openCompose(documentID: id)
+    }
+
+    private func delete(_ offsets: IndexSet) {
+        let ids = offsets.map { notes[$0].id }
+        ids.forEach { _ = ComposeNoteStore.delete(id: $0) }
+        reload()
     }
 }
 
