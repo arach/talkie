@@ -36,29 +36,6 @@ private enum ScopeFont {
     }
 }
 
-// MARK: - Local tokens (a few not in TalkieKit)
-
-private enum SkillsToken {
-    // Default light-mode panel: PEARL scheme (cool sheen) per
-    // design/studio/lib/schemes.ts. Sits as a barely-there panel on
-    // the cream canvas. Off-the-shelf default in light mode.
-    // Warm alternates (CHIFFON, etc.) and FROST live in the studio
-    // scheme picker; user-selectable in a future Settings pass.
-    static let paper = Color.hex("F5F8FA")
-    static let cream = Color.hex("FBFBFA")
-    static let ink = Color.hex("2A2620")
-    static let inkFaint = Color(red: 42/255, green: 38/255, blue: 32/255).opacity(0.55)
-    static let inkFainter = Color(red: 42/255, green: 38/255, blue: 32/255).opacity(0.32)
-    static let inkRule = Color(red: 42/255, green: 38/255, blue: 32/255).opacity(0.18)
-    static let inkRuleSoft = Color(red: 42/255, green: 38/255, blue: 32/255).opacity(0.10)
-    static let amber = Color.hex("C47D1C")
-    static let brass = Color.hex("9A6A22")
-    static let amberSoft = Color.hex("C47D1C").opacity(0.08)
-    static let amberLine = Color.hex("C47D1C").opacity(0.45)
-    static let brassSoft = Color.hex("9A6A22").opacity(0.08)
-    static let brassLine = Color.hex("9A6A22").opacity(0.30)
-}
-
 // MARK: - Agent choices (Phase 1 stub — wire to LLMConfig later)
 
 private struct AgentChoice: Identifiable, Equatable {
@@ -291,7 +268,7 @@ struct ScopeSkillsLandingView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.bottom, 32)
         }
-        .background(SkillsToken.cream)
+        .background(ScopeCanvas.canvas)
         .onAppear {
             if bundledStarters.isEmpty {
                 bundledStarters = SkillStarterLoader.loadBundledStarters()
@@ -313,17 +290,17 @@ struct ScopeSkillsLandingView: View {
                 Text("· SKILLS")
                     .font(ScopeFont.mono(size: 9, weight: .semibold))
                     .tracking(2.6)
-                    .foregroundStyle(SkillsToken.inkFaint)
+                    .foregroundStyle(ScopeInk.faint)
                 Text("one surface · pick a starter, iterate, save")
                     .font(ScopeFont.displayItalic(size: 13))
-                    .foregroundStyle(SkillsToken.inkFaint)
+                    .foregroundStyle(ScopeInk.faint)
                 Spacer()
                 chip(label: editorStatusChipLabel, tone: .amber)
             }
             Text("Skills")
                 .font(ScopeFont.display(size: 30))
                 .tracking(-0.5)
-                .foregroundStyle(SkillsToken.ink)
+                .foregroundStyle(ScopeInk.primary)
         }
         .padding(.horizontal, 32)
         .padding(.top, 20)
@@ -370,7 +347,7 @@ struct ScopeSkillsLandingView: View {
                 }
                 .frame(maxHeight: .infinity)
 
-                Rectangle().fill(SkillsToken.inkRuleSoft).frame(height: 1)
+                Rectangle().fill(ScopeEdge.subtle).frame(height: 1)
 
                 // Input row — mic, text field, paper plane. Bottom of the pane.
                 HStack(spacing: 8) {
@@ -378,7 +355,7 @@ struct ScopeSkillsLandingView: View {
                     TextField("describe what to make · or tap the mic", text: $draftMessage)
                         .textFieldStyle(.plain)
                         .font(ScopeFont.displayItalic(size: 12.5))
-                        .foregroundStyle(SkillsToken.ink)
+                        .foregroundStyle(ScopeInk.primary)
                         .onSubmit { submitDraftMessage() }
                     submitButton
                 }
@@ -387,10 +364,10 @@ struct ScopeSkillsLandingView: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(SkillsToken.paper)
+                    .fill(ScopeCanvas.surface)
                     .overlay(
                         RoundedRectangle(cornerRadius: 4)
-                            .stroke(SkillsToken.inkRuleSoft, lineWidth: 1)
+                            .stroke(ScopeEdge.subtle, lineWidth: 1)
                     )
             )
             .frame(height: 280)
@@ -403,10 +380,10 @@ struct ScopeSkillsLandingView: View {
             Text("· AGENT")
                 .font(ScopeFont.mono(size: 9, weight: .semibold))
                 .tracking(2.2)
-                .foregroundStyle(SkillsToken.amber)
+                .foregroundStyle(ScopeAmber.solid)
             Text(text)
                 .font(ScopeFont.displayItalic(size: 12.5))
-                .foregroundStyle(SkillsToken.ink)
+                .foregroundStyle(ScopeInk.primary)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -418,7 +395,7 @@ struct ScopeSkillsLandingView: View {
             Text("· AGENT")
                 .font(ScopeFont.mono(size: 9, weight: .semibold))
                 .tracking(2.0)
-                .foregroundStyle(SkillsToken.inkFaint)
+                .foregroundStyle(ScopeInk.faint)
             Spacer()
             Menu {
                 Section("Anthropic") {
@@ -453,10 +430,10 @@ struct ScopeSkillsLandingView: View {
                     Text(selectedAgent.label.uppercased())
                         .font(ScopeFont.mono(size: 9))
                         .tracking(1.6)
-                        .foregroundStyle(SkillsToken.inkFainter)
+                        .foregroundStyle(ScopeInk.subtle)
                     Image(systemName: "chevron.down")
                         .font(.system(size: 8, weight: .semibold))
-                        .foregroundStyle(SkillsToken.inkFainter)
+                        .foregroundStyle(ScopeInk.subtle)
                 }
             }
             .menuStyle(.borderlessButton)
@@ -475,21 +452,21 @@ struct ScopeSkillsLandingView: View {
         let recordingRed = Color(red: 0.72, green: 0.32, blue: 0.18)
         let micColor: Color = {
             if isRecording { return Color.white }
-            if isTranscribing { return SkillsToken.amber }
-            if isHoveringMic { return SkillsToken.amber }
-            return SkillsToken.inkFainter
+            if isTranscribing { return ScopeAmber.solid }
+            if isHoveringMic { return ScopeAmber.solid }
+            return ScopeInk.subtle
         }()
         let fillColor: Color = {
             if isRecording { return recordingRed }
-            if isTranscribing { return SkillsToken.amberSoft }
-            if isHoveringMic { return SkillsToken.amberSoft }
+            if isTranscribing { return ScopeAmber.tint }
+            if isHoveringMic { return ScopeAmber.tint }
             return Color.clear
         }()
         let strokeColor: Color = {
             if isRecording { return recordingRed }
-            if isTranscribing { return SkillsToken.amber.opacity(0.6) }
-            if isHoveringMic { return SkillsToken.amber.opacity(0.55) }
-            return SkillsToken.inkRule
+            if isTranscribing { return ScopeAmber.solid.opacity(0.6) }
+            if isHoveringMic { return ScopeAmber.solid.opacity(0.55) }
+            return ScopeEdge.faint
         }()
         let icon: String = {
             if isRecording { return "stop.fill" }
@@ -579,16 +556,16 @@ struct ScopeSkillsLandingView: View {
         } label: {
             Image(systemName: "paperplane.fill")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(active ? SkillsToken.amber : SkillsToken.inkFaint)
+                .foregroundStyle(active ? ScopeAmber.solid : ScopeInk.faint)
                 .frame(width: 22, height: 22)
                 .background(
                     RoundedRectangle(cornerRadius: 3)
-                        .fill(active ? SkillsToken.amberSoft : Color.clear)
+                        .fill(active ? ScopeAmber.tint : Color.clear)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 3)
                         .stroke(
-                            active ? SkillsToken.amber.opacity(0.55) : SkillsToken.inkRule,
+                            active ? ScopeAmber.solid.opacity(0.55) : ScopeEdge.faint,
                             lineWidth: 1
                         )
                 )
@@ -621,7 +598,7 @@ struct ScopeSkillsLandingView: View {
                 Text("· MARKUP · \(markupFilename)")
                     .font(ScopeFont.mono(size: 9, weight: .semibold))
                     .tracking(2.2)
-                    .foregroundStyle(SkillsToken.inkFaint)
+                    .foregroundStyle(ScopeInk.faint)
                     .lineLimit(1)
                 Spacer()
                 Button(action: runSelectedStarter) {
@@ -721,10 +698,10 @@ struct ScopeSkillsLandingView: View {
     @ViewBuilder
     private func markupEditor(lines: [SkillMarkupLine]) -> some View {
         ZStack(alignment: .topLeading) {
-            SkillsToken.paper
+            ScopeCanvas.surface
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
-                        .stroke(SkillsToken.inkRuleSoft, lineWidth: 1)
+                        .stroke(ScopeEdge.subtle, lineWidth: 1)
                 )
             VStack(alignment: .leading, spacing: 0) {
                 // Description header — the frontmatter rendered as a spec written by the agent.
@@ -737,7 +714,7 @@ struct ScopeSkillsLandingView: View {
                         ForEach(Array(lines.enumerated()), id: \.offset) { idx, _ in
                             Text("\(idx + 1)")
                                 .font(ScopeFont.mono(size: 10))
-                                .foregroundStyle(SkillsToken.inkFainter)
+                                .foregroundStyle(ScopeInk.subtle)
                                 .frame(height: 20)
                                 .padding(.trailing, 8)
                         }
@@ -747,7 +724,7 @@ struct ScopeSkillsLandingView: View {
                     .background(
                         Color(red: 42/255, green: 38/255, blue: 32/255).opacity(0.02)
                             .overlay(
-                                Rectangle().fill(SkillsToken.inkRuleSoft)
+                                Rectangle().fill(ScopeEdge.subtle)
                                     .frame(width: 1)
                                     .frame(maxWidth: .infinity, alignment: .trailing)
                             )
@@ -774,10 +751,10 @@ struct ScopeSkillsLandingView: View {
             Text(name)
                 .font(ScopeFont.display(size: 17))
                 .tracking(-0.2)
-                .foregroundStyle(SkillsToken.ink)
+                .foregroundStyle(ScopeInk.primary)
             Text(description)
                 .font(ScopeFont.displayItalic(size: 11.5))
-                .foregroundStyle(SkillsToken.inkFaint)
+                .foregroundStyle(ScopeInk.faint)
                 .lineSpacing(1.5)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -786,7 +763,7 @@ struct ScopeSkillsLandingView: View {
         .padding(.bottom, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(
-            Rectangle().fill(SkillsToken.inkRuleSoft).frame(height: 1),
+            Rectangle().fill(ScopeEdge.subtle).frame(height: 1),
             alignment: .bottom
         )
     }
@@ -800,20 +777,20 @@ struct ScopeSkillsLandingView: View {
             HStack(spacing: 0) {
                 Text(kw.padding(toLength: 5, withPad: " ", startingAt: 0))
                     .font(ScopeFont.mono(size: 12, weight: .semibold))
-                    .foregroundStyle(SkillsToken.amber)
+                    .foregroundStyle(ScopeAmber.solid)
                 Text(rest)
                     .font(ScopeFont.mono(size: 12))
-                    .foregroundStyle(SkillsToken.ink)
+                    .foregroundStyle(ScopeInk.primary)
             }
             .frame(height: 20, alignment: .leading)
         case .sub(let text):
             HStack(spacing: 0) {
                 Text("      \u{21B3} ")
                     .font(ScopeFont.mono(size: 12))
-                    .foregroundStyle(SkillsToken.inkFainter)
+                    .foregroundStyle(ScopeInk.subtle)
                 Text(text)
                     .font(ScopeFont.mono(size: 12))
-                    .foregroundStyle(SkillsToken.ink)
+                    .foregroundStyle(ScopeInk.primary)
             }
             .frame(height: 20, alignment: .leading)
         }
@@ -955,10 +932,10 @@ struct ScopeSkillsLandingView: View {
     @ViewBuilder
     private var markupPlaceholder: some View {
         ZStack(alignment: .topLeading) {
-            SkillsToken.paper
+            ScopeCanvas.surface
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
-                        .stroke(SkillsToken.inkRuleSoft, lineWidth: 1)
+                        .stroke(ScopeEdge.subtle, lineWidth: 1)
                 )
             HStack(alignment: .top, spacing: 0) {
                 // Gutter
@@ -966,7 +943,7 @@ struct ScopeSkillsLandingView: View {
                     ForEach(1...10, id: \.self) { i in
                         Text("\(i)")
                             .font(ScopeFont.mono(size: 10))
-                            .foregroundStyle(SkillsToken.inkFainter)
+                            .foregroundStyle(ScopeInk.subtle)
                             .frame(height: 20)
                             .padding(.trailing, 8)
                     }
@@ -976,7 +953,7 @@ struct ScopeSkillsLandingView: View {
                 .background(
                     Color(red: 42/255, green: 38/255, blue: 32/255).opacity(0.02)
                         .overlay(
-                            Rectangle().fill(SkillsToken.inkRuleSoft)
+                            Rectangle().fill(ScopeEdge.subtle)
                                 .frame(width: 1)
                                 .frame(maxWidth: .infinity, alignment: .trailing)
                         )
@@ -1004,10 +981,10 @@ struct ScopeSkillsLandingView: View {
         HStack(spacing: 0) {
             Text(kw.padding(toLength: 5, withPad: " ", startingAt: 0))
                 .font(ScopeFont.mono(size: 12, weight: .semibold))
-                .foregroundStyle(SkillsToken.amber)
+                .foregroundStyle(ScopeAmber.solid)
             Text(rest)
                 .font(ScopeFont.mono(size: 12))
-                .foregroundStyle(SkillsToken.ink)
+                .foregroundStyle(ScopeInk.primary)
         }
         .frame(height: 20, alignment: .leading)
     }
@@ -1021,12 +998,12 @@ struct ScopeSkillsLandingView: View {
                 Text("· CONSOLE · \(consoleHeaderLabel)")
                     .font(ScopeFont.mono(size: 9, weight: .semibold))
                     .tracking(2.2)
-                    .foregroundStyle(SkillsToken.inkFaint)
+                    .foregroundStyle(ScopeInk.faint)
                 Spacer()
                 Text(consoleHeaderRight)
                     .font(ScopeFont.mono(size: 9))
                     .tracking(1.6)
-                    .foregroundStyle(SkillsToken.inkFainter)
+                    .foregroundStyle(ScopeInk.subtle)
             }
             consoleBody
             Spacer(minLength: 0)
@@ -1036,10 +1013,10 @@ struct ScopeSkillsLandingView: View {
         .padding(.vertical, 14)
         .background(
             RoundedRectangle(cornerRadius: 4)
-                .fill(SkillsToken.paper)
+                .fill(ScopeCanvas.surface)
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
-                        .stroke(SkillsToken.inkRuleSoft, lineWidth: 1)
+                        .stroke(ScopeEdge.subtle, lineWidth: 1)
                 )
         )
         .padding(.horizontal, 32)
@@ -1075,12 +1052,12 @@ struct ScopeSkillsLandingView: View {
             HStack(spacing: 8) {
                 Text("›")
                     .font(ScopeFont.mono(size: 11.5))
-                    .foregroundStyle(SkillsToken.amber)
+                    .foregroundStyle(ScopeAmber.solid)
                 Text(selectedStarter == nil
                      ? "pick a starter below to load it into the editor"
                      : "press ⌘S to save \"\(selectedStarter!.name)\" as a skill")
                     .font(ScopeFont.mono(size: 11.5))
-                    .foregroundStyle(SkillsToken.inkFaint)
+                    .foregroundStyle(ScopeInk.faint)
                 Spacer()
             }
         case .savedSkill(let name, _):
@@ -1088,19 +1065,19 @@ struct ScopeSkillsLandingView: View {
                 HStack(spacing: 8) {
                     Text("›")
                         .font(ScopeFont.mono(size: 11.5))
-                        .foregroundStyle(SkillsToken.amber)
+                        .foregroundStyle(ScopeAmber.solid)
                     Text("save skill \"\(name.lowercased())\"")
                         .font(ScopeFont.mono(size: 11.5))
-                        .foregroundStyle(SkillsToken.amber)
+                        .foregroundStyle(ScopeAmber.solid)
                     Spacer()
                 }
                 HStack(spacing: 8) {
                     Text("✓")
                         .font(ScopeFont.mono(size: 11.5))
-                        .foregroundStyle(SkillsToken.brass)
+                        .foregroundStyle(ScopeBrass.solid)
                     Text("\(name) saved to your skills · scroll down to see the card")
                         .font(ScopeFont.mono(size: 11.5))
-                        .foregroundStyle(SkillsToken.ink)
+                        .foregroundStyle(ScopeInk.primary)
                     Spacer()
                 }
             }
@@ -1111,7 +1088,7 @@ struct ScopeSkillsLandingView: View {
                     .foregroundStyle(Color.red.opacity(0.7))
                 Text(message)
                     .font(ScopeFont.mono(size: 11.5))
-                    .foregroundStyle(SkillsToken.ink)
+                    .foregroundStyle(ScopeInk.primary)
                 Spacer()
             }
         case .running(let name, let line, _):
@@ -1119,19 +1096,19 @@ struct ScopeSkillsLandingView: View {
                 HStack(spacing: 8) {
                     Text("›")
                         .font(ScopeFont.mono(size: 11.5))
-                        .foregroundStyle(SkillsToken.amber)
+                        .foregroundStyle(ScopeAmber.solid)
                     Text("run \(name.lowercased())")
                         .font(ScopeFont.mono(size: 11.5))
-                        .foregroundStyle(SkillsToken.amber)
+                        .foregroundStyle(ScopeAmber.solid)
                     Spacer()
                 }
                 HStack(spacing: 8) {
                     Text("·")
                         .font(ScopeFont.mono(size: 11.5))
-                        .foregroundStyle(SkillsToken.brass)
+                        .foregroundStyle(ScopeBrass.solid)
                     Text(line)
                         .font(ScopeFont.mono(size: 11.5))
-                        .foregroundStyle(SkillsToken.ink)
+                        .foregroundStyle(ScopeInk.primary)
                     Spacer()
                 }
             }
@@ -1140,19 +1117,19 @@ struct ScopeSkillsLandingView: View {
                 HStack(spacing: 8) {
                     Text("›")
                         .font(ScopeFont.mono(size: 11.5))
-                        .foregroundStyle(SkillsToken.amber)
+                        .foregroundStyle(ScopeAmber.solid)
                     Text("run \(name.lowercased())")
                         .font(ScopeFont.mono(size: 11.5))
-                        .foregroundStyle(SkillsToken.amber)
+                        .foregroundStyle(ScopeAmber.solid)
                     Spacer()
                 }
                 HStack(spacing: 8) {
                     Text("✓")
                         .font(ScopeFont.mono(size: 11.5))
-                        .foregroundStyle(SkillsToken.brass)
+                        .foregroundStyle(ScopeBrass.solid)
                     Text(summary)
                         .font(ScopeFont.mono(size: 11.5))
-                        .foregroundStyle(SkillsToken.ink)
+                        .foregroundStyle(ScopeInk.primary)
                     Spacer()
                 }
             }
@@ -1161,10 +1138,10 @@ struct ScopeSkillsLandingView: View {
                 HStack(spacing: 8) {
                     Text("›")
                         .font(ScopeFont.mono(size: 11.5))
-                        .foregroundStyle(SkillsToken.amber)
+                        .foregroundStyle(ScopeAmber.solid)
                     Text("run \(name.lowercased())")
                         .font(ScopeFont.mono(size: 11.5))
-                        .foregroundStyle(SkillsToken.amber)
+                        .foregroundStyle(ScopeAmber.solid)
                     Spacer()
                 }
                 HStack(spacing: 8) {
@@ -1173,7 +1150,7 @@ struct ScopeSkillsLandingView: View {
                         .foregroundStyle(Color.red.opacity(0.7))
                     Text(message)
                         .font(ScopeFont.mono(size: 11.5))
-                        .foregroundStyle(SkillsToken.ink)
+                        .foregroundStyle(ScopeInk.primary)
                     Spacer()
                 }
             }
@@ -1188,12 +1165,12 @@ struct ScopeSkillsLandingView: View {
             Text("· \(label.uppercased())")
                 .font(ScopeFont.mono(size: 9, weight: .semibold))
                 .tracking(2.4)
-                .foregroundStyle(SkillsToken.inkFaint)
+                .foregroundStyle(ScopeInk.faint)
             Text(hint)
                 .font(ScopeFont.displayItalic(size: 12))
-                .foregroundStyle(SkillsToken.inkFaint)
+                .foregroundStyle(ScopeInk.faint)
             Rectangle()
-                .fill(SkillsToken.inkRuleSoft)
+                .fill(ScopeEdge.subtle)
                 .frame(height: 1)
         }
         .padding(.horizontal, 32)
@@ -1211,18 +1188,18 @@ struct ScopeSkillsLandingView: View {
                 Text("· \(label.uppercased())")
                     .font(ScopeFont.mono(size: 9, weight: .semibold))
                     .tracking(2.4)
-                    .foregroundStyle(SkillsToken.inkFaint)
+                    .foregroundStyle(ScopeInk.faint)
                 Text(meta)
                     .font(ScopeFont.mono(size: 9))
                     .tracking(1.6)
-                    .foregroundStyle(SkillsToken.inkFainter)
+                    .foregroundStyle(ScopeInk.subtle)
                 Rectangle()
-                    .fill(SkillsToken.inkRuleSoft)
+                    .fill(ScopeEdge.subtle)
                     .frame(height: 1)
             }
             Text(intro)
                 .font(ScopeFont.displayItalic(size: 13))
-                .foregroundStyle(SkillsToken.inkFaint)
+                .foregroundStyle(ScopeInk.faint)
                 .lineSpacing(2.5)
                 .padding(.leading, 4)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1269,8 +1246,8 @@ struct ScopeSkillsLandingView: View {
             return starter.status == "READY" ? "USE →" : "OPEN →"
         }()
         let ctaColor: Color = {
-            if isActive { return SkillsToken.amber }
-            return isWorkflow ? SkillsToken.brass : SkillsToken.amber
+            if isActive { return ScopeAmber.solid }
+            return isWorkflow ? ScopeBrass.solid : ScopeAmber.solid
         }()
         let chipTone: ChipTone = {
             if isActive { return .amber }
@@ -1278,21 +1255,21 @@ struct ScopeSkillsLandingView: View {
             return starter.status == "READY" ? .amber : .ink
         }()
         let borderColor: Color = {
-            if isActive { return SkillsToken.amberLine }
-            return isWorkflow ? SkillsToken.brassLine : SkillsToken.inkRuleSoft
+            if isActive { return ScopeAmber.solid.opacity(0.45) }
+            return isWorkflow ? ScopeBrass.solid.opacity(0.30) : ScopeEdge.subtle
         }()
-        let bgFill: Color = isActive ? SkillsToken.amberSoft.opacity(0.5) : SkillsToken.paper
+        let bgFill: Color = isActive ? ScopeAmber.tint.opacity(0.5) : ScopeCanvas.surface
 
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Text("· \(starter.category.uppercased())")
                     .font(ScopeFont.mono(size: 9, weight: .semibold))
                     .tracking(2.0)
-                    .foregroundStyle(isActive ? SkillsToken.amber : (isWorkflow ? SkillsToken.brass : SkillsToken.inkFaint))
+                    .foregroundStyle(isActive ? ScopeAmber.solid : (isWorkflow ? ScopeBrass.solid : ScopeInk.faint))
                 Text(starter.code)
                     .font(ScopeFont.mono(size: 9))
                     .tracking(1.4)
-                    .foregroundStyle(SkillsToken.inkFainter)
+                    .foregroundStyle(ScopeInk.subtle)
                 Spacer()
             }
             .padding(.bottom, 4)
@@ -1300,17 +1277,17 @@ struct ScopeSkillsLandingView: View {
             Text(starter.name)
                 .font(ScopeFont.display(size: 19))
                 .tracking(-0.2)
-                .foregroundStyle(SkillsToken.ink)
+                .foregroundStyle(ScopeInk.primary)
                 .padding(.bottom, 4)
 
             Text(starter.byline)
                 .font(ScopeFont.displayItalic(size: 11.5))
-                .foregroundStyle(SkillsToken.inkFaint)
+                .foregroundStyle(ScopeInk.faint)
                 .lineSpacing(1.5)
                 .fixedSize(horizontal: false, vertical: true)
 
             Rectangle()
-                .fill(SkillsToken.inkRuleSoft)
+                .fill(ScopeEdge.subtle)
                 .frame(height: 1)
                 .padding(.vertical, 10)
 
@@ -1346,7 +1323,7 @@ struct ScopeSkillsLandingView: View {
 
     @ViewBuilder
     private func pipelineRow(pipeline: [(kw: String, tag: String)], isWorkflow: Bool) -> some View {
-        let kwColor = isWorkflow ? SkillsToken.brass : SkillsToken.amber
+        let kwColor = isWorkflow ? ScopeBrass.solid : ScopeAmber.solid
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             ForEach(pipeline.indices, id: \.self) { i in
                 HStack(spacing: 4) {
@@ -1355,12 +1332,12 @@ struct ScopeSkillsLandingView: View {
                         .foregroundStyle(kwColor)
                     Text(pipeline[i].tag)
                         .font(ScopeFont.mono(size: 10))
-                        .foregroundStyle(SkillsToken.ink)
+                        .foregroundStyle(ScopeInk.primary)
                 }
                 if i < pipeline.count - 1 {
                     Text("·")
                         .font(ScopeFont.mono(size: 10))
-                        .foregroundStyle(SkillsToken.inkFainter)
+                        .foregroundStyle(ScopeInk.subtle)
                 }
             }
         }
@@ -1421,16 +1398,16 @@ struct ScopeSkillsLandingView: View {
             Text("+ NEW SKILL")
                 .font(ScopeFont.mono(size: 10, weight: .semibold))
                 .tracking(2.2)
-                .foregroundStyle(SkillsToken.inkFaint)
+                .foregroundStyle(ScopeInk.faint)
             Text("⌘N")
                 .font(ScopeFont.mono(size: 9))
                 .tracking(1.6)
-                .foregroundStyle(SkillsToken.inkFainter)
+                .foregroundStyle(ScopeInk.subtle)
         }
         .frame(maxWidth: .infinity, minHeight: 184)
         .overlay(
             RoundedRectangle(cornerRadius: 4)
-                .strokeBorder(SkillsToken.inkRuleSoft, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                .strokeBorder(ScopeEdge.subtle, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
         )
     }
 
@@ -1505,12 +1482,12 @@ struct ScopeSkillsLandingView: View {
             Text("· \(surface.uppercased())")
                 .font(ScopeFont.mono(size: 9, weight: .semibold))
                 .tracking(2.2)
-                .foregroundStyle(SkillsToken.inkFaint)
+                .foregroundStyle(ScopeInk.faint)
             content()
                 .frame(maxWidth: .infinity)
             Text(caption)
                 .font(ScopeFont.displayItalic(size: 11.5))
-                .foregroundStyle(SkillsToken.inkFaint)
+                .foregroundStyle(ScopeInk.faint)
                 .lineSpacing(1.4)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -1518,10 +1495,10 @@ struct ScopeSkillsLandingView: View {
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, minHeight: 196, alignment: .topLeading)
         .background(
-            RoundedRectangle(cornerRadius: 4).fill(SkillsToken.paper)
+            RoundedRectangle(cornerRadius: 4).fill(ScopeCanvas.surface)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 4).stroke(SkillsToken.inkRuleSoft, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 4).stroke(ScopeEdge.subtle, lineWidth: 1)
         )
     }
 
@@ -1530,10 +1507,10 @@ struct ScopeSkillsLandingView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("\u{201C}We made real progress on the worker layer today. The pool contention is gone — switching to a single-writer model cleared the last batch of stalls…\u{201D}")
                 .font(ScopeFont.displayItalic(size: 11))
-                .foregroundStyle(SkillsToken.ink)
+                .foregroundStyle(ScopeInk.primary)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
-            Rectangle().fill(SkillsToken.inkRuleSoft).frame(height: 1)
+            Rectangle().fill(ScopeEdge.subtle).frame(height: 1)
             HStack(spacing: 6) {
                 miniChip(label: "Refine", active: false)
                 miniChip(label: "Simplify", active: false)
@@ -1543,8 +1520,8 @@ struct ScopeSkillsLandingView: View {
         }
         .padding(10)
         .background(
-            RoundedRectangle(cornerRadius: 3).fill(SkillsToken.paper)
-                .overlay(RoundedRectangle(cornerRadius: 3).stroke(SkillsToken.inkRuleSoft, lineWidth: 1))
+            RoundedRectangle(cornerRadius: 3).fill(ScopeCanvas.surface)
+                .overlay(RoundedRectangle(cornerRadius: 3).stroke(ScopeEdge.subtle, lineWidth: 1))
         )
     }
 
@@ -1553,16 +1530,16 @@ struct ScopeSkillsLandingView: View {
         Text(label)
             .font(ScopeFont.mono(size: 9, weight: active ? .semibold : .medium))
             .tracking(1.6)
-            .foregroundStyle(active ? SkillsToken.amber : (muted ? SkillsToken.inkFainter : SkillsToken.inkFaint))
+            .foregroundStyle(active ? ScopeAmber.solid : (muted ? ScopeInk.subtle : ScopeInk.faint))
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
             .background(
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(active ? SkillsToken.amberSoft : Color.clear)
+                    .fill(active ? ScopeAmber.tint : Color.clear)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 2)
-                    .stroke(active ? SkillsToken.amber : SkillsToken.inkRuleSoft, lineWidth: 1)
+                    .stroke(active ? ScopeAmber.solid : ScopeEdge.subtle, lineWidth: 1)
             )
     }
 
@@ -1571,9 +1548,9 @@ struct ScopeSkillsLandingView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Circle()
-                    .fill(SkillsToken.amber)
+                    .fill(ScopeAmber.solid)
                     .frame(width: 6, height: 6)
-                    .shadow(color: SkillsToken.amber, radius: 4)
+                    .shadow(color: ScopeAmber.solid, radius: 4)
                 Text("· LISTENING")
                     .font(ScopeFont.mono(size: 9, weight: .semibold))
                     .tracking(2.4)
@@ -1585,7 +1562,7 @@ struct ScopeSkillsLandingView: View {
                     .foregroundStyle(Color.hex("F4F1EA"))
                 Text("\u{201C}standup\u{201D}")
                     .font(.system(size: 14, weight: .medium, design: .serif))
-                    .foregroundStyle(SkillsToken.amber)
+                    .foregroundStyle(ScopeAmber.solid)
             }
             Text("then dictate · 3 bullets · auto-stops")
                 .font(ScopeFont.mono(size: 9))
@@ -1595,7 +1572,7 @@ struct ScopeSkillsLandingView: View {
             HStack(spacing: 1.5) {
                 ForEach([3, 6, 4, 9, 5, 11, 7, 4, 8, 12, 6, 9, 5, 7, 3, 10, 6, 4], id: \.self) { h in
                     Rectangle()
-                        .fill(SkillsToken.amber.opacity(0.5))
+                        .fill(ScopeAmber.solid.opacity(0.5))
                         .frame(width: 2, height: CGFloat(h))
                 }
             }
@@ -1613,54 +1590,54 @@ struct ScopeSkillsLandingView: View {
                 Text("08:42")
                     .font(ScopeFont.mono(size: 9))
                     .tracking(1.4)
-                    .foregroundStyle(SkillsToken.inkFainter)
+                    .foregroundStyle(ScopeInk.subtle)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Worker layer notes")
                         .font(.system(size: 12.5, design: .serif))
-                        .foregroundStyle(SkillsToken.ink)
+                        .foregroundStyle(ScopeInk.primary)
                     Text("4:12 · today")
                         .font(ScopeFont.displayItalic(size: 10.5))
-                        .foregroundStyle(SkillsToken.inkFaint)
+                        .foregroundStyle(ScopeInk.faint)
                 }
                 Spacer()
                 Text("▷ apply ↓")
                     .font(ScopeFont.mono(size: 9, weight: .semibold))
                     .tracking(2.0)
-                    .foregroundStyle(SkillsToken.inkFainter)
+                    .foregroundStyle(ScopeInk.subtle)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            Rectangle().fill(SkillsToken.inkRuleSoft).frame(height: 1)
+            Rectangle().fill(ScopeEdge.subtle).frame(height: 1)
             VStack(alignment: .leading, spacing: 6) {
                 Text("· YOUR SKILLS")
                     .font(ScopeFont.mono(size: 9, weight: .semibold))
                     .tracking(2.2)
-                    .foregroundStyle(SkillsToken.inkFaint)
+                    .foregroundStyle(ScopeInk.faint)
                 HStack {
                     Text("Daily Standup")
                         .font(.system(size: 11.5, design: .serif))
-                        .foregroundStyle(SkillsToken.ink)
+                        .foregroundStyle(ScopeInk.primary)
                     Spacer()
                     Text("APPLY →")
                         .font(ScopeFont.mono(size: 9, weight: .semibold))
                         .tracking(2.2)
-                        .foregroundStyle(SkillsToken.amber)
+                        .foregroundStyle(ScopeAmber.solid)
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
                 .background(
-                    RoundedRectangle(cornerRadius: 2).fill(SkillsToken.amberSoft)
-                        .overlay(RoundedRectangle(cornerRadius: 2).stroke(SkillsToken.amberLine, lineWidth: 1))
+                    RoundedRectangle(cornerRadius: 2).fill(ScopeAmber.tint)
+                        .overlay(RoundedRectangle(cornerRadius: 2).stroke(ScopeAmber.solid.opacity(0.45), lineWidth: 1))
                 )
                 HStack {
                     Text("Log Bug")
                         .font(.system(size: 11.5, design: .serif))
-                        .foregroundStyle(SkillsToken.inkFaint)
+                        .foregroundStyle(ScopeInk.faint)
                     Spacer()
                     Text("READY")
                         .font(ScopeFont.mono(size: 9))
                         .tracking(2.2)
-                        .foregroundStyle(SkillsToken.inkFainter)
+                        .foregroundStyle(ScopeInk.subtle)
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -1670,8 +1647,8 @@ struct ScopeSkillsLandingView: View {
             // Inner dropdown blends with the paper outer — hairline above does the separation.
         }
         .background(
-            RoundedRectangle(cornerRadius: 3).fill(SkillsToken.paper)
-                .overlay(RoundedRectangle(cornerRadius: 3).stroke(SkillsToken.inkRuleSoft, lineWidth: 1))
+            RoundedRectangle(cornerRadius: 3).fill(ScopeCanvas.surface)
+                .overlay(RoundedRectangle(cornerRadius: 3).stroke(ScopeEdge.subtle, lineWidth: 1))
         )
     }
 
@@ -1680,10 +1657,10 @@ struct ScopeSkillsLandingView: View {
     @ViewBuilder
     private var footer: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Rectangle().fill(SkillsToken.inkRuleSoft).frame(height: 1)
+            Rectangle().fill(ScopeEdge.subtle).frame(height: 1)
             Text("One tab. Pick a starter, watch it open above, talk to the agent, run, save. Three skill modes coexist — atomic, composed (DO sequence/route over other skills), and workflow (graduated into the legacy editor). The foot of the page shows where they manifest — Compose, voice trigger, Library.")
                 .font(ScopeFont.displayItalic(size: 12.5))
-                .foregroundStyle(SkillsToken.inkFaint)
+                .foregroundStyle(ScopeInk.faint)
                 .lineSpacing(2.5)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -1699,13 +1676,13 @@ struct ScopeSkillsLandingView: View {
             Text("· \(title.uppercased())")
                 .font(ScopeFont.mono(size: 9, weight: .semibold))
                 .tracking(2.0)
-                .foregroundStyle(SkillsToken.inkFaint)
+                .foregroundStyle(ScopeInk.faint)
             Spacer()
             if let sub {
                 Text(sub.uppercased())
                     .font(ScopeFont.mono(size: 9))
                     .tracking(1.6)
-                    .foregroundStyle(SkillsToken.inkFainter)
+                    .foregroundStyle(ScopeInk.subtle)
             }
         }
     }
@@ -1715,18 +1692,18 @@ struct ScopeSkillsLandingView: View {
     @ViewBuilder
     private func chip(label: String, tone: ChipTone) -> some View {
         let color: Color = {
-            switch tone { case .amber: return SkillsToken.amber
-                          case .brass: return SkillsToken.brass
-                          case .ink:   return SkillsToken.inkFaint }
+            switch tone { case .amber: return ScopeAmber.solid
+                          case .brass: return ScopeBrass.solid
+                          case .ink:   return ScopeInk.faint }
         }()
         let border: Color = {
-            switch tone { case .amber: return SkillsToken.amber
-                          case .brass: return SkillsToken.brass
-                          case .ink:   return SkillsToken.inkRule }
+            switch tone { case .amber: return ScopeAmber.solid
+                          case .brass: return ScopeBrass.solid
+                          case .ink:   return ScopeEdge.faint }
         }()
         let bg: Color = {
-            switch tone { case .amber: return SkillsToken.amberSoft
-                          case .brass: return SkillsToken.brassSoft
+            switch tone { case .amber: return ScopeAmber.tint
+                          case .brass: return ScopeBrass.solid.opacity(0.08)
                           case .ink:   return Color.clear }
         }()
         Text(label)
