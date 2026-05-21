@@ -47,19 +47,17 @@ public extension Color {
 /// keeps the "off-white instrument cover" feel without the
 /// parchment heat.
 public enum ScopeCanvas {
-    /// Primary page background — true off-white. Midpoint between the
-    /// website's `modern --canvas: #ffffff` and `--canvas-alt: #fafafa`.
-    /// Replaces the cream-paper `#FBFAF7`.
-    public static let canvas = Color.hex("FBFBFA")
+    /// Primary page background — cool-gray page substrate from the
+    /// 2026-05-21 Scope canon. Frosted instrument case; never blue.
+    public static let canvas = Color.hex("F8F8F7")
     /// "Bay" — sidebar / embedded structural surface. One step down
     /// from canvas so it reads as a distinct surface, no yellow.
     /// Mapped to `tacticalBackgroundSecondary` in SettingsManager.
-    public static let canvasAlt = Color.hex("F2F2F1")
-    /// Card surface — neutral gray-white card. From `slate
-    /// --panel-bg-alt: #ededed`.
-    public static let surface = Color.hex("EDEDEC")
+    public static let canvasAlt = Color.hex("ECECEB")
+    /// Card surface — cool neutral pane lift / mild emphasis.
+    public static let surface = Color.hex("EFEFEE")
     /// 85% canvas — for floating overlays / pill chrome.
-    public static let canvasOverlay = Color.hex("FBFBFA").opacity(0.85)
+    public static let canvasOverlay = Color.hex("F8F8F7").opacity(0.85)
 }
 
 // MARK: - Ink (text)
@@ -131,6 +129,29 @@ public enum ScopeAmber {
     public static let glow = Color.hex("C47D1C").opacity(0.22)
     /// Brighter glow for dots / focal points.
     public static let glowStrong = Color.hex("C47D1C").opacity(0.32)
+}
+
+// MARK: - Brass (warm instrument metal)
+
+/// Brass is the secondary warm accent against the cool Scope substrate.
+/// It stays warm by canon; use it for memo/dictation metal and quieter
+/// secondary action chrome when amber would be too loud.
+public enum ScopeBrass {
+    /// Canonical brass / memo stripe.
+    public static let solid = Color.hex("9A6A22")
+    /// Deep brass / pressed or shadowed metal.
+    public static let deep = Color.hex("7A521A")
+}
+
+// MARK: - Kind tints
+
+/// Per-object-kind stripes. Memo/dictation stay warm; note/capture
+/// move to cool grays so the substrate does not reintroduce teal/blue.
+public enum ScopeKind {
+    public static let memo = Color.hex("9A6A22")
+    public static let dict = Color.hex("E89A3C")
+    public static let note = Color.hex("767674")
+    public static let capture = Color.hex("5C5E5C")
 }
 
 // MARK: - Panel (dark instrument bay on cream desk)
