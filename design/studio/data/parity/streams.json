@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T19:41:33.181375Z",
+  "updatedAt": "2026-05-21T19:41:43.687674Z",
   "streams": [
     {
       "key": "C1",
@@ -797,6 +797,14 @@
           "level": "progress",
           "message": "Tier-0 start: making SignInNext persist and render the CloudKit accountStatus result instead of discarding it after native Apple Sign In.",
           "findingKey": "C4::SignInView::CloudKit provisioning result"
+        },
+        {
+          "ts": "2026-05-21T18:16:20.306Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Landed SignInNext CloudKit provisioning result: accountStatus now updates step 3 detail and leaves a warning/error state when iCloud is not available.",
+          "findingKey": "C4::SignInView::CloudKit provisioning result",
+          "ref": "99a2842"
         }
       ]
     },
