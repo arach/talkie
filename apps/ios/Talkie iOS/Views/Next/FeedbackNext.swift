@@ -17,11 +17,15 @@ import SwiftUI
 
 struct FeedbackNext: View {
     @ObservedObject private var theme = ThemeManager.shared
+    @ObservedObject private var logStore = LogStore.shared
 
     @State private var description: String = ""
     @State private var contact: String = ""
     @State private var isSubmitting: Bool = false
     @State private var result: Result?
+    @State private var includeLogs: Bool = true
+    @State private var showingLogInspector: Bool = false
+    @State private var reviewedLogText: String = ""
     @FocusState private var descriptionFocused: Bool
 
     enum Result: Equatable {
@@ -51,7 +55,10 @@ struct FeedbackNext: View {
                 }
             }
         }
-        .onAppear { descriptionFocused = true }
+        .onAppear {
+            descriptionFocused = true
+            refreshReviewedLogs()
+        }
     }
 
     // MARK: - Header
@@ -162,7 +169,91 @@ struct FeedbackNext: View {
 
             includedRow(label: "App version", value: "\(Bundle.main.feedbackShortVersion) (\(Bundle.main.feedbackBuildNumber))")
             includedRow(label: "Device", value: "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
-            includedRow(label: "Recent logs", value: "anonymized")
+            logReviewPanel
+        }
+    }
+
+    private var logReviewPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Recent logs")
+                    .talkieType(.fieldLabel)
+                    .foregroundStyle(theme.colors.textPrimary.opacity(0.85))
+                Spacer(minLength: 8)
+                Text(includeLogs ? "\(reviewedLogLines.count) redacted" : "excluded")
+                    .talkieType(.fieldValue)
+                    .foregroundStyle(theme.colors.textTertiary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+
+            HStack(spacing: 8) {
+                Button(action: { includeLogs.toggle() }) {
+                    Text(includeLogs ? "INCLUDED" : "EXCLUDED")
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(includeLogs ? theme.currentTheme.chrome.accent : theme.colors.textTertiary)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(theme.currentTheme.chrome.edgeFaint.opacity(0.45))
+                        )
+                }
+                .buttonStyle(.plain)
+
+                Button(action: { showingLogInspector.toggle() }) {
+                    Text(showingLogInspector ? "HIDE" : "REVIEW / REDACT")
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(theme.colors.textSecondary)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(theme.currentTheme.chrome.edgeFaint.opacity(0.45))
+                        )
+                }
+                .buttonStyle(.plain)
+
+                Button(action: refreshReviewedLogs) {
+                    Text("RESET")
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(theme.colors.textTertiary)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(theme.currentTheme.chrome.edgeFaint.opacity(0.28))
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(logStore.entries.isEmpty)
+            }
+
+            if showingLogInspector {
+                Text("Logs are pre-redacted. Delete any line you don’t want attached; edits are redacted again on send.")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary)
+
+                TextEditor(text: $reviewedLogText)
+                    .scrollContentBackground(.hidden)
+                    .frame(minHeight: 128)
+                    .talkieType(.preview)
+                    .foregroundStyle(includeLogs ? theme.colors.textPrimary : theme.colors.textTertiary)
+                    .tint(theme.currentTheme.chrome.accent)
+                    .disabled(!includeLogs)
+                    .padding(8)
+                    .background(theme.currentTheme.chrome.edgeFaint.opacity(0.28))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                    )
+            }
+        }
+        .padding(.vertical, 10)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(theme.currentTheme.chrome.edgeFaint)
+                .frame(height: 1)
         }
     }
 
@@ -299,7 +390,8 @@ struct FeedbackNext: View {
             do {
                 let reportID = try await FeedbackService.submit(
                     description: description,
-                    contact: contact
+                    contact: contact,
+                    logs: includeLogs ? reviewedLogLines : []
                 )
                 isSubmitting = false
                 result = .success(reportID: reportID)
@@ -308,6 +400,17 @@ struct FeedbackNext: View {
                 result = .error(message: error.localizedDescription)
             }
         }
+    }
+
+    private var reviewedLogLines: [String] {
+        reviewedLogText
+            .split(whereSeparator: \.isNewline)
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private func refreshReviewedLogs() {
+        reviewedLogText = FeedbackService.reviewableLogLines(limit: 50).joined(separator: "\n")
     }
 }
 
