@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T19:45:34.779Z",
+  "updatedAt": "2026-05-21T19:50:26.600Z",
   "streams": [
     {
       "key": "C1",
@@ -1199,6 +1199,14 @@
           "level": "progress",
           "message": "Starting approved attachment follow-up: add PhotosPicker queueing to RecordingSheetNext, persist images through MemoAttachmentStore on save, and carry queued sidecar requests onto the saved memo.",
           "findingKey": "C6::RecordingView::Attachment pipeline"
+        },
+        {
+          "ts": "2026-05-21T19:50:26.600Z",
+          "agent": "talkie-codex-c6",
+          "level": "landed",
+          "message": "Shipped RecordingSheetNext attachment queue: PhotosPicker imports images, queued thumbnails/sidecar bookmarks show in the sheet, and saved memos persist attachments via MemoAttachmentStore plus RecordingSidecarStore requests.",
+          "findingKey": "C6::RecordingView::Attachment pipeline",
+          "ref": "9e0a407"
         }
       ]
     }
