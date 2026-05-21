@@ -295,14 +295,18 @@ struct FeedbackNext: View {
     private func submit() {
         guard canSubmit else { return }
         isSubmitting = true
-        // Paint-side stub. Codex wires FeedbackService.submit against
-        // the api.usetalkie.com feedback endpoint and replaces this
-        // delayed mock with the real network call + log attach.
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 800_000_000)
-            let mockReportID = "FB-" + String(UUID().uuidString.prefix(8)).uppercased()
-            isSubmitting = false
-            result = .success(reportID: mockReportID)
+            do {
+                let reportID = try await FeedbackService.submit(
+                    description: description,
+                    contact: contact
+                )
+                isSubmitting = false
+                result = .success(reportID: reportID)
+            } catch {
+                isSubmitting = false
+                result = .error(message: error.localizedDescription)
+            }
         }
     }
 }
