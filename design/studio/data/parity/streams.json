@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T19:51:01.945Z",
+  "updatedAt": "2026-05-21T19:56:39.086Z",
   "streams": [
     {
       "key": "C1",
@@ -827,6 +827,22 @@
           "level": "progress",
           "message": "Tier-0 start: porting donor Text-to-Speech controls into SettingsNext VOICE and wiring saved AI-key fallback through TalkieAIProviderResolver.",
           "findingKey": "C4::SettingsView::TEXT-TO-SPEECH section"
+        },
+        {
+          "ts": "2026-05-21T19:56:39.073Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Landed SettingsNext VOICE Text-to-Speech section: provider Local/OpenAI/ElevenLabs, Mac/direct route, voice/API-key fields, reply output routing, and AI-key management link.",
+          "findingKey": "C4::SettingsView::TEXT-TO-SPEECH section",
+          "ref": "9589fde"
+        },
+        {
+          "ts": "2026-05-21T19:56:39.086Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Landed resolver wiring: TalkieAIProviderResolver now falls back to AICredentialStore Keychain keys for direct OpenAI/Groq providers before legacy OpenAI speech-key fallback.",
+          "findingKey": "C4::AICredentialsNext::Provider resolver wiring",
+          "ref": "9589fde"
         }
       ]
     },
