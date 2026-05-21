@@ -139,7 +139,11 @@ private let cachedGhostColors = ThemeColors(
     searchBackground: Color(hex: "FFFFFF", darkHex: "1A1A1A"),
     textPrimary: Color(hex: "2A2A2A", darkHex: "E5E5E5"),
     textSecondary: Color(hex: "7A7A7A", darkHex: "8A8A8A"),
-    textTertiary: Color(hex: "A0A0A0", darkHex: "5A5A5A"),
+    // textTertiary was A0A0A0 / 5A5A5A — both failed WCAG AA at the
+    // 3:1 large-text bar (light 2.40:1 / dark 2.68:1). Bumped to land
+    // at 3.17:1 (light) and 4.40:1 (dark) while preserving the
+    // secondary > tertiary hierarchy.
+    textTertiary: Color(hex: "8A8A8A", darkHex: "7A7A7A"),
     accent: Color(hex: "6366F1"),
     success: Color(hex: "10B981")
 )
@@ -154,7 +158,11 @@ private let cachedLiftColors = ThemeColors(
     searchBackground: Color(hex: "FAFAFA", darkHex: "181818"),
     textPrimary: Color(hex: "1A1A1A", darkHex: "FAFAFA"),
     textSecondary: Color(hex: "525252", darkHex: "A0A0A0"),
-    textTertiary: Color(hex: "A0A0A0", darkHex: "707070"),
+    // textTertiary was A0A0A0 / 707070 — light failed AA at 3:1
+    // large-text bar (2.63:1). Bumped light to 8A8A8A → 3.45:1.
+    // Dark side stays at 707070 (already passes large-text on
+    // 1A1A1A at 3.10:1).
+    textTertiary: Color(hex: "8A8A8A", darkHex: "707070"),
     accent: Color(hex: "6366F1"),
     success: Color(hex: "10B981")
 )
@@ -173,7 +181,10 @@ private let cachedScopeColors = ThemeColors(
     searchBackground: Color(hex: "F2F0EA", darkHex: "151310"),
     textPrimary: Color(hex: "1A1612", darkHex: "F5F3EE"),
     textSecondary: Color(hex: "5A5045", darkHex: "A8A096"),
-    textTertiary: Color(hex: "A39989", darkHex: "7D6E5E"),
+    // textTertiary light A39989 failed at 2.69:1 (large-text 3:1).
+    // Darkened to 8A7E6C → 3.78:1 while keeping the warm graphite
+    // tone the theme depends on. Dark side stays at 7D6E5E (4.06:1).
+    textTertiary: Color(hex: "8A7E6C", darkHex: "7D6E5E"),
     accent: Color(hex: "B5823A", darkHex: "E89A3C"),
     success: Color(hex: "6F7D3E", darkHex: "9CB35A")
 )
