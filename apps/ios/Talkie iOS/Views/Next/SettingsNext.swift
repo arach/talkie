@@ -301,6 +301,7 @@ struct SettingsNext: View {
                 metrics: [("RTT", "—"), ("SENT", "—"), ("QUEUED", "—")]
             )
             navRow("View connections detail") { AppShellRouter.shared.openConnectionCenter() }
+            navRow("Resolve sync conflicts") { AppShellRouter.shared.openSyncConflicts() }
             actionRow("Re-pair Mac", tone: .neutral) { Task { await bridgeManager.connect() } }
             if isNativelySignedIn {
                 actionRow("Sign out", tone: .warn) { resetAuthState() }

@@ -105,12 +105,12 @@ const MILESTONES: Milestone[] = [
     blurb:
       "Surfaces that didn't exist in the donor — system-level integrations that extend Talkie's reach.",
     items: [
-      { code: "N01", title: "Share extension", detail: "Receive shared content (URL, text, image) from other apps → land in CaptureStore.", status: "future", size: "l", risk: "med" },
-      { code: "N02", title: "Widget complications", detail: "Lock-screen / home-screen widget for PICK UP + capture count + ambient mic.", status: "future", size: "m", risk: "low" },
-      { code: "N03", title: "Watch app", detail: "Apple Watch companion for one-tap dictation + recent capture preview.", status: "future", size: "xl", risk: "high" },
-      { code: "N04", title: "Background dictation", detail: "Capture audio in background mode (with permissions). Long-form transcription pipeline.", status: "future", size: "l", risk: "high" },
+      { code: "N01", title: "Share extension", detail: "TalkieShare target — ShareViewController accepts URLs / text / images from the iOS share sheet, writes to the App Group container (group.to.talkie.app), and opens the main app to process. No legacy Clerk dependency.", status: "shipped", size: "l" },
+      { code: "N02", title: "Widget complications", detail: "TalkieWidget + TalkieWatchWidget targets. iOS widget shows memo count + recent memos with adaptive theme; watch widget surfaces recording entry. Both wired via App Group.", status: "shipped", size: "m" },
+      { code: "N03", title: "Watch app", detail: "TalkieWatch Watch App — RecordingView, RecentMemosView, PresetPickerView, AboutView, with WatchSessionManager bridging to the iPhone. AudioRecorder for watch-side capture.", status: "shipped", size: "xl" },
+      { code: "N04", title: "Background dictation", detail: "Info.plist UIBackgroundModes includes 'audio' + 'remote-notification'. AudioRecorderManager wraps recordings in beginBackgroundTask/endBackgroundTask so iOS keeps the mic alive when the app suspends. BackgroundTasks framework registered for scheduled refreshes.", status: "shipped", size: "l" },
       { code: "N05", title: "Multi-account", detail: "Support multiple sign-ins (work + personal). Workspace switcher.", status: "future", size: "xl", risk: "high" },
-      { code: "N06", title: "iCloud sync conflict resolution", detail: "Surface for resolving conflicting captures across devices.", status: "future", size: "m", risk: "med" },
+      { code: "N06", title: "iCloud sync conflict resolution", detail: "SyncConflictNext surface — pending list of LOCAL vs iCLOUD versions with Keep local / Keep iCloud / Keep both chips per conflict. Resolved state when empty. Codex wires SyncConflictStore.pending from CKModifyRecordsOperation errors. Entry: Settings CONNECT → 'Resolve sync conflicts'.", status: "shipped", size: "m" },
     ],
   },
   {
