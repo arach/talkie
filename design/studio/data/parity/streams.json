@@ -2811,6 +2811,14 @@
           "level": "info",
           "message": "C3 is adding the memo-detail polling/toast receiver for Mac workflow runs in parity/c3 and will avoid duplicating the C6 per-memo trigger cards from PR #21.",
           "findingKey": "C6::WorkflowActionSheet::Per-memo workflow triggers"
+        },
+        {
+          "ts": "2026-05-21T23:19:47.660Z",
+          "agent": "talkie-codex-c3",
+          "level": "info",
+          "message": "C3 landed the memo-detail workflow polling/toast receiver in parity/c3 at 8d4f94e; C6 PR #21 remains the trigger-card owner.",
+          "findingKey": "C6::WorkflowActionSheet::Per-memo workflow triggers",
+          "ref": "8d4f94e"
         }
       ]
     }
