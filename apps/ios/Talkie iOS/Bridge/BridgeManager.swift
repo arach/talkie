@@ -130,6 +130,7 @@ final class BridgeManager {
     let client = BridgeClient()
     private var retryTask: Task<Void, Never>?
     private var companionPollTask: Task<Void, Never>?
+    private var pendingPairingApprovalTask: Task<Void, Never>?
     private var companionEventTask: Task<Void, Never>?
     private var companionEventSocket: URLSessionWebSocketTask?
     private var lastReportedSetupState: DeviceSetupStateRequest?
@@ -347,6 +348,7 @@ final class BridgeManager {
 
             switch result.pairingResult {
             case .approved:
+                stopPendingPairingApprovalMonitor()
                 awaitingPairingApproval = false
                 lastSuccessfulContactAt = .now
                 updateActiveMacContactDate(.now)
@@ -367,6 +369,7 @@ final class BridgeManager {
                 if shouldStorePairing {
                     lastSuccessfulContactAt = nil
                     errorMessage = "Approve this iPhone on your Mac to finish pairing."
+                    startPendingPairingApprovalMonitor()
                 } else {
                     errorMessage = "Approve this iPhone on your Mac to refresh pairing. Your current pairing is still saved."
                 }
@@ -442,6 +445,7 @@ final class BridgeManager {
             pairedMacName = resolvedMacName
             updateStoredActiveMacName(resolvedMacName)
             TalkieAppSettings.shared.reloadFromDisk()
+            stopPendingPairingApprovalMonitor()
             awaitingPairingApproval = false
             lastSuccessfulContactAt = .now
             updateActiveMacContactDate(.now)
@@ -474,6 +478,24 @@ final class BridgeManager {
         }
     }
 
+    private func startPendingPairingApprovalMonitor() {
+        pendingPairingApprovalTask?.cancel()
+        pendingPairingApprovalTask = Task { [weak self] in
+            guard let self else { return }
+
+            while !Task.isCancelled && self.awaitingPairingApproval {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled, self.awaitingPairingApproval else { return }
+                await self.connect()
+            }
+        }
+    }
+
+    private func stopPendingPairingApprovalMonitor() {
+        pendingPairingApprovalTask?.cancel()
+        pendingPairingApprovalTask = nil
+    }
+
     func retry() async {
         retryCount = 0
         await connect()
@@ -484,6 +506,7 @@ final class BridgeManager {
         retryTask = nil
         companionPollTask?.cancel()
         companionPollTask = nil
+        stopPendingPairingApprovalMonitor()
         stopCompanionEventStream()
         lastReportedSetupState = nil
         retryCount = 0
@@ -506,6 +529,7 @@ final class BridgeManager {
             lastSuccessfulContactAt = nil
             awaitingPairingApproval = false
             errorMessage = nil
+            stopPendingPairingApprovalMonitor()
 
             Task {
                 await client.clearAuth()
@@ -1390,6 +1414,7 @@ final class BridgeManager {
         switch result.pairingResult {
         case .approved:
             recordCredentialImportEvent("The Mac approved the refreshed pairing.", level: .success)
+            stopPendingPairingApprovalMonitor()
             awaitingPairingApproval = false
             errorMessage = nil
             await connect()
@@ -1402,6 +1427,7 @@ final class BridgeManager {
             lastSuccessfulContactAt = nil
             status = .disconnected
             errorMessage = "Approve this iPhone on your Mac, then try importing credentials again."
+            startPendingPairingApprovalMonitor()
             recordCredentialImportEvent(
                 "Open Talkie on the Mac, then approve this iPhone under Settings > iOS > Pending Pairings.",
                 level: .warning
