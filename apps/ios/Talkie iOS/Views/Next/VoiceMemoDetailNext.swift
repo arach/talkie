@@ -40,6 +40,10 @@ final class VoiceMemoDetailStore: ObservableObject {
         isMock || sourceMemo != nil
     }
 
+    var canEditTranscript: Bool {
+        isMock || sourceMemo != nil
+    }
+
     var canGenerateTitle: Bool {
         let transcript = memo.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         return canEditTitle && !transcript.isEmpty && transcript != "No transcript yet."
@@ -108,6 +112,32 @@ final class VoiceMemoDetailStore: ObservableObject {
         try await aiService.applySmartTitle(to: sourceMemo, context: context)
         refreshSourceMemoDisplay()
         return memo.title
+    }
+
+    // MARK: - Transcript
+
+    @discardableResult
+    func saveTranscript(_ rawTranscript: String) -> Bool {
+        let transcript = rawTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !transcript.isEmpty else { return false }
+
+        if isMock {
+            memo = memo.withTranscript(transcript)
+            return true
+        }
+
+        guard let sourceMemo else { return false }
+        sourceMemo.addUserTranscript(content: transcript)
+
+        do {
+            try sourceMemo.managedObjectContext?.save()
+            refreshSourceMemoDisplay()
+            return true
+        } catch {
+            sourceMemo.managedObjectContext?.rollback()
+            refreshSourceMemoDisplay()
+            return false
+        }
     }
 
     // MARK: - Attachments
@@ -221,7 +251,7 @@ final class VoiceMemoDetailStore: ObservableObject {
             title: cleanTitle(memo.title, fallback: "Recording"),
             createdAtLabel: createdAtLabel(memo.createdAt ?? Date()),
             durationLabel: formatDuration(effectiveDuration),
-            transcript: firstNonEmpty([memo.transcription, memo.notes]) ?? "No transcript yet.",
+            transcript: firstNonEmpty([memo.currentTranscript, memo.notes]) ?? "No transcript yet.",
             summary: firstNonEmpty([memo.summary]),
             levels: waveformLevels(from: memo.waveformData),
             isPlaying: isPlaying,
@@ -299,6 +329,10 @@ private extension VoiceMemoDetailStore.MemoDisplay {
     func withTitle(_ title: String) -> Self {
         .init(id: id, title: title, createdAtLabel: createdAtLabel, durationLabel: durationLabel, transcript: transcript, summary: summary, levels: levels, isPlaying: isPlaying, playheadProgress: playheadProgress)
     }
+
+    func withTranscript(_ transcript: String) -> Self {
+        .init(id: id, title: title, createdAtLabel: createdAtLabel, durationLabel: durationLabel, transcript: transcript, summary: summary, levels: levels, isPlaying: isPlaying, playheadProgress: playheadProgress)
+    }
 }
 
 struct VoiceMemoDetailNext: View {
@@ -312,6 +346,9 @@ struct VoiceMemoDetailNext: View {
     @State private var editedTitle: String = ""
     @State private var titleEditError: String?
     @State private var isGeneratingTitle: Bool = false
+    @State private var isEditingTranscript: Bool = false
+    @State private var editedTranscript: String = ""
+    @State private var transcriptEditError: String?
     @FocusState private var titleFieldFocused: Bool
 
     init(memoID: String? = nil) {
@@ -364,6 +401,9 @@ struct VoiceMemoDetailNext: View {
         }
         .sheet(item: $previewAttachment) { attachment in
             attachmentPreview(attachment)
+        }
+        .sheet(isPresented: $isEditingTranscript) {
+            transcriptEditorSheet
         }
     }
 
@@ -568,6 +608,19 @@ struct VoiceMemoDetailNext: View {
                     .talkieType(.channelLabelTiny)
                     .foregroundStyle(theme.colors.textTertiary)
                 Spacer()
+                if store.canEditTranscript {
+                    Button(action: beginTranscriptEdit) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 10, weight: .semibold))
+                            Text("EDIT")
+                                .talkieType(.channelLabelTiny)
+                        }
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Edit transcript")
+                }
                 Text("\(wordCount) WORDS")
                     .talkieType(.channelLabelTiny)
                     .foregroundStyle(theme.colors.textTertiary)
@@ -581,6 +634,63 @@ struct VoiceMemoDetailNext: View {
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 10).fill(theme.colors.cardBackground).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: theme.currentTheme.chrome.hairlineWidth)))
+        }
+    }
+
+    private var transcriptEditorSheet: some View {
+        ZStack {
+            theme.colors.background.ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Button("Cancel", action: cancelTranscriptEdit)
+                        .talkieType(.fieldLabel)
+                        .foregroundStyle(theme.colors.textSecondary)
+
+                    Spacer()
+
+                    Text("Edit transcript")
+                        .talkieType(.headlineSecondary)
+                        .foregroundStyle(theme.colors.textPrimary)
+
+                    Spacer()
+
+                    Button("Save", action: saveTranscriptEdit)
+                        .talkieType(.fieldLabel)
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 16)
+                .padding(.top, 18)
+
+                if let transcriptEditError {
+                    Text(transcriptEditError)
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(Color.red.opacity(0.85))
+                        .padding(.horizontal, 16)
+                }
+
+                TextEditor(text: $editedTranscript)
+                    .talkieType(.listTitle)
+                    .foregroundStyle(theme.colors.textPrimary)
+                    .scrollContentBackground(.hidden)
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(theme.colors.cardBackground)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .strokeBorder(
+                                        transcriptEditError == nil
+                                            ? theme.currentTheme.chrome.edgeFaint
+                                            : Color.red.opacity(0.55),
+                                        lineWidth: theme.currentTheme.chrome.hairlineWidth
+                                    )
+                            )
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+            }
         }
     }
 
@@ -815,5 +925,25 @@ struct VoiceMemoDetailNext: View {
             return
         }
         cancelTitleEdit()
+    }
+
+    private func beginTranscriptEdit() {
+        editedTranscript = store.memo.transcript == "No transcript yet." ? "" : store.memo.transcript
+        transcriptEditError = nil
+        isEditingTranscript = true
+    }
+
+    private func cancelTranscriptEdit() {
+        editedTranscript = ""
+        transcriptEditError = nil
+        isEditingTranscript = false
+    }
+
+    private func saveTranscriptEdit() {
+        guard store.saveTranscript(editedTranscript) else {
+            transcriptEditError = "Enter transcript text before saving."
+            return
+        }
+        cancelTranscriptEdit()
     }
 }
