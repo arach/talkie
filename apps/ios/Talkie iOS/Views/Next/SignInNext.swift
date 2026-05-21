@@ -63,12 +63,17 @@ final class SignInStore: NSObject, ObservableObject {
                 updateStep(1, status: .completed, detail: "Credential saved")
                 updateStep(2, status: .inProgress)
 
-                _ = try? await CKContainer.default().accountStatus()
+                let provisioning = await provisionCloudKitSync()
                 UserDefaults.standard.set(true, forKey: Self.signedInDefaultsKey)
-                updateStep(2, status: .completed, detail: "Ready for iCloud sync")
+                updateStep(2, status: provisioning.status, detail: provisioning.detail)
 
-                AppLogger.app.info("[Auth] Native Sign in with Apple complete")
-                AppShellRouter.shared.openHome()
+                if let warning = provisioning.warning {
+                    errorMessage = warning
+                    AppLogger.app.warning("[Auth] Native Sign in with Apple complete, CloudKit provisioning warning: \(warning)")
+                } else {
+                    AppLogger.app.info("[Auth] Native Sign in with Apple complete")
+                    AppShellRouter.shared.openHome()
+                }
             } catch let error as ASAuthorizationError where error.code == .canceled {
                 authSteps = []
             } catch {
@@ -78,6 +83,32 @@ final class SignInStore: NSObject, ObservableObject {
             }
 
             isSigningIn = false
+        }
+    }
+
+    private func provisionCloudKitSync() async -> (
+        status: AuthStepDisplay.Status,
+        detail: String,
+        warning: String?
+    ) {
+        do {
+            let status = try await CKContainer.default().accountStatus()
+            switch status {
+            case .available:
+                return (.completed, "iCloud account available", nil)
+            case .noAccount:
+                return (.failed, "No iCloud account", "Sign in to iCloud in iOS Settings to sync memos with your Mac.")
+            case .restricted:
+                return (.failed, "iCloud restricted", "iCloud is restricted on this device. Check Screen Time or device management settings.")
+            case .temporarilyUnavailable:
+                return (.failed, "iCloud temporarily unavailable", "iCloud is temporarily unavailable. Try again once the service recovers.")
+            case .couldNotDetermine:
+                return (.failed, "iCloud status unknown", "Talkie could not determine your iCloud status. Local data remains available.")
+            @unknown default:
+                return (.failed, "Unknown iCloud status", "Talkie could not verify iCloud sync on this device.")
+            }
+        } catch {
+            return (.failed, "CloudKit check failed", "CloudKit provisioning failed: \(error.localizedDescription)")
         }
     }
 

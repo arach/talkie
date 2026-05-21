@@ -21,6 +21,9 @@ final class TalkieAppSettings {
     var appearanceMode: AppearanceMode = .system { didSet { persistIfNeeded() } }
     var tagLocationEnabled = false { didSet { persistIfNeeded() } }
     var locationTipDismissed = false { didSet { persistIfNeeded() } }
+    var recordingInputDevice = "system" { didSet { persistIfNeeded() } }
+    var recordingSampleRate = "system" { didSet { persistIfNeeded() } }
+    var recordingEchoCancellationEnabled = true { didSet { persistIfNeeded() } }
     var keyboardLEDIndicatorsEnabled = true { didSet { persistIfNeeded() } }
     var keyboardHapticFeedbackEnabled = true { didSet { persistIfNeeded() } }
     var keyboardAutoCapitalizeEnabled = true { didSet { persistIfNeeded() } }
@@ -80,6 +83,9 @@ final class TalkieAppSettings {
         appearanceMode = AppearanceMode(rawValue: configuration.appearance.mode) ?? .system
         tagLocationEnabled = configuration.recording.tagLocationEnabled
         locationTipDismissed = configuration.recording.locationTipDismissed
+        recordingInputDevice = configuration.recording.inputDevice
+        recordingSampleRate = configuration.recording.sampleRate
+        recordingEchoCancellationEnabled = configuration.recording.echoCancellationEnabled
         keyboardLEDIndicatorsEnabled = configuration.keyboard.ledIndicatorsEnabled
         keyboardHapticFeedbackEnabled = configuration.keyboard.hapticFeedbackEnabled
         keyboardAutoCapitalizeEnabled = configuration.keyboard.autoCapitalizeEnabled
@@ -133,6 +139,9 @@ final class TalkieAppSettings {
             configuration.appearance.mode = appearanceMode.rawValue
             configuration.recording.tagLocationEnabled = tagLocationEnabled
             configuration.recording.locationTipDismissed = locationTipDismissed
+            configuration.recording.inputDevice = recordingInputDevice
+            configuration.recording.sampleRate = recordingSampleRate
+            configuration.recording.echoCancellationEnabled = recordingEchoCancellationEnabled
             configuration.keyboard.ledIndicatorsEnabled = keyboardLEDIndicatorsEnabled
             configuration.keyboard.hapticFeedbackEnabled = keyboardHapticFeedbackEnabled
             configuration.keyboard.autoCapitalizeEnabled = keyboardAutoCapitalizeEnabled
@@ -184,6 +193,9 @@ final class TalkieAppSettings {
 
         defaults.set(configuration.recording.tagLocationEnabled, forKey: "recording.tagLocation")
         defaults.set(configuration.recording.locationTipDismissed, forKey: "tips.locationDismissed")
+        defaults.set(configuration.recording.inputDevice, forKey: "recording.inputDevice")
+        defaults.set(configuration.recording.sampleRate, forKey: "recording.sampleRate")
+        defaults.set(configuration.recording.echoCancellationEnabled, forKey: "recording.echoCancellation")
 
         defaults.set(configuration.keyboard.ledIndicatorsEnabled, forKey: "keyboard.ledIndicators")
         defaults.set(configuration.keyboard.autoCapitalizeEnabled, forKey: "keyboard.autoCapitalize")

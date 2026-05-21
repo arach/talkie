@@ -23,6 +23,37 @@ struct TalkieAppConfiguration: Codable {
     struct Recording: Codable {
         var tagLocationEnabled = false
         var locationTipDismissed = false
+        var inputDevice = "system"
+        var sampleRate = "system"
+        var echoCancellationEnabled = true
+
+        private enum CodingKeys: String, CodingKey {
+            case tagLocationEnabled
+            case locationTipDismissed
+            case inputDevice
+            case sampleRate
+            case echoCancellationEnabled
+        }
+
+        init() {}
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            tagLocationEnabled = try container.decodeIfPresent(Bool.self, forKey: .tagLocationEnabled) ?? false
+            locationTipDismissed = try container.decodeIfPresent(Bool.self, forKey: .locationTipDismissed) ?? false
+            inputDevice = try container.decodeIfPresent(String.self, forKey: .inputDevice) ?? "system"
+            sampleRate = try container.decodeIfPresent(String.self, forKey: .sampleRate) ?? "system"
+            echoCancellationEnabled = try container.decodeIfPresent(Bool.self, forKey: .echoCancellationEnabled) ?? true
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(tagLocationEnabled, forKey: .tagLocationEnabled)
+            try container.encode(locationTipDismissed, forKey: .locationTipDismissed)
+            try container.encode(inputDevice, forKey: .inputDevice)
+            try container.encode(sampleRate, forKey: .sampleRate)
+            try container.encode(echoCancellationEnabled, forKey: .echoCancellationEnabled)
+        }
     }
 
     struct Keyboard: Codable {
