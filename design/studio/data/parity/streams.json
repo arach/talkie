@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T19:39:50.343864Z",
+  "updatedAt": "2026-05-21T19:40:17.414964Z",
   "streams": [
     {
       "key": "C1",
@@ -767,6 +767,14 @@
           "level": "progress",
           "message": "Tier-0 start: porting the donor Auto-Open Command Deck toggle into SettingsNext with TalkieAppSettings.followComputerShortcutMode binding.",
           "findingKey": "C4::SettingsView::COMPANION section"
+        },
+        {
+          "ts": "2026-05-21T18:11:03.967Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Landed SettingsNext CONNECT panel Auto-open Command Deck toggle bound to TalkieAppSettings.followComputerShortcutMode.",
+          "findingKey": "C4::SettingsView::COMPANION section",
+          "ref": "edb2fab"
         }
       ]
     },
