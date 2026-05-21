@@ -1772,8 +1772,9 @@ private struct RoutinesPanel: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(isHovered ? ScopeEdge.normal : ScopeEdge.faint, lineWidth: 0.5)
+                .stroke(isHovered ? ScopeEdge.strong : ScopeEdge.normal, lineWidth: 0.5)
         )
+        .shadow(color: Color.black.opacity(0.04), radius: 1, y: 1)
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .frame(maxWidth: .infinity)
         .onHover { isHovered = $0 }
@@ -1836,8 +1837,9 @@ private struct DidYouKnowCard: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .stroke(isHovered ? ScopeInk.subtle : ScopeEdge.subtle, lineWidth: 0.5)
+                    .stroke(isHovered ? ScopeEdge.strong : ScopeEdge.normal, lineWidth: 0.5)
             )
+            .shadow(color: Color.black.opacity(0.04), radius: 1, y: 1)
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }

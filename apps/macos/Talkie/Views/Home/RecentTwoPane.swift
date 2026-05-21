@@ -133,8 +133,9 @@ private struct RecentPane: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .stroke(ScopeEdge.subtle, lineWidth: 0.5)
+                .stroke(ScopeEdge.normal, lineWidth: 0.5)
         )
+        .shadow(color: Color.black.opacity(0.04), radius: 1, y: 1)
     }
 
     private var paneHeader: some View {
