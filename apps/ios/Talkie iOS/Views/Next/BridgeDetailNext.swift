@@ -2,20 +2,13 @@
 //  BridgeDetailNext.swift
 //  Talkie iOS
 //
-//  STUB — Phase-1 placeholder. To be implemented by a dedicated
-//  Codex stream:
-//    - Replace the legacy `BridgeSettingsView` sheet (the last donor
-//      surface alive in the new system, opened from
-//      `ConnectionCenterNext`'s Mac Bridge row).
-//    - Live status from `BridgeManager` (already published).
-//    - Pairing flow: nearby Mac discovery via `NearbyMacBrowser`,
-//      QR-pair flow via `SSHPrivateKeyQRCodePayload`.
-//    - Session list (saved hosts) → row links into `TerminalNext`.
-//    - Visual: SettingsNext-style sections (status header + action
-//      rows), TalkieTypeStyle tokens.
-//    - After this lands, `BridgeSettingsView`, `SessionListView`,
-//      `SessionDetailView`, `DebugToolbar` (if no other callers)
-//      can be retired — final donor cleanup.
+//  Unified Next bridge detail surface.
+//
+//  Replaces the legacy `BridgeSettingsView` entry point with live
+//  `BridgeManager` status, nearby Mac discovery, QR pairing, saved
+//  terminal sessions, and SettingsNext-style action rows. Session
+//  message history remains a separate donor gap tracked by the C5
+//  parity audit.
 //
 
 import SwiftUI
