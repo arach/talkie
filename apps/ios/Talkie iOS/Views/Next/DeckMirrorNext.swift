@@ -17,6 +17,9 @@ struct DeckMirrorNext: View {
     @ObservedObject private var deck = DeckMirrorStore.shared
     @State private var bridgeManager = BridgeManager.shared
     @State private var selectedSpaceID: String?
+    @State private var showingAppSwitcher = false
+    @State private var activatingAppID: String?
+    @State private var appSwitcherErrorMessage: String?
 
     var body: some View {
         ZStack {
@@ -38,6 +41,16 @@ struct DeckMirrorNext: View {
                 selectedSpaceID = deck.board?.activeSpaceID ?? deck.board?.spaces.first?.id
             }
         }
+        .sheet(isPresented: $showingAppSwitcher) {
+            DeckAppSwitcherSheet(
+                apps: appSwitcherApps,
+                activeAppID: frontmostApp?.id,
+                activatingAppID: activatingAppID,
+                errorMessage: appSwitcherErrorMessage,
+                onRefresh: refreshAppSwitcher,
+                onActivate: activateApp
+            )
+        }
     }
 
     // MARK: - Header
@@ -49,11 +62,31 @@ struct DeckMirrorNext: View {
                 .foregroundStyle(theme.colors.textPrimary.opacity(0.78))
 
             if let macName = bridgeManager.pairedMacDisplayName {
-                Text("· \(macName)")
-                    .talkieType(.channelLabelTiny)
-                    .foregroundStyle(theme.colors.textTertiary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                Button(action: openAppSwitcher) {
+                    HStack(spacing: 4) {
+                        Text("· \(macName)")
+                            .talkieType(.channelLabelTiny)
+                            .foregroundStyle(theme.colors.textTertiary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+
+                        if frontmostApp != nil {
+                            Circle()
+                                .fill(Color(red: 0.36, green: 0.74, blue: 0.50))
+                                .frame(width: 5, height: 5)
+                                .accessibilityLabel("Active Mac app")
+                        }
+
+                        Image(systemName: "rectangle.stack")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(theme.colors.textTertiary)
+                            .accessibilityHidden(true)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Mac app switcher")
+                .accessibilityHint("Shows running apps on \(macName)")
             }
 
             Spacer()
@@ -271,6 +304,51 @@ struct DeckMirrorNext: View {
         .accessibilityHint(isEmpty ? "" : "Fires on the Mac")
     }
 
+    // MARK: - App switcher
+
+    private var appSwitcherApps: [CompanionAppSwitcherApp] {
+        bridgeManager.companionState?.appSwitcherApps ?? []
+    }
+
+    private var frontmostApp: CompanionAppSwitcherApp? {
+        appSwitcherApps.first(where: { $0.isFrontmost })
+    }
+
+    private func openAppSwitcher() {
+        appSwitcherErrorMessage = nil
+        showingAppSwitcher = true
+        refreshAppSwitcher()
+    }
+
+    private func refreshAppSwitcher() {
+        Task {
+            await bridgeManager.refreshCompanionState()
+        }
+    }
+
+    private func activateApp(_ app: CompanionAppSwitcherApp) {
+        guard activatingAppID == nil else { return }
+        appSwitcherErrorMessage = nil
+        activatingAppID = app.id
+
+        Task {
+            do {
+                let response = try await bridgeManager.activateCompanionApp(app)
+                if response.ok {
+                    showingAppSwitcher = false
+                } else {
+                    appSwitcherErrorMessage = response.error
+                        ?? response.message
+                        ?? "The Mac could not activate \(app.displayName)."
+                }
+            } catch {
+                appSwitcherErrorMessage = error.localizedDescription
+            }
+
+            activatingAppID = nil
+        }
+    }
+
     private func errorBanner(_ message: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -291,6 +369,176 @@ struct DeckMirrorNext: View {
                     RoundedRectangle(cornerRadius: 10)
                         .strokeBorder(Color(red: 0.85, green: 0.46, blue: 0.34).opacity(0.45),
                                       lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                )
+        )
+    }
+}
+
+private struct DeckAppSwitcherSheet: View {
+    let apps: [CompanionAppSwitcherApp]
+    let activeAppID: String?
+    let activatingAppID: String?
+    let errorMessage: String?
+    let onRefresh: () -> Void
+    let onActivate: (CompanionAppSwitcherApp) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    if let errorMessage {
+                        errorRow(errorMessage)
+                    }
+
+                    if apps.isEmpty {
+                        emptyState
+                    } else {
+                        VStack(spacing: 8) {
+                            ForEach(apps) { app in
+                                appRow(app)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 18)
+            }
+            .background(theme.colors.background.ignoresSafeArea())
+            .navigationTitle("Mac Apps")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Refresh", systemImage: "arrow.clockwise") {
+                        onRefresh()
+                    }
+                    .disabled(activatingAppID != nil)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("No running apps yet")
+                .talkieType(.headlineSecondary)
+                .foregroundStyle(theme.colors.textPrimary)
+            Text("Keep the Mac bridge connected, then refresh to load the current app runtime list.")
+                .talkieType(.preview)
+                .foregroundStyle(theme.colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(theme.colors.cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(
+                            theme.currentTheme.chrome.edgeFaint,
+                            lineWidth: theme.currentTheme.chrome.hairlineWidth
+                        )
+                )
+        )
+    }
+
+    private func appRow(_ app: CompanionAppSwitcherApp) -> some View {
+        let isActive = app.id == activeAppID
+        let isActivating = app.id == activatingAppID
+
+        return Button(action: { onActivate(app) }) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(theme.currentTheme.chrome.accent.opacity(isActive ? 0.14 : 0.08))
+                    Image(systemName: isActive ? "macwindow.on.rectangle" : "macwindow")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(
+                            isActive
+                                ? theme.currentTheme.chrome.accent
+                                : theme.colors.textSecondary
+                        )
+                }
+                .frame(width: 38, height: 38)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(app.displayName)
+                        .talkieType(.listTitle)
+                        .foregroundStyle(theme.colors.textPrimary)
+                        .lineLimit(1)
+
+                    Text(app.bundleIdentifier ?? "pid \(app.processIdentifier)")
+                        .talkieType(.hint)
+                        .foregroundStyle(theme.colors.textTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+                Spacer(minLength: 8)
+
+                if isActivating {
+                    ProgressView()
+                        .controlSize(.small)
+                } else if isActive {
+                    Text("ACTIVE")
+                        .talkieType(.chipLabel)
+                        .foregroundStyle(Color(red: 0.36, green: 0.74, blue: 0.50))
+                } else {
+                    Text("OPEN")
+                        .talkieType(.chipLabel)
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                }
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(theme.colors.cardBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .strokeBorder(
+                                isActive
+                                    ? theme.currentTheme.chrome.accent.opacity(0.45)
+                                    : theme.currentTheme.chrome.edgeFaint,
+                                lineWidth: theme.currentTheme.chrome.hairlineWidth
+                            )
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(isActive || activatingAppID != nil)
+    }
+
+    private func errorRow(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Color(red: 0.85, green: 0.46, blue: 0.34))
+                .accessibilityHidden(true)
+            Text(message)
+                .talkieType(.preview)
+                .foregroundStyle(theme.colors.textSecondary)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(theme.colors.cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(
+                            Color(red: 0.85, green: 0.46, blue: 0.34).opacity(0.45),
+                            lineWidth: theme.currentTheme.chrome.hairlineWidth
+                        )
                 )
         )
     }

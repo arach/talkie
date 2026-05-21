@@ -721,6 +721,29 @@ final class BridgeManager {
         return response
     }
 
+    func activateCompanionApp(_ app: CompanionAppSwitcherApp) async throws -> CompanionTriggerResponse {
+        guard isPaired else {
+            throw BridgeError.notConfigured
+        }
+
+        if status != .connected {
+            await connect()
+        }
+
+        guard status == .connected else {
+            throw BridgeError.connectionFailed
+        }
+
+        let response = try await client.companionActivateApp(
+            processIdentifier: app.processIdentifier,
+            bundleIdentifier: app.bundleIdentifier
+        )
+        lastSuccessfulContactAt = .now
+        updateActiveMacContactDate(.now)
+        await refreshCompanionState()
+        return response
+    }
+
     func sendMessageWithImage(sessionId: String, text: String, image: UIImage) async throws {
         try await sendMessage(sessionId: sessionId, text: text)
     }
