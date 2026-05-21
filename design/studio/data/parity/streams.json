@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T19:48:09.723Z",
+  "updatedAt": "2026-05-21T19:50:40.838Z",
   "streams": [
     {
       "key": "C1",
@@ -812,6 +812,14 @@
           "level": "progress",
           "message": "Tier-0 start: porting the donor Recording section into SettingsNext VOICE with location tagging plus persisted mic input, sample-rate, and echo-cancellation preferences.",
           "findingKey": "C4::SettingsView::RECORDING section"
+        },
+        {
+          "ts": "2026-05-21T19:50:40.838Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Landed SettingsNext VOICE Recording section: location tagging requests permission on enable, mic input/sample-rate cycle controls persist through TalkieAppSettings, and echo-cancellation preference is stored/mirrored.",
+          "findingKey": "C4::SettingsView::RECORDING section",
+          "ref": "2e275a4"
         }
       ]
     },
