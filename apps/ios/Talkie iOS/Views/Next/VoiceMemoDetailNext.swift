@@ -8,6 +8,7 @@
 
 import Combine
 import CoreData
+import Photos
 import PhotosUI
 import SwiftUI
 import UIKit
@@ -171,6 +172,17 @@ final class VoiceMemoDetailStore: ObservableObject {
         UUID(uuidString: memo.id) ?? sourceMemo?.id
     }
 
+    var attachmentFingerprint: String {
+        attachments
+            .map(\.id.uuidString)
+            .sorted()
+            .joined(separator: "|")
+    }
+
+    var hasPersistentMemo: Bool {
+        !isMock && sourceMemo?.id != nil
+    }
+
     func reloadAttachments() {
         guard let uuid = memoUUID else {
             attachments = []
@@ -215,6 +227,64 @@ final class VoiceMemoDetailStore: ObservableObject {
         guard let uuid = memoUUID else { return }
         MemoAttachmentStore.shared.delete(attachment, memoID: uuid)
         reloadAttachments()
+    }
+
+    @discardableResult
+    func appendOCRTextToNotes(_ rawText: String) -> Bool {
+        let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return false }
+
+        if isMock {
+            memo = memo.withTranscript(memo.transcript + "\n\n--- Scanned Text ---\n" + text)
+            return true
+        }
+
+        guard let sourceMemo else { return false }
+        let separator = "\n\n--- Scanned Text ---\n"
+        let currentNotes = sourceMemo.notes ?? ""
+        if currentNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            sourceMemo.notes = text
+        } else {
+            sourceMemo.notes = currentNotes + separator + text
+        }
+        sourceMemo.lastModified = Date()
+
+        do {
+            try sourceMemo.managedObjectContext?.save()
+            refreshSourceMemoDisplay()
+            return true
+        } catch {
+            sourceMemo.managedObjectContext?.rollback()
+            refreshSourceMemoDisplay()
+            return false
+        }
+    }
+
+    func buildAttachmentUploadRequest() throws -> MemoAttachmentUploadRequest {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        let items = try attachments.map { attachment in
+            let data = try Data(contentsOf: MemoAttachmentStore.shared.url(for: attachment))
+            return MemoAttachmentUploadItem(
+                id: attachment.id.uuidString,
+                originalName: attachment.originalName,
+                addedAt: formatter.string(from: attachment.addedAt),
+                fileSizeBytes: attachment.fileSizeBytes,
+                pixelWidth: attachment.pixelWidth,
+                pixelHeight: attachment.pixelHeight,
+                recordingOffsetSeconds: nil,
+                mimeType: Self.mimeType(for: attachment.originalName),
+                dataBase64: data.base64EncodedString()
+            )
+        }
+
+        let createdAt = sourceMemo?.createdAt ?? Date()
+        return MemoAttachmentUploadRequest(
+            memoTitle: memo.title,
+            memoCreatedAt: formatter.string(from: createdAt),
+            attachments: items
+        )
     }
 
     func shareItems() -> [Any] {
@@ -377,6 +447,17 @@ final class VoiceMemoDetailStore: ObservableObject {
         }
     }
 
+    private static func mimeType(for filename: String) -> String {
+        switch URL(fileURLWithPath: filename).pathExtension.lowercased() {
+        case "png":
+            return "image/png"
+        case "heic", "heif":
+            return "image/heic"
+        default:
+            return "image/jpeg"
+        }
+    }
+
     static func formatDuration(_ duration: TimeInterval) -> String {
         let total = max(0, Int(duration.rounded()))
         return "\(total / 60):" + String(format: "%02d", total % 60)
@@ -423,9 +504,25 @@ struct VoiceMemoDetailNext: View {
     @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var store: VoiceMemoDetailStore
     @StateObject private var aiService = OnDeviceAIService.shared
-    @State private var pickerItem: PhotosPickerItem?
-    @State private var isPickerActive: Bool = false
+    @State private var selectedAttachmentItems: [PhotosPickerItem] = []
+    @State private var ocrPhotoPickerItems: [PhotosPickerItem] = []
+    @State private var showingAttachmentPickerSheet: Bool = false
+    @State private var showingAttachmentPhotoPicker: Bool = false
+    @State private var showingAttachmentCamera: Bool = false
+    @State private var showingOCRPhotoPicker: Bool = false
     @State private var previewAttachment: MemoImageAttachment?
+    @State private var recentAttachmentAssets: [PHAsset] = []
+    @State private var attachmentPhotoAuthorizationStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+    @State private var hasLoadedRecentAttachmentAssets: Bool = false
+    @State private var isImportingAttachments: Bool = false
+    @State private var isRunningOCR: Bool = false
+    @State private var ocrResultText: String?
+    @State private var attachmentError: String?
+    @State private var isSendingAttachmentsToMac: Bool = false
+    @State private var lastSentAttachmentFingerprint: String?
+    @State private var showingSendToMacAlert: Bool = false
+    @State private var sendToMacAlertTitle: String = ""
+    @State private var sendToMacAlertMessage: String = ""
     @State private var isEditingTitle: Bool = false
     @State private var editedTitle: String = ""
     @State private var titleEditError: String?
@@ -476,14 +573,62 @@ struct VoiceMemoDetailNext: View {
             }
             .scrollIndicators(.hidden)
         }
-        .photosPicker(isPresented: $isPickerActive, selection: $pickerItem, matching: .images)
-        .onChange(of: pickerItem) { _, newValue in
-            guard let newValue else { return }
+        .photosPicker(
+            isPresented: $showingAttachmentPhotoPicker,
+            selection: $selectedAttachmentItems,
+            maxSelectionCount: 10,
+            matching: .images
+        )
+        .photosPicker(
+            isPresented: $showingOCRPhotoPicker,
+            selection: $ocrPhotoPickerItems,
+            maxSelectionCount: 1,
+            matching: .images
+        )
+        .onChange(of: selectedAttachmentItems) { _, newItems in
+            guard !newItems.isEmpty else { return }
             Task {
-                if let data = try? await newValue.loadTransferable(type: Data.self) {
-                    _ = store.addAttachment(data: data)
+                await importSelectedAttachmentItems(newItems)
+            }
+        }
+        .onChange(of: ocrPhotoPickerItems) { _, newItems in
+            guard let item = newItems.first else { return }
+            ocrPhotoPickerItems = []
+            Task {
+                await performOCR(from: item)
+            }
+        }
+        .sheet(isPresented: $showingAttachmentPickerSheet) {
+            MemoAttachmentPickerSheetNext(
+                recentAssets: recentAttachmentAssets,
+                photoAuthorizationStatus: attachmentPhotoAuthorizationStatus,
+                onChooseFromLibrary: {
+                    showingAttachmentPickerSheet = false
+                    showingAttachmentPhotoPicker = true
+                },
+                onTakePhoto: {
+                    showingAttachmentPickerSheet = false
+                    showingAttachmentCamera = true
+                },
+                onScanText: {
+                    showingAttachmentPickerSheet = false
+                    showingOCRPhotoPicker = true
+                },
+                onSelectRecentAsset: { asset in
+                    showingAttachmentPickerSheet = false
+                    Task {
+                        await importRecentAttachmentAsset(asset)
+                    }
                 }
-                pickerItem = nil
+            )
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingAttachmentCamera) {
+            CameraImagePicker { image in
+                Task {
+                    await importCapturedImage(image)
+                }
             }
         }
         .sheet(item: $previewAttachment) { attachment in
@@ -501,11 +646,37 @@ struct VoiceMemoDetailNext: View {
         .sheet(isPresented: $showingVersionHistory) {
             TranscriptVersionHistoryNext(versions: store.transcriptVersions)
         }
+        .alert("Scanned Text", isPresented: Binding(
+            get: { ocrResultText != nil },
+            set: { if !$0 { ocrResultText = nil } }
+        )) {
+            Button("Append to Notes") {
+                appendOCRTextToNotes()
+            }
+            Button("Cancel", role: .cancel) {
+                ocrResultText = nil
+            }
+        } message: {
+            if let ocrResultText {
+                let preview = ocrResultText.prefix(200)
+                Text(String(preview) + (ocrResultText.count > 200 ? "..." : ""))
+            }
+        }
+        .alert(sendToMacAlertTitle, isPresented: $showingSendToMacAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(sendToMacAlertMessage)
+        }
         .alert("Delete memo?", isPresented: $showingDeleteConfirmation) {
             Button("Delete", role: .destructive, action: deleteMemo)
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This removes the memo, its audio file, and saved attachments from this device.")
+        }
+        .onChange(of: showingAttachmentPickerSheet) { _, isPresented in
+            if isPresented {
+                loadRecentAttachmentAssetsIfNeeded()
+            }
         }
     }
 
@@ -838,7 +1009,36 @@ struct VoiceMemoDetailNext: View {
                         .foregroundStyle(theme.colors.textTertiary)
                 }
                 Spacer()
-                Button(action: { isPickerActive = true }) {
+                if !store.attachments.isEmpty {
+                    Button(action: sendAttachmentsToPairedMac) {
+                        HStack(spacing: 4) {
+                            if isSendingAttachmentsToMac {
+                                ProgressView()
+                                    .scaleEffect(0.5)
+                            } else {
+                                Image(systemName: hasSentCurrentAttachmentsToMac ? "checkmark.circle.fill" : "desktopcomputer")
+                                    .font(.system(size: 10, weight: .semibold))
+                            }
+                            Text(hasSentCurrentAttachmentsToMac ? "SENT" : "SEND MAC")
+                                .talkieType(.channelLabelTiny)
+                        }
+                        .foregroundStyle(hasSentCurrentAttachmentsToMac ? theme.colors.textTertiary : theme.currentTheme.chrome.accent)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(
+                                    hasSentCurrentAttachmentsToMac
+                                        ? theme.currentTheme.chrome.edgeFaint
+                                        : theme.currentTheme.chrome.accent.opacity(0.5),
+                                    lineWidth: theme.currentTheme.chrome.hairlineWidth
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isSendingAttachmentsToMac || hasSentCurrentAttachmentsToMac)
+                }
+                Button(action: { showingAttachmentPickerSheet = true }) {
                     HStack(spacing: 4) {
                         Image(systemName: "plus")
                             .font(.system(size: 10, weight: .semibold))
@@ -870,11 +1070,29 @@ struct VoiceMemoDetailNext: View {
                     }
                 }
             }
+
+            if isImportingAttachments || isRunningOCR || isSendingAttachmentsToMac {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .scaleEffect(0.58)
+                    Text(attachmentBusyLabel)
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(theme.colors.textTertiary)
+                }
+                .padding(.horizontal, 4)
+            }
+
+            if let attachmentError {
+                Text(attachmentError)
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(Color.red.opacity(0.85))
+                    .padding(.horizontal, 4)
+            }
         }
     }
 
     private var emptyAttachmentsTile: some View {
-        Button(action: { isPickerActive = true }) {
+        Button(action: { showingAttachmentPickerSheet = true }) {
             VStack(spacing: 8) {
                 Image(systemName: "photo.on.rectangle.angled")
                     .font(.system(size: 16, weight: .medium))
@@ -1030,6 +1248,16 @@ struct VoiceMemoDetailNext: View {
         store.memo.transcript.split { $0.isWhitespace || $0.isNewline }.count
     }
 
+    private var hasSentCurrentAttachmentsToMac: Bool {
+        !store.attachmentFingerprint.isEmpty && lastSentAttachmentFingerprint == store.attachmentFingerprint
+    }
+
+    private var attachmentBusyLabel: String {
+        if isRunningOCR { return "SCANNING TEXT" }
+        if isSendingAttachmentsToMac { return "SENDING TO MAC" }
+        return "IMPORTING ATTACHMENTS"
+    }
+
     private func beginTitleEdit() {
         editedTitle = store.memo.title
         titleEditError = nil
@@ -1087,6 +1315,224 @@ struct VoiceMemoDetailNext: View {
             return
         }
         cancelTranscriptEdit()
+    }
+
+    private func importSelectedAttachmentItems(_ items: [PhotosPickerItem]) async {
+        isImportingAttachments = true
+        attachmentError = nil
+
+        var importedCount = 0
+        for item in items {
+            do {
+                guard let data = try await item.loadTransferable(type: Data.self) else { continue }
+                if store.addAttachment(data: data) != nil {
+                    importedCount += 1
+                }
+            } catch {
+                attachmentError = "Couldn’t import one of the selected images."
+            }
+        }
+
+        selectedAttachmentItems = []
+        isImportingAttachments = false
+
+        if importedCount == 0 && attachmentError == nil {
+            attachmentError = "No image data was available."
+        }
+    }
+
+    private func importCapturedImage(_ image: UIImage) async {
+        isImportingAttachments = true
+        attachmentError = nil
+
+        guard let data = image.pngData() ?? image.jpegData(compressionQuality: 0.92) else {
+            isImportingAttachments = false
+            attachmentError = "Couldn’t prepare the captured photo."
+            return
+        }
+
+        let preferredName = "Camera_\(Int(Date().timeIntervalSince1970))"
+        let saved = store.addAttachment(data: data, originalName: preferredName)
+        isImportingAttachments = false
+
+        if saved == nil {
+            attachmentError = "Couldn’t attach the captured photo."
+        }
+    }
+
+    private func performOCR(from pickerItem: PhotosPickerItem) async {
+        guard let data = try? await pickerItem.loadTransferable(type: Data.self),
+              let image = UIImage(data: data) else {
+            attachmentError = "Couldn't load the selected image."
+            return
+        }
+
+        isRunningOCR = true
+        attachmentError = nil
+
+        do {
+            let result = try await ScreenshotOCRService.extractText(from: image)
+            _ = store.addAttachment(
+                data: data,
+                originalName: "OCR_\(Int(Date().timeIntervalSince1970))"
+            )
+            isRunningOCR = false
+            ocrResultText = result.text
+        } catch {
+            isRunningOCR = false
+            attachmentError = error.localizedDescription
+        }
+    }
+
+    private func appendOCRTextToNotes() {
+        guard let text = ocrResultText else { return }
+        if store.appendOCRTextToNotes(text) {
+            ocrResultText = nil
+            attachmentError = nil
+        } else {
+            attachmentError = "Couldn’t append scanned text to this memo."
+        }
+    }
+
+    private func loadRecentAttachmentAssetsIfNeeded(force: Bool = false) {
+        if hasLoadedRecentAttachmentAssets && !force { return }
+
+        let currentStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        attachmentPhotoAuthorizationStatus = currentStatus
+
+        switch currentStatus {
+        case .authorized, .limited:
+            hasLoadedRecentAttachmentAssets = true
+            recentAttachmentAssets = fetchRecentAttachmentAssets()
+        case .notDetermined:
+            PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
+                Task { @MainActor in
+                    attachmentPhotoAuthorizationStatus = status
+                    if status == .authorized || status == .limited {
+                        hasLoadedRecentAttachmentAssets = true
+                        recentAttachmentAssets = fetchRecentAttachmentAssets()
+                    } else {
+                        recentAttachmentAssets = []
+                    }
+                }
+            }
+        default:
+            recentAttachmentAssets = []
+        }
+    }
+
+    private func fetchRecentAttachmentAssets(limit: Int = 12) -> [PHAsset] {
+        let options = PHFetchOptions()
+        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        options.fetchLimit = limit
+
+        let screenshotCollections = PHAssetCollection.fetchAssetCollections(
+            with: .smartAlbum,
+            subtype: .smartAlbumScreenshots,
+            options: nil
+        )
+
+        if let screenshots = screenshotCollections.firstObject {
+            let screenshotAssets = PHAsset.fetchAssets(in: screenshots, options: options)
+            if screenshotAssets.count > 0 {
+                return screenshotAssets.objects(at: IndexSet(integersIn: 0..<screenshotAssets.count))
+            }
+        }
+
+        let imageAssets = PHAsset.fetchAssets(with: .image, options: options)
+        guard imageAssets.count > 0 else { return [] }
+        return imageAssets.objects(at: IndexSet(integersIn: 0..<imageAssets.count))
+    }
+
+    private func importRecentAttachmentAsset(_ asset: PHAsset) async {
+        isImportingAttachments = true
+        attachmentError = nil
+
+        let options = PHImageRequestOptions()
+        options.isSynchronous = false
+        options.deliveryMode = .highQualityFormat
+        options.resizeMode = .fast
+        options.isNetworkAccessAllowed = false
+
+        let result = await withCheckedContinuation { (continuation: CheckedContinuation<(Data, String?)?, Never>) in
+            PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { data, _, _, _ in
+                let preferredName = asset.value(forKey: "filename") as? String
+                continuation.resume(returning: data.map { ($0, preferredName) })
+            }
+        }
+
+        guard let (data, preferredName) = result else {
+            isImportingAttachments = false
+            attachmentError = "That photo isn’t available on this iPhone yet."
+            return
+        }
+
+        let saved = store.addAttachment(data: data, originalName: preferredName)
+        isImportingAttachments = false
+
+        if saved == nil {
+            attachmentError = "Couldn’t attach that image."
+        }
+    }
+
+    private func sendAttachmentsToPairedMac() {
+        guard !isSendingAttachmentsToMac else { return }
+
+        DirectMacRegistry.shared.refresh()
+
+        guard let memoID = store.memoUUID?.uuidString, store.hasPersistentMemo else {
+            presentSendToMacAlert(title: "To Mac", message: "This memo is not ready yet.")
+            return
+        }
+
+        guard !store.attachments.isEmpty else {
+            presentSendToMacAlert(title: "To Mac", message: "Add an attachment first.")
+            return
+        }
+
+        guard BridgeManager.shared.isPaired else {
+            let knownMacs = DirectMacRegistry.shared.macs
+            let subtitle: String
+            if knownMacs.contains(where: \.hasTerminalAccess) {
+                subtitle = "This iPhone can reach your Mac for terminal access, but direct file send still needs Talkie Mac pairing."
+            } else if !knownMacs.isEmpty {
+                subtitle = "Direct send needs a Talkie Mac pairing on this iPhone."
+            } else {
+                subtitle = "Scan a Talkie Mac QR first to enable direct send."
+            }
+            presentSendToMacAlert(title: "To Mac", message: subtitle)
+            return
+        }
+
+        let fingerprint = store.attachmentFingerprint
+        isSendingAttachmentsToMac = true
+        attachmentError = nil
+
+        Task { @MainActor in
+            do {
+                let request = try store.buildAttachmentUploadRequest()
+                let response = try await BridgeManager.shared.sendMemoAttachments(memoId: memoID, body: request)
+                isSendingAttachmentsToMac = false
+                lastSentAttachmentFingerprint = fingerprint
+
+                let macName = BridgeManager.shared.pairedMacName ?? "your Mac"
+                let noun = response.savedCount == 1 ? "attachment" : "attachments"
+                presentSendToMacAlert(
+                    title: "Sent to Mac",
+                    message: "Sent \(response.savedCount) \(noun) directly to \(macName)."
+                )
+            } catch {
+                isSendingAttachmentsToMac = false
+                attachmentError = error.localizedDescription
+                presentSendToMacAlert(title: "To Mac", message: error.localizedDescription)
+            }
+        }
+    }
+
+    private func presentSendToMacAlert(title: String, message: String) {
+        sendToMacAlertTitle = title
+        sendToMacAlertMessage = message
+        showingSendToMacAlert = true
     }
 
     private func deleteMemo() {
