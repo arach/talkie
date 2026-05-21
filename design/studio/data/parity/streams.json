@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T23:44:00.408Z",
+  "updatedAt": "2026-05-21T23:45:09.450Z",
   "streams": [
     {
       "key": "C1",
@@ -1918,8 +1918,232 @@
           "ts": "2026-05-21T23:44:00.393Z",
           "agent": "talkie-codex-c3",
           "level": "info",
-          "message": "PR parity/c3 → feat/ios-shell-phase-0: https://github.com/arach/talkie/pull/17",
+          "message": "PR parity/c3 \u2192 feat/ios-shell-phase-0: https://github.com/arach/talkie/pull/17",
           "ref": "https://github.com/arach/talkie/pull/17"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.450Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now a69de94 (was d0bb399).",
+          "findingKey": "C3::Attachments + context menus::Attachment tile context menu",
+          "ref": "a69de94"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.451Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now c47b208 (was 9d40917).",
+          "findingKey": "C3::Attachments + context menus::OCR scanner in picker",
+          "ref": "c47b208"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.452Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now c47b208 (was 9d40917).",
+          "findingKey": "C3::Attachments + context menus::Recent assets carousel",
+          "ref": "c47b208"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.453Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now c47b208 (was 9d40917).",
+          "findingKey": "C3::Attachments + context menus::Send attachments to Mac",
+          "ref": "c47b208"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.454Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now 6153fed (was a95a065).",
+          "findingKey": "C3::Attachments + context menus::Shell long-press \u2192 voice command",
+          "ref": "6153fed"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.455Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now a69de94 (was d0bb399).",
+          "findingKey": "C3::Attachments + context menus::Transcript context menu",
+          "ref": "a69de94"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.456Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now 8c51799 (was 2daaac4).",
+          "findingKey": "C3::ComposeView::Autosave on scenePhase",
+          "ref": "8c51799"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.457Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now 6153fed (was a95a065).",
+          "findingKey": "C3::ComposeView::Bridge revision path (.mac / .direct)",
+          "ref": "6153fed"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.458Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now 6153fed (was a95a065).",
+          "findingKey": "C3::ComposeView::ComposeLocalRevisionService persistence",
+          "ref": "6153fed"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.459Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now 6153fed (was a95a065).",
+          "findingKey": "C3::ComposeView::InlineDictationController pipeline",
+          "ref": "6153fed"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.460Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now 6153fed (was a95a065).",
+          "findingKey": "C3::ComposeView::Notes list view",
+          "ref": "6153fed"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.461Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now 6153fed (was a95a065).",
+          "findingKey": "C3::ComposeView::Quick transforms",
+          "ref": "6153fed"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.462Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now 6153fed (was a95a065).",
+          "findingKey": "C3::ComposeView::Revision UI",
+          "ref": "6153fed"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.463Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now 05654d6 (was 93f0bfe).",
+          "findingKey": "C3::MemoAgentSheet::Context pinning",
+          "ref": "05654d6"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.464Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now 05654d6 (was 93f0bfe).",
+          "findingKey": "C3::MemoAgentSheet::In-sheet dictation",
+          "ref": "05654d6"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.465Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now 05654d6 (was 93f0bfe).",
+          "findingKey": "C3::MemoAgentSheet::Multi-turn Claude conversation",
+          "ref": "05654d6"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.466Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now 4224db2 (was cd099b4).",
+          "findingKey": "C3::MemoCLISheet::Bridge headless transport",
+          "ref": "4224db2"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.467Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now 4224db2 (was cd099b4).",
+          "findingKey": "C3::MemoCLISheet::Custom command input",
+          "ref": "4224db2"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.468Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now 4224db2 (was cd099b4).",
+          "findingKey": "C3::MemoCLISheet::Preset commands",
+          "ref": "4224db2"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.469Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now b371f52 (was 255ac23).",
+          "findingKey": "C3::VoiceMemoDetailView::AI title generation",
+          "ref": "b371f52"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.470Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now c47b208 (was 9d40917).",
+          "findingKey": "C3::VoiceMemoDetailView::Attachment picker",
+          "ref": "c47b208"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.471Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now 6c2669b (was ed26ee7).",
+          "findingKey": "C3::VoiceMemoDetailView::Delete confirmation + audio file cleanup",
+          "ref": "6c2669b"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.472Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now 43a1462 (was 8d4f94e).",
+          "findingKey": "C3::VoiceMemoDetailView::Mac workflow polling + toast",
+          "ref": "43a1462"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.473Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now c47b208 (was 9d40917).",
+          "findingKey": "C3::VoiceMemoDetailView::OCR \u2192 append to notes",
+          "ref": "c47b208"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.474Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now 3638334 (was 274c26e).",
+          "findingKey": "C3::VoiceMemoDetailView::Share sheet",
+          "ref": "3638334"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.475Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now 938530e (was f0cc47a).",
+          "findingKey": "C3::VoiceMemoDetailView::Title edit mode",
+          "ref": "938530e"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.476Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now 24c8fc7 (was 82b6857).",
+          "findingKey": "C3::VoiceMemoDetailView::Transcript edit mode",
+          "ref": "24c8fc7"
+        },
+        {
+          "ts": "2026-05-21T23:45:09.477Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Rebased parity/c3; landed implementation ref is now a69de94 (was d0bb399).",
+          "findingKey": "C3::VoiceMemoDetailView::TranscriptVersionHistorySheet",
+          "ref": "a69de94"
         }
       ]
     },
