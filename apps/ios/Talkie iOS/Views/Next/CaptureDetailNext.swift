@@ -28,10 +28,10 @@ import TalkieMobileKit
 final class CaptureDetailStore: ObservableObject {
     @Published var capture: CaptureDisplay
     @Published private(set) var sourceCapture: Capture?
+    @Published private(set) var captureImage: UIImage?
     @Published var isSyncing = false
 
     private let captureID: UUID?
-    private var captureImage: UIImage?
 
     struct CaptureDisplay {
         let id: String
@@ -228,6 +228,7 @@ struct CaptureDetailNext: View {
     @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var store: CaptureDetailStore
     @State private var showCopied = false
+    @State private var isShowingImageViewer = false
     @State private var aiCommandsCapture: Capture?
 
     init(captureID: String? = nil) {
@@ -235,33 +236,46 @@ struct CaptureDetailNext: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
+        ZStack {
+            VStack(spacing: 0) {
+                header
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    if store.capture.hasImage {
-                        photoThumb
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if let image = store.captureImage {
+                            photoThumb(image: image)
+                                .padding(.horizontal, 12)
+                                .padding(.top, 12)
+                        }
+
+                        contentCard
                             .padding(.horizontal, 12)
-                            .padding(.top, 12)
+                            .padding(.top, store.capture.hasImage ? 0 : 12)
+
+                        detailsCard
+                            .padding(.horizontal, 12)
+
+                        actionTray
+                            .padding(.horizontal, 12)
+                            .padding(.top, 4)
+
+                        Spacer(minLength: 120)   // breathing room above the chrome tray
                     }
-
-                    contentCard
-                        .padding(.horizontal, 12)
-                        .padding(.top, store.capture.hasImage ? 0 : 12)
-
-                    detailsCard
-                        .padding(.horizontal, 12)
-
-                    actionTray
-                        .padding(.horizontal, 12)
-                        .padding(.top, 4)
-
-                    Spacer(minLength: 120)   // breathing room above the chrome tray
                 }
+                .scrollIndicators(.hidden)
             }
-            .scrollIndicators(.hidden)
+
+            if isShowingImageViewer, let image = store.captureImage {
+                CaptureDetailImageViewerNext(image: image) {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        isShowingImageViewer = false
+                    }
+                }
+                .transition(.opacity)
+                .zIndex(1)
+            }
         }
+        .animation(.easeInOut(duration: 0.18), value: isShowingImageViewer)
         .sheet(item: $aiCommandsCapture) { capture in
             CaptureAICommandsSheet(capture: capture)
         }
@@ -312,20 +326,48 @@ struct CaptureDetailNext: View {
 
     // MARK: - Photo thumb (donor's CaptureDetailImageThumbnail)
 
-    private var photoThumb: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(theme.colors.background)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(theme.currentTheme.chrome.edgeFaint,
-                                      lineWidth: theme.currentTheme.chrome.hairlineWidth)
-                )
-            Image(systemName: "photo")
-                .font(.system(size: 44, weight: .light))
-                .foregroundStyle(theme.colors.textTertiary)
+    private func photoThumb(image: UIImage) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.18)) {
+                isShowingImageViewer = true
+            }
+        } label: {
+            ZStack(alignment: .bottomTrailing) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity)
+                    .frame(maxHeight: 180)
+                    .clipShape(.rect(cornerRadius: 12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                          lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                    )
+
+                Label("Zoom", systemImage: "arrow.up.left.and.arrow.down.right")
+                    .talkieType(.hint)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(.black.opacity(0.62), in: Capsule())
+                    .padding(10)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 180)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(theme.colors.background)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                          lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                    )
+            )
         }
-        .frame(height: 180)
+        .buttonStyle(.plain)
+        .contentShape(.rect(cornerRadius: 12))
+        .accessibilityLabel("Open image viewer")
     }
 
     // MARK: - Content card
@@ -527,5 +569,196 @@ struct CaptureDetailNext: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
             withAnimation(.easeInOut(duration: 0.2)) { showCopied = false }
         }
+    }
+}
+
+private struct CaptureDetailImageViewerNext: View {
+    let image: UIImage
+    let onClose: () -> Void
+
+    @State private var steadyScale: CGFloat = 1
+    @State private var gestureScale: CGFloat = 1
+    @State private var steadyOffset: CGSize = .zero
+    @State private var gestureOffset: CGSize = .zero
+    @State private var showsHint = true
+
+    private let maximumScale: CGFloat = 5
+
+    var body: some View {
+        GeometryReader { proxy in
+            let scale = clampedScale(steadyScale * gestureScale)
+            let offset = constrainedOffset(
+                proposed: CGSize(
+                    width: steadyOffset.width + gestureOffset.width,
+                    height: steadyOffset.height + gestureOffset.height
+                ),
+                in: proxy.size,
+                scale: scale
+            )
+
+            ZStack {
+                Color.black
+                    .ignoresSafeArea()
+
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .scaleEffect(scale)
+                    .offset(offset)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                    .gesture(dragGesture(in: proxy.size, currentScale: scale))
+                    .simultaneousGesture(magnifyGesture(in: proxy.size))
+                    .onTapGesture(count: 2) {
+                        toggleZoom()
+                    }
+
+                VStack(spacing: 0) {
+                    HStack(spacing: 10) {
+                        if scale > 1.01 {
+                            Button("Reset", systemImage: "arrow.counterclockwise") {
+                                showsHint = false
+                                withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                                    resetZoom()
+                                }
+                            }
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(.black.opacity(0.52), in: Capsule())
+                        }
+
+                        Spacer()
+
+                        Button(action: onClose) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 40, height: 40)
+                                .background(.black.opacity(0.52), in: Circle())
+                        }
+                        .accessibilityLabel("Close image viewer")
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+
+                    Spacer()
+
+                    if showsHint {
+                        Text("Pinch to zoom. Drag to pan. Double-tap to reset.")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(.black.opacity(0.55), in: Capsule())
+                            .padding(.bottom, 24)
+                            .transition(.opacity)
+                    }
+                }
+            }
+        }
+    }
+
+    private func magnifyGesture(in containerSize: CGSize) -> some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                showsHint = false
+                gestureScale = value.magnification
+            }
+            .onEnded { value in
+                let nextScale = clampedScale(steadyScale * value.magnification)
+                let proposedOffset = CGSize(
+                    width: steadyOffset.width + gestureOffset.width,
+                    height: steadyOffset.height + gestureOffset.height
+                )
+
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                    steadyScale = nextScale
+                    steadyOffset = nextScale <= 1.01
+                        ? .zero
+                        : constrainedOffset(proposed: proposedOffset, in: containerSize, scale: nextScale)
+                    gestureScale = 1
+                    gestureOffset = .zero
+                }
+            }
+    }
+
+    private func dragGesture(in containerSize: CGSize, currentScale: CGFloat) -> some Gesture {
+        DragGesture()
+            .onChanged { value in
+                guard currentScale > 1.01 else { return }
+                showsHint = false
+                gestureOffset = value.translation
+            }
+            .onEnded { value in
+                guard currentScale > 1.01 else {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        steadyOffset = .zero
+                        gestureOffset = .zero
+                    }
+                    return
+                }
+
+                let proposedOffset = CGSize(
+                    width: steadyOffset.width + value.translation.width,
+                    height: steadyOffset.height + value.translation.height
+                )
+
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    steadyOffset = constrainedOffset(proposed: proposedOffset, in: containerSize, scale: currentScale)
+                    gestureOffset = .zero
+                }
+            }
+    }
+
+    private func toggleZoom() {
+        showsHint = false
+
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+            if steadyScale > 1.01 {
+                resetZoom()
+            } else {
+                steadyScale = 2
+                gestureScale = 1
+                steadyOffset = .zero
+                gestureOffset = .zero
+            }
+        }
+    }
+
+    private func resetZoom() {
+        steadyScale = 1
+        gestureScale = 1
+        steadyOffset = .zero
+        gestureOffset = .zero
+    }
+
+    private func clampedScale(_ scale: CGFloat) -> CGFloat {
+        min(max(scale, 1), maximumScale)
+    }
+
+    private func constrainedOffset(proposed: CGSize, in containerSize: CGSize, scale: CGFloat) -> CGSize {
+        guard scale > 1.01 else { return .zero }
+
+        let fittedSize = fittedImageSize(in: containerSize)
+        let scaledSize = CGSize(width: fittedSize.width * scale, height: fittedSize.height * scale)
+        let horizontalLimit = max(0, (scaledSize.width - containerSize.width) / 2)
+        let verticalLimit = max(0, (scaledSize.height - containerSize.height) / 2)
+
+        return CGSize(
+            width: min(max(proposed.width, -horizontalLimit), horizontalLimit),
+            height: min(max(proposed.height, -verticalLimit), verticalLimit)
+        )
+    }
+
+    private func fittedImageSize(in containerSize: CGSize) -> CGSize {
+        guard image.size.width > 0, image.size.height > 0 else { return containerSize }
+
+        let widthScale = containerSize.width / image.size.width
+        let heightScale = containerSize.height / image.size.height
+        let scale = min(widthScale, heightScale)
+
+        return CGSize(width: image.size.width * scale, height: image.size.height * scale)
     }
 }
