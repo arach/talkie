@@ -293,8 +293,18 @@ struct SettingsNext: View {
 
     private var connectPanel: some View {
         VStack(alignment: .leading, spacing: 0) {
-            field("iCloud sync", appSettings.iCloudSyncEnabled ? "On" : "Off", hint: iCloudStatus.status.title)
-            field("Mac Bridge", bridgeStatusValue, hint: bridgeStatusHint)
+            field(
+                "iCloud sync",
+                appSettings.iCloudSyncEnabled ? "On" : "Off",
+                hint: iCloudHint,
+                inlineAction: iCloudInlineAction
+            )
+            field(
+                "Mac Bridge",
+                bridgeStatusValue,
+                hint: bridgeStatusHint,
+                inlineAction: bridgeInlineAction
+            )
             field("Account", nativeAccountValue, hint: "Sign in with Apple")
             metricStrip(
                 title: "LINK HEALTH",
@@ -303,12 +313,52 @@ struct SettingsNext: View {
             navRow("View connections detail") { AppShellRouter.shared.openConnectionCenter() }
             navRow("Workspaces") { AppShellRouter.shared.openWorkspaces() }
             navRow("Resolve sync conflicts") { AppShellRouter.shared.openSyncConflicts() }
-            actionRow("Re-pair Mac", tone: .neutral) { Task { await bridgeManager.connect() } }
             if isNativelySignedIn {
                 actionRow("Sign out", tone: .warn) { resetAuthState() }
             } else {
                 actionRow("Sign in with Apple", tone: .accent) { AppShellRouter.shared.openSignIn() }
             }
+        }
+    }
+
+    // MARK: - Inline actions / hints (connect panel)
+
+    /// Surface a "RECONNECT" chip inline on the Mac Bridge field when
+    /// we have a saved pair but aren't currently connected. Tap calls
+    /// the same `bridgeManager.connect()` the bottom Re-pair row used
+    /// to, but reads as a recovery action — not a destructive re-pair.
+    private var bridgeInlineAction: InlineFieldAction? {
+        guard bridgeManager.isPaired else { return nil }
+        switch bridgeManager.status {
+        case .disconnected, .error:
+            return InlineFieldAction(label: "RECONNECT") {
+                Task { await bridgeManager.connect() }
+            }
+        case .connecting, .connected:
+            return nil
+        }
+    }
+
+    /// Suppress the noisy "iCloud Status Unknown" hint when the
+    /// account check is still pending — sim builds and pre-auth states
+    /// frequently land there and the user can't act on it. Only
+    /// surface a hint when something is actually wrong, with a
+    /// "CHECK" chip the user can tap to re-run the status query.
+    private var iCloudHint: String? {
+        switch iCloudStatus.status {
+        case .available, .checking, .couldNotDetermine: return nil
+        default: return iCloudStatus.status.title
+        }
+    }
+
+    private var iCloudInlineAction: InlineFieldAction? {
+        switch iCloudStatus.status {
+        case .error, .temporarilyUnavailable, .noAccount, .restricted:
+            return InlineFieldAction(label: "CHECK") {
+                iCloudStatus.checkStatus()
+            }
+        case .available, .checking, .couldNotDetermine:
+            return nil
         }
     }
 
@@ -356,7 +406,21 @@ struct SettingsNext: View {
 
     // MARK: - Panel primitives
 
-    private func field(_ label: String, _ value: String, hint: String? = nil) -> some View {
+    /// Optional tappable chip placed at the trailing edge of a field
+    /// row — used when the field's state implies a recovery action
+    /// (e.g. RECONNECT on a disconnected bridge). Keeps the action
+    /// physically adjacent to the state it acts on.
+    struct InlineFieldAction {
+        let label: String
+        let action: () -> Void
+    }
+
+    private func field(
+        _ label: String,
+        _ value: String,
+        hint: String? = nil,
+        inlineAction: InlineFieldAction? = nil
+    ) -> some View {
         // Fixed-height row. Hint, when present, sits INLINE with the
         // label (truncated if it crowds the value) so the row never
         // grows beyond 44pt — gives every panel the same rhythm
@@ -384,6 +448,25 @@ struct SettingsNext: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .layoutPriority(1)
+
+            if let inlineAction {
+                Button(action: inlineAction.action) {
+                    Text(inlineAction.label)
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(
+                                    theme.currentTheme.chrome.accent.opacity(0.55),
+                                    lineWidth: theme.currentTheme.chrome.hairlineWidth
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(inlineAction.label) \(label)")
+            }
         }
         .frame(height: 44)
         .overlay(alignment: .bottom) {
