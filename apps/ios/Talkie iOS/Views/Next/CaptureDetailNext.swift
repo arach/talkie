@@ -140,6 +140,17 @@ final class CaptureDetailStore: ObservableObject {
         }
     }
 
+    func updateCapture(title: String?, text: String) {
+        guard let sourceCapture else { return }
+        CaptureStore.shared.update(title: title, text: text, for: sourceCapture.id)
+        refresh()
+    }
+
+    func deleteCapture() {
+        guard let sourceCapture else { return }
+        CaptureStore.shared.delete(sourceCapture)
+    }
+
     private func refreshLoadedAssets(for capture: Capture) {
         captureImage = loadCaptureImage(for: capture)
         audioURL = CaptureStore.shared.audioURL(for: capture.id)
@@ -237,6 +248,10 @@ struct CaptureDetailNext: View {
     @State private var showCopied = false
     @State private var isShowingImageViewer = false
     @State private var aiCommandsCapture: Capture?
+    @State private var isEditingCapture = false
+    @State private var editedTitle = ""
+    @State private var editedText = ""
+    @State private var showingDeleteConfirmation = false
 
     init(captureID: String? = nil) {
         _store = StateObject(wrappedValue: CaptureDetailStore(captureID: captureID))
@@ -304,6 +319,25 @@ struct CaptureDetailNext: View {
             CaptureAICommandsSheet(capture: capture) {
                 store.refresh()
             }
+        }
+        .sheet(isPresented: $isEditingCapture) {
+            CaptureEditSheetNext(
+                title: $editedTitle,
+                text: $editedText,
+                onCancel: { isEditingCapture = false },
+                onSave: saveEditedCapture
+            )
+        }
+        .alert("Delete capture?", isPresented: $showingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                store.deleteCapture()
+                audioPlayer.stopPlayback()
+                speechService.stop()
+                AppShellRouter.shared.openHome()
+            }
+        } message: {
+            Text("This removes the capture and its stored image or audio files from this iPhone.")
         }
         .onReceive(NotificationCenter.default.publisher(for: .capturesDidChange)) { _ in
             store.refresh()
@@ -557,6 +591,12 @@ struct CaptureDetailNext: View {
             trayChip(systemImage: "sparkles", label: "AI") {
                 aiCommandsCapture = store.sourceCapture
             }
+            trayChip(systemImage: "pencil", label: "Edit") {
+                beginEditingCapture()
+            }
+            trayChip(systemImage: "trash", label: "Delete") {
+                showingDeleteConfirmation = true
+            }
             Spacer()
             primaryChip(label: "Compose ›") {
                 AppShellRouter.shared.openCompose(documentID: store.capture.id)
@@ -594,6 +634,26 @@ struct CaptureDetailNext: View {
     }
 
     // MARK: - Actions
+
+    private func beginEditingCapture() {
+        guard let sourceCapture = store.sourceCapture else { return }
+        editedTitle = sourceCapture.title ?? ""
+        editedText = sourceCapture.text
+        isEditingCapture = true
+    }
+
+    private func saveEditedCapture() {
+        let trimmedText = editedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else { return }
+
+        let trimmedTitle = editedTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        store.updateCapture(
+            title: trimmedTitle.isEmpty ? nil : trimmedTitle,
+            text: trimmedText
+        )
+        isEditingCapture = false
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
 
     private func requestTTS() {
         guard !store.isLoadingTTS, let capture = store.sourceCapture else { return }
@@ -827,6 +887,92 @@ private struct CaptureDetailImageViewerNext: View {
         let scale = min(widthScale, heightScale)
 
         return CGSize(width: image.size.width * scale, height: image.size.height * scale)
+    }
+}
+
+private struct CaptureEditSheetNext: View {
+    @Binding var title: String
+    @Binding var text: String
+    let onCancel: () -> Void
+    let onSave: () -> Void
+
+    @ObservedObject private var theme = ThemeManager.shared
+    @FocusState private var isTextFocused: Bool
+
+    private var canSave: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Title")
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(theme.colors.textTertiary)
+
+                    TextField("Optional title", text: $title)
+                        .talkieType(.preview)
+                        .textInputAutocapitalization(.sentences)
+                        .padding(12)
+                        .background(theme.colors.cardBackground, in: RoundedRectangle(cornerRadius: 10))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                              lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                        )
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Content")
+                            .talkieType(.channelLabelTiny)
+                            .foregroundStyle(theme.colors.textTertiary)
+                        Spacer()
+                        Text("\(wordCount(text)) words")
+                            .talkieType(.hint)
+                            .foregroundStyle(theme.colors.textTertiary)
+                    }
+
+                    TextEditor(text: $text)
+                        .focused($isTextFocused)
+                        .scrollContentBackground(.hidden)
+                        .talkieType(.preview)
+                        .foregroundStyle(theme.colors.textPrimary)
+                        .padding(10)
+                        .frame(minHeight: 280)
+                        .background(theme.colors.cardBackground, in: RoundedRectangle(cornerRadius: 10))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                              lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                        )
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(16)
+            .background(theme.colors.background.ignoresSafeArea())
+            .navigationTitle("Edit Capture")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", action: onCancel)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save", action: onSave)
+                        .fontWeight(.semibold)
+                        .disabled(!canSave)
+                }
+            }
+            .onAppear {
+                isTextFocused = true
+            }
+        }
+    }
+
+    private func wordCount(_ value: String) -> Int {
+        value.split { $0.isWhitespace || $0.isNewline }.count
     }
 }
 
