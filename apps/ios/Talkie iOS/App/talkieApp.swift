@@ -42,10 +42,12 @@ struct talkieApp: App {
 
     init() {
         let initStart = Date()
-        registerBackgroundTasks()
-        _ = TalkieAppSettings.shared
-        _ = TalkieAppConfigurationStore.shared.synchronizePinnedWorkflowMirror()
-        applyScreenshotThemeOverrideIfNeeded()
+        Self.logPhase("bg-task-register", from: initStart) { registerBackgroundTasks() }
+        Self.logPhase("app-settings-load", from: initStart) { _ = TalkieAppSettings.shared }
+        Self.logPhase("workflow-mirror-sync", from: initStart) {
+            _ = TalkieAppConfigurationStore.shared.synchronizePinnedWorkflowMirror()
+        }
+        Self.logPhase("theme-override-check", from: initStart) { applyScreenshotThemeOverrideIfNeeded() }
 
         // Initialize ConnectionManager and register sync providers (async, non-blocking)
         Task {
@@ -57,6 +59,17 @@ struct talkieApp: App {
 
         let initDuration = Date().timeIntervalSince(initStart)
         AppLogger.app.info("📱 App.init: \(String(format: "%.0f", initDuration * 1000))ms")
+    }
+
+    /// Run `work` and log the elapsed time as a boot-phase marker.
+    /// `elapsed` is wall time since the start of `init()` so phase rows
+    /// in the console form a cumulative timeline.
+    private static func logPhase(_ name: String, from start: Date, _ work: () -> Void) {
+        let before = Date()
+        work()
+        let phase = Date().timeIntervalSince(before) * 1000
+        let elapsed = Date().timeIntervalSince(start) * 1000
+        AppLogger.app.info("📱  · \(name): +\(String(format: "%.0f", phase))ms (t=\(String(format: "%.0f", elapsed))ms)")
     }
 
     var body: some Scene {
