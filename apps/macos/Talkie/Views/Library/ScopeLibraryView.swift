@@ -2,11 +2,10 @@
 //  ScopeLibraryView.swift
 //  Talkie macOS
 //
-//  Cream-phosphor Library — the user's primary list of voice content
-//  (memos, dictations, notes, captures). Built around the metaphor of
-//  a tape archive: amber "ON FILE" stat strip at the top, channel-
-//  tagged signal rows beneath, date-bucketed section headers as
-//  eyebrow groupings, and a paper inspector to the right.
+//  Scope Library — the user's primary list of voice content
+//  (memos, dictations, notes, captures). Cool-gray document surface
+//  with channel-tagged rows, date-bucketed section headers, and an
+//  editorial inspector column.
 //
 //  Only mounted when SettingsManager.shared.isScopeTheme is true.
 //  AppNavigation branches on theme and renders RecordingsScreen() for
@@ -570,13 +569,7 @@ struct ScopeLibraryView: View {
 
     private var emptyStateSubtitle: String {
         if !searchText.isEmpty { return "No matches for \"\(searchText)\"." }
-        switch typeFilter {
-        case .all:        return "Hyper+M to record."
-        case .memos:      return "Hyper+M to record."
-        case .dictations: return "Hyper+D to dictate."
-        case .notes:      return "Hyper+N to start a note."
-        case .captures:   return "Hyper+S to capture."
-        }
+        return "No items in this view."
     }
 
 

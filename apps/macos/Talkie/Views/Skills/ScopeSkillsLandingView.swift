@@ -1650,11 +1650,6 @@ struct ScopeSkillsLandingView: View {
     private var footer: some View {
         VStack(alignment: .leading, spacing: 12) {
             ScopeRule(.subtle)
-            Text("One tab. Pick a starter, watch it open above, talk to the agent, run, save. Three skill modes coexist — atomic, composed (DO sequence/route over other skills), and workflow (graduated into the legacy editor). The foot of the page shows where they manifest — Compose, voice trigger, Library.")
-                .font(ScopeFont.displayItalic(size: 12.5))
-                .foregroundStyle(ScopeInk.faint)
-                .lineSpacing(2.5)
-                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 32)
         .padding(.top, 26)

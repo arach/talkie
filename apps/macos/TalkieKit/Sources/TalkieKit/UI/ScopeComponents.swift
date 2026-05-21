@@ -64,8 +64,8 @@ public struct GraticuleBackground: View {
 
 // MARK: - Eyebrow
 
-/// Leading-dot uppercase caption — the homepage's section header
-/// pattern (`· OWNERSHIP`, `· CAPTURE MODES`).
+/// Uppercase caption — the homepage's section header pattern
+/// (`OWNERSHIP`, `CAPTURE MODES`).
 public struct Eyebrow: View {
     public let text: String
     public let color: Color
@@ -82,7 +82,7 @@ public struct Eyebrow: View {
     }
 
     public var body: some View {
-        Text("· \(text.uppercased())")
+        Text(text.uppercased())
             .font(ScopeType.eyebrow)
             .tracking(ScopeType.Tracking.wide)
             .foregroundStyle(color)

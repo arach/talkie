@@ -510,31 +510,28 @@ struct ScopeHomeView: View {
     // recurring-theme aggregator. Shortcuts is the only one mostly
     // real today (HotkeyManager registrations).
 
-    // "Did you know" row — editorial 3-card section pulled from the
-    // Learn screen's RecapCard vocabulary. Replaces the prior Discovery
-    // row (calendar/shortcuts/trending) which read as dashboard tiles
-    // rather than restful curated content.
+    // Tips row — compact instrument labels for common actions.
     private var discoveryRow: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Eyebrow("Did you know")
+            Eyebrow("Tips")
             HStack(alignment: .top, spacing: 16) {
                 DidYouKnowCard(
                     glyph: .voiceEdit,
-                    hook: "Talk back to a memo.",
-                    detail: "Hit ⌃⇧⌘ E during playback to dictate an edit in place.",
-                    action: "Try it"
+                    hook: "Memo edit",
+                    detail: "Use ⌃⇧⌘ E during playback to dictate an edit.",
+                    action: "Open"
                 )
                 DidYouKnowCard(
                     glyph: .smartActions,
-                    hook: "Fix grammar with a chip.",
-                    detail: "Compose has one-tap chips for grammar, concise, and tone.",
-                    action: "See compose"
+                    hook: "Compose chips",
+                    detail: "Grammar, concise, and tone chips are available in Compose.",
+                    action: "Compose"
                 )
                 DidYouKnowCard(
                     glyph: .tray,
-                    hook: "Hyper+S, anywhere.",
-                    detail: "Screenshots drain into your next memo unless you pin them.",
-                    action: "How it works"
+                    hook: "Screen capture",
+                    detail: "Use Hyper+S to add a screenshot to the capture tray.",
+                    action: "Details"
                 )
             }
         }
@@ -1804,9 +1801,9 @@ private struct DidYouKnowCard: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top, spacing: 12) {
                     glyphTile
-                    Text(hook)
-                        .font(ScopeFont.display(size: 16, medium: true))
-                        .tracking(-0.2)
+                    Text(hook.uppercased())
+                        .font(ScopeType.channel)
+                        .tracking(ScopeType.Tracking.wide)
                         .foregroundStyle(ScopeInk.primary)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
