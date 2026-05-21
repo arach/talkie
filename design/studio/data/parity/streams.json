@@ -1862,6 +1862,27 @@
           "message": "Landed receiver-side ComposeStore command handling on the shared revision pipeline; AppShellNext/VoicePivotButton already route long-press transcripts into active Compose.",
           "findingKey": "C3::Attachments + context menus::Shell long-press \u2192 voice command",
           "ref": "a95a065"
+        },
+        {
+          "ts": "2026-05-21T23:37:14.371Z",
+          "agent": "talkie-codex-c3",
+          "level": "progress",
+          "message": "Starting TTS slice: verify memo/capture ReadAloudSource handoff and bind live source metadata into ReadAloudNext.",
+          "findingKey": "C3::TTS hooks in memo detail::Surface model"
+        },
+        {
+          "ts": "2026-05-21T23:37:14.386Z",
+          "agent": "talkie-codex-c3",
+          "level": "progress",
+          "message": "Starting TTS slice: extend ReadAloudPlayer range tracking so the source viewer highlights the current spoken chunk reliably.",
+          "findingKey": "C3::TTS hooks in memo detail::Range-of-speech highlighting"
+        },
+        {
+          "ts": "2026-05-21T23:37:14.401Z",
+          "agent": "talkie-codex-c3",
+          "level": "progress",
+          "message": "Starting TTS slice: replace placeholder skip buttons with sentence/chunk seek transport.",
+          "findingKey": "C3::TTS hooks in memo detail::Transport with skip + seek"
         }
       ]
     },
