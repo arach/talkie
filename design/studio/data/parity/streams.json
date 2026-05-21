@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T19:55:53.400Z",
+  "updatedAt": "2026-05-21T19:56:19.956Z",
   "streams": [
     {
       "key": "C1",
       "title": "Home · Library · History",
       "scope": "HomeNextView + HomeFeed, LibraryNextView + LibraryFeed, DictationHistoryNext + DictationHistoryFeed",
-      "owner": "talkie-codex-c1",
-      "status": "in-flight",
+      "owner": null,
+      "status": "done",
       "lockedAt": "2026-05-21T19:38:48.016Z",
       "notes": [
         {
@@ -601,6 +601,12 @@
           "message": "Recommend DROP: PICK UP is a Next-only continue card and matches the new shell spec.",
           "findingKey": "C1::HomeView::PICK UP continue card",
           "proposedDecision": "DROP"
+        },
+        {
+          "ts": "2026-05-21T19:56:19.942Z",
+          "agent": "talkie-codex-c1",
+          "level": "info",
+          "message": "C1 implementation pass complete: landed Home search/filter/sort/pagination/deep-link/promote/meta/iCloud CTA, Library search/filter/promote/sync status, DictationHistory promote/metadata/read-aloud, and feed loading/error handling. Workflow badge remains user-DEFER; proposed DROP/DEFER notes cover intentional Next-only or high-risk no-port findings."
         }
       ]
     },
