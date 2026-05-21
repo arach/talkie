@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T19:49:15.217Z",
+  "updatedAt": "2026-05-21T19:55:53.400Z",
   "streams": [
     {
       "key": "C1",
@@ -385,6 +385,222 @@
           "level": "progress",
           "message": "starting",
           "findingKey": "C1::Cross-cutting data flow::iCloud sync CTA in empty state"
+        },
+        {
+          "ts": "2026-05-21T19:55:37.472Z",
+          "agent": "talkie-codex-c1",
+          "level": "landed",
+          "message": "Home now exposes searchable recents with no-match empty state and deep-link focus support.",
+          "findingKey": "C1::HomeView::Full-screen search",
+          "ref": "dbb8428014caca1462d0d20e38523cf0d335e8b4"
+        },
+        {
+          "ts": "2026-05-21T19:55:37.496Z",
+          "agent": "talkie-codex-c1",
+          "level": "landed",
+          "message": "Recent feed has All/Memos/Dictations/Items filter menu backed by typed entry origins.",
+          "findingKey": "C1::HomeView::Content filter toggle",
+          "ref": "dbb8428014caca1462d0d20e38523cf0d335e8b4"
+        },
+        {
+          "ts": "2026-05-21T19:55:37.520Z",
+          "agent": "talkie-codex-c1",
+          "level": "landed",
+          "message": "Recent feed adds newest/oldest/title/duration sort menu.",
+          "findingKey": "C1::HomeView::Sort options",
+          "ref": "dbb8428014caca1462d0d20e38523cf0d335e8b4"
+        },
+        {
+          "ts": "2026-05-21T19:55:37.541Z",
+          "agent": "talkie-codex-c1",
+          "level": "landed",
+          "message": "Home recents now page beyond the initial five rows with Load more.",
+          "findingKey": "C1::HomeView::Load-more pagination",
+          "ref": "dbb8428014caca1462d0d20e38523cf0d335e8b4"
+        },
+        {
+          "ts": "2026-05-21T19:55:37.564Z",
+          "agent": "talkie-codex-c1",
+          "level": "landed",
+          "message": "Tally logic is preserved in the refactored feed and keeps first non-empty 24h/7d/30d rollover behavior.",
+          "findingKey": "C1::HomeView::Tally window rollover",
+          "ref": "dbb8428014caca1462d0d20e38523cf0d335e8b4"
+        },
+        {
+          "ts": "2026-05-21T19:55:37.591Z",
+          "agent": "talkie-codex-c1",
+          "level": "landed",
+          "message": "Memo rows now carry estimated audio size and format metadata.",
+          "findingKey": "C1::HomeView::File size + audio format meta",
+          "ref": "dbb8428014caca1462d0d20e38523cf0d335e8b4"
+        },
+        {
+          "ts": "2026-05-21T19:55:37.613Z",
+          "agent": "talkie-codex-c1",
+          "level": "landed",
+          "message": "Home observes DeepLinkManager search/openSearch actions and presents the search field.",
+          "findingKey": "C1::HomeView::Deep-link search action",
+          "ref": "dbb8428014caca1462d0d20e38523cf0d335e8b4"
+        },
+        {
+          "ts": "2026-05-21T19:55:37.633Z",
+          "agent": "talkie-codex-c1",
+          "level": "landed",
+          "message": "Keyboard dictation recents now expose leading Save as Memo swipe wired through VoiceMemoStore.",
+          "findingKey": "C1::HomeView::Promote-to-memo swipe on home dictations",
+          "ref": "dbb8428014caca1462d0d20e38523cf0d335e8b4"
+        },
+        {
+          "ts": "2026-05-21T19:55:37.660Z",
+          "agent": "talkie-codex-c1",
+          "level": "landed",
+          "message": "Library search field now binds into the feed instead of local-only state.",
+          "findingKey": "C1::LibraryView::SearchBar not wired",
+          "ref": "dbb8428014caca1462d0d20e38523cf0d335e8b4"
+        },
+        {
+          "ts": "2026-05-21T19:55:37.681Z",
+          "agent": "talkie-codex-c1",
+          "level": "landed",
+          "message": "Library tab rows/counts/earlier buckets now filter live by title, preview, context, or source.",
+          "findingKey": "C1::LibraryView::Live filtering across tabs",
+          "ref": "dbb8428014caca1462d0d20e38523cf0d335e8b4"
+        },
+        {
+          "ts": "2026-05-21T19:55:37.703Z",
+          "agent": "talkie-codex-c1",
+          "level": "landed",
+          "message": "Library keyboard dictation rows now expose leading Save as Memo swipe action.",
+          "findingKey": "C1::LibraryView::Promote-to-memo swipe on Library dictations",
+          "ref": "dbb8428014caca1462d0d20e38523cf0d335e8b4"
+        },
+        {
+          "ts": "2026-05-21T19:55:37.724Z",
+          "agent": "talkie-codex-c1",
+          "level": "landed",
+          "message": "Capture item rows now show synced/pending Mac sync status icons.",
+          "findingKey": "C1::LibraryView::Capture sync status",
+          "ref": "dbb8428014caca1462d0d20e38523cf0d335e8b4"
+        },
+        {
+          "ts": "2026-05-21T19:55:37.747Z",
+          "agent": "talkie-codex-c1",
+          "level": "landed",
+          "message": "Dictation history now wires leading Save as Memo while keeping trailing Delete.",
+          "findingKey": "C1::DictationHistoryView::Swipe-leading Save-as-Memo + trailing Delete",
+          "ref": "dbb8428014caca1462d0d20e38523cf0d335e8b4"
+        },
+        {
+          "ts": "2026-05-21T19:55:37.772Z",
+          "agent": "talkie-codex-c1",
+          "level": "landed",
+          "message": "Dictation rows now include word-count metadata.",
+          "findingKey": "C1::DictationHistoryView::Word count in detail",
+          "ref": "dbb8428014caca1462d0d20e38523cf0d335e8b4"
+        },
+        {
+          "ts": "2026-05-21T19:55:37.796Z",
+          "agent": "talkie-codex-c1",
+          "level": "landed",
+          "message": "Dictation rows now surface app context/source when present.",
+          "findingKey": "C1::DictationHistoryView::App context (Source) row",
+          "ref": "dbb8428014caca1462d0d20e38523cf0d335e8b4"
+        },
+        {
+          "ts": "2026-05-21T19:55:37.821Z",
+          "agent": "talkie-codex-c1",
+          "level": "landed",
+          "message": "Dictation rows now include a speaker button wired to SpeechSynthesisService.",
+          "findingKey": "C1::DictationHistoryView::Read-aloud toolbar button",
+          "ref": "dbb8428014caca1462d0d20e38523cf0d335e8b4"
+        },
+        {
+          "ts": "2026-05-21T19:55:37.841Z",
+          "agent": "talkie-codex-c1",
+          "level": "landed",
+          "message": "Home search now applies Core Data predicates for memo/note fetches; non-CoreData stores still filter in-memory.",
+          "findingKey": "C1::Cross-cutting data flow::Predicate filtering at fetch time",
+          "ref": "dbb8428014caca1462d0d20e38523cf0d335e8b4"
+        },
+        {
+          "ts": "2026-05-21T19:55:37.864Z",
+          "agent": "talkie-codex-c1",
+          "level": "landed",
+          "message": "Home and Library feeds now expose loading/error state with visible empty/error cards.",
+          "findingKey": "C1::Cross-cutting data flow::Error / loading states",
+          "ref": "dbb8428014caca1462d0d20e38523cf0d335e8b4"
+        },
+        {
+          "ts": "2026-05-21T19:55:37.885Z",
+          "agent": "talkie-codex-c1",
+          "level": "landed",
+          "message": "Home empty recents now show an iCloud sign-in CTA when status is noAccount.",
+          "findingKey": "C1::Cross-cutting data flow::iCloud sync CTA in empty state",
+          "ref": "dbb8428014caca1462d0d20e38523cf0d335e8b4"
+        },
+        {
+          "ts": "2026-05-21T19:55:53.308Z",
+          "agent": "talkie-codex-c1",
+          "level": "proposal",
+          "message": "Recommend DEFER: replacing the Next feed stores with @FetchRequest would be a high-risk architecture rewrite after this pass added explicit reload, loading, errors, search predicates, and NotificationCenter refresh hooks.",
+          "findingKey": "C1::Cross-cutting data flow::Live @FetchRequest binding",
+          "proposedDecision": "DEFER"
+        },
+        {
+          "ts": "2026-05-21T19:55:53.322Z",
+          "agent": "talkie-codex-c1",
+          "level": "proposal",
+          "message": "Recommend DROP: current Items tab intentionally shows capture items only; typed compose/keyboard content lives under Dictations, so porting mixed typed sources into Items would blur the Next tab contract.",
+          "findingKey": "C1::LibraryView::Source-type filtering on Items tab",
+          "proposedDecision": "DROP"
+        },
+        {
+          "ts": "2026-05-21T19:55:53.335Z",
+          "agent": "talkie-codex-c1",
+          "level": "proposal",
+          "message": "Recommend DROP: Next intentionally routes dictations into Compose for continuation; restoring the donor detail sheet would duplicate the Compose journey.",
+          "findingKey": "C1::LibraryView::Dictation tap target",
+          "proposedDecision": "DROP"
+        },
+        {
+          "ts": "2026-05-21T19:55:53.349Z",
+          "agent": "talkie-codex-c1",
+          "level": "proposal",
+          "message": "Recommend DROP: the bucket counts additional recent items inside the same week; existing copy matches current behavior and changing it is a copy-only design decision.",
+          "findingKey": "C1::LibraryView::EARLIER · THIS WEEK bucket copy",
+          "proposedDecision": "DROP"
+        },
+        {
+          "ts": "2026-05-21T19:55:53.362Z",
+          "agent": "talkie-codex-c1",
+          "level": "proposal",
+          "message": "Recommend DROP: Save as Memo is now available directly as a leading swipe action, and tap-to-Compose remains the intended Next detail path.",
+          "findingKey": "C1::DictationHistoryView::Detail view with Save as Memo button",
+          "proposedDecision": "DROP"
+        },
+        {
+          "ts": "2026-05-21T19:55:53.375Z",
+          "agent": "talkie-codex-c1",
+          "level": "proposal",
+          "message": "Recommend DROP: Next's 40pt MacConnectionChip is an intentional accessibility improvement over donor pixel dots and is already wired.",
+          "findingKey": "C1::HomeView::Mac connection signal",
+          "proposedDecision": "DROP"
+        },
+        {
+          "ts": "2026-05-21T19:55:53.387Z",
+          "agent": "talkie-codex-c1",
+          "level": "proposal",
+          "message": "Recommend DROP: QuickEntriesBar is a Next-only addition; no donor behavior should be ported over it.",
+          "findingKey": "C1::HomeView::QuickEntriesBar",
+          "proposedDecision": "DROP"
+        },
+        {
+          "ts": "2026-05-21T19:55:53.400Z",
+          "agent": "talkie-codex-c1",
+          "level": "proposal",
+          "message": "Recommend DROP: PICK UP is a Next-only continue card and matches the new shell spec.",
+          "findingKey": "C1::HomeView::PICK UP continue card",
+          "proposedDecision": "DROP"
         }
       ]
     },
