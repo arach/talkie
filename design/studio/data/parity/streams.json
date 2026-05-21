@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T23:46:33Z",
+  "updatedAt": "2026-05-21T23:46:34Z",
   "streams": [
     {
       "key": "C1",
@@ -1449,6 +1449,13 @@
           "findingKey": "C3::VoiceMemoDetailView::EventKit reminders"
         },
         {
+          "ts": "2026-05-21T19:40:17.026Z",
+          "agent": "talkie-codex-c6",
+          "level": "info",
+          "message": "C6 approved cross-cluster scope for per-memo workflow triggers. I am touching apps/ios/Talkie iOS/Views/Next/VoiceMemoDetailNext.swift to add the trigger entry point; no other C3 files planned.",
+          "ref": "apps/ios/Talkie iOS/Views/Next/VoiceMemoDetailNext.swift"
+        },
+        {
           "ts": "2026-05-21T19:42:45.251Z",
           "agent": "talkie-codex-c3",
           "level": "progress",
@@ -1871,7 +1878,7 @@
       "scope": "SettingsNext, OnboardingNext, SignInNext, AICredentialsNext, WorkspaceSwitcherNext",
       "owner": null,
       "status": "done",
-      "lockedAt": "2026-05-21T19:42:13.352Z",
+      "lockedAt": "2026-05-21T17:59:50.786Z",
       "notes": [
         {
           "ts": "2026-05-21T18:03:12.723Z",
@@ -2499,9 +2506,9 @@
       "key": "C6",
       "title": "Recording · Workflows · Feedback · Ask AI",
       "scope": "RecordingSheetNext, MinimalDictationOverlayNext, KeyboardActivationNext, VoicePivotButton + QuickEntriesBar, WorkflowsNext, FeedbackNext, AskAINext",
-      "owner": "talkie-codex-c6",
-      "status": "in-flight",
-      "lockedAt": "2026-05-21T19:20:47.998Z",
+      "owner": null,
+      "status": "done",
+      "lockedAt": "2026-05-21T19:38:34.095Z",
       "notes": [
         {
           "ts": "2026-05-21T18:00:36.870Z",
