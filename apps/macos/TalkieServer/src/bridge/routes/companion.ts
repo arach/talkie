@@ -10,6 +10,7 @@ export interface CompanionStateResponse {
   requestedSurface: "normal" | "shortcut";
   shortcutSlots: string[];
   shortcutPages?: CompanionShortcutPage[];
+  commandDeck?: CommandDeckSnapshot;
   shortcutStates: CompanionShortcutRuntimeState[];
   recentResults: CompanionShortcutRecentResult[];
   appSwitcherApps: CompanionAppSwitcherApp[];
@@ -22,6 +23,25 @@ export interface CompanionShortcutPage {
   id: string;
   title: string;
   shortcutSlots: string[];
+}
+
+export interface CommandDeckSnapshot {
+  spaces: CommandDeckSpace[];
+  activeSpaceID?: string;
+}
+
+export interface CommandDeckSpace {
+  id: string;
+  title: string;
+  tiles: CommandDeckTile[];
+}
+
+export interface CommandDeckTile {
+  id: string;
+  slotID?: string;
+  label: string;
+  icon: string;
+  hint?: string;
 }
 
 interface CompanionStateOptions {
@@ -111,6 +131,9 @@ interface ShortcutBoardSpace {
 
 interface ShortcutBoardTile {
   id?: string;
+  title?: string;
+  subtitle?: string;
+  icon?: string;
   legacySlotID?: string;
 }
 
@@ -188,6 +211,7 @@ export async function companionStateRoute(
     requestedSurface: readShortcutModeEnabled(settings) ? "shortcut" : "normal",
     shortcutSlots: readShortcutSlots(options, settings),
     shortcutPages: readShortcutPages(options, settings),
+    commandDeck: readCommandDeck(options, settings),
     shortcutStates: runtimeState.shortcutStates,
     recentResults: runtimeState.recentResults,
     appSwitcherApps: runtimeState.appSwitcherApps,
@@ -448,6 +472,128 @@ function readShortcutPages(
   }
 
   return defaultShortcutPages();
+}
+
+
+function readCommandDeck(
+  options: CompanionStateOptions,
+  settings: TalkieSettingsFile | null
+): CommandDeckSnapshot {
+  const resolvedBoard = settings ? resolveBoard(settings, options) : null;
+  const spaces = commandDeckSpacesFromBoard(resolvedBoard);
+  return {
+    spaces,
+    activeSpaceID: spaces.find((space) => space.id === "talkie")?.id ?? spaces[0]?.id,
+  };
+}
+
+function resolveBoard(
+  settings: TalkieSettingsFile,
+  options: CompanionStateOptions
+): ShortcutBoard | null {
+  const baseBoard = settings.devices?.defaults?.shortcutBoard;
+  if (!baseBoard) {
+    return null;
+  }
+
+  let resolved = cloneBoard(baseBoard);
+
+  if (options.deviceClass) {
+    const classOverride = settings.devices?.classes?.[options.deviceClass]?.shortcutBoardOverride;
+    if (classOverride) {
+      resolved = applyBoardOverride(resolved, classOverride);
+    }
+  }
+
+  if (options.deviceId) {
+    const deviceOverride = settings.devices?.overrides?.[options.deviceId]?.shortcutBoardOverride;
+    if (deviceOverride) {
+      resolved = applyBoardOverride(resolved, deviceOverride);
+    }
+  }
+
+  return resolved;
+}
+
+function commandDeckSpacesFromBoard(board: ShortcutBoard | null): CommandDeckSpace[] {
+  const sourceSpaces = Array.isArray(board?.spaces) && board.spaces.length > 0
+    ? board.spaces
+    : defaultShortcutPages().map((page) => ({
+        id: page.id,
+        title: page.title,
+        tiles: page.shortcutSlots.map((slotID, index) => ({
+          id: slotID || `${page.id}-slot-${index + 1}`,
+          legacySlotID: slotID,
+        })),
+      }));
+
+  return sourceSpaces.map((space, spaceIndex) => {
+    const title = typeof space.title === "string" && space.title.trim().length > 0
+      ? space.title.trim()
+      : defaultTitleForPage(space.id);
+    const id = typeof space.id === "string" && space.id.trim().length > 0
+      ? space.id.trim()
+      : title.toLowerCase().replace(/\s+/g, "-") || `space-${spaceIndex + 1}`;
+
+    return {
+      id,
+      title,
+      tiles: commandDeckTilesFromSpace(id, space.tiles),
+    };
+  });
+}
+
+function commandDeckTilesFromSpace(spaceID: string, tiles: ShortcutBoardTile[] | undefined): CommandDeckTile[] {
+  const normalized = Array.isArray(tiles) ? tiles.slice(0, 16) : [];
+  while (normalized.length < 16) {
+    normalized.push({ id: `${spaceID}-slot-${normalized.length + 1}` });
+  }
+
+  return normalized.map((tile, index) => {
+    const slotID = resolveLegacySlotId(tile);
+    const display = displayInfoForSlot(slotID);
+    const rawLabel = typeof tile.title === "string" ? tile.title.trim() : "";
+    const rawIcon = typeof tile.icon === "string" ? tile.icon.trim() : "";
+    const rawHint = typeof tile.subtitle === "string" ? tile.subtitle.trim() : "";
+
+    return {
+      id: `${spaceID}:${index}`,
+      slotID: slotID || undefined,
+      label: rawLabel || display.label,
+      icon: rawIcon || display.icon,
+      hint: rawHint ? shortHint(rawHint) : display.hint,
+    };
+  });
+}
+
+function shortHint(value: string): string | undefined {
+  const normalized = value.trim();
+  if (!normalized) return undefined;
+  if (normalized.length <= 14 && !normalized.includes(" ")) return normalized;
+  return undefined;
+}
+
+function displayInfoForSlot(slotID: string): { label: string; icon: string; hint?: string } {
+  switch (slotID) {
+    case "talkie-dictate": return { label: "Dictate", icon: "waveform.badge.mic" };
+    case "talkie-record": return { label: "Memo", icon: "square.and.pencil" };
+    case "talkie-settings": return { label: "Voice", icon: "waveform.badge.plus" };
+    case "talkie-search": return { label: "Search", icon: "magnifyingglass" };
+    case "mac-claude": return { label: "Claude", icon: "sparkles", hint: "Mac" };
+    case "talkie-agent": return { label: "Pi", icon: "circle.grid.cross" };
+    case "talkie-ssh": return { label: "Shell", icon: "terminal" };
+    case "mac-sessions": return { label: "Workflow", icon: "wand.and.stars", hint: "Mac" };
+    case "mac-windows": return { label: "Desktop", icon: "display", hint: "Mac" };
+    case "talkie-keyboard": return { label: "Screen", icon: "record.circle" };
+    case "talkie-memos": return { label: "Memos", icon: "waveform" };
+    case "talkie-command": return { label: "Command", icon: "command" };
+    case "talkie-pending": return { label: "Pending", icon: "hourglass" };
+    case "talkie-recent": return { label: "Recent", icon: "clock.arrow.circlepath" };
+    case "talkie-home": return { label: "Home", icon: "house" };
+    case "talkie-devices": return { label: "Devices", icon: "ipad.and.iphone" };
+    case "mac-paste-image": return { label: "Share", icon: "photo.on.rectangle.angled", hint: "Mac" };
+    default: return { label: "—", icon: "square.dashed" };
+  }
 }
 
 function resolveBoardShortcutSlots(

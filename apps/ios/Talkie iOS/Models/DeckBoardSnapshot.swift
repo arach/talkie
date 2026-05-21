@@ -66,10 +66,7 @@ final class DeckMirrorStore: ObservableObject {
     /// Set when the last fire failed; UI shows an inline banner.
     @Published private(set) var lastErrorMessage: String?
 
-    private init() {
-        // Paint-side mock — Codex replaces with a real bridge ingest.
-        board = .mock
-    }
+    private init() {}
 
     /// Replace the board snapshot. Called by Codex from the bridge
     /// event-stream callback once it lands on iOS.
@@ -77,17 +74,24 @@ final class DeckMirrorStore: ObservableObject {
         self.board = board
     }
 
-    /// Fire a slot. Paint-side: 350ms simulated round-trip, sets
-    /// firingSlotID then clears. Codex replaces with a real send via
-    /// `BridgeClient` (the Mac handler in TalkieServer.swift dispatches
-    /// the matching `case`).
+    /// Fire a slot on the paired Mac via the bridge. Keeps
+    /// `firingSlotID` set for the duration of the round-trip so the
+    /// deck tile still pulses while the Mac handles the command.
     func fire(slotID: String) {
         guard firingSlotID == nil else { return }
         firingSlotID = slotID
         lastErrorMessage = nil
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 350_000_000)
-            firingSlotID = nil
+            defer { firingSlotID = nil }
+
+            do {
+                let response = try await BridgeManager.shared.client.companionTrigger(shortcutId: slotID)
+                if response.ok == false {
+                    lastErrorMessage = response.error ?? response.message ?? "Mac did not handle \(slotID)."
+                }
+            } catch {
+                lastErrorMessage = error.localizedDescription
+            }
         }
     }
 }

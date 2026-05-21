@@ -1162,6 +1162,7 @@ final class BridgeManager {
             updateCompanionEventStreamStatus(true)
             if let snapshot = envelope.snapshot {
                 await applyCompanionState(snapshot)
+                DeckMirrorStore.shared.set(board: snapshot.commandDeck)
             }
         case "companion:error":
             log.debug("Companion events stream reported error: \(envelope.error ?? "unknown error")")

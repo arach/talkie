@@ -1212,6 +1212,7 @@ struct CompanionStateResponse: Codable, Equatable {
     let requestedSurface: RequestedSurface
     let shortcutSlots: [String]?
     let shortcutPages: [CompanionShortcutPage]?
+    let commandDeck: DeckBoardSnapshot?
     let shortcutStates: [CompanionShortcutRuntimeState]?
     let recentResults: [CompanionShortcutRecentResult]?
     let appSwitcherApps: [CompanionAppSwitcherApp]?
