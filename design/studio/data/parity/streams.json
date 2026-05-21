@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T22:36:58.691Z",
+  "updatedAt": "2026-05-21T22:40:13.577Z",
   "streams": [
     {
       "key": "C1",
@@ -1223,6 +1223,34 @@
           "level": "info",
           "message": "Build verification passed: xcodebuild Talkie on iPhone 17 simulator succeeded after C2 capture changes. PR remains open for parity/c2 → feat/ios-shell-phase-0.",
           "ref": "https://github.com/arach/talkie/pull/20"
+        },
+        {
+          "ts": "2026-05-21T22:40:13.498Z",
+          "agent": "user-art",
+          "level": "info",
+          "message": "Product call: Option A — router shell over existing surfaces. CaptureComposeNextView is a thin entry point that routes to CameraCaptureNext / WebCaptureBrowserNext / dictation / text-only compose based on user pick. Do NOT retire any of the existing per-mode surfaces. The shell pattern is: source picker (4 cells) + tap-through to the chosen surface, with onCaptureSaved bubbling back the captureID for any downstream handoff.",
+          "findingKey": "C2::CaptureComposeView::Entire surface absent"
+        },
+        {
+          "ts": "2026-05-21T22:40:13.518Z",
+          "agent": "user-art",
+          "level": "info",
+          "message": "Per the Option A router-shell decision: import + edit surface stays inside each per-mode surface (CameraCaptureNext has its own preview/edit, WebCaptureBrowser has its own URL flow, etc). No unified import/edit destination — the shell just delegates.",
+          "findingKey": "C2::CaptureComposeView::Import + edit surface"
+        },
+        {
+          "ts": "2026-05-21T22:40:13.542Z",
+          "agent": "user-art",
+          "level": "info",
+          "message": "Contract decision: handoff passes captureID only. Compose fetches its own data from CaptureStore by ID. Keeps the payload narrow, lets Compose decide what to seed (transcript, attachments, etc) without C2 having to know Compose internals. Coordinate with C3 via info note when wiring the receiver side.",
+          "findingKey": "C2::CaptureComposeView::onCaptureSaved → compose handoff"
+        },
+        {
+          "ts": "2026-05-21T22:40:13.566Z",
+          "agent": "user-art",
+          "level": "info",
+          "message": "Contract approved as proposed: init(store:onSelect:onSyncAll:onDelete:). The painter still needs to build CaptureListSectionNext.swift — that paint work is pending. For now, Codex can proceed with the OTHER PORT findings; come back to this one when the painted view lands on feat/ios-shell-phase-0.",
+          "findingKey": "C2::CaptureListSection::Entire surface absent"
         }
       ]
     },
@@ -1426,6 +1454,12 @@
           "level": "info",
           "message": "Summary: landed C3 tier-0 Compose/Memo-detail ports (compose scenePhase autosave; memo title edit and smart title; transcript edit/versioning; delete confirmation via VoiceMemoStore cleanup; share sheet with transcript and image attachments). PR is open.",
           "ref": "https://github.com/arach/talkie/pull/17"
+        },
+        {
+          "ts": "2026-05-21T22:40:13.577Z",
+          "agent": "user-art",
+          "level": "info",
+          "message": "Expansion approved across all remaining C3 PORT surfaces. Work them as M/L slices, one PR per slice (or grouped if tightly coupled). MemoAgentSheet (multi-turn Claude + Scout streaming), MemoCLISheet (headless transport + presets), workflow polling handoff with C6, OCR/context-menu/TTS — all greenlit. Do not stop at Tier-0; keep going until the C3 PORT set is drained."
         }
       ]
     },
