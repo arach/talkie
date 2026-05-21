@@ -305,24 +305,94 @@ private struct EmptyTabState: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        VStack(spacing: 6) {
-            Text("Nothing here yet")
-                .talkieType(.preview)
-                .foregroundStyle(theme.colors.textSecondary)
-            Text(hint)
-                .talkieType(.fieldValue)
-                .foregroundStyle(theme.colors.textTertiary)
-                .multilineTextAlignment(.center)
+        VStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(theme.currentTheme.chrome.accent.opacity(0.10))
+                    .frame(width: 56, height: 56)
+                Image(systemName: iconName)
+                    .font(.system(size: 22, weight: .light))
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+            }
+
+            VStack(spacing: 6) {
+                Text(headline)
+                    .talkieType(.headlineSecondary)
+                    .foregroundStyle(theme.colors.textPrimary)
+                Text(hint)
+                    .talkieType(.preview)
+                    .foregroundStyle(theme.colors.textTertiary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 14)
+
+            if let cta {
+                Button(action: cta.action) {
+                    HStack(spacing: 6) {
+                        Image(systemName: cta.icon)
+                            .font(.system(size: 11, weight: .semibold))
+                        Text(cta.label)
+                            .talkieType(.chipLabel)
+                    }
+                    .foregroundStyle(theme.colors.cardBackground)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .background(Capsule().fill(theme.currentTheme.chrome.accent))
+                }
+                .buttonStyle(.plain)
+            }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
+        .padding(.vertical, 36)
+        .padding(.horizontal, 14)
+    }
+
+    private var iconName: String {
+        switch tab {
+        case .memos:      return "waveform"
+        case .dictations: return "text.cursor"
+        case .items:      return "tray"
+        }
+    }
+
+    private var headline: String {
+        switch tab {
+        case .memos:      return "No memos yet"
+        case .dictations: return "No dictations yet"
+        case .items:      return "Nothing in the tray"
+        }
     }
 
     private var hint: String {
         switch tab {
-        case .memos:      return "Tap the mic to record a memo"
-        case .dictations: return "Dictate from the keyboard or Compose"
-        case .items:      return "Share links or scans into Talkie"
+        case .memos:      return "Long-press the mic anywhere in Talkie to start a recording."
+        case .dictations: return "Use the Talkie keyboard or Compose to capture text by voice."
+        case .items:      return "Share links from Safari, or run a camera scan to add items here."
+        }
+    }
+
+    private struct CTA {
+        let label: String
+        let icon: String
+        let action: () -> Void
+    }
+
+    private var cta: CTA? {
+        switch tab {
+        case .memos:
+            return CTA(label: "RECORD", icon: "mic.fill") {
+                // Mic is the global FAB; surface the tray.
+                // (No direct invoke API exposed; nudge user toward voice button.)
+            }
+        case .dictations:
+            return CTA(label: "ENABLE KEYBOARD", icon: "keyboard") {
+                AppShellRouter.shared.openKeyboardActivation()
+            }
+        case .items:
+            return CTA(label: "OPEN CAMERA", icon: "camera") {
+                AppShellRouter.shared.openCameraCapture()
+            }
         }
     }
 }

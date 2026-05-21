@@ -122,8 +122,8 @@ const MILESTONES: Milestone[] = [
       { code: "S01", title: "Accessibility audit", detail: "VoiceOver labels, Dynamic Type sizing, contrast across all 5 themes.", status: "future", size: "l", risk: "med" },
       { code: "S02", title: "Localization", detail: "Strings extraction, NSLocalizedString sweep, first non-English locale.", status: "future", size: "l", risk: "low" },
       { code: "S03", title: "Launch performance", detail: "Cold-launch budget under 1s. Profile + trim app boot path.", status: "future", size: "m", risk: "med" },
-      { code: "S04", title: "Offline error states", detail: "Every network-dependent surface has a clear offline state + retry.", status: "future", size: "m", risk: "low" },
-      { code: "S05", title: "Empty states", detail: "Each list / collection has a designed empty state — not just blank.", status: "future", size: "s", risk: "low" },
+      { code: "S04", title: "Offline error states", detail: "Shared NetworkStatusBanner component (offline · requestFailed · ok) wired into AskAINext above the conversation area. RETRY chip resets session.errorMessage and re-sends. Codex layers NetworkReachability into networkStatus to drive the .offline branch.", status: "shipped", size: "m" },
+      { code: "S05", title: "Empty states", detail: "LibraryNextView EmptyTabState upgraded — icon tile + headline + hint + per-tab CTA chip (RECORD · ENABLE KEYBOARD · OPEN CAMERA). DictationHistory, Terminal, Workflows schedules/history, memo attachments all already shipped with designed empties.", status: "shipped", size: "s" },
     ],
   },
 ];

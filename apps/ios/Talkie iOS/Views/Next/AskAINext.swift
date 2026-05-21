@@ -39,9 +39,18 @@ struct AskAINext: View {
             VStack(spacing: 0) {
                 header
                 divider
+
+                if networkStatus != .ok {
+                    NetworkStatusBanner(status: networkStatus, onRetry: retrySend)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 10)
+                        .transition(.opacity)
+                }
+
                 conversationArea
                 promptBar
             }
+            .animation(.easeInOut(duration: 0.18), value: networkStatus)
         }
         .onAppear(perform: bindShellVoice)
         .onDisappear {
@@ -221,6 +230,25 @@ struct AskAINext: View {
     private func applyPreset(_ preset: AskAIPreset) {
         session.prompt = preset.template
         isPromptFocused = true
+    }
+
+    /// Status the offline / request-failed banner observes. Paint-side
+    /// derives this from session.errorMessage. Codex layers a real
+    /// NetworkReachability observer on top to drive .offline when the
+    /// device has lost the network entirely.
+    private var networkStatus: NetworkStatus {
+        if let message = session.errorMessage, !message.isEmpty {
+            return .requestFailed(message: message)
+        }
+        return .ok
+    }
+
+    private func retrySend() {
+        session.errorMessage = nil
+        if !session.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           session.canSend {
+            sendPrompt()
+        }
     }
 
     private func sendPrompt() {
