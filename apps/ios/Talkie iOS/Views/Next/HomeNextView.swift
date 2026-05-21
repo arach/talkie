@@ -19,10 +19,14 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct HomeNextView: View {
     @ObservedObject private var theme = ThemeManager.shared
+    @ObservedObject private var deepLinkManager = DeepLinkManager.shared
+    @ObservedObject private var iCloudStatus = iCloudStatusManager.shared
     @StateObject private var feed: HomeFeed
+    @State private var isSearchPresented = false
 
     init(feed: HomeFeed? = nil) {
         _feed = StateObject(wrappedValue: feed ?? HomeFeed())
@@ -36,9 +40,27 @@ struct HomeNextView: View {
                 StationCard(pickUp: feed.lastDocument)
                     .padding(.horizontal, 12)
 
-                RecentSection(items: feed.recentItems) { item in
-                    feed.delete(item)
-                }
+                RecentSection(
+                    items: feed.recentItems,
+                    totalCount: feed.totalRecentCount,
+                    isLoading: feed.isLoading,
+                    errorMessage: feed.errorMessage,
+                    isSearching: feed.isSearching,
+                    hasMore: feed.hasMoreRecentItems,
+                    remainingCount: feed.remainingRecentItems,
+                    contentFilter: $feed.contentFilter,
+                    sortOption: $feed.sortOption,
+                    showsSyncPrompt: iCloudStatus.status == .noAccount && !iCloudStatus.isDismissed,
+                    onLoadMore: { feed.loadMoreRecentItems() },
+                    onPromote: { feed.promoteToMemo($0) },
+                    onDelete: { feed.delete($0) },
+                    onOpenICloudSettings: openICloudSettings,
+                    onDismissSyncPrompt: {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            iCloudStatus.dismissBanner()
+                        }
+                    }
+                )
                 .padding(.horizontal, 12)
 
                 Spacer(minLength: 80)   // breathing room for the shell voice button
@@ -46,9 +68,42 @@ struct HomeNextView: View {
         }
         .scrollIndicators(.hidden)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .searchable(
+            text: $feed.searchText,
+            isPresented: $isSearchPresented,
+            prompt: "Search memos, dictations, and captures"
+        )
         .onReceive(NotificationCenter.default.publisher(for: .voiceMemosDidChange)) { _ in feed.reload() }
         .onReceive(NotificationCenter.default.publisher(for: .capturesDidChange)) { _ in feed.reload() }
         .onReceive(NotificationCenter.default.publisher(for: .composeNotesDidChange)) { _ in feed.reload() }
+        .onChange(of: deepLinkManager.pendingAction) { _, action in
+            handleDeepLinkAction(action)
+        }
+        .onAppear {
+            handleDeepLinkAction(deepLinkManager.pendingAction)
+        }
+    }
+
+    private func handleDeepLinkAction(_ action: DeepLinkAction) {
+        switch action {
+        case .search(let query):
+            feed.searchText = query
+            isSearchPresented = true
+            deepLinkManager.clearAction()
+        case .openSearch:
+            isSearchPresented = true
+            deepLinkManager.clearAction()
+        default:
+            break
+        }
+    }
+
+    private func openICloudSettings() {
+        if let url = URL(string: "App-Prefs:root=APPLE_ACCOUNT") {
+            UIApplication.shared.open(url)
+        } else if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
     }
 }
 
@@ -497,17 +552,33 @@ private struct QuickEntriesBar: View {
 
 private struct RecentSection: View {
     let items: [HomeFeed.RecentItem]
+    let totalCount: Int
+    let isLoading: Bool
+    let errorMessage: String?
+    let isSearching: Bool
+    let hasMore: Bool
+    let remainingCount: Int
+    @Binding var contentFilter: HomeFeed.ContentFilter
+    @Binding var sortOption: HomeFeed.SortOption
+    let showsSyncPrompt: Bool
+    let onLoadMore: () -> Void
+    let onPromote: (HomeFeed.RecentItem) -> Void
     let onDelete: (HomeFeed.RecentItem) -> Void
+    let onOpenICloudSettings: () -> Void
+    let onDismissSyncPrompt: () -> Void
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Text("· RECENT · \(items.count)")
+                Text("· RECENT · \(totalCount)")
                     .talkieType(.channelLabel)
                     .foregroundStyle(theme.currentTheme.chrome.accent)
 
                 Spacer()
+
+                filterMenu
+                sortMenu
 
                 Button(action: { AppShellRouter.shared.openLibrary() }) {
                     Text("ALL ›")
@@ -518,27 +589,83 @@ private struct RecentSection: View {
             }
             .padding(.horizontal, 4)
 
-            List {
-                ForEach(Array(items.enumerated()), id: \.element.id) { idx, item in
-                    RecentRow(item: item, showDivider: idx > 0)
-                        .contentShape(Rectangle())
-                        .onTapGesture { open(item) }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                onDelete(item)
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
+            VStack(spacing: 0) {
+                if isLoading && items.isEmpty {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 32)
+                } else if let errorMessage {
+                    FeedMessageState(
+                        icon: "exclamationmark.triangle",
+                        title: "Couldn’t load recents",
+                        message: errorMessage
+                    )
+                } else if items.isEmpty {
+                    EmptyHomeRecentState(
+                        isSearching: isSearching,
+                        showsSyncPrompt: showsSyncPrompt,
+                        onOpenICloudSettings: onOpenICloudSettings,
+                        onDismissSyncPrompt: onDismissSyncPrompt
+                    )
+                } else {
+                    List {
+                        ForEach(items.enumerated(), id: \.element.id) { idx, item in
+                            RecentRow(item: item, showDivider: idx > 0)
+                                .contentShape(Rectangle())
+                                .onTapGesture { open(item) }
+                                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                    if item.canPromoteToMemo {
+                                        Button {
+                                            onPromote(item)
+                                        } label: {
+                                            Label("Save as Memo", systemImage: "square.and.arrow.down.fill")
+                                        }
+                                        .tint(theme.currentTheme.chrome.accent)
+                                    }
+                                }
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        onDelete(item)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                                .listRowInsets(EdgeInsets())
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
                         }
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .scrollDisabled(true)
+                    .frame(height: CGFloat(items.count) * 72)
+
+                    if hasMore {
+                        Button(action: {
+                            withAnimation { onLoadMore() }
+                        }) {
+                            HStack(spacing: 6) {
+                                Spacer()
+                                Image(systemName: "arrow.down")
+                                    .font(.system(size: 10, weight: .semibold))
+                                Text("Load \(min(10, remainingCount)) more")
+                                    .talkieType(.preview)
+                                Spacer()
+                            }
+                            .foregroundStyle(theme.colors.textSecondary)
+                            .padding(.vertical, 14)
+                        }
+                        .buttonStyle(.plain)
+                        .overlay(
+                            Rectangle()
+                                .fill(theme.currentTheme.chrome.edgeSubtle)
+                                .frame(height: theme.currentTheme.chrome.hairlineWidth)
+                                .padding(.leading, 36),
+                            alignment: .top
+                        )
+                    }
                 }
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .scrollDisabled(true)
-            .frame(height: CGFloat(items.count) * 62)
             .background(theme.colors.cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(
@@ -547,6 +674,42 @@ private struct RecentSection: View {
                                   lineWidth: theme.currentTheme.chrome.hairlineWidth)
             )
         }
+    }
+
+    private var filterMenu: some View {
+        Menu {
+            ForEach(HomeFeed.ContentFilter.allCases, id: \.self) { filter in
+                Button {
+                    contentFilter = filter
+                } label: {
+                    Label(filter.label, systemImage: filter.icon)
+                }
+            }
+        } label: {
+            Label(contentFilter.label, systemImage: contentFilter.icon)
+                .labelStyle(.iconOnly)
+                .foregroundStyle(theme.colors.textTertiary)
+        }
+        .accessibilityLabel("Content filter")
+        .accessibilityValue(contentFilter.label)
+    }
+
+    private var sortMenu: some View {
+        Menu {
+            ForEach(HomeFeed.SortOption.allCases, id: \.self) { option in
+                Button {
+                    sortOption = option
+                } label: {
+                    Label(option.label, systemImage: option.menuIcon)
+                }
+            }
+        } label: {
+            Image(systemName: sortOption.menuIcon)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(theme.colors.textTertiary)
+        }
+        .accessibilityLabel("Sort recent items")
+        .accessibilityValue(sortOption.label)
     }
 
     private func open(_ item: HomeFeed.RecentItem) {
@@ -598,6 +761,14 @@ private struct RecentRow: View {
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                         }
+
+                        if let meta = item.meta {
+                            Text(meta)
+                                .talkieType(.hint)
+                                .foregroundStyle(theme.colors.textTertiary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
                     }
                 }
                 .padding(.horizontal, 14)
@@ -616,6 +787,83 @@ private struct RecentRow: View {
             Image(systemName: "link").font(.system(size: 12))
         case .scan:
             Image(systemName: "viewfinder").font(.system(size: 12))
+        }
+    }
+}
+
+private struct FeedMessageState: View {
+    let icon: String
+    let title: String
+    let message: String
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 24, weight: .light))
+                .foregroundStyle(theme.colors.textTertiary)
+            Text(title)
+                .talkieType(.channelLabel)
+                .foregroundStyle(theme.colors.textSecondary)
+            Text(message)
+                .talkieType(.preview)
+                .foregroundStyle(theme.colors.textTertiary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 32)
+        .padding(.horizontal, 16)
+    }
+}
+
+private struct EmptyHomeRecentState: View {
+    let isSearching: Bool
+    let showsSyncPrompt: Bool
+    let onOpenICloudSettings: () -> Void
+    let onDismissSyncPrompt: () -> Void
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        VStack(spacing: 12) {
+            FeedMessageState(
+                icon: isSearching ? "magnifyingglass" : "tray",
+                title: isSearching ? "· NO MATCHES" : "· NOTHING RECENT",
+                message: isSearching ? "Try a different search term" : "Record, dictate, compose, or scan to start your feed."
+            )
+
+            if showsSyncPrompt {
+                HStack(spacing: 10) {
+                    Image(systemName: "icloud.slash")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("iCloud is not signed in")
+                            .talkieType(.preview)
+                            .foregroundStyle(theme.colors.textPrimary)
+                        Text("Sign in to sync memos with your Mac.")
+                            .talkieType(.hint)
+                            .foregroundStyle(theme.colors.textTertiary)
+                    }
+                    Spacer()
+                    Button("Open") {
+                        onOpenICloudSettings()
+                    }
+                    .talkieType(.chipLabel)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                    Button(action: onDismissSyncPrompt) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(theme.colors.textTertiary)
+                }
+                .padding(12)
+                .background(theme.currentTheme.chrome.accentTint)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .padding(.horizontal, 12)
+                .padding(.bottom, 12)
+            }
         }
     }
 }

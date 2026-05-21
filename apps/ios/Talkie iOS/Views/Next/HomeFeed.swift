@@ -6,14 +6,79 @@
 //
 
 import CoreData
+import Foundation
 import SwiftUI
 import TalkieMobileKit
 
 @MainActor
 final class HomeFeed: ObservableObject {
+    enum ContentFilter: String, CaseIterable {
+        case all = "All"
+        case memos = "Memos"
+        case dictations = "Dictations"
+        case captures = "Items"
+
+        var label: String { rawValue }
+
+        var icon: String {
+            switch self {
+            case .all: return "tray.full"
+            case .memos: return "waveform"
+            case .dictations: return "keyboard"
+            case .captures: return "tray.and.arrow.down"
+            }
+        }
+    }
+
+    enum SortOption: String, CaseIterable {
+        case dateNewest = "Newest First"
+        case dateOldest = "Oldest First"
+        case title = "Title (A-Z)"
+        case duration = "Duration"
+
+        var label: String { rawValue }
+
+        var menuIcon: String {
+            switch self {
+            case .dateNewest: return "arrow.down"
+            case .dateOldest: return "arrow.up"
+            case .title: return "textformat"
+            case .duration: return "clock"
+            }
+        }
+    }
+
     @Published var lastDocument: PickUp?
     @Published var recentTally: Tally
     @Published var recentItems: [RecentItem]
+    @Published private(set) var totalRecentCount: Int
+    @Published private(set) var isLoading: Bool
+    @Published private(set) var errorMessage: String?
+
+    @Published var searchText: String = "" {
+        didSet {
+            guard searchText != oldValue else { return }
+            displayLimit = Self.defaultDisplayLimit
+            reload()
+        }
+    }
+
+    @Published var contentFilter: ContentFilter = .all {
+        didSet {
+            guard contentFilter != oldValue else { return }
+            displayLimit = Self.defaultDisplayLimit
+            refreshRecentItems()
+        }
+    }
+
+    @Published var sortOption: SortOption = .dateNewest {
+        didSet {
+            guard sortOption != oldValue else { return }
+            refreshRecentItems()
+        }
+    }
+
+    @Published private(set) var displayLimit: Int
 
     struct PickUp {
         let title: String
@@ -37,68 +102,86 @@ final class HomeFeed: ObservableObject {
         let source: Source
         let title: String
         let preview: String?
+        let meta: String?
         let relativeTime: String   // "9:34 AM", "Yesterday", "Mon"
+        let canPromoteToMemo: Bool
 
         enum Source { case dictation, typed, link, scan }
     }
+
+    var hasMoreRecentItems: Bool { totalRecentCount > displayLimit }
+    var remainingRecentItems: Int { max(0, totalRecentCount - displayLimit) }
+    var isSearching: Bool { !normalizedSearchText.isEmpty }
+
+    private static let defaultDisplayLimit = 5
+    private static let pageSize = 10
+
+    private var entries: [Entry] = []
 
     init() {
         self.lastDocument = nil
         self.recentTally = Tally(eyebrow: "Quiet · long-press to capture", cta: nil, cells: [])
         self.recentItems = []
+        self.totalRecentCount = 0
+        self.isLoading = false
+        self.errorMessage = nil
+        self.displayLimit = Self.defaultDisplayLimit
         reload()
     }
 
     func reload() {
+        isLoading = true
+        defer { isLoading = false }
+
         let context = PersistenceController.shared.container.viewContext
-        let memos = Self.fetchVoiceMemos(context: context)
-        let notes = Self.fetchComposeNotes(context: context)
 
-        KeyboardDictationStore.shared.reload()
-        CaptureStore.shared.reload()
-        let dictations = KeyboardDictationStore.shared.all()
-        let captures = CaptureStore.shared.all()
+        do {
+            let unfilteredMemos = try Self.fetchVoiceMemos(context: context)
+            let unfilteredNotes = try Self.fetchComposeNotes(context: context)
+            let filteredMemos = try Self.fetchVoiceMemos(context: context, matching: normalizedSearchText)
+            let filteredNotes = try Self.fetchComposeNotes(context: context, matching: normalizedSearchText)
 
-        let entries = Self.makeEntries(
-            memos: memos,
-            notes: notes,
-            dictations: dictations,
-            captures: captures
-        )
+            KeyboardDictationStore.shared.reload()
+            CaptureStore.shared.reload()
+            let dictations = KeyboardDictationStore.shared.all()
+            let captures = CaptureStore.shared.all()
 
-        let pickUpEntry = entries
-            .filter { $0.kind == "Compose" }
-            .sorted { $0.updatedAt > $1.updatedAt }
-            .first
-            ?? entries.sorted { $0.updatedAt > $1.updatedAt }.first
+            let allEntries = Self.makeEntries(
+                memos: unfilteredMemos,
+                notes: unfilteredNotes,
+                dictations: dictations,
+                captures: captures
+            )
+            let matchingDictations = Self.filter(dictations: dictations, matching: normalizedSearchText)
+            let matchingCaptures = Self.filter(captures: captures, matching: normalizedSearchText)
 
-        self.lastDocument = pickUpEntry
-            .map { entry in
-                PickUp(
-                    title: entry.title,
-                    meta: "\(entry.kind) · \(Self.formatWordCount(entry.wordCount)) · \(Self.relativeAge(from: entry.updatedAt))",
-                    continueAction: { AppShellRouter.shared.openCompose(documentID: entry.id) }
-                )
-            }
+            entries = Self.makeEntries(
+                memos: filteredMemos,
+                notes: filteredNotes,
+                dictations: matchingDictations,
+                captures: matchingCaptures
+            )
 
-        self.recentTally = Self.makeTally(
-            memos: memos,
-            dictations: dictations,
-            captures: captures
-        )
+            refreshPickUp(from: allEntries)
+            recentTally = Self.makeTally(
+                memos: unfilteredMemos,
+                dictations: dictations,
+                captures: captures
+            )
+            errorMessage = nil
+            refreshRecentItems()
+        } catch {
+            errorMessage = "Couldn’t load recent items."
+            entries = []
+            recentItems = []
+            totalRecentCount = 0
+            AppLogger.persistence.error("Failed to load home feed: \(error.localizedDescription)")
+        }
+    }
 
-        self.recentItems = entries
-            .sorted { $0.updatedAt > $1.updatedAt }
-            .prefix(5)
-            .map { entry in
-                RecentItem(
-                    id: entry.id,
-                    source: entry.source,
-                    title: entry.title,
-                    preview: entry.preview,
-                    relativeTime: Self.relativeListTime(from: entry.updatedAt)
-                )
-            }
+    func loadMoreRecentItems() {
+        displayLimit += Self.pageSize
+        refreshRecentItems()
     }
 
     func delete(_ item: RecentItem) {
@@ -120,37 +203,147 @@ final class HomeFeed: ObservableObject {
 
         reload()
     }
+
+    func promoteToMemo(_ item: RecentItem) {
+        guard item.canPromoteToMemo,
+              let uuid = UUID(uuidString: item.id),
+              let dictation = KeyboardDictationStore.shared.all().first(where: { $0.id == uuid }) else {
+            return
+        }
+        if VoiceMemoStore.shared.promoteKeyboardDictation(dictation) {
+            reload()
+        }
+    }
+
+    private func refreshPickUp(from allEntries: [Entry]) {
+        let pickUpEntry = allEntries
+            .filter { $0.origin == .composeNote }
+            .sorted { $0.updatedAt > $1.updatedAt }
+            .first
+            ?? allEntries.sorted { $0.updatedAt > $1.updatedAt }.first
+
+        lastDocument = pickUpEntry
+            .map { entry in
+                PickUp(
+                    title: entry.title,
+                    meta: "\(entry.kind) · \(Self.formatWordCount(entry.wordCount)) · \(Self.relativeAge(from: entry.updatedAt))",
+                    continueAction: { AppShellRouter.shared.openCompose(documentID: entry.id) }
+                )
+            }
+    }
+
+    private func refreshRecentItems() {
+        let filtered = entries
+            .filter { entry in contentFilter.matches(entry.origin) }
+            .sorted(using: sortOption)
+
+        totalRecentCount = filtered.count
+        recentItems = filtered
+            .prefix(displayLimit)
+            .map { entry in
+                RecentItem(
+                    id: entry.id,
+                    source: entry.source,
+                    title: entry.title,
+                    preview: entry.preview,
+                    meta: entry.meta,
+                    relativeTime: Self.relativeListTime(from: entry.updatedAt),
+                    canPromoteToMemo: entry.origin == .keyboardDictation
+                )
+            }
+    }
+
+    private var normalizedSearchText: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+private extension HomeFeed.ContentFilter {
+    func matches(_ origin: HomeFeed.Entry.Origin) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .memos:
+            return origin == .memo
+        case .dictations:
+            return origin == .composeNote || origin == .keyboardDictation
+        case .captures:
+            return origin == .capture
+        }
+    }
+}
+
+private extension Array where Element == HomeFeed.Entry {
+    func sorted(using option: HomeFeed.SortOption) -> [HomeFeed.Entry] {
+        switch option {
+        case .dateNewest:
+            return sorted { $0.updatedAt > $1.updatedAt }
+        case .dateOldest:
+            return sorted { $0.updatedAt < $1.updatedAt }
+        case .title:
+            return sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        case .duration:
+            return sorted { $0.durationSeconds > $1.durationSeconds }
+        }
+    }
 }
 
 private extension HomeFeed {
     struct Entry {
+        enum Origin { case memo, composeNote, keyboardDictation, capture }
+
         let id: String
         let kind: String
+        let origin: Origin
         let source: RecentItem.Source
         let title: String
         let preview: String?
+        let meta: String?
         let wordCount: Int
+        let durationSeconds: Double
         let updatedAt: Date
     }
 
-    static func fetchVoiceMemos(context: NSManagedObjectContext) -> [VoiceMemo] {
+    static func fetchVoiceMemos(
+        context: NSManagedObjectContext,
+        matching query: String = ""
+    ) throws -> [VoiceMemo] {
         let request: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
+        if !query.isEmpty {
+            request.predicate = NSPredicate(
+                format: "title CONTAINS[cd] %@ OR transcription CONTAINS[cd] %@ OR summary CONTAINS[cd] %@ OR notes CONTAINS[cd] %@",
+                query,
+                query,
+                query,
+                query
+            )
+        }
         request.sortDescriptors = [
             NSSortDescriptor(keyPath: \VoiceMemo.lastModified, ascending: false),
             NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false),
         ]
         request.fetchLimit = 200
-        return (try? context.fetch(request)) ?? []
+        return try context.fetch(request)
     }
 
-    static func fetchComposeNotes(context: NSManagedObjectContext) -> [ComposeNote] {
+    static func fetchComposeNotes(
+        context: NSManagedObjectContext,
+        matching query: String = ""
+    ) throws -> [ComposeNote] {
         let request: NSFetchRequest<ComposeNote> = ComposeNote.fetchRequest()
+        if !query.isEmpty {
+            request.predicate = NSPredicate(
+                format: "title CONTAINS[cd] %@ OR content CONTAINS[cd] %@",
+                query,
+                query
+            )
+        }
         request.sortDescriptors = [
             NSSortDescriptor(keyPath: \ComposeNote.lastModified, ascending: false),
             NSSortDescriptor(keyPath: \ComposeNote.createdAt, ascending: false),
         ]
         request.fetchLimit = 200
-        return (try? context.fetch(request)) ?? []
+        return try context.fetch(request)
     }
 
     static func makeEntries(
@@ -165,10 +358,13 @@ private extension HomeFeed {
             return Entry(
                 id: memo.id?.uuidString ?? memo.objectID.uriRepresentation().absoluteString,
                 kind: "Memo",
+                origin: .memo,
                 source: .dictation,
                 title: title,
                 preview: preview(body),
+                meta: memoMeta(for: memo),
                 wordCount: wordCount(body ?? title),
+                durationSeconds: memo.duration,
                 updatedAt: memo.lastModified ?? memo.createdAt ?? .distantPast
             )
         }
@@ -178,10 +374,13 @@ private extension HomeFeed {
             return Entry(
                 id: note.id?.uuidString ?? note.objectID.uriRepresentation().absoluteString,
                 kind: "Compose",
+                origin: .composeNote,
                 source: .typed,
                 title: title,
                 preview: preview(note.content),
+                meta: nil,
                 wordCount: wordCount(note.content ?? title),
+                durationSeconds: 0,
                 updatedAt: note.lastModified ?? note.createdAt ?? .distantPast
             )
         }
@@ -190,10 +389,13 @@ private extension HomeFeed {
             Entry(
                 id: dictation.id.uuidString,
                 kind: "Type",
+                origin: .keyboardDictation,
                 source: .typed,
                 title: title(from: dictation.text, fallback: "Keyboard dictation"),
                 preview: preview(dictation.text),
+                meta: dictationMeta(for: dictation),
                 wordCount: dictation.wordCount,
+                durationSeconds: dictation.durationSeconds ?? 0,
                 updatedAt: dictation.timestamp
             )
         }
@@ -203,10 +405,13 @@ private extension HomeFeed {
             return Entry(
                 id: capture.id.uuidString,
                 kind: kind(for: capture),
+                origin: .capture,
                 source: source,
                 title: cleanTitle(capture.title, fallback: title(from: capture.text, fallback: fallbackTitle(for: capture))),
-                preview: preview(capture.text),
+                preview: capture.sourceURL?.isEmpty == false ? capture.sourceURL : preview(capture.text),
+                meta: capture.syncedToMac ? "Synced to Mac" : "Not synced",
                 wordCount: capture.wordCount,
+                durationSeconds: 0,
                 updatedAt: capture.timestamp
             )
         }
@@ -247,6 +452,24 @@ private extension HomeFeed {
             cta: nil,
             cells: []
         )
+    }
+
+    static func filter(dictations: [KeyboardDictation], matching query: String) -> [KeyboardDictation] {
+        guard !query.isEmpty else { return dictations }
+        return dictations.filter { dictation in
+            dictation.text.localizedStandardContains(query)
+                || (dictation.appContext?.localizedStandardContains(query) ?? false)
+        }
+    }
+
+    static func filter(captures: [Capture], matching query: String) -> [Capture] {
+        guard !query.isEmpty else { return captures }
+        return captures.filter { capture in
+            capture.title?.localizedStandardContains(query) == true
+                || capture.text.localizedStandardContains(query)
+                || capture.sourceURL?.localizedStandardContains(query) == true
+                || capture.sourceType.localizedStandardContains(query)
+        }
     }
 
     static func source(for capture: Capture) -> RecentItem.Source {
@@ -304,6 +527,58 @@ private extension HomeFeed {
 
     static func wordCount(_ text: String) -> Int {
         text.split { $0.isWhitespace || $0.isNewline }.count
+    }
+
+    static func memoMeta(for memo: VoiceMemo) -> String? {
+        guard memo.duration > 0 || (memo.fileURL?.isEmpty == false) else { return nil }
+        var parts: [String] = []
+        if memo.duration > 0 {
+            parts.append(estimatedFileSize(forDuration: memo.duration))
+        }
+        if let format = audioFormat(from: memo.fileURL) {
+            parts.append(format)
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    static func dictationMeta(for dictation: KeyboardDictation) -> String? {
+        var parts: [String] = [formatWordCount(dictation.wordCount)]
+        if let duration = dictation.durationSeconds, duration > 0 {
+            parts.append(formatDuration(duration))
+        }
+        if let context = dictation.appContext?.trimmingCharacters(in: .whitespacesAndNewlines), !context.isEmpty {
+            parts.append(context)
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    static func estimatedFileSize(forDuration duration: Double) -> String {
+        let bytes = Int(max(1, duration) * 16 * 1024)
+        return formatBytes(bytes)
+    }
+
+    static func audioFormat(from fileURL: String?) -> String? {
+        guard let fileURL, !fileURL.isEmpty else { return nil }
+        let ext = URL(fileURLWithPath: fileURL).pathExtension
+        return ext.isEmpty ? "Audio" : ext.uppercased()
+    }
+
+    static func formatBytes(_ bytes: Int) -> String {
+        if bytes >= 1_048_576 {
+            let tenths = (bytes * 10) / 1_048_576
+            let whole = tenths / 10
+            let fraction = tenths % 10
+            return fraction == 0 ? "~\(whole) MB" : "~\(whole).\(fraction) MB"
+        }
+        let kb = max(1, bytes / 1024)
+        return "~\(kb) KB"
+    }
+
+    static func formatDuration(_ duration: Double) -> String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        if minutes > 0 { return "\(minutes)m \(seconds)s" }
+        return "\(seconds)s"
     }
 
     static func formatWordCount(_ count: Int) -> String {

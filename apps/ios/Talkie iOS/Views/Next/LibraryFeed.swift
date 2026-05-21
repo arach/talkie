@@ -13,6 +13,7 @@ import TalkieMobileKit
 @MainActor
 final class LibraryFeed: ObservableObject {
     enum Source { case dictation, typed, link, scan }
+    enum SyncStatus { case synced, pending }
 
     struct Item: Identifiable {
         let id: String
@@ -20,61 +21,56 @@ final class LibraryFeed: ObservableObject {
         let title: String
         let preview: String?
         let relativeTime: String
+        let syncStatus: SyncStatus?
+        let canPromoteToMemo: Bool
     }
 
     @Published private(set) var memos: [Item]
     @Published private(set) var dictations: [Item]
     @Published private(set) var items: [Item]
-
-    @Published private(set) var memosTotal: Int
-    @Published private(set) var dictationsTotal: Int
-    @Published private(set) var itemsTotal: Int
-
-    @Published private(set) var earlierMemos: Int
-    @Published private(set) var earlierDictations: Int
-    @Published private(set) var earlierItems: Int
+    @Published private(set) var isLoading: Bool
+    @Published private(set) var errorMessage: String?
 
     init() {
         self.memos = []
         self.dictations = []
         self.items = []
-        self.memosTotal = 0
-        self.dictationsTotal = 0
-        self.itemsTotal = 0
-        self.earlierMemos = 0
-        self.earlierDictations = 0
-        self.earlierItems = 0
+        self.isLoading = false
+        self.errorMessage = nil
         reload()
     }
 
     func reload() {
+        isLoading = true
+        defer { isLoading = false }
+
         let context = PersistenceController.shared.container.viewContext
-        let memos = Self.fetchVoiceMemos(context: context)
-        let notes = Self.fetchComposeNotes(context: context)
+        do {
+            let memos = try Self.fetchVoiceMemos(context: context)
+            let notes = try Self.fetchComposeNotes(context: context)
 
-        KeyboardDictationStore.shared.reload()
-        CaptureStore.shared.reload()
-        let keyboardDictations = KeyboardDictationStore.shared.all()
-        let captures = CaptureStore.shared.all()
+            KeyboardDictationStore.shared.reload()
+            CaptureStore.shared.reload()
+            let keyboardDictations = KeyboardDictationStore.shared.all()
+            let captures = CaptureStore.shared.all()
 
-        let memoBucket = Self.bucket(Self.memoEntries(from: memos), limit: Self.visibleLimit)
-        let dictationBucket = Self.bucket(
-            Self.noteEntries(from: notes) + Self.keyboardEntries(from: keyboardDictations),
-            limit: Self.visibleLimit
-        )
-        let itemBucket = Self.bucket(Self.captureItemEntries(from: captures), limit: Self.visibleLimit)
-
-        self.memos = memoBucket.visible
-        self.dictations = dictationBucket.visible
-        self.items = itemBucket.visible
-
-        self.memosTotal = memoBucket.total
-        self.dictationsTotal = dictationBucket.total
-        self.itemsTotal = itemBucket.total
-
-        self.earlierMemos = memoBucket.earlier
-        self.earlierDictations = dictationBucket.earlier
-        self.earlierItems = itemBucket.earlier
+            self.memoEntries = Self.memoEntries(from: memos)
+            self.dictationEntries = Self.noteEntries(from: notes) + Self.keyboardEntries(from: keyboardDictations)
+            self.itemEntries = Self.captureItemEntries(from: captures)
+            self.memos = Self.bucket(self.memoEntries, limit: Self.visibleLimit).visible
+            self.dictations = Self.bucket(self.dictationEntries, limit: Self.visibleLimit).visible
+            self.items = Self.bucket(self.itemEntries, limit: Self.visibleLimit).visible
+            self.errorMessage = nil
+        } catch {
+            self.memoEntries = []
+            self.dictationEntries = []
+            self.itemEntries = []
+            self.memos = []
+            self.dictations = []
+            self.items = []
+            self.errorMessage = "Couldn’t load library items."
+            AppLogger.persistence.error("Failed to load library feed: \(error.localizedDescription)")
+        }
     }
 
     func delete(_ item: Item, in tab: LibraryTab) {
@@ -97,28 +93,27 @@ final class LibraryFeed: ObservableObject {
         reload()
     }
 
-    func items(for tab: LibraryTab) -> [Item] {
-        switch tab {
-        case .memos:      return memos
-        case .dictations: return dictations
-        case .items:      return items
+    func promoteToMemo(_ item: Item) {
+        guard item.canPromoteToMemo,
+              let uuid = UUID(uuidString: item.id),
+              let dictation = KeyboardDictationStore.shared.all().first(where: { $0.id == uuid }) else {
+            return
+        }
+        if VoiceMemoStore.shared.promoteKeyboardDictation(dictation) {
+            reload()
         }
     }
 
-    func totalCount(for tab: LibraryTab) -> Int {
-        switch tab {
-        case .memos:      return memosTotal
-        case .dictations: return dictationsTotal
-        case .items:      return itemsTotal
-        }
+    func items(for tab: LibraryTab, matching query: String = "") -> [Item] {
+        Self.bucket(filteredEntries(for: tab, matching: query), limit: Self.visibleLimit).visible
     }
 
-    func earlierCount(for tab: LibraryTab) -> Int {
-        switch tab {
-        case .memos:      return earlierMemos
-        case .dictations: return earlierDictations
-        case .items:      return earlierItems
-        }
+    func totalCount(for tab: LibraryTab, matching query: String = "") -> Int {
+        Self.bucket(filteredEntries(for: tab, matching: query), limit: Self.visibleLimit).total
+    }
+
+    func earlierCount(for tab: LibraryTab, matching query: String = "") -> Int {
+        Self.bucket(filteredEntries(for: tab, matching: query), limit: Self.visibleLimit).earlier
     }
 
     // MARK: - Persistence-backed feed
@@ -129,6 +124,26 @@ final class LibraryFeed: ObservableObject {
     private struct Entry {
         let item: Item
         let updatedAt: Date
+        let searchableText: String
+    }
+
+    private var memoEntries: [Entry] = []
+    private var dictationEntries: [Entry] = []
+    private var itemEntries: [Entry] = []
+
+    private func filteredEntries(for tab: LibraryTab, matching query: String) -> [Entry] {
+        let entries: [Entry]
+        switch tab {
+        case .memos: entries = memoEntries
+        case .dictations: entries = dictationEntries
+        case .items: entries = itemEntries
+        }
+
+        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedQuery.isEmpty else { return entries }
+        return entries.filter { entry in
+            entry.searchableText.localizedStandardContains(normalizedQuery)
+        }
     }
 
     private static func bucket(_ entries: [Entry], limit: Int) -> (visible: [Item], total: Int, earlier: Int) {
@@ -140,39 +155,43 @@ final class LibraryFeed: ObservableObject {
         return (Array(visible), recent.count, max(0, recent.count - limit))
     }
 
-    private static func fetchVoiceMemos(context: NSManagedObjectContext) -> [VoiceMemo] {
+    private static func fetchVoiceMemos(context: NSManagedObjectContext) throws -> [VoiceMemo] {
         let request: NSFetchRequest<VoiceMemo> = VoiceMemo.fetchRequest()
         request.sortDescriptors = [
             NSSortDescriptor(keyPath: \VoiceMemo.lastModified, ascending: false),
             NSSortDescriptor(keyPath: \VoiceMemo.createdAt, ascending: false),
         ]
         request.fetchLimit = 200
-        return (try? context.fetch(request)) ?? []
+        return try context.fetch(request)
     }
 
-    private static func fetchComposeNotes(context: NSManagedObjectContext) -> [ComposeNote] {
+    private static func fetchComposeNotes(context: NSManagedObjectContext) throws -> [ComposeNote] {
         let request: NSFetchRequest<ComposeNote> = ComposeNote.fetchRequest()
         request.sortDescriptors = [
             NSSortDescriptor(keyPath: \ComposeNote.lastModified, ascending: false),
             NSSortDescriptor(keyPath: \ComposeNote.createdAt, ascending: false),
         ]
         request.fetchLimit = 200
-        return (try? context.fetch(request)) ?? []
+        return try context.fetch(request)
     }
 
     private static func memoEntries(from memos: [VoiceMemo]) -> [Entry] {
         memos.map { memo in
             let updatedAt = memo.lastModified ?? memo.createdAt ?? .distantPast
             let body = firstNonEmpty([memo.transcription, memo.summary, memo.notes])
+            let item = Item(
+                id: memo.id?.uuidString ?? memo.objectID.uriRepresentation().absoluteString,
+                source: .dictation,
+                title: cleanTitle(memo.title, fallback: "Untitled memo"),
+                preview: preview(body),
+                relativeTime: relativeListTime(from: updatedAt),
+                syncStatus: nil,
+                canPromoteToMemo: false
+            )
             return Entry(
-                item: Item(
-                    id: memo.id?.uuidString ?? memo.objectID.uriRepresentation().absoluteString,
-                    source: .dictation,
-                    title: cleanTitle(memo.title, fallback: "Untitled memo"),
-                    preview: preview(body),
-                    relativeTime: relativeListTime(from: updatedAt)
-                ),
-                updatedAt: updatedAt
+                item: item,
+                updatedAt: updatedAt,
+                searchableText: searchableText(title: item.title, preview: item.preview)
             )
         }
     }
@@ -181,30 +200,38 @@ final class LibraryFeed: ObservableObject {
         notes.map { note in
             let updatedAt = note.lastModified ?? note.createdAt ?? .distantPast
             let title = cleanTitle(note.title, fallback: title(from: note.content ?? "", fallback: "Untitled note"))
+            let item = Item(
+                id: note.id?.uuidString ?? note.objectID.uriRepresentation().absoluteString,
+                source: .typed,
+                title: title,
+                preview: preview(note.content),
+                relativeTime: relativeListTime(from: updatedAt),
+                syncStatus: nil,
+                canPromoteToMemo: false
+            )
             return Entry(
-                item: Item(
-                    id: note.id?.uuidString ?? note.objectID.uriRepresentation().absoluteString,
-                    source: .typed,
-                    title: title,
-                    preview: preview(note.content),
-                    relativeTime: relativeListTime(from: updatedAt)
-                ),
-                updatedAt: updatedAt
+                item: item,
+                updatedAt: updatedAt,
+                searchableText: searchableText(title: item.title, preview: item.preview)
             )
         }
     }
 
     private static func keyboardEntries(from dictations: [KeyboardDictation]) -> [Entry] {
         dictations.map { dictation in
-            Entry(
-                item: Item(
-                    id: dictation.id.uuidString,
-                    source: .typed,
-                    title: title(from: dictation.text, fallback: "Keyboard dictation"),
-                    preview: preview(dictation.text),
-                    relativeTime: relativeListTime(from: dictation.timestamp)
-                ),
-                updatedAt: dictation.timestamp
+            let item = Item(
+                id: dictation.id.uuidString,
+                source: .typed,
+                title: title(from: dictation.text, fallback: "Keyboard dictation"),
+                preview: preview(dictation.text),
+                relativeTime: relativeListTime(from: dictation.timestamp),
+                syncStatus: nil,
+                canPromoteToMemo: true
+            )
+            return Entry(
+                item: item,
+                updatedAt: dictation.timestamp,
+                searchableText: searchableText(title: item.title, preview: item.preview, extra: dictation.appContext)
             )
         }
     }
@@ -213,15 +240,19 @@ final class LibraryFeed: ObservableObject {
         captures.compactMap { capture in
             guard let source = itemSource(for: capture) else { return nil }
             let fallback = fallbackTitle(for: capture, source: source)
+            let item = Item(
+                id: capture.id.uuidString,
+                source: source,
+                title: cleanTitle(capture.title, fallback: title(from: capture.text, fallback: fallback)),
+                preview: capturePreview(for: capture, source: source),
+                relativeTime: relativeListTime(from: capture.timestamp),
+                syncStatus: capture.syncedToMac ? .synced : .pending,
+                canPromoteToMemo: false
+            )
             return Entry(
-                item: Item(
-                    id: capture.id.uuidString,
-                    source: source,
-                    title: cleanTitle(capture.title, fallback: title(from: capture.text, fallback: fallback)),
-                    preview: capturePreview(for: capture, source: source),
-                    relativeTime: relativeListTime(from: capture.timestamp)
-                ),
-                updatedAt: capture.timestamp
+                item: item,
+                updatedAt: capture.timestamp,
+                searchableText: searchableText(title: item.title, preview: item.preview, extra: capture.sourceType)
             )
         }
     }
@@ -248,6 +279,13 @@ final class LibraryFeed: ObservableObject {
             return sourceURL
         }
         return preview(capture.text)
+    }
+
+    private static func searchableText(title: String, preview: String?, extra: String? = nil) -> String {
+        [title, preview, extra]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
     }
 
     private static func firstNonEmpty(_ values: [String?]) -> String? {

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T23:42:18.033Z",
+  "updatedAt": "2026-05-21T23:46:32Z",
   "streams": [
     {
       "key": "C1",
@@ -754,9 +754,9 @@
       "key": "C2",
       "title": "Capture",
       "scope": "CaptureDetailNext, CameraCaptureNext, WebCaptureBrowserNext, ScanPreviewOverlay, CaptureAICommandsSheet equivalent",
-      "owner": "talkie-codex-c2",
-      "status": "blocked",
-      "lockedAt": "2026-05-21T22:42:28.485Z",
+      "owner": null,
+      "status": "done",
+      "lockedAt": "2026-05-21T17:59:22.003Z",
       "notes": [
         {
           "ts": "2026-05-21T17:59:50.681Z",
@@ -1324,9 +1324,9 @@
       "key": "C3",
       "title": "Compose · Memo detail",
       "scope": "ComposeNextView + ComposeStore, VoiceMemoDetailNext, ReadAloudNext, attachments, agent + CLI sheets",
-      "owner": "talkie-codex-c3",
-      "status": "in-flight",
-      "lockedAt": "2026-05-21T23:25:33.120Z",
+      "owner": null,
+      "status": "done",
+      "lockedAt": "2026-05-21T18:00:01.377Z",
       "notes": [
         {
           "ts": "2026-05-21T18:00:43.158Z",
@@ -1871,7 +1871,7 @@
       "scope": "SettingsNext, OnboardingNext, SignInNext, AICredentialsNext, WorkspaceSwitcherNext",
       "owner": null,
       "status": "done",
-      "lockedAt": "2026-05-21T19:42:13.352Z",
+      "lockedAt": "2026-05-21T17:59:50.786Z",
       "notes": [
         {
           "ts": "2026-05-21T18:03:12.723Z",
@@ -2188,7 +2188,7 @@
       "scope": "ConnectionCenterNext, BridgeDetailNext, DeckMirrorNext, NetworkStatusBanner, MacConnectionChip, MacCoachCard",
       "owner": null,
       "status": "done",
-      "lockedAt": "2026-05-21T23:41:18.588Z",
+      "lockedAt": "2026-05-21T17:59:42.179Z",
       "notes": [
         {
           "ts": "2026-05-21T18:00:26.165Z",
@@ -2499,9 +2499,9 @@
       "key": "C6",
       "title": "Recording · Workflows · Feedback · Ask AI",
       "scope": "RecordingSheetNext, MinimalDictationOverlayNext, KeyboardActivationNext, VoicePivotButton + QuickEntriesBar, WorkflowsNext, FeedbackNext, AskAINext",
-      "owner": null,
-      "status": "done",
-      "lockedAt": "2026-05-21T19:38:34.095Z",
+      "owner": "talkie-codex-c6",
+      "status": "in-flight",
+      "lockedAt": "2026-05-21T19:20:47.998Z",
       "notes": [
         {
           "ts": "2026-05-21T18:00:36.870Z",
