@@ -181,6 +181,10 @@ final class ComposeStore: ObservableObject {
         state = .idle
     }
 
+    func autosave() {
+        persistDocument()
+    }
+
     struct Document {
         let title: String
         var paragraphs: [String]

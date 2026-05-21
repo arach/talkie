@@ -26,6 +26,7 @@ struct ComposeNextView: View {
 
     @ObservedObject private var theme = ThemeManager.shared
     @EnvironmentObject private var chrome: ShellChrome
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var compose: ComposeStore
     @FocusState private var keyboardFieldFocused: Bool
     @State private var keyboardBridgeText: String = ""
@@ -90,6 +91,10 @@ struct ComposeNextView: View {
         }
         .onChange(of: compose.keyboardFocusRequested) { _, _ in
             keyboardFieldFocused = true
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .inactive || newPhase == .background else { return }
+            compose.autosave()
         }
     }
 }
