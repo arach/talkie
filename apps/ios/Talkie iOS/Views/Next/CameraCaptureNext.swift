@@ -430,23 +430,18 @@ private final class CameraCaptureNextModel: NSObject, ObservableObject {
             return
         }
 
-        let ocrText: String
+        let preview: ScanPreview
         do {
-            let result = try await ScreenshotOCRService.extractText(from: image)
-            ocrText = result.text
+            let result = try await ScreenshotOCRService.extractChunks(from: image)
+            preview = ScanPreview(image: result.image, chunks: result.chunks)
         } catch {
             AppLogger.ai.warning("Camera capture OCR found no text: \(error.localizedDescription)")
-            ocrText = ""
+            preview = ScanPreview(image: image, chunks: [])
         }
 
-        // Build the preview snapshot. Once Codex wires real
-        // per-observation confidence from Vision, replace
-        // `mockChunks(from:)` with the real chunk array; the rest of
-        // the flow (overlay, confirm, save) stays unchanged.
-        let chunks = Self.mockChunks(from: ocrText)
         statusMessage = nil
         isProcessing = false
-        scanPreview = ScanPreview(image: image, chunks: chunks)
+        scanPreview = preview
     }
 
     /// Persist the pending preview as a capture, sync, and route to
@@ -487,41 +482,6 @@ private final class CameraCaptureNextModel: NSObject, ObservableObject {
     func discardPreview() {
         scanPreview = nil
         statusMessage = nil
-    }
-
-    /// Paint-side mock that splits OCR text into chunks with a
-    /// deterministic confidence gradient. Each chunk's confidence
-    /// dips with position so demos always include at least one
-    /// medium/low band to exercise the reshoot affordance.
-    private static func mockChunks(from text: String) -> [OCRChunk] {
-        let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !cleaned.isEmpty else { return [] }
-
-        // Split on sentence boundaries, falling back to lines, then
-        // to a single chunk for very short scans.
-        let sentences = cleaned
-            .split(whereSeparator: { ".!?".contains($0) })
-            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-
-        let segments: [String]
-        if sentences.count > 1 {
-            segments = sentences
-        } else {
-            let lines = cleaned
-                .split(whereSeparator: \.isNewline)
-                .map { String($0).trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty }
-            segments = lines.count > 1 ? lines : [cleaned]
-        }
-
-        return segments.enumerated().map { idx, body in
-            // Gradient: first chunk ~0.93, last chunk ~0.55. Keeps the
-            // mock honest — there's almost always one wobbly chunk.
-            let step = segments.count > 1 ? Double(idx) / Double(segments.count - 1) : 0
-            let confidence = 0.93 - step * 0.38
-            return OCRChunk(text: body, confidence: max(0.35, confidence))
-        }
     }
 
     private func finishWithError(_ message: String) {

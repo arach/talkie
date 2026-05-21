@@ -20,6 +20,18 @@ enum ScreenshotOCRService {
         let didDetectPage: Bool
     }
 
+    /// Result of an OCR operation that preserves per-observation confidence.
+    struct OCRChunkResult {
+        let chunks: [OCRChunk]
+        let image: UIImage
+        let pageCount: Int
+        let didDetectPage: Bool
+
+        var text: String {
+            chunks.map(\.text).joined(separator: "\n").normalizedDocumentText
+        }
+    }
+
     enum OCRError: LocalizedError {
         case noTextFound
         case recognitionFailed(Error)
@@ -40,10 +52,20 @@ enum ScreenshotOCRService {
         let didDetectPage: Bool
     }
 
+    private struct PreparedChunkPage {
+        let image: UIImage
+        let chunks: [OCRChunk]
+        let didDetectPage: Bool
+    }
+
     private static let ciContext = CIContext()
 
     static func extractText(from image: UIImage) async throws -> OCRResult {
         try await extractText(from: [image])
+    }
+
+    static func extractChunks(from image: UIImage) async throws -> OCRChunkResult {
+        try await extractChunks(from: [image])
     }
 
     static func extractText(from images: [UIImage]) async throws -> OCRResult {
@@ -85,6 +107,50 @@ enum ScreenshotOCRService {
         AppLogger.ai.info("OCR extracted \(combinedText.count) characters from \(preparedPages.count) page(s)")
         return OCRResult(
             text: combinedText,
+            image: previewImage,
+            pageCount: preparedPages.count,
+            didDetectPage: didDetectPage
+        )
+    }
+
+    static func extractChunks(from images: [UIImage]) async throws -> OCRChunkResult {
+        guard !images.isEmpty else {
+            throw OCRError.noTextFound
+        }
+
+        var preparedPages: [PreparedChunkPage] = []
+        preparedPages.reserveCapacity(images.count)
+
+        for image in images {
+            let normalizedImage = image.normalizedForOCR()
+            let correctedImage = await correctedDocumentImage(from: normalizedImage)
+            let preparedImage = correctedImage ?? normalizedImage
+            let chunks = try await recognizeLegacyChunks(from: preparedImage)
+
+            preparedPages.append(
+                PreparedChunkPage(
+                    image: preparedImage,
+                    chunks: chunks,
+                    didDetectPage: correctedImage != nil || images.count > 1
+                )
+            )
+        }
+
+        let combinedChunks = preparedPages
+            .flatMap(\.chunks)
+            .filter { !$0.text.normalizedDocumentText.isEmpty }
+
+        guard !combinedChunks.isEmpty else {
+            throw OCRError.noTextFound
+        }
+
+        let previewImage = compositePreviewImage(from: preparedPages.map(\.image)) ?? preparedPages[0].image
+        let didDetectPage = preparedPages.contains(where: { $0.didDetectPage })
+        let characterCount = combinedChunks.reduce(0) { $0 + $1.text.count }
+
+        AppLogger.ai.info("OCR extracted \(characterCount) characters from \(preparedPages.count) page(s) with confidence")
+        return OCRChunkResult(
+            chunks: combinedChunks,
             image: previewImage,
             pageCount: preparedPages.count,
             didDetectPage: didDetectPage
@@ -150,6 +216,20 @@ enum ScreenshotOCRService {
     }
 
     private static func recognizeLegacyText(from image: UIImage) async throws -> String {
+        let chunks = try await recognizeLegacyChunks(from: image)
+        let trimmed = chunks
+            .map(\.text)
+            .joined(separator: "\n")
+            .normalizedDocumentText
+
+        guard !trimmed.isEmpty else {
+            throw OCRError.noTextFound
+        }
+
+        return trimmed
+    }
+
+    private static func recognizeLegacyChunks(from image: UIImage) async throws -> [OCRChunk] {
         guard let cgImage = image.cgImage else {
             throw OCRError.noTextFound
         }
@@ -178,19 +258,27 @@ enum ScreenshotOCRService {
             }
         }
 
-        let recognizedStrings = observations.compactMap { observation -> String? in
-            observation.topCandidates(1).first?.string
+        let chunks = observations.compactMap { observation -> OCRChunk? in
+            guard let candidate = observation.topCandidates(1).first else {
+                return nil
+            }
+
+            let text = candidate.string.normalizedDocumentText
+            guard !text.isEmpty else {
+                return nil
+            }
+
+            return OCRChunk(
+                text: text,
+                confidence: Double(candidate.confidence)
+            )
         }
 
-        let trimmed = recognizedStrings
-            .joined(separator: "\n")
-            .normalizedDocumentText
-
-        guard !trimmed.isEmpty else {
+        guard !chunks.isEmpty else {
             throw OCRError.noTextFound
         }
 
-        return trimmed
+        return chunks
     }
 
     private static func correctedDocumentImage(from image: UIImage) async -> UIImage? {
