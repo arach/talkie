@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T22:35:36.837Z",
+  "updatedAt": "2026-05-21T22:36:58.691Z",
   "streams": [
     {
       "key": "C1",
@@ -725,6 +725,27 @@
           "agent": "user-art",
           "level": "info",
           "message": "Rejected DEFER recommendation — we want @FetchRequest in place even though it is a meaningful rewrite. The current explicit reload + NotificationCenter pattern is the workaround, not the destination. Proceed with PORT when bandwidth allows; do not skip.",
+          "findingKey": "C1::Cross-cutting data flow::Live @FetchRequest binding"
+        },
+        {
+          "ts": "2026-05-21T22:36:43.082Z",
+          "agent": "user-art",
+          "level": "decision",
+          "message": "DEFER",
+          "findingKey": "C1::Cross-cutting data flow::Live @FetchRequest binding"
+        },
+        {
+          "ts": "2026-05-21T22:36:58.678Z",
+          "agent": "user-art",
+          "level": "decision",
+          "message": "DEFER",
+          "findingKey": "C1::Cross-cutting data flow::Live @FetchRequest binding"
+        },
+        {
+          "ts": "2026-05-21T22:36:58.691Z",
+          "agent": "user-art",
+          "level": "info",
+          "message": "Reversing earlier PORT — agreed with codex-c1 on reflection. HomeFeed/LibraryFeed merge three typed sources, so @FetchRequest would mean 3 fetch requests + manual merge, which is what the explicit-reload pattern already is. The architecture diverged from the donor on purpose; the current pattern is the destination, not a workaround. DEFER stands.",
           "findingKey": "C1::Cross-cutting data flow::Live @FetchRequest binding"
         }
       ]
