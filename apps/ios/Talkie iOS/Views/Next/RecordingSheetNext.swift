@@ -8,8 +8,10 @@
 //
 
 import CoreData
+import PhotosUI
 import SwiftUI
 import TalkieMobileKit
+import UIKit
 
 /// Tracks the active state of the next-style recording sheet — the
 /// chrome's mic-FAB sets this true; the sheet observes and presents.
@@ -32,8 +34,19 @@ struct RecordingSheetNext: View {
     @State private var savedURL: URL?
     @State private var savedDuration: TimeInterval = 0
     @State private var savedLevels: [Float] = []
+    @State private var selectedAttachmentItems: [PhotosPickerItem] = []
+    @State private var showingAttachmentPhotoPicker = false
+    @State private var pendingAttachments: [RecordingSheetPendingAttachment] = []
+    @State private var pendingSidecarRequests: [RecordingSidecarRequest] = []
+    @State private var attachmentError: String?
+
+    private let memoAttachmentStore = MemoAttachmentStore.shared
 
     private enum Phase { case starting, recording, stopped, saving, saved }
+
+    private var queuedContextCount: Int {
+        pendingAttachments.count + pendingSidecarRequests.count
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -56,6 +69,12 @@ struct RecordingSheetNext: View {
         .presentationDetents([.height(280), .height(560)], selection: $detent)
         .presentationDragIndicator(.hidden)
         .presentationBackground(.regularMaterial)
+        .photosPicker(
+            isPresented: $showingAttachmentPhotoPicker,
+            selection: $selectedAttachmentItems,
+            maxSelectionCount: 10,
+            matching: .images
+        )
         .onAppear {
             startedAt = Date()
             recorder.startRecording()
@@ -65,6 +84,12 @@ struct RecordingSheetNext: View {
             if recorder.isRecording {
                 recorder.stopRecording()
                 recorder.finalizeRecording()
+            }
+        }
+        .onChange(of: selectedAttachmentItems) { _, newItems in
+            guard !newItems.isEmpty else { return }
+            Task {
+                await importSelectedAttachmentItems(newItems)
             }
         }
     }
@@ -108,6 +133,8 @@ struct RecordingSheetNext: View {
             Text("· REC · HQ · 44.1k · MEMO")
                 .talkieType(.channelLabelTiny)
                 .foregroundStyle(theme.colors.textTertiary)
+
+            compactContextQueue
 
             Spacer()
 
@@ -171,6 +198,8 @@ struct RecordingSheetNext: View {
             metadataRow(label: "Quality", value: "HQ · 44.1k")
             metadataRow(label: "Samples", value: "\(savedLevels.count) levels")
 
+            contextDetailsPanel
+
             Spacer()
 
             HStack(spacing: 10) {
@@ -225,6 +254,168 @@ struct RecordingSheetNext: View {
                 .foregroundStyle(theme.colors.textPrimary)
         }
         .padding(.top, 40)
+    }
+
+    // MARK: - Context queue
+
+    private var compactContextQueue: some View {
+        HStack(spacing: 8) {
+            contextPill(systemImage: "photo.on.rectangle", label: "Photos", action: showPhotosPicker)
+
+            ForEach(RecordingSidecarKind.allCases, id: \.self) { kind in
+                contextPill(systemImage: kind.iconName, label: kind.displayName) {
+                    queueSidecarRequest(kind)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            if queuedContextCount > 0 {
+                Text("\(queuedContextCount)")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(theme.currentTheme.chrome.accent.opacity(0.14)))
+            }
+        }
+    }
+
+    private var contextDetailsPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("· CONTEXT")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary)
+                Spacer()
+                if queuedContextCount > 0 {
+                    Text("\(queuedContextCount) QUEUED")
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                }
+            }
+
+            compactContextQueue
+
+            if !pendingAttachments.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(pendingAttachments) { attachment in
+                            pendingAttachmentTile(attachment)
+                        }
+                    }
+                }
+            }
+
+            if !pendingSidecarRequests.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(pendingSidecarRequests) { request in
+                            pendingSidecarTile(request)
+                        }
+                    }
+                }
+            }
+
+            if let attachmentError {
+                Text(attachmentError)
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(Color(red: 0.85, green: 0.46, blue: 0.34))
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(theme.colors.cardBackground.opacity(0.68))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                      lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                )
+        )
+    }
+
+    private func contextPill(systemImage: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 10, weight: .semibold))
+                Text(label.uppercased())
+                    .talkieType(.channelLabelTiny)
+            }
+            .foregroundStyle(theme.colors.textSecondary)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 7)
+            .background(
+                Capsule()
+                    .fill(theme.colors.cardBackground.opacity(0.7))
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                          lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func pendingAttachmentTile(_ attachment: RecordingSheetPendingAttachment) -> some View {
+        ZStack(alignment: .topTrailing) {
+            Image(uiImage: attachment.image)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 64, height: 64)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                      lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                )
+
+            Button(action: { removePendingAttachment(attachment) }) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(theme.colors.cardBackground)
+                    .background(Circle().fill(Color.black.opacity(0.5)))
+            }
+            .buttonStyle(.plain)
+            .padding(4)
+        }
+    }
+
+    private func pendingSidecarTile(_ request: RecordingSidecarRequest) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: request.kind.iconName)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(theme.currentTheme.chrome.accent)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(request.kind.displayName)
+                    .talkieType(.fieldLabel)
+                    .foregroundStyle(theme.colors.textPrimary)
+                Text("Queued at \(timeString(request.queuedAtOffset))")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary)
+            }
+
+            Button(action: { removeSidecarRequest(request) }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(theme.colors.textTertiary)
+                    .frame(width: 22, height: 22)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 9)
+                .fill(theme.colors.cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9)
+                        .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                      lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                )
+        )
     }
 
     // MARK: - Actions
@@ -296,6 +487,9 @@ struct RecordingSheetNext: View {
 
         do {
             try context.save()
+            if let memoID = memo.id {
+                persistQueuedContext(for: memoID, memoTitle: memo.title ?? defaultTitle)
+            }
             phase = .saved
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 700_000_000)
@@ -305,6 +499,82 @@ struct RecordingSheetNext: View {
             // Best-effort: dismiss; the recording file stays on disk.
             controller.isPresented = false
         }
+    }
+
+    private func persistQueuedContext(for memoID: UUID, memoTitle: String) {
+        for attachment in pendingAttachments {
+            if memoAttachmentStore.saveImage(
+                data: attachment.data,
+                preferredName: attachment.preferredName,
+                memoID: memoID
+            ) == nil {
+                AppLogger.persistence.warning("Failed to persist recording attachment for memo \(memoID.uuidString)")
+            }
+        }
+
+        RecordingSidecarStore.shared.attachRequests(
+            pendingSidecarRequests,
+            to: memoID.uuidString,
+            memoTitle: memoTitle
+        )
+    }
+
+    private func importSelectedAttachmentItems(_ items: [PhotosPickerItem]) async {
+        for item in items {
+            do {
+                guard let data = try await item.loadTransferable(type: Data.self),
+                      let image = UIImage(data: data) else {
+                    continue
+                }
+                await MainActor.run {
+                    addPendingAttachment(image: image, data: data, preferredName: nil)
+                }
+            } catch {
+                await MainActor.run {
+                    attachmentError = "Couldn’t import one of those images."
+                }
+            }
+        }
+
+        await MainActor.run {
+            selectedAttachmentItems = []
+        }
+    }
+
+    private func addPendingAttachment(image: UIImage, data: Data, preferredName: String?) {
+        let name = preferredName ?? "Image_\(Int(Date().timeIntervalSince1970))"
+        pendingAttachments.insert(
+            RecordingSheetPendingAttachment(
+                image: image,
+                data: data,
+                preferredName: name
+            ),
+            at: 0
+        )
+        attachmentError = nil
+        detent = .height(560)
+    }
+
+    private func removePendingAttachment(_ attachment: RecordingSheetPendingAttachment) {
+        pendingAttachments.removeAll { $0.id == attachment.id }
+    }
+
+    private func queueSidecarRequest(_ kind: RecordingSidecarKind) {
+        pendingSidecarRequests.append(
+            RecordingSidecarRequest(
+                kind: kind,
+                queuedAtOffset: recorder.recordingDuration
+            )
+        )
+        detent = .height(560)
+    }
+
+    private func removeSidecarRequest(_ request: RecordingSidecarRequest) {
+        pendingSidecarRequests.removeAll { $0.id == request.id }
+    }
+
+    private func showPhotosPicker() {
+        showingAttachmentPhotoPicker = true
     }
 
     // MARK: - Helpers
@@ -363,4 +633,11 @@ struct RecordingSheetNext: View {
         }
         .buttonStyle(.plain)
     }
+}
+
+private struct RecordingSheetPendingAttachment: Identifiable {
+    let id = UUID()
+    let image: UIImage
+    let data: Data
+    let preferredName: String
 }

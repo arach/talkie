@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T19:44:27.994Z",
+  "updatedAt": "2026-05-21T19:45:34.779Z",
   "streams": [
     {
       "key": "C1",
@@ -1192,6 +1192,13 @@
           "message": "Shipped per-memo workflow trigger cards in VoiceMemoDetailNext, backed by memo-scoped WorkflowsStore templates and run history targets.",
           "findingKey": "C6::WorkflowActionSheet::Per-memo workflow triggers",
           "ref": "a6cbca9"
+        },
+        {
+          "ts": "2026-05-21T19:45:34.779Z",
+          "agent": "talkie-codex-c6",
+          "level": "progress",
+          "message": "Starting approved attachment follow-up: add PhotosPicker queueing to RecordingSheetNext, persist images through MemoAttachmentStore on save, and carry queued sidecar requests onto the saved memo.",
+          "findingKey": "C6::RecordingView::Attachment pipeline"
         }
       ]
     }
