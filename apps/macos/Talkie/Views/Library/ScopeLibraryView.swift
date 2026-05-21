@@ -460,7 +460,7 @@ struct ScopeLibraryView: View {
     private var paginationFooter: some View {
         if viewModel.isLoading && !viewModel.recordings.isEmpty {
             HStack(spacing: 8) {
-                PhosphorDot(color: ScopeAmber.solid.opacity(0.6), size: 5)
+                PhosphorDot(color: ScopeInk.faint, size: 5)
                 Text("LOADING MORE")
                     .font(ScopeType.chrome)
                     .tracking(ScopeType.Tracking.wide)
@@ -473,7 +473,7 @@ struct ScopeLibraryView: View {
                 Task { await viewModel.loadNextPage() }
             } label: {
                 HStack(spacing: 8) {
-                    PhosphorDot(color: ScopeAmber.solid.opacity(0.45), size: 5)
+                    PhosphorDot(color: ScopeInk.faint, size: 5)
                     Text("LOAD MORE")
                         .font(ScopeType.chrome)
                         .tracking(ScopeType.Tracking.wide)
@@ -496,8 +496,7 @@ struct ScopeLibraryView: View {
             Text("· \(bucket.label)")
                 .font(ScopeType.eyebrow)
                 .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(ScopeAmber.solid)
-                .phosphorGlow(radius: 3, opacity: 0.28)
+                .foregroundStyle(ScopeInk.muted)
             Spacer()
             Text("\(count)")
                 .font(ScopeType.chrome)
@@ -508,7 +507,7 @@ struct ScopeLibraryView: View {
         .padding(.top, 14)
         .padding(.bottom, 8)
         .overlay(alignment: .bottom) {
-            ScopeDivider().padding(.horizontal, 32)
+            ScopeDivider(color: ScopeEdge.faint).padding(.horizontal, 32)
         }
     }
 
