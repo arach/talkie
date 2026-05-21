@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T19:40:35.446627Z",
+  "updatedAt": "2026-05-21T19:40:46.536640Z",
   "streams": [
     {
       "key": "C1",
@@ -782,6 +782,14 @@
           "level": "progress",
           "message": "Tier-0 start: adding the donor SSH Terminal entry back to SettingsNext CONNECT panel, gated to DEBUG like the legacy Remote Access section.",
           "findingKey": "C4::SettingsView::REMOTE ACCESS section"
+        },
+        {
+          "ts": "2026-05-21T18:12:04.905Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Landed DEBUG-gated SSH Terminal nav row in SettingsNext CONNECT panel alongside Connection Center.",
+          "findingKey": "C4::SettingsView::REMOTE ACCESS section",
+          "ref": "aa70de3"
         }
       ]
     },
