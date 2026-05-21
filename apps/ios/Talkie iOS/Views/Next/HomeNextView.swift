@@ -518,15 +518,27 @@ private struct RecentSection: View {
             }
             .padding(.horizontal, 4)
 
-            VStack(spacing: 0) {
+            List {
                 ForEach(Array(items.enumerated()), id: \.element.id) { idx, item in
-                    SwipeRevealRow {
-                        onDelete(item)
-                    } content: {
-                        RecentRow(item: item, showDivider: idx > 0)
-                    }
+                    RecentRow(item: item, showDivider: idx > 0)
+                        .contentShape(Rectangle())
+                        .onTapGesture { open(item) }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                onDelete(item)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                 }
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .scrollDisabled(true)
+            .frame(height: CGFloat(items.count) * 62)
             .background(theme.colors.cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(
@@ -534,6 +546,14 @@ private struct RecentSection: View {
                     .strokeBorder(theme.currentTheme.chrome.edgeFaint,
                                   lineWidth: theme.currentTheme.chrome.hairlineWidth)
             )
+        }
+    }
+
+    private func open(_ item: HomeFeed.RecentItem) {
+        switch item.source {
+        case .dictation:        AppShellRouter.shared.openMemoDetail(memoID: item.id)
+        case .typed:            AppShellRouter.shared.openCompose(documentID: item.id)
+        case .link, .scan:      AppShellRouter.shared.openCaptureDetail(captureID: item.id)
         }
     }
 }
@@ -544,8 +564,7 @@ private struct RecentRow: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        Button(action: openItem) {
-            VStack(spacing: 0) {
+        VStack(spacing: 0) {
                 if showDivider {
                     Rectangle()
                         .fill(theme.currentTheme.chrome.edgeSubtle)
@@ -583,17 +602,6 @@ private struct RecentRow: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(RowPressStyle())
-    }
-
-    private func openItem() {
-        switch item.source {
-        case .dictation:        AppShellRouter.shared.openMemoDetail(memoID: item.id)
-        case .typed:            AppShellRouter.shared.openCompose(documentID: item.id)
-        case .link, .scan:      AppShellRouter.shared.openCaptureDetail(captureID: item.id)
         }
     }
 

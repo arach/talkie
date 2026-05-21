@@ -129,18 +129,21 @@ struct DictationHistoryNext: View {
     private var listBody: some View {
         List {
             ForEach(feed.displayed) { entry in
-                SwipeRevealRow {
-                    feed.delete(entry)
-                } content: {
-                    DictationEntryRow(entry: entry)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            AppShellRouter.shared.openCompose(documentID: entry.id)
+                DictationEntryRow(entry: entry)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        AppShellRouter.shared.openCompose(documentID: entry.id)
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            feed.delete(entry)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
                         }
-                }
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(theme.colors.cardBackground)
-                .listRowSeparatorTint(theme.currentTheme.chrome.edgeSubtle)
+                    }
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             }
 
             if feed.hasMore {
@@ -159,8 +162,8 @@ struct DictationHistoryNext: View {
                     .padding(.vertical, 14)
                 }
                 .listRowInsets(EdgeInsets())
-                .listRowBackground(theme.colors.cardBackground)
-                .listRowSeparatorTint(theme.currentTheme.chrome.edgeSubtle)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             }
         }
         .listStyle(.plain)
