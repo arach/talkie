@@ -60,6 +60,11 @@ struct AppShellNext<Content: View>: View {
         }
         .environmentObject(chrome)
         .environmentObject(router)
+        // Dynamic Type — let editorial tokens (headline / listTitle /
+        // preview / hint) scale up, but clamp at the third accessibility
+        // size so chrome chip labels + the channel band don't crush the
+        // tray. Users on smaller text sizes are unaffected.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
         .sheet(isPresented: $recordingSheet.isPresented) {
             RecordingSheetNext()
         }

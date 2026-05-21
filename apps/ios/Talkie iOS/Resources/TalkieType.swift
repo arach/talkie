@@ -117,16 +117,18 @@ extension TalkieTypeStyle {
     /// Newsreader Regular — the only place serif appears on the
     /// surface. Light weight read too thin; regular gives it the
     /// editorial body the moment deserves.
+    /// Scales with Dynamic Type, anchored to `.title2`.
     static let headline = TalkieTypeStyle(
-        font: Font.custom("Newsreader", size: 22).weight(.regular),
+        font: Font.custom("Newsreader", size: 22, relativeTo: .title2).weight(.regular),
         tracking: -0.1
     )
 
     /// Quieter headline — fallback / empty state ("Nothing recent").
     /// Sans, lighter weight. Serif here would feel mismatched against
     /// the empty/quiet tone.
+    /// Scales with Dynamic Type, anchored to `.title3`.
     static let headlineSecondary = TalkieTypeStyle(
-        font: .system(size: 18, weight: .light, design: .default),
+        font: .system(size: 18, weight: .light, design: .default).leading(.standard),
         tracking: 0
     )
 
@@ -134,15 +136,16 @@ extension TalkieTypeStyle {
 
     /// List row title (Recent items, library rows). System sans,
     /// regular weight — scans cleanly without competing with the
-    /// serif headline above.
+    /// serif headline above. Scales with Dynamic Type via `.body`.
     static let listTitle = TalkieTypeStyle(
-        font: .system(size: 15, weight: .regular, design: .default),
+        font: .system(.body, design: .default, weight: .regular),
         tracking: -0.05
     )
 
     /// Single-line preview / subtitle below a list row title.
+    /// Scales with Dynamic Type via `.subheadline`.
     static let preview = TalkieTypeStyle(
-        font: .system(size: 13, weight: .regular, design: .default),
+        font: .system(.subheadline, design: .default, weight: .regular),
         tracking: 0
     )
 
