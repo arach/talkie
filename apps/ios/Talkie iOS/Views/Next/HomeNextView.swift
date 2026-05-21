@@ -66,11 +66,14 @@ private struct HomeHeader: View {
         // centered while the chrome carries live system state.
         HStack {
             // Single Mac connection complication on the left.
-            // Hidden entirely when no Mac is paired. Frame stays
-            // 40pt tall so the header keeps its rhythm even when
-            // the chip is absent (Spacer takes over).
-            MacConnectionChip()
-                .frame(minHeight: 40, alignment: .leading)
+            // 32pt circular icon — same footprint as the gear on the
+            // right so the wordmark stays centered. Hidden entirely
+            // when no Mac is paired; an invisible spacer keeps the
+            // wordmark centered in that case too.
+            ZStack {
+                MacConnectionChip()
+            }
+            .frame(width: 40, height: 40)
             Spacer()
             Text("TALKIE")
                 .talkieType(.wordmark)
@@ -123,34 +126,18 @@ private struct MacConnectionChip: View {
     var body: some View {
         if bridgeManager.isPaired {
             Button(action: handleTap) {
-                HStack(spacing: 6) {
+                ZStack {
+                    Circle().fill(theme.colors.cardBackground)
+                    Circle().strokeBorder(
+                        borderColor,
+                        lineWidth: theme.currentTheme.chrome.hairlineWidth
+                    )
                     Image(systemName: "point.3.connected.trianglepath.dotted")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(iconColor)
-                    Text(chipLabel)
-                        .talkieType(.channelLabelSmall)
-                        .foregroundStyle(labelColor)
-                        .lineLimit(1)
-                    if showsChevron {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(theme.colors.textTertiary)
-                            .accessibilityHidden(true)
-                    }
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(theme.colors.cardBackground)
-                        .overlay(
-                            Capsule()
-                                .strokeBorder(
-                                    borderColor,
-                                    lineWidth: theme.currentTheme.chrome.hairlineWidth
-                                )
-                        )
-                )
+                .frame(width: 40, height: 40)
+                .shadow(color: .black.opacity(0.10), radius: 4, y: 2)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(accessibilityLabel)
