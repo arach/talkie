@@ -38,6 +38,7 @@ private struct CaptureAIQuickPrompt: Identifiable {
 }
 
 private struct CaptureAICommandExecution {
+    let id: UUID
     let instruction: String
     let responseText: String
     let providerName: String
@@ -62,6 +63,8 @@ struct CaptureAICommandsSheet: View {
     @State private var isLoadingSpeech = false
     @State private var errorMessage: String?
     @State private var latestExecution: CaptureAICommandExecution?
+    @State private var executionHistory: [CaptureAICommandExecution] = []
+    @State private var isShowingHistory = false
     @State private var speakWhenReady = false
     @State private var spokenResponseText: String?
     @State private var spokenAudioData: Data?
@@ -141,6 +144,8 @@ struct CaptureAICommandsSheet: View {
                     if let latestExecution {
                         resultCard(latestExecution)
                     }
+
+                    executionHistorySection
                 }
                 .padding(Spacing.md)
             }
@@ -499,6 +504,77 @@ struct CaptureAICommandsSheet: View {
         }
     }
 
+    private var executionHistorySection: some View {
+        let previousExecutions = executionHistory.filter { run in
+            run.id != latestExecution?.id
+        }
+
+        return Group {
+            if !previousExecutions.isEmpty {
+                DisclosureGroup(isExpanded: $isShowingHistory) {
+                    VStack(spacing: Spacing.xs) {
+                        ForEach(previousExecutions, id: \.id) { execution in
+                            historyRow(execution)
+                        }
+                    }
+                    .padding(.top, Spacing.sm)
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color.textSecondary)
+                        Text("Past Commands")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color.textPrimary)
+                        Spacer()
+                        Text("\(previousExecutions.count)")
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(Color.textTertiary)
+                    }
+                }
+                .tint(Color.textSecondary)
+                .padding(Spacing.md)
+                .background(Color.surfaceSecondary)
+                .clipShape(.rect(cornerRadius: CornerRadius.md))
+                .overlay {
+                    RoundedRectangle(cornerRadius: CornerRadius.md)
+                        .stroke(Color.borderPrimary, lineWidth: 0.5)
+                        .allowsHitTesting(false)
+                }
+            }
+        }
+    }
+
+    private func historyRow(_ execution: CaptureAICommandExecution) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                Text(execution.instruction)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.textPrimary)
+                    .lineLimit(2)
+
+                Spacer()
+
+                Text(execution.createdAt, format: .dateTime.month().day().hour().minute())
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.textTertiary)
+            }
+
+            Text(execution.responseText)
+                .font(.system(size: 12))
+                .foregroundStyle(Color.textSecondary)
+                .lineLimit(3)
+
+            Text("\(execution.providerName) · \(execution.modelId)")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(Color.textTertiary)
+                .lineLimit(1)
+        }
+        .padding(Spacing.sm)
+        .background(Color.surfacePrimary)
+        .clipShape(.rect(cornerRadius: CornerRadius.sm))
+    }
+
     private var captureTitle: String? {
         if let title = capture.title, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return title
@@ -594,6 +670,7 @@ struct CaptureAICommandsSheet: View {
     private func loadLatestExecution() {
         guard let latestRun = commandStore.latestRun(for: capture.id) else { return }
         latestExecution = CaptureAICommandExecution(
+            id: latestRun.id,
             instruction: latestRun.instruction,
             responseText: latestRun.responseText,
             providerName: latestRun.providerName,
@@ -601,6 +678,21 @@ struct CaptureAICommandsSheet: View {
             fallbackReason: latestRun.fallbackReason,
             createdAt: latestRun.createdAt
         )
+        loadExecutionHistory()
+    }
+
+    private func loadExecutionHistory() {
+        executionHistory = commandStore.runs(for: capture.id).map { run in
+            CaptureAICommandExecution(
+                id: run.id,
+                instruction: run.instruction,
+                responseText: run.responseText,
+                providerName: run.providerName,
+                modelId: run.modelId,
+                fallbackReason: run.fallbackReason,
+                createdAt: run.createdAt
+            )
+        }
     }
 
     private func toggleDictation() {
@@ -676,6 +768,7 @@ struct CaptureAICommandsSheet: View {
 
                 await MainActor.run {
                     let execution = CaptureAICommandExecution(
+                        id: UUID(),
                         instruction: command,
                         responseText: result.responseText,
                         providerName: result.providerName,
@@ -686,6 +779,7 @@ struct CaptureAICommandsSheet: View {
                     latestExecution = execution
                     commandStore.addRun(
                         CaptureAICommandRun(
+                            id: execution.id,
                             captureId: capture.id,
                             instruction: execution.instruction,
                             responseText: execution.responseText,
@@ -695,6 +789,7 @@ struct CaptureAICommandsSheet: View {
                             createdAt: execution.createdAt
                         )
                     )
+                    loadExecutionHistory()
                     onExecutionSaved()
                     errorMessage = nil
                     instruction = command

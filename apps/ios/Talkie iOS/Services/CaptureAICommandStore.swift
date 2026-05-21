@@ -55,6 +55,10 @@ final class CaptureAICommandStore {
         runs.first(where: { $0.captureId == captureId })
     }
 
+    func runs(for captureId: UUID) -> [CaptureAICommandRun] {
+        runs.filter { $0.captureId == captureId }
+    }
+
     func addRun(_ run: CaptureAICommandRun) {
         runs.removeAll { existing in
             existing.captureId == run.captureId && existing.id == run.id
