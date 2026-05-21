@@ -17,6 +17,9 @@
 //
 
 import SwiftUI
+#if canImport(AppKit)
+import AppKit
+#endif
 
 // MARK: - Hex helper
 
@@ -216,12 +219,27 @@ public enum ScopePanel {
 /// at the typical 10pt size. Tracking scales with font size in
 /// SwiftUI, which is fine — the visual ratio stays close.
 public enum ScopeType {
+    /// Studio's `font-mono` is JetBrains Mono. We mirror that here
+    /// so the SwiftUI surfaces don't drop to SF Mono (which reads
+    /// noticeably differently — wider, rounder digits). Falls back
+    /// to system monospaced if the font isn't loaded.
+    private static func mono(size: CGFloat) -> Font {
+        #if canImport(AppKit)
+        for name in ["JetBrainsMono-SemiBold", "JetBrainsMono-Medium"] {
+            if NSFont(name: name, size: size) != nil {
+                return .custom(name, size: size)
+            }
+        }
+        #endif
+        return .system(size: size, weight: .semibold, design: .monospaced)
+    }
+
     /// 10pt monospaced bold caps, wide tracking — eyebrow / section label.
-    public static let eyebrow = Font.system(size: 10, weight: .semibold, design: .monospaced)
+    public static var eyebrow: Font { mono(size: 10) }
     /// 9pt monospaced caps — channel / pin tags.
-    public static let channel = Font.system(size: 9, weight: .semibold, design: .monospaced)
+    public static var channel: Font { mono(size: 9) }
     /// 8pt monospaced — chrome footers, technical metadata.
-    public static let chrome  = Font.system(size: 8, weight: .semibold, design: .monospaced)
+    public static var chrome:  Font { mono(size: 8) }
 
     /// Tracking values matched to the homepage CSS tracking-[0.20–0.26em].
     /// SwiftUI tracking is points; at 10pt these read close to the site.

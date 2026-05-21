@@ -39,6 +39,25 @@ private enum ScopeFont {
         }
         return .system(size: size, weight: medium ? .medium : .regular, design: .serif)
     }
+
+    /// JetBrains Mono with system fallback. Studio's `font-mono`
+    /// renders as JetBrains Mono; matching it here so SwiftUI surfaces
+    /// don't drop to SF Mono.
+    static func mono(size: CGFloat, weight: Font.Weight = .semibold) -> Font {
+        let candidates: [String]
+        switch weight {
+        case .semibold, .bold:
+            candidates = ["JetBrainsMono-SemiBold", "JetBrainsMono-Medium"]
+        default:
+            candidates = ["JetBrainsMono-Medium", "JetBrainsMono-Regular"]
+        }
+        for name in candidates {
+            if NSFont(name: name, size: size) != nil {
+                return .custom(name, size: size)
+            }
+        }
+        return .system(size: size, weight: weight, design: .monospaced)
+    }
 }
 
 struct ScopeHomeView: View {
@@ -1782,7 +1801,7 @@ private struct DidYouKnowCard: View {
                 HStack(alignment: .top, spacing: 12) {
                     glyphTile
                     Text(hook)
-                        .font(.system(size: 15, weight: .medium, design: .serif))
+                        .font(ScopeFont.display(size: 16, medium: true))
                         .tracking(-0.2)
                         .foregroundStyle(ScopeInk.primary)
                         .lineLimit(2)
@@ -1790,7 +1809,7 @@ private struct DidYouKnowCard: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 Text(detail)
-                    .font(.system(size: 11))
+                    .font(.system(size: 11.5))
                     .foregroundStyle(ScopeInk.faint)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
@@ -1799,7 +1818,7 @@ private struct DidYouKnowCard: View {
                 Rectangle().fill(ScopeEdge.faint).frame(height: 0.5)
                 HStack(spacing: 4) {
                     Text(action.uppercased())
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(ScopeFont.mono(size: 9, weight: .semibold))
                         .tracking(2.4)
                     Text("→").font(.system(size: 10))
                 }

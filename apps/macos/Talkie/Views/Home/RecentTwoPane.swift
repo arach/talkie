@@ -15,7 +15,42 @@
 //
 
 import SwiftUI
+import AppKit
 import TalkieKit
+
+// MARK: - Fonts
+//
+// Studio's `font-display` is Cormorant Garamond, `font-mono` is
+// JetBrains Mono. Mirroring those here (with system fallbacks) so the
+// SwiftUI surface reads the same as the web view.
+private enum RecentFont {
+    static func display(size: CGFloat, medium: Bool = false) -> Font {
+        for name in (medium
+                     ? ["CormorantGaramond-Medium", "Cormorant Garamond Medium"]
+                     : ["CormorantGaramond-Regular", "Cormorant Garamond", "CormorantGaramond"]) {
+            if NSFont(name: name, size: size) != nil {
+                return .custom(name, size: size)
+            }
+        }
+        return .system(size: size, weight: medium ? .medium : .regular, design: .serif)
+    }
+
+    static func mono(size: CGFloat, weight: Font.Weight = .semibold) -> Font {
+        let candidates: [String]
+        switch weight {
+        case .semibold, .bold:
+            candidates = ["JetBrainsMono-SemiBold", "JetBrainsMono-Medium"]
+        default:
+            candidates = ["JetBrainsMono-Medium", "JetBrainsMono-Regular"]
+        }
+        for name in candidates {
+            if NSFont(name: name, size: size) != nil {
+                return .custom(name, size: size)
+            }
+        }
+        return .system(size: size, weight: weight, design: .monospaced)
+    }
+}
 
 // MARK: - Models
 
@@ -106,11 +141,11 @@ private struct RecentPane: View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Circle().fill(tint).frame(width: 6, height: 6)
             Text(label)
-                .font(.system(size: 14, weight: .medium, design: .serif))
+                .font(RecentFont.display(size: 14, medium: true))
                 .foregroundStyle(ScopeInk.primary)
             Spacer()
             Text("\(sections.reduce(0) { $0 + $1.rows.count }) items".uppercased())
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .font(RecentFont.mono(size: 9, weight: .semibold))
                 .tracking(1.8)
                 .foregroundStyle(ScopeInk.faint)
         }
@@ -138,13 +173,13 @@ private struct RecentSubBand: View {
                     .tracking(1.8)
                     .foregroundStyle(ScopeInk.faint)
                 Text(section.count.uppercased())
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(RecentFont.mono(size: 9, weight: .medium))
                     .tracking(1.8)
                     .foregroundStyle(ScopeInk.faint)
                 Spacer()
                 Button(action: section.onLibrary) {
                     Text("\(section.libraryLabel) →")
-                        .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                        .font(RecentFont.mono(size: 8, weight: .semibold))
                         .tracking(2.0)
                         .foregroundStyle(ScopeInk.faint)
                 }
@@ -182,7 +217,7 @@ private struct RecentRowView: View {
         Button(action: row.onTap) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(row.glyph)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(RecentFont.mono(size: 11, weight: .medium))
                     .foregroundStyle(tint)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.line)
@@ -200,7 +235,7 @@ private struct RecentRowView: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     if !row.meta.isEmpty {
                         Text(row.meta.uppercased())
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(RecentFont.mono(size: 9, weight: .medium))
                             .tracking(1.6)
                             .foregroundStyle(ScopeInk.faint)
                     }
@@ -235,7 +270,7 @@ private struct EmptyCTARow: View {
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(tint)
                 Text(cta.label.uppercased())
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .font(RecentFont.mono(size: 11, weight: .semibold))
                     .tracking(1.6)
                     .foregroundStyle(ScopeInk.primary)
                 Text("→")
@@ -245,7 +280,7 @@ private struct EmptyCTARow: View {
                 HStack(spacing: 3) {
                     ForEach(cta.kbd, id: \.self) { k in
                         Text(k)
-                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .font(RecentFont.mono(size: 9, weight: .semibold))
                             .frame(minWidth: 14, minHeight: 14)
                             .padding(.horizontal, 3)
                             .background(
