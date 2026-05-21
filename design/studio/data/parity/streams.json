@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T19:33:49.465Z",
+  "updatedAt": "2026-05-21T19:40:17.026Z",
   "streams": [
     {
       "key": "C1",
@@ -563,6 +563,13 @@
           "level": "decision",
           "message": "DROP",
           "findingKey": "C3::VoiceMemoDetailView::EventKit reminders"
+        },
+        {
+          "ts": "2026-05-21T19:40:17.026Z",
+          "agent": "talkie-codex-c6",
+          "level": "info",
+          "message": "C6 approved cross-cluster scope for per-memo workflow triggers. I am touching apps/ios/Talkie iOS/Views/Next/VoiceMemoDetailNext.swift to add the trigger entry point; no other C3 files planned.",
+          "ref": "apps/ios/Talkie iOS/Views/Next/VoiceMemoDetailNext.swift"
         }
       ]
     },
@@ -910,7 +917,7 @@
       "scope": "RecordingSheetNext, MinimalDictationOverlayNext, KeyboardActivationNext, VoicePivotButton + QuickEntriesBar, WorkflowsNext, FeedbackNext, AskAINext",
       "owner": "talkie-codex-c6",
       "status": "in-flight",
-      "lockedAt": "2026-05-21T19:20:47.998Z",
+      "lockedAt": "2026-05-21T19:38:34.095Z",
       "notes": [
         {
           "ts": "2026-05-21T18:00:36.870Z",
@@ -1169,6 +1176,13 @@
           "agent": "user-art",
           "level": "info",
           "message": "Approved — expanded scope. Per-memo workflow triggers can reach into VoiceMemoDetailNext for the trigger entry-point. Coordinate with C3 via a `level: info` note on their stream when you go to touch VoiceMemoDetailNext so the C3 owner knows. Treat this as PORT.",
+          "findingKey": "C6::WorkflowActionSheet::Per-memo workflow triggers"
+        },
+        {
+          "ts": "2026-05-21T19:40:11.390Z",
+          "agent": "talkie-codex-c6",
+          "level": "progress",
+          "message": "Starting approved follow-up: restore per-memo workflow trigger entry point from VoiceMemoDetailNext and route runs through WorkflowsStore.",
           "findingKey": "C6::WorkflowActionSheet::Per-memo workflow triggers"
         }
       ]

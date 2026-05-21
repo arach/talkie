@@ -116,7 +116,10 @@ final class WorkflowsStore: ObservableObject {
         WorkflowTemplate(id: "summary", name: "Summarize captures", blurb: "Daily digest of new captures", icon: "doc.text.magnifyingglass"),
         WorkflowTemplate(id: "title", name: "Generate memo titles", blurb: "Re-title untitled voice memos", icon: "text.cursor"),
         WorkflowTemplate(id: "outline", name: "Outline from transcript", blurb: "Bullet outline for selected memos", icon: "list.bullet.indent"),
-        WorkflowTemplate(id: "translate", name: "Translate to English", blurb: "Translate non-English captures", icon: "globe")
+        WorkflowTemplate(id: "translate", name: "Translate to English", blurb: "Translate non-English captures", icon: "globe"),
+        WorkflowTemplate(id: "memo-summary", name: "Summarize this memo", blurb: "Create a focused summary from the selected memo", icon: "text.alignleft"),
+        WorkflowTemplate(id: "memo-tasks", name: "Taskify memo", blurb: "Extract owners, due dates, and next actions", icon: "checklist"),
+        WorkflowTemplate(id: "memo-reminders", name: "Create reminders", blurb: "Turn transcript commitments into reminders", icon: "bell.badge")
     ]
 }
 

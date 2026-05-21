@@ -232,10 +232,12 @@ private extension VoiceMemoDetailStore.MemoDisplay {
 
 struct VoiceMemoDetailNext: View {
     @ObservedObject private var theme = ThemeManager.shared
+    @ObservedObject private var workflows = WorkflowsStore.shared
     @StateObject private var store: VoiceMemoDetailStore
     @State private var pickerItem: PhotosPickerItem?
     @State private var isPickerActive: Bool = false
     @State private var previewAttachment: MemoImageAttachment?
+    @State private var runningWorkflowID: String?
 
     init(memoID: String? = nil) {
         _store = StateObject(wrappedValue: VoiceMemoDetailStore(memoID: memoID))
@@ -261,6 +263,9 @@ struct VoiceMemoDetailNext: View {
                     // stops at meta + playback + transcript display.
 
                     transcriptSection
+                        .padding(.horizontal, 12)
+
+                    workflowTriggersSection
                         .padding(.horizontal, 12)
 
                     attachmentsSection
@@ -461,6 +466,98 @@ struct VoiceMemoDetailNext: View {
                     }
                 }
             }
+        }
+    }
+
+    /// Donor parity: restores the per-memo WorkflowActionSheet entry point
+    /// without regressing the Next hub. These chips run the memo-scoped
+    /// templates directly against the active memo and record the run in the
+    /// shared WorkflowsStore history.
+    private var workflowTriggersSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("· WORKFLOWS")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary)
+                Spacer()
+                Button(action: { AppShellRouter.shared.openWorkflows() }) {
+                    Text("HUB")
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 4)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(memoWorkflowTemplates) { template in
+                        workflowTriggerCard(template)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        }
+    }
+
+    private var memoWorkflowTemplates: [WorkflowTemplate] {
+        workflows.templates.filter { $0.id.hasPrefix("memo-") }
+    }
+
+    private func workflowTriggerCard(_ template: WorkflowTemplate) -> some View {
+        let isRunning = runningWorkflowID == template.id
+        return Button {
+            runMemoWorkflow(template)
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image(systemName: template.icon)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                        .frame(width: 28, height: 28)
+                        .background(
+                            RoundedRectangle(cornerRadius: 7)
+                                .fill(theme.currentTheme.chrome.accent.opacity(0.12))
+                        )
+                    Spacer()
+                    Text(isRunning ? "RUNNING" : "RUN")
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(isRunning ? theme.colors.textTertiary : theme.currentTheme.chrome.accent)
+                }
+
+                Text(template.name)
+                    .talkieType(.fieldLabel)
+                    .foregroundStyle(theme.colors.textPrimary)
+                    .lineLimit(1)
+
+                Text(template.blurb)
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(width: 154, alignment: .leading)
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(theme.colors.cardBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                          lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(runningWorkflowID != nil)
+    }
+
+    private func runMemoWorkflow(_ template: WorkflowTemplate) {
+        guard runningWorkflowID == nil else { return }
+        runningWorkflowID = template.id
+        Task { @MainActor in
+            await workflows.run(template: template, on: store.memo.title)
+            runningWorkflowID = nil
         }
     }
 
