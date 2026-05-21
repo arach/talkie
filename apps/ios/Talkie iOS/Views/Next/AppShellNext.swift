@@ -113,6 +113,7 @@ struct AppShellNext<Content: View>: View {
         case .workflows: return "workflows"
         case .syncConflicts: return "syncConflicts"
         case .workspaces: return "workspaces"
+        case .themeContrast: return "themeContrast"
         case .captureDetail(let c): return "capture:\(c)"
         case .memoDetail(let m): return "memo:\(m)"
         case .dictationHistory: return "dictations"
@@ -177,6 +178,8 @@ struct AppShellNext<Content: View>: View {
             SyncConflictNext()
         case .workspaces:
             WorkspaceSwitcherNext()
+        case .themeContrast:
+            ThemeContrastDebugNext()
         }
     }
 }
@@ -222,6 +225,8 @@ final class AppShellRouter: ObservableObject {
         case syncConflicts
         // M5 — multi-account workspace switcher.
         case workspaces
+        // M6 — debug-only theme contrast inspector.
+        case themeContrast
     }
 
     @Published var surface: Surface = .home
@@ -288,6 +293,8 @@ final class AppShellRouter: ObservableObject {
             openSyncConflicts()
         } else if args.contains("--workspaces") {
             openWorkspaces()
+        } else if args.contains("--contrast") {
+            openThemeContrast()
         }
     }
 
@@ -340,6 +347,7 @@ final class AppShellRouter: ObservableObject {
     func openWorkflows() { push(.workflows) }
     func openSyncConflicts() { push(.syncConflicts) }
     func openWorkspaces() { push(.workspaces) }
+    func openThemeContrast() { push(.themeContrast) }
 
     /// Open a new Compose document seeded with `text`. Caller doesn't
     /// pick the document ID — this generates one and stashes the seed

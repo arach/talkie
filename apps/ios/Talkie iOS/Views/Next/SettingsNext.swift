@@ -337,6 +337,7 @@ struct SettingsNext: View {
             actionRow("Open log viewer", tone: .accent) { AppLogger.app.info("SettingsNext log viewer requested; no LogViewerSheet is available in this target") }
             actionRow("Dump shared store", tone: .neutral) { dumpSharedStore() }
             actionRow("Force iCloud refresh", tone: .neutral) { iCloudStatus.checkStatus() }
+            navRow("Inspect theme contrast") { AppShellRouter.shared.openThemeContrast() }
         }
     }
 
