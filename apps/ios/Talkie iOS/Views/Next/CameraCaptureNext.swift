@@ -221,7 +221,7 @@ struct CameraCaptureNext: View {
         let fallbackForeground = theme.colors.cardBackground
         let fallbackAccent = theme.currentTheme.chrome.accent
 
-        VStack(spacing: 16) {
+        return VStack(spacing: 16) {
             Image(systemName: systemImage)
                 .font(.system(size: 34, weight: .medium))
                 .foregroundStyle(theme.currentTheme.chrome.accent)
