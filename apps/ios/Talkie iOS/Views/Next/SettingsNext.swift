@@ -30,6 +30,7 @@ import SwiftUI
 
 struct SettingsNext: View {
     @ObservedObject private var theme = ThemeManager.shared
+    @ObservedObject private var aiCredentials = AICredentialStore.shared
     @ObservedObject private var iCloudStatus = iCloudStatusManager.shared
     @ObservedObject private var parakeetManager = ParakeetModelManager.shared
     @State private var appSettings = TalkieAppSettings.shared
@@ -68,6 +69,22 @@ struct SettingsNext: View {
         SettingsChoice(id: "system", title: "System"),
         SettingsChoice(id: "44100", title: "44.1 kHz"),
         SettingsChoice(id: "48000", title: "48 kHz")
+    ]
+
+    private static let ttsProviderChoices: [SettingsChoice] = [
+        SettingsChoice(id: "local", title: "Local"),
+        SettingsChoice(id: "openai", title: "OpenAI"),
+        SettingsChoice(id: "elevenlabs", title: "ElevenLabs")
+    ]
+
+    private static let ttsRouteChoices: [SettingsChoice] = [
+        SettingsChoice(id: "bridge", title: "Via Mac"),
+        SettingsChoice(id: "direct", title: "Direct")
+    ]
+
+    private static let aiVoiceOutputChoices: [SettingsChoice] = [
+        SettingsChoice(id: "phone", title: "iPhone"),
+        SettingsChoice(id: "watch", title: "Watch")
     ]
 
     init() {
@@ -287,6 +304,84 @@ struct SettingsNext: View {
                 valueOff: "Off",
                 hint: "Voice isolation"
             )
+
+            sectionHeader("TEXT-TO-SPEECH")
+            cycleRow(
+                "Provider",
+                selection: Binding(
+                    get: { appSettings.ttsProvider },
+                    set: { provider in
+                        appSettings.ttsProvider = provider
+                        normalizeSpeechSettings(for: provider)
+                    }
+                ),
+                choices: Self.ttsProviderChoices,
+                hint: speechProviderHint
+            )
+            if appSettings.ttsProvider == "local" {
+                field("Route", "Via Mac", hint: "Kokoro over Bridge")
+            } else {
+                cycleRow(
+                    "Route",
+                    selection: Binding(
+                        get: { appSettings.ttsMode },
+                        set: { appSettings.ttsMode = $0 }
+                    ),
+                    choices: Self.ttsRouteChoices,
+                    hint: speechRouteHint
+                )
+            }
+            textEntryRow(
+                "Voice",
+                text: Binding(
+                    get: { appSettings.ttsVoice },
+                    set: { appSettings.ttsVoice = $0 }
+                ),
+                placeholder: speechVoicePlaceholder,
+                hint: speechVoiceSummary
+            )
+            if shouldShowSpeechCredentialRow {
+                if let reusableSpeechCredential {
+                    field(
+                        "API Key",
+                        "AI keys",
+                        hint: "Using saved \(reusableSpeechCredential.providerName) credential"
+                    )
+                } else {
+                    textEntryRow(
+                        "API Key",
+                        text: Binding(
+                            get: { appSettings.ttsApiKey },
+                            set: { appSettings.ttsApiKey = $0 }
+                        ),
+                        placeholder: "Paste key",
+                        hint: speechCredentialSummary,
+                        secure: true
+                    )
+                }
+            }
+            toggleRow(
+                "Speak replies",
+                isOn: Binding(
+                    get: { appSettings.aiVoiceOutputRoute != "silent" },
+                    set: { appSettings.aiVoiceOutputRoute = $0 ? "phone" : "silent" }
+                ),
+                valueOn: aiVoiceRouteLabel,
+                valueOff: "Silent",
+                hint: "AI command responses"
+            )
+            if appSettings.aiVoiceOutputRoute != "silent" {
+                cycleRow(
+                    "Output",
+                    selection: Binding(
+                        get: { appSettings.aiVoiceOutputRoute },
+                        set: { appSettings.aiVoiceOutputRoute = $0 }
+                    ),
+                    choices: Self.aiVoiceOutputChoices,
+                    hint: "Where short replies speak"
+                )
+            }
+            navRow("Manage AI keys") { AppShellRouter.shared.openAICredentials() }
         }
     }
 
@@ -579,8 +674,8 @@ struct SettingsNext: View {
 
         return Button {
             guard !choices.isEmpty else { return }
-            let currentIndex = choices.firstIndex { $0.id == selection.wrappedValue } ?? -1
-            let nextIndex = choices.index(after: currentIndex) % choices.count
+            let currentIndex = choices.firstIndex { $0.id == selection.wrappedValue }
+            let nextIndex = currentIndex.map { choices.index(after: $0) % choices.count } ?? choices.startIndex
             let nextValue = choices[nextIndex].id
             selection.wrappedValue = nextValue
             onChange?(nextValue)
@@ -623,6 +718,54 @@ struct SettingsNext: View {
         .buttonStyle(.plain)
         .accessibilityLabel("\(label): \(current.title)")
         .accessibilityHint("Cycles to the next option")
+    }
+
+    private func textEntryRow(
+        _ label: String,
+        text: Binding<String>,
+        placeholder: String,
+        hint: String? = nil,
+        secure: Bool = false
+    ) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(label)
+                .talkieType(.fieldLabel)
+                .foregroundStyle(theme.colors.textPrimary)
+                .layoutPriority(2)
+
+            if let hint {
+                Text("· \(hint)")
+                    .talkieType(.hint)
+                    .foregroundStyle(theme.colors.textTertiary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .layoutPriority(0)
+            }
+
+            Spacer(minLength: 8)
+
+            Group {
+                if secure {
+                    SecureField(placeholder, text: text)
+                } else {
+                    TextField(placeholder, text: text)
+                }
+            }
+            .talkieType(.fieldValue)
+            .foregroundStyle(theme.currentTheme.chrome.accent)
+            .tint(theme.currentTheme.chrome.accent)
+            .multilineTextAlignment(.trailing)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .lineLimit(1)
+            .frame(maxWidth: 150)
+        }
+        .frame(height: 44)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(theme.currentTheme.chrome.edgeFaint)
+                .frame(height: 1)
+        }
     }
 
     private func toggleRow(
@@ -811,6 +954,109 @@ struct SettingsNext: View {
         }
 
         return "Pair a Mac first; manual Deck still works"
+    }
+
+    private var speechProviderHint: String {
+        switch appSettings.ttsProvider {
+        case "openai":
+            return "Can reuse AI keys"
+        case "elevenlabs":
+            return "Direct key for phone speech"
+        default:
+            return "Mac Bridge Kokoro"
+        }
+    }
+
+    private var speechRouteHint: String {
+        if appSettings.ttsMode == "direct" {
+            return reusableSpeechCredential == nil
+                ? "Uses key saved here"
+                : "Uses saved AI credential"
+        }
+
+        return "Paired Mac fallback"
+    }
+
+    private var shouldShowSpeechCredentialRow: Bool {
+        appSettings.ttsProvider != "local" && appSettings.ttsMode == "direct"
+    }
+
+    private var reusableSpeechCredential: ComposeBorrowedProvider? {
+        _ = aiCredentials.setProviderIDs
+        guard appSettings.ttsProvider == "openai" else { return nil }
+        if let cachedProvider = ComposeProviderCredentialStore.shared.load(providerId: "openai") {
+            return cachedProvider
+        }
+        guard let apiKey = AICredentialStore.shared.key(for: "openai") else { return nil }
+        return ComposeBorrowedProvider(
+            providerId: "openai",
+            providerName: TalkieAIProviderCredentialPayload.displayName(for: "openai"),
+            modelId: TalkieAIProviderCredentialPayload.defaultModel(for: "openai"),
+            apiKey: apiKey,
+            assistantPrompt: TalkieAIProviderCredentialPayload.defaultAssistantPrompt,
+            fallbackReason: "Using the API key saved in AI Keys on this iPhone."
+        )
+    }
+
+    private var speechCredentialSummary: String {
+        if appSettings.ttsProvider == "elevenlabs" {
+            return "Direct ElevenLabs speech"
+        }
+
+        return "Or save OpenAI in AI keys"
+    }
+
+    private var speechVoicePlaceholder: String {
+        switch appSettings.ttsProvider {
+        case "elevenlabs":
+            return "Voice ID"
+        case "local":
+            return "af_heart"
+        default:
+            return "echo"
+        }
+    }
+
+    private var speechVoiceSummary: String {
+        switch appSettings.ttsProvider {
+        case "elevenlabs":
+            return "ElevenLabs voice ID"
+        case "local":
+            return "Kokoro voice on Mac"
+        default:
+            return "OpenAI voice name"
+        }
+    }
+
+    private var aiVoiceRouteLabel: String {
+        switch appSettings.aiVoiceOutputRoute {
+        case "watch":
+            return "Watch"
+        case "silent":
+            return "Silent"
+        default:
+            return "iPhone"
+        }
+    }
+
+    private func normalizeSpeechSettings(for provider: String) {
+        switch provider {
+        case "local":
+            appSettings.ttsMode = "bridge"
+            if appSettings.ttsVoice.isEmpty || appSettings.ttsVoice == "echo" {
+                appSettings.ttsVoice = "af_heart"
+            }
+        case "openai":
+            if appSettings.ttsVoice.isEmpty || appSettings.ttsVoice == "af_heart" {
+                appSettings.ttsVoice = "echo"
+            }
+        case "elevenlabs":
+            if appSettings.ttsVoice == "echo" || appSettings.ttsVoice == "af_heart" {
+                appSettings.ttsVoice = ""
+            }
+        default:
+            break
+        }
     }
 
     private var iosChannel: String {
