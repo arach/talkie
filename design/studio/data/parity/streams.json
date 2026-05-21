@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T19:40:46.536640Z",
+  "updatedAt": "2026-05-21T19:41:33.181375Z",
   "streams": [
     {
       "key": "C1",
@@ -790,6 +790,13 @@
           "message": "Landed DEBUG-gated SSH Terminal nav row in SettingsNext CONNECT panel alongside Connection Center.",
           "findingKey": "C4::SettingsView::REMOTE ACCESS section",
           "ref": "aa70de3"
+        },
+        {
+          "ts": "2026-05-21T18:15:36.132Z",
+          "agent": "talkie-codex-c4",
+          "level": "progress",
+          "message": "Tier-0 start: making SignInNext persist and render the CloudKit accountStatus result instead of discarding it after native Apple Sign In.",
+          "findingKey": "C4::SignInView::CloudKit provisioning result"
         }
       ]
     },
