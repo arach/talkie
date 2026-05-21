@@ -298,15 +298,30 @@ struct OCRChunk: Identifiable, Equatable {
 struct ScanPreview: Equatable {
     let image: UIImage
     let chunks: [OCRChunk]
+    let pageCount: Int
+    let deferredPageCount: Int
     /// Joined text fallback for downstream save / OCR consumers that
     /// don't need chunk granularity.
     var combinedText: String { chunks.map(\.text).joined(separator: "\n") }
     /// True when any chunk falls below the medium-confidence band —
     /// drives the "consider reshooting" coaching banner.
     var hasLowConfidence: Bool { chunks.contains { $0.band == .low } }
+    var pageStatusText: String? {
+        guard pageCount > 1 || deferredPageCount > 0 else { return nil }
+
+        let scannedPageCount = max(1, pageCount - deferredPageCount)
+        var status = "Page \(scannedPageCount) of \(max(pageCount, scannedPageCount)) scanned"
+        if deferredPageCount > 0 {
+            status += " · \(deferredPageCount) \(deferredPageCount == 1 ? "page" : "pages") waiting"
+        }
+        return status
+    }
 
     static func == (lhs: ScanPreview, rhs: ScanPreview) -> Bool {
-        lhs.image === rhs.image && lhs.chunks == rhs.chunks
+        lhs.image === rhs.image &&
+            lhs.chunks == rhs.chunks &&
+            lhs.pageCount == rhs.pageCount &&
+            lhs.deferredPageCount == rhs.deferredPageCount
     }
 }
 
@@ -499,10 +514,15 @@ private final class CameraCaptureNextModel: NSObject, ObservableObject {
         let preview: ScanPreview
         do {
             let result = try await ScreenshotOCRService.extractChunks(from: image)
-            preview = ScanPreview(image: result.image, chunks: result.chunks)
+            preview = ScanPreview(
+                image: result.image,
+                chunks: result.chunks,
+                pageCount: result.pageCount,
+                deferredPageCount: 0
+            )
         } catch {
             AppLogger.ai.warning("Camera capture OCR found no text: \(error.localizedDescription)")
-            preview = ScanPreview(image: image, chunks: [])
+            preview = ScanPreview(image: image, chunks: [], pageCount: 1, deferredPageCount: 0)
         }
 
         statusMessage = nil
@@ -731,6 +751,11 @@ private struct ScanPreviewOverlay: View {
                             .padding(.horizontal, 12)
                             .padding(.top, 12)
 
+                        if let pageStatusText = preview.pageStatusText {
+                            pageStatusRow(pageStatusText)
+                                .padding(.horizontal, 12)
+                        }
+
                         if preview.hasLowConfidence && !isEditing {
                             lowConfidenceBanner
                                 .padding(.horizontal, 12)
@@ -854,6 +879,29 @@ private struct ScanPreviewOverlay: View {
 
     private func wordCount(_ s: String) -> Int {
         s.split { $0.isWhitespace || $0.isNewline }.count
+    }
+
+    private func pageStatusRow(_ text: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "doc.on.doc")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(theme.currentTheme.chrome.accent)
+            Text(text)
+                .talkieType(.preview)
+                .foregroundStyle(theme.colors.textSecondary)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(theme.colors.cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                      lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                )
+        )
     }
 
     private var lowConfidenceBanner: some View {
