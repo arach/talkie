@@ -33,11 +33,8 @@ struct HomeNextView: View {
             VStack(spacing: 12) {
                 HomeHeader()
 
-                StationCard(
-                    pickUp: feed.lastDocument,
-                    tally: feed.recentTally
-                )
-                .padding(.horizontal, 12)
+                StationCard(pickUp: feed.lastDocument)
+                    .padding(.horizontal, 12)
 
                 RecentSection(items: feed.recentItems)
                     .padding(.horizontal, 12)
@@ -375,7 +372,6 @@ private struct StatusPixel: View {
 
 private struct StationCard: View {
     let pickUp: HomeFeed.PickUp?
-    let tally: HomeFeed.Tally
 
     @ObservedObject private var theme = ThemeManager.shared
 
@@ -420,8 +416,6 @@ private struct StationCard: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
-
-            ActionBus(tally: tally)
         }
         .background(theme.colors.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -431,65 +425,6 @@ private struct StationCard: View {
                               lineWidth: theme.currentTheme.chrome.hairlineWidth)
         )
         .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
-    }
-}
-
-private struct ActionBus: View {
-    let tally: HomeFeed.Tally
-    @ObservedObject private var theme = ThemeManager.shared
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(theme.currentTheme.chrome.accent)
-                    .frame(width: 5, height: 5)
-                Text(tally.eyebrow)
-                    .talkieType(.channelLabelSmall)
-                    .foregroundStyle(theme.currentTheme.chrome.accent)
-                Spacer()
-                if let cta = tally.cta {
-                    Text(cta)
-                        .talkieType(.channelLabelSmall)
-                        .foregroundStyle(theme.colors.textTertiary)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
-
-            if !tally.cells.isEmpty {
-                HStack(spacing: 0) {
-                    ForEach(Array(tally.cells.enumerated()), id: \.offset) { idx, cell in
-                        VStack(spacing: 4) {
-                            Text(cell.value)
-                                .talkieType(.instrumentReadout)
-                                .foregroundStyle(theme.currentTheme.chrome.accent)
-                            Text(cell.label)
-                                .talkieType(.channelLabelTiny)
-                                .foregroundStyle(theme.colors.textTertiary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-
-                        if idx < tally.cells.count - 1 {
-                            Rectangle()
-                                .fill(theme.currentTheme.chrome.edgeFaint)
-                                .frame(width: theme.currentTheme.chrome.hairlineWidth)
-                                .padding(.vertical, 8)
-                        }
-                    }
-                }
-            } else {
-                Color.clear.frame(height: 10)
-            }
-        }
-        .background(theme.colors.background)
-        .overlay(
-            Rectangle()
-                .fill(theme.currentTheme.chrome.edgeFaint)
-                .frame(height: theme.currentTheme.chrome.hairlineWidth),
-            alignment: .top
-        )
     }
 }
 
