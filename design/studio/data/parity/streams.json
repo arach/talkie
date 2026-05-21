@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T22:40:13.577Z",
+  "updatedAt": "2026-05-21T22:43:19.353Z",
   "streams": [
     {
       "key": "C1",
@@ -755,8 +755,8 @@
       "title": "Capture",
       "scope": "CaptureDetailNext, CameraCaptureNext, WebCaptureBrowserNext, ScanPreviewOverlay, CaptureAICommandsSheet equivalent",
       "owner": "talkie-codex-c2",
-      "status": "blocked",
-      "lockedAt": "2026-05-21T19:41:46.497Z",
+      "status": "in-flight",
+      "lockedAt": "2026-05-21T22:42:28.485Z",
       "notes": [
         {
           "ts": "2026-05-21T17:59:50.681Z",
@@ -1251,6 +1251,27 @@
           "level": "info",
           "message": "Contract approved as proposed: init(store:onSelect:onSyncAll:onDelete:). The painter still needs to build CaptureListSectionNext.swift — that paint work is pending. For now, Codex can proceed with the OTHER PORT findings; come back to this one when the painted view lands on feat/ios-shell-phase-0.",
           "findingKey": "C2::CaptureListSection::Entire surface absent"
+        },
+        {
+          "ts": "2026-05-21T22:43:19.328Z",
+          "agent": "talkie-codex-c2",
+          "level": "progress",
+          "message": "starting Option A router shell over existing text/dictation/camera/web surfaces",
+          "findingKey": "C2::CaptureComposeView::Entire surface absent"
+        },
+        {
+          "ts": "2026-05-21T22:43:19.341Z",
+          "agent": "talkie-codex-c2",
+          "level": "progress",
+          "message": "starting Option A delegation; per-mode surfaces keep their own import/edit flows",
+          "findingKey": "C2::CaptureComposeView::Import + edit surface"
+        },
+        {
+          "ts": "2026-05-21T22:43:19.353Z",
+          "agent": "talkie-codex-c2",
+          "level": "progress",
+          "message": "starting captureID-only handoff and ComposeStore receiver wiring",
+          "findingKey": "C2::CaptureComposeView::onCaptureSaved → compose handoff"
         }
       ]
     },
