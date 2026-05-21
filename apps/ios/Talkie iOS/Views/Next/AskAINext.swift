@@ -229,7 +229,7 @@ struct AskAINext: View {
     }
 
     private func applyPreset(_ preset: AskAIPreset) {
-        session.prompt = preset.template
+        session.applyPreset(preset)
         isPromptFocused = true
     }
 
@@ -276,8 +276,11 @@ private final class AskAISession: ObservableObject {
     @Published var isThinking = false
     @Published var errorMessage: String?
 
+    private let store = AskAISessionStore.shared
     private let bridgeManager = BridgeManager.shared
     private let appSettings = TalkieAppSettings.shared
+    private var lastPreset: AskAIPreset?
+    private var lastModel: String?
 
     var canSend: Bool {
         !isThinking && !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -287,10 +290,23 @@ private final class AskAISession: ObservableObject {
 
     var nextTurnCode: String { Self.code(for: turns.count + 1) }
 
+    init() {
+        guard let snapshot = store.load() else { return }
+        turns = snapshot.turns.filter { !$0.isThinking }
+        lastPreset = snapshot.lastPreset
+        lastModel = snapshot.lastModel
+    }
+
     func receiveVoicePrompt(_ transcript: String) {
         let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         prompt = trimmed
+    }
+
+    func applyPreset(_ preset: AskAIPreset) {
+        prompt = preset.template
+        lastPreset = preset
+        persist()
     }
 
     func send() {
@@ -320,6 +336,7 @@ private final class AskAISession: ObservableObject {
         )
         turns.append(thinkingTurn)
         isThinking = true
+        persist()
 
         Task {
             let startedAt = Date()
@@ -336,6 +353,7 @@ private final class AskAISession: ObservableObject {
                         tokens: Self.estimatedTokens(for: result.responseText)
                     )
                     isThinking = false
+                    persist()
                 }
             } catch {
                 await MainActor.run {
@@ -349,6 +367,7 @@ private final class AskAISession: ObservableObject {
                     )
                     errorMessage = error.localizedDescription
                     isThinking = false
+                    persist()
                 }
             }
         }
@@ -433,6 +452,17 @@ private final class AskAISession: ObservableObject {
             ?? appSettings.composeDirectModelId
     }
 
+    private func persist() {
+        lastModel = preferredModelLabel
+        let snapshot = AskAISessionSnapshot(
+            turns: turns,
+            lastPreset: lastPreset,
+            lastModel: lastModel,
+            lastTurnID: lastTurnID
+        )
+        Task { await store.save(snapshot) }
+    }
+
     private static func code(for index: Int) -> String {
         "T" + String(index).leftPadded(toLength: 2, with: "0")
     }
@@ -446,14 +476,20 @@ private final class AskAISession: ObservableObject {
     }
 }
 
-private struct AskAIPreset: Identifiable {
-    let id = UUID()
+struct AskAIPreset: Identifiable, Codable, Equatable {
+    let id: UUID
     let title: String
     let template: String
+
+    init(id: UUID = UUID(), title: String, template: String) {
+        self.id = id
+        self.title = title
+        self.template = template
+    }
 }
 
-private struct AskAITurn: Identifiable, Equatable {
-    enum Speaker: Equatable {
+struct AskAITurn: Identifiable, Codable, Equatable {
+    enum Speaker: Codable, Equatable {
         case user
         case talkie
 
