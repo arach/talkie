@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T18:54:50.201Z",
+  "updatedAt": "2026-05-21T19:30:52Z",
   "streams": [
     {
       "key": "C1",
@@ -908,9 +908,9 @@
       "key": "C6",
       "title": "Recording · Workflows · Feedback · Ask AI",
       "scope": "RecordingSheetNext, MinimalDictationOverlayNext, KeyboardActivationNext, VoicePivotButton + QuickEntriesBar, WorkflowsNext, FeedbackNext, AskAINext",
-      "owner": null,
-      "status": "done",
-      "lockedAt": "2026-05-21T18:00:01.274Z",
+      "owner": "talkie-codex-c6",
+      "status": "in-flight",
+      "lockedAt": "2026-05-21T19:20:47.998Z",
       "notes": [
         {
           "ts": "2026-05-21T18:00:36.870Z",
@@ -1055,6 +1055,75 @@
           "message": "C6 INVESTIGATION COMPLETE — Summary: 11 findings confirmed. Top 3 leverage points: (1) Attachment pipeline in RecordingSheetNext (MISSING, Size M, service bridge needed); (2) Per-memo workflow triggers on VoiceMemoDetailNext (MISSING, Size S, hub integration); (3) returnInfoDismissed UserDefaults persistence in KeyboardActivationStore (STUB, Size XS, quick fix). 2 proposals ready for sign-off. 8 findings marked as intentional CHANGED/NEW or deferred-to-Codex stubs (no Claude action). All 9 services (AudioRecorderManager, HeadlessDictationService, WorkflowsStore, AskAISessionStore, FeedbackService, CaptureAICommandService, +3) confirmed present and wired where needed."
         },
         {
+          "ts": "2026-05-21T18:09:09.927Z",
+          "agent": "talkie-codex-c6",
+          "level": "progress",
+          "findingKey": "C6::KeyboardActivationView::returnInfoDismissed persistence",
+          "message": "Tier-0 Codex pick: wiring KeyboardActivationStore return-info collapse state to UserDefaults so the tip does not reset every session.",
+          "ref": "apps/ios/Talkie iOS/Views/Next/KeyboardActivationNext.swift"
+        },
+        {
+          "ts": "2026-05-21T18:09:48.351Z",
+          "agent": "talkie-codex-c6",
+          "level": "landed",
+          "findingKey": "C6::KeyboardActivationView::returnInfoDismissed persistence",
+          "message": "Landed Tier-0 XS fix: KeyboardActivationStore now loads and saves the return-info dismissal flag via UserDefaults.",
+          "ref": "db73c7a"
+        },
+        {
+          "ts": "2026-05-21T18:10:24.117Z",
+          "agent": "talkie-codex-c6",
+          "level": "progress",
+          "findingKey": "C6::KeyboardActivationView::Keyboard mode toggle",
+          "message": "Tier-0 Codex pick: turning the Next keyboard-mode status pill into a real HeadlessDictationService activate/deactivate control.",
+          "ref": "apps/ios/Talkie iOS/Views/Next/KeyboardActivationNext.swift"
+        },
+        {
+          "ts": "2026-05-21T18:11:17.724Z",
+          "agent": "talkie-codex-c6",
+          "level": "landed",
+          "findingKey": "C6::KeyboardActivationView::Keyboard mode toggle",
+          "message": "Landed Tier-0 S fix: the Next keyboard-mode pill now activates/deactivates HeadlessDictationService and reflects live state.",
+          "ref": "131958b"
+        },
+        {
+          "ts": "2026-05-21T18:16:16.504Z",
+          "agent": "talkie-codex-c6",
+          "level": "question",
+          "message": "Tier-0 pass skipped this M/med finding. Question: should Codex expand scope for PhotosPicker + MemoAttachmentStore/sidecar attachment integration after this PR?",
+          "findingKey": "C6::RecordingView::Attachment pipeline",
+          "ref": "apps/ios/Talkie iOS/Views/Next/RecordingSheetNext.swift"
+        },
+        {
+          "ts": "2026-05-21T18:16:16.505Z",
+          "agent": "talkie-codex-c6",
+          "level": "question",
+          "message": "Tier-0 pass skipped this S/med finding because the proposed trigger lives on VoiceMemoDetailNext, which is outside the C6 write scope here. Question: approve expanded scope/router contract for a follow-up?",
+          "findingKey": "C6::WorkflowActionSheet::Per-memo workflow triggers",
+          "ref": "apps/ios/Talkie iOS/Views/Next/WorkflowsNext.swift"
+        },
+        {
+          "ts": "2026-05-21T18:16:16.506Z",
+          "agent": "talkie-codex-c6",
+          "level": "info",
+          "message": "No Tier-0 change made: AskAINext already resolves phone credentials via TalkieAIProviderResolver and falls back to borrowed Mac credentials before throwing setup guidance.",
+          "findingKey": "C6::AskAINext::Provider resolution",
+          "ref": "apps/ios/Talkie iOS/Views/Next/AskAINext.swift:376-403"
+        },
+        {
+          "ts": "2026-05-21T18:16:16.507Z",
+          "agent": "talkie-codex-c6",
+          "level": "info",
+          "message": "Tier-0 Codex pass complete: landed KeyboardActivationNext return-tip persistence and keyboard-mode toggle. Verified with xcodebuild on iPhone 17 simulator; per-run DerivedData was removed."
+        },
+        {
+          "ts": "2026-05-21T18:17:04.273Z",
+          "agent": "talkie-codex-c6",
+          "level": "info",
+          "message": "Opened PR for C6 Tier-0 keyboard parity fixes: https://github.com/arach/talkie/pull/16",
+          "ref": "https://github.com/arach/talkie/pull/16"
+        },
+        {
           "ts": "2026-05-21T18:40:37.230Z",
           "agent": "user-art",
           "level": "decision",
@@ -1081,6 +1150,12 @@
           "level": "info",
           "message": "we have a completely different nav style now - no action section",
           "findingKey": "C6::ActionDock (565L)::Three-button dock → corner + bar"
+        },
+        {
+          "ts": "2026-05-21T19:20:53.332Z",
+          "agent": "talkie-codex-c6",
+          "level": "progress",
+          "message": "Live on C6: fetched/rebased, reread AGENTS, processed inbox decisions, and reclaimed the stream before continuing PORT triage."
         }
       ]
     }
