@@ -1,0 +1,485 @@
+{
+  "version": 1,
+  "updatedAt": "2026-05-21T18:00:39.711Z",
+  "streams": [
+    {
+      "key": "C1",
+      "title": "Home · Library · History",
+      "scope": "HomeNextView + HomeFeed, LibraryNextView + LibraryFeed, DictationHistoryNext + DictationHistoryFeed",
+      "owner": "investigator-c1",
+      "status": "in-flight",
+      "lockedAt": "2026-05-21T17:59:01.234Z",
+      "notes": [
+        {
+          "ts": "2026-05-21T17:57:46.706Z",
+          "agent": "setup-check",
+          "level": "info",
+          "message": "Swarm infrastructure online — protocol doc at design/studio/data/parity/AGENTS.md, helper at design/studio/scripts/parity-stream.ts."
+        },
+        {
+          "ts": "2026-05-21T17:59:42.728Z",
+          "agent": "investigator-c1",
+          "level": "proposal",
+          "message": "Confirmed MISSING. Donor HomeView:50 has @State isSearching + searchText driven by .searchable() modifier (line ~180-200). Next HomeNextView has no search surface. Recommend adding @State + .searchable() on RecentSection, with live title+transcription filtering matching donor. Size S, low risk, no Codex needed.",
+          "findingKey": "C1::HomeView::Full-screen search",
+          "ref": "apps/ios/Talkie iOS/Views/Next/LibraryNextView.swift:461"
+        },
+        {
+          "ts": "2026-05-21T17:59:51.796Z",
+          "agent": "investigator-c1",
+          "level": "proposal",
+          "message": "Confirmed MISSING. Donor HomeView:2421+ defines ContentFilter enum (Memos/Dictations/Captures) with ContentFilterToggle component + per-type fetch requests. HomeFeed.makeEntries() merges all sources into one list with no filtering. Recommend adding ContentFilter state + enum to HomeFeed, segregating fetch/filter per type. Size M, med risk, needs wire to LibraryView for consistency.",
+          "findingKey": "C1::HomeView::Content filter toggle",
+          "ref": "apps/ios/Talkie iOS/Views/Next/HomeFeed.swift:62"
+        },
+        {
+          "ts": "2026-05-21T17:59:55.264Z",
+          "agent": "investigator-c1",
+          "level": "proposal",
+          "message": "Confirmed MISSING. Donor HomeView:13-38 defines SortOption enum (dateNewest/oldest/title/duration) with menuIcon. HomeFeed.makeEntries() hardcodes sort to updatedAt DESC (line 90). Recommend adding @State sortOption + toggle UI to HomeHeader + applying sort predicate in fetchVoiceMemos. Size S, low risk, no Codex needed.",
+          "findingKey": "C1::HomeView::Sort options",
+          "ref": "apps/ios/Talkie iOS/Views/Next/HomeFeed.swift:90"
+        },
+        {
+          "ts": "2026-05-21T17:59:57.478Z",
+          "agent": "investigator-c1",
+          "level": "proposal",
+          "message": "Confirmed MISSING. Donor HomeView:71 increments displayLimit += 10 on load-more tap. HomeFeed hardcodes limit to 5 with no expansion (line 92). Recommend adding displayLimit @State to HomeFeed + load-more button in RecentSection matching DictationHistoryNext:150 pattern. Size XS, low risk, no Codex needed.",
+          "findingKey": "C1::HomeView::Load-more pagination",
+          "ref": "apps/ios/Talkie iOS/Views/Next/HomeFeed.swift:92"
+        },
+        {
+          "ts": "2026-05-21T18:00:01.388Z",
+          "agent": "investigator-c1",
+          "level": "proposal",
+          "message": "Confirmed MISSING. Donor auto-selects first non-empty 24h→7d→30d window. HomeFeed.makeTally() (line 218) iterates correctly but always anchors at now (could show empty window). Behavior is correct but spec says should auto-advance if 24h is empty. Recommend adding logic to skip empty windows. Size XS, low risk, no Codex needed.",
+          "findingKey": "C1::HomeView::Tally window rollover",
+          "ref": "apps/ios/Talkie iOS/Views/Next/HomeFeed.swift:218"
+        },
+        {
+          "ts": "2026-05-21T18:00:04.195Z",
+          "agent": "investigator-c1",
+          "level": "proposal",
+          "message": "Confirmed MISSING. Donor VoiceMemoRow:24-32 counts completed WorkflowRuns + shows sparkles + count. HomeFeed.Entry has no workflow integration. Recommend adding workflowCount to Entry + fetching completed runs per memo in makeEntries(). Needs wire to workflow store. Size M, med risk, needs Codex for service integration.",
+          "findingKey": "C1::HomeView::Workflow run badge on rows",
+          "ref": "apps/ios/Talkie iOS/Views/Next/HomeFeed.swift:162"
+        },
+        {
+          "ts": "2026-05-21T18:00:06.303Z",
+          "agent": "investigator-c1",
+          "level": "proposal",
+          "message": "Confirmed MISSING. Donor VoiceMemoRow:37-49 estimates file size (~16KB/sec) + extracts format from extension. HomeFeed.Entry has no file metadata. Recommend adding fileSize + audioFormat computed properties to Entry, matching donor's safe estimation pattern. Size S, low risk, no Codex needed.",
+          "findingKey": "C1::HomeView::File size + audio format meta",
+          "ref": "apps/ios/Talkie iOS/Views/Next/HomeFeed.swift:162"
+        },
+        {
+          "ts": "2026-05-21T18:00:08.634Z",
+          "agent": "investigator-c1",
+          "level": "proposal",
+          "message": "Confirmed MISSING. Donor HomeView has deepLinkManager handling .search(query) deep link → isSearching=true + focused search field. HomeNextView has no deep-link integration. Recommend wiring DeepLinkManager in HomeNextView to set isSearching + focus on search field when .search pattern detected. Size S, low risk, no Codex needed.",
+          "findingKey": "C1::HomeView::Deep-link search action",
+          "ref": "apps/ios/Talkie iOS/Views/Next/HomeNextView.swift:23"
+        },
+        {
+          "ts": "2026-05-21T18:00:10.965Z",
+          "agent": "investigator-c1",
+          "level": "proposal",
+          "message": "Confirmed MISSING. Donor home recent dictations have swipe-leading promoteHomeDictationToMemo action. Next RecentItem has no swipe actions. Recommend adding swipe-leading promote + swipe-trailing delete to RecentSection rows (for .typed source only). Size S, low-med risk, needs Codex for action wiring.",
+          "findingKey": "C1::HomeView::Promote-to-memo swipe on home dictations",
+          "ref": "apps/ios/Talkie iOS/Views/Next/HomeFeed.swift:104"
+        },
+        {
+          "ts": "2026-05-21T18:00:13.763Z",
+          "agent": "investigator-c1",
+          "level": "info",
+          "message": "Confirmed CHANGED. Donor AmbientStatusRow was 4×6pt pixel dots (iCloud·Mac·Account·Deck). Next consolidates to 40pt MacConnectionChip with icon-only design + context-aware tap target. Design intentional; implementation correct.",
+          "findingKey": "C1::HomeView::Mac connection signal",
+          "ref": "apps/ios/Talkie iOS/Views/Next/HomeNextView.swift:109"
+        },
+        {
+          "ts": "2026-05-21T18:00:16.219Z",
+          "agent": "investigator-c1",
+          "level": "proposal",
+          "message": "Confirmed STUB. SearchBar component (line 461) binds to local @State query but has no filter logic — placeholder updates per tab (line 76) but query does not filter items. Recommend wiring query binding to LibraryFeed + applying filter predicates per tab. Size M, low risk, no Codex needed.",
+          "findingKey": "C1::LibraryView::SearchBar not wired",
+          "ref": "apps/ios/Talkie iOS/Views/Next/LibraryNextView.swift:461"
+        },
+        {
+          "ts": "2026-05-21T18:00:18.639Z",
+          "agent": "investigator-c1",
+          "level": "proposal",
+          "message": "Confirmed MISSING. Donor LibraryView applies search text dynamically to filteredMemos/filteredDictations/filteredCaptures predicates. LibraryFeed has no filter state. Recommend adding @State query to LibraryFeed + filtering each tab's items in items(for:) method. Size M, low risk, no Codex needed.",
+          "findingKey": "C1::LibraryView::Live filtering across tabs",
+          "ref": "apps/ios/Talkie iOS/Views/Next/LibraryFeed.swift:50"
+        },
+        {
+          "ts": "2026-05-21T18:00:21.570Z",
+          "agent": "investigator-c1",
+          "level": "proposal",
+          "message": "Confirmed MISSING. Donor DictationListSection has swipe-leading promoteToMemo. LibraryListCard line 200 only exposes trailing delete. Recommend adding swipe-leading promote action to rows where source==.typed. Size S, low-med risk, needs Codex for action wiring.",
+          "findingKey": "C1::LibraryView::Promote-to-memo swipe on Library dictations",
+          "ref": "apps/ios/Talkie iOS/Views/Next/LibraryNextView.swift:200"
+        },
+        {
+          "ts": "2026-05-21T18:00:24.397Z",
+          "agent": "investigator-c1",
+          "level": "proposal",
+          "message": "Confirmed MISSING. itemSource() line 229 returns nil for typed/dictation sources, filtering them from Items tab. Captures merge typed/dictation/link/scan sources — no segregation on Items tab. This is correct behavior per tab design. No action needed.",
+          "findingKey": "C1::LibraryView::Source-type filtering on Items tab",
+          "ref": "apps/ios/Talkie iOS/Views/Next/LibraryFeed.swift:229"
+        },
+        {
+          "ts": "2026-05-21T18:00:26.551Z",
+          "agent": "investigator-c1",
+          "level": "proposal",
+          "message": "Confirmed MISSING. Donor CaptureCard shows syncedToMac checkmark vs dotted circle. LibraryFeed.Item has no sync state field. Recommend adding syncStatus: SyncState enum to Item, fetching from Capture.syncedToMac property. Size S, low risk, no Codex needed.",
+          "findingKey": "C1::LibraryView::Capture sync status",
+          "ref": "apps/ios/Talkie iOS/Views/Next/LibraryFeed.swift:17"
+        },
+        {
+          "ts": "2026-05-21T18:00:30.494Z",
+          "agent": "investigator-c1",
+          "level": "info",
+          "message": "Confirmed CHANGED. Donor opens DictationDetailView sheet; Next routes to Compose document (line 256). This is intentional per design — different but valid user journey. No action needed.",
+          "findingKey": "C1::LibraryView::Dictation tap target",
+          "ref": "apps/ios/Talkie iOS/Views/Next/LibraryNextView.swift:256"
+        },
+        {
+          "ts": "2026-05-21T18:00:32.974Z",
+          "agent": "investigator-c1",
+          "level": "info",
+          "message": "Confirmed MINOR. Label reads '· EARLIER · THIS WEEK' but earlier count is for items in the last 7d not shown, not older items. Label is semantically correct per implementation. Consider if wording could be clearer (e.g., '· OLDER ITEMS'). Low priority.",
+          "findingKey": "C1::LibraryView::EARLIER · THIS WEEK bucket copy",
+          "ref": "apps/ios/Talkie iOS/Views/Next/LibraryNextView.swift:219"
+        },
+        {
+          "ts": "2026-05-21T18:00:37.020Z",
+          "agent": "investigator-c1",
+          "level": "proposal",
+          "message": "Confirmed STUB. File header acknowledges both as paint-side TODOs. DictationHistoryNext line 137 only shows swipe-trailing delete. Recommend adding swipe-leading promote action + wiring both via Codex. Size S, low-med risk, needs Codex for action implementation.",
+          "findingKey": "C1::DictationHistoryView::Swipe-leading Save-as-Memo + trailing Delete",
+          "ref": "apps/ios/Talkie iOS/Views/Next/DictationHistoryNext.swift:137"
+        },
+        {
+          "ts": "2026-05-21T18:00:39.711Z",
+          "agent": "investigator-c1",
+          "level": "proposal",
+          "message": "Confirmed MISSING. Donor DictationDetailView has full-screen detail with promote button + toolbar read-aloud. Next opens Compose seeded with ID (line 135). This is intentional design choice. No action needed — Compose surface covers the intent.",
+          "findingKey": "C1::DictationHistoryView::Detail view with Save as Memo button",
+          "ref": "apps/ios/Talkie iOS/Views/Next/DictationHistoryNext.swift:135"
+        }
+      ]
+    },
+    {
+      "key": "C2",
+      "title": "Capture",
+      "scope": "CaptureDetailNext, CameraCaptureNext, WebCaptureBrowserNext, ScanPreviewOverlay, CaptureAICommandsSheet equivalent",
+      "owner": null,
+      "status": "done",
+      "lockedAt": "2026-05-21T17:59:22.003Z",
+      "notes": [
+        {
+          "ts": "2026-05-21T17:59:50.681Z",
+          "agent": "investigator-c2",
+          "level": "proposal",
+          "message": "CaptureListSection (CaptureCard + CaptureRow + sync badge + unsynced count) has no Next port. Should create CaptureListSectionNext in Views/Next/ to surface recent captures with sync status. Size: M, needs CaptureStore.all() binding. Risk: low, isolated surface.",
+          "findingKey": "C2::CaptureListSection::Entire surface absent",
+          "ref": "apps/ios/Talkie iOS/Views/CaptureListSection.swift"
+        },
+        {
+          "ts": "2026-05-21T17:59:52.239Z",
+          "agent": "investigator-c2",
+          "level": "proposal",
+          "message": "CaptureDetailNext shows photo placeholder (line 315–329) but clicking does not open fullscreen. Donor had CaptureDetailImageViewer. Proposal: wire image tap to open ImageViewer. Size: XS, needs Codex gesture + view container. Risk: low.",
+          "findingKey": "C2::CaptureDetailView::Image viewer fullscreen",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CaptureDetailNext.swift:315"
+        },
+        {
+          "ts": "2026-05-21T17:59:53.980Z",
+          "agent": "investigator-c2",
+          "level": "info",
+          "message": "CONFIRMED WIRED: CaptureDetailNext.refreshLoadedAssets (line 140–142) calls CaptureStore.loadImageData(filename:), identical to donor. Image loads and renders in photoThumb (line 315–329). No action needed.",
+          "findingKey": "C2::CaptureDetailView::Image loading from MemoAttachmentStore",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CaptureDetailNext.swift:140"
+        },
+        {
+          "ts": "2026-05-21T17:59:56.250Z",
+          "agent": "investigator-c2",
+          "level": "proposal",
+          "message": "Donor CaptureDetailView had @StateObject AudioPlayerManager for TTS. Next has none. Audio only accessed via Listen button (line 474–480) routing to ReadAloudNext. Proposal: confirm no local TTS needed on detail; if required, add AudioPlayerManager + playback UI. Size: S–M. Risk: med (depends on ReadAloud refactor). Needs Codex.",
+          "findingKey": "C2::CaptureDetailView::Audio playback state machine",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CaptureDetailNext.swift:474"
+        },
+        {
+          "ts": "2026-05-21T17:59:56.868Z",
+          "agent": "investigator-c2",
+          "level": "info",
+          "message": "CONFIRMED WIRED: NotificationCenter observer at line 268–270 calls store.refresh() on .capturesDidChange. Matches donor pattern. No action needed.",
+          "findingKey": "C2::CaptureDetailView::capturesDidChange refresh",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CaptureDetailNext.swift:268"
+        },
+        {
+          "ts": "2026-05-21T17:59:58.270Z",
+          "agent": "investigator-c2",
+          "level": "proposal",
+          "message": "STUB CONFIRMED: sheet stores sourceCapture locally (line 231) but AI result does not propagate back to detail on save. Proposal: wire CaptureAICommandsSheet completion callback to refresh CaptureDetailStore. Size: XS. Risk: low. Needs Codex for service bridge.",
+          "findingKey": "C2::CaptureDetailView::AI Commands sheet bidirectional sync",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CaptureDetailNext.swift:265"
+        },
+        {
+          "ts": "2026-05-21T17:59:59.546Z",
+          "agent": "investigator-c2",
+          "level": "proposal",
+          "message": "STUB CONFIRMED: no affordances on CaptureDetailNext for edit or delete. Proposal: add Edit button (opens inline title/text editor) + Delete button (with confirmation) to action tray or toolbar. Size: M. Risk: med (state management). Needs Codex for persistence bridge.",
+          "findingKey": "C2::CaptureDetailView::Edit + delete flows",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CaptureDetailNext.swift:467"
+        },
+        {
+          "ts": "2026-05-21T18:00:04.902Z",
+          "agent": "investigator-c2",
+          "level": "proposal",
+          "message": "MISSING: Donor batch OCR with deferred page queue not in Next. Proposal: add extractText(pages:) variant to ScreenshotOCRService that returns pageCount + status. Wire into CameraCaptureNext model to track queue. Size: S. Risk: low. Codex implements service logic.",
+          "findingKey": "C2::CaptureComposeView::ScreenshotOCRService deferred pages",
+          "ref": "apps/ios/Talkie iOS/Services/ScreenshotOCRService.swift"
+        },
+        {
+          "ts": "2026-05-21T18:00:06.257Z",
+          "agent": "investigator-c2",
+          "level": "proposal",
+          "message": "MISSING: Donor accepted optional URL param and opened browser directly. Next CameraCaptureNext has no such handoff. Proposal: add initialURL param to CameraCaptureNext; if provided, skip to WebCaptureBrowserNext. Size: XS. Risk: low.",
+          "findingKey": "C2::CaptureComposeView::initialURL fast-path → WebCaptureBrowser",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CameraCaptureNext.swift:15"
+        },
+        {
+          "ts": "2026-05-21T18:00:07.426Z",
+          "agent": "investigator-c2",
+          "level": "proposal",
+          "message": "MISSING: Donor CaptureComposeView had onCaptureSaved callback to pass capture into compose surface. Next has no integration. Proposal: wire CameraCaptureNext + WebCaptureBrowserNext completion callbacks to seed ComposeNextView with capture ID. Size: XS. Risk: low. Needs router wiring.",
+          "findingKey": "C2::CaptureComposeView::onCaptureSaved → compose handoff",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CameraCaptureNext.swift:478"
+        },
+        {
+          "ts": "2026-05-21T18:00:09.397Z",
+          "agent": "investigator-c2",
+          "level": "info",
+          "message": "CHANGED: Donor used VisionKit.VNDocumentCameraViewController (multi-page scanner with perspective correction). Next CameraCaptureNext uses AVFoundation direct (single photo per capture). Intentional trade-off (simpler first pass). Proposal: defer multi-page scanner to Phase-2; current design viable for M1 launch.",
+          "findingKey": "C2::CameraImagePicker + OCRPreviewSheet::VNDocumentCameraViewController",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CameraCaptureNext.swift:15"
+        },
+        {
+          "ts": "2026-05-21T18:00:10.604Z",
+          "agent": "investigator-c2",
+          "level": "proposal",
+          "message": "MISSING: Donor had UIImagePickerController fallback for older devices. Next has none. Proposal: add fallback path to CameraCaptureNext when AVFoundation unavailable (permissionState == .unavailable). Route to PhotosPicker instead. Size: XS. Risk: low.",
+          "findingKey": "C2::CameraImagePicker + OCRPreviewSheet::UIImagePickerController fallback",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CameraCaptureNext.swift:39"
+        },
+        {
+          "ts": "2026-05-21T18:00:11.873Z",
+          "agent": "investigator-c2",
+          "level": "proposal",
+          "message": "MISSING: Donor OCR sheet showed 'Page X of Y scanned · N pages waiting'. Next ScanPreviewOverlay does not surface batch state. Proposal: extend ScanPreviewOverlay to show deferred page count when totalPageCount > 1. Size: XS. Risk: low.",
+          "findingKey": "C2::CameraImagePicker + OCRPreviewSheet::Deferred page status row",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CameraCaptureNext.swift:633"
+        },
+        {
+          "ts": "2026-05-21T18:00:13.160Z",
+          "agent": "investigator-c2",
+          "level": "info",
+          "message": "CHANGED CONFIRMED: Donor OCRPreviewSheet was modal; Next ScanPreviewOverlay (line 633–856) is full-bleed overlay integrated into CameraCaptureNext. Intentional refactor for better UX. No action needed.",
+          "findingKey": "C2::CameraImagePicker + OCRPreviewSheet::Sheet → full-bleed overlay",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CameraCaptureNext.swift:633"
+        },
+        {
+          "ts": "2026-05-21T18:00:14.248Z",
+          "agent": "investigator-c2",
+          "level": "info",
+          "message": "NEW CONFIRMED: ScanPreviewOverlay (line 761–787) adds TextEditor seeded with OCR combinedText for user correction before save. Donor had no edit mode. Enhancement, no action needed.",
+          "findingKey": "C2::CameraImagePicker + OCRPreviewSheet::Inline edit mode in scan preview",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CameraCaptureNext.swift:761"
+        },
+        {
+          "ts": "2026-05-21T18:00:15.359Z",
+          "agent": "investigator-c2",
+          "level": "info",
+          "message": "NEW CONFIRMED: lowConfidenceBanner (line 793–814) surfaces when OCRChunk.band == .low. Donor had none. Enhancement, no action needed.",
+          "findingKey": "C2::CameraImagePicker + OCRPreviewSheet::Low-confidence coaching banner",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CameraCaptureNext.swift:793"
+        },
+        {
+          "ts": "2026-05-21T18:00:16.386Z",
+          "agent": "investigator-c2",
+          "level": "info",
+          "message": "CHANGED CONFIRMED: Donor used @StateObject + @ObservedObject directly; Next WebCaptureBrowserNext wraps both in WebCaptureBrowserStore (lines 28–97) + stores @Observable. Equivalent behavior. No action needed.",
+          "findingKey": "C2::WebCaptureBrowser::State machine refactor",
+          "ref": "apps/ios/Talkie iOS/Views/Next/WebCaptureBrowserNext.swift:28"
+        },
+        {
+          "ts": "2026-05-21T18:00:18.097Z",
+          "agent": "investigator-c2",
+          "level": "proposal",
+          "message": "MISSING: Donor CaptureAICommandPath enum (direct / mac) with provider picker. Next has no path selection. Proposal: add enum + toggle buttons to CaptureAICommandsSheet (or use route from AskAINext pattern). Size: XS. Risk: low. Needs Codex for provider resolver.",
+          "findingKey": "C2::CaptureAICommandsSheet::Path selection (direct vs Mac)",
+          "ref": "apps/ios/Talkie iOS/Views/CaptureAICommandsSheet.swift:15 (donor)"
+        },
+        {
+          "ts": "2026-05-21T18:00:19.402Z",
+          "agent": "investigator-c2",
+          "level": "proposal",
+          "message": "MISSING: Donor's 5 hardcoded buttons (Two Key Points / Summarize / Explain / Relate / Research). Next has no carousel. Proposal: add HStack carousel above custom instruction field with preset buttons. Size: XS. Risk: low.",
+          "findingKey": "C2::CaptureAICommandsSheet::Quick prompts carousel",
+          "ref": "apps/ios/Talkie iOS/Views/CaptureAICommandsSheet.swift:32 (donor)"
+        },
+        {
+          "ts": "2026-05-21T18:00:20.701Z",
+          "agent": "investigator-c2",
+          "level": "proposal",
+          "message": "MISSING: Donor wrapped DictationWrapper inline in command field. Next has no voice input. Proposal: add mic icon button in instruction TextField (or right-side button) to toggle dictation. Wire InlineDictationController. Size: S. Risk: med. Needs Codex.",
+          "findingKey": "C2::CaptureAICommandsSheet::Dictation mic in command field",
+          "ref": "apps/ios/Talkie iOS/Views/CaptureAICommandsSheet.swift (donor)"
+        },
+        {
+          "ts": "2026-05-21T18:00:21.742Z",
+          "agent": "investigator-c2",
+          "level": "proposal",
+          "message": "MISSING: Donor AudioPlayerManager played response via SpeechSynthesisService. Next has no playback. Proposal: add speaker icon button after response text; wire to ReadAloudNext or inline AudioPlayerManager. Size: S. Risk: med. Needs Codex.",
+          "findingKey": "C2::CaptureAICommandsSheet::TTS speak-back of response",
+          "ref": "apps/ios/Talkie iOS/Views/CaptureAICommandsSheet.swift (donor)"
+        },
+        {
+          "ts": "2026-05-21T18:00:23.051Z",
+          "agent": "investigator-c2",
+          "level": "proposal",
+          "message": "MISSING: Donor CaptureAICommandStore logged executions persistently. Next has no record. Proposal: extend CaptureAICommandStore to persist execution history (instruction + response + provider + timestamp). Add disclosure in sheet footer to show past commands. Size: S. Risk: low. Codex wires store.",
+          "findingKey": "C2::CaptureAICommandsSheet::Execution history / persistence",
+          "ref": "apps/ios/Talkie iOS/Services/CaptureAICommandStore.swift"
+        },
+        {
+          "ts": "2026-05-21T18:00:24.403Z",
+          "agent": "investigator-c2",
+          "level": "proposal",
+          "message": "MISSING: Donor surfaced 'reconnect to Mac' CTA on bridge-down errors. Next error state not wired. Proposal: add error recovery UI to CaptureAICommandsSheet: if bridge offline, show 'Connect Mac' button routing to Bridge settings. Size: XS. Risk: low. Codex wires BridgeManager check.",
+          "findingKey": "C2::CaptureAICommandsSheet::Bridge reconnect on failure",
+          "ref": "apps/ios/Talkie iOS/Views/CaptureAICommandsSheet.swift (donor)"
+        },
+        {
+          "ts": "2026-05-21T18:00:28.783Z",
+          "agent": "investigator-c2",
+          "level": "proposal",
+          "message": "Donor CaptureComposeView combines text editor + dictation + camera + photo library + URL browser + OCR into one capture-creation flow. No Next equivalent. Proposal: create CaptureComposeNextView (or merge into home create flow). Size: L. Risk: high (multi-modal state). Needs full Codex implementation.",
+          "findingKey": "C2::CaptureComposeView::Entire surface absent",
+          "ref": "apps/ios/Talkie iOS/Views/CaptureComposeView.swift (donor)"
+        },
+        {
+          "ts": "2026-05-21T18:00:32.729Z",
+          "agent": "investigator-c2",
+          "level": "proposal",
+          "message": "MISSING: Donor persisted imageFilename + deferredPageFilenames + totalPageCount for batch processing. Next CameraCaptureNext saves single scans only. Proposal: extend Capture model with deferredPageFilenames + totalPageCount (already in model, line 20–21). Wire CameraCaptureNext to queue subsequent pages. Size: M. Risk: med.",
+          "findingKey": "C2::CaptureComposeView::Multi-page scan batching",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CameraCaptureNext.swift"
+        },
+        {
+          "ts": "2026-05-21T18:00:32.818Z",
+          "agent": "investigator-c2",
+          "level": "proposal",
+          "message": "MISSING: Donor CaptureComposeView (donor, ~150L) was unified capture entry point with text + image + URL modes. Next spreads across CameraCaptureNext + WebCaptureBrowserNext. Proposal: evaluate whether to consolidate into single ComposeNextView entry or keep separate routes. Current design simpler but less unified. Size: L. Risk: med. Decision needed.",
+          "findingKey": "C2::CaptureComposeView::Import + edit surface",
+          "ref": "apps/ios/Talkie iOS/Views/CaptureComposeView.swift (donor)"
+        },
+        {
+          "ts": "2026-05-21T18:00:35.639Z",
+          "agent": "investigator-c2",
+          "level": "info",
+          "message": "Investigation complete: 26 findings across 6 subsurfaces. Confirmed: 6 info-level findings (already wired or intentional changes). Proposals: 20 concrete improvements. Top 3 leverage findings: (1) CaptureListSectionNext entirely absent — M size, unblocking home dashboard. (2) CaptureComposeView missing — L size, unifies capture paths (depends on design decision to consolidate). (3) CaptureAICommandsSheet incomplete — 6 sub-findings, enables AI on captures. Blockers: C2 depends on Codex for state wiring (AudioPlayerManager, DictationController, BridgeManager bindings) and cross-cluster features (ReadAloudNext completion, TalkieAIProviderResolver from C4)."
+        }
+      ]
+    },
+    {
+      "key": "C3",
+      "title": "Compose · Memo detail",
+      "scope": "ComposeNextView + ComposeStore, VoiceMemoDetailNext, ReadAloudNext, attachments, agent + CLI sheets",
+      "owner": "investigator-c3",
+      "status": "in-flight",
+      "lockedAt": "2026-05-21T18:00:01.377Z",
+      "notes": []
+    },
+    {
+      "key": "C4",
+      "title": "Settings · Onboarding · Sign-In",
+      "scope": "SettingsNext, OnboardingNext, SignInNext, AICredentialsNext, WorkspaceSwitcherNext",
+      "owner": "investigator-c4",
+      "status": "in-flight",
+      "lockedAt": "2026-05-21T17:59:50.786Z",
+      "notes": []
+    },
+    {
+      "key": "C5",
+      "title": "Bridge · Mac · Deck",
+      "scope": "ConnectionCenterNext, BridgeDetailNext, DeckMirrorNext, NetworkStatusBanner, MacConnectionChip, MacCoachCard",
+      "owner": "investigator-c5",
+      "status": "in-flight",
+      "lockedAt": "2026-05-21T17:59:42.179Z",
+      "notes": [
+        {
+          "ts": "2026-05-21T18:00:26.165Z",
+          "agent": "investigator-c5",
+          "level": "info",
+          "message": "Investigation: Examined 10 donor surfaces (ConnectionCenterView, BridgeSettingsView, SessionListView, SessionDetailView, CompanionScreenPreviewView, CompanionShortcutModeView, MacAvailabilityCoachView, QRScannerView, NearbyMacBrowser) vs 5 Next (ConnectionCenterNext, BridgeDetailNext, DeckMirrorNext, NetworkStatusBanner, ChromeOverlay). Status: Phase-1 stub in BridgeDetailNext is misleading — impl is functionally complete. 8 proposals follow."
+        },
+        {
+          "ts": "2026-05-21T18:00:29.221Z",
+          "agent": "investigator-c5",
+          "level": "proposal",
+          "message": "MISSING: donor SessionDetailView (message history + audio/image inputs) is entirely absent. BridgeDetailNext has TerminalNext (11L stub) but no session-history surface. Recommend: New TerminalSessionDetailNext view showing prior turns with context, audio scrubbing, and image previews. Risk: low (isolated view). Codex: @StateObject for session state binding.",
+          "findingKey": "C5::BridgeSettingsView + SessionListView + SessionDetailView::SessionDetailView"
+        },
+        {
+          "ts": "2026-05-21T18:00:31.829Z",
+          "agent": "investigator-c5",
+          "level": "proposal",
+          "message": "MISSING: Donor uses MacStatusObserver + cloudObserver for freshCloudStatuses filter to enable cloud-aware reconnect fallback. BridgeDetailNext tracks only direct pairing (bridgeManager), no cloud signal path. Recommend: Reference MacStatusObserver.shared in BridgeDetailNext status UI. Risk: low. Codex: integrate observer polling.",
+          "findingKey": "C5::BridgeSettingsView + SessionListView + SessionDetailView::MacStatusObserver cloud fallback"
+        },
+        {
+          "ts": "2026-05-21T18:00:34.212Z",
+          "agent": "investigator-c5",
+          "level": "info",
+          "message": "CONFIRMED CHANGED: Donor split Bridge / Sessions / Detail across three views. Next unifies into BridgeDetailNext (status + pairing + sessions + actions) — intentional consolidation. Paint layer complete; wire remaining lifecycle in BridgeDetailNext.",
+          "findingKey": "C5::BridgeSettingsView + SessionListView + SessionDetailView::Three surfaces → one"
+        },
+        {
+          "ts": "2026-05-21T18:00:36.304Z",
+          "agent": "investigator-c5",
+          "level": "info",
+          "message": "CONFIRMED: Misleading comment — BridgeDetailNext impl IS functionally complete (live BridgeManager + NearbyMacBrowser + QR pairing + sessions visible). Only SessionDetailView history surface absent (separate finding above). Recommend: update file header docstring.",
+          "findingKey": "C5::BridgeSettingsView + SessionListView + SessionDetailView::File header claims Phase-1 placeholder"
+        },
+        {
+          "ts": "2026-05-21T18:00:39.444Z",
+          "agent": "investigator-c5",
+          "level": "proposal",
+          "message": "MISSING: Donor tracks lastTriggeredShortcutID + latestTriggerFeedback + optimistic state + idle reset timer (700L complex). DeckMirrorNext shows only lastErrorMessage. Recommend: Enhance DeckMirrorStore to track lastTriggerResult with timestamp + optimistic-state lifecycle. Risk: medium (state sync w/bridge). Codex: idle reset timers + feedback animations.",
+          "findingKey": "C5::CompanionShortcutModeView (runtime)::Execution feedback loop"
+        }
+      ]
+    },
+    {
+      "key": "C6",
+      "title": "Recording · Workflows · Feedback · Ask AI",
+      "scope": "RecordingSheetNext, MinimalDictationOverlayNext, KeyboardActivationNext, VoicePivotButton + QuickEntriesBar, WorkflowsNext, FeedbackNext, AskAINext",
+      "owner": "investigator-c6",
+      "status": "in-flight",
+      "lockedAt": "2026-05-21T18:00:01.274Z",
+      "notes": [
+        {
+          "ts": "2026-05-21T18:00:36.870Z",
+          "agent": "investigator-c6",
+          "level": "proposal",
+          "message": "Confirmed MISSING. Donor RecordingView has @State pendingAttachments + pendingSidecarRequests + addPendingAttachment() + PhotosPicker binding. Next RecordingSheetNext has zero attachment support (no picker, no state). Recommend adding: @State attachments, PhotosPicker with maxSelectionCount, pending-attachment row UI in expanded view. Size: M, risk: med (MemoAttachmentStore integration), needs Codex for gesture + service bridge.",
+          "findingKey": "C6::RecordingView::Attachment pipeline",
+          "ref": "apps/ios/Talkie iOS/Views/Next/RecordingSheetNext.swift:1"
+        }
+      ]
+    }
+  ]
+}
