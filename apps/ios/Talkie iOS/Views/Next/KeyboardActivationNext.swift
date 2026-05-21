@@ -37,7 +37,14 @@ final class KeyboardActivationStore: ObservableObject {
     @Published var recordingDuration: TimeInterval = 0
     @Published var lastTranscript: String?
     @Published var errorMessage: String?
-    @Published var returnInfoDismissed: Bool = false
+    @Published var returnInfoDismissed: Bool = false {
+        didSet {
+            guard returnInfoDismissed != oldValue else { return }
+            UserDefaults.standard.set(returnInfoDismissed, forKey: Self.returnInfoDismissedKey)
+        }
+    }
+
+    private static let returnInfoDismissedKey = "KeyboardActivationNext.returnInfoDismissed"
 
     private let headlessService = HeadlessDictationService.shared
     private let sharedStore = DictationSharedStore.shared
@@ -51,6 +58,8 @@ final class KeyboardActivationStore: ObservableObject {
     }
 
     init() {
+        returnInfoDismissed = UserDefaults.standard.bool(forKey: Self.returnInfoDismissedKey)
+
         let args = ProcessInfo.processInfo.arguments
         if let i = args.firstIndex(of: "--kbdPhase"), i + 1 < args.count {
             self.phase = Phase(rawValue: args[i + 1]) ?? .ready
