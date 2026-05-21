@@ -765,6 +765,24 @@ function ClusterStrip({
         const status = stream?.status ?? "queued";
         const statusTone = STREAM_STATUS_TONE[status];
         const isActive = activeKey === c.key;
+
+        // Progress = landed / (total - dropped - deferred). Skipped findings
+        // never need to ship, so they shouldn't drag the denominator.
+        const landedKeys = new Set<string>();
+        for (const n of notes) {
+          if (n.level === "landed" && n.findingKey) landedKeys.add(n.findingKey);
+        }
+        let toShip = 0;
+        for (const sub of c.subsurfaces) {
+          for (const f of sub.findings) {
+            const k = findingKey(c.key, sub.donor, f.title);
+            const d = effectiveDecision(notes, k);
+            if (d === "PORT") toShip += 1;
+          }
+        }
+        const landed = landedKeys.size;
+        const pct = toShip > 0 ? Math.min(100, Math.round((landed / toShip) * 100)) : 0;
+
         return (
           <button
             key={c.key}
@@ -792,6 +810,18 @@ function ClusterStrip({
             </div>
             <div className="text-[9px] font-mono text-studio-ink-faint">
               {stream?.owner ?? "unclaimed"}
+            </div>
+            <div className="mt-0.5 flex flex-col gap-1">
+              <div className="flex items-baseline justify-between text-[9px] font-mono">
+                <span className="text-studio-ink">{landed} / {toShip} landed</span>
+                <span className="text-studio-ink-faint">{pct}%</span>
+              </div>
+              <div className="h-1 rounded-full overflow-hidden bg-[rgba(0,0,0,0.06)]">
+                <div
+                  className="h-full transition-all"
+                  style={{ width: `${pct}%`, backgroundColor: "#3fa57a" }}
+                />
+              </div>
             </div>
             {last ? (
               <div className="mt-0.5 flex flex-col gap-0.5 border-t border-studio-edge pt-1.5">
@@ -852,9 +882,9 @@ function ActivityStream({
       </div>
       <div className="text-[9px] tabular-nums font-mono text-studio-ink-faint">
         {filtered.length} note{filtered.length === 1 ? "" : "s"} · showing{" "}
-        {rows.length}
+        {rows.length} · scroll for older
       </div>
-      <div className="flex flex-col">
+      <div className="flex flex-col max-h-[360px] overflow-y-auto pr-1">
         {rows.length === 0 ? (
           <div className="text-[11px] text-studio-ink-faint italic py-2">
             no activity in this stream yet
@@ -1285,6 +1315,7 @@ function SubsurfaceBlock({
             .filter((n) => n.findingKey === key)
             .slice()
             .sort((a, b) => (a.ts < b.ts ? -1 : 1));
+          const isLanded = cardNotes.some((n) => n.level === "landed");
           return (
             <FindingCard
               key={i}
@@ -1294,6 +1325,7 @@ function SubsurfaceBlock({
               decision={effectiveDecision(streamNotes, key)}
               threadNotes={cardNotes}
               postNote={postNote}
+              isLanded={isLanded}
             />
           );
         })}
@@ -1315,6 +1347,7 @@ function FindingCard({
   decision,
   threadNotes,
   postNote,
+  isLanded,
 }: {
   clusterKey: string;
   findingKey: string;
@@ -1322,6 +1355,7 @@ function FindingCard({
   decision: Decision;
   threadNotes: StreamNote[];
   postNote: PostNote;
+  isLanded: boolean;
 }) {
   const tone = TAG_TONE[finding.tag];
   const [draft, setDraft] = useState("");
@@ -1365,8 +1399,12 @@ function FindingCard({
 
   return (
     <div
-      className="flex flex-col gap-1.5 rounded-md border border-studio-edge p-3"
-      style={{ backgroundColor: tone.bg }}
+      className="flex flex-col gap-1.5 rounded-md border p-3"
+      style={{
+        backgroundColor: isLanded ? "rgba(63, 165, 122, 0.06)" : tone.bg,
+        borderColor: isLanded ? "#3fa57a" : undefined,
+        borderLeftWidth: isLanded ? "3px" : undefined,
+      }}
     >
       <div className="flex items-baseline gap-2">
         <span
@@ -1375,6 +1413,15 @@ function FindingCard({
         >
           {finding.tag}
         </span>
+        {isLanded && (
+          <span
+            className="text-[10px] font-semibold tabular-nums"
+            style={{ color: "#3fa57a" }}
+            title="Landed"
+          >
+            ✓
+          </span>
+        )}
         <span className="text-[12px] font-medium leading-tight text-studio-ink">
           {finding.title}
         </span>
