@@ -12,6 +12,7 @@ struct AskAINext: View {
     @FocusState private var isPromptFocused: Bool
     @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var session = AskAISession()
+    @ObservedObject private var reachability = NetworkReachability.shared
 
     private let presets: [AskAIPreset] = [
         AskAIPreset(
@@ -237,6 +238,9 @@ struct AskAINext: View {
     /// NetworkReachability observer on top to drive .offline when the
     /// device has lost the network entirely.
     private var networkStatus: NetworkStatus {
+        if reachability.status == .offline {
+            return .offline
+        }
         if let message = session.errorMessage, !message.isEmpty {
             return .requestFailed(message: message)
         }

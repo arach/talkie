@@ -48,6 +48,7 @@ struct talkieApp: App {
             _ = TalkieAppConfigurationStore.shared.synchronizePinnedWorkflowMirror()
         }
         Self.logPhase("theme-override-check", from: initStart) { applyScreenshotThemeOverrideIfNeeded() }
+        Self.logPhase("network-reachability-start", from: initStart) { NetworkReachability.shared.start() }
 
         // Initialize ConnectionManager and register sync providers (async, non-blocking)
         Task {
