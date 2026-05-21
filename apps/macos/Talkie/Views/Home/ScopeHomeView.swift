@@ -1766,7 +1766,10 @@ private struct RoutinesPanel: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
         }
-        .background(ScopeCanvas.surface)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color.white.opacity(0.40))
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 6)
                 .stroke(isHovered ? ScopeEdge.normal : ScopeEdge.faint, lineWidth: 0.5)
