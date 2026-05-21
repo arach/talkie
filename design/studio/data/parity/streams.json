@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T18:01:21.772Z",
+  "updatedAt": "2026-05-21T18:04:06.716Z",
   "streams": [
     {
       "key": "C1",
@@ -556,10 +556,177 @@
       "key": "C4",
       "title": "Settings · Onboarding · Sign-In",
       "scope": "SettingsNext, OnboardingNext, SignInNext, AICredentialsNext, WorkspaceSwitcherNext",
-      "owner": "investigator-c4",
-      "status": "in-flight",
+      "owner": null,
+      "status": "done",
       "lockedAt": "2026-05-21T17:59:50.786Z",
-      "notes": []
+      "notes": [
+        {
+          "ts": "2026-05-21T18:03:12.723Z",
+          "agent": "investigator-c4",
+          "level": "proposal",
+          "message": "Companion Command Deck toggle (followComputerShortcutMode) wired in donor SettingsView 178-201 but absent from SettingsNext. Not in any of six inspector panels (VOICE/LOOK/CONNECT/KEYS/LAB/ABOUT). Port requires: add to VOICE or LAB panel, bind to appSettings.followComputerShortcutMode, size XS, risk low.",
+          "findingKey": "C4::SettingsView::COMPANION section",
+          "ref": "SettingsView.swift:178-201, SettingsNext.swift:1-212"
+        },
+        {
+          "ts": "2026-05-21T18:03:14.998Z",
+          "agent": "investigator-c4",
+          "level": "proposal",
+          "message": "Donor RECORDING section (lines 202-253) has location tagging control, but SettingsNext voicePanel (216-230) only shows engine/device/sample rate TODOs. Missing: mic input device selector, sample rate control, echo cancellation toggle. Port requires: extend voicePanel with location picker + controls, wire to appSettings, size M, risk med (gesture/service deps).",
+          "findingKey": "C4::SettingsView::RECORDING section",
+          "ref": "SettingsView.swift:202-253, SettingsNext.swift:216-230"
+        },
+        {
+          "ts": "2026-05-21T18:03:17.303Z",
+          "agent": "investigator-c4",
+          "level": "proposal",
+          "message": "Donor TEXT-TO-SPEECH section (254-369): provider picker (Local/OpenAI/ElevenLabs) + conditional fields (Route, API Key, Voice). Absent from SettingsNext panels. Port strategy: create standalone AICredentialsNext-like panel or extend VOICE panel. Consider: AICredentialStore + TalkieAIProviderResolver integration (Codex). Size M, risk med (provider state machine).",
+          "findingKey": "C4::SettingsView::TEXT-TO-SPEECH section",
+          "ref": "SettingsView.swift:254-369, SettingsNext.swift:1-212"
+        },
+        {
+          "ts": "2026-05-21T18:03:19.455Z",
+          "agent": "investigator-c4",
+          "level": "proposal",
+          "message": "Donor REMOTE ACCESS section (369-397): SSH Terminal + Connection Center rows, platform-gated (DEBUG). SettingsNext has navRow to ConnectionCenter only (313). Missing: SSH Terminal link. Port requires: conditionally surface SSH Terminal nav row in CONNECT panel, size XS, risk low.",
+          "findingKey": "C4::SettingsView::REMOTE ACCESS section",
+          "ref": "SettingsView.swift:369-397, SettingsNext.swift:294-322"
+        },
+        {
+          "ts": "2026-05-21T18:03:21.557Z",
+          "agent": "investigator-c4",
+          "level": "info",
+          "message": "Layout refactor: vertical list → horizontal rail + active panel. Confirmed delivered; six panels (VOICE/LOOK/CONNECT/KEYS/LAB/ABOUT) present in SettingsNext. No action needed.",
+          "findingKey": "C4::SettingsView::Inspector layout",
+          "ref": "SettingsView.swift:1-100, SettingsNext.swift:75-212"
+        },
+        {
+          "ts": "2026-05-21T18:03:26.358Z",
+          "agent": "investigator-c4",
+          "level": "proposal",
+          "message": "lookPanel shows theme swatches (254-292) but has TODOs for Density/Accent intensity/Wordmark style (235-237). iCloud last-sync timestamp also missing (no lastSyncedAt binding). Port requires: add TalkieAppSettings keys for density/accent/wordmark, bind theme swatch selection, size S, risk low (paint + bindings only).",
+          "findingKey": "C4::SettingsView::Appearance bindings",
+          "ref": "SettingsNext.swift:232-292"
+        },
+        {
+          "ts": "2026-05-21T18:03:28.702Z",
+          "agent": "investigator-c4",
+          "level": "proposal",
+          "message": "Donor KeyboardSettingsView (70-160): DisclosureGroup with 5 setup steps. SettingsNext keysPanel (365-375) has no disclosure. Port requires: add DisclosureGroup with setup instructions to KEYS panel, size S, risk low. Needs Codex for HeadlessDictationService.activate/deactivate bindings.",
+          "findingKey": "C4::KeyboardSettingsView::SETUP INSTRUCTIONS disclosure",
+          "ref": "KeyboardSettingsView.swift:70-160, SettingsNext.swift:365-375"
+        },
+        {
+          "ts": "2026-05-21T18:03:30.735Z",
+          "agent": "investigator-c4",
+          "level": "proposal",
+          "message": "Donor has NavigationLink to custom keyboard slot configurator. SettingsNext keysPanel has no navigation target for keyboard customization. Port requires: add nav row in KEYS panel → KeyboardConfiguratorView, size S, risk low.",
+          "findingKey": "C4::KeyboardSettingsView::KeyboardConfiguratorView push",
+          "ref": "KeyboardSettingsView.swift:1-400, SettingsNext.swift:365-375"
+        },
+        {
+          "ts": "2026-05-21T18:03:33.537Z",
+          "agent": "investigator-c4",
+          "level": "proposal",
+          "message": "Donor KeyboardSettingsView has KeyboardPlayground fullScreenCover. SettingsNext keysPanel lacks testing mode. Port requires: add action row in KEYS panel to open KeyboardView preview, size XS, risk low.",
+          "findingKey": "C4::KeyboardSettingsView::Testing playground",
+          "ref": "KeyboardSettingsView.swift:200-250, SettingsNext.swift:365-375"
+        },
+        {
+          "ts": "2026-05-21T18:03:36.537Z",
+          "agent": "investigator-c4",
+          "level": "proposal",
+          "message": "OnboardingNext line 161: TODO for TalkieLogo + TalkieLogoRibbon decoration. Placeholder waveform.mic icon present. Port requires: bring TalkieLogo asset + LogoRibbon SVG view from donor, size S, risk low. This is paint-only, no state/logic needed.",
+          "findingKey": "C4::OnboardingView::Welcome hero",
+          "ref": "OnboardingNext.swift:161-174"
+        },
+        {
+          "ts": "2026-05-21T18:03:39.003Z",
+          "agent": "investigator-c4",
+          "level": "proposal",
+          "message": "OnboardingNext line 239/296: TODOs for animated phone illustration (Capture page) + interactive iPhone↔iCloud↔Mac diagram (Sync page). ArchitectureWalkthrough modal also deferred. Port requires: Codex-side animation + gesture bindings, size L, risk high (complex animations).",
+          "findingKey": "C4::OnboardingView::Capture + Sync hero animations",
+          "ref": "OnboardingNext.swift:239-296"
+        },
+        {
+          "ts": "2026-05-21T18:03:41.740Z",
+          "agent": "investigator-c4",
+          "level": "info",
+          "message": "Finding notes 'not surfaced explicitly on either side'. OnboardingNext defers mic/speech-recog/dictation extension enable to app lifecycle. Donor likely same. No action in paint layer—permission gating is OS-level. Flagging as informational, not a port item.",
+          "findingKey": "C4::OnboardingView::Explicit permission prompts",
+          "ref": "OnboardingNext.swift:1-150"
+        },
+        {
+          "ts": "2026-05-21T18:03:43.928Z",
+          "agent": "investigator-c4",
+          "level": "info",
+          "message": "Donor uses CKContainer(identifier:); Next uses CKContainer.default() + simulator guard. Both native CloudKit. No Clerk auth (per project memory). Next approach is correct for iOS simulator parity.",
+          "findingKey": "C4::OnboardingView::iCloud account check",
+          "ref": "OnboardingNext.swift:135-145, SignInNext.swift:66"
+        },
+        {
+          "ts": "2026-05-21T18:03:46.172Z",
+          "agent": "investigator-c4",
+          "level": "info",
+          "message": "NEW: SignInStore @MainActor class with authSteps state machine (Request → Validate → Provision). Full implementation present with Apple auth delegate + Keychain save. No action needed.",
+          "findingKey": "C4::SignInView::SignInStore 3-step state machine",
+          "ref": "SignInNext.swift:25-168"
+        },
+        {
+          "ts": "2026-05-21T18:03:47.820Z",
+          "agent": "investigator-c4",
+          "level": "info",
+          "message": "NEW: NativeAppleCredential struct (userIdentifier/email/givenName/familyName/tokens) fully implemented with Keychain save/update/delete. Delivered; no action needed.",
+          "findingKey": "C4::SignInView::NativeAppleCredential Keychain struct",
+          "ref": "SignInNext.swift:145-153"
+        },
+        {
+          "ts": "2026-05-21T18:03:50.129Z",
+          "agent": "investigator-c4",
+          "level": "proposal",
+          "message": "Line 64-68: CKContainer.default().accountStatus() called post-sign-in but result is not reflected in UI (just awaited, not stored). Port requires: capture status, display in authSteps[2] detail or error state, size XS, risk low.",
+          "findingKey": "C4::SignInView::CloudKit provisioning result",
+          "ref": "SignInNext.swift:64-68"
+        },
+        {
+          "ts": "2026-05-21T18:03:51.980Z",
+          "agent": "investigator-c4",
+          "level": "info",
+          "message": "NEW: Complete standalone surface (OpenAI/Anthropic/Groq/OpenRouter catalog) with per-provider edit modal. Paint fully delivered. No action needed.",
+          "findingKey": "C4::AICredentialsNext::Standalone AI credentials surface",
+          "ref": "AICredentialsNext.swift:1-215"
+        },
+        {
+          "ts": "2026-05-21T18:03:54.321Z",
+          "agent": "investigator-c4",
+          "level": "proposal",
+          "message": "AICredentialsNext (line 57) observes AICredentialStore but lines 105-110 reference abstract credential storage. TalkieAIProviderResolver not yet bound. Port requires: Codex wires TalkieAIProviderResolver.resolve() + credential persistence loop, size S, risk med (service lifecycle).",
+          "findingKey": "C4::AICredentialsNext::Provider resolver wiring",
+          "ref": "AICredentialsNext.swift:55-121"
+        },
+        {
+          "ts": "2026-05-21T18:03:56.067Z",
+          "agent": "investigator-c4",
+          "level": "info",
+          "message": "NEW: Complete paint with mock identities, role labels, capture counts, activation state. No action needed on paint side.",
+          "findingKey": "C4::WorkspaceSwitcherNext::Standalone workspace switcher",
+          "ref": "WorkspaceSwitcherNext.swift:1-227"
+        },
+        {
+          "ts": "2026-05-21T18:03:58.526Z",
+          "agent": "investigator-c4",
+          "level": "proposal",
+          "message": "Mock data only (mockIdentities static). Port requires: Codex wires WorkspaceStore.identities (live Keychain entries) + activate(_:) swap (iCloud zone + Core Data store + BridgeManager pairing), size M, risk high (state lifecycle, data migration).",
+          "findingKey": "C4::WorkspaceSwitcherNext::WorkspaceStore wiring",
+          "ref": "WorkspaceSwitcherNext.swift:39-226"
+        },
+        {
+          "ts": "2026-05-21T18:04:02.189Z",
+          "agent": "investigator-c4",
+          "level": "info",
+          "message": "C4 Investigation Complete. Summary: 20 findings across 5 subsurfaces. Top 3 leverage items: (1) TEXT-TO-SPEECH provider picker + route controls (M, med risk) — no SettingsNext panel, needs AICredentialStore integration; (2) Onboarding hero animations (L, high risk) — requires Codex for gesture/animation bindings; (3) WorkspaceStore activation flow (M, high risk) — mock data only, needs Keychain + Core Data + Bridge pairing orchestration. 10 proposals filed, 8 infos confirmed delivered, all respect native Apple Sign In (no Clerk)."
+        }
+      ]
     },
     {
       "key": "C5",

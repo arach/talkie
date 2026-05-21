@@ -113,6 +113,13 @@ const STUDIES = [
     blurb:
       "Release-train view of the rebuild — M1 (Next shell + Phase 1 + Phase 2) shipped, M2 entry-point wires queued, M3 polish, M4 missing donor surfaces, M5 new scope (share ext, widget, watch), M6 system polish.",
   },
+  {
+    slug: "parity",
+    name: "Parity Audit",
+    kind: "Donor vs Next",
+    blurb:
+      "6-agent swarm review comparing master (donor) vs feat/ios-shell-phase-0 (Next) across 6 clusters — home/library, capture, compose/memo, settings/onboarding/sign-in, bridge/deck, recording/workflows/ask AI. Tagged MISSING / STUB / CHANGED / NEW.",
+  },
 ];
 
 export default function Landing() {
