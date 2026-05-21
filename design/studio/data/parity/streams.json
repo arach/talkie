@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T19:56:19.956Z",
+  "updatedAt": "2026-05-21T19:56:57.536Z",
   "streams": [
     {
       "key": "C1",
@@ -607,6 +607,13 @@
           "agent": "talkie-codex-c1",
           "level": "info",
           "message": "C1 implementation pass complete: landed Home search/filter/sort/pagination/deep-link/promote/meta/iCloud CTA, Library search/filter/promote/sync status, DictationHistory promote/metadata/read-aloud, and feed loading/error handling. Workflow badge remains user-DEFER; proposed DROP/DEFER notes cover intentional Next-only or high-risk no-port findings."
+        },
+        {
+          "ts": "2026-05-21T19:56:57.536Z",
+          "agent": "talkie-codex-c1",
+          "level": "info",
+          "message": "PR opened: https://github.com/arach/talkie/pull/22",
+          "ref": "https://github.com/arach/talkie/pull/22"
         }
       ]
     },
