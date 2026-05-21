@@ -36,6 +36,10 @@ private enum ScopeFont {
     }
 }
 
+private enum SkillsSpacing {
+    static let sectionGap: CGFloat = 32
+}
+
 // MARK: - Agent choices (Phase 1 stub — wire to LLMConfig later)
 
 private struct AgentChoice: Identifiable, Equatable {
@@ -266,7 +270,7 @@ struct ScopeSkillsLandingView: View {
                 footer
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.bottom, 32)
+            .padding(.bottom, SkillsSpacing.sectionGap)
         }
         .background(ScopeCanvas.canvas)
         .onAppear {
@@ -497,6 +501,7 @@ struct ScopeSkillsLandingView: View {
             }
         }
         .help(micTooltip)
+        .accessibilityLabel(micTooltip)
     }
 
     private var micTooltip: String {
@@ -582,6 +587,7 @@ struct ScopeSkillsLandingView: View {
             }
         }
         .help(hasContent ? "Send" : "Type a message first")
+        .accessibilityLabel(hasContent ? "Send message" : "Send message disabled")
     }
 
     private var chatGreeting: String {
@@ -1170,7 +1176,7 @@ struct ScopeSkillsLandingView: View {
             ScopeRule(.subtle)
         }
         .padding(.horizontal, 32)
-        .padding(.top, 22)
+        .padding(.top, SkillsSpacing.sectionGap)
         .padding(.bottom, 8)
     }
 
@@ -1199,7 +1205,7 @@ struct ScopeSkillsLandingView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 32)
-        .padding(.top, 32)
+        .padding(.top, SkillsSpacing.sectionGap)
         .padding(.bottom, 14)
     }
 
@@ -1540,38 +1546,38 @@ struct ScopeSkillsLandingView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Circle()
-                    .fill(ScopeAmber.solid)
+                    .fill(ScopePanel.trace)
                     .frame(width: 6, height: 6)
-                    .shadow(color: ScopeAmber.solid, radius: 4)
+                    .shadow(color: ScopePanel.trace, radius: 4)
                 Text("· LISTENING")
                     .font(ScopeFont.mono(size: 9, weight: .semibold))
                     .tracking(2.4)
-                    .foregroundStyle(Color.white.opacity(0.6))
+                    .foregroundStyle(ScopePanel.inkMuted)
             }
             HStack(spacing: 4) {
                 Text("say")
                     .font(.system(size: 14, design: .serif))
-                    .foregroundStyle(Color.hex("F4F1EA"))
+                    .foregroundStyle(ScopePanel.ink)
                 Text("\u{201C}standup\u{201D}")
                     .font(.system(size: 14, weight: .medium, design: .serif))
-                    .foregroundStyle(ScopeAmber.solid)
+                    .foregroundStyle(ScopePanel.trace)
             }
             Text("then dictate · 3 bullets · auto-stops")
                 .font(ScopeFont.mono(size: 9))
                 .tracking(1.4)
-                .foregroundStyle(Color.white.opacity(0.45))
+                .foregroundStyle(ScopePanel.inkSubtle)
             Spacer().frame(height: 4)
             HStack(spacing: 1.5) {
                 ForEach([3, 6, 4, 9, 5, 11, 7, 4, 8, 12, 6, 9, 5, 7, 3, 10, 6, 4], id: \.self) { h in
                     Rectangle()
-                        .fill(ScopeAmber.solid.opacity(0.5))
+                        .fill(ScopePanel.trace.opacity(0.5))
                         .frame(width: 2, height: CGFloat(h))
                 }
             }
         }
         .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 6).fill(Color.hex("0E1518"))
+            RoundedRectangle(cornerRadius: 6).fill(ScopePanel.bg)
         )
     }
 
