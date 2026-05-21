@@ -320,6 +320,9 @@ struct SettingsNext: View {
                 title: "LINK HEALTH",
                 metrics: [("RTT", "—"), ("SENT", "—"), ("QUEUED", "—")]
             )
+            #if DEBUG
+            navRow("SSH Terminal") { AppShellRouter.shared.openTerminal() }
+            #endif
             navRow("View connections detail") { AppShellRouter.shared.openConnectionCenter() }
             navRow("Workspaces") { AppShellRouter.shared.openWorkspaces() }
             navRow("Resolve sync conflicts") { AppShellRouter.shared.openSyncConflicts() }
