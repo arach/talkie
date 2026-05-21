@@ -13,10 +13,24 @@ import TalkieMobileKit
 import UIKit
 
 struct CameraCaptureNext: View {
+    private let initialURL: URL?
+
     @StateObject private var camera = CameraCaptureNextModel()
     @ObservedObject private var theme = ThemeManager.shared
 
+    init(initialURL: URL? = nil) {
+        self.initialURL = initialURL
+    }
+
     var body: some View {
+        if let initialURL {
+            WebCaptureBrowserNext(initialURL: initialURL)
+        } else {
+            cameraBody
+        }
+    }
+
+    private var cameraBody: some View {
         ZStack {
             theme.colors.background.ignoresSafeArea()
 
