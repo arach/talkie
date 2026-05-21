@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T19:40:17.026Z",
+  "updatedAt": "2026-05-21T19:44:27.994Z",
   "streams": [
     {
       "key": "C1",
@@ -1184,6 +1184,14 @@
           "level": "progress",
           "message": "Starting approved follow-up: restore per-memo workflow trigger entry point from VoiceMemoDetailNext and route runs through WorkflowsStore.",
           "findingKey": "C6::WorkflowActionSheet::Per-memo workflow triggers"
+        },
+        {
+          "ts": "2026-05-21T19:44:27.994Z",
+          "agent": "talkie-codex-c6",
+          "level": "landed",
+          "message": "Shipped per-memo workflow trigger cards in VoiceMemoDetailNext, backed by memo-scoped WorkflowsStore templates and run history targets.",
+          "findingKey": "C6::WorkflowActionSheet::Per-memo workflow triggers",
+          "ref": "a6cbca9"
         }
       ]
     }
