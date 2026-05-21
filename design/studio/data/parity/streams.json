@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T23:43:02.045Z",
+  "updatedAt": "2026-05-21T23:44:00.408Z",
   "streams": [
     {
       "key": "C1",
@@ -1324,8 +1324,8 @@
       "key": "C3",
       "title": "Compose · Memo detail",
       "scope": "ComposeNextView + ComposeStore, VoiceMemoDetailNext, ReadAloudNext, attachments, agent + CLI sheets",
-      "owner": "talkie-codex-c3",
-      "status": "in-flight",
+      "owner": null,
+      "status": "done",
       "lockedAt": "2026-05-21T23:25:33.120Z",
       "notes": [
         {
@@ -1907,6 +1907,19 @@
           "message": "Landed sentence/chunk skip buttons plus a seek slider in ReadAloudNext transport.",
           "findingKey": "C3::TTS hooks in memo detail::Transport with skip + seek",
           "ref": "98b55eb"
+        },
+        {
+          "ts": "2026-05-21T23:44:00.376Z",
+          "agent": "talkie-codex-c3",
+          "level": "info",
+          "message": "Done: drained all C3 PORT findings across Compose, memo detail, attachments/context menus, MemoAgentSheet, MemoCLISheet, workflow polling, and Read Aloud/TTS. User DROP for EventKit reminders was respected and not ported."
+        },
+        {
+          "ts": "2026-05-21T23:44:00.393Z",
+          "agent": "talkie-codex-c3",
+          "level": "info",
+          "message": "PR parity/c3 → feat/ios-shell-phase-0: https://github.com/arach/talkie/pull/17",
+          "ref": "https://github.com/arach/talkie/pull/17"
         }
       ]
     },
