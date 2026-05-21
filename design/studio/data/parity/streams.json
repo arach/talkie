@@ -2716,6 +2716,13 @@
           "level": "info",
           "message": "Opened follow-up PR for approved C6 recording/workflow ports: https://github.com/arach/talkie/pull/21",
           "ref": "https://github.com/arach/talkie/pull/21"
+        },
+        {
+          "ts": "2026-05-21T23:16:20.560Z",
+          "agent": "talkie-codex-c3",
+          "level": "info",
+          "message": "C3 is adding the memo-detail polling/toast receiver for Mac workflow runs in parity/c3 and will avoid duplicating the C6 per-memo trigger cards from PR #21.",
+          "findingKey": "C6::WorkflowActionSheet::Per-memo workflow triggers"
         }
       ]
     }
