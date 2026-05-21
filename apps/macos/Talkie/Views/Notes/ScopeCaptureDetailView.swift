@@ -20,26 +20,6 @@ import AppKit
 import SwiftUI
 import TalkieKit
 
-// MARK: - Local tokens
-
-private enum CapToken {
-    static let page        = Color.hex("FBFBFA")
-    static let pane        = Color.hex("FAF7EF")
-    static let chrome      = Color.hex("F4F1EA")
-    static let rail        = Color.hex("F2EDDE")
-    static let mat         = Color.hex("F2EDDE") // image mat — warm paper
-    static let matAlt      = Color.hex("E8DFC8") // image mat alt
-    static let ink         = Color.hex("2A2620")
-    static let inkFaint    = Color(red: 42/255, green: 38/255, blue: 32/255).opacity(0.55)
-    static let inkFainter  = Color(red: 42/255, green: 38/255, blue: 32/255).opacity(0.32)
-    static let inkRule     = Color(red: 42/255, green: 38/255, blue: 32/255).opacity(0.16)
-    static let inkRuleS    = Color(red: 42/255, green: 38/255, blue: 32/255).opacity(0.10)
-    static let edge        = Color.hex("E0DCD3")
-    static let amber       = Color.hex("C47D1C")
-    static let brass       = Color.hex("9A6A22")
-    static let captureTint = Color.hex("5A7A86")
-}
-
 private enum CapFont {
     static func display(size: CGFloat, weight: Font.Weight = .medium) -> Font {
         Font.system(size: size, weight: weight, design: .serif)
@@ -73,7 +53,7 @@ struct ScopeCaptureDetailView: View {
                 footRail(bodyPad: bodyPad)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background(CapToken.pane)
+            .background(ScopeCanvas.canvas)
         }
     }
 
@@ -166,16 +146,16 @@ struct ScopeCaptureDetailView: View {
                 Text(sequence)
                     .font(CapFont.mono(size: 9, weight: .semibold))
                     .tracking(2.2)
-                    .foregroundStyle(CapToken.captureTint)
+                    .foregroundStyle(ScopeKind.capture)
                 Text("· \(channelLabel)")
                     .font(CapFont.mono(size: 9, weight: .semibold))
                     .tracking(2.2)
-                    .foregroundStyle(CapToken.inkFaint)
-                Rectangle().fill(CapToken.inkRuleS).frame(height: 0.5)
+                    .foregroundStyle(ScopeInk.faint)
+                ScopeRule(.subtle)
                 Text("\(dateLabel) · \(timeLabel)")
                     .font(CapFont.mono(size: 9))
                     .tracking(1.8)
-                    .foregroundStyle(CapToken.inkFaint)
+                    .foregroundStyle(ScopeInk.faint)
             }
 
             // Title — serif for text captures (it's the passage title),
@@ -184,7 +164,7 @@ struct ScopeCaptureDetailView: View {
                 Text(capture.displayTitle)
                     .font(CapFont.display(size: 22, weight: .medium))
                     .tracking(-0.3)
-                    .foregroundStyle(CapToken.ink)
+                    .foregroundStyle(ScopeInk.primary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
@@ -192,19 +172,19 @@ struct ScopeCaptureDetailView: View {
                 Text(bylineTextCapture)
                     .font(CapFont.mono(size: 10))
                     .tracking(1.6)
-                    .foregroundStyle(CapToken.inkFaint)
+                    .foregroundStyle(ScopeInk.faint)
                     .padding(.top, 6)
             } else {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     Text(filename)
                         .font(CapFont.mono(size: 18, weight: .medium))
-                        .foregroundStyle(CapToken.ink)
+                        .foregroundStyle(ScopeInk.primary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                     Text("\(dimensions) · \(fileSize)")
                         .font(CapFont.mono(size: 10))
                         .tracking(1.6)
-                        .foregroundStyle(CapToken.inkFaint)
+                        .foregroundStyle(ScopeInk.faint)
                 }
                 .padding(.top, 12)
             }
@@ -217,10 +197,10 @@ struct ScopeCaptureDetailView: View {
                     Text("· DERIVED")
                         .font(CapFont.mono(size: 8.5, weight: .semibold))
                         .tracking(2.8)
-                        .foregroundStyle(CapToken.inkFaint)
+                        .foregroundStyle(ScopeInk.faint)
                     Text(caption)
                         .font(CapFont.displayItalic(size: 12.5))
-                        .foregroundStyle(CapToken.inkFaint)
+                        .foregroundStyle(ScopeInk.faint)
                         .lineLimit(2)
                 }
                 .padding(.top, 6)
@@ -245,19 +225,16 @@ struct ScopeCaptureDetailView: View {
                         Text("＋ ADD CAPTION")
                             .font(CapFont.mono(size: 10, weight: .semibold))
                             .tracking(2.2)
-                            .foregroundStyle(CapToken.brass)
-                        Text("promotes to a note")
-                            .font(CapFont.displayItalic(size: 11))
-                            .foregroundStyle(CapToken.brass.opacity(0.65))
+                            .foregroundStyle(ScopeBrass.solid)
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(
                         RoundedRectangle(cornerRadius: 3)
-                            .fill(CapToken.amber.opacity(0.10))
+                            .fill(ScopeAmber.solid.opacity(0.10))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 3)
-                                    .stroke(CapToken.amber.opacity(0.40), lineWidth: 0.5)
+                                    .stroke(ScopeAmber.solid.opacity(0.40), lineWidth: 0.5)
                             )
                     )
                 }
@@ -265,7 +242,7 @@ struct ScopeCaptureDetailView: View {
                 Text("⌘N")
                     .font(CapFont.mono(size: 9))
                     .tracking(1.8)
-                    .foregroundStyle(CapToken.inkFaint)
+                    .foregroundStyle(ScopeInk.faint)
             }
             .padding(.top, 20)
 
@@ -305,7 +282,7 @@ struct ScopeCaptureDetailView: View {
             ForEach(Array(textPassageParagraphs.enumerated()), id: \.offset) { _, paragraph in
                 Text(paragraph)
                     .font(.system(size: 13, design: .default))
-                    .foregroundStyle(CapToken.ink)
+                    .foregroundStyle(ScopeInk.primary)
                     .lineSpacing(5)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
@@ -317,16 +294,16 @@ struct ScopeCaptureDetailView: View {
         .frame(maxWidth: 720, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 4)
-                .fill(CapToken.mat.opacity(0.55))
+                .fill(ScopeCanvas.surface.opacity(0.55))
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
-                        .stroke(CapToken.inkRuleS, lineWidth: 0.5)
+                        .stroke(ScopeEdge.subtle, lineWidth: 0.5)
                 )
         )
         .overlay(alignment: .leading) {
             // Marginal rule (blockquote-style)
             Rectangle()
-                .fill(CapToken.captureTint.opacity(0.45))
+                .fill(ScopeKind.capture.opacity(0.45))
                 .frame(width: 2)
         }
     }
@@ -340,27 +317,27 @@ struct ScopeCaptureDetailView: View {
                 .frame(maxWidth: .infinity)
                 .background(
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(CapToken.mat)
+                        .fill(ScopeCanvas.surface)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
-                        .stroke(CapToken.inkRule, lineWidth: 0.5)
+                        .stroke(ScopeEdge.faint, lineWidth: 0.5)
                 )
                 .shadow(color: Color(red: 46/255, green: 68/255, blue: 82/255).opacity(0.10), radius: 12, y: 6)
         } else {
             // Placeholder mat when image isn't available — cool checker
             Rectangle()
-                .fill(CapToken.mat)
+                .fill(ScopeCanvas.surface)
                 .aspectRatio(16/10, contentMode: .fit)
                 .frame(maxWidth: .infinity)
                 .overlay(
                     Text("(image unavailable)")
                         .font(CapFont.displayItalic(size: 12))
-                        .foregroundStyle(CapToken.inkFainter)
+                        .foregroundStyle(ScopeInk.subtle)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
-                        .stroke(CapToken.inkRule, lineWidth: 0.5)
+                        .stroke(ScopeEdge.faint, lineWidth: 0.5)
                 )
         }
     }
@@ -392,7 +369,7 @@ struct ScopeCaptureDetailView: View {
         .padding(.bottom, 28)
         .frame(width: width, alignment: .topLeading)
         .overlay(alignment: .leading) {
-            Rectangle().fill(CapToken.inkRuleS).frame(width: 1)
+            ScopeRule(.subtle, axis: .vertical)
         }
     }
 
@@ -402,13 +379,13 @@ struct ScopeCaptureDetailView: View {
             Text("· ACTIONS")
                 .font(CapFont.mono(size: 8.5, weight: .semibold))
                 .tracking(2.8)
-                .foregroundStyle(CapToken.inkFaint)
+                .foregroundStyle(ScopeInk.faint)
                 .padding(.bottom, 4)
             CapRailAction(label: "Copy",  icon: "doc.on.doc",            isPrimary: true, action: {})
             CapRailAction(label: "Open",  icon: "arrow.up.right.square", action: openInDefault)
             CapRailAction(label: "Pin",   icon: "pin",                   action: {})
             CapRailAction(label: "Share", icon: "square.and.arrow.up",   action: {})
-            Rectangle().fill(CapToken.inkRuleS).frame(height: 0.5)
+            ScopeRule(.subtle)
                 .padding(.vertical, 4)
             CapRailAction(label: "More",  icon: "ellipsis",              action: {})
         }
@@ -420,19 +397,19 @@ struct ScopeCaptureDetailView: View {
             Text("· \(title.uppercased())")
                 .font(CapFont.mono(size: 8.5, weight: .semibold))
                 .tracking(2.8)
-                .foregroundStyle(CapToken.inkFaint)
+                .foregroundStyle(ScopeInk.faint)
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                     HStack(alignment: .firstTextBaseline) {
                         Text(row.0)
                             .font(CapFont.mono(size: 9))
                             .tracking(1.4)
-                            .foregroundStyle(CapToken.inkFaint)
+                            .foregroundStyle(ScopeInk.faint)
                         Spacer()
                         Text(row.1)
                             .font(CapFont.mono(size: 10))
                             .tracking(0.6)
-                            .foregroundStyle(row.2 ? CapToken.captureTint : CapToken.ink)
+                            .foregroundStyle(row.2 ? ScopeKind.capture : ScopeInk.primary)
                     }
                 }
             }
@@ -445,11 +422,12 @@ struct ScopeCaptureDetailView: View {
             Text("· \(dimensions) · \(fileSize) · \(sourceLabel)")
                 .font(CapFont.mono(size: 9))
                 .tracking(2.2)
-                .foregroundStyle(CapToken.inkFaint)
+                .foregroundStyle(ScopeInk.faint)
             Spacer()
             HStack(spacing: 4) {
-                footAction(label: "Reveal in Finder", tone: CapToken.ink, action: revealInFinder)
-                Rectangle().fill(CapToken.inkRule).frame(width: 1, height: 12)
+                footAction(label: "Reveal in Finder", tone: ScopeInk.muted, action: revealInFinder)
+                ScopeRule(.subtle, axis: .vertical)
+                    .frame(height: 12)
                     .padding(.horizontal, 4)
                 footAction(label: "Delete", tone: Color.hex("A0494D"), action: {})
             }
@@ -457,8 +435,8 @@ struct ScopeCaptureDetailView: View {
         .padding(.horizontal, bodyPad)
         .padding(.vertical, 12)
         .background(
-            Rectangle().fill(CapToken.rail)
-                .overlay(Rectangle().fill(CapToken.inkRuleS).frame(height: 1), alignment: .top)
+            Rectangle().fill(ScopeCanvas.surface)
+                .overlay(ScopeRule(.row), alignment: .top)
         )
     }
 
@@ -468,7 +446,7 @@ struct ScopeCaptureDetailView: View {
             Text(label.uppercased())
                 .font(CapFont.mono(size: 9, weight: .semibold))
                 .tracking(2.2)
-                .foregroundStyle(tone.opacity(0.75))
+                .foregroundStyle(tone)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
         }
@@ -526,16 +504,16 @@ private struct CapRailAction: View {
     }
 
     private var foregroundColor: Color {
-        if isPrimary { return hovered ? CapToken.amber : CapToken.brass }
-        if hovered { return CapToken.ink }
-        return CapToken.inkFaint
+        if isPrimary { return hovered ? ScopeAmber.solid : ScopeBrass.solid }
+        if hovered { return ScopeInk.primary }
+        return ScopeInk.faint
     }
 
     private var backgroundFill: Color {
         if isPrimary {
-            return hovered ? CapToken.amber.opacity(0.14) : CapToken.amber.opacity(0.07)
+            return hovered ? ScopeAmber.solid.opacity(0.14) : ScopeAmber.solid.opacity(0.07)
         }
-        return hovered ? CapToken.inkRuleS : Color.clear
+        return hovered ? ScopeEdge.subtle : Color.clear
     }
 }
 
