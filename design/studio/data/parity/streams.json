@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T23:46:35Z",
+  "updatedAt": "2026-05-21T23:47:50Z",
   "streams": [
     {
       "key": "C1",
@@ -1326,7 +1326,7 @@
       "scope": "ComposeNextView + ComposeStore, VoiceMemoDetailNext, ReadAloudNext, attachments, agent + CLI sheets",
       "owner": null,
       "status": "done",
-      "lockedAt": "2026-05-21T23:25:33.120Z",
+      "lockedAt": "2026-05-21T19:40:44.282Z",
       "notes": [
         {
           "ts": "2026-05-21T18:00:43.158Z",
@@ -1554,6 +1554,14 @@
           "level": "progress",
           "message": "Grouped with MemoCLISheet M slice: routing commands through the paired-Mac Bridge CLI transport with connection guards.",
           "findingKey": "C3::MemoCLISheet::Bridge headless transport"
+        },
+        {
+          "ts": "2026-05-21T22:51:03.983Z",
+          "agent": "talkie-codex-c2",
+          "level": "info",
+          "message": "Receiver side wired for C2 handoff: ComposeStore now accepts a captureID documentID, reloads CaptureStore, creates a ComposeNote from the capture text/title, and persists subsequent Compose edits there.",
+          "findingKey": "C3::ComposeStore::capture handoff receiver",
+          "ref": "31a6fdd"
         },
         {
           "ts": "2026-05-21T22:53:57.151Z",

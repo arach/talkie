@@ -202,6 +202,30 @@ public final class CaptureStore {
         NotificationCenter.default.post(name: .capturesDidChange, object: nil)
     }
 
+    /// Update user-editable capture content and mark it unsynced so the Mac receives the revision.
+    public func update(title: String?, text: String, for id: UUID) {
+        var captures = all()
+        guard let index = captures.firstIndex(where: { $0.id == id }) else { return }
+
+        let current = captures[index]
+        captures[index] = Capture(
+            id: current.id,
+            sourceType: current.sourceType,
+            text: text,
+            title: title,
+            sourceURL: current.sourceURL,
+            bookmark: current.bookmark,
+            imageFilename: current.imageFilename,
+            deferredPageFilenames: current.deferredPageFilenames,
+            totalPageCount: current.totalPageCount,
+            timestamp: current.timestamp,
+            syncedToMac: false
+        )
+        save(captures)
+        log.info("Updated capture content: \(id)")
+        NotificationCenter.default.post(name: .capturesDidChange, object: nil)
+    }
+
     /// Get all unsynced captures
     public func unsyncedCaptures() -> [Capture] {
         all().filter { !$0.syncedToMac }
