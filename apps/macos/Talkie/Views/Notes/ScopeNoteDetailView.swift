@@ -21,26 +21,6 @@
 import SwiftUI
 import TalkieKit
 
-// MARK: - Local tokens (warm cream family — consistent with the rest of Scope)
-
-private enum NoteToken {
-    static let page       = Color.hex("FBFBFA") // cream canvas
-    static let pane       = Color.hex("FAF7EF") // pane interior
-    static let chrome     = Color.hex("F4F1EA") // chrome / divider bar
-    static let rail       = Color.hex("F2EDDE") // bottom attachment rail
-    static let ink        = Color.hex("2A2620")
-    static let inkFaint   = Color(red: 42/255, green: 38/255, blue: 32/255).opacity(0.55)
-    static let inkFainter = Color(red: 42/255, green: 38/255, blue: 32/255).opacity(0.32)
-    static let inkRule    = Color(red: 42/255, green: 38/255, blue: 32/255).opacity(0.16)
-    static let inkRuleS   = Color(red: 42/255, green: 38/255, blue: 32/255).opacity(0.10)
-    static let edge       = Color.hex("E0DCD3")
-    static let ruleSoft   = Color.hex("ECE7DD")
-    static let amber      = Color.hex("C47D1C")
-    static let brass      = Color.hex("9A6A22")
-    static let noteTint   = Color.hex("6B7A75")
-    static let captureTint = Color.hex("5A7A86")
-}
-
 // MARK: - Typography helpers
 
 private enum NoteFont {
@@ -80,7 +60,7 @@ struct ScopeNoteDetailView: View {
                 attachmentRail(bodyPad: bodyPad)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background(NoteToken.pane)
+            .background(ScopeCanvas.canvas)
         }
     }
 
@@ -143,23 +123,23 @@ struct ScopeNoteDetailView: View {
                 Text(sequence)
                     .font(NoteFont.mono(size: 9, weight: .semibold))
                     .tracking(2.2)
-                    .foregroundStyle(NoteToken.noteTint)
+                    .foregroundStyle(ScopeKind.note)
                 Text("· \(channelLabel)")
                     .font(NoteFont.mono(size: 9, weight: .semibold))
                     .tracking(2.2)
-                    .foregroundStyle(NoteToken.inkFaint)
-                Rectangle().fill(NoteToken.inkRuleS).frame(height: 0.5)
+                    .foregroundStyle(ScopeInk.faint)
+                ScopeRule(.subtle)
                 Text("\(dateLabel) · \(timeLabel)")
                     .font(NoteFont.mono(size: 9))
                     .tracking(1.8)
-                    .foregroundStyle(NoteToken.inkFaint)
+                    .foregroundStyle(ScopeInk.faint)
             }
 
             // Title
             Text(note.displayTitle)
                 .font(NoteFont.display(size: 26, weight: .medium))
                 .tracking(-0.3)
-                .foregroundStyle(NoteToken.ink)
+                .foregroundStyle(ScopeInk.primary)
                 .lineLimit(3)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -169,7 +149,7 @@ struct ScopeNoteDetailView: View {
             Text(bylineText)
                 .font(NoteFont.mono(size: 10))
                 .tracking(1.6)
-                .foregroundStyle(NoteToken.inkFaint)
+                .foregroundStyle(ScopeInk.faint)
                 .padding(.top, 6)
 
             // Body — measure-capped. System sans (SF Pro) at regular
@@ -181,7 +161,7 @@ struct ScopeNoteDetailView: View {
                 ForEach(Array(bodyParagraphs.enumerated()), id: \.offset) { _, paragraph in
                     Text(paragraph)
                         .font(.system(size: 13.5, weight: .regular, design: .default))
-                        .foregroundStyle(NoteToken.ink.opacity(0.88))
+                        .foregroundStyle(ScopeInk.dim)
                         .lineSpacing(7)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
@@ -192,7 +172,7 @@ struct ScopeNoteDetailView: View {
                 // Marginal rule — like a printed page's gutter. Softer
                 // now that the prose itself is lighter.
                 Rectangle()
-                    .fill(NoteToken.noteTint.opacity(0.22))
+                    .fill(ScopeKind.note.opacity(0.22))
                     .frame(width: 1)
                     .offset(x: -16)
             }
@@ -234,7 +214,7 @@ struct ScopeNoteDetailView: View {
         .padding(.bottom, 28)
         .frame(width: width, alignment: .topLeading)
         .overlay(alignment: .leading) {
-            Rectangle().fill(NoteToken.inkRuleS).frame(width: 1)
+            ScopeRule(.subtle, axis: .vertical)
         }
     }
 
@@ -244,14 +224,14 @@ struct ScopeNoteDetailView: View {
             Text("· ACTIONS")
                 .font(NoteFont.mono(size: 8.5, weight: .semibold))
                 .tracking(2.8)
-                .foregroundStyle(NoteToken.inkFaint)
+                .foregroundStyle(ScopeInk.faint)
                 .padding(.bottom, 4)
             NoteRailAction(label: "Edit",   icon: "pencil",                 isPrimary: true, action: {})
             NoteRailAction(label: "Star",   icon: "star",                   action: {})
             NoteRailAction(label: "Pin",    icon: "pin",                    action: {})
             NoteRailAction(label: "Share",  icon: "square.and.arrow.up",    action: {})
             NoteRailAction(label: "Export", icon: "arrow.down.doc",         action: {})
-            Rectangle().fill(NoteToken.inkRuleS).frame(height: 0.5)
+            ScopeRule(.subtle)
                 .padding(.vertical, 4)
             NoteRailAction(label: "More",   icon: "ellipsis",               action: {})
         }
@@ -263,19 +243,19 @@ struct ScopeNoteDetailView: View {
             Text("· \(title.uppercased())")
                 .font(NoteFont.mono(size: 8.5, weight: .semibold))
                 .tracking(2.8)
-                .foregroundStyle(NoteToken.inkFaint)
+                .foregroundStyle(ScopeInk.faint)
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                     HStack(alignment: .firstTextBaseline) {
                         Text(row.0)
                             .font(NoteFont.mono(size: 9))
                             .tracking(1.4)
-                            .foregroundStyle(NoteToken.inkFaint)
+                            .foregroundStyle(ScopeInk.faint)
                         Spacer()
                         Text(row.1)
                             .font(NoteFont.mono(size: 10))
                             .tracking(0.6)
-                            .foregroundStyle(row.2 ? NoteToken.brass : NoteToken.ink)
+                            .foregroundStyle(row.2 ? ScopeBrass.solid : ScopeInk.primary)
                     }
                 }
             }
@@ -289,15 +269,16 @@ struct ScopeNoteDetailView: View {
                 Text("· ATTACHMENTS")
                     .font(NoteFont.mono(size: 9, weight: .semibold))
                     .tracking(2.8)
-                    .foregroundStyle(NoteToken.inkFaint)
+                    .foregroundStyle(ScopeInk.faint)
                 Text("\(note.screenshots.count)")
                     .font(NoteFont.mono(size: 9))
-                    .foregroundStyle(NoteToken.inkFaint)
+                    .foregroundStyle(ScopeInk.faint)
             }
             if note.screenshots.isEmpty {
                 Text("none yet")
-                    .font(NoteFont.displayItalic(size: 11))
-                    .foregroundStyle(NoteToken.inkFainter)
+                    .font(NoteFont.mono(size: 9))
+                    .tracking(1.6)
+                    .foregroundStyle(ScopeInk.faint)
             } else {
                 ForEach(Array(note.screenshots.prefix(6).enumerated()), id: \.offset) { _, ss in
                     attachmentChip(filename: ss.filename, meta: "\(ss.width ?? 0)×\(ss.height ?? 0)")
@@ -308,7 +289,7 @@ struct ScopeNoteDetailView: View {
                 Text("+ ADD")
                     .font(NoteFont.mono(size: 9, weight: .semibold))
                     .tracking(2.2)
-                    .foregroundStyle(NoteToken.noteTint)
+                    .foregroundStyle(ScopeKind.note)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(
@@ -316,7 +297,7 @@ struct ScopeNoteDetailView: View {
                             .fill(Color.white.opacity(0.5))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 2)
-                                    .stroke(NoteToken.inkRule, lineWidth: 0.5)
+                                    .stroke(ScopeEdge.faint, lineWidth: 0.5)
                             )
                     )
             }
@@ -325,8 +306,8 @@ struct ScopeNoteDetailView: View {
         .padding(.horizontal, bodyPad)
         .padding(.vertical, 14)
         .background(
-            Rectangle().fill(NoteToken.rail)
-                .overlay(Rectangle().fill(NoteToken.inkRuleS).frame(height: 1), alignment: .top)
+            Rectangle().fill(ScopeCanvas.surface)
+                .overlay(ScopeRule(.row), alignment: .top)
         )
     }
 
@@ -335,27 +316,27 @@ struct ScopeNoteDetailView: View {
         HStack(spacing: 8) {
             Text("▢")
                 .font(NoteFont.mono(size: 11))
-                .foregroundStyle(NoteToken.captureTint)
+                .foregroundStyle(ScopeKind.capture)
             VStack(alignment: .leading, spacing: 1) {
                 Text(filename)
                     .font(.system(size: 11))
-                    .foregroundStyle(NoteToken.ink)
+                    .foregroundStyle(ScopeInk.primary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Text(meta.uppercased())
                     .font(NoteFont.mono(size: 8.5))
                     .tracking(1.4)
-                    .foregroundStyle(NoteToken.inkFaint)
+                    .foregroundStyle(ScopeInk.faint)
             }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
         .background(
             RoundedRectangle(cornerRadius: 3)
-                .fill(NoteToken.captureTint.opacity(0.06))
+                .fill(ScopeKind.capture.opacity(0.06))
                 .overlay(
                     RoundedRectangle(cornerRadius: 3)
-                        .stroke(NoteToken.captureTint.opacity(0.28), lineWidth: 0.5)
+                        .stroke(ScopeKind.capture.opacity(0.28), lineWidth: 0.5)
                 )
         )
         .frame(maxWidth: 220)
@@ -400,16 +381,16 @@ private struct NoteRailAction: View {
     }
 
     private var foregroundColor: Color {
-        if isPrimary { return hovered ? NoteToken.amber : NoteToken.brass }
-        if hovered { return NoteToken.ink }
-        return NoteToken.inkFaint
+        if isPrimary { return hovered ? ScopeAmber.solid : ScopeBrass.solid }
+        if hovered { return ScopeInk.primary }
+        return ScopeInk.faint
     }
 
     private var backgroundFill: Color {
         if isPrimary {
-            return hovered ? NoteToken.amber.opacity(0.14) : NoteToken.amber.opacity(0.07)
+            return hovered ? ScopeAmber.solid.opacity(0.14) : ScopeAmber.solid.opacity(0.07)
         }
-        return hovered ? NoteToken.inkRuleS : Color.clear
+        return hovered ? ScopeEdge.subtle : Color.clear
     }
 }
 
