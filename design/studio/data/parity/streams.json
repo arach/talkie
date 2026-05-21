@@ -1,14 +1,14 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T19:33:49.465Z",
+  "updatedAt": "2026-05-21T19:49:15.217Z",
   "streams": [
     {
       "key": "C1",
       "title": "Home · Library · History",
       "scope": "HomeNextView + HomeFeed, LibraryNextView + LibraryFeed, DictationHistoryNext + DictationHistoryFeed",
-      "owner": null,
-      "status": "done",
-      "lockedAt": "2026-05-21T17:59:01.234Z",
+      "owner": "talkie-codex-c1",
+      "status": "in-flight",
+      "lockedAt": "2026-05-21T19:38:48.016Z",
       "notes": [
         {
           "ts": "2026-05-21T17:57:46.706Z",
@@ -252,6 +252,139 @@
           "level": "decision",
           "message": "DEFER",
           "findingKey": "C1::HomeView::Workflow run badge on rows"
+        },
+        {
+          "ts": "2026-05-21T19:43:22.332Z",
+          "agent": "talkie-codex-c1",
+          "level": "progress",
+          "message": "starting",
+          "findingKey": "C1::HomeView::Load-more pagination"
+        },
+        {
+          "ts": "2026-05-21T19:43:22.346Z",
+          "agent": "talkie-codex-c1",
+          "level": "progress",
+          "message": "starting",
+          "findingKey": "C1::HomeView::Tally window rollover"
+        },
+        {
+          "ts": "2026-05-21T19:43:22.365Z",
+          "agent": "talkie-codex-c1",
+          "level": "progress",
+          "message": "starting",
+          "findingKey": "C1::HomeView::Full-screen search"
+        },
+        {
+          "ts": "2026-05-21T19:43:22.381Z",
+          "agent": "talkie-codex-c1",
+          "level": "progress",
+          "message": "starting",
+          "findingKey": "C1::HomeView::Content filter toggle"
+        },
+        {
+          "ts": "2026-05-21T19:43:22.403Z",
+          "agent": "talkie-codex-c1",
+          "level": "progress",
+          "message": "starting",
+          "findingKey": "C1::HomeView::Sort options"
+        },
+        {
+          "ts": "2026-05-21T19:43:22.420Z",
+          "agent": "talkie-codex-c1",
+          "level": "progress",
+          "message": "starting",
+          "findingKey": "C1::HomeView::File size + audio format meta"
+        },
+        {
+          "ts": "2026-05-21T19:43:22.436Z",
+          "agent": "talkie-codex-c1",
+          "level": "progress",
+          "message": "starting",
+          "findingKey": "C1::HomeView::Deep-link search action"
+        },
+        {
+          "ts": "2026-05-21T19:43:22.456Z",
+          "agent": "talkie-codex-c1",
+          "level": "progress",
+          "message": "starting",
+          "findingKey": "C1::HomeView::Promote-to-memo swipe on home dictations"
+        },
+        {
+          "ts": "2026-05-21T19:46:52.544Z",
+          "agent": "talkie-codex-c1",
+          "level": "progress",
+          "message": "starting",
+          "findingKey": "C1::LibraryView::SearchBar not wired"
+        },
+        {
+          "ts": "2026-05-21T19:46:52.557Z",
+          "agent": "talkie-codex-c1",
+          "level": "progress",
+          "message": "starting",
+          "findingKey": "C1::LibraryView::Live filtering across tabs"
+        },
+        {
+          "ts": "2026-05-21T19:46:52.570Z",
+          "agent": "talkie-codex-c1",
+          "level": "progress",
+          "message": "starting",
+          "findingKey": "C1::LibraryView::Promote-to-memo swipe on Library dictations"
+        },
+        {
+          "ts": "2026-05-21T19:46:52.582Z",
+          "agent": "talkie-codex-c1",
+          "level": "progress",
+          "message": "starting",
+          "findingKey": "C1::LibraryView::Capture sync status"
+        },
+        {
+          "ts": "2026-05-21T19:48:31.491Z",
+          "agent": "talkie-codex-c1",
+          "level": "progress",
+          "message": "starting",
+          "findingKey": "C1::DictationHistoryView::Swipe-leading Save-as-Memo + trailing Delete"
+        },
+        {
+          "ts": "2026-05-21T19:48:31.520Z",
+          "agent": "talkie-codex-c1",
+          "level": "progress",
+          "message": "starting",
+          "findingKey": "C1::DictationHistoryView::Word count in detail"
+        },
+        {
+          "ts": "2026-05-21T19:48:31.545Z",
+          "agent": "talkie-codex-c1",
+          "level": "progress",
+          "message": "starting",
+          "findingKey": "C1::DictationHistoryView::App context (Source) row"
+        },
+        {
+          "ts": "2026-05-21T19:48:31.567Z",
+          "agent": "talkie-codex-c1",
+          "level": "progress",
+          "message": "starting",
+          "findingKey": "C1::DictationHistoryView::Read-aloud toolbar button"
+        },
+        {
+          "ts": "2026-05-21T19:49:15.188Z",
+          "agent": "talkie-codex-c1",
+          "level": "progress",
+          "message": "starting",
+          "findingKey": "C1::Cross-cutting data flow::Predicate filtering at fetch time"
+        },
+        {
+          "ts": "2026-05-21T19:49:15.205Z",
+          "agent": "talkie-codex-c1",
+          "level": "progress",
+          "message": "starting",
+          "findingKey": "C1::Cross-cutting data flow::Error / loading states"
+        },
+        {
+          "ts": "2026-05-21T19:49:15.217Z",
+          "agent": "talkie-codex-c1",
+          "level": "progress",
+          "message": "starting",
+          "findingKey": "C1::Cross-cutting data flow::iCloud sync CTA in empty state"
         }
       ]
     },

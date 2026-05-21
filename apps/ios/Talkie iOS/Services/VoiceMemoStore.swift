@@ -7,6 +7,8 @@
 
 import CoreData
 import Foundation
+import TalkieMobileKit
+import UIKit
 
 @MainActor
 final class VoiceMemoStore {
@@ -51,10 +53,49 @@ final class VoiceMemoStore {
         }
     }
 
+    @discardableResult
+    func promoteKeyboardDictation(_ dictation: KeyboardDictation) -> Bool {
+        let memo = VoiceMemo(context: context)
+        memo.id = UUID()
+        memo.title = Self.deriveMemoTitle(from: dictation.text)
+        memo.createdAt = dictation.timestamp
+        memo.lastModified = Date()
+        memo.duration = dictation.durationSeconds ?? 0
+        memo.isTranscribing = false
+        memo.sortOrder = Int32(dictation.timestamp.timeIntervalSince1970 * -1)
+        memo.originDeviceId = PersistenceController.deviceId
+        memo.autoProcessed = false
+
+        memo.addSystemTranscript(
+            content: dictation.text,
+            fromMacOS: false,
+            engine: "keyboard_dictation"
+        )
+
+        do {
+            try context.save()
+            PersistenceController.refreshWidgetData(context: context)
+            KeyboardDictationStore.shared.delete(dictation.id)
+            NotificationCenter.default.post(name: .voiceMemosDidChange, object: nil)
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            return true
+        } catch {
+            context.rollback()
+            AppLogger.persistence.error("Failed to promote dictation to memo: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     private func deleteAudioFile(for memo: VoiceMemo) {
         guard let filename = memo.fileURL, !filename.isEmpty else { return }
         let url = URL.documentsDirectory.appending(path: filename)
         try? fileManager.removeItem(at: url)
+    }
+
+    private static func deriveMemoTitle(from text: String) -> String {
+        let words = text.split(separator: " ").prefix(6)
+        let title = words.joined(separator: " ")
+        return title.count < text.count ? title + "…" : title
     }
 }
 

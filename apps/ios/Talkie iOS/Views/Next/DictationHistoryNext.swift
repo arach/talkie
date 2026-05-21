@@ -31,6 +31,8 @@ final class DictationHistoryFeed: ObservableObject {
         let text: String
         let timestamp: Date
         let durationSeconds: Double?
+        let wordCount: Int
+        let appContext: String?
     }
 
     init() {
@@ -45,8 +47,21 @@ final class DictationHistoryFeed: ObservableObject {
                 id: dictation.id.uuidString,
                 text: dictation.text,
                 timestamp: dictation.timestamp,
-                durationSeconds: dictation.durationSeconds
+                durationSeconds: dictation.durationSeconds,
+                wordCount: dictation.wordCount,
+                appContext: dictation.appContext
             )
+        }
+    }
+
+    func promoteToMemo(_ entry: Entry) {
+        guard let uuid = UUID(uuidString: entry.id),
+              let dictation = KeyboardDictationStore.shared.all().first(where: { $0.id == uuid }) else {
+            return
+        }
+        if VoiceMemoStore.shared.promoteKeyboardDictation(dictation) {
+            entries.removeAll { $0.id == entry.id }
+            displayLimit = min(displayLimit, max(entries.count, 10))
         }
     }
 
@@ -62,11 +77,46 @@ final class DictationHistoryFeed: ObservableObject {
     var totalCount: Int    { entries.count }
 
     static let mockEntries: [Entry] = [
-        Entry(id: "1", text: "thanks for the breakdown — let's talk through it tomorrow", timestamp: Date().addingTimeInterval(-3600), durationSeconds: 8),
-        Entry(id: "2", text: "moving the meeting to 4pm if that works for everyone", timestamp: Date().addingTimeInterval(-7200), durationSeconds: 6),
-        Entry(id: "3", text: "need to refactor the auth flow before we ship the migration", timestamp: Date().addingTimeInterval(-10800), durationSeconds: 9),
-        Entry(id: "4", text: "quick reminder to drop the docs in the channel", timestamp: Date().addingTimeInterval(-86400), durationSeconds: nil),
-        Entry(id: "5", text: "the api rate limits hit us again on the analytics export", timestamp: Date().addingTimeInterval(-90000), durationSeconds: 7),
+        Entry(
+            id: "1",
+            text: "thanks for the breakdown — let's talk through it tomorrow",
+            timestamp: Date().addingTimeInterval(-3600),
+            durationSeconds: 8,
+            wordCount: 8,
+            appContext: "Messages"
+        ),
+        Entry(
+            id: "2",
+            text: "moving the meeting to 4pm if that works for everyone",
+            timestamp: Date().addingTimeInterval(-7200),
+            durationSeconds: 6,
+            wordCount: 10,
+            appContext: "Calendar"
+        ),
+        Entry(
+            id: "3",
+            text: "need to refactor the auth flow before we ship the migration",
+            timestamp: Date().addingTimeInterval(-10800),
+            durationSeconds: 9,
+            wordCount: 10,
+            appContext: "Notes"
+        ),
+        Entry(
+            id: "4",
+            text: "quick reminder to drop the docs in the channel",
+            timestamp: Date().addingTimeInterval(-86400),
+            durationSeconds: nil,
+            wordCount: 8,
+            appContext: nil
+        ),
+        Entry(
+            id: "5",
+            text: "the api rate limits hit us again on the analytics export",
+            timestamp: Date().addingTimeInterval(-90000),
+            durationSeconds: 7,
+            wordCount: 10,
+            appContext: "Slack"
+        ),
     ]
 }
 
@@ -134,6 +184,14 @@ struct DictationHistoryNext: View {
                     .onTapGesture {
                         AppShellRouter.shared.openCompose(documentID: entry.id)
                     }
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        Button {
+                            feed.promoteToMemo(entry)
+                        } label: {
+                            Label("Save as Memo", systemImage: "square.and.arrow.down.fill")
+                        }
+                        .tint(theme.currentTheme.chrome.accent)
+                    }
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                         Button(role: .destructive) {
                             feed.delete(entry)
@@ -194,6 +252,7 @@ struct DictationHistoryNext: View {
 private struct DictationEntryRow: View {
     let entry: DictationHistoryFeed.Entry
     @ObservedObject private var theme = ThemeManager.shared
+    @State private var speech = SpeechSynthesisService.shared
     @State private var showCopied = false
 
     private static let timeFormatter: DateFormatter = {
@@ -228,11 +287,26 @@ private struct DictationEntryRow: View {
                         Text("  \u{00B7}  ").foregroundStyle(theme.colors.textTertiary.opacity(0.5))
                     }
                     Text(formatTimestamp(entry.timestamp))
+                    Text("  \u{00B7}  ").foregroundStyle(theme.colors.textTertiary.opacity(0.5))
+                    Text("\(entry.wordCount) \(entry.wordCount == 1 ? "word" : "words")")
+                    if let context = entry.appContext?.trimmingCharacters(in: .whitespacesAndNewlines), !context.isEmpty {
+                        Text("  \u{00B7}  ").foregroundStyle(theme.colors.textTertiary.opacity(0.5))
+                        Text(context)
+                    }
                     Spacer()
                 }
                 .talkieType(.hint)
                 .foregroundStyle(theme.colors.textTertiary)
             }
+
+            Button(action: toggleReadout) {
+                Image(systemName: speech.isSpeaking ? "stop.fill" : "speaker.wave.2.fill")
+                    .font(.system(size: 12, weight: .light))
+                    .foregroundStyle(speech.isSpeaking ? theme.currentTheme.chrome.accent : theme.colors.textTertiary)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(speech.isSpeaking ? "Stop read aloud" : "Read aloud")
 
             Button(action: copyText) {
                 Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
@@ -246,11 +320,16 @@ private struct DictationEntryRow: View {
         .padding(.horizontal, 16)
     }
 
+    private func toggleReadout() {
+        speech.toggleReadout(entry.text)
+    }
+
     private func copyText() {
         UIPasteboard.general.string = entry.text
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         withAnimation(.easeInOut(duration: 0.2)) { showCopied = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+        Task {
+            try? await Task.sleep(for: .milliseconds(1200))
             withAnimation(.easeInOut(duration: 0.2)) { showCopied = false }
         }
     }

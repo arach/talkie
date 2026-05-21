@@ -28,6 +28,7 @@ struct LibraryNextView: View {
     @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var library: LibraryFeed
     @State private var activeTab: LibraryTab = .memos
+    @State private var query: String = ""
 
     init(feed: LibraryFeed? = nil) {
         _library = StateObject(wrappedValue: feed ?? LibraryFeed())
@@ -36,19 +37,24 @@ struct LibraryNextView: View {
     var body: some View {
         VStack(spacing: 0) {
             LibraryHeader(
-                count: library.items(for: activeTab).count,
-                total: library.totalCount(for: activeTab),
+                count: library.items(for: activeTab, matching: query).count,
+                total: library.totalCount(for: activeTab, matching: query),
                 onBack: { AppShellRouter.shared.openHome() }
             )
             TabRow(active: $activeTab)
             ScrollView {
                 VStack(spacing: 12) {
                     LibraryListCard(
-                        items: library.items(for: activeTab),
-                        earlierCount: library.earlierCount(for: activeTab),
-                        activeTab: activeTab
+                        items: library.items(for: activeTab, matching: query),
+                        earlierCount: library.earlierCount(for: activeTab, matching: query),
+                        activeTab: activeTab,
+                        isLoading: library.isLoading,
+                        errorMessage: library.errorMessage,
+                        isSearching: !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     ) { item in
                         library.delete(item, in: activeTab)
+                    } onPromote: { item in
+                        library.promoteToMemo(item)
                     }
                     .padding(.horizontal, 12)
 
@@ -59,7 +65,7 @@ struct LibraryNextView: View {
                         .padding(.horizontal, 12)
                     }
 
-                    SearchBar(placeholder: searchPlaceholder)
+                    SearchBar(placeholder: searchPlaceholder, query: $query)
                         .padding(.horizontal, 12)
 
                     Spacer(minLength: 80)
@@ -184,20 +190,44 @@ private struct LibraryListCard: View {
     let items: [LibraryFeed.Item]
     let earlierCount: Int
     let activeTab: LibraryTab
+    let isLoading: Bool
+    let errorMessage: String?
+    let isSearching: Bool
     let onDelete: (LibraryFeed.Item) -> Void
+    let onPromote: (LibraryFeed.Item) -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
         VStack(spacing: 0) {
-            if items.isEmpty {
-                EmptyTabState(tab: activeTab)
+            if isLoading && items.isEmpty {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 36)
+            } else if let errorMessage {
+                LibraryMessageState(
+                    icon: "exclamationmark.triangle",
+                    headline: "Couldn’t load library",
+                    hint: errorMessage
+                )
+            } else if items.isEmpty {
+                EmptyTabState(tab: activeTab, isSearching: isSearching)
             } else {
                 List {
-                    ForEach(Array(items.enumerated()), id: \.element.id) { idx, item in
+                    ForEach(items.enumerated(), id: \.element.id) { idx, item in
                         LibraryRow(item: item, showDivider: idx > 0)
                             .contentShape(Rectangle())
                             .onTapGesture { open(item) }
+                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                if item.canPromoteToMemo {
+                                    Button {
+                                        onPromote(item)
+                                    } label: {
+                                        Label("Save as Memo", systemImage: "square.and.arrow.down.fill")
+                                    }
+                                    .tint(theme.currentTheme.chrome.accent)
+                                }
+                            }
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
                                     onDelete(item)
@@ -290,6 +320,12 @@ private struct LibraryRow: View {
                             Text(item.relativeTime)
                                 .talkieType(.channelLabel)
                                 .foregroundStyle(theme.colors.textTertiary)
+                            if let syncStatus = item.syncStatus {
+                                Image(systemName: syncIcon(for: syncStatus))
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(syncColor(for: syncStatus))
+                                    .accessibilityLabel(syncAccessibilityLabel(for: syncStatus))
+                            }
                         }
                         if let preview = item.preview {
                             Text(preview)
@@ -302,6 +338,27 @@ private struct LibraryRow: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
+        }
+    }
+
+    private func syncIcon(for status: LibraryFeed.SyncStatus) -> String {
+        switch status {
+        case .synced: return "checkmark.circle.fill"
+        case .pending: return "circle.dotted"
+        }
+    }
+
+    private func syncColor(for status: LibraryFeed.SyncStatus) -> Color {
+        switch status {
+        case .synced: return theme.currentTheme.chrome.accent
+        case .pending: return theme.colors.textTertiary
+        }
+    }
+
+    private func syncAccessibilityLabel(for status: LibraryFeed.SyncStatus) -> String {
+        switch status {
+        case .synced: return "Synced to Mac"
+        case .pending: return "Not synced to Mac"
         }
     }
 
@@ -322,6 +379,7 @@ private struct LibraryRow: View {
 
 private struct EmptyTabState: View {
     let tab: LibraryTab
+    let isSearching: Bool
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
@@ -369,6 +427,7 @@ private struct EmptyTabState: View {
     }
 
     private var iconName: String {
+        if isSearching { return "magnifyingglass" }
         switch tab {
         case .memos:      return "waveform"
         case .dictations: return "text.cursor"
@@ -377,6 +436,7 @@ private struct EmptyTabState: View {
     }
 
     private var headline: String {
+        if isSearching { return "No matches" }
         switch tab {
         case .memos:      return "No memos yet"
         case .dictations: return "No dictations yet"
@@ -385,6 +445,7 @@ private struct EmptyTabState: View {
     }
 
     private var hint: String {
+        if isSearching { return "Try a different search term." }
         switch tab {
         case .memos:      return "Long-press the mic anywhere in Talkie to start a recording."
         case .dictations: return "Use the Talkie keyboard or Compose to capture text by voice."
@@ -399,6 +460,7 @@ private struct EmptyTabState: View {
     }
 
     private var cta: CTA? {
+        if isSearching { return nil }
         switch tab {
         case .memos:
             return CTA(label: "RECORD", icon: "mic.fill") {
@@ -414,6 +476,31 @@ private struct EmptyTabState: View {
                 AppShellRouter.shared.openCameraCapture()
             }
         }
+    }
+}
+
+private struct LibraryMessageState: View {
+    let icon: String
+    let headline: String
+    let hint: String
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 26, weight: .light))
+                .foregroundStyle(theme.colors.textTertiary)
+            Text(headline)
+                .talkieType(.headlineSecondary)
+                .foregroundStyle(theme.colors.textPrimary)
+            Text(hint)
+                .talkieType(.preview)
+                .foregroundStyle(theme.colors.textTertiary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 36)
+        .padding(.horizontal, 14)
     }
 }
 
@@ -460,8 +547,8 @@ private struct FullHistoryLink: View {
 
 private struct SearchBar: View {
     let placeholder: String
+    @Binding var query: String
     @ObservedObject private var theme = ThemeManager.shared
-    @State private var query: String = ""
 
     var body: some View {
         HStack(spacing: 8) {
