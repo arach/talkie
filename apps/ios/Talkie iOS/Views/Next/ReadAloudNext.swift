@@ -12,8 +12,7 @@ import UIKit
 struct ReadAloudNext: View {
     @EnvironmentObject private var chromeState: ShellChrome
     @ObservedObject private var theme = ThemeManager.shared
-    @State private var player = ReadAloudPlayer()
-    @State private var speechService = SpeechSynthesisService.shared
+    @StateObject private var player = ReadAloudPlayer.shared
 
     var body: some View {
         ZStack {
@@ -46,20 +45,14 @@ struct ReadAloudNext: View {
             }
         }
         .onAppear {
-            player.bind(speechService: speechService)
+            player.configureAudio()
+            player.bind(source: AppShellRouter.shared.pendingReadAloudSource)
+            AppShellRouter.shared.pendingReadAloudSource = nil
         }
         .onDisappear {
             player.stop()
         }
-        .onChange(of: player.rate) { _, newValue in
-            speechService.setPlaybackRate(Float(newValue))
-        }
-        .onChange(of: player.pitch) { _, newValue in
-            speechService.speechPitch = Float(newValue)
-        }
-        .onChange(of: player.selectedVoiceIdentifier) { _, newValue in
-            speechService.selectedVoiceIdentifier = newValue
-        }
+
     }
 
     private var header: some View {
@@ -95,243 +88,6 @@ struct ReadAloudNext: View {
 }
 
 // MARK: - Player model
-
-@MainActor
-@Observable
-final class ReadAloudPlayer {
-    enum Variant: String, CaseIterable, Identifiable {
-        case idle, playing, queue
-        var id: String { rawValue }
-    }
-
-    enum SourceKind: String, CaseIterable, Identifiable {
-        case text, image, url, pdf
-        var id: String { rawValue }
-
-        var label: String { rawValue.uppercased() }
-        var icon: String {
-            switch self {
-            case .text: return "doc.text"
-            case .image: return "photo"
-            case .url: return "link"
-            case .pdf: return "doc.richtext"
-            }
-        }
-    }
-
-    struct Item: Identifiable {
-        let id = UUID()
-        let kind: SourceKind
-        let title: String
-        let meta: String
-        let sourcePath: String
-        let text: String
-        let sourceURL: URL?
-        let referenceEyebrow: String?
-        let duration: TimeInterval
-    }
-
-    struct QueueItem: Identifiable {
-        let id = UUID()
-        let title: String
-        let meta: String
-    }
-
-    var variant: Variant = .playing
-    var selectedKind: SourceKind = .text
-    var sourceExpanded = true
-    var selectedVoiceIdentifier: String?
-    var rate = 1.0
-    var pitch = 1.0
-    var autoPause = true
-    var activeChunkIndex = 1
-    var progress = 0.44
-    var voices: [AVSpeechSynthesisVoice] = []
-
-    private weak var speechService: SpeechSynthesisService?
-    private var progressTask: Task<Void, Never>?
-    private var chunksCache: [String] = []
-
-    let queue: [QueueItem] = [
-        QueueItem(title: "Idea: offline-first sync architecture", meta: "1:42"),
-        QueueItem(title: "Meeting notes — product roadmap", meta: "2:18"),
-        QueueItem(title: "Keyboard configurator reference", meta: "0:54")
-    ]
-
-    private let items: [SourceKind: Item] = [
-        .text: Item(
-            kind: .text,
-            title: "Conference Bio",
-            meta: "COMPOSE · 31 WORDS · 0:24 / 1:08",
-            sourcePath: "conference-bio.txt",
-            text: "I'm a designer working at the intersection of voice interfaces and instrument-grade tooling. My background spans broadcast audio, editorial publishing, and software product design. I'm currently exploring how voice-first capture can fit into desk and pocket workflows without giving up the precision of a hardware console. Talk to me about voice UI, instrument vocabulary, channel-label semantics, or anything radio.",
-            sourceURL: nil,
-            referenceEyebrow: nil,
-            duration: 68
-        ),
-        .image: Item(
-            kind: .image,
-            title: "Scope dashboard notes",
-            meta: "SCAN · 142 CHARS · 0:11 / 0:38",
-            sourcePath: "scope-dashboard.png",
-            text: "the trace band should anchor to the bottom of the sheet so the chrome reads as one panel rather than two",
-            sourceURL: nil,
-            referenceEyebrow: "OCR EXCERPT · 142 CHARS",
-            duration: 38
-        ),
-        .url: Item(
-            kind: .url,
-            title: "Apple's vision for the next OS",
-            meta: "URL · DARINGFIREBALL.NET · 1:02 / 4:18",
-            sourcePath: "daringfireball.net/2026/05/apple-vision",
-            text: "Apple's next OS quietly trades chrome for content, but the new defaults expose more of the system's editorial voice than ever before",
-            sourceURL: URL(string: "https://daringfireball.net/2026/05/apple-vision"),
-            referenceEyebrow: "ARTICLE EXCERPT",
-            duration: 258
-        ),
-        .pdf: Item(
-            kind: .pdf,
-            title: "On Bullshit · Frankfurt",
-            meta: "PDF · 12 PAGES · 3:14 / 28:42",
-            sourcePath: "on-bullshit-frankfurt.pdf",
-            text: "It is impossible for someone to lie unless he thinks he knows the truth. Producing bullshit requires no such conviction",
-            sourceURL: nil,
-            referenceEyebrow: "PAGE 3 OF 12",
-            duration: 1_722
-        )
-    ]
-
-    var currentItem: Item {
-        items[selectedKind] ?? fallbackItem
-    }
-
-    private var fallbackItem: Item {
-        Item(
-            kind: .text,
-            title: "No readable source",
-            meta: "TEXT · 0 WORDS · READY",
-            sourcePath: "Empty source",
-            text: "Choose a readable source to begin playback.",
-            sourceURL: nil,
-            referenceEyebrow: nil,
-            duration: 1
-        )
-    }
-
-    var chunks: [String] {
-        chunks(for: currentItem.text)
-    }
-
-    var playedBarCount: Int {
-        min(32, max(0, Int((progress * 32).rounded(.down))))
-    }
-
-    var selectedVoiceLabel: String {
-        if let voice = voices.first(where: { $0.identifier == selectedVoiceIdentifier }) {
-            return "\(voice.name) · \(voice.language)"
-        }
-        return "System · Auto"
-    }
-
-    func bind(speechService: SpeechSynthesisService) {
-        self.speechService = speechService
-        voices = AVSpeechSynthesisVoice.speechVoices()
-            .filter { $0.language.starts(with: "en") }
-            .sorted { lhs, rhs in lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending }
-        selectedVoiceIdentifier = speechService.selectedVoiceIdentifier ?? voices.first?.identifier
-        rate = Double(speechService.playbackRate)
-        pitch = Double(speechService.speechPitch)
-        chunksCache = chunks(for: currentItem.text)
-    }
-
-    func selectSource(_ kind: SourceKind, variant nextVariant: Variant = .playing) {
-        selectedKind = kind
-        variant = nextVariant
-        activeChunkIndex = kind == .text ? 1 : 0
-        progress = kind == .text ? 0.44 : 0.28
-        chunksCache = chunks(for: currentItem.text)
-    }
-
-    func togglePlayback() {
-        guard let speechService else { return }
-        if speechService.isSpeaking {
-            stop()
-            return
-        }
-
-        if variant == .idle {
-            variant = .playing
-        }
-
-        chunksCache = chunks(for: currentItem.text)
-        speechService.selectedVoiceIdentifier = selectedVoiceIdentifier
-        speechService.speechPitch = Float(pitch)
-        speechService.setPlaybackRate(Float(rate))
-        speechService.speak(currentItem.text) { [weak self] in
-            Task { @MainActor in
-                self?.progressTask?.cancel()
-                self?.progress = 1
-                self?.activeChunkIndex = max(0, (self?.chunksCache.count ?? 1) - 1)
-            }
-        }
-        startHighlightShim()
-    }
-
-    func stop() {
-        speechService?.stop()
-        progressTask?.cancel()
-        progressTask = nil
-    }
-
-    func skipBackward() {
-        progress = max(0, progress - 0.12)
-        activeChunkIndex = max(0, activeChunkIndex - 1)
-    }
-
-    func skipForward() {
-        progress = min(1, progress + 0.12)
-        activeChunkIndex = min(max(0, chunks.count - 1), activeChunkIndex + 1)
-    }
-
-    func openOriginal() {
-        guard let url = currentItem.sourceURL else { return }
-        UIApplication.shared.open(url)
-    }
-
-    fileprivate func chunkState(for index: Int) -> ReadAloudChunkState {
-        if index < activeChunkIndex { return .played }
-        if index == activeChunkIndex { return .playing }
-        return .upcoming
-    }
-
-    private func startHighlightShim() {
-        progressTask?.cancel()
-        let totalChunks = max(1, chunksCache.count)
-        progressTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(700))
-                guard let self else { return }
-                self.progress = min(0.98, self.progress + 0.022)
-                self.activeChunkIndex = min(totalChunks - 1, Int((self.progress * Double(totalChunks)).rounded(.down)))
-            }
-        }
-    }
-
-    private func chunks(for text: String) -> [String] {
-        let separators = CharacterSet(charactersIn: ".!?\n")
-        let raw = text.components(separatedBy: separators)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        guard !raw.isEmpty else { return [text] }
-        return raw.map { chunk in
-            chunk.hasSuffix(".") ? chunk : "\(chunk)."
-        }
-    }
-}
-
-private enum ReadAloudChunkState {
-    case played, playing, upcoming
-}
 
 // MARK: - Top-level states
 
@@ -435,12 +191,11 @@ private struct ReadAloudWaveformView: View {
 
 private struct TransportView: View {
     let player: ReadAloudPlayer
-    @State private var speechService = SpeechSynthesisService.shared
 
     var body: some View {
         HStack(spacing: 28) {
             transportButton(systemImage: "backward.end.fill", size: 36) { player.skipBackward() }
-            transportButton(systemImage: speechService.isSpeaking ? "pause.fill" : "play.fill", size: 56, primary: true) { player.togglePlayback() }
+            transportButton(systemImage: player.isPlaying ? "pause.fill" : "play.fill", size: 56, primary: true) { player.togglePlayback() }
             transportButton(systemImage: "forward.end.fill", size: 36) { player.skipForward() }
         }
         .frame(maxWidth: .infinity)
