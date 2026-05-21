@@ -191,14 +191,38 @@ private struct ReadAloudWaveformView: View {
 
 private struct TransportView: View {
     let player: ReadAloudPlayer
+    @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        HStack(spacing: 28) {
-            transportButton(systemImage: "backward.end.fill", size: 36) { player.skipBackward() }
-            transportButton(systemImage: player.isPlaying ? "pause.fill" : "play.fill", size: 56, primary: true) { player.togglePlayback() }
-            transportButton(systemImage: "forward.end.fill", size: 36) { player.skipForward() }
+        VStack(spacing: 10) {
+            HStack(spacing: 28) {
+                transportButton(systemImage: "backward.end.fill", size: 36) { player.skipBackward() }
+                transportButton(systemImage: player.isPlaying ? "pause.fill" : "play.fill", size: 56, primary: true) { player.togglePlayback() }
+                transportButton(systemImage: "forward.end.fill", size: 36) { player.skipForward() }
+            }
+            .frame(maxWidth: .infinity)
+
+            if player.chunkCount > 1 {
+                HStack(spacing: 10) {
+                    Text("SENTENCE \(player.currentChunkDisplayIndex)/\(player.chunkCount)")
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(theme.colors.textTertiary)
+                        .frame(width: 96, alignment: .leading)
+
+                    Slider(
+                        value: Binding(
+                            get: { Double(max(0, player.currentChunkDisplayIndex - 1)) },
+                            set: { newValue in
+                                player.seekToChunk(Int(newValue.rounded()), play: player.isPlaying)
+                            }
+                        ),
+                        in: 0...Double(max(0, player.chunkCount - 1)),
+                        step: 1
+                    )
+                    .tint(theme.currentTheme.chrome.accent)
+                }
+            }
         }
-        .frame(maxWidth: .infinity)
         .padding(.top, 2)
     }
 
@@ -206,10 +230,10 @@ private struct TransportView: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: primary ? 20 : 15, weight: .semibold))
-                .foregroundStyle(primary ? ThemeManager.shared.colors.cardBackground : ThemeManager.shared.colors.textPrimary)
+                .foregroundStyle(primary ? theme.colors.cardBackground : theme.colors.textPrimary)
                 .frame(width: size, height: size)
-                .background(Circle().fill(primary ? ThemeManager.shared.currentTheme.chrome.accent : Color.clear))
-                .overlay(Circle().strokeBorder(primary ? Color.clear : ThemeManager.shared.currentTheme.chrome.edgeFaint, lineWidth: ThemeManager.shared.currentTheme.chrome.hairlineWidth))
+                .background(Circle().fill(primary ? theme.currentTheme.chrome.accent : Color.clear))
+                .overlay(Circle().strokeBorder(primary ? Color.clear : theme.currentTheme.chrome.edgeFaint, lineWidth: theme.currentTheme.chrome.hairlineWidth))
         }
         .buttonStyle(.plain)
     }
