@@ -1,7 +1,7 @@
 {
   "version": 1,
   "audit": "scope-2026-05-21",
-  "updatedAt": "2026-05-21T23:03:07.723Z",
+  "updatedAt": "2026-05-21T23:17:54.408Z",
   "items": {
     "t-cool-palette": {
       "status": "shipped",
@@ -406,8 +406,8 @@
     },
     "sw-home-card-equal-weight": {
       "status": "queued",
-      "updatedAt": "2026-05-21T20:30:00.000Z",
-      "updatedBy": "claude-orchestrator",
+      "updatedAt": "2026-05-21T23:17:54.408Z",
+      "updatedBy": "claude-painter",
       "notes": [
         {
           "ts": "2026-05-21T20:30:00.000Z",
@@ -416,6 +416,12 @@
           "message": "Demote Routines + Did-you-know to borderless rows on canvas (keep Bay + Recent as cards). NEEDS painter review.",
           "ref": "apps/macos/Talkie/Views/Home/ScopeHomeView.swift",
           "severity": "proposal"
+        },
+        {
+          "ts": "2026-05-21T23:17:54.408Z",
+          "agent": "claude-painter",
+          "level": "decision",
+          "message": "DECISION: Bay + Recent stay as cards. Routines + Did-you-know demote to borderless rule-separated rows on canvas. Editorial weight collapses into the two primary bands."
         }
       ]
     },
@@ -674,9 +680,9 @@
       ]
     },
     "sw-dict-overlay-token": {
-      "status": "queued",
-      "updatedAt": "2026-05-21T20:30:00.000Z",
-      "updatedBy": "claude-orchestrator",
+      "status": "inflight",
+      "updatedAt": "2026-05-21T23:17:28.576Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
       "notes": [
         {
           "ts": "2026-05-21T20:30:00.000Z",
@@ -685,6 +691,12 @@
           "message": "Drop overlay L259-277: use ScopeAmber.solid/tint + ScopeType.eyebrow instead of settings.resolvedAccentColor + Theme.current.fontSM",
           "ref": "apps/macos/Talkie/Views/TalkieObject/TalkieView.swift:259",
           "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T23:17:28.576Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "TalkieView mechanical leftovers in progress."
         }
       ]
     },
@@ -717,9 +729,9 @@
       ]
     },
     "sw-dict-magic-number": {
-      "status": "queued",
-      "updatedAt": "2026-05-21T20:30:00.000Z",
-      "updatedBy": "claude-orchestrator",
+      "status": "inflight",
+      "updatedAt": "2026-05-21T23:17:28.544Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
       "notes": [
         {
           "ts": "2026-05-21T20:30:00.000Z",
@@ -728,6 +740,12 @@
           "message": "Replace PageLayout.headerHeight + 18 magic number with PageLayout.headerOverlayClearance",
           "ref": "apps/macos/Talkie/Views/TalkieObject/TalkieView.swift",
           "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T23:17:28.544Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "TalkieView mechanical leftovers in progress."
         }
       ]
     },
@@ -823,8 +841,8 @@
     },
     "sw-note-channel-label-marketing": {
       "status": "queued",
-      "updatedAt": "2026-05-21T20:30:00.000Z",
-      "updatedBy": "claude-orchestrator",
+      "updatedAt": "2026-05-21T23:17:54.408Z",
+      "updatedBy": "claude-painter",
       "notes": [
         {
           "ts": "2026-05-21T20:30:00.000Z",
@@ -833,13 +851,19 @@
           "message": "Strip fake 'CH-04 · NOTE' channel label — show real note.source.displayName or nothing. NEEDS painter decision.",
           "ref": "apps/macos/Talkie/Views/Notes/ScopeNoteDetailView.swift",
           "severity": "proposal"
+        },
+        {
+          "ts": "2026-05-21T23:17:54.408Z",
+          "agent": "claude-painter",
+          "level": "decision",
+          "message": "DECISION: Drop the fake CH-04 chip. If note.source.displayName exists, render it as a mono eyebrow (no channel framing). If not, render nothing."
         }
       ]
     },
     "sw-note-sequence-fake-id": {
       "status": "queued",
-      "updatedAt": "2026-05-21T20:30:00.000Z",
-      "updatedBy": "claude-orchestrator",
+      "updatedAt": "2026-05-21T23:17:54.408Z",
+      "updatedBy": "claude-painter",
       "notes": [
         {
           "ts": "2026-05-21T20:30:00.000Z",
@@ -848,6 +872,12 @@
           "message": "Replace synthetic N-#### sequence from hashValue — real persistent ID or drop chip. NEEDS painter decision.",
           "ref": "apps/macos/Talkie/Views/Notes/ScopeNoteDetailView.swift",
           "severity": "proposal"
+        },
+        {
+          "ts": "2026-05-21T23:17:54.408Z",
+          "agent": "claude-painter",
+          "level": "decision",
+          "message": "DECISION: Drop the synthetic N-#### chip entirely. Only show a sequence chip when we have a real persistent ID. Until then, no chip."
         }
       ]
     },
@@ -999,8 +1029,8 @@
     },
     "sw-cap-filename-headline": {
       "status": "queued",
-      "updatedAt": "2026-05-21T20:30:00.000Z",
-      "updatedBy": "claude-orchestrator",
+      "updatedAt": "2026-05-21T23:17:54.408Z",
+      "updatedBy": "claude-painter",
       "notes": [
         {
           "ts": "2026-05-21T20:30:00.000Z",
@@ -1009,6 +1039,12 @@
           "message": "Promote derivedCaption to serif headline; demote filename to mono byline. NEEDS painter visual treatment.",
           "ref": "apps/macos/Talkie/Views/Notes/ScopeCaptureDetailView.swift",
           "severity": "proposal"
+        },
+        {
+          "ts": "2026-05-21T23:17:54.408Z",
+          "agent": "claude-painter",
+          "level": "decision",
+          "message": "DECISION: Promote derivedCaption to serif headline (top); demote filename to mono byline below. Matches 'document on a desk' framing — caption is the editorial title, filename is provenance."
         }
       ]
     },
@@ -1141,8 +1177,8 @@
     },
     "sw-sk-amber-flood": {
       "status": "queued",
-      "updatedAt": "2026-05-21T20:30:00.000Z",
-      "updatedBy": "claude-orchestrator",
+      "updatedAt": "2026-05-21T23:17:54.408Z",
+      "updatedBy": "claude-painter",
       "notes": [
         {
           "ts": "2026-05-21T20:30:00.000Z",
@@ -1151,6 +1187,12 @@
           "message": "Ration amber: demote AGENT eyebrow, console arrows, miniChip borders, mic hover, one of RUN/SAVE to ink/brass. NEEDS painter pick of 3 amber slots.",
           "ref": "apps/macos/Talkie/Views/Skills/ScopeSkillsLandingView.swift",
           "severity": "proposal"
+        },
+        {
+          "ts": "2026-05-21T23:17:54.408Z",
+          "agent": "claude-painter",
+          "level": "decision",
+          "message": "DECISION: Keep amber on RUN, SAVE, and mic hover (the three primary user affordances). Demote AGENT eyebrow + console arrows + miniChip borders to ScopeInk.muted / ScopeBrass.solid."
         }
       ]
     },

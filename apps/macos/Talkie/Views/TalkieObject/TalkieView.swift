@@ -158,7 +158,7 @@ struct TalkieView: View {
                     // footprint (pill capsule + shadow) so the masthead
                     // slug doesn't touch the bar's bottom edge.
                     Color.clear
-                        .frame(height: PageLayout.headerHeight + 18)
+                        .frame(height: PageLayout.headerOverlayClearance)
 
                     if canShowRail {
                         // 1fr / 220pt grid. Detail content keeps its
@@ -259,8 +259,8 @@ struct TalkieView: View {
         .overlay {
             if isDropTargeted {
                 RoundedRectangle(cornerRadius: CornerRadius.lg)
-                    .strokeBorder(settings.resolvedAccentColor, style: StrokeStyle(lineWidth: 2, dash: [8, 4]))
-                    .background(settings.resolvedAccentColor.opacity(0.05))
+                    .strokeBorder(ScopeAmber.solid, style: StrokeStyle(lineWidth: 2, dash: [8, 4]))
+                    .background(ScopeAmber.tint)
                     .clipShape(RoundedRectangle(cornerRadius: CornerRadius.lg))
                     .padding(Spacing.sm)
                     .overlay {
@@ -268,9 +268,10 @@ struct TalkieView: View {
                             Image(systemName: "plus.circle")
                                 .font(.system(size: 32, weight: .thin))
                             Text("Drop files to attach")
-                                .font(Theme.current.fontSM)
+                                .font(ScopeType.eyebrow)
+                                .tracking(ScopeType.Tracking.wide)
                         }
-                        .foregroundColor(settings.resolvedAccentColor)
+                        .foregroundStyle(ScopeAmber.solid)
                     }
                     .allowsHitTesting(false)
             }
