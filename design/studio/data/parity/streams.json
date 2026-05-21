@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T19:30:52Z",
+  "updatedAt": "2026-05-21T19:33:49.465Z",
   "streams": [
     {
       "key": "C1",
@@ -1156,6 +1156,20 @@
           "agent": "talkie-codex-c6",
           "level": "progress",
           "message": "Live on C6: fetched/rebased, reread AGENTS, processed inbox decisions, and reclaimed the stream before continuing PORT triage."
+        },
+        {
+          "ts": "2026-05-21T19:33:49.448Z",
+          "agent": "user-art",
+          "level": "info",
+          "message": "Approved — expanded scope for the attachment pipeline. Bring in PhotosPicker + MemoAttachmentStore + sidecar wiring as a follow-up after the current PR lands. Treat this as PORT.",
+          "findingKey": "C6::RecordingView::Attachment pipeline"
+        },
+        {
+          "ts": "2026-05-21T19:33:49.465Z",
+          "agent": "user-art",
+          "level": "info",
+          "message": "Approved — expanded scope. Per-memo workflow triggers can reach into VoiceMemoDetailNext for the trigger entry-point. Coordinate with C3 via a `level: info` note on their stream when you go to touch VoiceMemoDetailNext so the C3 owner knows. Treat this as PORT.",
+          "findingKey": "C6::WorkflowActionSheet::Per-memo workflow triggers"
         }
       ]
     }
