@@ -21,57 +21,46 @@ final class ComposeStore: ObservableObject {
     @Published var generatingETA: String?
     @Published var pendingDiff: Diff?
     @Published var keyboardFocusRequested: Bool = false
+    @Published var revisionPath: RevisionPath
+    @Published var appliedRevisions: [ComposeNoteStore.RevisionRecord] = []
 
-    let modelLabel: String = "Sonnet 4.6"
     let documentID: String
 
+    var modelLabel: String {
+        switch revisionPath {
+        case .direct:
+            if let provider = TalkieAIProviderResolver.shared.configuredProvider() {
+                return "\(provider.providerName) · \(provider.modelId)"
+            }
+            return "Direct API"
+        case .mac:
+            return "Mac Bridge"
+        }
+    }
+
     private let context: NSManagedObjectContext
-    private let recorder = AudioRecorderManager()
+    private let inlineDictationController = InlineDictationController()
+    private let voiceCommandController = InlineDictationController()
     private var note: ComposeNote?
     private var dictationTask: Task<Void, Never>?
     private var commandTask: Task<Void, Never>?
     private var voiceCommandTask: Task<Void, Never>?
     private var isVoiceCommandCapturing = false
+    private var voiceCommandDidSubmit = false
+    private var lastRevisionProviderName = "Local fallback"
+    private var lastRevisionModelId = "local"
     private var isMockDocument: Bool { documentID == "mock" }
 
     init(documentID: String) {
         self.documentID = documentID
         self.context = PersistenceController.shared.container.viewContext
         self.document = Self.mockDocument
+        self.revisionPath = RevisionPath(rawValue: TalkieAppSettings.shared.composeRevisionPath) ?? .direct
 
-        if documentID == "mock" {
-            self.document = Self.mockDocument
-        } else if let note = Self.fetchNote(id: documentID, context: context) {
-            self.note = note
-            self.document = Self.document(from: note)
-        } else if let dictation = Self.fetchKeyboardDictation(id: documentID) {
-            self.document = Self.document(from: dictation)
-        } else if let note = Self.fetchLatestNote(context: context) {
-            self.note = note
-            self.document = Self.document(from: note)
-        } else {
-            let note = ComposeNote(context: context)
-            note.id = UUID(uuidString: documentID) ?? UUID()
-            note.createdAt = Date()
-            note.lastModified = Date()
-            note.title = "Untitled note"
-            note.content = ""
-            self.note = note
-            self.document = Self.document(from: note)
-            Self.save(context)
-        }
-
-        let args = ProcessInfo.processInfo.arguments
-        if let i = args.firstIndex(of: "--composeState"), i + 1 < args.count {
-            switch args[i + 1].lowercased() {
-            case "idle":       seed(.idle)
-            case "dictating":  seed(.dictating)
-            case "listening":  seed(.listening)
-            case "generating": seed(.generating)
-            case "diff":       seed(.diff)
-            default: break
-            }
-        }
+        configureDictationControllers()
+        loadDocument(documentID: documentID)
+        loadAppliedRevisions()
+        seedFromLaunchArgumentsIfNeeded()
     }
 
     deinit {
@@ -92,13 +81,15 @@ final class ComposeStore: ObservableObject {
             return
         }
 
-        if state == .dictating {
-            finishDictation()
-        } else {
+        switch inlineDictationController.currentState {
+        case .idle:
             beginDictation()
+        case .recording:
+            finishDictation()
+        case .transcribing:
+            inlineDictationController.cancel()
         }
     }
-
 
     func toggleVoiceCommand() {
         if isMockDocument {
@@ -123,7 +114,7 @@ final class ComposeStore: ObservableObject {
             return
         }
 
-        if isVoiceCommandCapturing {
+        if isVoiceCommandCapturing || voiceCommandController.currentState != .idle {
             finishVoiceCommandCapture()
         } else {
             beginVoiceCommandCapture()
@@ -168,17 +159,40 @@ final class ComposeStore: ObservableObject {
 
     func acceptDiff() {
         guard let diff = pendingDiff else { state = .idle; return }
+        let originalIndex = document.paragraphs.firstIndex(of: diff.original)
         document = document.replacing(diff.original, with: diff.proposed)
+        persistDocument()
+        recordRevision(for: diff, originalIndex: originalIndex)
         pendingDiff = nil
         lastCommandTranscript = nil
         state = .idle
-        persistDocument()
     }
 
     func discardDiff() {
         pendingDiff = nil
         lastCommandTranscript = nil
         state = .idle
+    }
+
+    func autosave() {
+        persistDocument()
+    }
+
+    func selectRevisionPath(_ path: RevisionPath) {
+        revisionPath = path
+        TalkieAppSettings.shared.composeRevisionPath = path.rawValue
+    }
+
+    func restoreRevision(_ revision: ComposeNoteStore.RevisionRecord) {
+        pendingDiff = nil
+        lastCommandTranscript = nil
+        livePartialTranscript = nil
+        state = .idle
+        document = Document(
+            title: document.title,
+            paragraphs: Self.paragraphs(from: revision.documentText)
+        )
+        persistDocument()
     }
 
     struct Document {
@@ -199,6 +213,27 @@ final class ComposeStore: ObservableObject {
         let proposed: String
         let removedCount: Int
         let addedCount: Int
+    }
+
+    enum RevisionPath: String, CaseIterable, Identifiable {
+        case direct
+        case mac
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .direct: return "API"
+            case .mac: return "Mac"
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .direct: return "network"
+            case .mac: return "desktopcomputer"
+            }
+        }
     }
 
     enum QuickTransform: CaseIterable {
@@ -223,50 +258,66 @@ final class ComposeStore: ObservableObject {
         }
     }
 
-
-    private func beginVoiceCommandCapture() {
-        dictationTask?.cancel()
-        voiceCommandTask?.cancel()
-        pendingDiff = nil
-        livePartialTranscript = nil
-        lastCommandTranscript = nil
-        generatingETA = "~3s"
-        state = .listening
-        isVoiceCommandCapturing = true
-
-        voiceCommandTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            self.recorder.startRecording()
+    private func loadDocument(documentID: String) {
+        if documentID == "mock" {
+            document = Self.mockDocument
+        } else if let note = Self.fetchNote(id: documentID, context: context) {
+            self.note = note
+            document = Self.document(from: note)
+        } else if let capture = Self.fetchCapture(id: documentID) {
+            let note = ComposeNoteStore.create(from: capture, context: context)
+            self.note = note
+            document = Self.document(from: note)
+        } else if let seed = AppShellRouter.shared.pendingComposeSeed {
+            AppShellRouter.shared.pendingComposeSeed = nil
+            let note = ComposeNoteStore.create(
+                title: Self.title(from: seed, fallback: "Draft"),
+                content: seed,
+                context: context
+            )
+            self.note = note
+            document = Self.document(from: note)
+        } else if let dictation = Self.fetchKeyboardDictation(id: documentID) {
+            document = Self.document(from: dictation)
+        } else if let note = Self.fetchLatestNote(context: context) {
+            self.note = note
+            document = Self.document(from: note)
+        } else {
+            let note = ComposeNoteStore.create(
+                title: "Untitled note",
+                content: "",
+                id: UUID(uuidString: documentID) ?? UUID(),
+                context: context
+            )
+            self.note = note
+            document = Self.document(from: note)
         }
     }
 
-    private func finishVoiceCommandCapture() {
-        guard isVoiceCommandCapturing else { return }
-        isVoiceCommandCapturing = false
-        voiceCommandTask?.cancel()
+    private func configureDictationControllers() {
+        inlineDictationController.onStateChange = { [weak self] state in
+            self?.applyInlineDictationState(state)
+        }
+        inlineDictationController.onTranscript = { [weak self] transcript in
+            self?.appendDictation(transcript)
+        }
+        inlineDictationController.onError = { [weak self] _ in
+            self?.livePartialTranscript = nil
+            self?.state = .idle
+        }
 
-        voiceCommandTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            self.recorder.stopRecording()
-            let recordingURL = self.recorder.currentRecordingURL
-            self.recorder.finalizeRecording()
-
-            guard let recordingURL else {
-                self.state = .idle
-                return
-            }
-
-            do {
-                let transcript = try await TranscriptionService.shared.transcribe(audioURL: recordingURL, useCase: .keyboard)
-                let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmed.isEmpty {
-                    self.state = .idle
-                } else {
-                    self.voiceCommandReceived(trimmed)
-                }
-            } catch {
-                self.state = .idle
-            }
+        voiceCommandController.onStateChange = { [weak self] state in
+            self?.applyVoiceCommandDictationState(state)
+        }
+        voiceCommandController.onTranscript = { [weak self] transcript in
+            self?.voiceCommandDidSubmit = true
+            self?.voiceCommandReceived(transcript)
+        }
+        voiceCommandController.onError = { [weak self] _ in
+            self?.isVoiceCommandCapturing = false
+            self?.voiceCommandDidSubmit = false
+            self?.lastCommandTranscript = nil
+            self?.state = .idle
         }
     }
 
@@ -278,32 +329,72 @@ final class ComposeStore: ObservableObject {
 
         dictationTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            self.recorder.startRecording()
+            await self.inlineDictationController.start()
         }
     }
 
     private func finishDictation() {
         livePartialTranscript = "Transcribing…"
-        dictationTask?.cancel()
+        inlineDictationController.stop(insertTranscript: true)
+    }
 
-        dictationTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            self.recorder.stopRecording()
-            let recordingURL = self.recorder.currentRecordingURL
-            self.recorder.finalizeRecording()
-
-            guard let recordingURL else {
-                self.livePartialTranscript = nil
-                self.state = .idle
-                return
+    private func applyInlineDictationState(_ controllerState: InlineDictationController.State) {
+        switch controllerState {
+        case .idle:
+            if state == .dictating {
+                livePartialTranscript = nil
+                state = .idle
             }
+        case .recording:
+            livePartialTranscript = "Listening…"
+            state = .dictating
+        case .transcribing:
+            livePartialTranscript = "Transcribing…"
+            state = .dictating
+        }
+    }
 
-            do {
-                let transcript = try await TranscriptionService.shared.transcribe(audioURL: recordingURL, useCase: .keyboard)
-                self.appendDictation(transcript)
-            } catch {
-                self.livePartialTranscript = nil
-                self.state = .idle
+    private func beginVoiceCommandCapture() {
+        voiceCommandTask?.cancel()
+        pendingDiff = nil
+        livePartialTranscript = nil
+        lastCommandTranscript = "Listening…"
+        generatingETA = "~3s"
+        state = .listening
+        isVoiceCommandCapturing = true
+        voiceCommandDidSubmit = false
+
+        voiceCommandTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.voiceCommandController.start()
+        }
+    }
+
+    private func finishVoiceCommandCapture() {
+        guard isVoiceCommandCapturing || voiceCommandController.currentState != .idle else { return }
+        lastCommandTranscript = "Transcribing…"
+        voiceCommandController.stop(insertTranscript: true)
+    }
+
+    private func applyVoiceCommandDictationState(_ controllerState: InlineDictationController.State) {
+        switch controllerState {
+        case .idle:
+            isVoiceCommandCapturing = false
+            if !voiceCommandDidSubmit, state == .listening {
+                lastCommandTranscript = nil
+                generatingETA = nil
+                state = .idle
+            }
+            voiceCommandDidSubmit = false
+        case .recording:
+            isVoiceCommandCapturing = true
+            voiceCommandDidSubmit = false
+            lastCommandTranscript = "Listening…"
+            state = .listening
+        case .transcribing:
+            if isVoiceCommandCapturing {
+                lastCommandTranscript = "Transcribing…"
+                state = .listening
             }
         }
     }
@@ -330,24 +421,81 @@ final class ComposeStore: ObservableObject {
         let trimmed = original.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return localRevision(original: original, command: command) }
 
-        if let provider = TalkieAIProviderResolver.shared.configuredProvider() {
+        let fullDocument = document.paragraphs.joined(separator: "\n\n")
+        let editingScope = "Paragraph \(targetIndex + 1) of \(max(1, document.paragraphs.count))."
+
+        if revisionPath == .mac {
+            do {
+                let result = try await BridgeManager.shared.composeRevision(
+                    text: trimmed,
+                    instruction: macInstruction(command, editingScope: editingScope, fullDocument: fullDocument)
+                )
+                let revised = result.revisedText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !revised.isEmpty, revised != trimmed {
+                    lastRevisionProviderName = result.providerName
+                    lastRevisionModelId = result.modelId
+                    return revised
+                }
+            } catch {
+                // Keep compose testable without a paired Mac; use local fallback below.
+            }
+        } else if let provider = TalkieAIProviderResolver.shared.configuredProvider() {
             do {
                 let result = try await ComposeLocalRevisionService.shared.revise(
                     text: trimmed,
                     instruction: command,
                     provider: provider,
-                    fullDocument: document.paragraphs.joined(separator: "\n\n"),
-                    editingScope: "Paragraph \(targetIndex + 1) of \(max(1, document.paragraphs.count)).",
-                    revisionHistory: "No prior revisions."
+                    fullDocument: fullDocument,
+                    editingScope: editingScope,
+                    revisionHistory: revisionHistoryPromptContext()
                 )
                 let revised = result.revisedText.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !revised.isEmpty, revised != trimmed { return revised }
+                if !revised.isEmpty, revised != trimmed {
+                    lastRevisionProviderName = result.providerName
+                    lastRevisionModelId = result.modelId
+                    return revised
+                }
             } catch {
                 // Keep compose testable without credentials/network; use local fallback below.
             }
         }
 
+        lastRevisionProviderName = "Local fallback"
+        lastRevisionModelId = "local"
         return localRevision(original: original, command: command)
+    }
+
+    private func revisionHistoryPromptContext() -> String {
+        guard !appliedRevisions.isEmpty else { return "No prior revisions." }
+
+        return appliedRevisions.reversed().enumerated().map { index, revision in
+            [
+                "Revision \(index + 1)",
+                "- Timestamp: \(Self.revisionDateFormatter.string(from: revision.createdAt))",
+                "- Scope: \(revision.scope)",
+                "- Instruction: \(revision.instruction)",
+                "- Revised text:",
+                revision.revisedText,
+            ].joined(separator: "\n")
+        }.joined(separator: "\n\n")
+    }
+
+    private func macInstruction(_ command: String, editingScope: String, fullDocument: String) -> String {
+        [
+            "User instruction:",
+            command,
+            "",
+            "Editing scope:",
+            editingScope,
+            "",
+            "Current full document:",
+            fullDocument,
+            "",
+            "Revision history (oldest to newest):",
+            revisionHistoryPromptContext(),
+            "",
+            "Return only the revised text for the current target paragraph.",
+        ].joined(separator: "\n")
     }
 
     private func targetParagraphIndex(for command: String) -> Int {
@@ -401,24 +549,49 @@ final class ComposeStore: ObservableObject {
 
     private func persistDocument() {
         guard !isMockDocument else { return }
-        let currentNote = note ?? Self.fetchNote(id: documentID, context: context)
-        guard let currentNote else { return }
+        let noteID = persistentNoteID ?? UUID(uuidString: documentID) ?? UUID()
+        let content = document.paragraphs.joined(separator: "\n\n")
+        if ComposeNoteStore.save(id: noteID, title: document.title, content: content, context: context) {
+            note = ComposeNoteStore.fetch(id: noteID, context: context)
+        }
+    }
 
-        currentNote.title = document.title
-        currentNote.content = document.paragraphs.joined(separator: "\n\n")
-        currentNote.lastModified = Date()
-        Self.save(context)
-        note = currentNote
+    private func recordRevision(for diff: Diff, originalIndex: Int?) {
+        guard !isMockDocument, let noteID = persistentNoteID else { return }
+        let scope = originalIndex.map { "Paragraph \($0 + 1)" } ?? "Document"
+        let record = ComposeNoteStore.RevisionRecord(
+            instruction: lastCommandTranscript ?? "Quick transform",
+            scope: scope,
+            revisedText: diff.proposed,
+            documentText: document.paragraphs.joined(separator: "\n\n"),
+            providerName: lastRevisionProviderName,
+            modelId: lastRevisionModelId
+        )
+        appliedRevisions.insert(record, at: 0)
+        ComposeNoteStore.saveRevisions(appliedRevisions, for: noteID)
+    }
+
+    private func loadAppliedRevisions() {
+        guard !isMockDocument, let noteID = persistentNoteID else { return }
+        appliedRevisions = ComposeNoteStore.revisions(for: noteID)
+    }
+
+    private var persistentNoteID: UUID? {
+        if let id = note?.id { return id }
+        return UUID(uuidString: documentID)
     }
 
     private static func fetchNote(id: String, context: NSManagedObjectContext) -> ComposeNote? {
         guard let uuid = UUID(uuidString: id) else { return nil }
-        let request: NSFetchRequest<ComposeNote> = ComposeNote.fetchRequest()
-        request.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
-        request.fetchLimit = 1
-        return (try? context.fetch(request))?.first
+        return ComposeNoteStore.fetch(id: uuid, context: context)
     }
 
+    private static func fetchCapture(id: String) -> Capture? {
+        let rawID = id.hasPrefix("capture:") ? String(id.dropFirst("capture:".count)) : id
+        guard let uuid = UUID(uuidString: rawID) else { return nil }
+        CaptureStore.shared.reload()
+        return CaptureStore.shared.all().first { $0.id == uuid }
+    }
 
     private static func fetchKeyboardDictation(id: String) -> KeyboardDictation? {
         guard let uuid = UUID(uuidString: id) else { return nil }
@@ -452,20 +625,15 @@ final class ComposeStore: ObservableObject {
         let rawTitle = note.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let title = rawTitle.isEmpty ? "Untitled note" : rawTitle
         let content = note.content ?? ""
+        return Document(title: title, paragraphs: paragraphs(from: content))
+    }
+
+    private static func paragraphs(from content: String) -> [String] {
         let paragraphs = content
             .components(separatedBy: "\n\n")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        return Document(title: title, paragraphs: paragraphs.isEmpty ? [""] : paragraphs)
-    }
-
-    private static func save(_ context: NSManagedObjectContext) {
-        guard context.hasChanges else { return }
-        do {
-            try context.save()
-        } catch {
-            context.rollback()
-        }
+        return paragraphs.isEmpty ? [""] : paragraphs
     }
 
     private static func makeDiff(original: String, proposed: String) -> Diff {
@@ -477,6 +645,8 @@ final class ComposeStore: ObservableObject {
     private static func wordCount(_ value: String) -> Int {
         value.split { $0.isWhitespace || $0.isNewline }.count
     }
+
+    private static let revisionDateFormatter = ISO8601DateFormatter()
 
     private static let mockDocument = Document(
         title: "Bio",
@@ -493,6 +663,19 @@ final class ComposeStore: ObservableObject {
         removedCount: 9,
         addedCount: 6
     )
+
+    private func seedFromLaunchArgumentsIfNeeded() {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "--composeState"), i + 1 < args.count else { return }
+        switch args[i + 1].lowercased() {
+        case "idle":       seed(.idle)
+        case "dictating":  seed(.dictating)
+        case "listening":  seed(.listening)
+        case "generating": seed(.generating)
+        case "diff":       seed(.diff)
+        default: break
+        }
+    }
 
     private func seed(_ target: ComposeState) {
         if isMockDocument {
@@ -519,7 +702,6 @@ final class ComposeStore: ObservableObject {
         }
     }
 }
-
 
 extension TranscriptionService {
     func transcribe(audioURL: URL, useCase: TranscriptionUseCase) async throws -> String {

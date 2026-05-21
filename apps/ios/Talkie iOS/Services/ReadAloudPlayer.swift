@@ -61,6 +61,7 @@ final class ReadAloudPlayer: NSObject, ObservableObject {
     @Published private(set) var currentRange: NSRange?
     @Published private(set) var isPlaying = false
     @Published private(set) var currentSource: ReadAloudSource?
+    @Published private(set) var currentChunkIndex = 0
     @Published private(set) var voices: [AVSpeechSynthesisVoice] = []
 
     private let synthesizer = AVSpeechSynthesizer()
@@ -68,6 +69,8 @@ final class ReadAloudPlayer: NSObject, ObservableObject {
     private let maximumPlaybackRate: Float = 2.0
     private var isPaused = false
     private var chunksCache: [TextChunk] = []
+    private var activeUtteranceBaseLocation = 0
+    private var suppressNextCancelReset = false
 
     let queue: [QueueItem] = [
         QueueItem(title: "Idea: offline-first sync architecture", meta: "1:42"),
@@ -169,6 +172,17 @@ final class ReadAloudPlayer: NSObject, ObservableObject {
         min(32, max(0, Int((progress * 32).rounded(.down))))
     }
 
+    var chunkCount: Int {
+        refreshChunksIfNeeded()
+        return chunksCache.count
+    }
+
+    var currentChunkDisplayIndex: Int {
+        refreshChunksIfNeeded()
+        guard !chunksCache.isEmpty else { return 0 }
+        return min(max(0, currentChunkIndex), chunksCache.count - 1) + 1
+    }
+
     var selectedVoiceLabel: String {
         if let voice = voices.first(where: { $0.identifier == selectedVoiceIdentifier }) {
             return "\(voice.name) · \(voice.language)"
@@ -194,6 +208,7 @@ final class ReadAloudPlayer: NSObject, ObservableObject {
         selectedKind = .text
         variant = .playing
         sourceExpanded = true
+        currentChunkIndex = 0
         refreshChunks()
     }
 
@@ -202,6 +217,7 @@ final class ReadAloudPlayer: NSObject, ObservableObject {
         currentSource = nil
         selectedKind = kind
         variant = nextVariant
+        currentChunkIndex = 0
         refreshChunks()
     }
 
@@ -220,31 +236,7 @@ final class ReadAloudPlayer: NSObject, ObservableObject {
             return
         }
 
-        let text = currentItem.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        if variant == .idle { variant = .playing }
-
-        if synthesizer.isSpeaking {
-            synthesizer.stopSpeaking(at: .immediate)
-        }
-
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
-        try? AVAudioSession.sharedInstance().setActive(true)
-
-        currentRange = nil
-        refreshChunks()
-
-        let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = selectedVoice
-        utterance.rate = mappedSpeechRate(for: Float(rate))
-        utterance.pitchMultiplier = Float(pitch)
-        utterance.volume = 1.0
-        utterance.preUtteranceDelay = 0.1
-        utterance.postUtteranceDelay = 0.2
-
-        isPaused = false
-        isPlaying = true
-        synthesizer.speak(utterance)
+        speak(fromChunk: currentChunkIndex)
     }
 
     func pause() {
@@ -263,14 +255,40 @@ final class ReadAloudPlayer: NSObject, ObservableObject {
         isPaused = false
         isPlaying = false
         currentRange = nil
+        activeUtteranceBaseLocation = 0
     }
 
     func skipBackward() {
-        stop()
+        refreshChunksIfNeeded()
+        guard !chunksCache.isEmpty else { return }
+        seekToChunk(max(0, currentChunkIndex - 1), play: isPlaying || isPaused)
     }
 
     func skipForward() {
-        stop()
+        refreshChunksIfNeeded()
+        guard !chunksCache.isEmpty else { return }
+        seekToChunk(min(chunksCache.count - 1, currentChunkIndex + 1), play: isPlaying || isPaused)
+    }
+
+    func seekToChunk(_ index: Int, play shouldPlay: Bool) {
+        refreshChunksIfNeeded()
+        guard !chunksCache.isEmpty else { return }
+        let clampedIndex = min(max(0, index), chunksCache.count - 1)
+
+        let wasSpeaking = synthesizer.isSpeaking || synthesizer.isPaused
+        if wasSpeaking {
+            suppressNextCancelReset = true
+            synthesizer.stopSpeaking(at: .immediate)
+        }
+
+        isPaused = false
+        isPlaying = false
+        currentChunkIndex = clampedIndex
+        currentRange = chunksCache[clampedIndex].range
+
+        if shouldPlay {
+            speak(fromChunk: clampedIndex)
+        }
     }
 
     func openOriginal() {
@@ -281,7 +299,7 @@ final class ReadAloudPlayer: NSObject, ObservableObject {
     func chunkState(for index: Int) -> ReadAloudChunkState {
         refreshChunksIfNeeded()
         guard chunksCache.indices.contains(index) else { return .upcoming }
-        guard let currentRange else { return index == 0 && isPlaying ? .playing : .upcoming }
+        guard let currentRange else { return index == currentChunkIndex && isPlaying ? .playing : .upcoming }
 
         let chunkRange = chunksCache[index].range
         let spokenLocation = currentRange.location
@@ -292,6 +310,55 @@ final class ReadAloudPlayer: NSObject, ObservableObject {
             return .played
         }
         return .upcoming
+    }
+
+    private func speak(fromChunk index: Int) {
+        let fullText = currentItem.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !fullText.isEmpty else { return }
+        if variant == .idle { variant = .playing }
+
+        refreshChunks()
+        guard !chunksCache.isEmpty else { return }
+        let clampedIndex = min(max(0, index), chunksCache.count - 1)
+        let startLocation = chunksCache[clampedIndex].range.location
+        let nsText = currentItem.text as NSString
+        guard startLocation < nsText.length else { return }
+        let remainingRange = NSRange(location: startLocation, length: nsText.length - startLocation)
+        let remainingText = nsText.substring(with: remainingRange)
+        guard !remainingText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+
+        if synthesizer.isSpeaking || synthesizer.isPaused {
+            suppressNextCancelReset = true
+            synthesizer.stopSpeaking(at: .immediate)
+        }
+
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
+        try? AVAudioSession.sharedInstance().setActive(true)
+
+        currentChunkIndex = clampedIndex
+        activeUtteranceBaseLocation = startLocation
+        currentRange = NSRange(location: startLocation, length: 0)
+
+        let utterance = AVSpeechUtterance(string: remainingText)
+        utterance.voice = selectedVoice
+        utterance.rate = mappedSpeechRate(for: Float(rate))
+        utterance.pitchMultiplier = Float(pitch)
+        utterance.volume = 1.0
+        utterance.preUtteranceDelay = 0.1
+        utterance.postUtteranceDelay = 0.2
+
+        isPaused = false
+        isPlaying = true
+        synthesizer.speak(utterance)
+    }
+
+    private func updateCurrentChunk(for location: Int) {
+        refreshChunksIfNeeded()
+        guard let index = chunksCache.firstIndex(where: { chunk in
+            NSLocationInRange(location, chunk.range)
+                || chunk.range.location + chunk.range.length == location
+        }) else { return }
+        currentChunkIndex = index
     }
 
     private var selectedVoice: AVSpeechSynthesisVoice? {
@@ -359,14 +426,22 @@ extension ReadAloudPlayer: AVSpeechSynthesizerDelegate {
         utterance: AVSpeechUtterance
     ) {
         Task { @MainActor in
-            currentRange = characterRange
+            let absoluteRange = NSRange(
+                location: activeUtteranceBaseLocation + characterRange.location,
+                length: characterRange.length
+            )
+            currentRange = absoluteRange
+            updateCurrentChunk(for: absoluteRange.location)
             isPlaying = true
         }
     }
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         Task { @MainActor in
-            currentRange = NSRange(location: (utterance.speechString as NSString).length, length: 0)
+            currentRange = NSRange(
+                location: activeUtteranceBaseLocation + (utterance.speechString as NSString).length,
+                length: 0
+            )
             isPaused = false
             isPlaying = false
         }
@@ -374,6 +449,10 @@ extension ReadAloudPlayer: AVSpeechSynthesizerDelegate {
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         Task { @MainActor in
+            if suppressNextCancelReset {
+                suppressNextCancelReset = false
+                return
+            }
             currentRange = nil
             isPaused = false
             isPlaying = false
