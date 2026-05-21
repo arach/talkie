@@ -2,7 +2,7 @@
 
 The Parity Audit at `design/studio/app/parity/page.tsx` enumerates donor → Next gaps in six clusters. This doc is the coordination protocol for the swarm of agents working those clusters in parallel.
 
-The audit page reads `streams.json` (this directory) at build time. Anything you append to a stream's `notes` array shows up in the audit UI under the matching section the next time the studio rebuilds.
+The audit page reads `streams.json` (this directory) fresh per request. Anything you append to a stream's `notes` array shows up in the audit UI under the matching section as soon as the user refreshes (or as soon as a Next.js HMR cycle completes in dev). The user can also post notes directly from the page via the per-finding compose field — those land in the same file under handle `user-art` and are visible to you on your next `inbox` check.
 
 ## Streams
 
@@ -24,7 +24,7 @@ Each stream's findings live in `ParityAudit.tsx` under the matching cluster `key
 Statuses: `queued` → `in-flight` → `done` (or `blocked`).
 
 1. **Claim** — pick a stream with `status: "queued"` and `owner: null`, set `owner` to your agent handle (e.g. `talkie-codex-rw`, `explore-c1`), set `status: "in-flight"`, set `lockedAt` to `new Date().toISOString()`. Save.
-2. **Look back** — every time you resume, re-read the current `streams.json`. The user may have changed decisions (PORT / DROP / DEFER) on findings in the audit UI; those land in browser localStorage, not here, but they may also leave guidance for you as notes. Read all notes for your stream before deciding what to touch next.
+2. **Check in** — before each meaningful action and at least once per work session, run `bun scripts/parity-stream.ts inbox --cluster C<N> --agent <your-handle>`. That prints every user-authored note (decisions + comments) on your cluster since your last note, so you see steering before you spend effort. Decisions live in `streams.json` as `level: "decision"` notes — the user's PORT / DROP / DEFER on a finding lands here, not in browser state. Treat the latest `decision` per `findingKey` as authoritative; treat any `user-*` `info` / `proposal` / `question` note as guidance you must respect.
 3. **Work** — implement, refactor, investigate. Stay inside your cluster's scope. If you discover something that belongs to another cluster, log a `level: "info"` note on that cluster's stream so its owner picks it up — do not edit the other cluster's files.
 4. **Update** — after every meaningful step (proposal, in-flight work, commit landed, blocker), append a `StreamNote` to your stream's `notes` array. See schema below.
 5. **Finish** — when your cluster has no remaining findings the user wants ported, set `status: "done"`, post a `level: "info"` summary note, clear `owner` to `null`, leave `lockedAt` for history.
@@ -35,10 +35,11 @@ Statuses: `queued` → `in-flight` → `done` (or `blocked`).
 interface StreamNote {
   ts: string;        // ISO timestamp, e.g. "2026-05-21T14:32:00Z"
   agent: string;     // your handle
-  level: "info" | "progress" | "landed" | "blocked" | "proposal" | "question";
+  level: "info" | "progress" | "landed" | "blocked" | "proposal" | "question" | "decision";
   findingKey?: string;  // "C1::HomeView::Full-screen search" — omit for stream-wide notes
   message: string;   // 1–3 sentences. File:line refs welcome.
   ref?: string;      // optional: commit sha, PR url, or file:line
+  proposedDecision?: "PORT" | "DROP" | "DEFER"; // see "Recommending a decision change" below
 }
 ```
 
@@ -50,6 +51,29 @@ Levels:
 - **blocked** — can't proceed. Explain the dependency in `message`.
 - **proposal** — concrete plan awaiting user signoff. Stop and wait.
 - **question** — needs the user. Stop and wait.
+- **decision** — only the user posts these. `message` is one of `"PORT"`, `"DROP"`, `"DEFER"`. Always pinned to a `findingKey`. Latest decision per finding wins; absence implies `PORT`.
+
+### Recommending a decision change
+
+The user defaults every finding to PORT and only flips DROP/DEFER on a small subset. If your investigation surfaces that a finding should be dropped or deferred — e.g., the donor feature is dead, the cost is huge for low value, the surface no longer exists in the new shell — **do not bury the recommendation in prose**. The user does not read every proposal in detail.
+
+Instead, set the structured `proposedDecision` field on your note alongside the prose rationale:
+
+```
+bun scripts/parity-stream.ts note --cluster C6 --agent investigator-c6 \
+    --finding "C6::ActionDock (565L)::Three-button dock → corner + bar" \
+    --level proposal \
+    --propose drop \
+    --message "Donor ActionDock has no Next equivalent — the shell ships a different nav model (VoicePivotButton + QuickEntriesBar). Porting would be a regression."
+```
+
+The audit page lifts every note with `proposedDecision !== current effective decision` into a "Pending recommendations" tray at the top, so the user sees it at a glance and can Accept (matching `decision` note posted) or override.
+
+Rules:
+- Only set `proposedDecision` when your recommendation differs from the current effective decision. Echoing PORT when PORT is already in force is noise.
+- Always pair with a `findingKey`. Stream-wide recommendations don't make sense — decisions are per-finding.
+- Prose rationale is still required. The field tells the user *what*; `message` tells them *why*.
+- One recommendation per note. If you want to flip two findings, post two notes.
 
 ## Write protocol
 
@@ -83,7 +107,7 @@ Both write to the same `design/studio/data/parity/streams.json` (on `feat/ios-sh
 ### Sequence
 
 1. **Investigation** — Claude sibling investigates, posts `proposal` notes with file:line, size, risk, "needs Codex" flag. Status moves to `done` when the cluster is fully surveyed.
-2. **Triage** — user reads `/parity`, sets PORT / DROP / DEFER on findings, optionally leaves per-finding notes. Decisions land in browser localStorage; when the user is ready to dispatch they paste them into the cluster's stream as a `level: "info"` note (or invoke a future "publish decisions" action).
+2. **Triage** — user reads `/parity`, sets PORT / DROP / DEFER on findings, optionally leaves per-finding comments. Both flow into `streams.json` immediately via the page (decisions as `level: "decision"` notes, comments as `level: "info"` notes, all under handle `user-art`). No paste step.
 3. **Implementation** — Codex sibling reads the cluster's stream:
    - filters to findings with a PORT signal from the user
    - works through them in size order (XS → L), one finding per commit

@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import streamsData from "@/data/parity/streams.json";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+
+const USER_AGENT_HANDLE = "user-art";
 
 /**
  * Parity audit — donor (legacy iOS) vs Next shell rebuild.
@@ -25,7 +27,8 @@ type NoteLevel =
   | "landed"
   | "blocked"
   | "proposal"
-  | "question";
+  | "question"
+  | "decision";
 
 interface StreamNote {
   ts: string;
@@ -34,6 +37,19 @@ interface StreamNote {
   findingKey?: string;
   message: string;
   ref?: string;
+  proposedDecision?: Decision;
+}
+
+interface OpenRecommendation {
+  clusterKey: string;
+  clusterLabel: string;
+  donor: string;
+  next: string;
+  finding: Finding;
+  findingKey: string;
+  note: StreamNote;
+  current: Decision;
+  proposed: Decision;
 }
 
 interface Stream {
@@ -46,27 +62,48 @@ interface Stream {
   notes: StreamNote[];
 }
 
-const STREAMS_BY_KEY: Record<string, Stream> = Object.fromEntries(
-  (streamsData.streams as Stream[]).map((s) => [s.key, s]),
-);
-
 interface Finding {
   tag: Tag;
   title: string;
   detail: string;
 }
 
-interface DecisionEntry {
-  decision: Decision | null;
-  note: string;
-}
-
-type DecisionMap = Record<string, DecisionEntry>;
-
-const STORAGE_KEY = "parity-decisions-v1";
-
 function findingKey(clusterKey: string, donor: string, title: string): string {
   return `${clusterKey}::${donor}::${title}`;
+}
+
+function effectiveDecision(notes: StreamNote[], key: string): Decision {
+  let latest: StreamNote | null = null;
+  for (const n of notes) {
+    if (n.level !== "decision") continue;
+    if (n.findingKey !== key) continue;
+    if (!latest || n.ts > latest.ts) latest = n;
+  }
+  const m = latest?.message;
+  return m === "DROP" || m === "DEFER" || m === "PORT" ? m : "PORT";
+}
+
+async function postNote(payload: {
+  clusterKey: string;
+  level: NoteLevel;
+  message: string;
+  findingKey?: string;
+  ref?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch("/api/parity/note", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...payload, agent: USER_AGENT_HANDLE }),
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      return { ok: false, error: body.error ?? `HTTP ${res.status}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
 }
 
 interface Subsurface {
@@ -504,7 +541,13 @@ const TAG_TONE: Record<Tag, { color: string; bg: string }> = {
   NEW: { color: "#3fa57a", bg: "rgba(63, 165, 122, 0.08)" },
 };
 
-export function ParityAudit() {
+export function ParityAudit({ streams }: { streams: Stream[] }) {
+  const router = useRouter();
+  const streamsByKey = useMemo(
+    () => Object.fromEntries(streams.map((s) => [s.key, s])),
+    [streams],
+  );
+
   const all = CLUSTERS.flatMap((c) => c.subsurfaces.flatMap((s) => s.findings));
   const counts = {
     total: all.length,
@@ -514,86 +557,84 @@ export function ParityAudit() {
     fresh: all.filter((f) => f.tag === "NEW").length,
   };
 
-  const [decisions, setDecisions] = useState<DecisionMap>({});
-  const [hydrated, setHydrated] = useState(false);
-  const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setDecisions(JSON.parse(raw));
-    } catch {
-      // ignore — start with empty map
-    }
-    setHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(decisions));
-    } catch {
-      // storage full / disabled — silent
-    }
-  }, [decisions, hydrated]);
-
-  function setEntry(key: string, patch: Partial<DecisionEntry>) {
-    setDecisions((prev) => {
-      const next = { ...prev };
-      const current = next[key] ?? { decision: null, note: "" };
-      const merged = { ...current, ...patch };
-      // PORT is the default — only persist entries that diverge (DROP/DEFER) or have a note.
-      const divergent = merged.decision === "DROP" || merged.decision === "DEFER";
-      if (!divergent && !merged.note.trim()) {
-        delete next[key];
-      } else {
-        next[key] = merged;
-      }
-      return next;
-    });
-  }
-
   const decisionCounts = useMemo(() => {
     let drop = 0;
     let defer = 0;
-    for (const entry of Object.values(decisions)) {
-      if (entry.decision === "DROP") drop += 1;
-      else if (entry.decision === "DEFER") defer += 1;
+    for (const c of CLUSTERS) {
+      const notes = streamsByKey[c.key]?.notes ?? [];
+      for (const sub of c.subsurfaces) {
+        for (const f of sub.findings) {
+          const key = findingKey(c.key, sub.donor, f.title);
+          const d = effectiveDecision(notes, key);
+          if (d === "DROP") drop += 1;
+          else if (d === "DEFER") defer += 1;
+        }
+      }
     }
     return { port: counts.total - drop - defer, drop, defer };
-  }, [decisions, counts.total]);
+  }, [streamsByKey, counts.total]);
 
-  async function copyDecisions() {
-    const payload = CLUSTERS.flatMap((c) =>
-      c.subsurfaces.flatMap((s) =>
-        s.findings.map((f) => {
-          const key = findingKey(c.key, s.donor, f.title);
-          const entry = decisions[key];
-          const decision: Decision = entry?.decision ?? "PORT";
-          return {
-            cluster: c.key,
-            donor: s.donor,
-            next: s.next,
-            tag: f.tag,
-            title: f.title,
-            decision,
-            note: entry?.note?.trim() || undefined,
-          };
-        }),
-      ),
-    );
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-      setCopyState("copied");
-      setTimeout(() => setCopyState("idle"), 1500);
-    } catch {
-      // clipboard blocked
+  const openRecommendations = useMemo<OpenRecommendation[]>(() => {
+    const recs: OpenRecommendation[] = [];
+    for (const c of CLUSTERS) {
+      const notes = streamsByKey[c.key]?.notes ?? [];
+      for (const sub of c.subsurfaces) {
+        for (const f of sub.findings) {
+          const key = findingKey(c.key, sub.donor, f.title);
+          // Latest agent note for this finding that proposed a decision.
+          let latestProposal: StreamNote | null = null;
+          for (const n of notes) {
+            if (n.findingKey !== key) continue;
+            if (!n.proposedDecision) continue;
+            if (n.agent.startsWith("user-")) continue;
+            if (!latestProposal || n.ts > latestProposal.ts) latestProposal = n;
+          }
+          if (!latestProposal) continue;
+          // Latest user decision note for this finding.
+          let latestUserDecision: StreamNote | null = null;
+          for (const n of notes) {
+            if (n.findingKey !== key) continue;
+            if (n.level !== "decision") continue;
+            if (!n.agent.startsWith("user-")) continue;
+            if (!latestUserDecision || n.ts > latestUserDecision.ts) {
+              latestUserDecision = n;
+            }
+          }
+          // Treat the proposal as open only if the user hasn't acted since it landed.
+          if (latestUserDecision && latestUserDecision.ts > latestProposal.ts) {
+            continue;
+          }
+          const current = effectiveDecision(notes, key);
+          if (latestProposal.proposedDecision === current) continue;
+          recs.push({
+            clusterKey: c.key,
+            clusterLabel: c.label,
+            donor: sub.donor,
+            next: sub.next,
+            finding: f,
+            findingKey: key,
+            note: latestProposal,
+            current,
+            proposed: latestProposal.proposedDecision!,
+          });
+        }
+      }
     }
-  }
+    // Newest proposal first — keep the user looking at fresh signals.
+    recs.sort((a, b) => (a.note.ts < b.note.ts ? 1 : -1));
+    return recs;
+  }, [streamsByKey]);
 
-  function clearDecisions() {
-    if (!confirm("Reset all findings back to PORT and clear notes?")) return;
-    setDecisions({});
+  async function postAndRefresh(payload: {
+    clusterKey: string;
+    level: NoteLevel;
+    message: string;
+    findingKey?: string;
+    ref?: string;
+  }): Promise<{ ok: boolean; error?: string }> {
+    const result = await postNote(payload);
+    if (result.ok) router.refresh();
+    return result;
   }
 
   return (
@@ -611,22 +652,13 @@ export function ParityAudit() {
           <span className="text-[9px] font-semibold uppercase tracking-eyebrow font-mono text-studio-ink">
             · Triage
           </span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={copyDecisions}
-              className="rounded-md border border-studio-edge px-2.5 py-1 text-[10px] font-mono uppercase tracking-eyebrow text-studio-ink hover:bg-[rgba(0,0,0,0.04)] transition-colors"
-            >
-              {copyState === "copied" ? "Copied" : "Copy decisions"}
-            </button>
-            <button
-              type="button"
-              onClick={clearDecisions}
-              className="rounded-md border border-studio-edge px-2.5 py-1 text-[10px] font-mono uppercase tracking-eyebrow text-studio-ink-faint hover:bg-[rgba(0,0,0,0.04)] transition-colors"
-            >
-              Clear
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => router.refresh()}
+            className="rounded-md border border-studio-edge px-2.5 py-1 text-[10px] font-mono uppercase tracking-eyebrow text-studio-ink hover:bg-[rgba(0,0,0,0.04)] transition-colors"
+          >
+            Refresh
+          </button>
         </div>
         <div className="grid grid-cols-3 gap-4">
           <Stat label="Port (default)" value={String(decisionCounts.port)} tone="ok" />
@@ -634,6 +666,13 @@ export function ParityAudit() {
           <Stat label="Defer" value={String(decisionCounts.defer)} tone="amber" />
         </div>
       </div>
+
+      {openRecommendations.length > 0 && (
+        <RecommendationsTray
+          recommendations={openRecommendations}
+          postNote={postAndRefresh}
+        />
+      )}
 
       <div className="text-[11px] leading-relaxed text-studio-ink-faint max-w-[760px]">
         Donor lives on <code className="font-mono text-[10px] text-studio-ink">master</code>;
@@ -643,17 +682,19 @@ export function ParityAudit() {
         feature is gone; <Legend tag="STUB" /> means Next paints but the logic
         isn't wired; <Legend tag="CHANGED" /> is a deliberate behavior swap;{" "}
         <Legend tag="NEW" /> is Next-only scope without a donor counterpart.
-        Styling differences are out of scope. Decisions persist locally — use{" "}
-        <span className="font-mono">Copy decisions</span> to hand them to the
-        swarm.
+        Decisions and comments post directly into{" "}
+        <code className="font-mono text-[10px] text-studio-ink">streams.json</code>{" "}
+        as <code className="font-mono text-[10px] text-studio-ink">user-art</code>{" "}
+        notes — swarm agents read them via{" "}
+        <span className="font-mono">bun scripts/parity-stream.ts inbox</span>.
       </div>
 
       {CLUSTERS.map((c) => (
         <ClusterSection
           key={c.key}
           cluster={c}
-          decisions={decisions}
-          onSet={setEntry}
+          stream={streamsByKey[c.key]}
+          postNote={postAndRefresh}
         />
       ))}
     </div>
@@ -703,14 +744,22 @@ function Legend({ tag }: { tag: Tag }) {
   );
 }
 
+type PostNote = (payload: {
+  clusterKey: string;
+  level: NoteLevel;
+  message: string;
+  findingKey?: string;
+  ref?: string;
+}) => Promise<{ ok: boolean; error?: string }>;
+
 function ClusterSection({
   cluster,
-  decisions,
-  onSet,
+  stream,
+  postNote,
 }: {
   cluster: Cluster;
-  decisions: DecisionMap;
-  onSet: (key: string, patch: Partial<DecisionEntry>) => void;
+  stream: Stream | undefined;
+  postNote: PostNote;
 }) {
   const total = cluster.subsurfaces.reduce(
     (acc, s) => acc + s.findings.length,
@@ -720,7 +769,6 @@ function ClusterSection({
     (acc, s) => acc + s.findings.filter((f) => f.tag === "MISSING").length,
     0,
   );
-  const stream = STREAMS_BY_KEY[cluster.key];
   const streamNotes = stream?.notes ?? [];
   const generalNotes = streamNotes.filter((n) => !n.findingKey);
   return (
@@ -750,9 +798,8 @@ function ClusterSection({
             key={`${cluster.key}-${i}`}
             subsurface={s}
             clusterKey={cluster.key}
-            decisions={decisions}
-            onSet={onSet}
             streamNotes={streamNotes}
+            postNote={postNote}
           />
         ))}
       </div>
@@ -795,6 +842,7 @@ const NOTE_LEVEL_TONE: Record<NoteLevel, string> = {
   blocked: "#d97757",
   proposal: "var(--theme-amber, #b5823a)",
   question: "#d97757",
+  decision: "var(--studio-ink, #222)",
 };
 
 function NotesLog({
@@ -826,6 +874,17 @@ function NoteRow({ note }: { note: StreamNote }) {
       >
         {note.level}
       </span>
+      {note.proposedDecision && (
+        <span
+          className="rounded-full px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-eyebrow font-mono"
+          style={{
+            color: DECISION_TONE[note.proposedDecision],
+            border: `1px solid ${DECISION_TONE[note.proposedDecision]}`,
+          }}
+        >
+          ↪ {note.proposedDecision}
+        </span>
+      )}
       <span className="font-mono text-[9px] text-studio-ink-faint shrink-0">
         {note.ts.slice(0, 16).replace("T", " ")} · {note.agent}
       </span>
@@ -839,18 +898,128 @@ function NoteRow({ note }: { note: StreamNote }) {
   );
 }
 
+function RecommendationsTray({
+  recommendations,
+  postNote,
+}: {
+  recommendations: OpenRecommendation[];
+  postNote: PostNote;
+}) {
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+
+  async function accept(rec: OpenRecommendation) {
+    setBusyKey(rec.findingKey);
+    await postNote({
+      clusterKey: rec.clusterKey,
+      level: "decision",
+      message: rec.proposed,
+      findingKey: rec.findingKey,
+    });
+    setBusyKey(null);
+  }
+
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-studio-edge p-4 bg-[rgba(217,119,87,0.04)]">
+      <div className="flex items-baseline justify-between gap-4 flex-wrap">
+        <span className="text-[9px] font-semibold uppercase tracking-eyebrow font-mono text-studio-ink">
+          · Pending recommendations
+        </span>
+        <span className="text-[10px] tabular-nums font-mono text-studio-ink-faint">
+          {recommendations.length} open · agent-recommended decision changes you
+          haven&apos;t acted on
+        </span>
+      </div>
+      <div className="flex flex-col gap-2">
+        {recommendations.map((rec) => (
+          <RecommendationRow
+            key={rec.findingKey + rec.note.ts}
+            rec={rec}
+            busy={busyKey === rec.findingKey}
+            onAccept={() => accept(rec)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RecommendationRow({
+  rec,
+  busy,
+  onAccept,
+}: {
+  rec: OpenRecommendation;
+  busy: boolean;
+  onAccept: () => void;
+}) {
+  const currentColor = DECISION_TONE[rec.current];
+  const proposedColor = DECISION_TONE[rec.proposed];
+  return (
+    <div className="flex flex-col gap-1 rounded-md border border-studio-edge p-2.5 bg-white">
+      <div className="flex items-baseline gap-2 flex-wrap">
+        <span className="text-[9px] font-mono uppercase tracking-eyebrow text-studio-ink-faint">
+          {rec.clusterKey}
+        </span>
+        <span className="text-[11px] font-medium text-studio-ink">
+          {rec.finding.title}
+        </span>
+        <span className="text-[9px] font-mono text-studio-ink-faint">
+          {rec.donor}
+        </span>
+      </div>
+      <div className="flex items-baseline gap-2 flex-wrap text-[10px]">
+        <span className="font-mono text-[9px] text-studio-ink-faint">
+          {rec.note.agent} ·{" "}
+          {rec.note.ts.slice(0, 16).replace("T", " ")}
+        </span>
+        <span
+          className="rounded-full px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-eyebrow font-mono"
+          style={{ color: currentColor, border: `1px solid ${currentColor}` }}
+        >
+          {rec.current}
+        </span>
+        <span className="font-mono text-[9px] text-studio-ink-faint">→</span>
+        <span
+          className="rounded-full px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-eyebrow font-mono"
+          style={{
+            color: "#fff",
+            backgroundColor: proposedColor,
+            border: `1px solid ${proposedColor}`,
+          }}
+        >
+          {rec.proposed}
+        </span>
+        <button
+          type="button"
+          onClick={onAccept}
+          disabled={busy}
+          className="ml-auto rounded-md border border-studio-edge px-2 py-1 text-[9px] font-mono uppercase tracking-eyebrow text-studio-ink hover:bg-[rgba(0,0,0,0.04)] transition-colors disabled:opacity-40"
+        >
+          {busy ? "Accepting…" : `Accept ${rec.proposed}`}
+        </button>
+      </div>
+      <div className="text-[11px] leading-snug text-studio-ink mt-0.5">
+        {rec.note.message}
+      </div>
+      {rec.note.ref && (
+        <div className="font-mono text-[10px] text-studio-ink-faint">
+          {rec.note.ref}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SubsurfaceBlock({
   subsurface,
   clusterKey,
-  decisions,
-  onSet,
   streamNotes,
+  postNote,
 }: {
   subsurface: Subsurface;
   clusterKey: string;
-  decisions: DecisionMap;
-  onSet: (key: string, patch: Partial<DecisionEntry>) => void;
   streamNotes: StreamNote[];
+  postNote: PostNote;
 }) {
   const findingKeys = new Set(
     subsurface.findings.map((f) =>
@@ -872,21 +1041,26 @@ function SubsurfaceBlock({
         </span>
         {sectionNotes.length > 0 && (
           <span className="ml-auto text-[9px] font-mono uppercase tracking-eyebrow text-studio-ink-faint">
-            {sectionNotes.length} agent note{sectionNotes.length === 1 ? "" : "s"}
+            {sectionNotes.length} note{sectionNotes.length === 1 ? "" : "s"}
           </span>
         )}
       </div>
       <div className="grid grid-cols-2 gap-2 mt-1">
         {subsurface.findings.map((f, i) => {
           const key = findingKey(clusterKey, subsurface.donor, f.title);
-          const cardNotes = streamNotes.filter((n) => n.findingKey === key);
+          const cardNotes = streamNotes
+            .filter((n) => n.findingKey === key)
+            .slice()
+            .sort((a, b) => (a.ts < b.ts ? -1 : 1));
           return (
             <FindingCard
               key={i}
+              clusterKey={clusterKey}
+              findingKey={key}
               finding={f}
-              entry={decisions[key] ?? { decision: null, note: "" }}
-              onSet={(patch) => onSet(key, patch)}
-              agentNotes={cardNotes}
+              decision={effectiveDecision(streamNotes, key)}
+              threadNotes={cardNotes}
+              postNote={postNote}
             />
           );
         })}
@@ -902,17 +1076,60 @@ const DECISION_TONE: Record<Decision, string> = {
 };
 
 function FindingCard({
+  clusterKey,
+  findingKey: key,
   finding,
-  entry,
-  onSet,
-  agentNotes,
+  decision,
+  threadNotes,
+  postNote,
 }: {
+  clusterKey: string;
+  findingKey: string;
   finding: Finding;
-  entry: DecisionEntry;
-  onSet: (patch: Partial<DecisionEntry>) => void;
-  agentNotes: StreamNote[];
+  decision: Decision;
+  threadNotes: StreamNote[];
+  postNote: PostNote;
 }) {
   const tone = TAG_TONE[finding.tag];
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  async function postDecision(d: Decision) {
+    if (d === decision || busy) return;
+    setBusy(true);
+    setFeedback(null);
+    const res = await postNote({
+      clusterKey,
+      level: "decision",
+      message: d,
+      findingKey: key,
+    });
+    setBusy(false);
+    if (!res.ok) setFeedback(`error: ${res.error ?? "unknown"}`);
+  }
+
+  async function sendComment() {
+    const trimmed = draft.trim();
+    if (!trimmed || busy) return;
+    setBusy(true);
+    setFeedback(null);
+    const res = await postNote({
+      clusterKey,
+      level: "info",
+      message: trimmed,
+      findingKey: key,
+    });
+    setBusy(false);
+    if (res.ok) {
+      setDraft("");
+      setFeedback("sent");
+      setTimeout(() => setFeedback(null), 1500);
+    } else {
+      setFeedback(`error: ${res.error ?? "unknown"}`);
+    }
+  }
+
   return (
     <div
       className="flex flex-col gap-1.5 rounded-md border border-studio-edge p-3"
@@ -934,24 +1151,20 @@ function FindingCard({
       </div>
       <div className="flex items-center gap-1 mt-1">
         {(["PORT", "DROP", "DEFER"] as Decision[]).map((d) => {
-          // PORT is the implicit default — show it active when no choice has been made.
-          const effective = entry.decision ?? "PORT";
-          const active = effective === d;
+          const active = decision === d;
           const color = DECISION_TONE[d];
-          const onClick =
-            d === "PORT"
-              ? () => onSet({ decision: null })
-              : () => onSet({ decision: active ? null : d });
           return (
             <button
               key={d}
               type="button"
-              onClick={onClick}
-              className="rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-eyebrow font-mono transition-colors"
+              disabled={busy || active}
+              onClick={() => postDecision(d)}
+              className="rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-eyebrow font-mono transition-colors disabled:opacity-60"
               style={{
                 color: active ? "#fff" : color,
                 backgroundColor: active ? color : "transparent",
                 border: `1px solid ${color}`,
+                cursor: active ? "default" : "pointer",
               }}
             >
               {d}
@@ -959,18 +1172,45 @@ function FindingCard({
           );
         })}
       </div>
-      <textarea
-        value={entry.note}
-        onChange={(e) => onSet({ note: e.target.value })}
-        placeholder="note for the swarm…"
-        rows={1}
-        className="mt-0.5 w-full resize-y rounded-md border border-studio-edge bg-transparent px-2 py-1 text-[11px] leading-snug text-studio-ink placeholder:text-studio-ink-faint focus:outline-none focus:border-studio-ink"
-      />
-      {agentNotes.length > 0 && (
+      {threadNotes.length > 0 && (
         <div className="mt-1 flex flex-col gap-1 border-t border-studio-edge pt-1.5">
-          {agentNotes.map((n, i) => (
+          {threadNotes.map((n, i) => (
             <NoteRow key={i} note={n} />
           ))}
+        </div>
+      )}
+      <div className="flex items-center gap-1 mt-0.5">
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              sendComment();
+            }
+          }}
+          disabled={busy}
+          placeholder="comment for the swarm…"
+          className="flex-1 rounded-md border border-studio-edge bg-transparent px-2 py-1 text-[11px] leading-snug text-studio-ink placeholder:text-studio-ink-faint focus:outline-none focus:border-studio-ink disabled:opacity-60"
+        />
+        <button
+          type="button"
+          onClick={sendComment}
+          disabled={busy || !draft.trim()}
+          className="rounded-md border border-studio-edge px-2 py-1 text-[9px] font-mono uppercase tracking-eyebrow text-studio-ink hover:bg-[rgba(0,0,0,0.04)] transition-colors disabled:opacity-40"
+        >
+          Send
+        </button>
+      </div>
+      {feedback && (
+        <div
+          className="text-[9px] font-mono uppercase tracking-eyebrow"
+          style={{
+            color: feedback.startsWith("error") ? "#d97757" : "#3fa57a",
+          }}
+        >
+          {feedback}
         </div>
       )}
     </div>
