@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T22:43:19.353Z",
+  "updatedAt": "2026-05-21T22:51:42.679Z",
   "streams": [
     {
       "key": "C1",
@@ -755,7 +755,7 @@
       "title": "Capture",
       "scope": "CaptureDetailNext, CameraCaptureNext, WebCaptureBrowserNext, ScanPreviewOverlay, CaptureAICommandsSheet equivalent",
       "owner": "talkie-codex-c2",
-      "status": "in-flight",
+      "status": "blocked",
       "lockedAt": "2026-05-21T22:42:28.485Z",
       "notes": [
         {
@@ -1272,6 +1272,44 @@
           "level": "progress",
           "message": "starting captureID-only handoff and ComposeStore receiver wiring",
           "findingKey": "C2::CaptureComposeView::onCaptureSaved → compose handoff"
+        },
+        {
+          "ts": "2026-05-21T22:50:52.482Z",
+          "agent": "talkie-codex-c2",
+          "level": "landed",
+          "message": "Added CaptureComposeNextView Option-A router shell with four source cells (text, dictation, camera, web) and routed the chrome Capture tray into it.",
+          "findingKey": "C2::CaptureComposeView::Entire surface absent",
+          "ref": "31a6fdd"
+        },
+        {
+          "ts": "2026-05-21T22:50:56.562Z",
+          "agent": "talkie-codex-c2",
+          "level": "landed",
+          "message": "Implemented the approved Option-A split: the picker delegates import/edit to existing per-mode text, dictation, camera, and web surfaces rather than adding a unified destination.",
+          "findingKey": "C2::CaptureComposeView::Import + edit surface",
+          "ref": "31a6fdd"
+        },
+        {
+          "ts": "2026-05-21T22:51:00.253Z",
+          "agent": "talkie-codex-c2",
+          "level": "landed",
+          "message": "Changed camera/web save callbacks to pass captureID strings and wired ComposeStore to fetch CaptureStore by ID, seed a ComposeNote, and keep edits in Compose.",
+          "findingKey": "C2::CaptureComposeView::onCaptureSaved → compose handoff",
+          "ref": "31a6fdd"
+        },
+        {
+          "ts": "2026-05-21T22:51:32.651Z",
+          "agent": "talkie-codex-c2",
+          "level": "info",
+          "message": "Verification: xcodebuild -project apps/ios/Talkie-iOS.xcodeproj -scheme Talkie -destination 'platform=iOS Simulator,name=iPhone 17' build succeeded with DerivedData under ~/Library/Caches/codex-builds; temporary DerivedData was removed.",
+          "ref": "31a6fdd"
+        },
+        {
+          "ts": "2026-05-21T22:51:40.115Z",
+          "agent": "talkie-codex-c2",
+          "level": "blocked",
+          "message": "Skipped per user decision: CaptureListSection contract is approved, but painter still needs to land CaptureListSectionNext.swift on feat/ios-shell-phase-0 before Codex can wire it.",
+          "findingKey": "C2::CaptureListSection::Entire surface absent"
         }
       ]
     },
@@ -1481,6 +1519,14 @@
           "agent": "user-art",
           "level": "info",
           "message": "Expansion approved across all remaining C3 PORT surfaces. Work them as M/L slices, one PR per slice (or grouped if tightly coupled). MemoAgentSheet (multi-turn Claude + Scout streaming), MemoCLISheet (headless transport + presets), workflow polling handoff with C6, OCR/context-menu/TTS — all greenlit. Do not stop at Tier-0; keep going until the C3 PORT set is drained."
+        },
+        {
+          "ts": "2026-05-21T22:51:03.983Z",
+          "agent": "talkie-codex-c2",
+          "level": "info",
+          "message": "Receiver side wired for C2 handoff: ComposeStore now accepts a captureID documentID, reloads CaptureStore, creates a ComposeNote from the capture text/title, and persists subsequent Compose edits there.",
+          "findingKey": "C3::ComposeStore::capture handoff receiver",
+          "ref": "31a6fdd"
         }
       ]
     },
