@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T19:41:43.687674Z",
+  "updatedAt": "2026-05-21T19:48:09.723Z",
   "streams": [
     {
       "key": "C1",
@@ -572,7 +572,7 @@
       "scope": "SettingsNext, OnboardingNext, SignInNext, AICredentialsNext, WorkspaceSwitcherNext",
       "owner": "talkie-codex-c4",
       "status": "in-flight",
-      "lockedAt": "2026-05-21T18:10:16.359Z",
+      "lockedAt": "2026-05-21T19:42:13.352Z",
       "notes": [
         {
           "ts": "2026-05-21T18:03:12.723Z",
@@ -805,6 +805,13 @@
           "message": "Landed SignInNext CloudKit provisioning result: accountStatus now updates step 3 detail and leaves a warning/error state when iCloud is not available.",
           "findingKey": "C4::SignInView::CloudKit provisioning result",
           "ref": "99a2842"
+        },
+        {
+          "ts": "2026-05-21T19:48:09.723Z",
+          "agent": "talkie-codex-c4",
+          "level": "progress",
+          "message": "Tier-0 start: porting the donor Recording section into SettingsNext VOICE with location tagging plus persisted mic input, sample-rate, and echo-cancellation preferences.",
+          "findingKey": "C4::SettingsView::RECORDING section"
         }
       ]
     },

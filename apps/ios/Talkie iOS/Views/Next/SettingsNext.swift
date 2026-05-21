@@ -53,6 +53,23 @@ struct SettingsNext: View {
         }
     }
 
+    private struct SettingsChoice: Identifiable, Equatable {
+        let id: String
+        let title: String
+    }
+
+    private static let recordingInputChoices: [SettingsChoice] = [
+        SettingsChoice(id: "system", title: "System default"),
+        SettingsChoice(id: "builtIn", title: "Built-in mic"),
+        SettingsChoice(id: "bluetooth", title: "Bluetooth")
+    ]
+
+    private static let recordingSampleRateChoices: [SettingsChoice] = [
+        SettingsChoice(id: "system", title: "System"),
+        SettingsChoice(id: "44100", title: "44.1 kHz"),
+        SettingsChoice(id: "48000", title: "48 kHz")
+    ]
+
     init() {
         // Honor `--inspectorTab=<voice|look|connect|keys|lab|about>`
         // so per-panel screenshot loops can boot directly into each
@@ -215,9 +232,8 @@ struct SettingsNext: View {
 
     private var voicePanel: some View {
         VStack(alignment: .leading, spacing: 0) {
+            sectionHeader("TRANSCRIPTION")
             field("Engine", appSettings.transcriptionMemoEngine.displayName, hint: appSettings.preferredParakeetModel.shortDescription)
-            field("Input device", "System default")
-            field("Sample rate", "System") // TODO: no TalkieAppSettings key exists yet.
             field("Channels", "System") // TODO: no TalkieAppSettings key exists yet.
             field("Gain", "Auto") // TODO: no TalkieAppSettings key exists yet.
             field("Pre-roll", "System") // TODO: no TalkieAppSettings key exists yet.
@@ -225,6 +241,51 @@ struct SettingsNext: View {
             metricStrip(
                 title: "ENGINE TELEMETRY",
                 metrics: [("LATENCY", "—"), ("WER", "—"), ("LOADED", parakeetManager.statusDescription.uppercased())]
+            )
+
+            sectionHeader("RECORDING")
+            toggleRow(
+                "Tag Location",
+                isOn: Binding(
+                    get: { appSettings.tagLocationEnabled },
+                    set: { enabled in
+                        appSettings.tagLocationEnabled = enabled
+                        if enabled {
+                            LocationService.shared.requestPermission()
+                        }
+                    }
+                ),
+                valueOn: "On",
+                valueOff: "Off",
+                hint: "Attach coordinates to voice memos"
+            )
+            cycleRow(
+                "Input device",
+                selection: Binding(
+                    get: { appSettings.recordingInputDevice },
+                    set: { appSettings.recordingInputDevice = $0 }
+                ),
+                choices: Self.recordingInputChoices,
+                hint: "Preferred microphone"
+            )
+            cycleRow(
+                "Sample rate",
+                selection: Binding(
+                    get: { appSettings.recordingSampleRate },
+                    set: { appSettings.recordingSampleRate = $0 }
+                ),
+                choices: Self.recordingSampleRateChoices,
+                hint: "Recorder preference"
+            )
+            toggleRow(
+                "Echo cancellation",
+                isOn: Binding(
+                    get: { appSettings.recordingEchoCancellationEnabled },
+                    set: { appSettings.recordingEchoCancellationEnabled = $0 }
+                ),
+                valueOn: "On",
+                valueOff: "Off",
+                hint: "Voice isolation"
             )
         }
     }
@@ -428,6 +489,22 @@ struct SettingsNext: View {
         let action: () -> Void
     }
 
+    private func sectionHeader(_ title: String) -> some View {
+        HStack {
+            Text(title)
+                .talkieType(.channelLabel)
+                .foregroundStyle(theme.colors.textTertiary)
+            Spacer()
+        }
+        .frame(height: 32)
+        .padding(.top, 8)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(theme.currentTheme.chrome.edgeFaint)
+                .frame(height: 1)
+        }
+    }
+
     private func field(
         _ label: String,
         _ value: String,
@@ -487,6 +564,65 @@ struct SettingsNext: View {
                 .fill(theme.currentTheme.chrome.edgeFaint)
                 .frame(height: 1)
         }
+    }
+
+    private func cycleRow(
+        _ label: String,
+        selection: Binding<String>,
+        choices: [SettingsChoice],
+        hint: String? = nil,
+        onChange: ((String) -> Void)? = nil
+    ) -> some View {
+        let current = choices.first { $0.id == selection.wrappedValue }
+            ?? choices.first
+            ?? SettingsChoice(id: selection.wrappedValue, title: selection.wrappedValue)
+
+        return Button {
+            guard !choices.isEmpty else { return }
+            let currentIndex = choices.firstIndex { $0.id == selection.wrappedValue } ?? -1
+            let nextIndex = choices.index(after: currentIndex) % choices.count
+            let nextValue = choices[nextIndex].id
+            selection.wrappedValue = nextValue
+            onChange?(nextValue)
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(label)
+                    .talkieType(.fieldLabel)
+                    .foregroundStyle(theme.colors.textPrimary)
+                    .layoutPriority(2)
+
+                if let hint {
+                    Text("· \(hint)")
+                        .talkieType(.hint)
+                        .foregroundStyle(theme.colors.textTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .layoutPriority(0)
+                }
+
+                Spacer(minLength: 8)
+
+                Text(current.title)
+                    .talkieType(.fieldValue)
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(theme.colors.textTertiary)
+                    .accessibilityHidden(true)
+            }
+            .frame(height: 44)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(theme.currentTheme.chrome.edgeFaint)
+                    .frame(height: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(label): \(current.title)")
+        .accessibilityHint("Cycles to the next option")
     }
 
     private func toggleRow(

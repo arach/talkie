@@ -123,6 +123,11 @@ final class TalkieAppConfigurationStore {
 
         configuration.recording.tagLocationEnabled = defaults.bool(forKey: "recording.tagLocation")
         configuration.recording.locationTipDismissed = defaults.bool(forKey: "tips.locationDismissed")
+        configuration.recording.inputDevice = defaults.string(forKey: "recording.inputDevice") ?? configuration.recording.inputDevice
+        configuration.recording.sampleRate = defaults.string(forKey: "recording.sampleRate") ?? configuration.recording.sampleRate
+        if defaults.object(forKey: "recording.echoCancellation") != nil {
+            configuration.recording.echoCancellationEnabled = defaults.bool(forKey: "recording.echoCancellation")
+        }
 
         if defaults.object(forKey: "keyboard.ledIndicators") != nil {
             configuration.keyboard.ledIndicatorsEnabled = defaults.bool(forKey: "keyboard.ledIndicators")
