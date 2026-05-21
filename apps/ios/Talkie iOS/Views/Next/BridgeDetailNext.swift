@@ -16,6 +16,7 @@ import SwiftUI
 struct BridgeDetailNext: View {
     @ObservedObject private var theme = ThemeManager.shared
     @State private var bridgeManager = BridgeManager.shared
+    @State private var macStatusObserver = MacStatusObserver.shared
     @State private var nearbyBrowser = NearbyMacBrowser.shared
     @State private var savedHosts: [SSHTerminalSavedHost] = []
     @State private var showingQRPairing = false
@@ -65,12 +66,15 @@ struct BridgeDetailNext: View {
         .task {
             savedHosts = SSHTerminalSavedHostStore().load()
             nearbyBrowser.start()
+            macStatusObserver.startObserving()
+            await macStatusObserver.refresh()
             if bridgeManager.status == .connected {
                 await bridgeManager.refreshSessions()
             }
         }
         .onDisappear {
             nearbyBrowser.stop()
+            macStatusObserver.stopObserving()
         }
         .fullScreenCover(isPresented: $showingQRPairing, onDismiss: reloadSavedHosts) {
             SSHPrivateKeyQRCodeImportView { _ in
@@ -120,6 +124,15 @@ struct BridgeDetailNext: View {
         section("STATUS") {
             field("State", statusTitle, hint: activeMacHint)
             field("Last seen", lastSeenText, hint: bridgeManager.activeRouteDescription)
+
+            if bridgeManager.status != .connected,
+               let cloudStatus = cloudFallbackStatus {
+                field(
+                    "Cloud fallback",
+                    cloudFallbackValue(for: cloudStatus),
+                    hint: cloudFallbackHint(for: cloudStatus)
+                )
+            }
 
             if let errorMessage = bridgeManager.errorMessage,
                bridgeManager.status == .error || bridgeManager.awaitingPairingApproval {
@@ -401,6 +414,51 @@ struct BridgeDetailNext: View {
 
     private var queuedMetric: String {
         bridgeManager.awaitingPairingApproval ? "1" : "0"
+    }
+
+    private var cloudFallbackStatus: MacStatusObserver.MacStatusInfo? {
+        let freshStatuses = macStatusObserver.macStatuses.filter { !$0.isStale }
+
+        if let matchedStatus = freshStatuses.first(where: cloudStatusMatchesPairedMac) {
+            return matchedStatus
+        }
+
+        return freshStatuses.first(where: { $0.isAvailable })
+    }
+
+    private func cloudStatusMatchesPairedMac(_ status: MacStatusObserver.MacStatusInfo) -> Bool {
+        guard let cloudHostname = normalizedMacLookupToken(status.hostname) else { return false }
+        let pairedTokens = pairedMacLookupTokens
+        guard !pairedTokens.isEmpty else { return false }
+
+        return pairedTokens.contains { token in
+            cloudHostname == token ||
+            cloudHostname.localizedStandardContains(token) ||
+            token.localizedStandardContains(cloudHostname)
+        }
+    }
+
+    private var pairedMacLookupTokens: [String] {
+        [
+            bridgeManager.pairedHostname,
+            bridgeManager.pairedMacDisplayName,
+            bridgeManager.activePairedMac?.pairedMacName
+        ]
+        .compactMap(normalizedMacLookupToken)
+    }
+
+    private func normalizedMacLookupToken(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let token = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return token.isEmpty ? nil : token
+    }
+
+    private func cloudFallbackValue(for status: MacStatusObserver.MacStatusInfo) -> String {
+        status.isAvailable ? "Cloud available" : status.statusDescription
+    }
+
+    private func cloudFallbackHint(for status: MacStatusObserver.MacStatusInfo) -> String {
+        "\(status.statusDescription) · \(status.timeSinceLastSeen)"
     }
 
     private var reconnectTitle: String {
