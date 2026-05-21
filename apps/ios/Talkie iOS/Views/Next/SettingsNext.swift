@@ -305,6 +305,16 @@ struct SettingsNext: View {
                 hint: bridgeStatusHint,
                 inlineAction: bridgeInlineAction
             )
+            toggleRow(
+                "Auto-open Command Deck",
+                isOn: Binding(
+                    get: { appSettings.followComputerShortcutMode },
+                    set: { appSettings.followComputerShortcutMode = $0 }
+                ),
+                valueOn: "On",
+                valueOff: "Off",
+                hint: companionShortcutHint
+            )
             field("Account", nativeAccountValue, hint: "Sign in with Apple")
             metricStrip(
                 title: "LINK HEALTH",
@@ -476,6 +486,48 @@ struct SettingsNext: View {
         }
     }
 
+    private func toggleRow(
+        _ label: String,
+        isOn: Binding<Bool>,
+        valueOn: String,
+        valueOff: String,
+        hint: String? = nil
+    ) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(label)
+                .talkieType(.fieldLabel)
+                .foregroundStyle(theme.colors.textPrimary)
+                .layoutPriority(2)
+
+            if let hint {
+                Text("· \(hint)")
+                    .talkieType(.hint)
+                    .foregroundStyle(theme.colors.textTertiary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .layoutPriority(0)
+            }
+
+            Spacer(minLength: 8)
+
+            Text(isOn.wrappedValue ? valueOn : valueOff)
+                .talkieType(.fieldValue)
+                .foregroundStyle(theme.currentTheme.chrome.accent)
+                .lineLimit(1)
+                .layoutPriority(1)
+
+            Toggle(label, isOn: isOn)
+                .labelsHidden()
+                .tint(theme.currentTheme.chrome.accent)
+        }
+        .frame(height: 44)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(theme.currentTheme.chrome.edgeFaint)
+                .frame(height: 1)
+        }
+    }
+
     private enum ActionTone { case neutral, accent, warn }
 
     /// Navigation row — same 44pt chrome as actionRow but trails a
@@ -611,6 +663,15 @@ struct SettingsNext: View {
 
     private var nativeAccountValue: String {
         isNativelySignedIn ? "Signed in" : "Not signed in"
+    }
+
+    private var companionShortcutHint: String {
+        if bridgeManager.isPaired {
+            let macName = bridgeManager.pairedMacDisplayName ?? bridgeManager.pairedHostname ?? "your Mac"
+            return "Let \(macName) switch this phone into Deck mode"
+        }
+
+        return "Pair a Mac first; manual Deck still works"
     }
 
     private var iosChannel: String {

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T19:33:49.465Z",
+  "updatedAt": "2026-05-21T19:39:50.343864Z",
   "streams": [
     {
       "key": "C1",
@@ -570,9 +570,9 @@
       "key": "C4",
       "title": "Settings · Onboarding · Sign-In",
       "scope": "SettingsNext, OnboardingNext, SignInNext, AICredentialsNext, WorkspaceSwitcherNext",
-      "owner": null,
-      "status": "done",
-      "lockedAt": "2026-05-21T17:59:50.786Z",
+      "owner": "talkie-codex-c4",
+      "status": "in-flight",
+      "lockedAt": "2026-05-21T18:10:16.359Z",
       "notes": [
         {
           "ts": "2026-05-21T18:03:12.723Z",
@@ -760,6 +760,13 @@
           "level": "decision",
           "message": "DEFER",
           "findingKey": "C4::KeyboardSettingsView::Testing playground"
+        },
+        {
+          "ts": "2026-05-21T18:10:16.375Z",
+          "agent": "talkie-codex-c4",
+          "level": "progress",
+          "message": "Tier-0 start: porting the donor Auto-Open Command Deck toggle into SettingsNext with TalkieAppSettings.followComputerShortcutMode binding.",
+          "findingKey": "C4::SettingsView::COMPANION section"
         }
       ]
     },
