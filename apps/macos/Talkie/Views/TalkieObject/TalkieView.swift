@@ -115,7 +115,7 @@ struct TalkieView: View {
         )
     }
 
-    /// Fixed footer at the bottom of the chiffon pane — the typesetter's
+    /// Fixed footer at the bottom of the detail pane — the typesetter's
     /// bar from the studio mock. Pinned regardless of recipe order so the
     /// player is always at the foot of the document, edge-to-edge.
     /// Self-gates: renders nothing if the recording has no audio.
@@ -147,7 +147,7 @@ struct TalkieView: View {
         // No outer horizontal padding — each top-tier section (toolbar
         // slug, masthead, body, playback) controls its own 36pt internal
         // padding so the studio composition can run edge-to-edge of the
-        // chiffon paper (hairlines, player rail) while body content keeps
+        // cool-gray document surface (hairlines, player rail) while body content keeps
         // a comfortable measure.
         AnyView(
             GeometryReader { proxy in
@@ -279,21 +279,8 @@ struct TalkieView: View {
             return true
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Warm chiffon paper — the detail pane reads as "document on a
-        // desk", distinct from the cool white Library list. Values
-        // mirror design/studio/components/studies/MacMemoDetail.tsx
-        // (DetailPane background gradient).
-        .background(
-            LinearGradient(
-                gradient: Gradient(stops: [
-                    .init(color: Color.hex("FAF7EF"), location: 0.0),
-                    .init(color: Color.hex("FAF6EB"), location: 0.6),
-                    .init(color: Color.hex("F7F2E5"), location: 1.0),
-                ]),
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
+        // Cool-gray Scope canvas — matches the 2026-05-21 canon.
+        .background(ScopeCanvas.canvas)
         // Lifecycle
         .onAppear {
             let title = recording.title ?? ""
