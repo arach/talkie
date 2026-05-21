@@ -97,6 +97,7 @@ const MILESTONES: Milestone[] = [
       { code: "M06", title: "Mac availability coach", detail: "MacCoachCard empty-state at the top of BridgeDetailNext when !hasPairedMacs. Numbered 3-step walkthrough (open Mac app · same network · tap nearby or scan) + QR CTA. Auto-dismisses once a pair lands.", status: "shipped", size: "s" },
       { code: "M07", title: "Companion shortcut config", detail: "Configure iOS Shortcuts integration. Donor: CompanionShortcutModeView.", status: "deferred", size: "m", risk: "low" },
       { code: "M08", title: "HyperScan capture flow", detail: "Niche bulk-scan flow. Donor: HyperScanCaptureView.", status: "deferred", size: "m", risk: "low" },
+      { code: "M09", title: "Mac Command Deck mirror", detail: "DeckMirrorNext paint pass — 4×4 tile grid with Space tabs, single-tap fires the slot on Mac via the bridge. DeckMirrorStore.shared with mock board + 350ms simulated fire. Home AmbientStatusRow grew a 4th 'Mac deck' pixel (shows only when paired). Codex extends the companion event payload + wires DeckMirrorStore.set(board:) + .fire(slotID:) against the existing TalkieServer.swift deck-* handlers.", status: "in-flight", size: "l", risk: "med" },
     ],
   },
   {

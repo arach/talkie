@@ -114,6 +114,7 @@ struct AppShellNext<Content: View>: View {
         case .syncConflicts: return "syncConflicts"
         case .workspaces: return "workspaces"
         case .themeContrast: return "themeContrast"
+        case .deck: return "deck"
         case .captureDetail(let c): return "capture:\(c)"
         case .memoDetail(let m): return "memo:\(m)"
         case .dictationHistory: return "dictations"
@@ -180,6 +181,8 @@ struct AppShellNext<Content: View>: View {
             WorkspaceSwitcherNext()
         case .themeContrast:
             ThemeContrastDebugNext()
+        case .deck:
+            DeckMirrorNext()
         }
     }
 }
@@ -227,6 +230,8 @@ final class AppShellRouter: ObservableObject {
         case workspaces
         // M6 — debug-only theme contrast inspector.
         case themeContrast
+        // Companion — Mac Command Deck mirror.
+        case deck
     }
 
     @Published var surface: Surface = .home
@@ -295,6 +300,8 @@ final class AppShellRouter: ObservableObject {
             openWorkspaces()
         } else if args.contains("--contrast") {
             openThemeContrast()
+        } else if args.contains("--deck") {
+            openDeck()
         }
     }
 
@@ -348,6 +355,7 @@ final class AppShellRouter: ObservableObject {
     func openSyncConflicts() { push(.syncConflicts) }
     func openWorkspaces() { push(.workspaces) }
     func openThemeContrast() { push(.themeContrast) }
+    func openDeck() { push(.deck) }
 
     /// Open a new Compose document seeded with `text`. Caller doesn't
     /// pick the document ID — this generates one and stashes the seed

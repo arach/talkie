@@ -106,6 +106,8 @@ private struct AmbientStatusRow: View {
     @State private var bridgeManager = BridgeManager.shared
     @ObservedObject private var iCloudStatus = iCloudStatusManager.shared
 
+    @ObservedObject private var deck = DeckMirrorStore.shared
+
     var body: some View {
         HStack(spacing: 0) {
             StatusPixel(state: macPixelState, label: "Mac bridge", value: macPixelLabel) {
@@ -121,7 +123,30 @@ private struct AmbientStatusRow: View {
                     AppShellRouter.shared.openSignIn()
                 }
             }
+            // Deck pixel — only renders when paired with a Mac. State
+            // tracks the locally-mirrored DeckBoardSnapshot: good when
+            // a board is in hand, transient when paired but no
+            // snapshot yet, error when the bridge errored.
+            if bridgeManager.isPaired {
+                StatusPixel(state: deckPixelState, label: "Mac deck", value: deckPixelLabel) {
+                    AppShellRouter.shared.openDeck()
+                }
+            }
         }
+    }
+
+    private var deckPixelState: StatusPixel.State {
+        if bridgeManager.status == .error { return .error }
+        if let board = deck.board, !board.spaces.isEmpty { return .good }
+        return .transient
+    }
+
+    private var deckPixelLabel: String {
+        if bridgeManager.status == .error { return "error" }
+        if let board = deck.board, !board.spaces.isEmpty {
+            return "\(board.spaces.count) space\(board.spaces.count == 1 ? "" : "s")"
+        }
+        return "waiting"
     }
 
     private var macPixelLabel: String {

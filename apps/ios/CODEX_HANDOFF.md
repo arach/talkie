@@ -147,6 +147,21 @@ open — it's the milestone map; this is the implementation backlog.
 
 ---
 
+## Companion · Mac Command Deck mirror (new, M09)
+
+### Bridge payload extension + `DeckMirrorStore` wiring
+- **Paint side:**
+  - `apps/ios/Talkie iOS/Models/DeckBoardSnapshot.swift` — declares `DeckBoardSnapshot { spaces: [DeckSpace], activeSpaceID }`, `DeckSpace { id, title, tiles: [DeckTile] }`, `DeckTile { id, slotID?, label, icon, hint? }`, plus `@MainActor final class DeckMirrorStore: ObservableObject` with `set(board:)`, `fire(slotID:)`, `firingSlotID`, `lastErrorMessage`.
+  - `apps/ios/Talkie iOS/Views/Next/DeckMirrorNext.swift` — fully rendered grid + Space tabs reading from `DeckMirrorStore.shared.board`.
+  - `apps/ios/Talkie iOS/Views/Next/HomeNextView.swift` — AmbientStatusRow grew a 4th "Mac deck" pixel (renders only when `bridgeManager.isPaired`).
+  - Router entry: `Surface.deck`, `openDeck()`, `--deck` launch arg.
+- **Codex impl tasks:**
+  1. Extend the macOS companion event payload to ship the resolved shortcut board (spaces + tiles + display info). The slot-ID catalog is at `apps/macos/Talkie/Services/TalkieSettingsConfiguration.swift::defaultLegacyShortcutSlots`. The board structure is `ShortcutBoard` + `defaultDeviceShortcutBoard()` in the same file.
+  2. In `BridgeManager` (likely in the existing `companionEventTask` / `companionEventSocket` handlers), when an event arrives with deck state, decode into `DeckBoardSnapshot` and call `await DeckMirrorStore.shared.set(board: snapshot)` on the main actor.
+  3. Replace `DeckMirrorStore.fire(slotID:)` body — currently a 350ms paint-side mock — with a real call into `BridgeClient` that dispatches the matching slot ID. The receiving handlers on macOS are at `apps/macos/Talkie/Services/TalkieServer.swift` (search `case "deck-up":`, `case "talkie-dictate":`, etc.). On send failure, set `DeckMirrorStore.shared.lastErrorMessage`.
+  4. Clear the mock board from `DeckMirrorStore.init` once the bridge is shipping real snapshots — until then leave the mock so the paint state isn't blank.
+- **Capability:** Mac already advertises `commandDeck` in `NearbyBridgeAdvertiser.swift`; iOS doesn't yet read it but a `BridgeManager.macSupportsCommandDeck` boolean derived from the capabilities string would let Home hide the Deck pixel for older Mac builds.
+
 ## Workflow rules (recap)
 
 From the saved Talkie workflow memory:
