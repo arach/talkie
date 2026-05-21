@@ -6,7 +6,7 @@
 //  status + tap-to-edit modal. Paint pass — Keychain storage is a
 //  Codex contract via `AICredentialStore.set(key:for:)` /
 //  `AICredentialStore.key(for:)` / `AICredentialStore.clear(_:)`. The
-//  view holds in-memory state until that store lands.
+//  view is backed by AICredentialStore.
 //
 //  Donor cue: AIProviderCredentialReviewSheet (OCR-driven entry). This
 //  surface replaces the broader manage-keys flow that lived inside the
@@ -54,7 +54,7 @@ struct AIProviderEntry: Identifiable, Equatable {
 
 struct AICredentialsNext: View {
     @ObservedObject private var theme = ThemeManager.shared
-    @State private var keys: [String: String] = [:]
+    @ObservedObject private var credentials = AICredentialStore.shared
     @State private var editing: AIProviderEntry?
 
     var body: some View {
@@ -102,17 +102,17 @@ struct AICredentialsNext: View {
         .sheet(item: $editing) { provider in
             CredentialEditor(
                 provider: provider,
-                initial: keys[provider.id] ?? "",
+                initial: credentials.key(for: provider.id) ?? "",
                 onSave: { value in
                     if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        keys.removeValue(forKey: provider.id)
+                        try? credentials.clear(provider.id)
                     } else {
-                        keys[provider.id] = value
+                        try? credentials.set(value, for: provider.id)
                     }
                     editing = nil
                 },
                 onClear: {
-                    keys.removeValue(forKey: provider.id)
+                    try? credentials.clear(provider.id)
                     editing = nil
                 }
             )
@@ -178,7 +178,7 @@ struct AICredentialsNext: View {
 
     @ViewBuilder
     private func statusPill(for entry: AIProviderEntry) -> some View {
-        let isSet = (keys[entry.id]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
+        let isSet = credentials.setProviderIDs.contains(entry.id)
         let label = isSet ? "SET" : "NOT SET"
         let color = isSet
             ? Color(red: 0.36, green: 0.74, blue: 0.50)
