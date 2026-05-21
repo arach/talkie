@@ -36,6 +36,10 @@ final class VoiceMemoDetailStore: ObservableObject {
     private var durationSeconds: TimeInterval
     private var isMock: Bool
 
+    var canEditTitle: Bool {
+        isMock || sourceMemo != nil
+    }
+
     init(memoID: String?) {
         let id = memoID ?? "mock"
         self.isMock = id == "mock"
@@ -59,6 +63,32 @@ final class VoiceMemoDetailStore: ObservableObject {
             .store(in: &cancellables)
 
         reloadAttachments()
+    }
+
+    // MARK: - Title
+
+    @discardableResult
+    func saveTitle(_ rawTitle: String) -> Bool {
+        let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return false }
+
+        if isMock {
+            memo = memo.withTitle(title)
+            return true
+        }
+
+        guard let sourceMemo else { return false }
+        sourceMemo.title = title
+
+        do {
+            try sourceMemo.managedObjectContext?.save()
+            refreshSourceMemoDisplay()
+            return true
+        } catch {
+            sourceMemo.managedObjectContext?.rollback()
+            refreshSourceMemoDisplay()
+            return false
+        }
     }
 
     // MARK: - Attachments
@@ -139,6 +169,15 @@ final class VoiceMemoDetailStore: ObservableObject {
         } else if isMock {
             memo = Self.mockMemo.withPlayback(isPlaying: isPlaying, progress: progress)
         }
+    }
+
+    private func refreshSourceMemoDisplay() {
+        guard sourceMemo != nil else { return }
+        refreshPlayback(
+            isPlaying: audioPlayer.isPlaying,
+            currentTime: currentTime,
+            playerDuration: audioPlayer.duration
+        )
     }
 
     private static func fetchMemo(id: String) -> VoiceMemo? {
@@ -228,6 +267,10 @@ private extension VoiceMemoDetailStore.MemoDisplay {
     func withPlayback(isPlaying: Bool, progress: Double) -> Self {
         .init(id: id, title: title, createdAtLabel: createdAtLabel, durationLabel: durationLabel, transcript: transcript, summary: summary, levels: levels, isPlaying: isPlaying, playheadProgress: progress)
     }
+
+    func withTitle(_ title: String) -> Self {
+        .init(id: id, title: title, createdAtLabel: createdAtLabel, durationLabel: durationLabel, transcript: transcript, summary: summary, levels: levels, isPlaying: isPlaying, playheadProgress: playheadProgress)
+    }
 }
 
 struct VoiceMemoDetailNext: View {
@@ -236,6 +279,10 @@ struct VoiceMemoDetailNext: View {
     @State private var pickerItem: PhotosPickerItem?
     @State private var isPickerActive: Bool = false
     @State private var previewAttachment: MemoImageAttachment?
+    @State private var isEditingTitle: Bool = false
+    @State private var editedTitle: String = ""
+    @State private var titleEditError: String?
+    @FocusState private var titleFieldFocused: Bool
 
     init(memoID: String? = nil) {
         _store = StateObject(wrappedValue: VoiceMemoDetailStore(memoID: memoID))
@@ -327,9 +374,27 @@ struct VoiceMemoDetailNext: View {
 
     private var metaRow: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(store.memo.title)
-                .talkieType(.headline)
-                .foregroundStyle(theme.colors.textPrimary)
+            if isEditingTitle {
+                titleEditor
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(store.memo.title)
+                        .talkieType(.headline)
+                        .foregroundStyle(theme.colors.textPrimary)
+
+                    if store.canEditTitle {
+                        Button(action: beginTitleEdit) {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(theme.currentTheme.chrome.accent)
+                                .accessibilityLabel("Edit title")
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+            }
 
             HStack(spacing: 6) {
                 Image(systemName: "waveform")
@@ -338,6 +403,54 @@ struct VoiceMemoDetailNext: View {
                 Text("· MEMO · \(store.memo.createdAtLabel.uppercased()) · \(store.memo.durationLabel)")
                     .talkieType(.channelLabelTiny)
                     .foregroundStyle(theme.colors.textTertiary)
+            }
+        }
+    }
+
+    private var titleEditor: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("Title", text: $editedTitle)
+                .talkieType(.headline)
+                .foregroundStyle(theme.colors.textPrimary)
+                .submitLabel(.done)
+                .focused($titleFieldFocused)
+                .onSubmit(saveTitleEdit)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(theme.colors.cardBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .strokeBorder(
+                                    titleEditError == nil
+                                        ? theme.currentTheme.chrome.accent.opacity(0.6)
+                                        : Color.red.opacity(0.55),
+                                    lineWidth: theme.currentTheme.chrome.hairlineWidth
+                                )
+                        )
+                )
+
+            HStack(spacing: 8) {
+                Button("Cancel", action: cancelTitleEdit)
+                    .talkieType(.fieldLabel)
+                    .foregroundStyle(theme.colors.textSecondary)
+
+                Spacer(minLength: 0)
+
+                Button("Save", action: saveTitleEdit)
+                    .talkieType(.fieldLabel)
+                    .foregroundStyle(theme.colors.cardBackground)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(theme.currentTheme.chrome.accent))
+            }
+            .buttonStyle(.plain)
+
+            if let titleEditError {
+                Text(titleEditError)
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(Color.red.opacity(0.85))
             }
         }
     }
@@ -609,5 +722,27 @@ struct VoiceMemoDetailNext: View {
 
     private var wordCount: Int {
         store.memo.transcript.split { $0.isWhitespace || $0.isNewline }.count
+    }
+
+    private func beginTitleEdit() {
+        editedTitle = store.memo.title
+        titleEditError = nil
+        isEditingTitle = true
+        titleFieldFocused = true
+    }
+
+    private func cancelTitleEdit() {
+        editedTitle = ""
+        titleEditError = nil
+        isEditingTitle = false
+        titleFieldFocused = false
+    }
+
+    private func saveTitleEdit() {
+        guard store.saveTitle(editedTitle) else {
+            titleEditError = "Enter a title before saving."
+            return
+        }
+        cancelTitleEdit()
     }
 }
