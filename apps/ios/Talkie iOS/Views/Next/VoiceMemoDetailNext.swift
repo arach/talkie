@@ -10,6 +10,7 @@ import Combine
 import CoreData
 import PhotosUI
 import SwiftUI
+import UIKit
 
 @MainActor
 final class VoiceMemoDetailStore: ObservableObject {
@@ -174,6 +175,19 @@ final class VoiceMemoDetailStore: ObservableObject {
         guard let uuid = memoUUID else { return }
         MemoAttachmentStore.shared.delete(attachment, memoID: uuid)
         reloadAttachments()
+    }
+
+    func shareItems() -> [Any] {
+        var items: [Any] = [
+            """
+            \(memo.title)
+            \(memo.createdAtLabel) · \(memo.durationLabel)
+
+            \(memo.transcript)
+            """
+        ]
+        items.append(contentsOf: attachments.compactMap { image(for: $0) })
+        return items
     }
 
     @discardableResult
@@ -364,6 +378,7 @@ struct VoiceMemoDetailNext: View {
     @State private var editedTranscript: String = ""
     @State private var transcriptEditError: String?
     @State private var showingDeleteConfirmation: Bool = false
+    @State private var showingShareSheet: Bool = false
     @FocusState private var titleFieldFocused: Bool
 
     init(memoID: String? = nil) {
@@ -420,6 +435,9 @@ struct VoiceMemoDetailNext: View {
         .sheet(isPresented: $isEditingTranscript) {
             transcriptEditorSheet
         }
+        .sheet(isPresented: $showingShareSheet) {
+            VoiceMemoShareSheet(items: store.shareItems())
+        }
         .alert("Delete memo?", isPresented: $showingDeleteConfirmation) {
             Button("Delete", role: .destructive, action: deleteMemo)
             Button("Cancel", role: .cancel) {}
@@ -450,6 +468,9 @@ struct VoiceMemoDetailNext: View {
             Spacer()
 
             Menu {
+                Button("Share", systemImage: "square.and.arrow.up") {
+                    showingShareSheet = true
+                }
                 if store.canEditTranscript {
                     Button("Edit transcript", systemImage: "text.quote", action: beginTranscriptEdit)
                 }
@@ -889,7 +910,9 @@ struct VoiceMemoDetailNext: View {
     /// stacked on top of the chrome tray.
     private var actionBar: some View {
         HStack(spacing: 8) {
-            actionChip(label: "Share", isPrimary: false) { /* TODO */ }
+            actionChip(label: "Share", isPrimary: false) {
+                showingShareSheet = true
+            }
             actionChip(label: "Listen", isPrimary: false) {
                 AppShellRouter.shared.openReadAloud(source: ReadAloudSource(
                     title: store.memo.title,
@@ -981,4 +1004,14 @@ struct VoiceMemoDetailNext: View {
         guard store.deleteMemo() else { return }
         AppShellRouter.shared.openHome()
     }
+}
+
+private struct VoiceMemoShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
