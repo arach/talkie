@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T23:38:43Z",
+  "updatedAt": "2026-05-21T23:42:18.033Z",
   "streams": [
     {
       "key": "C1",
@@ -2188,7 +2188,7 @@
       "scope": "ConnectionCenterNext, BridgeDetailNext, DeckMirrorNext, NetworkStatusBanner, MacConnectionChip, MacCoachCard",
       "owner": null,
       "status": "done",
-      "lockedAt": "2026-05-21T19:41:16.486Z",
+      "lockedAt": "2026-05-21T23:41:18.588Z",
       "notes": [
         {
           "ts": "2026-05-21T18:00:26.165Z",
@@ -2404,6 +2404,94 @@
           "level": "info",
           "message": "PR ready: parity/c5 → feat/ios-shell-phase-0. Build passed with iPhone 17 simulator; DerivedData cleaned.",
           "ref": "https://github.com/arach/talkie/pull/18"
+        },
+        {
+          "ts": "2026-05-21T23:42:17.877Z",
+          "agent": "talkie-codex-c5",
+          "level": "landed",
+          "message": "Landed acknowledgment: ConnectionCenterStore owns the reactive row/status model and tracks Observation-backed bridge/iCloud state.",
+          "findingKey": "C5::ConnectionCenterView::Reactive store pattern",
+          "ref": "apps/ios/Talkie iOS/Views/Next/ConnectionCenterNext.swift:28"
+        },
+        {
+          "ts": "2026-05-21T23:42:17.893Z",
+          "agent": "talkie-codex-c5",
+          "level": "landed",
+          "message": "Landed acknowledgment: ConnectionCenterNext already paints the Next header chrome with Done/title/edge treatment.",
+          "findingKey": "C5::ConnectionCenterView::Header chrome bar",
+          "ref": "apps/ios/Talkie iOS/Views/Next/ConnectionCenterNext.swift:279"
+        },
+        {
+          "ts": "2026-05-21T23:42:17.909Z",
+          "agent": "talkie-codex-c5",
+          "level": "landed",
+          "message": "Landed acknowledgment: BridgeDetailNext is the unified bridge detail surface for status, pairing, sessions, and actions.",
+          "findingKey": "C5::BridgeSettingsView + SessionListView + SessionDetailView::Three surfaces → one",
+          "ref": "apps/ios/Talkie iOS/Views/Next/BridgeDetailNext.swift:15"
+        },
+        {
+          "ts": "2026-05-21T23:42:17.924Z",
+          "agent": "talkie-codex-c5",
+          "level": "landed",
+          "message": "Landed acknowledgment: sessions are embedded as BridgeDetailNext rows rather than donor grid/navigation surfaces.",
+          "findingKey": "C5::BridgeSettingsView + SessionListView + SessionDetailView::Session list shape",
+          "ref": "apps/ios/Talkie iOS/Views/Next/BridgeDetailNext.swift:193"
+        },
+        {
+          "ts": "2026-05-21T23:42:17.938Z",
+          "agent": "talkie-codex-c5",
+          "level": "landed",
+          "message": "Landed acknowledgment: DeckMirrorNext renders from DeckBoardSnapshot/DeckMirrorStore instead of owning the donor runtime.",
+          "findingKey": "C5::CompanionShortcutModeView (runtime)::Runtime → snapshot",
+          "ref": "apps/ios/Talkie iOS/Models/DeckBoardSnapshot.swift:24"
+        },
+        {
+          "ts": "2026-05-21T23:42:17.953Z",
+          "agent": "talkie-codex-c5",
+          "level": "landed",
+          "message": "Landed acknowledgment: MacCoachCard is embedded in BridgeDetailNext and replaces the standalone Mac availability tab.",
+          "findingKey": "C5::MacAvailabilityCoachView::Standalone tab → embedded card",
+          "ref": "apps/ios/Talkie iOS/Views/Next/BridgeDetailNext.swift:40"
+        },
+        {
+          "ts": "2026-05-21T23:42:17.967Z",
+          "agent": "talkie-codex-c5",
+          "level": "landed",
+          "message": "Landed acknowledgment: the 4-pixel ambient row is replaced by a single 40pt MacConnectionChip.",
+          "findingKey": "C5::AmbientStatusRow (4-pixel)::Density + interaction",
+          "ref": "apps/ios/Talkie iOS/Views/Next/HomeNextView.swift:123"
+        },
+        {
+          "ts": "2026-05-21T23:42:17.980Z",
+          "agent": "talkie-codex-c5",
+          "level": "landed",
+          "message": "Landed acknowledgment: MacConnectionChip routes connected deck state to DeckMirror and other paired states to ConnectionCenter.",
+          "findingKey": "C5::AmbientStatusRow (4-pixel)::Context-aware tap target",
+          "ref": "apps/ios/Talkie iOS/Views/Next/HomeNextView.swift:161"
+        },
+        {
+          "ts": "2026-05-21T23:42:17.994Z",
+          "agent": "talkie-codex-c5",
+          "level": "landed",
+          "message": "Landed acknowledgment: SSHPrivateKeyQRCodeImportView is the consolidated scanner used by bridge pairing and terminal import paths.",
+          "findingKey": "C5::QRScannerView::Consolidated scanner",
+          "ref": "apps/ios/Talkie iOS/SSH/SSHPrivateKeyQRCodeImportView.swift:11"
+        },
+        {
+          "ts": "2026-05-21T23:42:18.007Z",
+          "agent": "talkie-codex-c5",
+          "level": "landed",
+          "message": "Landed acknowledgment: NetworkStatusBanner is the shared ok/offline/requestFailed banner component.",
+          "findingKey": "C5::NetworkStatusBanner::Shared banner component",
+          "ref": "apps/ios/Talkie iOS/Views/Next/NetworkStatusBanner.swift:23"
+        },
+        {
+          "ts": "2026-05-21T23:42:18.020Z",
+          "agent": "talkie-codex-c5",
+          "level": "landed",
+          "message": "Landed PORT: Bridge cluster now uses NetworkStatusBanner in ConnectionCenterNext; BridgeDetailNext:50 and DeckMirrorNext:123/154 carry the companion placements.",
+          "findingKey": "C5::NetworkStatusBanner::Banner in Bridge cluster",
+          "ref": "apps/ios/Talkie iOS/Views/Next/ConnectionCenterNext.swift:237"
         }
       ]
     },
