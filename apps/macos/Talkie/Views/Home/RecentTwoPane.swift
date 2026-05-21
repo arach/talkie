@@ -84,8 +84,8 @@ struct RecentSection: Identifiable {
 // MARK: - Tokens
 
 private enum RecentPaneTokens {
-    static let voiceTint   = Color(red: 0.604, green: 0.416, blue: 0.133)  // brass #9A6A22
-    static let contentTint = Color(red: 0.420, green: 0.478, blue: 0.459)  // slate #6B7A75
+    static let voiceTint   = ScopeBrass.solid
+    static let contentTint = ScopeKind.note
     static let cardBg      = Color.white.opacity(0.40)
     static let hoverBg     = Color(red: 0.95, green: 0.95, blue: 0.94).opacity(0.5)
 }

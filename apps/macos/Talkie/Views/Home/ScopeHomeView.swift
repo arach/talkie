@@ -1079,10 +1079,10 @@ private struct CaptureModeCard: View {
             Text(action)
                 .font(ScopeType.channel)
                 .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(isHovered ? ScopeAmber.solid : Color.hex("9A6A22"))
+                .foregroundStyle(isHovered ? ScopeAmber.solid : ScopeBrass.solid)
             Text("→")
                 .font(.system(size: 11))
-                .foregroundStyle(isHovered ? ScopeAmber.solid : Color.hex("9A6A22"))
+                .foregroundStyle(isHovered ? ScopeAmber.solid : ScopeBrass.solid)
             Spacer()
             Text(hint)
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
@@ -1344,9 +1344,9 @@ enum BayScheme: String, CaseIterable {
     /// phosphor.
     var trace: Color {
         switch self {
-        case .amber:                              return Color.hex("E89A3C")
+        case .amber:                              return ScopeKind.dict
         case .pearl, .porcelain, .aluminum:       return Color.hex("D49236")
-        case .chiffon, .vellum, .paper:           return Color.hex("9A6A22")
+        case .chiffon, .vellum, .paper:           return ScopeBrass.solid
         }
     }
 
@@ -1729,9 +1729,9 @@ private struct RoutinesPanel: View {
                 ForEach(Array(rows.enumerated()), id: \.offset) { idx, row in
                     HStack(spacing: 10) {
                         Circle()
-                            .fill(row.leading == .filled ? Color.hex("9A6A22") : Color.clear)
+                            .fill(row.leading == .filled ? ScopeBrass.solid : Color.clear)
                             .overlay(
-                                Circle().stroke(Color.hex("9A6A22"), lineWidth: row.leading == .hollow ? 1 : 0)
+                                Circle().stroke(ScopeBrass.solid, lineWidth: row.leading == .hollow ? 1 : 0)
                             )
                             .frame(width: 5, height: 5)
                         Text(row.label)
@@ -1758,10 +1758,10 @@ private struct RoutinesPanel: View {
                 Text(footer)
                     .font(ScopeType.channel)
                     .tracking(ScopeType.Tracking.wide)
-                    .foregroundStyle(isHovered ? ScopeAmber.solid : Color.hex("9A6A22"))
+                    .foregroundStyle(isHovered ? ScopeAmber.solid : ScopeBrass.solid)
                 Text("→")
                     .font(.system(size: 11))
-                    .foregroundStyle(isHovered ? ScopeAmber.solid : Color.hex("9A6A22"))
+                    .foregroundStyle(isHovered ? ScopeAmber.solid : ScopeBrass.solid)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
@@ -1826,7 +1826,7 @@ private struct DidYouKnowCard: View {
                         .tracking(2.4)
                     Text("→").font(.system(size: 10))
                 }
-                .foregroundStyle(isHovered ? Color.hex("7A521A") : Color.hex("9A6A22"))
+                .foregroundStyle(isHovered ? ScopeBrass.deep : ScopeBrass.solid)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 18)
@@ -1860,7 +1860,7 @@ private struct DidYouKnowCard: View {
 
     @ViewBuilder
     private var glyphIcon: some View {
-        let brass = Color.hex("9A6A22")
+        let brass = ScopeBrass.solid
         switch glyph {
         case .voiceEdit:
             Path { p in
@@ -1930,7 +1930,7 @@ private struct TodayWidget: View {
                         ForEach(Array(events.enumerated()), id: \.offset) { _, event in
                             let x = CGFloat(event.hour) / 24.0 * geo.size.width
                             Circle()
-                                .fill(Color.hex("9A6A22"))
+                                .fill(ScopeBrass.solid)
                                 .frame(width: 10, height: 10)
                                 .overlay(
                                     Circle().stroke(ScopeCanvas.surface, lineWidth: 2)
@@ -2023,7 +2023,7 @@ private struct TrendingWidget: View {
                             ZStack(alignment: .leading) {
                                 Rectangle().fill(ScopeEdge.faint)
                                 Rectangle()
-                                    .fill(Color.hex("9A6A22"))
+                                    .fill(ScopeBrass.solid)
                                     .frame(width: geo.size.width * CGFloat(t.count) / CGFloat(maxCount))
                             }
                         }

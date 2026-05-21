@@ -667,10 +667,10 @@ private struct ScopeLibraryRow: View {
 
     private var channelColor: Color {
         switch recording.type {
-        case .memo: return ScopeAmber.solid
-        case .dictation: return ScopeInk.muted
-        case .note: return ScopeInk.dim
-        case .capture: return ScopeInk.muted
+        case .memo: return ScopeKind.memo
+        case .dictation: return ScopeKind.dict
+        case .note: return ScopeKind.note
+        case .capture, .selection: return ScopeKind.capture
         default: return ScopeInk.subtle
         }
     }
