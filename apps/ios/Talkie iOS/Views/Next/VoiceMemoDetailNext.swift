@@ -18,6 +18,7 @@ final class VoiceMemoDetailStore: ObservableObject {
     @Published var memo: MemoDisplay
     @Published var attachments: [MemoImageAttachment] = []
     @Published var transcriptVersions: [TranscriptVersionDisplay] = []
+    @Published var workflowRuns: [WorkflowRunDisplay] = []
 
     struct MemoDisplay {
         let id: String
@@ -39,6 +40,48 @@ final class VoiceMemoDetailStore: ObservableObject {
         let formattedDate: String
         let isLatest: Bool
         let sourceIcon: String
+    }
+
+    struct WorkflowRunDisplay: Identifiable, Equatable {
+        let id: String
+        let workflowName: String
+        let status: String
+        let outputPreview: String?
+        let runDateLabel: String
+        let icon: String
+
+        var statusLabel: String {
+            switch status.lowercased() {
+            case "completed", "success", "succeeded":
+                return "Complete"
+            case "failed", "failure", "error":
+                return "Failed"
+            case "running", "in_progress", "processing":
+                return "Running"
+            case "queued", "pending":
+                return "Queued"
+            default:
+                return status.isEmpty ? "Pending" : status.capitalized
+            }
+        }
+
+        var isFinished: Bool {
+            switch status.lowercased() {
+            case "completed", "success", "succeeded", "failed", "failure", "error":
+                return true
+            default:
+                return false
+            }
+        }
+
+        var isFailure: Bool {
+            switch status.lowercased() {
+            case "failed", "failure", "error":
+                return true
+            default:
+                return false
+            }
+        }
     }
 
     private let audioPlayer = AudioPlayerManager()
@@ -94,6 +137,7 @@ final class VoiceMemoDetailStore: ObservableObject {
 
         reloadAttachments()
         reloadTranscriptVersions()
+        reloadWorkflowRuns()
     }
 
     // MARK: - Title
@@ -209,6 +253,19 @@ final class VoiceMemoDetailStore: ObservableObject {
                 sourceIcon: Self.sourceIcon(for: version)
             )
         }
+    }
+
+    func reloadWorkflowRuns() {
+        guard let sourceMemo, let runs = sourceMemo.workflowRuns as? Set<WorkflowRun> else {
+            workflowRuns = []
+            return
+        }
+
+        workflowRuns = runs
+            .sorted { lhs, rhs in
+                (lhs.runDate ?? .distantPast) > (rhs.runDate ?? .distantPast)
+            }
+            .map(Self.workflowRunDisplay(from:))
     }
 
     @discardableResult
@@ -432,6 +489,40 @@ final class VoiceMemoDetailStore: ObservableObject {
         return title.isEmpty ? fallback : title
     }
 
+    private static func workflowRunDisplay(from run: WorkflowRun) -> WorkflowRunDisplay {
+        let name = firstNonEmpty([run.workflowName]) ?? "Mac workflow"
+        let outputPreview = firstNonEmpty([run.output])
+        return WorkflowRunDisplay(
+            id: run.id?.uuidString ?? run.objectID.uriRepresentation().absoluteString,
+            workflowName: name,
+            status: run.status ?? "",
+            outputPreview: outputPreview.map { previewText($0) },
+            runDateLabel: workflowRunDateLabel(run.runDate),
+            icon: firstNonEmpty([run.workflowIcon]) ?? "bolt.horizontal.circle"
+        )
+    }
+
+    private static func workflowRunDateLabel(_ date: Date?) -> String {
+        guard let date else { return "Waiting" }
+        let time = date.formatted(date: .omitted, time: .shortened)
+        if Calendar.current.isDateInToday(date) {
+            return "Today · \(time)"
+        }
+        if Calendar.current.isDateInYesterday(date) {
+            return "Yesterday · \(time)"
+        }
+        return "\(date.formatted(.dateTime.month(.abbreviated).day())) · \(time)"
+    }
+
+    private static func previewText(_ text: String) -> String {
+        let normalized = text
+            .split(whereSeparator: { $0.isNewline })
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalized.count > 140 else { return normalized }
+        return String(normalized.prefix(140)) + "…"
+    }
+
     private static func sourceIcon(for version: TranscriptVersion) -> String {
         guard let sourceType = version.sourceTypeEnum else {
             return "doc.text"
@@ -535,6 +626,8 @@ struct VoiceMemoDetailNext: View {
     @State private var showingAgentSheet: Bool = false
     @State private var showingCLISheet: Bool = false
     @State private var showingVersionHistory: Bool = false
+    @State private var knownWorkflowStatuses: [String: String] = [:]
+    @State private var workflowToast: VoiceMemoDetailStore.WorkflowRunDisplay?
     @FocusState private var titleFieldFocused: Bool
 
     init(memoID: String? = nil) {
@@ -557,9 +650,13 @@ struct VoiceMemoDetailNext: View {
                     // NOTE: Legacy VoiceMemoDetailView surfaces a lot
                     // more — version history, reminders, mac workflows,
                     // and OCR. Parity slices now restore title/transcript
-                    // editing, sharing, and memo-scoped CLI commands.
+                    // editing, sharing, memo-scoped CLI commands, and
+                    // workflow-status polling.
 
                     transcriptSection
+                        .padding(.horizontal, 12)
+
+                    workflowRunsSection
                         .padding(.horizontal, 12)
 
                     attachmentsSection
@@ -681,6 +778,18 @@ struct VoiceMemoDetailNext: View {
             if isPresented {
                 loadRecentAttachmentAssetsIfNeeded()
             }
+        }
+        .overlay(alignment: .top) {
+            if let workflowToast {
+                workflowToastBanner(workflowToast)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 56)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: workflowToast?.id)
+        .task(id: store.memo.id) {
+            await pollWorkflowRuns()
         }
     }
 
@@ -944,6 +1053,151 @@ struct VoiceMemoDetailNext: View {
                         UIPasteboard.general.string = store.memo.transcript
                     }
                 }
+        }
+    }
+
+    private var workflowRunsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("· MAC WORKFLOWS")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary)
+                Spacer()
+                Button(action: {
+                    store.reloadWorkflowRuns()
+                    knownWorkflowStatuses = workflowStatusSnapshot
+                }) {
+                    Text("REFRESH")
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 4)
+
+            if store.workflowRuns.isEmpty {
+                HStack(spacing: 9) {
+                    Image(systemName: "desktopcomputer")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                        .frame(width: 28, height: 28)
+                        .background(
+                            RoundedRectangle(cornerRadius: 7)
+                                .fill(theme.currentTheme.chrome.accent.opacity(0.12))
+                        )
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Waiting for Mac workflow runs")
+                            .talkieType(.fieldLabel)
+                            .foregroundStyle(theme.colors.textPrimary)
+                        Text("Runs synced back from the Mac will appear here and toast when they finish.")
+                            .talkieType(.channelLabelTiny)
+                            .foregroundStyle(theme.colors.textTertiary)
+                            .lineLimit(2)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(12)
+                .background(workflowCardBackground)
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(store.workflowRuns.prefix(3)) { run in
+                        workflowRunRow(run)
+                    }
+                }
+            }
+        }
+    }
+
+    private func workflowRunRow(_ run: VoiceMemoDetailStore.WorkflowRunDisplay) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: run.icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(workflowStatusColor(run))
+                .frame(width: 30, height: 30)
+                .background(
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(workflowStatusColor(run).opacity(0.12))
+                )
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(run.workflowName)
+                        .talkieType(.fieldLabel)
+                        .foregroundStyle(theme.colors.textPrimary)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text(run.statusLabel.uppercased())
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(workflowStatusColor(run))
+                }
+
+                Text(run.runDateLabel)
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary)
+
+                if let outputPreview = run.outputPreview {
+                    Text(outputPreview)
+                        .talkieType(.preview)
+                        .foregroundStyle(theme.colors.textSecondary)
+                        .lineLimit(2)
+                        .padding(.top, 2)
+                }
+            }
+        }
+        .padding(12)
+        .background(workflowCardBackground)
+    }
+
+    private var workflowCardBackground: some View {
+        RoundedRectangle(cornerRadius: 10)
+            .fill(theme.colors.cardBackground)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(
+                        theme.currentTheme.chrome.edgeFaint,
+                        lineWidth: theme.currentTheme.chrome.hairlineWidth
+                    )
+            )
+    }
+
+    private func workflowToastBanner(_ run: VoiceMemoDetailStore.WorkflowRunDisplay) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: run.isFailure ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(workflowStatusColor(run))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(run.workflowName)
+                    .talkieType(.fieldLabel)
+                    .foregroundStyle(theme.colors.textPrimary)
+                    .lineLimit(1)
+                Text(run.isFailure ? "Mac workflow failed" : "Mac workflow complete")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(theme.colors.cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(workflowStatusColor(run).opacity(0.45), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.18), radius: 12, y: 8)
+        )
+    }
+
+    private func workflowStatusColor(_ run: VoiceMemoDetailStore.WorkflowRunDisplay) -> Color {
+        if run.isFailure { return .red.opacity(0.85) }
+        if run.isFinished { return theme.currentTheme.chrome.accent }
+        switch run.status.lowercased() {
+        case "running", "in_progress", "processing":
+            return .orange.opacity(0.9)
+        default:
+            return theme.colors.textTertiary
         }
     }
 
@@ -1266,6 +1520,56 @@ struct VoiceMemoDetailNext: View {
         if isRunningOCR { return "SCANNING TEXT" }
         if isSendingAttachmentsToMac { return "SENDING TO MAC" }
         return "IMPORTING ATTACHMENTS"
+    }
+
+    private var workflowStatusSnapshot: [String: String] {
+        Dictionary(uniqueKeysWithValues: store.workflowRuns.map { ($0.id, $0.status) })
+    }
+
+    private func pollWorkflowRuns() async {
+        store.reloadWorkflowRuns()
+        knownWorkflowStatuses = workflowStatusSnapshot
+
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(4))
+            if Task.isCancelled { break }
+            refreshWorkflowRunsForToast()
+        }
+    }
+
+    private func refreshWorkflowRunsForToast() {
+        let previous = knownWorkflowStatuses
+        store.reloadWorkflowRuns()
+
+        if let completedRun = store.workflowRuns.first(where: { run in
+            let oldStatus = previous[run.id]
+            guard run.isFinished else { return false }
+            guard let oldStatus else { return !previous.isEmpty }
+            return !Self.workflowStatusIsFinished(oldStatus) || oldStatus != run.status
+        }) {
+            showWorkflowToast(completedRun)
+        }
+
+        knownWorkflowStatuses = workflowStatusSnapshot
+    }
+
+    private func showWorkflowToast(_ run: VoiceMemoDetailStore.WorkflowRunDisplay) {
+        workflowToast = run
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(4))
+            if workflowToast?.id == run.id {
+                workflowToast = nil
+            }
+        }
+    }
+
+    private static func workflowStatusIsFinished(_ status: String) -> Bool {
+        switch status.lowercased() {
+        case "completed", "success", "succeeded", "failed", "failure", "error":
+            return true
+        default:
+            return false
+        }
     }
 
     private func beginTitleEdit() {
