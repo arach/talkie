@@ -2,10 +2,7 @@
 //  WorkflowsNext.swift
 //  Talkie iOS
 //
-//  Workflow templates · scheduled runs · history. Paint pass — store
-//  is in-memory mock data. Codex contract: WorkflowsStore.templates,
-//  .schedules, .runs (all observed @Published collections), plus
-//  WorkflowsStore.run(template:on:) for one-shot execution.
+//  Workflow templates · scheduled runs · history, backed by WorkflowsStore.
 //
 //  Distinct from CaptureAICommandsSheet (per-capture AI run): this
 //  surface is the standalone workflows hub — templates the user can
@@ -15,38 +12,9 @@
 
 import SwiftUI
 
-struct WorkflowTemplate: Identifiable, Equatable {
-    let id: String
-    let name: String
-    let blurb: String
-    let icon: String
-}
-
-struct WorkflowSchedule: Identifiable, Equatable {
-    let id: String
-    let templateID: String
-    let templateName: String
-    let cadence: String
-    let nextRunLabel: String
-}
-
-struct WorkflowHistoryEntry: Identifiable, Equatable {
-    enum Outcome: Equatable {
-        case success
-        case failure(String)
-    }
-    let id: String
-    let templateName: String
-    let target: String?
-    let timestampLabel: String
-    let outcome: Outcome
-}
-
 struct WorkflowsNext: View {
     @ObservedObject private var theme = ThemeManager.shared
-    @State private var templates: [WorkflowTemplate] = Self.builtInTemplates
-    @State private var schedules: [WorkflowSchedule] = []
-    @State private var runs: [WorkflowHistoryEntry] = Self.mockRuns
+    @ObservedObject private var store = WorkflowsStore.shared
     @State private var runningTemplateID: String?
 
     var body: some View {
@@ -102,10 +70,10 @@ struct WorkflowsNext: View {
 
     private var templatesSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionLabel("· TEMPLATES", count: templates.count)
+            sectionLabel("· TEMPLATES", count: store.templates.count)
 
             VStack(spacing: 0) {
-                ForEach(templates) { template in
+                ForEach(store.templates) { template in
                     templateRow(template)
                 }
             }
@@ -159,7 +127,7 @@ struct WorkflowsNext: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 12)
         .overlay(alignment: .bottom) {
-            if template.id != templates.last?.id {
+            if template.id != store.templates.last?.id {
                 Rectangle()
                     .fill(theme.currentTheme.chrome.edgeSubtle)
                     .frame(height: theme.currentTheme.chrome.hairlineWidth)
@@ -172,9 +140,9 @@ struct WorkflowsNext: View {
 
     private var schedulesSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionLabel("· SCHEDULED", count: schedules.count)
+            sectionLabel("· SCHEDULED", count: store.schedules.count)
 
-            if schedules.isEmpty {
+            if store.schedules.isEmpty {
                 emptyTile(
                     icon: "calendar",
                     title: "No scheduled runs",
@@ -182,7 +150,7 @@ struct WorkflowsNext: View {
                 )
             } else {
                 VStack(spacing: 0) {
-                    ForEach(schedules) { schedule in
+                    ForEach(store.schedules) { schedule in
                         scheduleRow(schedule)
                     }
                 }
@@ -215,9 +183,9 @@ struct WorkflowsNext: View {
 
     private var historySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionLabel("· HISTORY", count: runs.count)
+            sectionLabel("· HISTORY", count: store.runs.count)
 
-            if runs.isEmpty {
+            if store.runs.isEmpty {
                 emptyTile(
                     icon: "clock.arrow.circlepath",
                     title: "No runs yet",
@@ -225,7 +193,7 @@ struct WorkflowsNext: View {
                 )
             } else {
                 VStack(spacing: 0) {
-                    ForEach(runs) { run in
+                    ForEach(store.runs) { run in
                         historyRow(run)
                     }
                 }
@@ -275,7 +243,7 @@ struct WorkflowsNext: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
         .overlay(alignment: .bottom) {
-            if run.id != runs.last?.id {
+            if run.id != store.runs.last?.id {
                 Rectangle()
                     .fill(theme.currentTheme.chrome.edgeSubtle)
                     .frame(height: theme.currentTheme.chrome.hairlineWidth)
@@ -357,56 +325,14 @@ struct WorkflowsNext: View {
         )
     }
 
-    // MARK: - Run handler (paint-side mock)
+    // MARK: - Run handler
 
     private func run(_ template: WorkflowTemplate) {
         guard runningTemplateID == nil else { return }
         runningTemplateID = template.id
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 600_000_000)
-            let timestamp = Date().formatted(.dateTime.hour().minute())
-            let newRun = WorkflowHistoryEntry(
-                id: UUID().uuidString,
-                templateName: template.name,
-                target: String?.none,
-                timestampLabel: "Today · \(timestamp)",
-                outcome: WorkflowHistoryEntry.Outcome.success
-            )
-            runs.insert(newRun, at: 0)
+            await store.run(template: template, on: nil)
             runningTemplateID = nil
         }
     }
-
-    // MARK: - Mock catalogs
-
-    static let builtInTemplates: [WorkflowTemplate] = [
-        WorkflowTemplate(id: "summary",  name: "Summarize captures",     blurb: "Daily digest of new captures", icon: "doc.text.magnifyingglass"),
-        WorkflowTemplate(id: "title",    name: "Generate memo titles",   blurb: "Re-title untitled voice memos", icon: "text.cursor"),
-        WorkflowTemplate(id: "outline",  name: "Outline from transcript", blurb: "Bullet outline for selected memos", icon: "list.bullet.indent"),
-        WorkflowTemplate(id: "translate", name: "Translate to English",   blurb: "Translate non-English captures", icon: "globe")
-    ]
-
-    static let mockRuns: [WorkflowHistoryEntry] = [
-        WorkflowHistoryEntry(
-            id: "r1",
-            templateName: "Summarize captures",
-            target: "13 items",
-            timestampLabel: "Today · 9:32 AM",
-            outcome: .success
-        ),
-        WorkflowHistoryEntry(
-            id: "r2",
-            templateName: "Generate memo titles",
-            target: "3 memos",
-            timestampLabel: "Yesterday · 6:14 PM",
-            outcome: .success
-        ),
-        WorkflowHistoryEntry(
-            id: "r3",
-            templateName: "Translate to English",
-            target: "1 capture",
-            timestampLabel: "Yesterday · 1:02 PM",
-            outcome: .failure("No API key configured for OpenAI")
-        )
-    ]
 }
