@@ -532,6 +532,7 @@ struct VoiceMemoDetailNext: View {
     @State private var transcriptEditError: String?
     @State private var showingDeleteConfirmation: Bool = false
     @State private var showingShareSheet: Bool = false
+    @State private var showingAgentSheet: Bool = false
     @State private var showingCLISheet: Bool = false
     @State private var showingVersionHistory: Bool = false
     @FocusState private var titleFieldFocused: Bool
@@ -640,6 +641,9 @@ struct VoiceMemoDetailNext: View {
         .sheet(isPresented: $showingShareSheet) {
             VoiceMemoShareSheet(items: store.shareItems())
         }
+        .sheet(isPresented: $showingAgentSheet) {
+            MemoAgentSheetNext(memo: store.memo)
+        }
         .sheet(isPresented: $showingCLISheet) {
             MemoCLISheetNext(memo: store.memo)
         }
@@ -704,6 +708,9 @@ struct VoiceMemoDetailNext: View {
             Menu {
                 Button("Share", systemImage: "square.and.arrow.up") {
                     showingShareSheet = true
+                }
+                Button("Ask Agent", systemImage: "brain.head.profile") {
+                    showingAgentSheet = true
                 }
                 Button("Run CLI", systemImage: "terminal") {
                     showingCLISheet = true
@@ -1224,6 +1231,9 @@ struct VoiceMemoDetailNext: View {
                     meta: "MEMO · \(wordCount) WORDS · \(store.memo.durationLabel)",
                     sourceURL: nil
                 ))
+            }
+            actionChip(label: "Agent", isPrimary: false) {
+                showingAgentSheet = true
             }
             actionChip(label: "CLI", isPrimary: false) {
                 showingCLISheet = true
