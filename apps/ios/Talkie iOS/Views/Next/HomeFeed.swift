@@ -43,6 +43,13 @@ final class HomeFeed: ObservableObject {
     }
 
     init() {
+        self.lastDocument = nil
+        self.recentTally = Tally(eyebrow: "Quiet · long-press to capture", cta: nil, cells: [])
+        self.recentItems = []
+        reload()
+    }
+
+    func reload() {
         let context = PersistenceController.shared.container.viewContext
         let memos = Self.fetchVoiceMemos(context: context)
         let notes = Self.fetchComposeNotes(context: context)
@@ -92,6 +99,26 @@ final class HomeFeed: ObservableObject {
                     relativeTime: Self.relativeListTime(from: entry.updatedAt)
                 )
             }
+    }
+
+    func delete(_ item: RecentItem) {
+        switch item.source {
+        case .dictation:
+            VoiceMemoStore.shared.delete(id: item.id)
+        case .typed:
+            if ComposeNoteStore.delete(id: item.id) {
+                // ComposeNoteStore posts .composeNotesDidChange.
+            } else if let uuid = UUID(uuidString: item.id) {
+                KeyboardDictationStore.shared.delete(uuid)
+            }
+        case .link, .scan:
+            if let uuid = UUID(uuidString: item.id),
+               let capture = CaptureStore.shared.all().first(where: { $0.id == uuid }) {
+                CaptureStore.shared.delete(capture)
+            }
+        }
+
+        reload()
     }
 }
 

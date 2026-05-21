@@ -35,6 +35,19 @@ final class LibraryFeed: ObservableObject {
     @Published private(set) var earlierItems: Int
 
     init() {
+        self.memos = []
+        self.dictations = []
+        self.items = []
+        self.memosTotal = 0
+        self.dictationsTotal = 0
+        self.itemsTotal = 0
+        self.earlierMemos = 0
+        self.earlierDictations = 0
+        self.earlierItems = 0
+        reload()
+    }
+
+    func reload() {
         let context = PersistenceController.shared.container.viewContext
         let memos = Self.fetchVoiceMemos(context: context)
         let notes = Self.fetchComposeNotes(context: context)
@@ -62,6 +75,26 @@ final class LibraryFeed: ObservableObject {
         self.earlierMemos = memoBucket.earlier
         self.earlierDictations = dictationBucket.earlier
         self.earlierItems = itemBucket.earlier
+    }
+
+    func delete(_ item: Item, in tab: LibraryTab) {
+        switch tab {
+        case .memos:
+            VoiceMemoStore.shared.delete(id: item.id)
+        case .dictations:
+            if ComposeNoteStore.delete(id: item.id) {
+                // ComposeNoteStore posts .composeNotesDidChange.
+            } else if let uuid = UUID(uuidString: item.id) {
+                KeyboardDictationStore.shared.delete(uuid)
+            }
+        case .items:
+            if let uuid = UUID(uuidString: item.id),
+               let capture = CaptureStore.shared.all().first(where: { $0.id == uuid }) {
+                CaptureStore.shared.delete(capture)
+            }
+        }
+
+        reload()
     }
 
     func items(for tab: LibraryTab) -> [Item] {

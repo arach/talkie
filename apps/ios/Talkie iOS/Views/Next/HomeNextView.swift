@@ -36,14 +36,19 @@ struct HomeNextView: View {
                 StationCard(pickUp: feed.lastDocument)
                     .padding(.horizontal, 12)
 
-                RecentSection(items: feed.recentItems)
-                    .padding(.horizontal, 12)
+                RecentSection(items: feed.recentItems) { item in
+                    feed.delete(item)
+                }
+                .padding(.horizontal, 12)
 
                 Spacer(minLength: 80)   // breathing room for the shell voice button
             }
         }
         .scrollIndicators(.hidden)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onReceive(NotificationCenter.default.publisher(for: .voiceMemosDidChange)) { _ in feed.reload() }
+        .onReceive(NotificationCenter.default.publisher(for: .capturesDidChange)) { _ in feed.reload() }
+        .onReceive(NotificationCenter.default.publisher(for: .composeNotesDidChange)) { _ in feed.reload() }
     }
 }
 
@@ -432,6 +437,7 @@ private struct StationCard: View {
 
 private struct RecentSection: View {
     let items: [HomeFeed.RecentItem]
+    let onDelete: (HomeFeed.RecentItem) -> Void
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
@@ -454,7 +460,11 @@ private struct RecentSection: View {
 
             VStack(spacing: 0) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { idx, item in
-                    RecentRow(item: item, showDivider: idx > 0)
+                    SwipeRevealRow {
+                        onDelete(item)
+                    } content: {
+                        RecentRow(item: item, showDivider: idx > 0)
+                    }
                 }
             }
             .background(theme.colors.cardBackground)

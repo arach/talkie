@@ -47,7 +47,9 @@ struct LibraryNextView: View {
                         items: library.items(for: activeTab),
                         earlierCount: library.earlierCount(for: activeTab),
                         activeTab: activeTab
-                    )
+                    ) { item in
+                        library.delete(item, in: activeTab)
+                    }
                     .padding(.horizontal, 12)
 
                     if activeTab == .dictations {
@@ -66,6 +68,9 @@ struct LibraryNextView: View {
             }
             .scrollIndicators(.hidden)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .voiceMemosDidChange)) { _ in library.reload() }
+        .onReceive(NotificationCenter.default.publisher(for: .capturesDidChange)) { _ in library.reload() }
+        .onReceive(NotificationCenter.default.publisher(for: .composeNotesDidChange)) { _ in library.reload() }
     }
 
     private var searchPlaceholder: String {
@@ -179,6 +184,7 @@ private struct LibraryListCard: View {
     let items: [LibraryFeed.Item]
     let earlierCount: Int
     let activeTab: LibraryTab
+    let onDelete: (LibraryFeed.Item) -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
 
@@ -188,7 +194,11 @@ private struct LibraryListCard: View {
                 EmptyTabState(tab: activeTab)
             } else {
                 ForEach(Array(items.enumerated()), id: \.element.id) { idx, item in
-                    LibraryRow(item: item, showDivider: idx > 0)
+                    SwipeRevealRow {
+                        onDelete(item)
+                    } content: {
+                        LibraryRow(item: item, showDivider: idx > 0)
+                    }
                 }
 
                 HStack(spacing: 6) {

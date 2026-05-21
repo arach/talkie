@@ -34,9 +34,27 @@ final class DictationHistoryFeed: ObservableObject {
     }
 
     init() {
-        // Codex wires the live load against KeyboardDictationStore.
-        // For paint, return a small mock so the list renders.
-        self.entries = Self.mockEntries
+        self.entries = []
+        reload()
+    }
+
+    func reload() {
+        KeyboardDictationStore.shared.reload()
+        entries = KeyboardDictationStore.shared.all().map { dictation in
+            Entry(
+                id: dictation.id.uuidString,
+                text: dictation.text,
+                timestamp: dictation.timestamp,
+                durationSeconds: dictation.durationSeconds
+            )
+        }
+    }
+
+    func delete(_ entry: Entry) {
+        guard let uuid = UUID(uuidString: entry.id) else { return }
+        KeyboardDictationStore.shared.delete(uuid)
+        entries.removeAll { $0.id == entry.id }
+        displayLimit = min(displayLimit, max(entries.count, 10))
     }
 
     var displayed: [Entry] { Array(entries.prefix(displayLimit)) }
@@ -111,29 +129,18 @@ struct DictationHistoryNext: View {
     private var listBody: some View {
         List {
             ForEach(feed.displayed) { entry in
-                DictationEntryRow(entry: entry)
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(theme.colors.cardBackground)
-                    .listRowSeparatorTint(theme.currentTheme.chrome.edgeSubtle)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        AppShellRouter.shared.openCompose(documentID: entry.id)
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        Button {
-                            // TODO M3+ wire: promote to VoiceMemo.
-                        } label: {
-                            Label("Save as memo", systemImage: "square.and.arrow.down.fill")
+                SwipeRevealRow {
+                    feed.delete(entry)
+                } content: {
+                    DictationEntryRow(entry: entry)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            AppShellRouter.shared.openCompose(documentID: entry.id)
                         }
-                        .tint(theme.currentTheme.chrome.accent)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button(role: .destructive) {
-                            // TODO M3+ wire: delete dictation.
-                        } label: {
-                            Label("Delete", systemImage: "trash.fill")
-                        }
-                    }
+                }
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(theme.colors.cardBackground)
+                .listRowSeparatorTint(theme.currentTheme.chrome.edgeSubtle)
             }
 
             if feed.hasMore {
