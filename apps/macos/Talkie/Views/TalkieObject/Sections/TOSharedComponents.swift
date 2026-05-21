@@ -1259,9 +1259,8 @@ struct DocumentBody: View {
 
         return HStack(alignment: .top, spacing: 20) {
             // Marginal rule — printed-page gutter.
-            Rectangle()
-                .fill(Color.hex("9A6A22").opacity(0.30))
-                .frame(width: 0.5)
+            ScopeRule(.action, axis: .vertical)
+                .opacity(0.35)
                 .padding(.vertical, 4)
 
             VStack(alignment: .leading, spacing: 18) {
@@ -1282,16 +1281,13 @@ struct DocumentBody: View {
 
     private var endSlug: some View {
         HStack(spacing: 10) {
-            Rectangle()
-                .fill(Theme.current.foreground.opacity(0.22))
-                .frame(width: 22, height: 0.5)
+            ScopeRule(.section)
+                .frame(width: 22)
             Text("END · \(formattedDuration) · \(wordCount) WORDS")
                 .font(.system(size: 9, weight: .regular, design: .monospaced))
                 .tracking(2.0)
                 .foregroundColor(Theme.current.foregroundSecondary.opacity(0.65))
-            Rectangle()
-                .fill(Theme.current.foreground.opacity(0.10))
-                .frame(height: 0.5)
+            ScopeRule(.subtle)
         }
     }
 
@@ -1329,9 +1325,7 @@ struct DocumentBody: View {
                     }
 
                     if gi < metadataGroups.count - 1 {
-                        Rectangle()
-                            .fill(Theme.current.foreground.opacity(0.08))
-                            .frame(height: 0.5)
+                        ScopeRule(.subtle)
                             .padding(.top, 4)
                     }
                 }

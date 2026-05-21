@@ -347,7 +347,7 @@ struct ScopeSkillsLandingView: View {
                 }
                 .frame(maxHeight: .infinity)
 
-                Rectangle().fill(ScopeEdge.subtle).frame(height: 1)
+                ScopeRule(.subtle)
 
                 // Input row — mic, text field, paper plane. Bottom of the pane.
                 HStack(spacing: 8) {
@@ -724,8 +724,7 @@ struct ScopeSkillsLandingView: View {
                     .background(
                         Color(red: 42/255, green: 38/255, blue: 32/255).opacity(0.02)
                             .overlay(
-                                Rectangle().fill(ScopeEdge.subtle)
-                                    .frame(width: 1)
+                                ScopeRule(.subtle, axis: .vertical)
                                     .frame(maxWidth: .infinity, alignment: .trailing)
                             )
                     )
@@ -763,7 +762,7 @@ struct ScopeSkillsLandingView: View {
         .padding(.bottom, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(
-            Rectangle().fill(ScopeEdge.subtle).frame(height: 1),
+            ScopeRule(.subtle),
             alignment: .bottom
         )
     }
@@ -953,8 +952,7 @@ struct ScopeSkillsLandingView: View {
                 .background(
                     Color(red: 42/255, green: 38/255, blue: 32/255).opacity(0.02)
                         .overlay(
-                            Rectangle().fill(ScopeEdge.subtle)
-                                .frame(width: 1)
+                            ScopeRule(.subtle, axis: .vertical)
                                 .frame(maxWidth: .infinity, alignment: .trailing)
                         )
                 )
@@ -1169,9 +1167,7 @@ struct ScopeSkillsLandingView: View {
             Text(hint)
                 .font(ScopeFont.displayItalic(size: 12))
                 .foregroundStyle(ScopeInk.faint)
-            Rectangle()
-                .fill(ScopeEdge.subtle)
-                .frame(height: 1)
+            ScopeRule(.subtle)
         }
         .padding(.horizontal, 32)
         .padding(.top, 22)
@@ -1193,9 +1189,7 @@ struct ScopeSkillsLandingView: View {
                     .font(ScopeFont.mono(size: 9))
                     .tracking(1.6)
                     .foregroundStyle(ScopeInk.subtle)
-                Rectangle()
-                    .fill(ScopeEdge.subtle)
-                    .frame(height: 1)
+                ScopeRule(.subtle)
             }
             Text(intro)
                 .font(ScopeFont.displayItalic(size: 13))
@@ -1286,9 +1280,7 @@ struct ScopeSkillsLandingView: View {
                 .lineSpacing(1.5)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Rectangle()
-                .fill(ScopeEdge.subtle)
-                .frame(height: 1)
+            ScopeRule(.subtle)
                 .padding(.vertical, 10)
 
             pipelineRow(pipeline: starter.pipeline, isWorkflow: isWorkflow)
@@ -1510,7 +1502,7 @@ struct ScopeSkillsLandingView: View {
                 .foregroundStyle(ScopeInk.primary)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
-            Rectangle().fill(ScopeEdge.subtle).frame(height: 1)
+            ScopeRule(.subtle)
             HStack(spacing: 6) {
                 miniChip(label: "Refine", active: false)
                 miniChip(label: "Simplify", active: false)
@@ -1607,7 +1599,7 @@ struct ScopeSkillsLandingView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            Rectangle().fill(ScopeEdge.subtle).frame(height: 1)
+            ScopeRule(.subtle)
             VStack(alignment: .leading, spacing: 6) {
                 Text("· YOUR SKILLS")
                     .font(ScopeFont.mono(size: 9, weight: .semibold))
@@ -1657,7 +1649,7 @@ struct ScopeSkillsLandingView: View {
     @ViewBuilder
     private var footer: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Rectangle().fill(ScopeEdge.subtle).frame(height: 1)
+            ScopeRule(.subtle)
             Text("One tab. Pick a starter, watch it open above, talk to the agent, run, save. Three skill modes coexist — atomic, composed (DO sequence/route over other skills), and workflow (graduated into the legacy editor). The foot of the page shows where they manifest — Compose, voice trigger, Library.")
                 .font(ScopeFont.displayItalic(size: 12.5))
                 .foregroundStyle(ScopeInk.faint)

@@ -169,6 +169,7 @@ struct TalkieView: View {
                         HStack(alignment: .top, spacing: 40) {
                             detailContent
                                 .frame(maxWidth: contentColumnMaxWidth, alignment: .leading)
+                            ScopeRule(.subtle, axis: .vertical)
                             TOMarginRail(recording: recording)
                                 .frame(width: TOMarginRail.preferredWidth, alignment: .leading)
                                 .padding(.trailing, MastheadPadding.horizontal)

@@ -96,6 +96,54 @@ public enum ScopeEdge {
     public static let subtle  = base.opacity(0.08)
 }
 
+// MARK: - Scope Rule — reusable hairline view
+//
+// Single source of truth for divider rendering across Scope surfaces.
+// Call sites choose semantic roles; the visual calibration stays here.
+public struct ScopeRule: View {
+
+    public enum Role {
+        case section
+        case row
+        case subtle
+        case action
+    }
+
+    public enum Axis { case horizontal, vertical }
+
+    private let role: Role
+    private let axis: Axis
+
+    public init(_ role: Role = .row, axis: Axis = .horizontal) {
+        self.role = role
+        self.axis = axis
+    }
+
+    public var body: some View {
+        Rectangle()
+            .fill(color)
+            .frame(
+                width: axis == .vertical ? thickness : nil,
+                height: axis == .horizontal ? thickness : nil
+            )
+    }
+
+    private var color: Color {
+        switch role {
+        case .section: return ScopeInk.primary.opacity(0.22)
+        case .row:     return ScopeInk.primary.opacity(0.16)
+        case .subtle:  return ScopeInk.primary.opacity(0.10)
+        case .action:  return ScopeBrass.solid.opacity(0.85)
+        }
+    }
+
+    private var thickness: CGFloat {
+        // Action rules are stronger by accent color but still render as
+        // a marker, not a heavy bar.
+        role == .action ? 1.5 : 1
+    }
+}
+
 // MARK: - Trace (phosphor / signal line)
 
 /// The "trace" color is the oscilloscope phosphor line. In the

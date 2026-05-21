@@ -112,9 +112,7 @@ struct TOHeaderSection: View {
     }
 
     private var hairline: some View {
-        Rectangle()
-            .fill(Theme.current.foreground.opacity(0.10))
-            .frame(height: 0.5)
+        ScopeRule(.section)
     }
 
     /// "M-CB0B" / "D-3792" — type letter prefix + first four hex chars
@@ -212,9 +210,7 @@ struct TOHeaderSection: View {
                 .tracking(2.0)
                 .foregroundColor(Theme.current.foregroundSecondary.opacity(0.60))
 
-            Rectangle()
-                .fill(Theme.current.foreground.opacity(0.12))
-                .frame(height: 0.5)
+            ScopeRule(.subtle)
 
             Text(eyebrowDate(recording.createdAt))
                 .font(.system(size: 9, weight: .regular, design: .monospaced))
@@ -315,9 +311,8 @@ struct TOHeaderSection: View {
             toolButton(label: "Export") {
                 exportRecording()
             }
-            Rectangle()
-                .fill(Theme.current.foreground.opacity(0.16))
-                .frame(width: 0.5, height: 12)
+            ScopeRule(.subtle, axis: .vertical)
+                .frame(height: 12)
                 .padding(.horizontal, 4)
             overflowMenu
         }
@@ -664,9 +659,8 @@ struct TOMetadataRow: View {
     }
 
     private var cellDivider: some View {
-        Rectangle()
-            .fill(Theme.current.foregroundMuted.opacity(0.3))
-            .frame(width: BorderWidth.thin, height: 12)
+        ScopeRule(.subtle, axis: .vertical)
+            .frame(height: 12)
     }
 
     // MARK: - Formatting

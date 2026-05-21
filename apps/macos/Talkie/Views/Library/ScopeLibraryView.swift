@@ -288,9 +288,7 @@ struct ScopeLibraryView: View {
         .padding(.top, 12)
         .padding(.bottom, 10)
         .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(ScopeEdge.faint)
-                .frame(height: 0.5)
+            ScopeRule(.section)
         }
     }
 
@@ -440,7 +438,7 @@ struct ScopeLibraryView: View {
                             .id(recording.id)
                             .overlay(alignment: .top) {
                                 if idx > 0 {
-                                    Rectangle().fill(ScopeEdge.subtle).frame(height: 1)
+                                    ScopeRule(.row)
                                 }
                             }
                         }
@@ -601,7 +599,7 @@ struct ScopeLibraryView: View {
         .padding(.horizontal, 32)
         .padding(.vertical, 10)
         .overlay(alignment: .top) {
-            Rectangle().fill(ScopeEdge.faint).frame(height: 1)
+            ScopeRule(.section)
         }
     }
 

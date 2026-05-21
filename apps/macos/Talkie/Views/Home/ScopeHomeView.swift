@@ -920,7 +920,7 @@ struct ScopeHomeView: View {
                     ForEach(unifiedActivity.prefix(6)) { item in
                         SignalRow(item: item, action: { onOpenItem(item) })
                             .overlay(alignment: .top) {
-                                Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
+                                ScopeRule(.row)
                             }
                     }
                 }
@@ -1722,7 +1722,7 @@ private struct RoutinesPanel: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .overlay(alignment: .bottom) {
-                Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
+                ScopeRule(.section)
             }
 
             VStack(spacing: 0) {
@@ -1746,12 +1746,12 @@ private struct RoutinesPanel: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
                     if idx < rows.count - 1 {
-                        Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
+                        ScopeRule(.row)
                     }
                 }
             }
 
-            Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
+            ScopeRule(.section)
 
             HStack(spacing: 4) {
                 Spacer()
@@ -1819,7 +1819,7 @@ private struct DidYouKnowCard: View {
                     .multilineTextAlignment(.leading)
                     .lineSpacing(2)
                 Spacer(minLength: 6)
-                Rectangle().fill(ScopeEdge.faint).frame(height: 0.5)
+                ScopeRule(.section)
                 HStack(spacing: 4) {
                     Text(action.uppercased())
                         .font(ScopeFont.mono(size: 9, weight: .semibold))

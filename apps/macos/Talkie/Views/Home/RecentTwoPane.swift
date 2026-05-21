@@ -153,7 +153,7 @@ private struct RecentPane: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .overlay(
-            Rectangle().fill(ScopeEdge.faint).frame(height: 0.5),
+            ScopeRule(.section),
             alignment: .bottom
         )
     }
@@ -201,7 +201,7 @@ private struct RecentSubBand: View {
         .overlay(
             Group {
                 if divided {
-                    Rectangle().fill(ScopeEdge.faint).frame(height: 1)
+                    ScopeRule(.row)
                 }
             },
             alignment: .top
@@ -253,7 +253,7 @@ private struct RecentRowView: View {
         .buttonStyle(.plain)
         .onHover { hovered = $0 }
         .overlay(
-            Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5),
+            ScopeRule(.subtle),
             alignment: .top
         )
     }
@@ -303,7 +303,7 @@ private struct EmptyCTARow: View {
         .buttonStyle(.plain)
         .onHover { hovered = $0 }
         .overlay(
-            Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5),
+            ScopeRule(.row),
             alignment: .top
         )
     }
