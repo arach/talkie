@@ -44,6 +44,10 @@ final class VoiceMemoDetailStore: ObservableObject {
         isMock || sourceMemo != nil
     }
 
+    var canDeleteMemo: Bool {
+        !isMock && sourceMemo != nil
+    }
+
     var canGenerateTitle: Bool {
         let transcript = memo.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         return canEditTitle && !transcript.isEmpty && transcript != "No transcript yet."
@@ -170,6 +174,16 @@ final class VoiceMemoDetailStore: ObservableObject {
         guard let uuid = memoUUID else { return }
         MemoAttachmentStore.shared.delete(attachment, memoID: uuid)
         reloadAttachments()
+    }
+
+    @discardableResult
+    func deleteMemo() -> Bool {
+        guard !isMock, let sourceMemo else { return false }
+        audioPlayer.stopPlayback()
+        VoiceMemoStore.shared.delete(sourceMemo)
+        self.sourceMemo = nil
+        attachments = []
+        return true
     }
 
     func image(for attachment: MemoImageAttachment) -> UIImage? {
@@ -349,6 +363,7 @@ struct VoiceMemoDetailNext: View {
     @State private var isEditingTranscript: Bool = false
     @State private var editedTranscript: String = ""
     @State private var transcriptEditError: String?
+    @State private var showingDeleteConfirmation: Bool = false
     @FocusState private var titleFieldFocused: Bool
 
     init(memoID: String? = nil) {
@@ -405,6 +420,12 @@ struct VoiceMemoDetailNext: View {
         .sheet(isPresented: $isEditingTranscript) {
             transcriptEditorSheet
         }
+        .alert("Delete memo?", isPresented: $showingDeleteConfirmation) {
+            Button("Delete", role: .destructive, action: deleteMemo)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the memo, its audio file, and saved attachments from this device.")
+        }
     }
 
     private var header: some View {
@@ -428,7 +449,16 @@ struct VoiceMemoDetailNext: View {
 
             Spacer()
 
-            Button(action: { /* TODO: more menu */ }) {
+            Menu {
+                if store.canEditTranscript {
+                    Button("Edit transcript", systemImage: "text.quote", action: beginTranscriptEdit)
+                }
+                if store.canDeleteMemo {
+                    Button("Delete memo", systemImage: "trash", role: .destructive) {
+                        showingDeleteConfirmation = true
+                    }
+                }
+            } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 16))
                     .foregroundStyle(theme.colors.textTertiary)
@@ -945,5 +975,10 @@ struct VoiceMemoDetailNext: View {
             return
         }
         cancelTranscriptEdit()
+    }
+
+    private func deleteMemo() {
+        guard store.deleteMemo() else { return }
+        AppShellRouter.shared.openHome()
     }
 }
