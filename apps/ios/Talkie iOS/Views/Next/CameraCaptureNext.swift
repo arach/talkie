@@ -8,6 +8,7 @@
 //
 
 import AVFoundation
+import PhotosUI
 import SwiftUI
 import TalkieMobileKit
 import UIKit
@@ -17,6 +18,7 @@ struct CameraCaptureNext: View {
 
     @StateObject private var camera = CameraCaptureNextModel()
     @ObservedObject private var theme = ThemeManager.shared
+    @State private var fallbackPhotoItem: PhotosPickerItem?
 
     init(initialURL: URL? = nil) {
         self.initialURL = initialURL
@@ -53,7 +55,8 @@ struct CameraCaptureNext: View {
                 cameraUnavailableOverlay(
                     title: "Camera Unavailable",
                     message: camera.statusMessage ?? "This device does not have an available camera.",
-                    systemImage: "camera.slash"
+                    systemImage: "camera.slash",
+                    showsPhotoLibraryFallback: true
                 )
             case .authorized:
                 CameraPreviewView(session: camera.session)
@@ -79,6 +82,13 @@ struct CameraCaptureNext: View {
         }
         .onDisappear {
             camera.stop()
+        }
+        .onChange(of: fallbackPhotoItem) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                await camera.importFallbackPhoto(newItem)
+                fallbackPhotoItem = nil
+            }
         }
         .alert("Camera Capture", isPresented: $camera.showingAlert) {
             Button("OK", role: .cancel) {}
@@ -204,7 +214,8 @@ struct CameraCaptureNext: View {
         message: String,
         systemImage: String,
         primaryActionTitle: String? = nil,
-        primaryAction: (() -> Void)? = nil
+        primaryAction: (() -> Void)? = nil,
+        showsPhotoLibraryFallback: Bool = false
     ) -> some View {
         VStack(spacing: 16) {
             Image(systemName: systemImage)
@@ -229,6 +240,30 @@ struct CameraCaptureNext: View {
                     .padding(.horizontal, 18)
                     .padding(.vertical, 10)
                     .background(Capsule().fill(theme.currentTheme.chrome.accent))
+            }
+
+            if showsPhotoLibraryFallback {
+                PhotosPicker(selection: $fallbackPhotoItem, matching: .images) {
+                    HStack(spacing: 6) {
+                        if camera.isProcessing {
+                            ProgressView()
+                                .scaleEffect(0.72)
+                        } else {
+                            Image(systemName: "photo.on.rectangle")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+
+                        Text(camera.isProcessing ? "Importing…" : "Choose Photo")
+                    }
+                    .talkieType(.preview)
+                    .foregroundStyle(theme.colors.cardBackground)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(theme.currentTheme.chrome.accent))
+                }
+                .buttonStyle(.plain)
+                .disabled(camera.isProcessing)
+                .accessibilityLabel("Choose a photo to scan")
             }
         }
         .padding(24)
@@ -366,6 +401,23 @@ private final class CameraCaptureNextModel: NSObject, ObservableObject {
     func openSystemSettings() {
         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
         UIApplication.shared.open(url)
+    }
+
+    func importFallbackPhoto(_ item: PhotosPickerItem) async {
+        guard !isProcessing else { return }
+        isProcessing = true
+        statusMessage = "Importing photo…"
+
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self) else {
+                finishWithError("Talkie could not read that photo.")
+                return
+            }
+
+            await processCapturedPhoto(data)
+        } catch {
+            finishWithError("Photo import failed: \(error.localizedDescription)")
+        }
     }
 
     private func configureIfNeeded() {
