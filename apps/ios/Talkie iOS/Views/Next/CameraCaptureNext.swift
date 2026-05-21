@@ -16,19 +16,21 @@ import VisionKit
 
 struct CameraCaptureNext: View {
     private let initialURL: URL?
+    private let onCaptureSaved: ((Capture) -> Void)?
 
     @StateObject private var camera = CameraCaptureNextModel()
     @ObservedObject private var theme = ThemeManager.shared
     @State private var fallbackPhotoItem: PhotosPickerItem?
     @State private var isShowingDocumentScanner = false
 
-    init(initialURL: URL? = nil) {
+    init(initialURL: URL? = nil, onCaptureSaved: ((Capture) -> Void)? = nil) {
         self.initialURL = initialURL
+        self.onCaptureSaved = onCaptureSaved
     }
 
     var body: some View {
         if let initialURL {
-            WebCaptureBrowserNext(initialURL: initialURL)
+            WebCaptureBrowserNext(initialURL: initialURL, onCaptureSaved: onCaptureSaved)
         } else {
             cameraBody
         }
@@ -70,7 +72,12 @@ struct CameraCaptureNext: View {
                 ScanPreviewOverlay(
                     preview: preview,
                     onReshoot: { camera.discardPreview() },
-                    onSave:    { editedText in camera.confirmAndSave(editedText: editedText) }
+                    onSave:    { editedText in
+                        camera.confirmAndSave(
+                            editedText: editedText,
+                            onCaptureSaved: onCaptureSaved
+                        )
+                    }
                 )
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
                 .zIndex(1)
@@ -601,7 +608,10 @@ private final class CameraCaptureNextModel: NSObject, ObservableObject {
     /// CaptureDetail. Called from the ScanPreviewOverlay's Save chip.
     /// `editedText` overrides the OCR-derived combined text when the
     /// user has hand-corrected the scan before saving (M02 path).
-    func confirmAndSave(editedText: String? = nil) {
+    func confirmAndSave(
+        editedText: String? = nil,
+        onCaptureSaved: ((Capture) -> Void)? = nil
+    ) {
         guard let preview = scanPreview else { return }
         scanPreview = nil
 
@@ -630,7 +640,11 @@ private final class CameraCaptureNextModel: NSObject, ObservableObject {
         CaptureSyncService.shared.syncIfConnected()
 
         statusMessage = "Saved scan"
-        AppShellRouter.shared.openCaptureDetail(captureID: capture.id.uuidString)
+        if let onCaptureSaved {
+            onCaptureSaved(capture)
+        } else {
+            AppShellRouter.shared.openCaptureDetail(captureID: capture.id.uuidString)
+        }
     }
 
     /// Discard the pending preview and return to the live camera.

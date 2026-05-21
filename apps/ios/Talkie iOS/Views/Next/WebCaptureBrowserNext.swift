@@ -98,6 +98,7 @@ final class WebCaptureBrowserStore: ObservableObject {
 
 struct WebCaptureBrowserNext: View {
     var initialURL: URL?
+    var onCaptureSaved: ((Capture) -> Void)?
 
     @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var store = WebCaptureBrowserStore()
@@ -488,7 +489,11 @@ struct WebCaptureBrowserNext: View {
 
             CaptureStore.shared.add(capture)
             CaptureSyncService.shared.syncIfConnected()
-            AppShellRouter.shared.openCaptureDetail(captureID: capture.id.uuidString)
+            if let onCaptureSaved {
+                onCaptureSaved(capture)
+            } else {
+                AppShellRouter.shared.openCaptureDetail(captureID: capture.id.uuidString)
+            }
         }
     }
 
