@@ -6,8 +6,10 @@
 //
 
 import Foundation
+import Combine
 import CryptoKit
 import SwiftUI
+import UIKit
 import TalkieMobileKit
 
 extension Notification.Name {
@@ -129,6 +131,8 @@ final class BridgeManager {
 
     let client = BridgeClient()
     private var retryTask: Task<Void, Never>?
+    private var autoReconnectTask: Task<Void, Never>?
+    private var autoReconnectCancellables = Set<AnyCancellable>()
     private var companionPollTask: Task<Void, Never>?
     private var pendingPairingApprovalTask: Task<Void, Never>?
     private var companionEventTask: Task<Void, Never>?
@@ -243,6 +247,55 @@ final class BridgeManager {
 
     private init() {
         loadPairing()
+        setupAutoReconnectObservers()
+    }
+
+
+    private var shouldAutoReconnect: Bool {
+        hasPairedMacs &&
+        status != .connected &&
+        status != .connecting &&
+        !awaitingPairingApproval
+    }
+
+    private func setupAutoReconnectObservers() {
+        NetworkReachability.shared.start()
+
+        NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.triggerAutoReconnect(reason: "foreground")
+                }
+            }
+            .store(in: &autoReconnectCancellables)
+
+        NetworkReachability.shared.$status
+            .removeDuplicates()
+            .sink { [weak self] status in
+                guard status == .online else { return }
+                Task { @MainActor [weak self] in
+                    self?.triggerAutoReconnect(reason: "network up")
+                }
+            }
+            .store(in: &autoReconnectCancellables)
+    }
+
+    private func triggerAutoReconnect(reason: String) {
+        guard shouldAutoReconnect else { return }
+        log.info("🔌 BridgeManager auto-reconnect: \(reason)")
+
+        retryTask?.cancel()
+        retryTask = nil
+        autoReconnectTask?.cancel()
+
+        autoReconnectTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled, let self, self.shouldAutoReconnect else { return }
+            await self.connect()
+            if !Task.isCancelled {
+                self.autoReconnectTask = nil
+            }
+        }
     }
 
     // MARK: - Public API
@@ -504,6 +557,8 @@ final class BridgeManager {
     func disconnect() {
         retryTask?.cancel()
         retryTask = nil
+        autoReconnectTask?.cancel()
+        autoReconnectTask = nil
         companionPollTask?.cancel()
         companionPollTask = nil
         stopPendingPairingApprovalMonitor()
