@@ -217,6 +217,10 @@ struct CameraCaptureNext: View {
         primaryAction: (() -> Void)? = nil,
         showsPhotoLibraryFallback: Bool = false
     ) -> some View {
+        let isImportingFallback = camera.isProcessing
+        let fallbackForeground = theme.colors.cardBackground
+        let fallbackAccent = theme.currentTheme.chrome.accent
+
         VStack(spacing: 16) {
             Image(systemName: systemImage)
                 .font(.system(size: 34, weight: .medium))
@@ -245,7 +249,7 @@ struct CameraCaptureNext: View {
             if showsPhotoLibraryFallback {
                 PhotosPicker(selection: $fallbackPhotoItem, matching: .images) {
                     HStack(spacing: 6) {
-                        if camera.isProcessing {
+                        if isImportingFallback {
                             ProgressView()
                                 .scaleEffect(0.72)
                         } else {
@@ -253,16 +257,16 @@ struct CameraCaptureNext: View {
                                 .font(.system(size: 12, weight: .semibold))
                         }
 
-                        Text(camera.isProcessing ? "Importing…" : "Choose Photo")
+                        Text(isImportingFallback ? "Importing…" : "Choose Photo")
                     }
                     .talkieType(.preview)
-                    .foregroundStyle(theme.colors.cardBackground)
+                    .foregroundStyle(fallbackForeground)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 10)
-                    .background(Capsule().fill(theme.currentTheme.chrome.accent))
+                    .background(Capsule().fill(fallbackAccent))
                 }
                 .buttonStyle(.plain)
-                .disabled(camera.isProcessing)
+                .disabled(isImportingFallback)
                 .accessibilityLabel("Choose a photo to scan")
             }
         }
