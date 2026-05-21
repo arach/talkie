@@ -40,6 +40,11 @@ final class VoiceMemoDetailStore: ObservableObject {
         isMock || sourceMemo != nil
     }
 
+    var canGenerateTitle: Bool {
+        let transcript = memo.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        return canEditTitle && !transcript.isEmpty && transcript != "No transcript yet."
+    }
+
     init(memoID: String?) {
         let id = memoID ?? "mock"
         self.isMock = id == "mock"
@@ -89,6 +94,20 @@ final class VoiceMemoDetailStore: ObservableObject {
             refreshSourceMemoDisplay()
             return false
         }
+    }
+
+    func generateSmartTitle(using aiService: OnDeviceAIService) async throws -> String {
+        if isMock {
+            let title = Self.localTitle(from: memo.summary ?? memo.transcript, fallback: "Generated memo title")
+            memo = memo.withTitle(title)
+            return title
+        }
+
+        guard let sourceMemo else { throw OnDeviceAIError.noTranscript }
+        let context = sourceMemo.managedObjectContext ?? PersistenceController.shared.container.viewContext
+        try await aiService.applySmartTitle(to: sourceMemo, context: context)
+        refreshSourceMemoDisplay()
+        return memo.title
     }
 
     // MARK: - Attachments
@@ -235,6 +254,15 @@ final class VoiceMemoDetailStore: ObservableObject {
         return "\(date.formatted(.dateTime.month(.abbreviated).day())) · \(time)"
     }
 
+    private static func localTitle(from text: String, fallback: String) -> String {
+        let words = text
+            .split { !$0.isLetter && !$0.isNumber }
+            .map(String.init)
+            .filter { !$0.isEmpty }
+        let title = words.prefix(5).joined(separator: " ")
+        return title.isEmpty ? fallback : title
+    }
+
     static func formatDuration(_ duration: TimeInterval) -> String {
         let total = max(0, Int(duration.rounded()))
         return "\(total / 60):" + String(format: "%02d", total % 60)
@@ -276,12 +304,14 @@ private extension VoiceMemoDetailStore.MemoDisplay {
 struct VoiceMemoDetailNext: View {
     @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var store: VoiceMemoDetailStore
+    @StateObject private var aiService = OnDeviceAIService.shared
     @State private var pickerItem: PhotosPickerItem?
     @State private var isPickerActive: Bool = false
     @State private var previewAttachment: MemoImageAttachment?
     @State private var isEditingTitle: Bool = false
     @State private var editedTitle: String = ""
     @State private var titleEditError: String?
+    @State private var isGeneratingTitle: Bool = false
     @FocusState private var titleFieldFocused: Bool
 
     init(memoID: String? = nil) {
@@ -437,6 +467,30 @@ struct VoiceMemoDetailNext: View {
                     .foregroundStyle(theme.colors.textSecondary)
 
                 Spacer(minLength: 0)
+
+                Button(action: generateSmartTitle) {
+                    HStack(spacing: 5) {
+                        if isGeneratingTitle {
+                            ProgressView()
+                                .scaleEffect(0.55)
+                        } else {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 10, weight: .semibold))
+                        }
+                        Text(isGeneratingTitle ? "Generating" : "Generate")
+                    }
+                    .talkieType(.fieldLabel)
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(theme.currentTheme.chrome.accent.opacity(0.45),
+                                          lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                    )
+                }
+                .disabled(isGeneratingTitle || !store.canGenerateTitle)
+                .opacity(store.canGenerateTitle ? 1 : 0.5)
 
                 Button("Save", action: saveTitleEdit)
                     .talkieType(.fieldLabel)
@@ -736,6 +790,23 @@ struct VoiceMemoDetailNext: View {
         titleEditError = nil
         isEditingTitle = false
         titleFieldFocused = false
+    }
+
+    private func generateSmartTitle() {
+        guard !isGeneratingTitle else { return }
+        titleEditError = nil
+        isGeneratingTitle = true
+
+        Task { @MainActor in
+            defer { isGeneratingTitle = false }
+            do {
+                let title = try await store.generateSmartTitle(using: aiService)
+                editedTitle = title
+                isEditingTitle = true
+            } catch {
+                titleEditError = error.localizedDescription
+            }
+        }
     }
 
     private func saveTitleEdit() {
