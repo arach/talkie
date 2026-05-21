@@ -12,6 +12,7 @@ import PhotosUI
 import SwiftUI
 import TalkieMobileKit
 import UIKit
+import VisionKit
 
 struct CameraCaptureNext: View {
     private let initialURL: URL?
@@ -19,6 +20,7 @@ struct CameraCaptureNext: View {
     @StateObject private var camera = CameraCaptureNextModel()
     @ObservedObject private var theme = ThemeManager.shared
     @State private var fallbackPhotoItem: PhotosPickerItem?
+    @State private var isShowingDocumentScanner = false
 
     init(initialURL: URL? = nil) {
         self.initialURL = initialURL
@@ -89,6 +91,18 @@ struct CameraCaptureNext: View {
                 await camera.importFallbackPhoto(newItem)
                 fallbackPhotoItem = nil
             }
+        }
+        .sheet(isPresented: $isShowingDocumentScanner) {
+            CameraDocumentScannerNext(
+                onScan: { pages in
+                    Task {
+                        await camera.importDocumentScan(pages)
+                    }
+                },
+                onFailure: { message in
+                    camera.finishWithError(message)
+                }
+            )
         }
         .alert("Camera Capture", isPresented: $camera.showingAlert) {
             Button("OK", role: .cancel) {}
@@ -189,9 +203,28 @@ struct CameraCaptureNext: View {
             .opacity(camera.canCapture ? 1 : 0.55)
             .accessibilityLabel("Capture scan")
 
-            Color.clear
-                .frame(width: 44, height: 44)
-                .accessibilityHidden(true)
+            Button(action: { isShowingDocumentScanner = true }) {
+                Image(systemName: "doc.viewfinder")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(theme.colors.textSecondary)
+                    .frame(width: 44, height: 44)
+                    .background(
+                        Circle()
+                            .fill(theme.colors.cardBackground.opacity(0.76))
+                            .background(.ultraThinMaterial, in: Circle())
+                    )
+                    .overlay(
+                        Circle()
+                            .strokeBorder(
+                                theme.currentTheme.chrome.edgeFaint,
+                                lineWidth: theme.currentTheme.chrome.hairlineWidth
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+            .disabled(!CameraDocumentScannerNext.isSupported || camera.isProcessing)
+            .opacity(CameraDocumentScannerNext.isSupported && !camera.isProcessing ? 1 : 0.45)
+            .accessibilityLabel("Scan multiple pages")
         }
     }
 
@@ -304,6 +337,7 @@ struct ScanPreview: Equatable {
     let chunks: [OCRChunk]
     let pageCount: Int
     let deferredPageCount: Int
+    let deferredPageImages: [UIImage]
     /// Joined text fallback for downstream save / OCR consumers that
     /// don't need chunk granularity.
     var combinedText: String { chunks.map(\.text).joined(separator: "\n") }
@@ -325,7 +359,8 @@ struct ScanPreview: Equatable {
         lhs.image === rhs.image &&
             lhs.chunks == rhs.chunks &&
             lhs.pageCount == rhs.pageCount &&
-            lhs.deferredPageCount == rhs.deferredPageCount
+            lhs.deferredPageCount == rhs.deferredPageCount &&
+            lhs.deferredPageImages.count == rhs.deferredPageImages.count
     }
 }
 
@@ -439,6 +474,18 @@ private final class CameraCaptureNextModel: NSObject, ObservableObject {
         }
     }
 
+    func importDocumentScan(_ pages: [UIImage]) async {
+        guard !isProcessing else { return }
+        guard !pages.isEmpty else {
+            finishWithError("No pages were captured.")
+            return
+        }
+
+        isProcessing = true
+        statusMessage = pages.count > 1 ? "Reading first page…" : "Reading text…"
+        await processCapturedPages(pages)
+    }
+
     private func configureIfNeeded() {
         guard !isConfigured else {
             startSession()
@@ -508,25 +555,41 @@ private final class CameraCaptureNextModel: NSObject, ObservableObject {
     }
 
     private func processCapturedPhoto(_ data: Data) async {
-        statusMessage = "Reading text…"
-
         guard let image = UIImage(data: data) else {
             finishWithError("Talkie could not read that photo.")
             return
         }
 
+        statusMessage = "Reading text…"
+        await processCapturedPages([image])
+    }
+
+    private func processCapturedPages(_ pages: [UIImage]) async {
+        guard let firstImage = pages.first else {
+            finishWithError("Talkie could not read that scan.")
+            return
+        }
+
+        let deferredPages = Array(pages.dropFirst())
         let preview: ScanPreview
         do {
-            let result = try await ScreenshotOCRService.extractChunks(from: image)
+            let result = try await ScreenshotOCRService.extractChunks(from: firstImage)
             preview = ScanPreview(
                 image: result.image,
                 chunks: result.chunks,
-                pageCount: result.pageCount,
-                deferredPageCount: 0
+                pageCount: max(pages.count, result.pageCount),
+                deferredPageCount: deferredPages.count,
+                deferredPageImages: deferredPages
             )
         } catch {
             AppLogger.ai.warning("Camera capture OCR found no text: \(error.localizedDescription)")
-            preview = ScanPreview(image: image, chunks: [], pageCount: 1, deferredPageCount: 0)
+            preview = ScanPreview(
+                image: firstImage,
+                chunks: [],
+                pageCount: pages.count,
+                deferredPageCount: deferredPages.count,
+                deferredPageImages: deferredPages
+            )
         }
 
         statusMessage = nil
@@ -550,6 +613,7 @@ private final class CameraCaptureNextModel: NSObject, ObservableObject {
             ?? preview.image.jpegData(compressionQuality: 0.92)
             ?? Data()
         let imageFilename = CaptureStore.shared.saveImage(storedData, id: captureID)
+        let deferredFilenames = saveDeferredPages(preview.deferredPageImages, captureID: captureID)
         let title = Self.title(from: combined, timestamp: Date())
 
         let capture = Capture(
@@ -557,7 +621,9 @@ private final class CameraCaptureNextModel: NSObject, ObservableObject {
             sourceType: "scan",
             text: combined,
             title: title,
-            imageFilename: imageFilename
+            imageFilename: imageFilename,
+            deferredPageFilenames: deferredFilenames.isEmpty ? nil : deferredFilenames,
+            totalPageCount: preview.pageCount > 1 ? preview.pageCount : nil
         )
 
         CaptureStore.shared.add(capture)
@@ -574,11 +640,22 @@ private final class CameraCaptureNextModel: NSObject, ObservableObject {
         statusMessage = nil
     }
 
-    private func finishWithError(_ message: String) {
+    func finishWithError(_ message: String) {
         isProcessing = false
         statusMessage = nil
         alertMessage = message
         showingAlert = true
+    }
+
+    private func saveDeferredPages(_ images: [UIImage], captureID: UUID) -> [String] {
+        images.enumerated().compactMap { offset, image in
+            guard let data = image.pngData() else { return nil }
+            return CaptureStore.shared.saveDeferredPage(
+                data,
+                captureId: captureID,
+                pageIndex: offset + 2
+            )
+        }
     }
 
     private func normalizedJPEGData(from image: UIImage) -> Data? {
@@ -627,6 +704,83 @@ private final class CameraPhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureD
         }
 
         completion(.success(data))
+    }
+}
+
+private struct CameraDocumentScannerNext: UIViewControllerRepresentable {
+    static var isSupported: Bool {
+        VNDocumentCameraViewController.isSupported
+    }
+
+    let onScan: ([UIImage]) -> Void
+    let onFailure: (String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(
+            onScan: onScan,
+            onFailure: onFailure,
+            dismiss: dismiss.callAsFunction
+        )
+    }
+
+    func makeUIViewController(context: Context) -> VNDocumentCameraViewController {
+        let controller = VNDocumentCameraViewController()
+        controller.delegate = context.coordinator
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: VNDocumentCameraViewController, context: Context) {}
+
+    final class Coordinator: NSObject, VNDocumentCameraViewControllerDelegate {
+        private let onScan: ([UIImage]) -> Void
+        private let onFailure: (String) -> Void
+        private let dismiss: () -> Void
+
+        init(
+            onScan: @escaping ([UIImage]) -> Void,
+            onFailure: @escaping (String) -> Void,
+            dismiss: @escaping () -> Void
+        ) {
+            self.onScan = onScan
+            self.onFailure = onFailure
+            self.dismiss = dismiss
+        }
+
+        func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) {
+            dismiss()
+        }
+
+        func documentCameraViewController(
+            _ controller: VNDocumentCameraViewController,
+            didFailWithError error: Error
+        ) {
+            onFailure(error.localizedDescription)
+            dismiss()
+        }
+
+        func documentCameraViewController(
+            _ controller: VNDocumentCameraViewController,
+            didFinishWith scan: VNDocumentCameraScan
+        ) {
+            guard scan.pageCount > 0 else {
+                onFailure("No pages were captured.")
+                dismiss()
+                return
+            }
+
+            var pages: [UIImage] = []
+            pages.reserveCapacity(scan.pageCount)
+            for index in 0..<scan.pageCount {
+                autoreleasepool {
+                    pages.append(scan.imageOfPage(at: index))
+                }
+            }
+
+            onScan(pages)
+            dismiss()
+        }
     }
 }
 

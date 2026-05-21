@@ -9,6 +9,7 @@ import UIKit
 import Vision
 import CoreImage
 import CoreImage.CIFilterBuiltins
+import TalkieMobileKit
 
 enum ScreenshotOCRService {
 
@@ -111,6 +112,17 @@ enum ScreenshotOCRService {
             pageCount: preparedPages.count,
             didDetectPage: didDetectPage
         )
+    }
+
+    static func extractText(fromDeferredCapturePageFilenames filenames: [String]) async throws -> OCRResult {
+        let images = filenames.compactMap { filename -> UIImage? in
+            guard let data = CaptureStore.shared.loadImageData(filename: filename) else {
+                return nil
+            }
+            return UIImage(data: data)
+        }
+
+        return try await extractText(from: images)
     }
 
     static func extractChunks(from images: [UIImage]) async throws -> OCRChunkResult {
