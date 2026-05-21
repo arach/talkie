@@ -91,6 +91,7 @@ struct WorkflowsNext: View {
                     )
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Close workflows")
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)

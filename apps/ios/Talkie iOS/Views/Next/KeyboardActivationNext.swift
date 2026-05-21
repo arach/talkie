@@ -178,6 +178,7 @@ struct KeyboardActivationNext: View {
                     .frame(width: 32, height: 32)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Close keyboard setup")
 
             Spacer()
 
@@ -498,6 +499,7 @@ struct KeyboardActivationNext: View {
                     .background(Circle().fill(theme.colors.textTertiary.opacity(0.1)))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss tip")
         }
         .padding(14)
         .background(

@@ -109,6 +109,7 @@ struct SettingsNext: View {
                     )
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Close settings")
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)
@@ -404,6 +405,7 @@ struct SettingsNext: View {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(theme.colors.textTertiary)
+                    .accessibilityHidden(true)
             }
             .frame(height: 44)
             .overlay(alignment: .bottom) {
@@ -413,6 +415,8 @@ struct SettingsNext: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityHint("Opens \(label.lowercased())")
     }
 
     private func actionRow(_ label: String, tone: ActionTone, action: (() -> Void)? = nil) -> some View {

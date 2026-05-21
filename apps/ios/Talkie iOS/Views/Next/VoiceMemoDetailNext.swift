@@ -316,6 +316,7 @@ struct VoiceMemoDetailNext: View {
                     .font(.system(size: 16))
                     .foregroundStyle(theme.colors.textTertiary)
                     .frame(width: 28, height: 28)
+                    .accessibilityLabel("More options")
             }
             .buttonStyle(.plain)
         }

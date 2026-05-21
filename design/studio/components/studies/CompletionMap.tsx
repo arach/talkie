@@ -119,7 +119,7 @@ const MILESTONES: Milestone[] = [
     blurb:
       "Cross-cutting work — accessibility, performance, localization. Not optional for shipping, but parallel to feature work.",
     items: [
-      { code: "S01", title: "Accessibility audit", detail: "VoiceOver labels, Dynamic Type sizing, contrast across all 5 themes.", status: "future", size: "l", risk: "med" },
+      { code: "S01", title: "Accessibility audit", detail: "Phase A — VoiceOver label sweep across Next surfaces: every glyph-only button (close · back · ellipsis · gear · chevron) now announces what it does. AmbientStatusRow pixels announce 'Mac bridge · connected' style labels. Phase B — Dynamic Type review + contrast across themes still ahead.", status: "in-flight", size: "l", risk: "med" },
       { code: "S02", title: "Localization", detail: "Strings extraction, NSLocalizedString sweep, first non-English locale.", status: "future", size: "l", risk: "low" },
       { code: "S03", title: "Launch performance", detail: "Cold-launch budget under 1s. Profile + trim app boot path.", status: "future", size: "m", risk: "med" },
       { code: "S04", title: "Offline error states", detail: "Shared NetworkStatusBanner component (offline · requestFailed · ok) wired into AskAINext above the conversation area. RETRY chip resets session.errorMessage and re-sends. Codex layers NetworkReachability into networkStatus to drive the .offline branch.", status: "shipped", size: "m" },

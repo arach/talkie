@@ -136,9 +136,11 @@ private struct ComposeHeader: View {
                             .font(.system(size: 9, weight: .semibold))
                             .foregroundStyle(theme.colors.textTertiary)
                             .padding(.leading, 1)
+                            .accessibilityHidden(true)
                     }
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Choose model · \(modelLabel)")
             }
 
             Spacer()
@@ -150,6 +152,7 @@ private struct ComposeHeader: View {
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("More options")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

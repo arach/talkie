@@ -67,6 +67,7 @@ struct MinimalDictationOverlayNext: View {
                             .fill(theme.colors.textTertiary.opacity(0.12))
                     )
             }
+            .accessibilityLabel("Close dictation overlay")
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 14)

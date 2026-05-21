@@ -388,6 +388,7 @@ private struct ConnectionRowNext: View {
                             .talkieType(.fieldLabel)
                         Image(systemName: "chevron.right")
                             .font(.system(size: 10, weight: .semibold))
+                            .accessibilityHidden(true)
                     }
                     .foregroundStyle(theme.currentTheme.chrome.accent)
                 }

@@ -87,6 +87,7 @@ private struct HomeHeader: View {
                 .shadow(color: .black.opacity(0.10), radius: 4, y: 2)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Settings")
         }
         .padding(.horizontal, 20)
         .padding(.top, 6)
@@ -107,19 +108,37 @@ private struct AmbientStatusRow: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            StatusPixel(state: macPixelState) {
+            StatusPixel(state: macPixelState, label: "Mac bridge", value: macPixelLabel) {
                 AppShellRouter.shared.openConnectionCenter()
             }
-            StatusPixel(state: iCloudPixelState) {
+            StatusPixel(state: iCloudPixelState, label: "iCloud sync", value: iCloudPixelLabel) {
                 AppShellRouter.shared.openConnectionCenter()
             }
-            StatusPixel(state: signInPixelState) {
+            StatusPixel(state: signInPixelState, label: "Account", value: isSignedIn ? "signed in" : "signed out") {
                 if isSignedIn {
                     AppShellRouter.shared.openConnectionCenter()
                 } else {
                     AppShellRouter.shared.openSignIn()
                 }
             }
+        }
+    }
+
+    private var macPixelLabel: String {
+        switch macPixelState {
+        case .good: return "connected"
+        case .transient: return bridgeManager.isPaired ? "reconnecting" : "connecting"
+        case .dim: return "not paired"
+        case .error: return "connection failed"
+        }
+    }
+
+    private var iCloudPixelLabel: String {
+        switch iCloudPixelState {
+        case .good: return "available"
+        case .transient: return "syncing"
+        case .dim: return "no iCloud account"
+        case .error: return "error"
         }
     }
 
@@ -155,6 +174,8 @@ private struct StatusPixel: View {
     enum State { case good, transient, dim, error }
 
     let state: State
+    let label: String
+    let value: String
     let action: () -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
@@ -176,6 +197,8 @@ private struct StatusPixel: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(label) · \(value)")
+        .accessibilityHint("Opens connection center")
     }
 
     private var fillColor: Color {

@@ -75,6 +75,7 @@ struct FeedbackNext: View {
                     )
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Close feedback")
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)

@@ -276,6 +276,7 @@ struct SignInNext: View {
                     .background(Circle().fill(theme.currentTheme.chrome.edgeFaint.opacity(0.5)))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Close sign in")
             .padding(.trailing, 14)
             .padding(.top, 8)
         }

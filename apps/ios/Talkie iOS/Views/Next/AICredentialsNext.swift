@@ -140,6 +140,7 @@ struct AICredentialsNext: View {
                     )
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Close AI keys")
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)
@@ -162,6 +163,7 @@ struct AICredentialsNext: View {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(theme.colors.textTertiary)
+                    .accessibilityHidden(true)
             }
             .padding(.vertical, 14)
             .padding(.horizontal, 14)
