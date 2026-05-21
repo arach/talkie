@@ -103,6 +103,7 @@ struct AppShellNext<Content: View>: View {
         case .bridgeDetail: return "bridgeDetail"
         case .askAI: return "askAI"
         case .readAloud: return "readAloud"
+        case .feedback: return "feedback"
         case .captureDetail(let c): return "capture:\(c)"
         case .memoDetail(let m): return "memo:\(m)"
         case .dictationHistory: return "dictations"
@@ -157,6 +158,8 @@ struct AppShellNext<Content: View>: View {
             AskAINext()
         case .readAloud:
             ReadAloudNext()
+        case .feedback:
+            FeedbackNext()
         }
     }
 }
@@ -192,6 +195,8 @@ final class AppShellRouter: ObservableObject {
         case askAI
         // Phase-2 — TTS playback / read-aloud surface.
         case readAloud
+        // M4 — user feedback / bug report surface.
+        case feedback
     }
 
     @Published var surface: Surface = .home
@@ -248,6 +253,8 @@ final class AppShellRouter: ObservableObject {
             openAskAI()
         } else if args.contains("--readaloud") {
             openReadAloud()
+        } else if args.contains("--feedback") {
+            openFeedback()
         }
     }
 
@@ -295,6 +302,7 @@ final class AppShellRouter: ObservableObject {
         pendingReadAloudSource = source
         push(.readAloud)
     }
+    func openFeedback() { push(.feedback) }
 
     /// Open a new Compose document seeded with `text`. Caller doesn't
     /// pick the document ID — this generates one and stashes the seed

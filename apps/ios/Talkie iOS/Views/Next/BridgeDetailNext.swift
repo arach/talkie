@@ -42,7 +42,15 @@ struct BridgeDetailNext: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        PairingPhaseBanner(phase: currentPhase)
+                        if !bridgeManager.hasPairedMacs {
+                            MacCoachCard(
+                                nearbyCount: nearbyBrowser.macs.count,
+                                isSearching: nearbyBrowser.isBrowsing,
+                                onScan: { showingQRPairing = true }
+                            )
+                        } else {
+                            PairingPhaseBanner(phase: currentPhase)
+                        }
 
                         if let errorMessage = bridgeManager.errorMessage,
                            bridgeManager.status == .error {
@@ -623,6 +631,111 @@ private struct PhaseChip: View {
         switch state {
         case .active: return theme.colors.textPrimary
         default:      return theme.colors.textTertiary
+        }
+    }
+}
+
+// MARK: - Mac availability coach (empty state)
+
+/// Onboarding card shown when no Mac has ever been paired.
+/// Walks the user through what to do on the Mac side and offers a
+/// QR fallback. Auto-dismisses once a pair lands (caller branches on
+/// `bridgeManager.hasPairedMacs`).
+private struct MacCoachCard: View {
+    let nearbyCount: Int
+    let isSearching: Bool
+    let onScan: () -> Void
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 6) {
+                Image(systemName: "desktopcomputer")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(theme.colors.textTertiary)
+                Text("· NO MAC YET")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary)
+                Spacer()
+                Text(searchLabel)
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(searchColor)
+            }
+
+            Text("Pair a Mac to mirror your captures, run the bridge terminal, and keep the dictation pipeline warm across devices.")
+                .talkieType(.preview)
+                .foregroundStyle(theme.colors.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 10) {
+                step(index: 1, title: "Open Talkie on your Mac", body: "macOS app must be running with bridge mode on.")
+                step(index: 2, title: "Stay on the same network", body: "iPhone and Mac on the same Wi-Fi / hotspot.")
+                step(index: 3, title: "Tap a nearby Mac below — or scan a QR", body: "Pairing handshake happens in seconds.")
+            }
+
+            HStack(spacing: 10) {
+                Button(action: onScan) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "qrcode.viewfinder")
+                            .font(.system(size: 12, weight: .medium))
+                        Text("Scan QR pair code")
+                            .talkieType(.fieldLabel)
+                    }
+                    .foregroundStyle(theme.colors.cardBackground)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 11)
+                    .background(Capsule().fill(theme.currentTheme.chrome.accent))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(theme.colors.cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(theme.currentTheme.chrome.accent.opacity(0.35),
+                                      lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                )
+        )
+    }
+
+    private var searchLabel: String {
+        if nearbyCount > 0 { return "\(nearbyCount) NEARBY" }
+        return isSearching ? "SEARCHING" : "IDLE"
+    }
+
+    private var searchColor: Color {
+        if nearbyCount > 0 {
+            return Color(red: 0.36, green: 0.74, blue: 0.50)
+        }
+        return isSearching ? theme.currentTheme.chrome.accent : theme.colors.textTertiary
+    }
+
+    private func step(index: Int, title: String, body: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            ZStack {
+                Circle()
+                    .strokeBorder(theme.currentTheme.chrome.accent.opacity(0.5),
+                                  lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                    .frame(width: 22, height: 22)
+                Text("\(index)")
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .talkieType(.fieldLabel)
+                    .foregroundStyle(theme.colors.textPrimary)
+                Text(body)
+                    .talkieType(.preview)
+                    .foregroundStyle(theme.colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
         }
     }
 }

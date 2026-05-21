@@ -51,7 +51,7 @@ struct CameraCaptureNext: View {
                 ScanPreviewOverlay(
                     preview: preview,
                     onReshoot: { camera.discardPreview() },
-                    onSave:    { camera.confirmAndSave() }
+                    onSave:    { editedText in camera.confirmAndSave(editedText: editedText) }
                 )
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
                 .zIndex(1)
@@ -451,11 +451,15 @@ private final class CameraCaptureNextModel: NSObject, ObservableObject {
 
     /// Persist the pending preview as a capture, sync, and route to
     /// CaptureDetail. Called from the ScanPreviewOverlay's Save chip.
-    func confirmAndSave() {
+    /// `editedText` overrides the OCR-derived combined text when the
+    /// user has hand-corrected the scan before saving (M02 path).
+    func confirmAndSave(editedText: String? = nil) {
         guard let preview = scanPreview else { return }
         scanPreview = nil
 
-        let combined = preview.combinedText
+        let combined = editedText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            ? editedText!
+            : preview.combinedText
         let captureID = UUID()
         let storedData = normalizedJPEGData(from: preview.image)
             ?? preview.image.jpegData(compressionQuality: 0.92)
@@ -669,9 +673,15 @@ private extension UIImage {
 private struct ScanPreviewOverlay: View {
     let preview: ScanPreview
     let onReshoot: () -> Void
-    let onSave: () -> Void
+    /// Save callback receives the edited transcript when the user has
+    /// switched into edit mode and modified the text. `nil` means save
+    /// the OCR-derived combinedText as-is (M02 edit path is opt-in).
+    let onSave: (String?) -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
+    @State private var isEditing: Bool = false
+    @State private var editedText: String = ""
+    @FocusState private var editorFocused: Bool
 
     var body: some View {
         ZStack {
@@ -695,13 +705,15 @@ private struct ScanPreviewOverlay: View {
                             .padding(.horizontal, 12)
                             .padding(.top, 12)
 
-                        if preview.hasLowConfidence {
+                        if preview.hasLowConfidence && !isEditing {
                             lowConfidenceBanner
                                 .padding(.horizontal, 12)
                         }
 
                         HStack(spacing: 6) {
-                            Text("· RECOGNIZED · \(preview.chunks.count) CHUNKS")
+                            Text(isEditing
+                                 ? "· EDITING · \(wordCount(editedText)) WORDS"
+                                 : "· RECOGNIZED · \(preview.chunks.count) CHUNKS")
                                 .talkieType(.channelLabelTiny)
                                 .foregroundStyle(theme.colors.textTertiary)
                             Spacer()
@@ -709,19 +721,24 @@ private struct ScanPreviewOverlay: View {
                         .padding(.horizontal, 16)
                         .padding(.top, 4)
 
-                        VStack(spacing: 0) {
-                            ForEach(Array(preview.chunks.enumerated()), id: \.element.id) { idx, chunk in
-                                ChunkRow(chunk: chunk, showDivider: idx > 0)
+                        if isEditing {
+                            editorPanel
+                                .padding(.horizontal, 12)
+                        } else {
+                            VStack(spacing: 0) {
+                                ForEach(Array(preview.chunks.enumerated()), id: \.element.id) { idx, chunk in
+                                    ChunkRow(chunk: chunk, showDivider: idx > 0)
+                                }
                             }
+                            .background(theme.colors.cardBackground)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                                  lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                            )
+                            .padding(.horizontal, 12)
                         }
-                        .background(theme.colors.cardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .strokeBorder(theme.currentTheme.chrome.edgeFaint,
-                                              lineWidth: theme.currentTheme.chrome.hairlineWidth)
-                        )
-                        .padding(.horizontal, 12)
 
                         actionRow
                             .padding(.horizontal, 12)
@@ -733,17 +750,44 @@ private struct ScanPreviewOverlay: View {
                 .scrollIndicators(.hidden)
             }
         }
+        .onAppear {
+            if editedText.isEmpty {
+                editedText = preview.combinedText
+            }
+        }
     }
 
     private var header: some View {
         HStack {
-            Text("REVIEW SCAN")
+            Text(isEditing ? "EDIT SCAN" : "REVIEW SCAN")
                 .talkieType(.channelLabel)
                 .foregroundStyle(theme.colors.textTertiary)
             Spacer()
-            Text("\(preview.chunks.count)")
-                .talkieType(.channelLabelSmall)
-                .foregroundStyle(theme.colors.textTertiary)
+            Button {
+                if isEditing {
+                    editorFocused = false
+                }
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    isEditing.toggle()
+                }
+                if isEditing {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        editorFocused = true
+                    }
+                }
+            } label: {
+                Text(isEditing ? "DONE" : "EDIT")
+                    .talkieType(.channelLabelSmall)
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(theme.currentTheme.chrome.accent.opacity(0.5),
+                                          lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                    )
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -752,6 +796,38 @@ private struct ScanPreviewOverlay: View {
                 .fill(theme.currentTheme.chrome.edgeFaint)
                 .frame(height: theme.currentTheme.chrome.hairlineWidth)
         }
+    }
+
+    private var editorPanel: some View {
+        ZStack(alignment: .topLeading) {
+            if editedText.isEmpty {
+                Text("Correct any wobbly chunks before saving.")
+                    .talkieType(.preview)
+                    .foregroundStyle(theme.colors.textTertiary.opacity(0.6))
+                    .padding(.top, 14)
+                    .padding(.horizontal, 18)
+                    .allowsHitTesting(false)
+            }
+            TextEditor(text: $editedText)
+                .focused($editorFocused)
+                .scrollContentBackground(.hidden)
+                .talkieType(.preview)
+                .foregroundStyle(theme.colors.textPrimary)
+                .tint(theme.currentTheme.chrome.accent)
+                .frame(minHeight: 240)
+                .padding(10)
+        }
+        .background(theme.colors.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(theme.currentTheme.chrome.accent.opacity(0.45),
+                              lineWidth: theme.currentTheme.chrome.hairlineWidth)
+        )
+    }
+
+    private func wordCount(_ s: String) -> Int {
+        s.split { $0.isWhitespace || $0.isNewline }.count
     }
 
     private var lowConfidenceBanner: some View {
@@ -796,8 +872,18 @@ private struct ScanPreviewOverlay: View {
             }
             .buttonStyle(.plain)
 
-            Button(action: onSave) {
-                Text("Save scan ›")
+            Button {
+                let override: String?
+                if isEditing {
+                    let trimmed = editedText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let original = preview.combinedText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    override = (trimmed != original) ? editedText : nil
+                } else {
+                    override = nil
+                }
+                onSave(override)
+            } label: {
+                Text(isEditing ? "Save edited ›" : "Save scan ›")
                     .talkieType(.fieldLabel)
                     .foregroundStyle(theme.colors.cardBackground)
                     .frame(maxWidth: .infinity)

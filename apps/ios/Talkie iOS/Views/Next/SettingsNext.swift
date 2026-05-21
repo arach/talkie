@@ -344,6 +344,7 @@ struct SettingsNext: View {
             field("Channel", iosChannel)
             field("Engine bundle", appSettings.preferredParakeetModel.huggingFaceRepo)
             field("Mac bridge protocol", "talkie-bridge-v1")
+            navRow("Send feedback") { AppShellRouter.shared.openFeedback() }
         }
     }
 
