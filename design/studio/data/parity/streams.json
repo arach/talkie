@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T22:51:42.679Z",
+  "updatedAt": "2026-05-21T22:52:13.591Z",
   "streams": [
     {
       "key": "C1",
@@ -1310,6 +1310,13 @@
           "level": "blocked",
           "message": "Skipped per user decision: CaptureListSection contract is approved, but painter still needs to land CaptureListSectionNext.swift on feat/ios-shell-phase-0 before Codex can wire it.",
           "findingKey": "C2::CaptureListSection::Entire surface absent"
+        },
+        {
+          "ts": "2026-05-21T22:52:13.590Z",
+          "agent": "talkie-codex-c2",
+          "level": "info",
+          "message": "PR updated: https://github.com/arach/talkie/pull/20 (parity/c2 → feat/ios-shell-phase-0).",
+          "ref": "c518cac"
         }
       ]
     },
