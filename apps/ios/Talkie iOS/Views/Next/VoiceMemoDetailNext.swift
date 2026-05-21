@@ -16,6 +16,7 @@ import UIKit
 final class VoiceMemoDetailStore: ObservableObject {
     @Published var memo: MemoDisplay
     @Published var attachments: [MemoImageAttachment] = []
+    @Published var transcriptVersions: [TranscriptVersionDisplay] = []
 
     struct MemoDisplay {
         let id: String
@@ -27,6 +28,16 @@ final class VoiceMemoDetailStore: ObservableObject {
         let levels: [Float]
         let isPlaying: Bool
         let playheadProgress: Double
+    }
+
+    struct TranscriptVersionDisplay: Identifiable, Equatable {
+        let id: String
+        let version: Int32
+        let content: String
+        let sourceDescription: String
+        let formattedDate: String
+        let isLatest: Bool
+        let sourceIcon: String
     }
 
     private let audioPlayer = AudioPlayerManager()
@@ -43,6 +54,10 @@ final class VoiceMemoDetailStore: ObservableObject {
 
     var canEditTranscript: Bool {
         isMock || sourceMemo != nil
+    }
+
+    var hasTranscriptVersionHistory: Bool {
+        transcriptVersions.count > 1
     }
 
     var canDeleteMemo: Bool {
@@ -77,6 +92,7 @@ final class VoiceMemoDetailStore: ObservableObject {
             .store(in: &cancellables)
 
         reloadAttachments()
+        reloadTranscriptVersions()
     }
 
     // MARK: - Title
@@ -97,10 +113,12 @@ final class VoiceMemoDetailStore: ObservableObject {
         do {
             try sourceMemo.managedObjectContext?.save()
             refreshSourceMemoDisplay()
+            reloadTranscriptVersions()
             return true
         } catch {
             sourceMemo.managedObjectContext?.rollback()
             refreshSourceMemoDisplay()
+            reloadTranscriptVersions()
             return false
         }
     }
@@ -137,10 +155,12 @@ final class VoiceMemoDetailStore: ObservableObject {
         do {
             try sourceMemo.managedObjectContext?.save()
             refreshSourceMemoDisplay()
+            reloadTranscriptVersions()
             return true
         } catch {
             sourceMemo.managedObjectContext?.rollback()
             refreshSourceMemoDisplay()
+            reloadTranscriptVersions()
             return false
         }
     }
@@ -157,6 +177,26 @@ final class VoiceMemoDetailStore: ObservableObject {
             return
         }
         attachments = MemoAttachmentStore.shared.attachments(for: uuid)
+    }
+
+    func reloadTranscriptVersions() {
+        guard let sourceMemo else {
+            transcriptVersions = []
+            return
+        }
+
+        let latestObjectID = sourceMemo.latestTranscriptVersion?.objectID
+        transcriptVersions = sourceMemo.sortedTranscriptVersions.map { version in
+            TranscriptVersionDisplay(
+                id: version.id?.uuidString ?? version.objectID.uriRepresentation().absoluteString,
+                version: version.version,
+                content: version.content ?? "",
+                sourceDescription: version.sourceDescription,
+                formattedDate: version.formattedDate,
+                isLatest: version.objectID == latestObjectID,
+                sourceIcon: Self.sourceIcon(for: version)
+            )
+        }
     }
 
     @discardableResult
@@ -197,6 +237,7 @@ final class VoiceMemoDetailStore: ObservableObject {
         VoiceMemoStore.shared.delete(sourceMemo)
         self.sourceMemo = nil
         attachments = []
+        transcriptVersions = []
         return true
     }
 
@@ -321,6 +362,21 @@ final class VoiceMemoDetailStore: ObservableObject {
         return title.isEmpty ? fallback : title
     }
 
+    private static func sourceIcon(for version: TranscriptVersion) -> String {
+        guard let sourceType = version.sourceTypeEnum else {
+            return "doc.text"
+        }
+
+        switch sourceType {
+        case .systemIOS:
+            return "iphone"
+        case .systemMacOS:
+            return "desktopcomputer"
+        case .user:
+            return "pencil"
+        }
+    }
+
     static func formatDuration(_ duration: TimeInterval) -> String {
         let total = max(0, Int(duration.rounded()))
         return "\(total / 60):" + String(format: "%02d", total % 60)
@@ -380,6 +436,7 @@ struct VoiceMemoDetailNext: View {
     @State private var showingDeleteConfirmation: Bool = false
     @State private var showingShareSheet: Bool = false
     @State private var showingCLISheet: Bool = false
+    @State private var showingVersionHistory: Bool = false
     @FocusState private var titleFieldFocused: Bool
 
     init(memoID: String? = nil) {
@@ -441,6 +498,9 @@ struct VoiceMemoDetailNext: View {
         .sheet(isPresented: $showingCLISheet) {
             MemoCLISheetNext(memo: store.memo)
         }
+        .sheet(isPresented: $showingVersionHistory) {
+            TranscriptVersionHistoryNext(versions: store.transcriptVersions)
+        }
         .alert("Delete memo?", isPresented: $showingDeleteConfirmation) {
             Button("Delete", role: .destructive, action: deleteMemo)
             Button("Cancel", role: .cancel) {}
@@ -476,6 +536,11 @@ struct VoiceMemoDetailNext: View {
                 }
                 Button("Run CLI", systemImage: "terminal") {
                     showingCLISheet = true
+                }
+                if store.hasTranscriptVersionHistory {
+                    Button("Version history", systemImage: "clock.arrow.circlepath") {
+                        showingVersionHistory = true
+                    }
                 }
                 if store.canEditTranscript {
                     Button("Edit transcript", systemImage: "text.quote", action: beginTranscriptEdit)
@@ -691,6 +756,16 @@ struct VoiceMemoDetailNext: View {
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 10).fill(theme.colors.cardBackground).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: theme.currentTheme.chrome.hairlineWidth)))
+                .contextMenu {
+                    if store.hasTranscriptVersionHistory {
+                        Button("Version History", systemImage: "clock.arrow.circlepath") {
+                            showingVersionHistory = true
+                        }
+                    }
+                    Button("Copy", systemImage: "doc.on.doc") {
+                        UIPasteboard.general.string = store.memo.transcript
+                    }
+                }
         }
     }
 
@@ -872,6 +947,11 @@ struct VoiceMemoDetailNext: View {
             .buttonStyle(.plain)
             .padding(5)
         }
+        .contextMenu {
+            Button("Remove", systemImage: "trash", role: .destructive) {
+                store.removeAttachment(attachment)
+            }
+        }
     }
 
     @ViewBuilder
@@ -1023,4 +1103,182 @@ private struct VoiceMemoShareSheet: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+private struct TranscriptVersionHistoryNext: View {
+    let versions: [VoiceMemoDetailStore.TranscriptVersionDisplay]
+
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        ZStack {
+            theme.colors.background.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                header
+
+                if versions.isEmpty {
+                    emptyState
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 10) {
+                            ForEach(versions) { version in
+                                TranscriptVersionRowNext(version: version)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                    }
+                    .scrollIndicators(.hidden)
+                }
+            }
+        }
+    }
+
+    private var header: some View {
+        HStack {
+            Button("Close") {
+                dismiss()
+            }
+            .talkieType(.fieldLabel)
+            .foregroundStyle(theme.colors.textSecondary)
+
+            Spacer()
+
+            Text("Version History")
+                .talkieType(.headlineSecondary)
+                .foregroundStyle(theme.colors.textPrimary)
+
+            Spacer()
+
+            Text("\(versions.count)")
+                .talkieType(.channelLabelTiny)
+                .foregroundStyle(theme.colors.textTertiary)
+                .frame(width: 44, alignment: .trailing)
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .overlay(
+            Rectangle()
+                .fill(theme.currentTheme.chrome.edgeFaint)
+                .frame(height: theme.currentTheme.chrome.hairlineWidth),
+            alignment: .bottom
+        )
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Spacer()
+
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 36, weight: .medium))
+                .foregroundStyle(theme.colors.textTertiary)
+
+            Text("No version history")
+                .talkieType(.headlineSecondary)
+                .foregroundStyle(theme.colors.textPrimary)
+
+            Text("Saved transcript edits and system transcripts will appear here.")
+                .talkieType(.preview)
+                .foregroundStyle(theme.colors.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 36)
+
+            Spacer()
+        }
+    }
+}
+
+private struct TranscriptVersionRowNext: View {
+    let version: VoiceMemoDetailStore.TranscriptVersionDisplay
+
+    @ObservedObject private var theme = ThemeManager.shared
+    @State private var isExpanded: Bool = false
+
+    var body: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.18)) {
+                isExpanded.toggle()
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(spacing: 8) {
+                    HStack(spacing: 5) {
+                        Text("v\(version.version)")
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(theme.colors.textPrimary)
+
+                        if version.isLatest {
+                            Text("CURRENT")
+                                .talkieType(.channelLabelTiny)
+                                .foregroundStyle(theme.currentTheme.chrome.accent)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(
+                                    Capsule()
+                                        .fill(theme.currentTheme.chrome.accent.opacity(0.12))
+                                )
+                        }
+                    }
+
+                    Spacer()
+
+                    Image(systemName: version.sourceIcon)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(theme.colors.textTertiary)
+                }
+
+                HStack(spacing: 6) {
+                    Text(version.sourceDescription.uppercased())
+                        .talkieType(.channelLabelTiny)
+                    Text("·")
+                        .talkieType(.channelLabelTiny)
+                    Text(version.formattedDate)
+                        .font(.system(size: 10, design: .monospaced))
+                }
+                .foregroundStyle(theme.colors.textTertiary)
+
+                Text(version.content)
+                    .talkieType(.preview)
+                    .foregroundStyle(theme.colors.textPrimary)
+                    .lineSpacing(4)
+                    .lineLimit(isExpanded ? nil : 3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .multilineTextAlignment(.leading)
+
+                if !isExpanded && version.content.count > 150 {
+                    Text("TAP TO EXPAND")
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(theme.colors.textTertiary)
+                }
+            }
+            .padding(13)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(
+                        version.isLatest
+                            ? theme.currentTheme.chrome.accent.opacity(0.07)
+                            : theme.colors.cardBackground
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .strokeBorder(
+                                version.isLatest
+                                    ? theme.currentTheme.chrome.accent.opacity(0.35)
+                                    : theme.currentTheme.chrome.edgeFaint,
+                                lineWidth: theme.currentTheme.chrome.hairlineWidth
+                            )
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button("Copy", systemImage: "doc.on.doc") {
+                UIPasteboard.general.string = version.content
+            }
+        }
+    }
 }
