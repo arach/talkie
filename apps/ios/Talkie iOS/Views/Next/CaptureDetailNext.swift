@@ -29,7 +29,10 @@ final class CaptureDetailStore: ObservableObject {
     @Published var capture: CaptureDisplay
     @Published private(set) var sourceCapture: Capture?
     @Published private(set) var captureImage: UIImage?
+    @Published private(set) var audioURL: URL?
     @Published var isSyncing = false
+    @Published var isLoadingTTS = false
+    @Published var ttsError: String?
 
     private let captureID: UUID?
 
@@ -139,6 +142,7 @@ final class CaptureDetailStore: ObservableObject {
 
     private func refreshLoadedAssets(for capture: Capture) {
         captureImage = loadCaptureImage(for: capture)
+        audioURL = CaptureStore.shared.audioURL(for: capture.id)
     }
 
     private func loadCaptureImage(for capture: Capture) -> UIImage? {
@@ -227,6 +231,9 @@ private extension CaptureDetailStore.CaptureDisplay {
 struct CaptureDetailNext: View {
     @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var store: CaptureDetailStore
+    @StateObject private var audioPlayer = AudioPlayerManager()
+    @State private var speechService = SpeechSynthesisService.shared
+    @State private var appSettings = TalkieAppSettings.shared
     @State private var showCopied = false
     @State private var isShowingImageViewer = false
     @State private var aiCommandsCapture: Capture?
@@ -254,6 +261,21 @@ struct CaptureDetailNext: View {
 
                         detailsCard
                             .padding(.horizontal, 12)
+
+                        if store.sourceCapture != nil {
+                            CaptureAudioPlaybackCard(
+                                title: store.capture.siteName ?? "Capture audio",
+                                bodyText: store.capture.bodyText,
+                                audioURL: store.audioURL,
+                                isLoadingTTS: store.isLoadingTTS,
+                                ttsError: store.ttsError,
+                                audioPlayer: audioPlayer,
+                                speechService: speechService,
+                                appSettings: appSettings,
+                                onGenerateTTS: requestTTS
+                            )
+                            .padding(.horizontal, 12)
+                        }
 
                         actionTray
                             .padding(.horizontal, 12)
@@ -285,6 +307,13 @@ struct CaptureDetailNext: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .capturesDidChange)) { _ in
             store.refresh()
+        }
+        .onChange(of: store.audioURL) { _, newURL in
+            audioPlayer.preloadDuration(for: newURL)
+        }
+        .onDisappear {
+            audioPlayer.stopPlayback()
+            speechService.stop()
         }
     }
 
@@ -566,6 +595,40 @@ struct CaptureDetailNext: View {
 
     // MARK: - Actions
 
+    private func requestTTS() {
+        guard !store.isLoadingTTS, let capture = store.sourceCapture else { return }
+
+        store.isLoadingTTS = true
+        store.ttsError = nil
+        speechService.stop()
+        audioPlayer.stopPlayback()
+
+        Task {
+            defer {
+                store.isLoadingTTS = false
+            }
+
+            do {
+                let audioData = try await TTSService.synthesizeConfigured(
+                    text: capture.text,
+                    settings: appSettings
+                )
+                guard let url = CaptureStore.shared.saveAudio(audioData, id: capture.id) else {
+                    store.ttsError = "Generated speech could not be saved."
+                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                    return
+                }
+
+                store.refresh()
+                audioPlayer.playAudio(url: url)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            } catch {
+                store.ttsError = "Couldn’t generate speech — \(error.localizedDescription)"
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
+            }
+        }
+    }
+
     private func copyText() {
         UIPasteboard.general.string = store.capture.bodyText
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -764,5 +827,334 @@ private struct CaptureDetailImageViewerNext: View {
         let scale = min(widthScale, heightScale)
 
         return CGSize(width: image.size.width * scale, height: image.size.height * scale)
+    }
+}
+
+private struct CaptureAudioPlaybackCard: View {
+    let title: String
+    let bodyText: String
+    let audioURL: URL?
+    let isLoadingTTS: Bool
+    let ttsError: String?
+    @ObservedObject var audioPlayer: AudioPlayerManager
+    let speechService: SpeechSynthesisService
+    let appSettings: TalkieAppSettings
+    let onGenerateTTS: () -> Void
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    private var hasCloudAudio: Bool { audioURL != nil }
+    private var canGenerateCloudTTS: Bool {
+        TTSService.canSynthesizeConfiguredAudio(
+            settings: appSettings,
+            bridgeStatus: BridgeManager.shared.status
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: hasCloudAudio ? "waveform" : "speaker.wave.2")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(hasCloudAudio ? "Capture audio" : "Read aloud")
+                        .talkieType(.preview)
+                        .foregroundStyle(theme.colors.textPrimary)
+                    Text(hasCloudAudio ? title : "On-device voice with optional generated audio")
+                        .talkieType(.hint)
+                        .foregroundStyle(theme.colors.textTertiary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                CapturePlaybackSpeedMenuNext(
+                    selectedRate: appSettings.ttsPlaybackRate,
+                    onSelect: updatePlaybackRate
+                )
+            }
+
+            if hasCloudAudio {
+                cloudPlaybackBar
+                cloudControlsRow
+            } else {
+                localControlsRow
+            }
+
+            if let ttsError {
+                Text(ttsError)
+                    .talkieType(.hint)
+                    .foregroundStyle(.red)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(theme.colors.cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                      lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                )
+        )
+        .onAppear {
+            applyPlaybackRate(appSettings.ttsPlaybackRate)
+        }
+        .onChange(of: appSettings.ttsPlaybackRate) { _, newRate in
+            applyPlaybackRate(newRate)
+        }
+    }
+
+    private var cloudPlaybackBar: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(theme.colors.textTertiary.opacity(0.22))
+                    .frame(height: 4)
+
+                Capsule()
+                    .fill(theme.currentTheme.chrome.accent)
+                    .frame(width: geometry.size.width * playbackProgress, height: 4)
+            }
+            .frame(maxHeight: .infinity, alignment: .center)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onEnded { value in
+                        seekCloudAudio(at: value.location.x, width: geometry.size.width)
+                    }
+            )
+        }
+        .frame(height: 12)
+    }
+
+    private var cloudControlsRow: some View {
+        HStack(spacing: 12) {
+            Text(formatDuration(displayedCurrentTime))
+                .talkieType(.hint)
+                .foregroundStyle(theme.colors.textTertiary)
+                .monospacedDigit()
+                .frame(minWidth: 38, alignment: .leading)
+
+            Spacer()
+
+            Button {
+                if let audioURL {
+                    speechService.stop()
+                    audioPlayer.togglePlayPause(url: audioURL)
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                }
+            } label: {
+                Image(systemName: audioPlayer.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(audioPlayer.isPlaying ? theme.colors.cardBackground : theme.colors.textPrimary)
+                    .frame(width: 40, height: 40)
+                    .background(
+                        Circle()
+                            .fill(audioPlayer.isPlaying ? theme.currentTheme.chrome.accent : theme.colors.background)
+                    )
+                    .overlay(
+                        Circle()
+                            .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                          lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(audioPlayer.isPlaying ? "Pause capture audio" : "Play capture audio")
+
+            Spacer()
+
+            Text(formatDuration(audioPlayer.duration))
+                .talkieType(.hint)
+                .foregroundStyle(theme.colors.textTertiary)
+                .monospacedDigit()
+                .frame(minWidth: 38, alignment: .trailing)
+        }
+    }
+
+    private var localControlsRow: some View {
+        HStack(spacing: 12) {
+            Button {
+                audioPlayer.stopPlayback()
+                speechService.toggleReadout(bodyText)
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            } label: {
+                Image(systemName: speechService.isSpeaking ? "stop.fill" : "play.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(speechService.isSpeaking ? .orange : theme.colors.textSecondary)
+                    .frame(width: 40, height: 40)
+                    .background(
+                        Circle()
+                            .fill(speechService.isSpeaking ? Color.orange.opacity(0.14) : theme.colors.background)
+                    )
+                    .overlay(
+                        Circle()
+                            .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                          lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(speechService.isSpeaking ? "Stop reading capture" : "Read capture aloud")
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(speechService.isSpeaking ? "Reading aloud…" : "On-device voice")
+                    .talkieType(.preview)
+                    .foregroundStyle(theme.colors.textSecondary)
+                if speechService.isSpeaking {
+                    CaptureReadoutPulseBarNext()
+                        .frame(maxWidth: 128)
+                } else {
+                    Text(canGenerateCloudTTS ? "Generate reusable audio when you want a scrubber." : "Pair Mac or configure TTS to generate audio.")
+                        .talkieType(.hint)
+                        .foregroundStyle(theme.colors.textTertiary)
+                }
+            }
+
+            Spacer()
+
+            if canGenerateCloudTTS && !speechService.isSpeaking {
+                Button(action: onGenerateTTS) {
+                    HStack(spacing: 6) {
+                        if isLoadingTTS {
+                            ProgressView()
+                                .scaleEffect(0.68)
+                        } else {
+                            Image(systemName: "waveform.badge.plus")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+
+                        Text(isLoadingTTS ? "Generating…" : "Generate")
+                            .talkieType(.fieldLabel)
+                    }
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule()
+                            .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                          lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(isLoadingTTS)
+            }
+        }
+    }
+
+    private var displayedCurrentTime: TimeInterval {
+        audioPlayer.currentPlayingURL == audioURL ? audioPlayer.currentTime : 0
+    }
+
+    private var playbackProgress: Double {
+        guard audioPlayer.duration > 0 else { return 0 }
+        return min(max(displayedCurrentTime / audioPlayer.duration, 0), 1)
+    }
+
+    private func seekCloudAudio(at locationX: CGFloat, width: CGFloat) {
+        guard width > 0, audioPlayer.duration > 0 else { return }
+        let fraction = min(max(locationX / width, 0), 1)
+        let targetTime = audioPlayer.duration * Double(fraction)
+
+        if audioPlayer.isPlaying {
+            audioPlayer.seek(to: targetTime)
+        } else if let audioURL {
+            speechService.stop()
+            audioPlayer.playAudio(url: audioURL)
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(50))
+                audioPlayer.seek(to: targetTime)
+            }
+        }
+    }
+
+    private func updatePlaybackRate(_ rate: Double) {
+        appSettings.ttsPlaybackRate = rate
+        applyPlaybackRate(rate)
+    }
+
+    private func applyPlaybackRate(_ rate: Double) {
+        audioPlayer.setPlaybackRate(Float(rate))
+        speechService.setPlaybackRate(Float(rate))
+    }
+
+    private func formatDuration(_ seconds: TimeInterval) -> String {
+        let totalSeconds = max(0, Int(seconds.rounded(.down)))
+        let minutes = totalSeconds / 60
+        let remainingSeconds = totalSeconds % 60
+        let paddedSeconds = remainingSeconds < 10 ? "0\(remainingSeconds)" : "\(remainingSeconds)"
+        return "\(minutes):\(paddedSeconds)"
+    }
+}
+
+private struct CapturePlaybackSpeedMenuNext: View {
+    let selectedRate: Double
+    let onSelect: (Double) -> Void
+
+    @ObservedObject private var theme = ThemeManager.shared
+    private let rates = [0.75, 1.0, 1.25, 1.5, 2.0]
+
+    var body: some View {
+        Menu {
+            ForEach(rates, id: \.self) { rate in
+                Button {
+                    onSelect(rate)
+                } label: {
+                    if selectedRate == rate {
+                        Label(label(for: rate), systemImage: "checkmark")
+                    } else {
+                        Text(label(for: rate))
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "speedometer")
+                    .font(.system(size: 10, weight: .semibold))
+
+                Text(label(for: selectedRate))
+                    .talkieType(.hint)
+                    .monospacedDigit()
+            }
+            .foregroundStyle(theme.colors.textSecondary)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
+            .background(theme.colors.background, in: Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                  lineWidth: theme.currentTheme.chrome.hairlineWidth)
+            )
+        }
+    }
+
+    private func label(for rate: Double) -> String {
+        "\(rate.formatted(.number.precision(.fractionLength(0 ... 2))))x"
+    }
+}
+
+private struct CaptureReadoutPulseBarNext: View {
+    @State private var animate = false
+
+    var body: some View {
+        GeometryReader { geometry in
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color.orange.opacity(0.28))
+                .frame(height: 3)
+                .overlay(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.orange)
+                        .frame(width: geometry.size.width * 0.3, height: 3)
+                        .offset(x: animate ? geometry.size.width * 0.7 : 0)
+                        .animation(
+                            .easeInOut(duration: 1.5).repeatForever(autoreverses: true),
+                            value: animate
+                        )
+                }
+        }
+        .frame(height: 3)
+        .onAppear { animate = true }
     }
 }
