@@ -15,6 +15,7 @@ import SwiftUI
 
 struct BridgeDetailNext: View {
     @ObservedObject private var theme = ThemeManager.shared
+    @ObservedObject private var reachability = NetworkReachability.shared
     @State private var bridgeManager = BridgeManager.shared
     @State private var macStatusObserver = MacStatusObserver.shared
     @State private var nearbyBrowser = NearbyMacBrowser.shared
@@ -46,6 +47,11 @@ struct BridgeDetailNext: View {
                             PairingPhaseBanner(phase: currentPhase)
                         }
 
+                        if bridgeNetworkStatus != .ok {
+                            NetworkStatusBanner(status: bridgeNetworkStatus, onRetry: reconnect)
+                                .transition(.opacity)
+                        }
+
                         if let errorMessage = bridgeManager.errorMessage,
                            bridgeManager.status == .error {
                             ErrorBanner(message: errorMessage) { reconnect() }
@@ -63,6 +69,7 @@ struct BridgeDetailNext: View {
                 .scrollIndicators(.hidden)
             }
         }
+        .animation(.easeInOut(duration: 0.18), value: bridgeNetworkStatus)
         .task {
             savedHosts = SSHTerminalSavedHostStore().load()
             nearbyBrowser.start()
@@ -414,6 +421,16 @@ struct BridgeDetailNext: View {
 
     private var queuedMetric: String {
         bridgeManager.awaitingPairingApproval ? "1" : "0"
+    }
+
+    private var bridgeNetworkStatus: NetworkStatus {
+        if bridgeManager.hasPairedMacs,
+           bridgeManager.status != .connected,
+           reachability.status == .offline {
+            return .offline
+        }
+
+        return .ok
     }
 
     private var cloudFallbackStatus: MacStatusObserver.MacStatusInfo? {
