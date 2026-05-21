@@ -184,7 +184,7 @@ struct WorkspaceSwitcherNext: View {
         guard !identity.isActive, switchingID == nil else { return }
         switchingID = identity.id
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 450_000_000)
+            try? await Task.sleep(for: .milliseconds(450))
             identities = identities.map { existing in
                 WorkspaceIdentity(
                     id: existing.id,
