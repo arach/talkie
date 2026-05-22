@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-22T00:32:56Z",
+  "updatedAt": "2026-05-22T00:35:14.442Z",
   "streams": [
     {
       "key": "C1",
@@ -2701,7 +2701,7 @@
       "scope": "ConnectionCenterNext, BridgeDetailNext, DeckMirrorNext, NetworkStatusBanner, MacConnectionChip, MacCoachCard",
       "owner": null,
       "status": "done",
-      "lockedAt": "2026-05-21T23:41:18.588Z",
+      "lockedAt": "2026-05-22T00:34:30.057Z",
       "notes": [
         {
           "ts": "2026-05-21T18:00:26.165Z",
@@ -3004,6 +3004,22 @@
           "level": "landed",
           "message": "Landed PORT: Bridge cluster now uses NetworkStatusBanner in ConnectionCenterNext; BridgeDetailNext:50 and DeckMirrorNext:123/154 carry the companion placements.",
           "findingKey": "C5::NetworkStatusBanner::Banner in Bridge cluster",
+          "ref": "apps/ios/Talkie iOS/Views/Next/ConnectionCenterNext.swift:237"
+        },
+        {
+          "ts": "2026-05-22T00:35:14.411Z",
+          "agent": "talkie-codex-c5",
+          "level": "landed",
+          "message": "Landed acknowledgment: NetworkStatusBanner is the shared ok/offline/requestFailed component for per-surface error handling.",
+          "findingKey": "C5::(none — per-surface error handling)::Shared banner component",
+          "ref": "apps/ios/Talkie iOS/Views/Next/NetworkStatusBanner.swift:23"
+        },
+        {
+          "ts": "2026-05-22T00:35:14.426Z",
+          "agent": "talkie-codex-c5",
+          "level": "landed",
+          "message": "Landed PORT: Bridge cluster surfaces now show NetworkStatusBanner offline/failed states in ConnectionCenterNext, BridgeDetailNext, and DeckMirrorNext.",
+          "findingKey": "C5::(none — per-surface error handling)::Banner in Bridge cluster",
           "ref": "apps/ios/Talkie iOS/Views/Next/ConnectionCenterNext.swift:237"
         }
       ]
