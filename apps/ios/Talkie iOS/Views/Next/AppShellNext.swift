@@ -55,13 +55,16 @@ struct AppShellNext<Content: View>: View {
                     )
             }
 
-            // Always-visible mic FAB — primary create action. One tap
-            // opens RecordingSheet regardless of chrome state. When
-            // chrome is summoned the FAB sits inside the tray's gap;
-            // when chrome is resting it anchors the bottom solo.
-            MicFAB()
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                .padding(.bottom, 16)
+            // Persistent MicFAB lives on the home surface — recording
+            // is the primary action there, so it's one tap regardless
+            // of chrome state. On sub-surfaces the FAB is tucked back
+            // inside the summoned tray (see LiquidGlassTray), keeping
+            // those screens focused on their own content.
+            if router.surface == .home {
+                MicFAB()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, 16)
+            }
 
             // Ambient voice button — always visible, bottom-left. Pure
             // summon affordance now (tap = chrome, long-press = voice

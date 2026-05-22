@@ -114,6 +114,7 @@ private struct CornerSlot: View {
 private struct LiquidGlassTray: View {
     @ObservedObject private var theme = ThemeManager.shared
     @EnvironmentObject private var chrome: ShellChrome
+    @EnvironmentObject private var router: AppShellRouter
 
     var body: some View {
         HStack(spacing: 14) {
@@ -138,13 +139,15 @@ private struct LiquidGlassTray: View {
                 AppShellRouter.shared.openCaptureCompose()
             }
 
-            // Center hole for the always-visible MicFAB (rendered by
-            // AppShellNext, not the tray). 48pt width matches the FAB
-            // diameter so the tray's HStack still resolves to a
-            // symmetric 5-element layout (Home · Capture · gap · Ask AI
-            // · Terminal) when summoned, and the FAB's visual center
-            // sits exactly in the gap.
-            Color.clear.frame(width: 48, height: 36)
+            // Tray center: on home the standalone MicFAB (rendered by
+            // AppShellNext) is always visible — leave a 48pt gap so it
+            // shows through. On sub-surfaces the persistent FAB is
+            // gone, so the tray itself carries the FAB inline.
+            if router.surface == .home {
+                Color.clear.frame(width: 48, height: 36)
+            } else {
+                MicFAB()
+            }
 
             TraySlot(
                 glyph: AnyView(Image(systemName: "sparkles").font(.system(size: 15, weight: .regular))),
