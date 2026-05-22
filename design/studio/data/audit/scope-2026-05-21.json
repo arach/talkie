@@ -1,7 +1,7 @@
 {
   "version": 1,
   "audit": "scope-2026-05-21",
-  "updatedAt": "2026-05-21T23:17:54.408Z",
+  "updatedAt": "2026-05-22T00:00:06.802Z",
   "items": {
     "t-cool-palette": {
       "status": "shipped",
@@ -250,8 +250,8 @@
       ]
     },
     "sw-design-ink-hold": {
-      "status": "queued",
-      "updatedAt": "2026-05-21T20:30:00.000Z",
+      "status": "skipped",
+      "updatedAt": "2026-05-22T00:00:06.801Z",
       "updatedBy": "claude-orchestrator",
       "notes": [
         {
@@ -261,6 +261,12 @@
           "message": "ScopeInk 5-step ladder vs studio single ink — leave alone for now; collapse decision needs visual review",
           "ref": "apps/macos/TalkieKit/Sources/TalkieKit/UI/ScopeDesign.swift",
           "severity": "proposal"
+        },
+        {
+          "ts": "2026-05-22T00:00:06.801Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Intentional hold per the original brief: ScopeInk 5-step ladder serves a different layered purpose than studio single ink. Collapse decision deferred unless a concrete UI issue surfaces."
         }
       ]
     },
@@ -405,9 +411,9 @@
       ]
     },
     "sw-home-card-equal-weight": {
-      "status": "queued",
-      "updatedAt": "2026-05-21T23:17:54.408Z",
-      "updatedBy": "claude-painter",
+      "status": "inflight",
+      "updatedAt": "2026-05-21T23:52:18.830Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
       "notes": [
         {
           "ts": "2026-05-21T20:30:00.000Z",
@@ -422,6 +428,12 @@
           "agent": "claude-painter",
           "level": "decision",
           "message": "DECISION: Bay + Recent stay as cards. Routines + Did-you-know demote to borderless rule-separated rows on canvas. Editorial weight collapses into the two primary bands."
+        },
+        {
+          "ts": "2026-05-21T23:52:18.830Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Home painter resolution in progress."
         }
       ]
     },
@@ -482,9 +494,9 @@
       ]
     },
     "sw-lib-readout-source-tints": {
-      "status": "queued",
-      "updatedAt": "2026-05-21T20:30:00.000Z",
-      "updatedBy": "claude-orchestrator",
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:41:12.837Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
       "notes": [
         {
           "ts": "2026-05-21T20:30:00.000Z",
@@ -493,6 +505,19 @@
           "message": "Promote readout source tints (#6B4FBB, #0B1418, #15191E, #2A3138, #5FE3C9) to ScopePanel ext or ScopeReadout namespace",
           "ref": "apps/macos/Talkie/Views/Library/ScopeLibraryView.swift",
           "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T23:40:07.377Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Library mechanical leftovers in progress."
+        },
+        {
+          "ts": "2026-05-21T23:41:12.837Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Verified the readout source tint literals are no longer live in ScopeLibraryView after the readout-bay removal; no ScopeReadout namespace needed. Library build verified via xcodebuild fallback.",
+          "ref": "0e9001a"
         }
       ]
     },
@@ -525,9 +550,9 @@
       ]
     },
     "sw-lib-de-amber": {
-      "status": "queued",
-      "updatedAt": "2026-05-21T20:30:00.000Z",
-      "updatedBy": "claude-orchestrator",
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:41:12.769Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
       "notes": [
         {
           "ts": "2026-05-21T20:30:00.000Z",
@@ -536,6 +561,19 @@
           "message": "De-amber chrome: bucket eyebrows → ScopeInk.muted, dividers → ScopeEdge.faint, pagination dots → ScopeInk.faint",
           "ref": "apps/macos/Talkie/Views/Library/ScopeLibraryView.swift",
           "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T23:40:07.326Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Library mechanical leftovers in progress."
+        },
+        {
+          "ts": "2026-05-21T23:41:12.769Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Demoted Library bucket eyebrows to ScopeInk.muted, pagination dots to ScopeInk.faint, and made the bucket divider explicitly ScopeEdge.faint; build verified via xcodebuild fallback.",
+          "ref": "0e9001a"
         }
       ]
     },
@@ -680,8 +718,8 @@
       ]
     },
     "sw-dict-overlay-token": {
-      "status": "inflight",
-      "updatedAt": "2026-05-21T23:17:28.576Z",
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:38:59.907Z",
       "updatedBy": "codex.ui-scope-pass-may-20",
       "notes": [
         {
@@ -697,6 +735,13 @@
           "agent": "codex.ui-scope-pass-may-20",
           "level": "progress",
           "message": "TalkieView mechanical leftovers in progress."
+        },
+        {
+          "ts": "2026-05-21T23:38:59.907Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Rebound the TalkieView drop overlay to ScopeAmber and ScopeType tokens instead of settings/Theme ad hoc tokens; build verified via xcodebuild fallback.",
+          "ref": "71dc02a"
         }
       ]
     },
@@ -729,8 +774,8 @@
       ]
     },
     "sw-dict-magic-number": {
-      "status": "inflight",
-      "updatedAt": "2026-05-21T23:17:28.544Z",
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:38:59.835Z",
       "updatedBy": "codex.ui-scope-pass-may-20",
       "notes": [
         {
@@ -746,6 +791,13 @@
           "agent": "codex.ui-scope-pass-may-20",
           "level": "progress",
           "message": "TalkieView mechanical leftovers in progress."
+        },
+        {
+          "ts": "2026-05-21T23:38:59.835Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Added PageLayout.headerOverlayClearance and replaced the TalkieView header clearance magic number; build verified via xcodebuild fallback.",
+          "ref": "71dc02a"
         }
       ]
     },
@@ -1133,9 +1185,9 @@
       ]
     },
     "sw-sk-voicepreview-panel": {
-      "status": "queued",
-      "updatedAt": "2026-05-21T20:30:00.000Z",
-      "updatedBy": "claude-orchestrator",
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:49:14.319Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
       "notes": [
         {
           "ts": "2026-05-21T20:30:00.000Z",
@@ -1144,6 +1196,19 @@
           "message": "voicePreview hardcoded #0E1518 / #F4F1EA → ScopePanel.bg / .ink / .trace",
           "ref": "apps/macos/Talkie/Views/Skills/ScopeSkillsLandingView.swift",
           "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T23:43:56.196Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Skills mechanical leftovers in progress."
+        },
+        {
+          "ts": "2026-05-21T23:49:14.319Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Rebound voicePreview dark panel colors to ScopePanel.bg/ink/trace tokens; build verified via xcodebuild fallback.",
+          "ref": "9546985"
         }
       ]
     },
@@ -1197,9 +1262,9 @@
       ]
     },
     "sw-sk-section-gap-token": {
-      "status": "queued",
-      "updatedAt": "2026-05-21T20:30:00.000Z",
-      "updatedBy": "claude-orchestrator",
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:49:14.278Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
       "notes": [
         {
           "ts": "2026-05-21T20:30:00.000Z",
@@ -1208,6 +1273,19 @@
           "message": "Standardize section gaps to SkillsSpacing.sectionGap token (currently 14 vs 32 inconsistent)",
           "ref": "apps/macos/Talkie/Views/Skills/ScopeSkillsLandingView.swift",
           "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T23:43:55.243Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Skills mechanical leftovers in progress."
+        },
+        {
+          "ts": "2026-05-21T23:49:14.278Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Added SkillsSpacing.sectionGap and routed section/bottom spacing through the token; build verified via xcodebuild fallback.",
+          "ref": "9546985"
         }
       ]
     },
@@ -1240,9 +1318,9 @@
       ]
     },
     "sw-sk-accessibility-labels": {
-      "status": "queued",
-      "updatedAt": "2026-05-21T20:30:00.000Z",
-      "updatedBy": "claude-orchestrator",
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:49:14.223Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
       "notes": [
         {
           "ts": "2026-05-21T20:30:00.000Z",
@@ -1251,6 +1329,708 @@
           "message": "Add .accessibilityLabel to inlineMic and submitButton",
           "ref": "apps/macos/Talkie/Views/Skills/ScopeSkillsLandingView.swift",
           "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T23:43:53.851Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Skills mechanical leftovers in progress."
+        },
+        {
+          "ts": "2026-05-21T23:49:14.223Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Added accessibility labels to the inline mic and submit controls; build verified via xcodebuild fallback.",
+          "ref": "9546985"
+        }
+      ]
+    },
+    "t-scoperule": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 6 ScopeRule sweep (commit 35ebece) + studio Sweep 1 component migration. Hand-rolled hairlines replaced with ScopeRule(.section/.row/.subtle/.action) across all 6 Swift surfaces; studio components already used the primitives."
+        }
+      ]
+    },
+    "tos-scoperule": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 6 ScopeRule sweep (commit 35ebece) + studio Sweep 1 component migration. Hand-rolled hairlines replaced with ScopeRule(.section/.row/.subtle/.action) across all 6 Swift surfaces; studio components already used the primitives."
+        }
+      ]
+    },
+    "t-marketing-copy": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 7 marketing copy strips (commit f673ea6) + painter decisions applied. Did-you-know serif hooks, Skills footer paragraph, Capture 'promotes to a note' italic, Note 'CH-04' chip all dropped."
+        }
+      ]
+    },
+    "h-marketing-hooks": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 7 marketing copy strips (commit f673ea6) + painter decisions applied. Did-you-know serif hooks, Skills footer paragraph, Capture 'promotes to a note' italic, Note 'CH-04' chip all dropped."
+        }
+      ]
+    },
+    "note-marketing-eyebrows": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 7 marketing copy strips (commit f673ea6) + painter decisions applied. Did-you-know serif hooks, Skills footer paragraph, Capture 'promotes to a note' italic, Note 'CH-04' chip all dropped."
+        }
+      ]
+    },
+    "sk-footer-marketing": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 7 marketing copy strips (commit f673ea6) + painter decisions applied. Did-you-know serif hooks, Skills footer paragraph, Capture 'promotes to a note' italic, Note 'CH-04' chip all dropped."
+        }
+      ]
+    },
+    "cap-promotes-narration": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 7 marketing copy strips (commit f673ea6) + painter decisions applied. Did-you-know serif hooks, Skills footer paragraph, Capture 'promotes to a note' italic, Note 'CH-04' chip all dropped."
+        }
+      ]
+    },
+    "t-equal-cards": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decision sw-home-card-equal-weight (Bay+Recent stay as cards; Routines+Did-you-know demote to borderless rows). Same pattern applied across surfaces with card stacking."
+        }
+      ]
+    },
+    "h-equal-cards": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decision sw-home-card-equal-weight (Bay+Recent stay as cards; Routines+Did-you-know demote to borderless rows). Same pattern applied across surfaces with card stacking."
+        }
+      ]
+    },
+    "sk-equal-cards": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decision sw-home-card-equal-weight (Bay+Recent stay as cards; Routines+Did-you-know demote to borderless rows). Same pattern applied across surfaces with card stacking."
+        }
+      ]
+    },
+    "t-amber-rationing": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decision sw-sk-amber-flood (keep amber on RUN/SAVE/mic; demote AGENT eyebrow, console arrows, miniChip borders). Same rationing applied across Library and Home."
+        }
+      ]
+    },
+    "tos-amber": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decision sw-sk-amber-flood (keep amber on RUN/SAVE/mic; demote AGENT eyebrow, console arrows, miniChip borders). Same rationing applied across Library and Home."
+        }
+      ]
+    },
+    "lib-rec-indicator": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decision sw-sk-amber-flood (keep amber on RUN/SAVE/mic; demote AGENT eyebrow, console arrows, miniChip borders). Same rationing applied across Library and Home."
+        }
+      ]
+    },
+    "sk-amber-overuse": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decision sw-sk-amber-flood (keep amber on RUN/SAVE/mic; demote AGENT eyebrow, console arrows, miniChip borders). Same rationing applied across Library and Home."
+        }
+      ]
+    },
+    "t-ink-fainter": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by cool-gray ScopeInk ladder (canon 2026-05-21). ScopeInk.muted / faint / dim provide the right contrast steps; legacy near-floor mono labels lifted to ScopeInk.muted via token migration."
+        }
+      ]
+    },
+    "tos-ink-floor": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by cool-gray ScopeInk ladder (canon 2026-05-21). ScopeInk.muted / faint / dim provide the right contrast steps; legacy near-floor mono labels lifted to ScopeInk.muted via token migration."
+        }
+      ]
+    },
+    "h-mono-floor": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by cool-gray ScopeInk ladder (canon 2026-05-21). ScopeInk.muted / faint / dim provide the right contrast steps; legacy near-floor mono labels lifted to ScopeInk.muted via token migration."
+        }
+      ]
+    },
+    "lib-mono-legibility": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by cool-gray ScopeInk ladder (canon 2026-05-21). ScopeInk.muted / faint / dim provide the right contrast steps; legacy near-floor mono labels lifted to ScopeInk.muted via token migration."
+        }
+      ]
+    },
+    "sk-fainter-contrast": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by cool-gray ScopeInk ladder (canon 2026-05-21). ScopeInk.muted / faint / dim provide the right contrast steps; legacy near-floor mono labels lifted to ScopeInk.muted via token migration."
+        }
+      ]
+    },
+    "note-toolbutton-contrast": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by cool-gray ScopeInk ladder (canon 2026-05-21). ScopeInk.muted / faint / dim provide the right contrast steps; legacy near-floor mono labels lifted to ScopeInk.muted via token migration."
+        }
+      ]
+    },
+    "cap-toolbutton-contrast": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by cool-gray ScopeInk ladder (canon 2026-05-21). ScopeInk.muted / faint / dim provide the right contrast steps; legacy near-floor mono labels lifted to ScopeInk.muted via token migration."
+        }
+      ]
+    },
+    "dict-amber-contrast": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by cool-gray ScopeInk ladder (canon 2026-05-21). ScopeInk.muted / faint / dim provide the right contrast steps; legacy near-floor mono labels lifted to ScopeInk.muted via token migration."
+        }
+      ]
+    },
+    "t-mono-saturation": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by Sweep 1 cool-gray substrate. The warm cream over-saturation that made mono labels feel heavy is gone — cool canvas reads cleaner under mono type."
+        }
+      ]
+    },
+    "tos-tier-substrates": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by Scope cool-gray canon (lib/scope-tokens.ts). Substrate hierarchy is canvas → pane → paneLifted → chrome → rail; one source of truth, semantic naming."
+        }
+      ]
+    },
+    "d-cool-canon": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Decision shipped 2026-05-21. Substrate pivoted from warm cream to cool neutral gray. See lib/scope-tokens.ts + project_scope_canon_2026_05_21.md memory."
+        }
+      ]
+    },
+    "h-scheme-picker": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by studio-chrome rationing. Scheme picker now reads as audition chrome, not primary affordance — sized down and demoted in StudioNav."
+        }
+      ]
+    },
+    "h-leading-dot": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 5 (sw-home-eyebrow-bullet). Leading '·' on SectionBlock eyebrows dropped — Swift and studio both clean."
+        }
+      ]
+    },
+    "h-flat-rhythm": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decision sw-home-card-equal-weight + Bay header demotion. Vertical rhythm now has primary (Bay, Recent) vs secondary (Routines, Did-you-know) bands."
+        }
+      ]
+    },
+    "h-bay-header": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decision sw-home-card-equal-weight + Bay header demotion. Vertical rhythm now has primary (Bay, Recent) vs secondary (Routines, Did-you-know) bands."
+        }
+      ]
+    },
+    "lib-selection": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by ScopeKind tint + ScopeRule.action (codex Phases 5+6). Selected row gets kind-tinted left edge + cool wash; lock-in reads clearly."
+        }
+      ]
+    },
+    "lib-bucket-headers": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 5/7 (sw-lib-strip-subtitle, sw-lib-de-amber). Bucket headers de-amber'd; fill dropped; ScopeRule.subtle top rule with mono label floated left."
+        }
+      ]
+    },
+    "lib-filter-pills": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by mono cluster + ScopeRule.action active dot. Pills tightened to single label·count form; active state uses leading ScopeRule.action mark."
+        }
+      ]
+    },
+    "lib-channel-chip": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex sw-lib-channel-color-kind (commit f0cac6b). Channel chip now bound to ScopeKind enum across kinds, not amber-only."
+        }
+      ]
+    },
+    "lib-readout-orphan": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 4 (sw-lib-delete-readout-bay, commit 6ec197d). ~940 lines of dead readout-bay scaffolding deleted; orphan code gone."
+        }
+      ]
+    },
+    "lib-middot-aria": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed under broader a11y pass. Decorative middots are aria-hidden via component primitive; structural separators use proper role."
+        }
+      ]
+    },
+    "dict-hand-rolled-rules": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 6 ScopeRule sweep + sw-dict-rail-rule + sw-dict-rules-adopt (commit 35ebece). TalkieView dividers now use ScopeRule primitives; margin-rail divider added."
+        }
+      ]
+    },
+    "dict-rail-crowding": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 6 ScopeRule sweep + sw-dict-rail-rule + sw-dict-rules-adopt (commit 35ebece). TalkieView dividers now use ScopeRule primitives; margin-rail divider added."
+        }
+      ]
+    },
+    "dict-action-row": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex sw-dict-overlay-token. Action overlay uses ScopeAmber.solid/tint + ScopeType.eyebrow tokens; no more inline accent/font references."
+        }
+      ]
+    },
+    "dict-serif-paragraph": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 7 marketing copy strips + sw-dict-stale-comments. Stale 'chiffon paper' language dropped; serif paragraph narrowed to title-only role."
+        }
+      ]
+    },
+    "dict-byline-fields": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by ScopeType.eyebrow + mono byline conventions applied across detail surfaces. Field labels read as instrument legend."
+        }
+      ]
+    },
+    "dict-sequence-pill": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decisions sw-note-sequence-fake-id + sw-cap-filename-headline (synthetic IDs dropped; derivedCaption promoted to headline). Same pattern applied to Dict detail."
+        }
+      ]
+    },
+    "dict-derived-title": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decisions sw-note-sequence-fake-id + sw-cap-filename-headline (synthetic IDs dropped; derivedCaption promoted to headline). Same pattern applied to Dict detail."
+        }
+      ]
+    },
+    "note-dead-air": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex sw-note-empty-state-italic + sw-note-attachment-rail (commit c968b23). Empty-state mono 9pt at ScopeInk.faint; attachment rail uses ScopeCanvas.surface + ScopeRule(.row)."
+        }
+      ]
+    },
+    "note-serif-lede": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by editorial document framing (document_not_dashboard memory). Serif lede replaced by eyebrow + serif headline + mono byline convention."
+        }
+      ]
+    },
+    "note-toolbar-eyebrow": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 5/7 + cool-gray canon. Toolbar eyebrow reads as instrument label; no marketing tone."
+        }
+      ]
+    },
+    "cap-rule-bypass": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 6 ScopeRule sweep + sw-cap-hairline-stretch fix (commit c5b0742). Stray Rectangle hairlines replaced with ScopeRule; HStack stretch bug fixed."
+        }
+      ]
+    },
+    "cap-filename-vs-derived": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decision sw-cap-filename-headline. derivedCaption → serif headline; filename → mono byline. Document-on-a-desk framing applied."
+        }
+      ]
+    },
+    "cap-margin-asymmetric": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by ScopePanel + scopeCardBorder + ScopeType conventions. Margin symmetry and mono tracking standardized via primitives."
+        }
+      ]
+    },
+    "cap-tracking-drift": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by ScopePanel + scopeCardBorder + ScopeType conventions. Margin symmetry and mono tracking standardized via primitives."
+        }
+      ]
+    },
+    "sk-mono-overuse": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by cool-gray substrate + ScopeInk ladder. Mono labels at ScopeInk.muted/faint read as instrument legend rather than dominant body."
+        }
+      ]
+    },
+    "sk-editor-bay-coequal": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by Skills surface refactor (commits fa2188d + earlier). Editor bay reads as primary; chrome rails subordinated."
+        }
+      ]
+    },
+    "sk-pipeline-crowding": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by SkillsSpacing.sectionGap standardization (sw-sk-section-gap-token, future commit). Section gaps consistent; pipeline rows have breathing room."
+        }
+      ]
+    },
+    "sk-italic-mono-collide": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by Phase 7 marketing copy strips (commit f673ea6) + ScopeType conventions. Italic serif removed from chrome; mono carries the byline."
         }
       ]
     }
