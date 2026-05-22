@@ -19,6 +19,10 @@ final class TalkieAppSettings {
 
     var theme: AppTheme = .scope { didSet { persistIfNeeded() } }
     var appearanceMode: AppearanceMode = .system { didSet { persistIfNeeded() } }
+    var appearanceDensity = "standard" { didSet { persistIfNeeded() } }
+    var appearanceAccentIntensity = "theme" { didSet { persistIfNeeded() } }
+    var appearanceWordmarkStyle = "mono" { didSet { persistIfNeeded() } }
+    var reduceMotionEnabled = false { didSet { persistIfNeeded() } }
     var tagLocationEnabled = false { didSet { persistIfNeeded() } }
     var locationTipDismissed = false { didSet { persistIfNeeded() } }
     var recordingInputDevice = "system" { didSet { persistIfNeeded() } }
@@ -81,6 +85,10 @@ final class TalkieAppSettings {
 
         theme = AppTheme(rawValue: configuration.appearance.theme) ?? .scope
         appearanceMode = AppearanceMode(rawValue: configuration.appearance.mode) ?? .system
+        appearanceDensity = configuration.appearance.density
+        appearanceAccentIntensity = configuration.appearance.accentIntensity
+        appearanceWordmarkStyle = configuration.appearance.wordmarkStyle
+        reduceMotionEnabled = configuration.appearance.reduceMotionEnabled
         tagLocationEnabled = configuration.recording.tagLocationEnabled
         locationTipDismissed = configuration.recording.locationTipDismissed
         recordingInputDevice = configuration.recording.inputDevice
@@ -137,6 +145,10 @@ final class TalkieAppSettings {
         let updatedConfiguration = store.update { configuration in
             configuration.appearance.theme = theme.rawValue
             configuration.appearance.mode = appearanceMode.rawValue
+            configuration.appearance.density = appearanceDensity
+            configuration.appearance.accentIntensity = appearanceAccentIntensity
+            configuration.appearance.wordmarkStyle = appearanceWordmarkStyle
+            configuration.appearance.reduceMotionEnabled = reduceMotionEnabled
             configuration.recording.tagLocationEnabled = tagLocationEnabled
             configuration.recording.locationTipDismissed = locationTipDismissed
             configuration.recording.inputDevice = recordingInputDevice
@@ -189,6 +201,10 @@ final class TalkieAppSettings {
 
         defaults.set(configuration.appearance.theme, forKey: "selectedTheme")
         defaults.set(configuration.appearance.mode, forKey: "appearanceMode")
+        defaults.set(configuration.appearance.density, forKey: "appearance.density")
+        defaults.set(configuration.appearance.accentIntensity, forKey: "appearance.accentIntensity")
+        defaults.set(configuration.appearance.wordmarkStyle, forKey: "appearance.wordmarkStyle")
+        defaults.set(configuration.appearance.reduceMotionEnabled, forKey: "appearance.reduceMotion")
         groupDefaults?.set(configuration.appearance.mode, forKey: "appearanceMode")
 
         defaults.set(configuration.recording.tagLocationEnabled, forKey: "recording.tagLocation")

@@ -120,6 +120,12 @@ final class TalkieAppConfigurationStore {
 
         configuration.appearance.theme = defaults.string(forKey: "selectedTheme") ?? configuration.appearance.theme
         configuration.appearance.mode = defaults.string(forKey: "appearanceMode") ?? configuration.appearance.mode
+        configuration.appearance.density = defaults.string(forKey: "appearance.density") ?? configuration.appearance.density
+        configuration.appearance.accentIntensity = defaults.string(forKey: "appearance.accentIntensity") ?? configuration.appearance.accentIntensity
+        configuration.appearance.wordmarkStyle = defaults.string(forKey: "appearance.wordmarkStyle") ?? configuration.appearance.wordmarkStyle
+        if defaults.object(forKey: "appearance.reduceMotion") != nil {
+            configuration.appearance.reduceMotionEnabled = defaults.bool(forKey: "appearance.reduceMotion")
+        }
 
         configuration.recording.tagLocationEnabled = defaults.bool(forKey: "recording.tagLocation")
         configuration.recording.locationTipDismissed = defaults.bool(forKey: "tips.locationDismissed")

@@ -18,6 +18,41 @@ struct TalkieAppConfiguration: Codable {
     struct Appearance: Codable {
         var theme: String = "scope"
         var mode: String = "system"
+        var density: String = "standard"
+        var accentIntensity: String = "theme"
+        var wordmarkStyle: String = "mono"
+        var reduceMotionEnabled = false
+
+        private enum CodingKeys: String, CodingKey {
+            case theme
+            case mode
+            case density
+            case accentIntensity
+            case wordmarkStyle
+            case reduceMotionEnabled
+        }
+
+        init() {}
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            theme = try container.decodeIfPresent(String.self, forKey: .theme) ?? "scope"
+            mode = try container.decodeIfPresent(String.self, forKey: .mode) ?? "system"
+            density = try container.decodeIfPresent(String.self, forKey: .density) ?? "standard"
+            accentIntensity = try container.decodeIfPresent(String.self, forKey: .accentIntensity) ?? "theme"
+            wordmarkStyle = try container.decodeIfPresent(String.self, forKey: .wordmarkStyle) ?? "mono"
+            reduceMotionEnabled = try container.decodeIfPresent(Bool.self, forKey: .reduceMotionEnabled) ?? false
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(theme, forKey: .theme)
+            try container.encode(mode, forKey: .mode)
+            try container.encode(density, forKey: .density)
+            try container.encode(accentIntensity, forKey: .accentIntensity)
+            try container.encode(wordmarkStyle, forKey: .wordmarkStyle)
+            try container.encode(reduceMotionEnabled, forKey: .reduceMotionEnabled)
+        }
     }
 
     struct Recording: Codable {

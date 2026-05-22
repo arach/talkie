@@ -14,9 +14,6 @@
 //
 //  Decorations intentionally deferred (call out in code, not faked):
 //  - GridPatternView background + CornerBrackets decoration
-//  - TalkieLogoRibbon on the Welcome page
-//  - Animated phone illustration + REC pulse on Capture
-//  - Interactive iPhone↔iCloud↔Mac architecture diagram on Sync
 //  - ArchitectureWalkthrough modal sheet
 //  - AnimatedStatusRow check animations on GetStarted
 //
@@ -25,16 +22,74 @@
 //  the rebuild is removing Clerk; see project memory.
 //
 
+import AVFoundation
 import CloudKit
+import Speech
 import SwiftUI
+import TalkieMobileKit
 
 struct OnboardingNext: View {
     @ObservedObject private var theme = ThemeManager.shared
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @State private var currentPage: Int = 0
     @State private var iCloudStatus: CKAccountStatus = .couldNotDetermine
+    @State private var heroPulse = false
+    @State private var selectedSyncNode: SyncNodeKind = .icloud
+    @State private var microphonePermissionStatus: PermissionPromptStatus = .needsAction
+    @State private var speechPermissionStatus: PermissionPromptStatus = .needsAction
+    @State private var keyboardPermissionStatus: PermissionPromptStatus = .needsSettings
 
     private let totalPages = 4
+
+    private enum SyncNodeKind: CaseIterable {
+        case iphone
+        case icloud
+        case mac
+
+        var icon: String {
+            switch self {
+            case .iphone: return "iphone"
+            case .icloud: return "icloud.fill"
+            case .mac: return "macbook"
+            }
+        }
+
+        var label: String {
+            switch self {
+            case .iphone: return "iPhone"
+            case .icloud: return "iCloud"
+            case .mac: return "Mac"
+            }
+        }
+
+        var detail: String {
+            switch self {
+            case .iphone: return "Recordings and dictation start locally on this iPhone."
+            case .icloud: return "CloudKit keeps private memo data available across devices."
+            case .mac: return "The Mac bridge runs heavier AI workflows when paired."
+            }
+        }
+    }
+
+    private enum PermissionPromptStatus {
+        case ready
+        case needsAction
+        case denied
+        case restricted
+        case needsSettings
+
+        var label: String {
+            switch self {
+            case .ready: return "READY"
+            case .needsAction: return "ENABLE"
+            case .denied: return "SETTINGS"
+            case .restricted: return "RESTRICTED"
+            case .needsSettings: return "SETTINGS"
+            }
+        }
+
+        var isReady: Bool { self == .ready }
+    }
 
     var body: some View {
         ZStack {
@@ -55,7 +110,13 @@ struct OnboardingNext: View {
                 pageNav
             }
         }
-        .onAppear { checkICloudStatus() }
+        .onAppear {
+            checkICloudStatus()
+            refreshPermissionStatuses()
+            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                heroPulse = true
+            }
+        }
     }
 
     // MARK: - Top SKIP bar
@@ -158,20 +219,7 @@ struct OnboardingNext: View {
         VStack(spacing: 16) {
             Spacer()
 
-            // TODO: TalkieLogo asset + TalkieLogoRibbon (";) Talkie"
-            // chip rotated 12°). Placeholder hero until brought across.
-            ZStack {
-                RoundedRectangle(cornerRadius: 32, style: .continuous)
-                    .fill(theme.colors.cardBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 32, style: .continuous)
-                            .strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: 1)
-                    )
-                    .frame(width: 140, height: 140)
-                Image(systemName: "waveform.badge.mic")
-                    .font(.system(size: 64, weight: .light))
-                    .foregroundStyle(theme.currentTheme.chrome.accent)
-            }
+            welcomeHero
 
             HStack(spacing: 8) {
                 Text("VOICE")
@@ -224,6 +272,60 @@ struct OnboardingNext: View {
             .talkieType(.channelLabelSmall)
             .foregroundStyle(theme.colors.textSecondary)
     }
+
+    private var welcomeHero: some View {
+        ZStack(alignment: .topTrailing) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 32, style: .continuous)
+                    .fill(theme.colors.cardBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 32, style: .continuous)
+                            .strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: 1)
+                    )
+                    .frame(width: 140, height: 140)
+
+                VStack(spacing: 10) {
+                    ZStack {
+                        Circle()
+                            .fill(theme.currentTheme.chrome.accent.opacity(heroPulse ? 0.18 : 0.08))
+                            .frame(width: 76, height: 76)
+                            .scaleEffect(heroPulse ? 1.08 : 0.96)
+                        Image(systemName: "waveform")
+                            .font(.system(size: 42, weight: .light))
+                            .foregroundStyle(theme.currentTheme.chrome.accent)
+                    }
+
+                    Text("TALKIE")
+                        .talkieType(.wordmark)
+                        .foregroundStyle(theme.colors.textPrimary.opacity(0.84))
+                }
+            }
+
+            logoRibbon
+                .offset(x: 22, y: -12)
+                .rotationEffect(.degrees(12))
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Talkie logo")
+    }
+
+    private var logoRibbon: some View {
+        HStack(spacing: 5) {
+            Text(";)")
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            Text("Talkie")
+                .talkieType(.channelLabelSmall)
+        }
+        .foregroundStyle(theme.colors.cardBackground)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(theme.currentTheme.chrome.accent)
+                .shadow(color: theme.currentTheme.chrome.accentGlow, radius: 8)
+        )
+    }
+
     private var taglineSep: some View {
         Text("·")
             .talkieType(.fieldValue)
@@ -236,32 +338,7 @@ struct OnboardingNext: View {
         VStack(spacing: 22) {
             Spacer()
 
-            // TODO: Donor has an embedded phone illustration with a
-            // REC pulse animation. Simplified hero here.
-            ZStack {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(theme.colors.cardBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: 1)
-                    )
-                    .frame(width: 200, height: 160)
-                VStack(spacing: 12) {
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 32, weight: .medium))
-                        .foregroundStyle(theme.currentTheme.chrome.accent)
-                        .shadow(color: theme.currentTheme.chrome.accentGlow,
-                                radius: theme.currentTheme.chrome.glowRadius)
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(theme.currentTheme.chrome.accent)
-                            .frame(width: 6, height: 6)
-                        Text("REC")
-                            .talkieType(.channelLabelTiny)
-                            .foregroundStyle(theme.currentTheme.chrome.accent)
-                    }
-                }
-            }
+            captureHero
 
             VStack(spacing: 8) {
                 Text("Capture Your Voice")
@@ -287,54 +364,104 @@ struct OnboardingNext: View {
         .padding(.horizontal, 28)
     }
 
+    private var captureHero: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(theme.colors.cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: 1)
+                )
+                .frame(width: 136, height: 188)
+
+            VStack(spacing: 14) {
+                Capsule()
+                    .fill(theme.currentTheme.chrome.edgeFaint)
+                    .frame(width: 42, height: 4)
+
+                ZStack {
+                    Circle()
+                        .fill(theme.currentTheme.chrome.accent.opacity(heroPulse ? 0.20 : 0.07))
+                        .frame(width: 92, height: 92)
+                        .scaleEffect(heroPulse ? 1.18 : 0.92)
+                    Circle()
+                        .strokeBorder(theme.currentTheme.chrome.accent.opacity(0.55), lineWidth: 1)
+                        .frame(width: 78, height: 78)
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 30, weight: .medium))
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                        .shadow(color: theme.currentTheme.chrome.accentGlow,
+                                radius: theme.currentTheme.chrome.glowRadius)
+                }
+
+                HStack(alignment: .bottom, spacing: 5) {
+                    ForEach(0..<7, id: \.self) { index in
+                        Capsule()
+                            .fill(theme.currentTheme.chrome.accent.opacity(index.isMultiple(of: 2) ? 0.9 : 0.48))
+                            .frame(width: 4, height: heroPulse ? CGFloat(10 + (index % 4) * 6) : CGFloat(22 - (index % 4) * 4))
+                            .animation(
+                                .easeInOut(duration: 0.85)
+                                    .repeatForever(autoreverses: true)
+                                    .delay(Double(index) * 0.05),
+                                value: heroPulse
+                            )
+                    }
+                }
+
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(Color(red: 0.92, green: 0.18, blue: 0.18))
+                        .frame(width: 6, height: 6)
+                        .opacity(heroPulse ? 1 : 0.35)
+                    Text("REC")
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Animated recording phone illustration")
+    }
+
     // MARK: - Sync page
 
     private var syncPage: some View {
         VStack(spacing: 22) {
             Spacer()
 
-            // TODO: Donor has an interactive iPhone↔iCloud↔Mac
-            // diagram with animated arrows, tappable nodes, and
-            // tooltip cards. Static node row here.
-            HStack(spacing: 0) {
-                syncNode(icon: "iphone",       label: "iPhone")
-                syncArrow
-                syncNode(icon: "icloud.fill",  label: "iCloud")
-                syncArrow
-                syncNode(icon: "macbook",      label: "Mac")
-            }
-            .padding(.vertical, 18)
-            .padding(.horizontal, 14)
-            .overlay(alignment: .top) {
-                HStack(spacing: 6) {
-                    Image(systemName: "lock.fill").font(.system(size: 8))
-                    Text("USER OWNED DATA")
-                        .talkieType(.channelLabelTiny)
-                }
-                .foregroundStyle(theme.currentTheme.chrome.accent)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 5)
-                .background(
-                    Capsule()
-                        .fill(theme.colors.background)
-                        .overlay(Capsule().strokeBorder(
-                            theme.currentTheme.chrome.accent.opacity(0.5),
-                            style: StrokeStyle(lineWidth: 1, dash: [3, 3])
-                        ))
-                )
-                .offset(y: -10)
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(theme.colors.cardBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(
+            syncArchitectureDiagram
+                .padding(.vertical, 18)
+                .padding(.horizontal, 14)
+                .overlay(alignment: .top) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "lock.fill").font(.system(size: 8))
+                        Text("USER OWNED DATA")
+                            .talkieType(.channelLabelTiny)
+                    }
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(theme.colors.background)
+                            .overlay(Capsule().strokeBorder(
                                 theme.currentTheme.chrome.accent.opacity(0.5),
                                 style: StrokeStyle(lineWidth: 1, dash: [3, 3])
-                            )
+                            ))
                     )
-            )
+                    .offset(y: -10)
+                }
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(theme.colors.cardBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(
+                                    theme.currentTheme.chrome.accent.opacity(0.5),
+                                    style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+                                )
+                        )
+                )
 
             VStack(spacing: 8) {
                 Text("The Magic of Sync")
@@ -361,22 +488,60 @@ struct OnboardingNext: View {
         .padding(.horizontal, 28)
     }
 
-    private func syncNode(icon: String, label: String) -> some View {
-        VStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 24, weight: .light))
-                .foregroundStyle(theme.colors.textPrimary)
-                .frame(width: 48, height: 48)
-            Text(label)
-                .talkieType(.channelLabelTiny)
-                .foregroundStyle(theme.colors.textTertiary)
+    private var syncArchitectureDiagram: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 0) {
+                syncNode(.iphone)
+                syncArrow(active: selectedSyncNode == .iphone || selectedSyncNode == .icloud)
+                syncNode(.icloud)
+                syncArrow(active: selectedSyncNode == .icloud || selectedSyncNode == .mac)
+                syncNode(.mac)
+            }
+
+            Text(selectedSyncNode.detail)
+                .talkieType(.timestamp)
+                .foregroundStyle(theme.colors.textSecondary)
+                .multilineTextAlignment(.center)
+                .frame(minHeight: 32)
+                .padding(.horizontal, 6)
         }
-        .frame(maxWidth: .infinity)
     }
-    private var syncArrow: some View {
+
+    private func syncNode(_ node: SyncNodeKind) -> some View {
+        let isSelected = selectedSyncNode == node
+        return Button {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                selectedSyncNode = node
+            }
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: node.icon)
+                    .font(.system(size: 24, weight: .light))
+                    .foregroundStyle(isSelected ? theme.currentTheme.chrome.accent : theme.colors.textPrimary)
+                    .frame(width: 48, height: 48)
+                    .background(
+                        Circle()
+                            .fill(isSelected ? theme.currentTheme.chrome.accent.opacity(0.12) : Color.clear)
+                    )
+                    .scaleEffect(isSelected && heroPulse ? 1.06 : 1)
+                Text(node.label)
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(isSelected ? theme.currentTheme.chrome.accent : theme.colors.textTertiary)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(node.label)
+        .accessibilityHint(node.detail)
+    }
+
+    private func syncArrow(active: Bool) -> some View {
         Image(systemName: "arrow.left.and.right")
             .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(theme.currentTheme.chrome.accent.opacity(0.6))
+            .foregroundStyle(theme.currentTheme.chrome.accent.opacity(active ? 0.8 : 0.35))
+            .offset(x: heroPulse && active ? 2 : 0)
+            .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: heroPulse)
+            .accessibilityHidden(true)
     }
 
     // MARK: - GetStarted page
@@ -410,6 +575,8 @@ struct OnboardingNext: View {
                     )
             )
             .padding(.horizontal, 4)
+
+            permissionPromptPanel
 
             // TAP TO TRY record affordance
             Button(action: tryRecord) {
@@ -465,6 +632,95 @@ struct OnboardingNext: View {
         .padding(.bottom, 12)
     }
 
+    private var permissionPromptPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("· PERMISSIONS")
+                .talkieType(.channelLabelTiny)
+                .foregroundStyle(theme.colors.textTertiary)
+
+            permissionPromptRow(
+                icon: "mic.fill",
+                title: "Microphone",
+                detail: "Record memos",
+                status: microphonePermissionStatus,
+                action: requestMicrophonePermission
+            )
+            permissionPromptRow(
+                icon: "waveform",
+                title: "Speech",
+                detail: "Transcribe live",
+                status: speechPermissionStatus,
+                action: requestSpeechPermission
+            )
+            permissionPromptRow(
+                icon: "keyboard",
+                title: "Dictation Extension",
+                detail: "Enable in Settings",
+                status: keyboardPermissionStatus,
+                action: openICloudSettings
+            )
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(theme.colors.cardBackground.opacity(0.72))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: 1)
+                )
+        )
+        .padding(.horizontal, 4)
+    }
+
+    private func permissionPromptRow(
+        icon: String,
+        title: String,
+        detail: String,
+        status: PermissionPromptStatus,
+        action: @escaping () -> Void
+    ) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(status.isReady ? theme.currentTheme.chrome.accent : theme.colors.textTertiary)
+                .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .talkieType(.fieldLabel)
+                    .foregroundStyle(theme.colors.textPrimary)
+                Text(detail)
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary)
+            }
+
+            Spacer(minLength: 8)
+
+            Button(action: action) {
+                Text(status.label)
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(status.isReady ? theme.currentTheme.chrome.accent : theme.colors.cardBackground)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(status.isReady ? Color.clear : theme.currentTheme.chrome.accent)
+                            .overlay(
+                                Capsule()
+                                    .strokeBorder(
+                                        status.isReady
+                                            ? theme.currentTheme.chrome.accent.opacity(0.55)
+                                            : Color.clear,
+                                        lineWidth: 1
+                                    )
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+            .disabled(status == .ready || status == .restricted)
+        }
+    }
+
     private func statusRow(label: String, value: String, active: Bool, highlight: Bool = false) -> some View {
         HStack {
             Image(systemName: active ? "checkmark.circle.fill" : "circle")
@@ -488,6 +744,75 @@ struct OnboardingNext: View {
     private func openICloudSettings() {
         if let url = URL(string: UIApplication.openSettingsURLString) {
             UIApplication.shared.open(url)
+        }
+    }
+
+    private func refreshPermissionStatuses() {
+        switch AVAudioApplication.shared.recordPermission {
+        case .granted:
+            microphonePermissionStatus = .ready
+        case .denied:
+            microphonePermissionStatus = .denied
+        case .undetermined:
+            microphonePermissionStatus = .needsAction
+        @unknown default:
+            microphonePermissionStatus = .needsAction
+        }
+
+        switch SFSpeechRecognizer.authorizationStatus() {
+        case .authorized:
+            speechPermissionStatus = .ready
+        case .denied:
+            speechPermissionStatus = .denied
+        case .restricted:
+            speechPermissionStatus = .restricted
+        case .notDetermined:
+            speechPermissionStatus = .needsAction
+        @unknown default:
+            speechPermissionStatus = .needsAction
+        }
+
+        keyboardPermissionStatus = KeyboardBridge.shared.getKeyboardModeEnabled() ? .ready : .needsSettings
+    }
+
+    private func requestMicrophonePermission() {
+        switch AVAudioApplication.shared.recordPermission {
+        case .granted:
+            microphonePermissionStatus = .ready
+        case .undetermined:
+            AVAudioApplication.requestRecordPermission { granted in
+                Task { @MainActor in
+                    microphonePermissionStatus = granted ? .ready : .denied
+                }
+            }
+        case .denied:
+            openICloudSettings()
+        @unknown default:
+            openICloudSettings()
+        }
+    }
+
+    private func requestSpeechPermission() {
+        switch SFSpeechRecognizer.authorizationStatus() {
+        case .authorized:
+            speechPermissionStatus = .ready
+        case .notDetermined:
+            SFSpeechRecognizer.requestAuthorization { status in
+                Task { @MainActor in
+                    switch status {
+                    case .authorized:
+                        speechPermissionStatus = .ready
+                    case .restricted:
+                        speechPermissionStatus = .restricted
+                    default:
+                        speechPermissionStatus = .denied
+                    }
+                }
+            }
+        case .denied, .restricted:
+            openICloudSettings()
+        @unknown default:
+            openICloudSettings()
         }
     }
 

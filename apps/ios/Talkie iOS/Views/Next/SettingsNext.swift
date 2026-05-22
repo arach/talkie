@@ -32,6 +32,7 @@ struct SettingsNext: View {
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var aiCredentials = AICredentialStore.shared
     @ObservedObject private var iCloudStatus = iCloudStatusManager.shared
+    @ObservedObject private var cloudKitSyncHealth = CloudKitSyncHealth.shared
     @ObservedObject private var parakeetManager = ParakeetModelManager.shared
     @State private var appSettings = TalkieAppSettings.shared
     @State private var bridgeManager = BridgeManager.shared
@@ -69,6 +70,24 @@ struct SettingsNext: View {
         SettingsChoice(id: "system", title: "System"),
         SettingsChoice(id: "44100", title: "44.1 kHz"),
         SettingsChoice(id: "48000", title: "48 kHz")
+    ]
+
+    private static let appearanceDensityChoices: [SettingsChoice] = [
+        SettingsChoice(id: "standard", title: "Standard"),
+        SettingsChoice(id: "compact", title: "Compact"),
+        SettingsChoice(id: "comfortable", title: "Comfort")
+    ]
+
+    private static let appearanceAccentIntensityChoices: [SettingsChoice] = [
+        SettingsChoice(id: "theme", title: "Theme"),
+        SettingsChoice(id: "subtle", title: "Subtle"),
+        SettingsChoice(id: "vivid", title: "Vivid")
+    ]
+
+    private static let appearanceWordmarkChoices: [SettingsChoice] = [
+        SettingsChoice(id: "mono", title: "Mono"),
+        SettingsChoice(id: "ribbon", title: "Ribbon"),
+        SettingsChoice(id: "compact", title: "Compact")
     ]
 
     private static let ttsProviderChoices: [SettingsChoice] = [
@@ -304,7 +323,6 @@ struct SettingsNext: View {
                 valueOff: "Off",
                 hint: "Voice isolation"
             )
-
             sectionHeader("TEXT-TO-SPEECH")
             cycleRow(
                 "Provider",
@@ -388,10 +406,43 @@ struct SettingsNext: View {
     private var lookPanel: some View {
         VStack(alignment: .leading, spacing: 0) {
             field("Theme", theme.currentTheme.displayName)
-            field("Density", "Standard") // TODO: no TalkieAppSettings key exists yet.
-            field("Accent intensity", "Theme") // TODO: no TalkieAppSettings key exists yet.
-            field("Wordmark style", "Mono")
-            field("Reduce motion", theme.appearanceMode.displayName) // TODO: no dedicated motion key exists yet.
+            cycleRow(
+                "Density",
+                selection: Binding(
+                    get: { appSettings.appearanceDensity },
+                    set: { appSettings.appearanceDensity = $0 }
+                ),
+                choices: Self.appearanceDensityChoices,
+                hint: "Inspector spacing"
+            )
+            cycleRow(
+                "Accent intensity",
+                selection: Binding(
+                    get: { appSettings.appearanceAccentIntensity },
+                    set: { appSettings.appearanceAccentIntensity = $0 }
+                ),
+                choices: Self.appearanceAccentIntensityChoices,
+                hint: "Chrome glow strength"
+            )
+            cycleRow(
+                "Wordmark style",
+                selection: Binding(
+                    get: { appSettings.appearanceWordmarkStyle },
+                    set: { appSettings.appearanceWordmarkStyle = $0 }
+                ),
+                choices: Self.appearanceWordmarkChoices,
+                hint: "Header treatment"
+            )
+            toggleRow(
+                "Reduce motion",
+                isOn: Binding(
+                    get: { appSettings.reduceMotionEnabled },
+                    set: { appSettings.reduceMotionEnabled = $0 }
+                ),
+                valueOn: "Reduced",
+                valueOff: "Standard",
+                hint: theme.appearanceMode.displayName
+            )
 
             // Theme picker — labeled chip swatches under a THEMES eyebrow.
             // Two themes share the indigo accent (Ghost / Lift), so the
@@ -455,6 +506,7 @@ struct SettingsNext: View {
                 hint: iCloudHint,
                 inlineAction: iCloudInlineAction
             )
+            field("Last iCloud sync", iCloudLastSyncValue, hint: iCloudLastSyncHint)
             field(
                 "Mac Bridge",
                 bridgeStatusValue,
@@ -529,6 +581,36 @@ struct SettingsNext: View {
         case .available, .checking, .couldNotDetermine:
             return nil
         }
+    }
+
+    private var latestCloudKitSyncAt: Date? {
+        [cloudKitSyncHealth.lastSuccessfulExport, cloudKitSyncHealth.lastSuccessfulImport]
+            .compactMap { $0 }
+            .max()
+    }
+
+    private var iCloudLastSyncValue: String {
+        guard appSettings.iCloudSyncEnabled else { return "Off" }
+        guard let latestCloudKitSyncAt else { return "Pending" }
+        return latestCloudKitSyncAt.formatted(.relative(presentation: .named))
+    }
+
+    private var iCloudLastSyncHint: String? {
+        guard appSettings.iCloudSyncEnabled else { return "Disabled in preferences" }
+        guard latestCloudKitSyncAt != nil else {
+            return "Waiting for CloudKit event · \(cloudKitSyncHealth.status.rawValue)"
+        }
+
+        if let export = cloudKitSyncHealth.lastSuccessfulExport,
+           let importDate = cloudKitSyncHealth.lastSuccessfulImport {
+            return "\(export >= importDate ? "Last export" : "Last import") · \(cloudKitSyncHealth.status.rawValue)"
+        }
+
+        if cloudKitSyncHealth.lastSuccessfulExport != nil {
+            return "Last export · \(cloudKitSyncHealth.status.rawValue)"
+        }
+
+        return "Last import · \(cloudKitSyncHealth.status.rawValue)"
     }
 
     private var keysPanel: some View {
