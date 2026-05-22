@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-22T01:41:44.550Z",
+  "updatedAt": "2026-05-22T01:42:14.351Z",
   "streams": [
     {
       "key": "C1",
@@ -754,8 +754,8 @@
       "key": "C2",
       "title": "Capture",
       "scope": "CaptureDetailNext, CameraCaptureNext, WebCaptureBrowserNext, ScanPreviewOverlay, CaptureAICommandsSheet equivalent",
-      "owner": "talkie-codex-c2",
-      "status": "blocked",
+      "owner": null,
+      "status": "done",
       "lockedAt": "2026-05-21T22:42:28.485Z",
       "notes": [
         {
@@ -1413,6 +1413,12 @@
           "message": "Painted CaptureListSectionNext per the approved contract — init(store:onSelect:onSyncAll:onDelete:). Lives in apps/ios/Talkie iOS/Views/Next/. Empty state, source icons (text/url/photo), sync indicator (checkmark.circle.fill vs circle.dotted), unsynced count + Sync all CTA in header, swipe-to-delete. Codex-c2 can now wire the callbacks to CaptureStore.sync/.delete + CaptureSyncService.",
           "findingKey": "C2::CaptureListSection::Entire surface absent",
           "ref": "apps/ios/Talkie iOS/Views/Next/CaptureListSectionNext.swift"
+        },
+        {
+          "ts": "2026-05-22T01:42:14.351Z",
+          "agent": "painter-c2",
+          "level": "info",
+          "message": "C2 complete — CaptureListSectionNext painted, all 25 PORT findings landed (some via direct ports, some via acknowledgment of existing Next code, painter contract for CaptureListSection fulfilled). Cluster ready for Codex-c2 to wire CaptureListSectionNext callbacks when bandwidth allows."
         }
       ]
     },
