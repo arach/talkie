@@ -52,7 +52,7 @@ struct ScopeNoteDetailView: View {
                 // Top toolbar removed — actions migrated to the side
                 // rail (marginColumn) where they sit alongside provenance
                 // and stats. The eyebrow inside the body column carries
-                // the sequence + channel that the toolbar used to show.
+                // real source provenance when available.
                 HStack(alignment: .top, spacing: 0) {
                     bodyColumn(bodyPad: bodyPad, proseMax: max(400, proseMax))
                     marginColumn(width: marginWidth)
@@ -66,12 +66,10 @@ struct ScopeNoteDetailView: View {
 
     // MARK: - Computed display data
 
-    private var sequence: String {
-        "N-" + String(abs(note.id.hashValue) % 10000).leftPadded(to: 4, with: "0")
-    }
-
-    private var channelLabel: String {
-        "CH-04 · NOTE"
+    private var sourceEyebrow: String? {
+        let source = note.source.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !source.isEmpty else { return nil }
+        return source.uppercased()
     }
 
     private var dateLabel: String {
@@ -117,17 +115,14 @@ struct ScopeNoteDetailView: View {
     @ViewBuilder
     private func bodyColumn(bodyPad: CGFloat, proseMax: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Eyebrow — sequence + channel on the left, date/time on
-            // the right. Replaces the old top toolbar's identity strip.
+            // Eyebrow — real source when available; date/time on the right.
             HStack(spacing: 10) {
-                Text(sequence)
-                    .font(NoteFont.mono(size: 9, weight: .semibold))
-                    .tracking(2.2)
-                    .foregroundStyle(ScopeKind.note)
-                Text("· \(channelLabel)")
-                    .font(NoteFont.mono(size: 9, weight: .semibold))
-                    .tracking(2.2)
-                    .foregroundStyle(ScopeInk.faint)
+                if let sourceEyebrow {
+                    Text(sourceEyebrow)
+                        .font(NoteFont.mono(size: 9, weight: .semibold))
+                        .tracking(2.2)
+                        .foregroundStyle(ScopeInk.faint)
+                }
                 ScopeRule(.subtle)
                 Text("\(dateLabel) · \(timeLabel)")
                     .font(NoteFont.mono(size: 9))
