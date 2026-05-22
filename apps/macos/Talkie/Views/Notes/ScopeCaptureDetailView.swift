@@ -130,6 +130,14 @@ struct ScopeCaptureDetailView: View {
         return nil
     }
 
+    private var imageHeadline: String {
+        derivedCaption ?? capture.displayTitle
+    }
+
+    private var imageByline: String {
+        "\(filename) · \(dimensions) · \(fileSize)"
+    }
+
     // MARK: - Sections
 
     private func openInDefault() {
@@ -158,8 +166,8 @@ struct ScopeCaptureDetailView: View {
                     .foregroundStyle(ScopeInk.faint)
             }
 
-            // Title — serif for text captures (it's the passage title),
-            // mono for image captures (it's a filename).
+            // Title — serif for authored/captioned material; filename is
+            // provenance metadata below the headline for image captures.
             if isTextCapture {
                 Text(capture.displayTitle)
                     .font(CapFont.display(size: 22, weight: .medium))
@@ -175,35 +183,21 @@ struct ScopeCaptureDetailView: View {
                     .foregroundStyle(ScopeInk.faint)
                     .padding(.top, 6)
             } else {
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text(filename)
-                        .font(CapFont.mono(size: 18, weight: .medium))
-                        .foregroundStyle(ScopeInk.primary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Text("\(dimensions) · \(fileSize)")
-                        .font(CapFont.mono(size: 10))
-                        .tracking(1.6)
-                        .foregroundStyle(ScopeInk.faint)
-                }
-                .padding(.top, 12)
-            }
-
-            // Derived caption — italic, greyed (image captures only;
-            // text captures don't need a "derived" tag since the body
-            // IS the content).
-            if !isTextCapture, let caption = derivedCaption {
-                HStack(spacing: 8) {
-                    Text("· DERIVED")
-                        .font(CapFont.mono(size: 8.5, weight: .semibold))
-                        .tracking(2.8)
-                        .foregroundStyle(ScopeInk.faint)
-                    Text(caption)
-                        .font(CapFont.displayItalic(size: 12.5))
-                        .foregroundStyle(ScopeInk.faint)
-                        .lineLimit(2)
-                }
-                .padding(.top, 6)
+                Text(imageHeadline)
+                    .font(CapFont.display(size: 22, weight: .medium))
+                    .tracking(-0.3)
+                    .foregroundStyle(ScopeInk.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 12)
+                Text(imageByline)
+                    .font(CapFont.mono(size: 10))
+                    .tracking(1.6)
+                    .foregroundStyle(ScopeInk.faint)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .padding(.top, 6)
             }
 
             // Hero — branches on content kind. Image for screenshots,
