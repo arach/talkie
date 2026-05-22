@@ -831,6 +831,28 @@ struct VoiceMemoDetailNext: View {
 
             Spacer()
 
+            // Single global "Edit" pill — opens the transcript edit
+            // sheet which also exposes the title field. Replaces the
+            // inline pencil next to the title and the EDIT chip in
+            // the transcript section header.
+            if store.canEditTranscript {
+                Button(action: beginTranscriptEdit) {
+                    Text("Edit")
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .overlay(
+                            Capsule().strokeBorder(
+                                theme.currentTheme.chrome.accent.opacity(0.4),
+                                lineWidth: theme.currentTheme.chrome.hairlineWidth
+                            )
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Edit memo")
+            }
+
             Menu {
                 Button("Share", systemImage: "square.and.arrow.up") {
                     showingShareSheet = true
@@ -845,9 +867,6 @@ struct VoiceMemoDetailNext: View {
                     Button("Version history", systemImage: "clock.arrow.circlepath") {
                         showingVersionHistory = true
                     }
-                }
-                if store.canEditTranscript {
-                    Button("Edit transcript", systemImage: "text.quote", action: beginTranscriptEdit)
                 }
                 if store.canDeleteMemo {
                     Button("Delete memo", systemImage: "trash", role: .destructive) {
@@ -871,6 +890,9 @@ struct VoiceMemoDetailNext: View {
 
     private var metaRow: some View {
         VStack(alignment: .leading, spacing: 6) {
+            // Title — no inline pencil; the global "Edit" pill in the
+            // header is the single entry point for editing the memo
+            // (title + transcript both live in the edit sheet).
             if isEditingTitle {
                 titleEditor
             } else {
@@ -878,16 +900,6 @@ struct VoiceMemoDetailNext: View {
                     Text(store.memo.title)
                         .talkieType(.headline)
                         .foregroundStyle(theme.colors.textPrimary)
-
-                    if store.canEditTitle {
-                        Button(action: beginTitleEdit) {
-                            Image(systemName: "pencil")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(theme.currentTheme.chrome.accent)
-                                .accessibilityLabel("Edit title")
-                        }
-                        .buttonStyle(.plain)
-                    }
 
                     Spacer(minLength: 0)
                 }
@@ -1030,24 +1042,14 @@ struct VoiceMemoDetailNext: View {
 
     private var transcriptSection: some View {
         VStack(alignment: .leading, spacing: 8) {
+            // Section header: no inline EDIT chip — global Edit pill
+            // in the header is the single entry point. Just label +
+            // word count here.
             HStack(spacing: 6) {
                 Text("· TRANSCRIPT")
                     .talkieType(.channelLabelTiny)
                     .foregroundStyle(theme.colors.textTertiary)
                 Spacer()
-                if store.canEditTranscript {
-                    Button(action: beginTranscriptEdit) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "pencil")
-                                .font(.system(size: 10, weight: .semibold))
-                            Text("EDIT")
-                                .talkieType(.channelLabelTiny)
-                        }
-                        .foregroundStyle(theme.currentTheme.chrome.accent)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Edit transcript")
-                }
                 Text("\(wordCount) WORDS")
                     .talkieType(.channelLabelTiny)
                     .foregroundStyle(theme.colors.textTertiary)
@@ -1429,18 +1431,16 @@ struct VoiceMemoDetailNext: View {
                         .foregroundStyle(isRunning ? theme.colors.textTertiary : theme.currentTheme.chrome.accent)
                 }
 
-                Text(template.name)
+                Text(memoCardLabel(for: template))
                     .talkieType(.fieldLabel)
                     .foregroundStyle(theme.colors.textPrimary)
                     .lineLimit(1)
-
-                Text(template.blurb)
-                    .talkieType(.channelLabelTiny)
-                    .foregroundStyle(theme.colors.textTertiary)
-                    .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(width: 154, alignment: .leading)
+            // Tighter card — was 154pt wide with a verbose blurb;
+            // now icon + short verb. Three fit in a screen-width
+            // scroll on 13 mini without horizontal scrolling.
+            .frame(width: 120, alignment: .leading)
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 10)
@@ -1454,6 +1454,19 @@ struct VoiceMemoDetailNext: View {
         }
         .buttonStyle(.plain)
         .disabled(runningWorkflowID != nil)
+    }
+
+    /// Short verb-phrase label for the memo workflow trigger card.
+    /// Source templates have full sentences (`"Summarize this memo"`
+    /// etc) that work in the Hub but read as wordy on the per-memo
+    /// trigger card next to the icon. Map to 1-2 word forms.
+    private func memoCardLabel(for template: WorkflowTemplate) -> String {
+        switch template.id {
+        case "memo-summary": return "Summarize"
+        case "memo-tasks": return "Taskify"
+        case "memo-reminders": return "Remind"
+        default: return template.name
+        }
     }
 
     private func runMemoWorkflow(_ template: WorkflowTemplate) {
