@@ -35,8 +35,14 @@ struct ChromeOverlay: View {
             CornerSlot(
                 position: .topLeading,
                 glyph: AnyView(Image(systemName: "chevron.left").font(.system(size: 15, weight: .medium))),
-                label: "Done"
+                label: router.surface == .home ? "Done" : "Home"
             ) {
+                // On a sub-surface this pill is the universal "go home" — pop
+                // to the root before collapsing the chrome. On home it just
+                // closes the summoned chrome (no navigation to perform).
+                if router.surface != .home {
+                    router.openHome()
+                }
                 chrome.dismissChrome()
             }
 
