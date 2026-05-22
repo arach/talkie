@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { StudioNav } from "@/components/StudioNav";
+import { StudioShell } from "@/components/StudioShell";
 import { SpecOverlay } from "@/components/SpecOverlay";
 
 export const metadata: Metadata = {
@@ -33,8 +33,7 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <StudioNav />
-        {children}
+        <StudioShell>{children}</StudioShell>
         <SpecOverlay />
       </body>
     </html>

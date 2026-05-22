@@ -622,7 +622,7 @@ export default function MacAuditPage() {
     const c: Record<Status, number> = { queued: 0, inflight: 0, shipped: 0, skipped: 0 };
     for (const id of allIds) c[status.statusOf(id)]++;
     return c;
-  }, [allIds, status.map]);
+  }, [allIds, status.data?.items]);
 
   const total = allIds.length;
   const shippedPct = total === 0 ? 0 : Math.round((counts.shipped / total) * 100);
