@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-21T23:47:50Z",
+  "updatedAt": "2026-05-22T00:32:56Z",
   "streams": [
     {
       "key": "C1",
@@ -1326,7 +1326,7 @@
       "scope": "ComposeNextView + ComposeStore, VoiceMemoDetailNext, ReadAloudNext, attachments, agent + CLI sheets",
       "owner": null,
       "status": "done",
-      "lockedAt": "2026-05-21T19:40:44.282Z",
+      "lockedAt": "2026-05-21T23:46:49.227Z",
       "notes": [
         {
           "ts": "2026-05-21T18:00:43.158Z",
@@ -2159,6 +2159,37 @@
           "message": "Rebased parity/c3; landed implementation ref is now a69de94 (was d0bb399).",
           "findingKey": "C3::VoiceMemoDetailView::TranscriptVersionHistorySheet",
           "ref": "a69de94"
+        },
+        {
+          "ts": "2026-05-21T23:47:27.223Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Acknowledged existing Next implementation: memo detail routes Listen through ReadAloudSource, and ReadAloudNext exposes the separated source picker model with four source buttons (memo/capture/library/Ask AI).",
+          "findingKey": "C3::TTS hooks in memo detail::Surface model",
+          "ref": "apps/ios/Talkie iOS/Views/Next/ReadAloudNext.swift:94"
+        },
+        {
+          "ts": "2026-05-21T23:47:27.240Z",
+          "agent": "talkie-codex-c3",
+          "level": "proposal",
+          "message": "Recommend DEFER: donor did not implement word-by-word highlighting either; Next already tracks AVSpeechSynthesizer ranges for chunk/current sentence state, but exact word-highlighting is polish beyond C3 parity.",
+          "findingKey": "C3::TTS hooks in memo detail::Range-of-speech highlighting",
+          "ref": "apps/ios/Talkie iOS/Services/ReadAloudPlayer.swift:422",
+          "proposedDecision": "DEFER"
+        },
+        {
+          "ts": "2026-05-21T23:47:27.255Z",
+          "agent": "talkie-codex-c3",
+          "level": "landed",
+          "message": "Acknowledged existing Next implementation: ReadAloudNext transport provides skip controls, waveform progress, and seek slider backed by ReadAloudPlayer.seekToChunk.",
+          "findingKey": "C3::TTS hooks in memo detail::Transport with skip + seek",
+          "ref": "apps/ios/Talkie iOS/Views/Next/ReadAloudNext.swift:192"
+        },
+        {
+          "ts": "2026-05-21T23:47:27.284Z",
+          "agent": "talkie-codex-c3",
+          "level": "info",
+          "message": "Second-pass C3 complete: Surface model and Transport with skip/seek are acknowledged as existing Next code with file-line refs; word-level range highlighting proposed DEFER because it is not donor parity and is TTS polish."
         }
       ]
     },
@@ -2168,7 +2199,7 @@
       "scope": "SettingsNext, OnboardingNext, SignInNext, AICredentialsNext, WorkspaceSwitcherNext",
       "owner": null,
       "status": "done",
-      "lockedAt": "2026-05-21T19:42:13.352Z",
+      "lockedAt": "2026-05-21T23:41:52.069Z",
       "notes": [
         {
           "ts": "2026-05-21T18:03:12.723Z",
@@ -2476,6 +2507,191 @@
           "agent": "talkie-codex-c4",
           "level": "info",
           "message": "C4 done summary: ported Companion, Recording, Text-to-Speech, Remote Access, CloudKit provisioning result, and AI provider resolver fallback. KeyboardSettingsView block remains DEFER per user decisions."
+        },
+        {
+          "ts": "2026-05-21T23:58:37.221Z",
+          "agent": "talkie-codex-c4",
+          "level": "progress",
+          "message": "Second-pass drain started after inbox/rebase; Swift implementation commit f98c9d8 covers Settings/Onboarding stub drains while existing surfaces get file:line landed refs.",
+          "ref": "f98c9d8"
+        },
+        {
+          "ts": "2026-05-21T23:58:37.237Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Already present: horizontal inspector rail and six-panel SettingsNext switcher verified post-rebase.",
+          "findingKey": "C4::SettingsView::Inspector layout",
+          "ref": "apps/ios/Talkie iOS/Views/Next/SettingsNext.swift:174"
+        },
+        {
+          "ts": "2026-05-21T23:58:37.252Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Command Deck auto-open toggle is bound to TalkieAppSettings.followComputerShortcutMode with paired-Mac hinting.",
+          "findingKey": "C4::SettingsView::COMPANION section",
+          "ref": "apps/ios/Talkie iOS/Views/Next/SettingsNext.swift:517"
+        },
+        {
+          "ts": "2026-05-21T23:58:37.267Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "RECORDING section renders microphone input, sample-rate selection, location tagging, and echo cancellation settings.",
+          "findingKey": "C4::SettingsView::RECORDING section",
+          "ref": "apps/ios/Talkie iOS/Views/Next/SettingsNext.swift:282"
+        },
+        {
+          "ts": "2026-05-21T23:58:37.282Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "TEXT-TO-SPEECH section renders provider/route pickers, voice field, direct API key handling, AI-key reuse, and speech output controls.",
+          "findingKey": "C4::SettingsView::TEXT-TO-SPEECH section",
+          "ref": "apps/ios/Talkie iOS/Views/Next/SettingsNext.swift:326"
+        },
+        {
+          "ts": "2026-05-21T23:58:37.297Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "REMOTE ACCESS includes DEBUG SSH Terminal entry plus Connection Center/Workspaces/Sync conflict routes.",
+          "findingKey": "C4::SettingsView::REMOTE ACCESS section",
+          "ref": "apps/ios/Talkie iOS/Views/Next/SettingsNext.swift:532"
+        },
+        {
+          "ts": "2026-05-21T23:58:37.312Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Appearance density, accent intensity, wordmark style, and reduce-motion controls now persist through TalkieAppSettings/TalkieAppConfiguration.",
+          "findingKey": "C4::SettingsView::Appearance bindings",
+          "ref": "apps/ios/Talkie iOS/Views/Next/SettingsNext.swift:409"
+        },
+        {
+          "ts": "2026-05-21T23:58:37.326Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "CONNECT panel now surfaces latest CloudKit import/export time with health-state hinting.",
+          "findingKey": "C4::SettingsView::iCloud last-sync timestamp",
+          "ref": "apps/ios/Talkie iOS/Views/Next/SettingsNext.swift:509"
+        },
+        {
+          "ts": "2026-05-21T23:58:37.341Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Welcome page replaces placeholder waveform.mic with Talkie logo card, wordmark, animated pulse, and LogoRibbon chip.",
+          "findingKey": "C4::OnboardingView::Welcome hero",
+          "ref": "apps/ios/Talkie iOS/Views/Next/OnboardingNext.swift:276"
+        },
+        {
+          "ts": "2026-05-21T23:58:37.355Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Capture hero now animates phone/mic/REC/equalizer; sync page adds tappable iPhone-iCloud-Mac architecture diagram at OnboardingNext.swift:491.",
+          "findingKey": "C4::OnboardingView::Capture + Sync hero animations",
+          "ref": "apps/ios/Talkie iOS/Views/Next/OnboardingNext.swift:367"
+        },
+        {
+          "ts": "2026-05-21T23:58:37.370Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Get Started page now presents explicit Microphone, Speech, and Dictation Extension permission rows with request/settings actions.",
+          "findingKey": "C4::OnboardingView::Explicit permission prompts",
+          "ref": "apps/ios/Talkie iOS/Views/Next/OnboardingNext.swift:635"
+        },
+        {
+          "ts": "2026-05-21T23:58:37.385Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Already wired: onboarding queries CKContainer accountStatus and reflects iCloud availability on the Get Started system panel.",
+          "findingKey": "C4::OnboardingView::iCloud account check",
+          "ref": "apps/ios/Talkie iOS/Views/Next/OnboardingNext.swift:196"
+        },
+        {
+          "ts": "2026-05-21T23:58:37.399Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Already present: SignInStore owns native Apple Sign In progression with three published auth steps; no Clerk code introduced.",
+          "findingKey": "C4::SignInView::SignInStore 3-step state machine",
+          "ref": "apps/ios/Talkie iOS/Views/Next/SignInNext.swift:26"
+        },
+        {
+          "ts": "2026-05-21T23:58:37.413Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Already present: NativeAppleCredential codable Keychain payload backs native Apple Sign In persistence.",
+          "findingKey": "C4::SignInView::NativeAppleCredential Keychain struct",
+          "ref": "apps/ios/Talkie iOS/Views/Next/SignInNext.swift:176"
+        },
+        {
+          "ts": "2026-05-21T23:58:37.426Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Already present: sign-in completion awaits CloudKit provisioning and surfaces the account-status result in step 3.",
+          "findingKey": "C4::SignInView::CloudKit provisioning result",
+          "ref": "apps/ios/Talkie iOS/Views/Next/SignInNext.swift:66"
+        },
+        {
+          "ts": "2026-05-21T23:58:37.439Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Already present: standalone AICredentialsNext surface manages provider cards and secure credential entry through AICredentialStore.",
+          "findingKey": "C4::AICredentialsNext::Standalone AI credentials surface",
+          "ref": "apps/ios/Talkie iOS/Views/Next/AICredentialsNext.swift:55"
+        },
+        {
+          "ts": "2026-05-21T23:58:37.453Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Provider resolver already checks ComposeProviderCredentialStore and keychain-backed AICredentialStore keys before legacy TTS fallback.",
+          "findingKey": "C4::AICredentialsNext::Provider resolver wiring",
+          "ref": "apps/ios/Talkie iOS/Services/TalkieAIProviderResolver.swift:28"
+        },
+        {
+          "ts": "2026-05-21T23:58:37.466Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Already present: standalone WorkspaceSwitcherNext surface lists workspace identities, active state, add-account route, and activation affordance.",
+          "findingKey": "C4::WorkspaceSwitcherNext::Standalone workspace switcher",
+          "ref": "apps/ios/Talkie iOS/Views/Next/WorkspaceSwitcherNext.swift:39"
+        },
+        {
+          "ts": "2026-05-21T23:58:37.480Z",
+          "agent": "talkie-codex-c4",
+          "level": "proposal",
+          "message": "Recommend DEFER: live WorkspaceStore activation must atomically swap ASAuthorization identity, iCloud zone, Core Data store, and Bridge pairing. Current mock activation is intentionally paint-only; faking persistence would be unsafe.",
+          "findingKey": "C4::WorkspaceSwitcherNext::WorkspaceStore wiring",
+          "ref": "apps/ios/Talkie iOS/Views/Next/WorkspaceSwitcherNext.swift:8",
+          "proposedDecision": "DEFER"
+        },
+        {
+          "ts": "2026-05-21T23:58:37.495Z",
+          "agent": "talkie-codex-c4",
+          "level": "info",
+          "message": "KeyboardSettingsView block remains skipped per user DEFER decisions for setup instructions, configurator push, and testing playground."
+        },
+        {
+          "ts": "2026-05-22T00:00:57.997Z",
+          "agent": "talkie-codex-c4",
+          "level": "info",
+          "message": "PR for C4 second-pass drain remains parity/c4 → feat/ios-shell-phase-0: https://github.com/arach/talkie/pull/19",
+          "ref": "https://github.com/arach/talkie/pull/19"
+        },
+        {
+          "ts": "2026-05-22T00:00:58.012Z",
+          "agent": "talkie-codex-c4",
+          "level": "info",
+          "message": "C4 second-pass drain accounted: 17 PORT findings have landed/file refs; WorkspaceStore wiring has structured DEFER proposal; KeyboardSettingsView block remains user-DEFERed. Build re-verify is blocked by C3-owned ComposeStore.swift save(context) error, with C3 info note posted."
+        },
+        {
+          "ts": "2026-05-22T00:01:18.089Z",
+          "agent": "talkie-codex-c4",
+          "level": "info",
+          "message": "Post-sync implementation commit for the second-pass Swift drain is 4a2f405 after the required final rebase.",
+          "ref": "4a2f405"
+        },
+        {
+          "ts": "2026-05-22T00:02:12.516Z",
+          "agent": "talkie-codex-c4",
+          "level": "info",
+          "message": "Opened fresh PR for post-merge C4 second-pass drain: https://github.com/arach/talkie/pull/24 (parity/c4 → feat/ios-shell-phase-0).",
+          "ref": "https://github.com/arach/talkie/pull/24"
         }
       ]
     },
@@ -2485,7 +2701,7 @@
       "scope": "ConnectionCenterNext, BridgeDetailNext, DeckMirrorNext, NetworkStatusBanner, MacConnectionChip, MacCoachCard",
       "owner": null,
       "status": "done",
-      "lockedAt": "2026-05-21T19:41:16.486Z",
+      "lockedAt": "2026-05-21T23:41:18.588Z",
       "notes": [
         {
           "ts": "2026-05-21T18:00:26.165Z",
@@ -3116,6 +3332,137 @@
           "message": "C3 landed the memo-detail workflow polling/toast receiver in parity/c3 at 8d4f94e; C6 PR #21 remains the trigger-card owner.",
           "findingKey": "C6::WorkflowActionSheet::Per-memo workflow triggers",
           "ref": "8d4f94e"
+        },
+        {
+          "ts": "2026-05-21T23:44:05.865Z",
+          "agent": "talkie-codex-c6",
+          "level": "progress",
+          "message": "Starting log inspection/redaction pass: expose redacted recent logs in FeedbackNext, allow review/edit/exclude, and submit the reviewed log bundle through FeedbackService.",
+          "findingKey": "C6::FeedbackSheet::Log attachment + redaction UI"
+        },
+        {
+          "ts": "2026-05-21T23:49:15.009Z",
+          "agent": "talkie-codex-c6",
+          "level": "landed",
+          "message": "Landed approved attachment pipeline after rebase: RecordingSheetNext queues PhotosPicker images, shows context pills/tiles, and persists MemoAttachmentStore images plus RecordingSidecarStore requests on save.",
+          "findingKey": "C6::RecordingView::Attachment pipeline",
+          "ref": "422d86d"
+        },
+        {
+          "ts": "2026-05-21T23:49:15.032Z",
+          "agent": "talkie-codex-c6",
+          "level": "landed",
+          "message": "Acknowledged existing Next change: RecordingSheetNext uses trimmed .height(280)/.height(560) sheet detents.",
+          "findingKey": "C6::RecordingView::Detents 280/600 → 280/560",
+          "ref": "apps/ios/Talkie iOS/Views/Next/RecordingSheetNext.swift:69"
+        },
+        {
+          "ts": "2026-05-21T23:49:15.053Z",
+          "agent": "talkie-codex-c6",
+          "level": "landed",
+          "message": "Acknowledged existing Next change: recording state paints explicit Cancel / Stop / Save transport controls.",
+          "findingKey": "C6::RecordingView::Three explicit transport buttons",
+          "ref": "apps/ios/Talkie iOS/Views/Next/RecordingSheetNext.swift:141-159"
+        },
+        {
+          "ts": "2026-05-21T23:49:15.079Z",
+          "agent": "talkie-codex-c6",
+          "level": "landed",
+          "message": "Acknowledged existing Next change: MinimalDictationOverlayController singleton owns overlay visibility and partial text state.",
+          "findingKey": "C6::MinimalDictationOverlay::Controller singleton abstraction",
+          "ref": "apps/ios/Talkie iOS/Views/Next/MinimalDictationOverlayNext.swift:14"
+        },
+        {
+          "ts": "2026-05-21T23:49:15.100Z",
+          "agent": "talkie-codex-c6",
+          "level": "landed",
+          "message": "Acknowledged existing Next addition: MinimalDictationOverlayDemoSurface provides screenshot/preview overlay mode.",
+          "findingKey": "C6::MinimalDictationOverlay::Demo surface for screenshots",
+          "ref": "apps/ios/Talkie iOS/Views/Next/MinimalDictationOverlayNext.swift:93"
+        },
+        {
+          "ts": "2026-05-21T23:49:15.128Z",
+          "agent": "talkie-codex-c6",
+          "level": "landed",
+          "message": "Acknowledged existing Next change: KeyboardActivationStore centralizes phase, live keyboard mode, transcript, and return-info state.",
+          "findingKey": "C6::KeyboardActivationView (829L)::Decoupled via store",
+          "ref": "apps/ios/Talkie iOS/Views/Next/KeyboardActivationNext.swift:34-61"
+        },
+        {
+          "ts": "2026-05-21T23:49:15.154Z",
+          "agent": "talkie-codex-c6",
+          "level": "landed",
+          "message": "Landed earlier: keyboard mode pill now calls KeyboardActivationStore.toggleKeyboardMode and bridges to HeadlessDictationService activate/deactivate.",
+          "findingKey": "C6::KeyboardActivationView (829L)::Keyboard mode toggle",
+          "ref": "868a005"
+        },
+        {
+          "ts": "2026-05-21T23:49:15.178Z",
+          "agent": "talkie-codex-c6",
+          "level": "landed",
+          "message": "Landed earlier: return-info dismissal is loaded and saved through UserDefaults.",
+          "findingKey": "C6::KeyboardActivationView (829L)::returnInfoDismissed persistence",
+          "ref": "66f7419"
+        },
+        {
+          "ts": "2026-05-21T23:49:15.203Z",
+          "agent": "talkie-codex-c6",
+          "level": "landed",
+          "message": "Acknowledged existing Next addition: ListeningBubble floats above the voice button with listening label and waveform.",
+          "findingKey": "C6::ActionDock (565L)::ListeningBubble floats above mic",
+          "ref": "apps/ios/Talkie iOS/Views/Next/ListeningBubble.swift:16"
+        },
+        {
+          "ts": "2026-05-21T23:49:15.223Z",
+          "agent": "talkie-codex-c6",
+          "level": "landed",
+          "message": "Acknowledged existing Next change: WorkflowsNext is the standalone templates, schedules, and history hub.",
+          "findingKey": "C6::WorkflowActionSheet::Per-memo sheet → standalone hub",
+          "ref": "apps/ios/Talkie iOS/Views/Next/WorkflowsNext.swift:15"
+        },
+        {
+          "ts": "2026-05-21T23:49:15.241Z",
+          "agent": "talkie-codex-c6",
+          "level": "landed",
+          "message": "Landed approved cross-cluster scope after rebase: VoiceMemoDetailNext shows memo workflow trigger cards backed by memo-scoped WorkflowsStore templates.",
+          "findingKey": "C6::WorkflowActionSheet::Per-memo workflow triggers",
+          "ref": "422d86d"
+        },
+        {
+          "ts": "2026-05-21T23:49:15.260Z",
+          "agent": "talkie-codex-c6",
+          "level": "landed",
+          "message": "Landed FeedbackNext log review/redaction UI: users can inspect, edit, reset, include, or exclude redacted recent logs; FeedbackService re-redacts reviewed lines before submit.",
+          "findingKey": "C6::FeedbackSheet::Log attachment + redaction UI",
+          "ref": "80bb07b"
+        },
+        {
+          "ts": "2026-05-21T23:49:15.278Z",
+          "agent": "talkie-codex-c6",
+          "level": "landed",
+          "message": "Acknowledged existing Next addition: AskAINext provides the multi-turn agentic Ask AI loop with presets and response actions.",
+          "findingKey": "C6::(none)::Net-new agentic loop surface",
+          "ref": "apps/ios/Talkie iOS/Views/Next/AskAINext.swift:10"
+        },
+        {
+          "ts": "2026-05-21T23:49:15.297Z",
+          "agent": "talkie-codex-c6",
+          "level": "landed",
+          "message": "Acknowledged existing provider wiring: AskAINext resolves configured phone providers first, then paired Mac borrowed providers before setup guidance.",
+          "findingKey": "C6::(none)::Provider resolution",
+          "ref": "apps/ios/Talkie iOS/Views/Next/AskAINext.swift:379-403"
+        },
+        {
+          "ts": "2026-05-21T23:49:15.313Z",
+          "agent": "talkie-codex-c6",
+          "level": "info",
+          "message": "Second-pass drain complete: all 14 PORT C6 findings now have landed notes; three ActionDock findings remain user-DEFER. Verified iOS build succeeded with DerivedData removed."
+        },
+        {
+          "ts": "2026-05-21T23:59:06.594Z",
+          "agent": "talkie-codex-c6",
+          "level": "info",
+          "message": "PR opened: https://github.com/arach/talkie/pull/23"
         }
       ]
     }
