@@ -612,7 +612,7 @@ final class ComposeStore: ObservableObject {
         note.lastModified = Date()
         note.title = cleanCaptureTitle(capture)
         note.content = capture.text
-        save(context)
+        try? context.save()
         return note
     }
 
@@ -623,7 +623,7 @@ final class ComposeStore: ObservableObject {
         note.lastModified = Date()
         note.title = title(from: text, fallback: "Untitled note")
         note.content = text
-        save(context)
+        try? context.save()
         return note
     }
 
