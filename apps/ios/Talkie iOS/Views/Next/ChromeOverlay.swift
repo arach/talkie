@@ -89,7 +89,7 @@ private struct CornerSlot: View {
                     Circle().strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: hairline)
                     glyph.foregroundStyle(theme.colors.textSecondary)
                 }
-                .frame(width: 40, height: 40)
+                .frame(width: 48, height: 48)
                 .shadow(color: .black.opacity(0.10), radius: 4, y: 2)
             }
             .buttonStyle(.plain)
@@ -97,12 +97,12 @@ private struct CornerSlot: View {
         }
         .padding(.horizontal, 20)
         .padding(.top, isTop ? 6 : 0)
-        // Bottom corner slots sit 20pt above the edge so their 40pt
-        // circles share a center-Y (~40pt) with the LiquidGlassTray
-        // and the bottom-left VoicePivotButton. Top corners keep the
-        // tighter 6pt inset since the top band has no tray to align
-        // against.
-        .padding(.bottom, isBottom ? 20 : 0)
+        // Bottom corner slots sit 16pt above the edge so their 48pt
+        // circles share a center-Y (40pt from safe area) with the
+        // LiquidGlassTray, the bottom-left VoicePivotButton, and the
+        // bottom-center MicFAB. Top corners keep the tighter 6pt inset
+        // since the top band has no tray to align against.
+        .padding(.bottom, isBottom ? 16 : 0)
     }
 }
 
@@ -181,10 +181,11 @@ private struct LiquidGlassTray: View {
         )
         .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        // 12pt outer padding so the tray capsule doesn't touch the
-        // screen edges on smaller iPhones (was overlapping ~5pt per
-        // side without it).
-        .padding(.horizontal, 12)
+        // 20pt outer padding so the tray capsule sits clearly inset
+        // from screen edges on smaller iPhones (was 12pt; bumped on
+        // 13 mini feedback). Tray content is ~276pt wide so even at
+        // 20pt outer padding × 2 there's room on a 375pt screen.
+        .padding(.horizontal, 20)
         .padding(.bottom, 6)
     }
 }
