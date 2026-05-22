@@ -368,6 +368,18 @@ final class VoiceMemoDetailStore: ObservableObject {
         return true
     }
 
+    /// Re-runs transcription on the existing audio file. Sets
+    /// isTranscribing → true on the entity; TranscriptionService
+    /// overwrites the transcript field when the pass settles.
+    @discardableResult
+    func retranscribe() -> Bool {
+        guard !isMock, let sourceMemo else { return false }
+        let context = sourceMemo.managedObjectContext
+            ?? PersistenceController.shared.container.viewContext
+        TranscriptionService.shared.transcribeVoiceMemo(sourceMemo, context: context)
+        return true
+    }
+
     func image(for attachment: MemoImageAttachment) -> UIImage? {
         MemoAttachmentStore.shared.image(for: attachment)
     }
@@ -1472,18 +1484,12 @@ struct VoiceMemoDetailNext: View {
         }
     }
 
-    /// Re-runs transcription against the existing audio file. Useful
-    /// when the original attempt produced 'No transcript yet.' (silent
-    /// failure, permission issues at save time, etc) or when you want
-    /// to redo the pass with a refreshed model. TranscriptionService
-    /// .transcribeVoiceMemo overwrites the transcript field and toggles
-    /// isTranscribing → so the UI flips to a transcribing state, then
-    /// settles with the new transcript.
+    /// Re-runs transcription via the store, which holds the
+    /// underlying VoiceMemo entity. Useful when the original attempt
+    /// produced 'No transcript yet.' or you want to redo the pass.
     private func retranscribe() {
-        let context = store.memo.managedObjectContext
-            ?? PersistenceController.shared.container.viewContext
-        TranscriptionService.shared.transcribeVoiceMemo(store.memo, context: context)
-        AppLogger.transcription.info("User-triggered retranscribe for memo \(store.memo.id?.uuidString ?? "?")")
+        store.retranscribe()
+        AppLogger.transcription.info("User-triggered retranscribe for memo \(store.memo.id)")
     }
 
     private func runMemoWorkflow(_ template: WorkflowTemplate) {
