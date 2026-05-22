@@ -119,7 +119,7 @@ private struct LiquidGlassTray: View {
                         .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 22, height: 22)
+                        .frame(width: 30, height: 30)
                 ),
                 label: "Home"
             ) {
@@ -128,7 +128,7 @@ private struct LiquidGlassTray: View {
             }
 
             TraySlot(
-                glyph: AnyView(Image(systemName: "viewfinder").font(.system(size: 17, weight: .regular))),
+                glyph: AnyView(Image(systemName: "plus.viewfinder").font(.system(size: 17, weight: .regular))),
                 label: "Capture"
             ) {
                 AppShellRouter.shared.openCaptureCompose()
