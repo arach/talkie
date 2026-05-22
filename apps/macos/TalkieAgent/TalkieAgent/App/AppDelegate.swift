@@ -131,7 +131,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         // during recording. This runs once on boot and caches the result.
         let hasAccessibility = PermissionManager.shared.preflightAccessibilityCheck()
         if !hasAccessibility {
-            log.warning("Accessibility permission not granted - paste may fail")
+            log.warning(
+                "Accessibility permission not granted - paste may fail",
+                detail: "bundle=\(Bundle.main.bundleIdentifier ?? "unknown"), executable=\(Bundle.main.executableURL?.path ?? "unknown")"
+            )
         }
 
         // Listen for permissions window notification from FloatingPill
@@ -1316,9 +1319,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                     action: nil
                 )
 
-                // TTS readback (measure precisely)
+                // TTS readback (measure precisely). Persistence should not depend
+                // on audio playback: if TTS fails, this is still a valid capture.
                 let ttsStart = CFAbsoluteTimeGetCurrent()
-                try await speechPlaybackController.speakSelection(result.text)
+                let playbackResult: SelectionSpeechPlaybackResult?
+                let ttsError: String?
+                do {
+                    playbackResult = try await speechPlaybackController.speakSelection(result.text)
+                    ttsError = nil
+                } catch {
+                    playbackResult = nil
+                    ttsError = error.localizedDescription
+                    log.error("Quick selection TTS failed", detail: error.localizedDescription, error: error)
+                    selectionFeedbackController.show(
+                        SelectionFeedbackMessage(
+                            title: "Speech failed",
+                            detail: "Saved to captures. \(error.localizedDescription)",
+                            tone: .failure,
+                            actionTitle: nil,
+                            action: nil
+                        ),
+                        duration: 2.3
+                    )
+                }
                 let ttsMs = Int((CFAbsoluteTimeGetCurrent() - ttsStart) * 1000)
 
                 // Collect screenshot (should be done by now — it runs in parallel)
@@ -1329,7 +1352,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 let storedVoiceId = TalkieSharedSettings.string(forKey: AgentSettingsKey.selectionTTSVoiceId)
                     ?? TalkieSharedSettings.string(forKey: AgentSettingsKey.selectedTTSVoiceId)
                     ?? "system"
-                let voiceId = storedVoiceId.hasPrefix("kokoro:") ? "system" : storedVoiceId
+                let voiceId = playbackResult?.voiceId ?? (storedVoiceId.hasPrefix("kokoro:") ? "system" : storedVoiceId)
                 storeSelectionObject(
                     recordingId: recordingId,
                     inputText: text,
@@ -1340,7 +1363,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                     processingMs: processingMs,
                     ttsMs: ttsMs,
                     endToEndMs: endToEndMs,
-                    screenshot: screenshot
+                    screenshot: screenshot,
+                    ttsError: ttsError
                 )
             } catch {
                 log.error("Speak selection failed", detail: error.localizedDescription, error: error)
@@ -1372,7 +1396,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         processingMs: Int,
         ttsMs: Int,
         endToEndMs: Int,
-        screenshot: RecordingScreenshot?
+        screenshot: RecordingScreenshot?,
+        ttsError: String? = nil
     ) {
         let keepHistoryEnabled = TalkieSharedSettings.object(forKey: AgentSettingsKey.selectionKeepHistory) as? Bool ?? true
         guard keepHistoryEnabled || result.shouldPersist else {
@@ -1405,10 +1430,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         let ttsModel: String?
         if voiceId.hasPrefix("openai:") {
             ttsProvider = "openai"
-            ttsModel = "tts-1"
+            ttsModel = OpenAISpeechService.model
         } else if voiceId.hasPrefix("elevenlabs:") {
             ttsProvider = "elevenlabs"
-            ttsModel = "eleven_flash_v2_5"
+            ttsModel = ElevenLabsSpeechService.model
         } else {
             ttsProvider = "apple"
             ttsModel = nil
@@ -1421,7 +1446,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             endpoint: "audio/speech",
             inputText: String(outputText.prefix(500)),
             latencyMs: ttsMs,
-            status: "success"
+            status: ttsError == nil ? "success" : "failed",
+            error: ttsError
         ))
 
         let metadata = RecordingMetadata(
@@ -1438,7 +1464,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 inputText: inputText,
                 mode: result.mode.rawValue,
                 voiceId: voiceId,
-                delivery: "speak",
+                delivery: ttsError == nil ? "speak" : "capture",
                 llmPrompt: result.prompt,
                 llmResponse: result.mode != .verbatim ? outputText : nil,
                 llmModel: result.llmModel,
@@ -2073,6 +2099,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 }
 
 @MainActor
+struct SelectionSpeechPlaybackResult {
+    let voiceId: String
+    let provider: String
+    let model: String?
+}
+
+@MainActor
 final class SelectionSpeechPlaybackController: NSObject, ObservableObject, AVAudioPlayerDelegate {
     static let shared = SelectionSpeechPlaybackController()
 
@@ -2092,30 +2125,29 @@ final class SelectionSpeechPlaybackController: NSObject, ObservableObject, AVAud
 
     private override init() { super.init() }
 
-    func speakSelection(_ text: String) async throws {
+    func speakSelection(_ text: String) async throws -> SelectionSpeechPlaybackResult {
         stopPlayback(notify: false)
 
-        // Check for selection-specific voice first, fall back to global
-        let selectedVoiceId = normalizeSelectionVoiceId(
-            TalkieSharedSettings.string(forKey: AgentSettingsKey.selectionTTSVoiceId)
-                ?? TalkieSharedSettings.string(forKey: AgentSettingsKey.selectedTTSVoiceId)
-                ?? "system"
-        )
-
-        let audioURL: URL
-        if selectedVoiceId.hasPrefix("openai:") {
-            let voiceId = String(selectedVoiceId.dropFirst("openai:".count))
-            let apiKey = TalkieSharedSettings.string(forKey: AgentSettingsKey.openaiApiKey)
-            audioURL = try await OpenAISpeechService.synthesize(text: text, voice: voiceId, apiKey: apiKey)
-        } else if selectedVoiceId.hasPrefix("elevenlabs:") {
-            let voiceId = String(selectedVoiceId.dropFirst("elevenlabs:".count))
-            let apiKey = TalkieSharedSettings.string(forKey: AgentSettingsKey.elevenLabsApiKey)
-            audioURL = try await ElevenLabsSpeechService.synthesize(text: text, voiceId: voiceId, apiKey: apiKey)
-        } else {
-            audioURL = try await synthesizeAppleSpeechToFile(text: text, selectedVoiceId: selectedVoiceId)
+        var lastError: Error?
+        for voiceId in candidateVoiceIDs() {
+            do {
+                let synthesis = try await synthesizeSelection(text: text, selectedVoiceId: voiceId)
+                try playAudioFile(at: synthesis.audioURL)
+                if synthesis.voiceId != voiceId {
+                    log.info("Quick selection TTS used normalized voice", detail: "requested=\(voiceId) used=\(synthesis.voiceId)")
+                }
+                return SelectionSpeechPlaybackResult(
+                    voiceId: synthesis.voiceId,
+                    provider: synthesis.provider,
+                    model: synthesis.model
+                )
+            } catch {
+                lastError = error
+                log.warning("Quick selection TTS candidate failed", detail: "voice=\(voiceId) error=\(error.localizedDescription)")
+            }
         }
 
-        try playAudioFile(at: audioURL)
+        throw lastError ?? SelectionSpeechError.audioPlaybackUnavailable
     }
 
     private func playAudioFile(at url: URL) throws {
@@ -2138,6 +2170,80 @@ final class SelectionSpeechPlaybackController: NSObject, ObservableObject, AVAud
 
     private func normalizeSelectionVoiceId(_ voiceId: String) -> String {
         voiceId.hasPrefix("kokoro:") ? "system" : voiceId
+    }
+
+    private struct SpeechSynthesisResult {
+        let audioURL: URL
+        let voiceId: String
+        let provider: String
+        let model: String?
+    }
+
+    private func candidateVoiceIDs() -> [String] {
+        let selectionVoiceId = TalkieSharedSettings.string(forKey: AgentSettingsKey.selectionTTSVoiceId)
+        let globalVoiceId = TalkieSharedSettings.string(forKey: AgentSettingsKey.selectedTTSVoiceId)
+        let hasOpenAIKey = TalkieSharedSettings.string(forKey: AgentSettingsKey.openaiApiKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty == false
+        let hasElevenLabsKey = TalkieSharedSettings.string(forKey: AgentSettingsKey.elevenLabsApiKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty == false
+
+        var candidates: [String] = []
+
+        func append(_ voiceId: String?) {
+            guard let voiceId else { return }
+            let normalized = normalizeSelectionVoiceId(voiceId)
+            guard !normalized.isEmpty, !candidates.contains(normalized) else { return }
+            candidates.append(normalized)
+        }
+
+        append(selectionVoiceId)
+        append(globalVoiceId)
+
+        if hasOpenAIKey {
+            append("openai:alloy")
+        }
+        if hasElevenLabsKey {
+            append("elevenlabs:21m00Tcm4TlvDq8ikWAM")
+        }
+        append("system")
+
+        return candidates
+    }
+
+    private func synthesizeSelection(text: String, selectedVoiceId: String) async throws -> SpeechSynthesisResult {
+        if selectedVoiceId.hasPrefix("openai:") {
+            let voiceId = String(selectedVoiceId.dropFirst("openai:".count))
+            let apiKey = TalkieSharedSettings.string(forKey: AgentSettingsKey.openaiApiKey)
+            let audioURL = try await OpenAISpeechService.synthesize(text: text, voice: voiceId, apiKey: apiKey)
+            return SpeechSynthesisResult(
+                audioURL: audioURL,
+                voiceId: selectedVoiceId,
+                provider: "openai",
+                model: OpenAISpeechService.model
+            )
+        }
+
+        if selectedVoiceId.hasPrefix("elevenlabs:") {
+            let voiceId = String(selectedVoiceId.dropFirst("elevenlabs:".count))
+            let apiKey = TalkieSharedSettings.string(forKey: AgentSettingsKey.elevenLabsApiKey)
+            let audioURL = try await ElevenLabsSpeechService.synthesize(text: text, voiceId: voiceId, apiKey: apiKey)
+            return SpeechSynthesisResult(
+                audioURL: audioURL,
+                voiceId: selectedVoiceId,
+                provider: "elevenlabs",
+                model: ElevenLabsSpeechService.model
+            )
+        }
+
+        let audioURL = try await synthesizeAppleSpeechToFile(text: text, selectedVoiceId: selectedVoiceId)
+        return SpeechSynthesisResult(
+            audioURL: audioURL,
+            voiceId: "system",
+            provider: "apple",
+            model: nil
+        )
     }
 
     func togglePlayPause() {
@@ -2638,6 +2744,7 @@ private final class SelectionQuickProcessor {
 
 private enum ElevenLabsSpeechService {
     private static let baseURL = URL(string: "https://api.elevenlabs.io/v1/text-to-speech")!
+    static let model = "eleven_flash_v2_5"
 
     private struct RequestBody: Encodable {
         let text: String
@@ -2669,7 +2776,7 @@ private enum ElevenLabsSpeechService {
         request.setValue(apiKey, forHTTPHeaderField: "xi-api-key")
         request.httpBody = try JSONEncoder().encode(RequestBody(
             text: text,
-            model_id: "eleven_flash_v2_5"
+            model_id: model
         ))
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -2694,6 +2801,7 @@ private enum ElevenLabsSpeechService {
 
 private enum OpenAISpeechService {
     private static let baseURL = URL(string: "https://api.openai.com/v1/audio/speech")!
+    static let model = "gpt-4o-mini-tts"
 
     private struct RequestBody: Encodable {
         let model: String
@@ -2716,7 +2824,7 @@ private enum OpenAISpeechService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONEncoder().encode(RequestBody(
-            model: "tts-1",
+            model: model,
             input: text,
             voice: voice,
             response_format: "mp3"

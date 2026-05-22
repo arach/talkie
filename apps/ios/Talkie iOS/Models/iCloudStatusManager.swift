@@ -165,7 +165,14 @@ class iCloudStatusManager: ObservableObject {
             return
         }
 
-        let container = CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier)
+        guard let container = CloudKitContainerProvider.container() else {
+            let reason = CloudKitContainerProvider.unavailableReason ?? "CloudKit unavailable"
+            realStatus = .couldNotDetermine
+            status = realStatus
+            initialCheckComplete = true
+            AppLogger.persistence.info("CloudKit status check skipped: \(reason)")
+            return
+        }
 
         container.accountStatus { [weak self] accountStatus, error in
             DispatchQueue.main.async {
@@ -220,7 +227,13 @@ class iCloudStatusManager: ObservableObject {
             return
         }
 
-        let container = CKContainer(identifier: TalkieMobileRuntimeIdentifiers.cloudKitContainerIdentifier)
+        guard let container = CloudKitContainerProvider.container() else {
+            let reason = CloudKitContainerProvider.unavailableReason ?? "CloudKit unavailable"
+            realStatus = .couldNotDetermine
+            status = realStatus
+            AppLogger.persistence.info("CloudKit status check skipped: \(reason)")
+            return
+        }
 
         container.accountStatus { [weak self] accountStatus, error in
             DispatchQueue.main.async {

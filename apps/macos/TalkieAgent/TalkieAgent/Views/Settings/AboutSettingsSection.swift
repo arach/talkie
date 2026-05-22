@@ -139,7 +139,7 @@ struct AboutSettingsSection: View {
     /// Walk up from bundle location to find .git directory
     private static func findGitDirectory() -> URL? {
         var url = Bundle.main.bundleURL
-        for _ in 0..<8 {  // Walk up max 8 levels (DerivedData can be deep)
+        for _ in 0..<8 {
             url = url.deletingLastPathComponent()
             let gitPath = url.appendingPathComponent(".git")
             if FileManager.default.fileExists(atPath: gitPath.path) {

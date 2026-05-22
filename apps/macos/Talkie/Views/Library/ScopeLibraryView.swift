@@ -403,8 +403,8 @@ struct ScopeLibraryView: View {
                     .shadow(color: isSelected ? ScopeAmber.glow : .clear, radius: 3)
                 HStack(spacing: 6) {
                     Text(option.label.uppercased())
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .tracking(1.2)
+                        .font(ScopeType.eyebrow)
+                        .tracking(ScopeType.Tracking.wide)
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
                     Text("\(count)")
@@ -548,7 +548,7 @@ struct ScopeLibraryView: View {
     private var loadingState: some View {
         HStack(spacing: 10) {
             PhosphorDot(color: ScopeAmber.solid.opacity(0.5), size: 5)
-            Text("LOADING")
+            Text("· LOADING")
                 .font(ScopeType.eyebrow)
                 .tracking(ScopeType.Tracking.wide)
                 .foregroundStyle(ScopeInk.faint)
@@ -564,7 +564,7 @@ struct ScopeLibraryView: View {
                     .frame(width: 48, height: 48)
                 PhosphorDot(color: ScopeAmber.solid.opacity(0.7), size: 8)
             }
-            Text("NO RECORDINGS YET")
+            Text("· NO RECORDINGS")
                 .font(ScopeType.eyebrow)
                 .tracking(ScopeType.Tracking.wide)
                 .foregroundStyle(ScopeInk.faint)
@@ -580,11 +580,11 @@ struct ScopeLibraryView: View {
     private var emptyStateSubtitle: String {
         if !searchText.isEmpty { return "No matches for \"\(searchText)\"." }
         switch typeFilter {
-        case .all: return "Start a recording."
-        case .memos: return "Memos land here once you've recorded."
-        case .dictations: return "Trigger dictation in any app — transcripts arrive here."
-        case .notes: return "Typed thoughts and screenshots collect here."
-        case .captures: return "Hyper+S to clip the screen alongside what you say."
+        case .all:        return "Hyper+M to record."
+        case .memos:      return "Hyper+M to record."
+        case .dictations: return "Hyper+D to dictate."
+        case .notes:      return "Hyper+N to start a note."
+        case .captures:   return "Hyper+S to capture."
         }
     }
 
@@ -845,13 +845,10 @@ struct ScopeLibraryView: View {
                     .font(.system(size: 14))
                     .foregroundStyle(ScopeInk.subtle)
             }
-            Text("NOTHING SELECTED")
+            Text("· NO SELECTION")
                 .font(ScopeType.eyebrow)
                 .tracking(ScopeType.Tracking.wide)
                 .foregroundStyle(ScopeInk.faint)
-            Text("Pick a row to see details.")
-                .font(.system(size: 12))
-                .foregroundStyle(ScopeInk.subtle)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -1801,11 +1798,11 @@ extension ReadoutSurface {
         bgSecondary: Color.hex("1A1F25"),
         stripTop: nil,
         stripBottom: nil,
-        inkPrimary: Color.hex("E8ECEA"),
-        inkMuted: Color.hex("9AA8A4"),
-        inkSubtle: Color.hex("6B7A75"),
-        signal: Color.hex("C47D1C"),
-        signalGlow: Color.hex("C47D1C").opacity(0.32),
+        inkPrimary: ScopePanel.ink,
+        inkMuted: ScopePanel.inkMuted,
+        inkSubtle: ScopePanel.inkSubtle,
+        signal: ScopeAmber.solid,
+        signalGlow: ScopeAmber.glowStrong,
         edgeFaint: Color.hex("2A3138"),
         topStripLeading: "LIBRARY",
         topStripTrailing: "",

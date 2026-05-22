@@ -26,14 +26,16 @@ actor ScreenshotService {
 
             let filter = SCContentFilter(desktopIndependentWindow: window)
             let config = SCStreamConfiguration()
-            config.width = Int(window.frame.width) * 2  // Retina
-            config.height = Int(window.frame.height) * 2
+            let scale = CGFloat(filter.pointPixelScale)
+            config.width = max(1, Int((filter.contentRect.width * scale).rounded(.toNearestOrAwayFromZero)))
+            config.height = max(1, Int((filter.contentRect.height * scale).rounded(.toNearestOrAwayFromZero)))
+            config.scalesToFit = false
             config.showsCursor = false
             config.capturesAudio = false
 
             let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
             log.info("Captured window \(windowID): \(image.width)x\(image.height)")
-            return NSImage(cgImage: image, size: NSSize(width: window.frame.width, height: window.frame.height))
+            return NSImage(cgImage: image, size: filter.contentRect.size)
         } catch {
             log.error("Failed to capture window \(windowID): \(error)")
             return nil

@@ -326,16 +326,8 @@ final class ScreenshotCaptureService {
         }
         CapturePerformanceMonitor.shared.mark("overlay.region.selected")
 
-        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
-        let captureRect = CGRect(
-            x: selectedRect.origin.x,
-            y: primaryHeight - selectedRect.origin.y - selectedRect.height,
-            width: selectedRect.width,
-            height: selectedRect.height
-        )
-
         CapturePerformanceMonitor.shared.mark("capture.region.read.begin")
-        let image = await captureScreenRegion(screenRect: captureRect)
+        let image = await captureScreenRegion(screenRect: selectedRect)
         guard let image else {
             CapturePerformanceMonitor.shared.mark("capture.region.read.failed")
             log.error("Region capture failed: unable to capture selected rect")
@@ -399,10 +391,11 @@ final class ScreenshotCaptureService {
             let filter = SCContentFilter(desktopIndependentWindow: window)
             let config = SCStreamConfiguration()
             let scale = CGFloat(filter.pointPixelScale)
-            config.width = max(1, Int(filter.contentRect.width * scale))
-            config.height = max(1, Int(filter.contentRect.height * scale))
+            config.width = max(1, Int((filter.contentRect.width * scale).rounded(.toNearestOrAwayFromZero)))
+            config.height = max(1, Int((filter.contentRect.height * scale).rounded(.toNearestOrAwayFromZero)))
             config.scalesToFit = false
             config.showsCursor = false
+            config.capturesAudio = false
 
             return try await SCScreenshotManager.captureImage(
                 contentFilter: filter,
@@ -447,11 +440,12 @@ final class ScreenshotCaptureService {
             let filter = SCContentFilter(display: display, excludingWindows: [])
             let config = SCStreamConfiguration()
             let scale = nsScreen.backingScaleFactor
-            config.width = max(1, Int(screenRect.width * scale))
-            config.height = max(1, Int(screenRect.height * scale))
+            config.width = max(1, Int((screenRect.width * scale).rounded(.toNearestOrAwayFromZero)))
+            config.height = max(1, Int((screenRect.height * scale).rounded(.toNearestOrAwayFromZero)))
             config.sourceRect = displayLocalRect
             config.scalesToFit = false
             config.showsCursor = false
+            config.capturesAudio = false
 
             return try await SCScreenshotManager.captureImage(
                 contentFilter: filter,

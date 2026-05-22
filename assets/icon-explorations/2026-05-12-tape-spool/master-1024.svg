@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Subtle tape reel gradient -->
+    <radialGradient id="reel-l" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7A6E5C" stop-opacity="0.3"/>
+      <stop offset="70%" stop-color="#7A6E5C" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#7A6E5C" stop-opacity="0.05"/>
+    </radialGradient>
+    <radialGradient id="reel-r" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7A6E5C" stop-opacity="0.25"/>
+      <stop offset="70%" stop-color="#7A6E5C" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#7A6E5C" stop-opacity="0.03"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background: Canvas -->
+  <rect width="1024" height="1024" fill="#0E0D0A"/>
+
+  <!-- Tape reels — two concentric ring sets, cassette heritage -->
+  <!-- Left reel -->
+  <circle cx="340" cy="520" r="200" fill="none" stroke="#7A6E5C" stroke-width="2" opacity="0.3"/>
+  <circle cx="340" cy="520" r="160" fill="none" stroke="#7A6E5C" stroke-width="1.5" opacity="0.2"/>
+  <circle cx="340" cy="520" r="80" fill="url(#reel-l)"/>
+  <circle cx="340" cy="520" r="28" fill="#16140e" stroke="#7A6E5C" stroke-width="2" opacity="0.5"/>
+  <!-- Reel spokes -->
+  <g stroke="#7A6E5C" stroke-width="1.5" opacity="0.2">
+    <line x1="340" y1="440" x2="340" y2="492"/>
+    <line x1="271" y1="480" x2="312" y2="502"/>
+    <line x1="409" y1="480" x2="368" y2="502"/>
+    <line x1="271" y1="560" x2="312" y2="538"/>
+    <line x1="409" y1="560" x2="368" y2="538"/>
+    <line x1="340" y1="600" x2="340" y2="548"/>
+  </g>
+
+  <!-- Right reel (smaller — take-up side) -->
+  <circle cx="684" cy="520" r="165" fill="none" stroke="#7A6E5C" stroke-width="2" opacity="0.25"/>
+  <circle cx="684" cy="520" r="130" fill="none" stroke="#7A6E5C" stroke-width="1.5" opacity="0.15"/>
+  <circle cx="684" cy="520" r="65" fill="url(#reel-r)"/>
+  <circle cx="684" cy="520" r="24" fill="#16140e" stroke="#7A6E5C" stroke-width="2" opacity="0.4"/>
+  <!-- Spokes -->
+  <g stroke="#7A6E5C" stroke-width="1.5" opacity="0.15">
+    <line x1="684" y1="455" x2="684" y2="496"/>
+    <line x1="628" y1="488" x2="660" y2="505"/>
+    <line x1="740" y1="488" x2="708" y2="505"/>
+    <line x1="628" y1="552" x2="660" y2="535"/>
+    <line x1="740" y1="552" x2="708" y2="535"/>
+    <line x1="684" y1="585" x2="684" y2="544"/>
+  </g>
+
+  <!-- Tape path connecting reels (curved) -->
+  <path d="M 540 520 Q 512 440 484 520" fill="none" stroke="#7A6E5C" stroke-width="1" opacity="0.2"/>
+
+  <!-- Landmark T — overlaid in cream, prominent -->
+  <g fill="#F4EFE6">
+    <polygon points="168,318 856,300 856,365 168,383"/>
+    <rect x="462" y="365" width="100" height="390" rx="3"/>
+    <path d="M 462 720 L 462 765 Q 462 800 435 812 Q 410 822 405 800 Q 400 778 425 772 L 462 765"/>
+  </g>
+
+  <!-- Hot Mic dot -->
+  <circle cx="790" cy="248" r="38" fill="#E68A3C"/>
+</svg>

@@ -20,7 +20,7 @@ final class RegionPickerOverlay {
     /// Returns nil if the user escapes or drags a sub-threshold rectangle.
     func pickRegion() async -> CGRect? {
         await withCheckedContinuation { continuation in
-            let view = PickerView()
+            let view = PickerView(frame: .zero)
             var resumed = false
             view.onRegionSelected = { rect in
                 guard !resumed else { return }
@@ -68,10 +68,14 @@ final class RegionPickerOverlay {
         window.makeKey()
         window.makeFirstResponder(view)
         overlayWindow = window
+        view.activateCursor()
+        Task { @MainActor [weak view] in
+            view?.activateCursor()
+        }
     }
 
     private func dismiss() {
-        NSCursor.arrow.set()
+        (overlayWindow?.contentView as? PickerView)?.deactivateCursor()
         overlayWindow?.orderOut(nil)
         overlayWindow = nil
     }
@@ -92,6 +96,15 @@ private final class PickerView: NSView {
     private var dragStart: NSPoint?
     private var dragCurrent: NSPoint?
     private var completed = false
+    private var didPushCursor = false
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setupTrackingArea()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
 
     override var acceptsFirstResponder: Bool { true }
 
@@ -102,11 +115,16 @@ private final class PickerView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         guard window != nil else { return }
-        NSCursor.crosshair.set()
+        activateCursor()
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        window?.invalidateCursorRects(for: self)
     }
 
     override func removeFromSuperview() {
-        NSCursor.arrow.set()
+        deactivateCursor()
         super.removeFromSuperview()
     }
 
@@ -145,6 +163,7 @@ private final class PickerView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        NSCursor.crosshair.set()
         let point = convert(event.locationInWindow, from: nil)
         dragStart = point
         dragCurrent = point
@@ -153,11 +172,13 @@ private final class PickerView: NSView {
 
     override func mouseDragged(with event: NSEvent) {
         guard dragStart != nil else { return }
+        NSCursor.crosshair.set()
         dragCurrent = convert(event.locationInWindow, from: nil)
         needsDisplay = true
     }
 
     override func mouseUp(with event: NSEvent) {
+        NSCursor.crosshair.set()
         guard let start = dragStart, let current = dragCurrent else {
             complete()
             onCancelled?()
@@ -191,6 +212,41 @@ private final class PickerView: NSView {
             complete()
             onCancelled?()
         }
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        NSCursor.crosshair.set()
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        activateCursor()
+    }
+
+    private func setupTrackingArea() {
+        let area = NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+    }
+
+    func activateCursor() {
+        guard window != nil, !completed else { return }
+        window?.invalidateCursorRects(for: self)
+        if didPushCursor {
+            NSCursor.crosshair.set()
+        } else {
+            NSCursor.crosshair.push()
+            didPushCursor = true
+        }
+    }
+
+    func deactivateCursor() {
+        guard didPushCursor else { return }
+        didPushCursor = false
+        NSCursor.pop()
     }
 
     private func complete() {

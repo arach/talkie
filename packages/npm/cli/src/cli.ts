@@ -10,6 +10,7 @@ import { registerSyncCommand } from "./commands/sync";
 import { registerDataCommand } from "./commands/data";
 import { registerAppCommand } from "./commands/app";
 import { registerTerminalCommand } from "./commands/terminal";
+import packageJson from "../package.json";
 
 export function createProgram(): Command {
   const program = new Command();
@@ -34,7 +35,7 @@ export function createProgram(): Command {
     talkie install            download & install Talkie.app
     talkie upgrade            check for & install app updates`
     )
-    .version("0.4.3")
+    .version(packageJson.version)
     .option("--db <path>", "override database path")
     .option("--json", "force JSON output (default when piped)")
     .option("--pretty", "force human-readable output (default in terminal)");

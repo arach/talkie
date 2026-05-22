@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import TalkieKit
 
 struct TalkieServiceMonitorView: View {
     private let monitor = ServiceManager.shared.engine
@@ -185,10 +186,8 @@ struct TalkieServiceMonitorView: View {
            FileManager.default.fileExists(atPath: appPath) {
             NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: appPath)
         } else {
-            // Fall back to DerivedData if Agent hasn't been discovered yet.
-            let debugPath = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/Developer/Xcode/DerivedData")
-            NSWorkspace.shared.open(debugPath)
+            let devPath = TalkieHelper.agent.userInstalledAppURL(for: TalkieEnvironment.current)
+            NSWorkspace.shared.open(devPath.deletingLastPathComponent())
         }
     }
 

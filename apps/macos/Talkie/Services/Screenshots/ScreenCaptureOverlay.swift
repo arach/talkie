@@ -23,8 +23,14 @@ final class ScreenCaptureOverlay {
     func selectRegion() async -> CGRect? {
         await withCheckedContinuation { continuation in
             let view = OverlayView(mode: .region)
-            view.onRegionSelected = { continuation.resume(returning: $0) }
-            view.onCancelled = { continuation.resume(returning: nil) }
+            var didResume = false
+            let resume: (CGRect?) -> Void = { result in
+                guard !didResume else { return }
+                didResume = true
+                continuation.resume(returning: result)
+            }
+            view.onRegionSelected = { resume($0) }
+            view.onCancelled = { resume(nil) }
             showOverlay(with: view)
         }
     }
@@ -32,8 +38,14 @@ final class ScreenCaptureOverlay {
     func selectWindow() async -> CGWindowID? {
         await withCheckedContinuation { continuation in
             let view = OverlayView(mode: .window)
-            view.onWindowSelected = { continuation.resume(returning: $0) }
-            view.onCancelled = { continuation.resume(returning: nil) }
+            var didResume = false
+            let resume: (CGWindowID?) -> Void = { result in
+                guard !didResume else { return }
+                didResume = true
+                continuation.resume(returning: result)
+            }
+            view.onWindowSelected = { resume($0) }
+            view.onCancelled = { resume(nil) }
             showOverlay(with: view)
         }
     }
@@ -72,10 +84,14 @@ final class ScreenCaptureOverlay {
 
         overlayWindow = window
         overlayView = view
+        view.activateCursor()
+        Task { @MainActor [weak view] in
+            view?.activateCursor()
+        }
     }
 
     private func dismiss() {
-        NSCursor.arrow.set()
+        overlayView?.deactivateCursor()
         overlayWindow?.orderOut(nil)
         overlayWindow = nil
         overlayView = nil
@@ -114,10 +130,14 @@ private final class OverlayView: NSView {
     private var windowCandidates: [WindowCandidate] = []
     private var windowCandidatesUpdatedAtNs: UInt64 = 0
     private var completed = false
+    private var didPushCursor = false
 
     private let windowHoverUpdateInterval: CFAbsoluteTime = 1.0 / 90.0
     private let windowCacheRefreshIntervalNs: UInt64 = 1_200_000_000 // 1.2s
     private var richCaptureUIEnabled: Bool { FeatureFlags.shared.enableCaptureRichUI }
+    private var overlayCursor: NSCursor {
+        mode == .region ? .crosshair : Self.cameraCursor
+    }
     private static let cameraCursor: NSCursor = {
         let size = NSSize(width: 24, height: 24)
         let image = NSImage(size: size)
@@ -138,9 +158,7 @@ private final class OverlayView: NSView {
     init(mode: OverlayMode) {
         self.mode = mode
         super.init(frame: .zero)
-        if mode == .window {
-            setupTrackingArea()
-        }
+        setupTrackingArea()
     }
 
     @available(*, unavailable)
@@ -149,25 +167,29 @@ private final class OverlayView: NSView {
     override var acceptsFirstResponder: Bool { true }
 
     override func resetCursorRects() {
-        let cursor: NSCursor = (mode == .region) ? .crosshair : Self.cameraCursor
-        addCursorRect(bounds, cursor: cursor)
+        addCursorRect(bounds, cursor: overlayCursor)
     }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         guard window != nil else { return }
-        (mode == .region ? NSCursor.crosshair : Self.cameraCursor).set()
+        activateCursor()
         if mode == .window {
             let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
             refreshWindowCandidatesIfNeeded(primaryHeight: primaryHeight, forceRefresh: false)
         }
     }
 
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        window?.invalidateCursorRects(for: self)
+    }
+
     override func removeFromSuperview() {
         pendingWindowHoverUpdate = false
         windowCandidatesRefreshTask?.cancel()
         windowCandidatesRefreshTask = nil
-        NSCursor.arrow.set()
+        deactivateCursor()
         super.removeFromSuperview()
     }
 
@@ -265,6 +287,7 @@ private final class OverlayView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        overlayCursor.set()
         guard mode == .region else {
             handleWindowClick()
             return
@@ -279,6 +302,7 @@ private final class OverlayView: NSView {
 
     override func mouseDragged(with event: NSEvent) {
         guard mode == .region, dragStart != nil else { return }
+        overlayCursor.set()
         let previousRect = lastDragDrawRect
         let nextPoint = convert(event.locationInWindow, from: nil)
         dragCurrent = nextPoint
@@ -289,6 +313,7 @@ private final class OverlayView: NSView {
 
     override func mouseUp(with event: NSEvent) {
         guard mode == .region, let start = dragStart, let current = dragCurrent else { return }
+        overlayCursor.set()
 
         let rect = NSRect(
             x: min(start.x, current.x),
@@ -316,8 +341,13 @@ private final class OverlayView: NSView {
     }
 
     override func mouseMoved(with event: NSEvent) {
+        overlayCursor.set()
         guard mode == .window else { return }
         scheduleWindowHoverUpdate()
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        activateCursor()
     }
 
     private func handleWindowClick() {
@@ -460,11 +490,28 @@ private final class OverlayView: NSView {
     private func setupTrackingArea() {
         let area = NSTrackingArea(
             rect: .zero,
-            options: [.mouseMoved, .activeAlways, .inVisibleRect],
+            options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect],
             owner: self,
             userInfo: nil
         )
         addTrackingArea(area)
+    }
+
+    func activateCursor() {
+        guard window != nil, !completed else { return }
+        window?.invalidateCursorRects(for: self)
+        if didPushCursor {
+            overlayCursor.set()
+        } else {
+            overlayCursor.push()
+            didPushCursor = true
+        }
+    }
+
+    func deactivateCursor() {
+        guard didPushCursor else { return }
+        didPushCursor = false
+        NSCursor.pop()
     }
 
     private func dragInvalidationRect(for start: NSPoint, current: NSPoint) -> NSRect {

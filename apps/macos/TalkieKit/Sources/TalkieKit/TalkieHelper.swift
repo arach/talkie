@@ -107,6 +107,10 @@ public enum TalkieHelper: String, CaseIterable, Sendable {
         }
     }
 
+    public func userInstalledAppURL(for env: TalkieEnvironment) -> URL {
+        env.userInstalledAppURL(named: appName)
+    }
+
     /// Distributed notification name for XPC readiness signal
     public func xpcReadyNotificationName(for env: TalkieEnvironment) -> Notification.Name {
         Notification.Name("\(xpcServiceName(for: env)).ready")
