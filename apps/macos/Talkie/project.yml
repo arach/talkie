@@ -117,7 +117,7 @@ targets:
     settings:
       base:
         MARKETING_VERSION: "2.5.20"
-        CURRENT_PROJECT_VERSION: "13"
+        CURRENT_PROJECT_VERSION: "14"
         INFOPLIST_KEY_CFBundleDisplayName: "Talkie"
         INFOPLIST_KEY_NSHumanReadableCopyright: ""
         CODE_SIGN_ENTITLEMENTS: Talkie.entitlements
