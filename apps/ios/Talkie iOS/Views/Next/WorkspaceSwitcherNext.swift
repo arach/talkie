@@ -11,6 +11,7 @@
 
 import Security
 import SwiftUI
+import TalkieMobileKit
 
 struct WorkspaceIdentity: Identifiable, Equatable {
     enum Role: Equatable {
