@@ -264,6 +264,130 @@ struct SettingsNext: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
+    // MARK: - Parakeet install row
+    //
+    // Explicit install / uninstall affordance for the on-device
+    // Parakeet model. Downloads run through ParakeetModelManager which
+    // persists the model on disk — one download per device until the
+    // user taps Uninstall. Subsequent app launches see the cached
+    // model and skip straight to .ready/.loading.
+    private var parakeetInstallRow: some View {
+        let state = parakeetManager.state
+        let model = appSettings.preferredParakeetModel
+
+        return HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Parakeet \(model.shortDescription)")
+                    .talkieType(.fieldLabel)
+                    .foregroundStyle(theme.colors.textPrimary)
+                Text(parakeetSubtitle(for: state, model: model))
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary)
+            }
+            Spacer()
+            parakeetTrailingControl(state: state, model: model)
+        }
+        .frame(minHeight: 52)
+        .padding(.vertical, 6)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(theme.currentTheme.chrome.edgeFaint)
+                .frame(height: 1)
+        }
+    }
+
+    private func parakeetSubtitle(for state: ParakeetModelManager.ModelState,
+                                  model: ParakeetModel) -> String {
+        switch state {
+        case .notDownloaded:
+            return "Tap install to download once · stays local until uninstall"
+        case .downloading(let progress):
+            return "Downloading \(Int(progress * 100))% · don't close the app"
+        case .downloaded, .loading:
+            return "Preparing model…"
+        case .ready:
+            return "Installed · ready for dictation, agentic, terminal"
+        case .error(let detail):
+            return "Error: \(detail)"
+        }
+    }
+
+    @ViewBuilder
+    private func parakeetTrailingControl(state: ParakeetModelManager.ModelState,
+                                         model: ParakeetModel) -> some View {
+        switch state {
+        case .notDownloaded:
+            Button {
+                installParakeet(model)
+            } label: {
+                Text("INSTALL")
+                    .talkieType(.chipLabel)
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+            }
+            .buttonStyle(.plain)
+
+        case .downloading(let progress):
+            HStack(spacing: 6) {
+                ProgressView(value: progress)
+                    .progressViewStyle(.linear)
+                    .frame(width: 70)
+                    .tint(theme.currentTheme.chrome.accent)
+                Text("\(Int(progress * 100))%")
+                    .talkieType(.chipLabel)
+                    .foregroundStyle(theme.colors.textSecondary)
+                    .frame(minWidth: 36, alignment: .trailing)
+            }
+
+        case .downloaded, .loading:
+            HStack(spacing: 6) {
+                ProgressView()
+                    .scaleEffect(0.6)
+                Text("LOADING")
+                    .talkieType(.chipLabel)
+                    .foregroundStyle(theme.colors.textTertiary)
+            }
+
+        case .ready:
+            Button {
+                uninstallParakeet(model)
+            } label: {
+                Text("UNINSTALL")
+                    .talkieType(.chipLabel)
+                    .foregroundStyle(theme.colors.textTertiary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Remove the cached Parakeet model")
+
+        case .error:
+            Button {
+                installParakeet(model)
+            } label: {
+                Text("RETRY")
+                    .talkieType(.chipLabel)
+                    .foregroundStyle(Color(red: 0.85, green: 0.46, blue: 0.34))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func installParakeet(_ model: ParakeetModel) {
+        Task {
+            do {
+                try await ParakeetModelManager.shared.downloadAndLoad(model)
+            } catch {
+                AppLogger.transcription.error("Parakeet install failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func uninstallParakeet(_ model: ParakeetModel) {
+        do {
+            try ParakeetModelManager.shared.deleteModel(model)
+        } catch {
+            AppLogger.transcription.error("Parakeet uninstall failed: \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Panels
 
     private var voicePanel: some View {
@@ -278,6 +402,8 @@ struct SettingsNext: View {
                 title: "ENGINE TELEMETRY",
                 metrics: [("LATENCY", "—"), ("WER", "—"), ("LOADED", parakeetManager.statusDescription.uppercased())]
             )
+
+            parakeetInstallRow
 
             sectionHeader("RECORDING")
             toggleRow(
