@@ -34,12 +34,14 @@ struct ChromeOverlay: View {
             // Top corners — chrome destinations.
             CornerSlot(
                 zone: .topLeading,
-                glyph: AnyView(Image(systemName: "chevron.down").font(.system(size: 15, weight: .medium))),
-                label: "Done"
+                glyph: AnyView(Image(systemName: "xmark").font(.system(size: 13, weight: .medium))),
+                label: "Close"
             ) {
                 // Dismisses the summoned chrome. Going home lives in the
                 // tray (leftmost slot); back/pop is handled by the native
                 // NavigationStack chevron at the top of each sub-surface.
+                // xmark reads as "close this overlay" without competing
+                // with the screen's back chevron underneath.
                 chrome.dismissChrome()
             }
 
