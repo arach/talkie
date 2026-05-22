@@ -105,7 +105,11 @@ struct TalkieAppConfiguration: Codable {
 
     struct Transcription: Codable {
         var keyboardEngine = "auto"
-        var memoEngine = "apple"
+        // .auto routes to Parakeet when its model is warm, Apple
+        // Speech otherwise (no blocking wait). Matches the donor
+        // Talkie Mobile behavior for memos; the previous "apple"
+        // default never reached Parakeet on fresh installs.
+        var memoEngine = "auto"
         var preferredParakeetModel = "v3"
     }
 
