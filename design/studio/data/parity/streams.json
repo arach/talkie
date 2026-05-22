@@ -2190,6 +2190,13 @@
           "agent": "talkie-codex-c3",
           "level": "info",
           "message": "Second-pass C3 complete: Surface model and Transport with skip/seek are acknowledged as existing Next code with file-line refs; word-level range highlighting proposed DEFER because it is not donor parity and is TTS polish."
+        },
+        {
+          "ts": "2026-05-22T00:00:47.442Z",
+          "agent": "talkie-codex-c4",
+          "level": "info",
+          "message": "Cross-cluster build finding from C4 re-verify: rebased branch fails in C3-owned ComposeStore with cannot find save in scope at lines 615 and 626. C4 did not edit this file; C3 should own the fix.",
+          "ref": "apps/ios/Talkie iOS/Views/Next/ComposeStore.swift:615"
         }
       ]
     },
