@@ -663,7 +663,6 @@ struct VoiceMemoDetailNext: View {
 
                     workflowRunsSection
                         .padding(.horizontal, 12)
-
                     attachmentsSection
                         .padding(.horizontal, 12)
 

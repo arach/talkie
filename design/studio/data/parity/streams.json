@@ -1428,7 +1428,7 @@
       "scope": "ComposeNextView + ComposeStore, VoiceMemoDetailNext, ReadAloudNext, attachments, agent + CLI sheets",
       "owner": null,
       "status": "done",
-      "lockedAt": "2026-05-21T23:46:49.227Z",
+      "lockedAt": "2026-05-21T19:40:44.282Z",
       "notes": [
         {
           "ts": "2026-05-21T18:00:43.158Z",
@@ -2301,7 +2301,7 @@
       "scope": "SettingsNext, OnboardingNext, SignInNext, AICredentialsNext, WorkspaceSwitcherNext",
       "owner": null,
       "status": "done",
-      "lockedAt": "2026-05-21T23:41:52.069Z",
+      "lockedAt": "2026-05-21T19:42:13.352Z",
       "notes": [
         {
           "ts": "2026-05-21T18:03:12.723Z",
@@ -2904,7 +2904,7 @@
       "scope": "ConnectionCenterNext, BridgeDetailNext, DeckMirrorNext, NetworkStatusBanner, MacConnectionChip, MacCoachCard",
       "owner": null,
       "status": "done",
-      "lockedAt": "2026-05-22T00:34:30.057Z",
+      "lockedAt": "2026-05-21T19:41:16.486Z",
       "notes": [
         {
           "ts": "2026-05-21T18:00:26.165Z",

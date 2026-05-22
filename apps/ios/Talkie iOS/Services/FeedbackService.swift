@@ -12,7 +12,7 @@ import UIKit
 enum FeedbackService {
     private static let endpoint = URL(string: "https://api.usetalkie.com/api/report")!
 
-    static func submit(description: String, contact: String?) async throws -> String {
+    static func submit(description: String, contact: String?, logs: [String]? = nil) async throws -> String {
         let trimmedDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedDescription.isEmpty else {
             throw FeedbackServiceError.emptyDescription
@@ -32,7 +32,7 @@ enum FeedbackService {
                 iosVersion: UIDevice.current.systemVersion,
                 deviceModel: UIDevice.modelIdentifier
             ),
-            logs: recentLogLines(limit: 50)
+            logs: preparedLogLines(from: logs, limit: 50)
         )
 
         var request = URLRequest(url: endpoint)
@@ -70,6 +70,10 @@ enum FeedbackService {
         throw FeedbackServiceError.missingReportID
     }
 
+    static func reviewableLogLines(limit: Int = 50) -> [String] {
+        recentLogLines(limit: limit)
+    }
+
     private static var appVersion: String {
         let shortVersion = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "—"
         let buildNumber = (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String) ?? "—"
@@ -102,6 +106,17 @@ enum FeedbackService {
             let detail = entry.detail.map { " | \(redactForFeedback($0))" } ?? ""
             return "\(entry.formattedTime) [\(entry.level.rawValue)] \(entry.category): \(redactForFeedback(entry.message))\(detail)"
         }
+    }
+
+    private static func preparedLogLines(from reviewedLines: [String]?, limit: Int) -> [String] {
+        guard let reviewedLines else {
+            return recentLogLines(limit: limit)
+        }
+
+        let filtered = reviewedLines
+            .map { redactForFeedback($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+            .filter { !$0.isEmpty }
+        return Array(filtered.prefix(limit))
     }
 
     private static func generateLocalReportID() -> String {
