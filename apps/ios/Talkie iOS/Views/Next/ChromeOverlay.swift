@@ -34,15 +34,12 @@ struct ChromeOverlay: View {
             // Top corners — chrome destinations.
             CornerSlot(
                 position: .topLeading,
-                glyph: AnyView(Image(systemName: "chevron.left").font(.system(size: 15, weight: .medium))),
-                label: router.surface == .home ? "Done" : "Home"
+                glyph: AnyView(Image(systemName: "chevron.down").font(.system(size: 15, weight: .medium))),
+                label: "Done"
             ) {
-                // On a sub-surface this pill is the universal "go home" — pop
-                // to the root before collapsing the chrome. On home it just
-                // closes the summoned chrome (no navigation to perform).
-                if router.surface != .home {
-                    router.openHome()
-                }
+                // Dismisses the summoned chrome. Going home lives in the
+                // tray (leftmost slot); back/pop is handled by the native
+                // NavigationStack chevron at the top of each sub-surface.
                 chrome.dismissChrome()
             }
 
@@ -112,21 +109,23 @@ private struct CornerSlot: View {
 /// slot count is kept odd by convention.
 private struct LiquidGlassTray: View {
     @ObservedObject private var theme = ThemeManager.shared
+    @EnvironmentObject private var chrome: ShellChrome
 
     var body: some View {
         HStack(spacing: 14) {
+            TraySlot(
+                glyph: AnyView(Image(systemName: "house").font(.system(size: 16, weight: .regular))),
+                label: "Home"
+            ) {
+                AppShellRouter.shared.openHome()
+                chrome.dismissChrome()
+            }
+
             TraySlot(
                 glyph: AnyView(Image(systemName: "square.and.arrow.down").font(.system(size: 17, weight: .regular))),
                 label: "Capture"
             ) {
                 AppShellRouter.shared.openCaptureCompose()
-            }
-
-            TraySlot(
-                glyph: AnyView(Image(systemName: "globe").font(.system(size: 16, weight: .regular))),
-                label: "Browse"
-            ) {
-                AppShellRouter.shared.openWebBrowser()
             }
 
             TrayFAB()
