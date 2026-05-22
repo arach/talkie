@@ -93,12 +93,13 @@ extension TalkieObjectType {
             // Playback dropped — TalkieView pins it as a fixed footer.
             // textProvenance dropped — its data lives in the right-margin
             // metadata column alongside the masthead.
+            // .notes (scratchpad) removed per arach 2026-05-21 — never used,
+            // adds dead chrome to every memo detail.
             return [
                 SectionSlot(.transcript,    mode: .reader,  chrome: .card),
                 SectionSlot(.segments,      mode: .compact, chrome: .card),
                 SectionSlot(.workflowRuns,  mode: .compact, chrome: .card),
                 SectionSlot(.mediaGallery,  mode: .compact, chrome: .card),
-                SectionSlot(.notes,         mode: .editor,  chrome: .inline),
                 SectionSlot(.attachments,   mode: .compact, chrome: .card),
             ]
 
@@ -140,7 +141,7 @@ extension TalkieObjectType {
                 SectionSlot(.refinement,       mode: .compact, chrome: .inline),
                 SectionSlot(.dictationContext, mode: .hero,    chrome: .card),
                 SectionSlot(.workflowRuns,     mode: .compact, chrome: .card),
-                SectionSlot(.notes,            mode: .editor,  chrome: .inline),
+                // .notes (scratchpad) removed per arach 2026-05-21.
             ]
 
         case .capture:
@@ -150,7 +151,7 @@ extension TalkieObjectType {
                 SectionSlot(.mediaGallery,   mode: .compact, chrome: .inline),
                 SectionSlot(.attachments,    mode: .gallery, chrome: .card),
                 SectionSlot(.workflowRuns,   mode: .compact, chrome: .card),
-                SectionSlot(.notes,          mode: .editor,  chrome: .inline),
+                // .notes (scratchpad) removed per arach 2026-05-21.
             ]
         }
     }

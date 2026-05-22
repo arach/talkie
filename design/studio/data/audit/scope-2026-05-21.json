@@ -1,7 +1,7 @@
 {
   "version": 1,
   "audit": "scope-2026-05-21",
-  "updatedAt": "2026-05-22T00:00:06.802Z",
+  "updatedAt": "2026-05-22T02:49:40.339Z",
   "items": {
     "t-cool-palette": {
       "status": "shipped",
@@ -411,8 +411,8 @@
       ]
     },
     "sw-home-card-equal-weight": {
-      "status": "inflight",
-      "updatedAt": "2026-05-21T23:52:18.830Z",
+      "status": "shipped",
+      "updatedAt": "2026-05-22T00:02:43.171Z",
       "updatedBy": "codex.ui-scope-pass-may-20",
       "notes": [
         {
@@ -434,6 +434,13 @@
           "agent": "codex.ui-scope-pass-may-20",
           "level": "progress",
           "message": "Home painter resolution in progress."
+        },
+        {
+          "ts": "2026-05-22T00:02:43.171Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Demoted Home Routines and Tips/Did-you-know from card chrome to borderless rule-separated rows on canvas while keeping Bay and Recent as the primary card-weight bands; build verified via xcodebuild fallback.",
+          "ref": "650ab2e"
         }
       ]
     },
@@ -719,7 +726,7 @@
     },
     "sw-dict-overlay-token": {
       "status": "shipped",
-      "updatedAt": "2026-05-21T23:38:59.907Z",
+      "updatedAt": "2026-05-22T02:49:40.339Z",
       "updatedBy": "codex.ui-scope-pass-may-20",
       "notes": [
         {
@@ -742,6 +749,13 @@
           "level": "landed",
           "message": "Rebound the TalkieView drop overlay to ScopeAmber and ScopeType tokens instead of settings/Theme ad hoc tokens; build verified via xcodebuild fallback.",
           "ref": "71dc02a"
+        },
+        {
+          "ts": "2026-05-22T02:49:40.339Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Follow-up token pass: TalkieObject drop overlay now uses ThemedScopeAccent/ThemedScopeCanvas so the Scope-styled drop state keeps the canonical amber in Scope but adapts to dark/non-Scope themes instead of pinning static Scope inks.",
+          "ref": "apps/macos/Talkie/Views/TalkieObject/TalkieView.swift:263"
         }
       ]
     },
@@ -775,7 +789,7 @@
     },
     "sw-dict-magic-number": {
       "status": "shipped",
-      "updatedAt": "2026-05-21T23:38:59.835Z",
+      "updatedAt": "2026-05-22T02:49:40.339Z",
       "updatedBy": "codex.ui-scope-pass-may-20",
       "notes": [
         {
@@ -798,6 +812,13 @@
           "level": "landed",
           "message": "Added PageLayout.headerOverlayClearance and replaced the TalkieView header clearance magic number; build verified via xcodebuild fallback.",
           "ref": "71dc02a"
+        },
+        {
+          "ts": "2026-05-22T02:49:40.339Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "info",
+          "message": "Follow-up checked during the detail-theme pass; no new header-clearance magic-number change was needed. The related TalkieView follow-up was limited to theme-aware drop-overlay tokens.",
+          "ref": "apps/macos/Talkie/Views/TalkieObject/TalkieView.swift:263"
         }
       ]
     },
@@ -892,9 +913,9 @@
       ]
     },
     "sw-note-channel-label-marketing": {
-      "status": "queued",
-      "updatedAt": "2026-05-21T23:17:54.408Z",
-      "updatedBy": "claude-painter",
+      "status": "shipped",
+      "updatedAt": "2026-05-22T00:04:22.497Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
       "notes": [
         {
           "ts": "2026-05-21T20:30:00.000Z",
@@ -909,13 +930,26 @@
           "agent": "claude-painter",
           "level": "decision",
           "message": "DECISION: Drop the fake CH-04 chip. If note.source.displayName exists, render it as a mono eyebrow (no channel framing). If not, render nothing."
+        },
+        {
+          "ts": "2026-05-22T00:03:27.970Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Note painter resolutions in progress."
+        },
+        {
+          "ts": "2026-05-22T00:04:22.497Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Dropped the fake CH-04 note channel chip and render only real note source as an unframed mono eyebrow when available; build verified via xcodebuild fallback.",
+          "ref": "f426a80"
         }
       ]
     },
     "sw-note-sequence-fake-id": {
-      "status": "queued",
-      "updatedAt": "2026-05-21T23:17:54.408Z",
-      "updatedBy": "claude-painter",
+      "status": "shipped",
+      "updatedAt": "2026-05-22T02:49:40.339Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
       "notes": [
         {
           "ts": "2026-05-21T20:30:00.000Z",
@@ -930,6 +964,26 @@
           "agent": "claude-painter",
           "level": "decision",
           "message": "DECISION: Drop the synthetic N-#### chip entirely. Only show a sequence chip when we have a real persistent ID. Until then, no chip."
+        },
+        {
+          "ts": "2026-05-22T00:03:28.011Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Note painter resolutions in progress."
+        },
+        {
+          "ts": "2026-05-22T00:04:22.570Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Removed the synthetic N-#### hash-derived sequence chip; no sequence renders until a real persistent note ID exists. Build verified via xcodebuild fallback.",
+          "ref": "f426a80"
+        },
+        {
+          "ts": "2026-05-22T02:49:40.339Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Applied the same painter decision to Capture detail: removed the C-/S- hashValue-derived sequence chip and fallback filename dependency; no capture/selection sequence renders until a persistent display ID exists.",
+          "ref": "apps/macos/Talkie/Views/Notes/ScopeCaptureDetailView.swift:147"
         }
       ]
     },
@@ -1080,9 +1134,9 @@
       ]
     },
     "sw-cap-filename-headline": {
-      "status": "queued",
-      "updatedAt": "2026-05-21T23:17:54.408Z",
-      "updatedBy": "claude-painter",
+      "status": "shipped",
+      "updatedAt": "2026-05-22T02:49:40.339Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
       "notes": [
         {
           "ts": "2026-05-21T20:30:00.000Z",
@@ -1097,6 +1151,26 @@
           "agent": "claude-painter",
           "level": "decision",
           "message": "DECISION: Promote derivedCaption to serif headline (top); demote filename to mono byline below. Matches 'document on a desk' framing — caption is the editorial title, filename is provenance."
+        },
+        {
+          "ts": "2026-05-22T00:05:10.151Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Capture painter resolution in progress."
+        },
+        {
+          "ts": "2026-05-22T00:05:53.782Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Promoted image captures' derivedCaption into the serif headline position and demoted filename/dimensions/filesize into mono provenance byline; build verified via xcodebuild fallback.",
+          "ref": "93f96e0"
+        },
+        {
+          "ts": "2026-05-22T02:49:40.339Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Final PR #15 follow-up: Capture detail remains caption-as-serif-headline / filename-as-mono-byline, but the headline, byline, action rail, attachment/mat colors, and foot rail now resolve through theme-aware detail tokens. The unstable hash-derived capture/selection chip was also removed until a real persistent display ID exists.",
+          "ref": "apps/macos/Talkie/Views/Notes/ScopeCaptureDetailView.swift:118"
         }
       ]
     },
@@ -1241,9 +1315,9 @@
       ]
     },
     "sw-sk-amber-flood": {
-      "status": "queued",
-      "updatedAt": "2026-05-21T23:17:54.408Z",
-      "updatedBy": "claude-painter",
+      "status": "shipped",
+      "updatedAt": "2026-05-22T00:09:00.771Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
       "notes": [
         {
           "ts": "2026-05-21T20:30:00.000Z",
@@ -1258,6 +1332,19 @@
           "agent": "claude-painter",
           "level": "decision",
           "message": "DECISION: Keep amber on RUN, SAVE, and mic hover (the three primary user affordances). Demote AGENT eyebrow + console arrows + miniChip borders to ScopeInk.muted / ScopeBrass.solid."
+        },
+        {
+          "ts": "2026-05-22T00:07:31.273Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Skills amber-ration painter resolution in progress."
+        },
+        {
+          "ts": "2026-05-22T00:09:00.771Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Kept amber on RUN/SAVE/mic hover while demoting AGENT eyebrow, console prompt arrows/command text, and miniChip active chrome to ScopeInk.muted/ScopeBrass.solid; build verified via xcodebuild fallback.",
+          "ref": "4910efd"
         }
       ]
     },
@@ -1594,40 +1681,61 @@
     },
     "note-toolbutton-contrast": {
       "status": "shipped",
-      "updatedAt": "2026-05-21T23:59:20.884Z",
-      "updatedBy": "claude-orchestrator",
+      "updatedAt": "2026-05-22T02:49:40.339Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
       "notes": [
         {
           "ts": "2026-05-21T23:59:20.884Z",
           "agent": "claude-orchestrator",
           "level": "landed",
           "message": "Closed by cool-gray ScopeInk ladder (canon 2026-05-21). ScopeInk.muted / faint / dim provide the right contrast steps; legacy near-floor mono labels lifted to ScopeInk.muted via token migration."
+        },
+        {
+          "ts": "2026-05-22T02:49:40.339Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Final contrast follow-up: Note detail action/attachment rail colors now route through ThemedScopeInk/Accent/Canvas, so buttons and chips remain readable outside the Scope light substrate.",
+          "ref": "apps/macos/Talkie/Views/Notes/ScopeNoteDetailView.swift:219"
         }
       ]
     },
     "cap-toolbutton-contrast": {
       "status": "shipped",
-      "updatedAt": "2026-05-21T23:59:20.884Z",
-      "updatedBy": "claude-orchestrator",
+      "updatedAt": "2026-05-22T02:49:40.339Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
       "notes": [
         {
           "ts": "2026-05-21T23:59:20.884Z",
           "agent": "claude-orchestrator",
           "level": "landed",
           "message": "Closed by cool-gray ScopeInk ladder (canon 2026-05-21). ScopeInk.muted / faint / dim provide the right contrast steps; legacy near-floor mono labels lifted to ScopeInk.muted via token migration."
+        },
+        {
+          "ts": "2026-05-22T02:49:40.339Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Final contrast follow-up: Capture detail action rail, add-caption chip, metadata values, and foot actions now route through ThemedScopeInk/Accent/Canvas, so they remain readable outside the Scope light substrate.",
+          "ref": "apps/macos/Talkie/Views/Notes/ScopeCaptureDetailView.swift:366"
         }
       ]
     },
     "dict-amber-contrast": {
       "status": "shipped",
-      "updatedAt": "2026-05-21T23:59:20.884Z",
-      "updatedBy": "claude-orchestrator",
+      "updatedAt": "2026-05-22T02:49:40.339Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
       "notes": [
         {
           "ts": "2026-05-21T23:59:20.884Z",
           "agent": "claude-orchestrator",
           "level": "landed",
           "message": "Closed by cool-gray ScopeInk ladder (canon 2026-05-21). ScopeInk.muted / faint / dim provide the right contrast steps; legacy near-floor mono labels lifted to ScopeInk.muted via token migration."
+        },
+        {
+          "ts": "2026-05-22T02:49:40.339Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Final contrast follow-up: memo/dictation detail brass/amber cues, JSON dismissal action, margin rail accents, and player rail linework now route through ThemedScopeAccent/ThemedScopeRule for dark-theme legibility.",
+          "ref": "apps/macos/Talkie/Views/TalkieObject/Sections/TOSharedComponents.swift:12"
         }
       ]
     },
@@ -2031,6 +2139,27 @@
           "agent": "claude-orchestrator",
           "level": "landed",
           "message": "Closed by Phase 7 marketing copy strips (commit f673ea6) + ScopeType conventions. Italic serif removed from chrome; mono carries the byline."
+        }
+      ]
+    },
+    "sw-detail-theme-aware": {
+      "status": "shipped",
+      "updatedAt": "2026-05-22T02:49:40.339Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-22T02:49:40.339Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "info",
+          "message": "PR #15 follow-up: independent review and Arach confirmation found editorial detail views using Scope-canonical inks/canvases directly, making title/byline/actions/sequence chips/player labels nearly invisible in dark themes.",
+          "ref": "PR #15 dark-theme editorial detail review"
+        },
+        {
+          "ts": "2026-05-22T02:49:40.339Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Added theme-aware Scope detail tokens (ThemedScopeCanvas/Ink/Edge/Accent/Rule) and routed memo, note, capture, playback, margin rail, media, notes, readout, and drop-overlay detail colors through Theme.current while preserving Scope canon when Scope is active. Dark memo detail screenshot verified readable; fallback macOS rebuild + relaunch succeeded.",
+          "ref": "working-tree after f6e8191"
         }
       ]
     }

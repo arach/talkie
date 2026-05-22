@@ -372,7 +372,12 @@ struct AppNavigation: View {
             }
             .overlay(alignment: .top) {
                 TalkieChromeBar()
-                    .padding(.top, 10)
+                    // Sits as close to the macOS title-bar baseline as
+                    // we can without colliding with the traffic-light
+                    // cluster. Gives the page content below room to
+                    // breathe — surface list headers no longer compete
+                    // with the pill for the same vertical slot.
+                    .padding(.top, 4)
                     .offset(x: (sidebarHidden ? 0 : sidebarTransition.width.ideal) / 2)
             }
             .overlay(alignment: .top) {

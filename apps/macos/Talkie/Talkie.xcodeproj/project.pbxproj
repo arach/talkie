@@ -291,6 +291,8 @@
 		8BB3696770DDD4A71196892D /* LLMProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31777395717FAEC0695EF5AC /* LLMProvider.swift */; };
 		8BD9B33DCCA7ACC59F9B9493 /* OverlayStylePreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F4992B45B1A31E2B8AF4B8A /* OverlayStylePreviews.swift */; };
 		8BF11A619D97715CEE45179C /* ScopeNotesScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B87F283410EB6EA303474E84 /* ScopeNotesScreen.swift */; };
+		8B78EDDEEEE4739E29D07B93 /* ScopeNoteDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5BBA448590EFA2C7296581E /* ScopeNoteDetailView.swift */; };
+		8F68FFB1433861BB034773BE /* ScopeCaptureDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51440DDFDF46D8A515E0A3D8 /* ScopeCaptureDetailView.swift */; };
 		8CDD9FEE4FCAE9CA3C648C43 /* AutomationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 408B2AC5617B7EFB4E864C55 /* AutomationScheduler.swift */; };
 		8D7754D09D22024B51EFCE6F /* ServiceSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FC0E8871AF3568BD0A6DAF1 /* ServiceSetupView.swift */; };
 		8D923CE05391148E990F3A42 /* MemoStorageStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7565A75ED8D5CB7FB0F107C /* MemoStorageStatus.swift */; };
@@ -895,6 +897,8 @@
 		B848CA51647C728E15DE9B85 /* settings-01-dictation-capture.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "settings-01-dictation-capture.png"; sourceTree = "<group>"; };
 		B85E11D8D3E8BED31169CF0F /* Migrations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Migrations.swift; sourceTree = "<group>"; };
 		B87F283410EB6EA303474E84 /* ScopeNotesScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeNotesScreen.swift; sourceTree = "<group>"; };
+		B5BBA448590EFA2C7296581E /* ScopeNoteDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeNoteDetailView.swift; sourceTree = "<group>"; };
+		51440DDFDF46D8A515E0A3D8 /* ScopeCaptureDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeCaptureDetailView.swift; sourceTree = "<group>"; };
 		BADBB832DB3FA8A73480B2EA /* AutomationsSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationsSettings.swift; sourceTree = "<group>"; };
 		BAE4EAB04189037E2A5BE4FC /* ServiceHealthCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceHealthCard.swift; sourceTree = "<group>"; };
 		BB3F2B424A6A46603EF1A10D /* ExternalDataAuditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalDataAuditor.swift; sourceTree = "<group>"; };
@@ -1440,6 +1444,8 @@
 			isa = PBXGroup;
 			children = (
 				B87F283410EB6EA303474E84 /* ScopeNotesScreen.swift */,
+				B5BBA448590EFA2C7296581E /* ScopeNoteDetailView.swift */,
+				51440DDFDF46D8A515E0A3D8 /* ScopeCaptureDetailView.swift */,
 			);
 			path = Notes;
 			sourceTree = "<group>";
@@ -2583,6 +2589,8 @@
 				4C10B512C74503D11EF59795 /* ScopeLibraryView.swift in Sources */,
 				265D767D7F0F717CBE8406ED /* ScopeModelsView.swift in Sources */,
 				8BF11A619D97715CEE45179C /* ScopeNotesScreen.swift in Sources */,
+				8B78EDDEEEE4739E29D07B93 /* ScopeNoteDetailView.swift in Sources */,
+				8F68FFB1433861BB034773BE /* ScopeCaptureDetailView.swift in Sources */,
 				090EA9A2A2546EC5F210DD5B /* ScopeOnboardingView.swift in Sources */,
 				E5C495C5E1A2EE1EEA17E859 /* ScopeSkillsLandingView.swift in Sources */,
 				F74925A7F87555D294F0D7E8 /* ScopeStatsScreen.swift in Sources */,

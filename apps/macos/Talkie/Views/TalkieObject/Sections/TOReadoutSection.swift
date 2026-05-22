@@ -43,13 +43,13 @@ struct TOReadoutSection: View {
     var body: some View {
         if hasText {
             VStack(alignment: .leading, spacing: Spacing.sm) {
-                HStack {
-                    Text("READOUT")
-                        .font(settings.fontXSMedium)
-                        .tracking(Tracking.wide)
-                        .foregroundColor(Theme.current.foregroundSecondary)
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text("· READOUT")
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .tracking(2.8)
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(0.62))
 
-                    Spacer()
+                    ThemedScopeRule(.subtle)
                 }
 
                 if audioURL != nil {

@@ -121,7 +121,12 @@ struct ScopeHomeView: View {
                     discoveryRow
                 }
                 .padding(.horizontal, 32)
-                .padding(.top, ScopeTopBandLayout.height + ScopeTopBandLayout.topInset + 8)
+                // Top padding clears the universal ScopeTopBand (44pt
+                // tall, offset by 4pt) plus enough breathing room that
+                // the agent panel's RUNNING strip doesn't crowd the
+                // band's bottom rule. Was 8pt — felt clipped under the
+                // band.
+                .padding(.top, ScopeTopBandLayout.height + ScopeTopBandLayout.topInset + 20)
                 .padding(.bottom, 32)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -177,7 +182,10 @@ struct ScopeHomeView: View {
             ? "\(totalWords / 1000)K WORDS"
             : "\(totalWords) WORDS"
         if streak > 1 {
-            return "\(streak)-DAY STREAK · \(totalWordsStr)"
+            // Was "\(streak)-DAY STREAK …" — the hyphen glued the count
+            // to its unit and read tighter than the parallel "X WORDS"
+            // form. Now reads "15 DAY STREAK · 200 WORDS".
+            return "\(streak) DAY STREAK · \(totalWordsStr)"
         }
         return totalWordsStr
     }
@@ -260,7 +268,7 @@ struct ScopeHomeView: View {
                     RecentSection(
                         id: "memos",
                         eyebrow: "Memos",
-                        count: countLabel(recentMemos.count, "today"),
+                        count: countLabel(todayCount(recentMemos), "today"),
                         libraryLabel: "ALL MEMOS",
                         onLibrary: { NavigationState.shared.navigate(to: .recordings) },
                         rows: recentMemos.prefix(3).map { obj in
@@ -284,7 +292,7 @@ struct ScopeHomeView: View {
                     RecentSection(
                         id: "dictations",
                         eyebrow: "Dictations",
-                        count: countLabel(recentDictations.count, "today"),
+                        count: countLabel(todayCount(recentDictations), "today"),
                         libraryLabel: "ALL DICTATIONS",
                         onLibrary: { NavigationState.shared.navigate(to: .dictations) },
                         rows: recentDictations.prefix(3).map { obj in
@@ -310,22 +318,22 @@ struct ScopeHomeView: View {
                     RecentSection(
                         id: "captures",
                         eyebrow: "Captures",
-                        count: countLabel(recentTrayItems.count, "today"),
+                        count: countLabel(todayCount(recentCaptures), "today"),
                         libraryLabel: "ALL CAPTURES",
                         onLibrary: { NavigationState.shared.navigate(to: .screenshots) },
-                        rows: recentTrayItems.prefix(3).map { item in
+                        rows: recentCaptures.prefix(3).map { item in
                             RecentRow(
                                 id: item.id,
-                                glyph: "▢",
-                                line: trayLine(for: item),
+                                glyph: "◫",
+                                line: item.line,
                                 body: nil,
-                                meta: trayMeta(for: item),
-                                when: whenLabel(item.capturedAt),
-                                onTap: {}
+                                meta: item.meta,
+                                when: whenLabel(item.date),
+                                onTap: { NavigationState.shared.navigate(to: .screenshots) }
                             )
                         },
                         emptyCTA: RecentCTA(
-                            glyph: "▢",
+                            glyph: "◫",
                             label: "Capture screen",
                             kbd: ["⌃", "⇧", "⌘", "S"],
                             onTap: {}
@@ -345,7 +353,12 @@ struct ScopeHomeView: View {
                                 body: noteBodyExcerpt(for: obj),
                                 meta: "",
                                 when: whenLabel(obj.createdAt),
-                                onTap: { NavigationState.shared.navigate(to: .notes, params: ["recordingId": obj.id.uuidString]) }
+                                // Route via the Library so the inspector
+                                // swap (recording.type == .note →
+                                // ScopeNoteDetailView) actually fires.
+                                // `.notes` lands on the Sheaf grid and
+                                // ignores recordingId.
+                                onTap: { NavigationState.shared.navigate(to: .recordings, params: ["recordingId": obj.id.uuidString]) }
                             )
                         },
                         emptyCTA: RecentCTA(
@@ -377,8 +390,87 @@ struct ScopeHomeView: View {
             .filter { $0.type == .note && $0.deletedAt == nil }
             .sorted { $0.createdAt > $1.createdAt }
     }
+
+    /// How many of `items` were created today. The Voice / Content
+    /// section labels say "X today" — they meant today specifically,
+    /// not all-time. Without this filter the label was rendering
+    /// "49 today" when the user had 49 dictations total but only 8
+    /// from today, and rows were collapsing to the CTA when the
+    /// all-time count happened to be 0 even though the user clearly
+    /// had older items.
+    private func todayCount(_ items: [TalkieObject]) -> Int {
+        let cal = Calendar.current
+        return items.filter { cal.isDateInToday($0.createdAt) }.count
+    }
+    private func todayCount(_ items: [TrayItem]) -> Int {
+        let cal = Calendar.current
+        return items.filter { cal.isDateInToday($0.capturedAt) }.count
+    }
     private var recentTrayItems: [TrayItem] {
         TrayItem.allItems().sorted { $0.capturedAt > $1.capturedAt }
+    }
+
+    /// Unified recent-capture stream. Screenshots and tray clips can
+    /// live in two stores: still-in-tray items (TrayItem) and items
+    /// that drained into a recording (RecordingScreenshot / .clips on
+    /// the parent TalkieObject). The home Captures section needs to
+    /// surface both so a screenshot taken this morning that drained
+    /// into a dictation still shows up under Captures.
+    private struct RecentCapture: Identifiable {
+        let id: UUID
+        let line: String
+        let meta: String
+        let date: Date
+    }
+
+    private var recentCaptures: [RecentCapture] {
+        var out: [RecentCapture] = []
+
+        // Tray items still in flight.
+        for item in TrayItem.allItems() {
+            out.append(RecentCapture(
+                id: item.id,
+                line: trayLine(for: item),
+                meta: trayMeta(for: item),
+                date: item.capturedAt
+            ))
+        }
+
+        // Drained screenshots that landed on recordings. Each shot gets
+        // its own row, dated by the recording's capture time (close
+        // enough to the actual snap timing for ranking).
+        for obj in recordingsVM.recordings where !obj.screenshots.isEmpty {
+            for ss in obj.screenshots {
+                let dims = (ss.width.map { "\($0)" } ?? "?") + "×" + (ss.height.map { "\($0)" } ?? "?")
+                let label = ss.windowTitle ?? ss.appName ?? obj.title ?? "Screenshot"
+                out.append(RecentCapture(
+                    id: stableUUID(from: "rec-\(ss.filename)"),
+                    line: label,
+                    meta: dims,
+                    date: obj.createdAt
+                ))
+            }
+        }
+
+        return out.sorted { $0.date > $1.date }
+    }
+
+    /// Deterministic UUID derived from a string — used so the rec-screenshot
+    /// rows keep stable identity across rerenders without colliding with
+    /// TrayItem.id (which is itself a UUID).
+    private func stableUUID(from string: String) -> UUID {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in string.utf8 {
+            hash ^= UInt64(byte)
+            hash &*= 0x100000001b3
+        }
+        let uuidString = String(format: "00000000-0000-4000-8000-%012llX", hash & 0x0000_FFFF_FFFF_FFFF)
+        return UUID(uuidString: uuidString) ?? UUID()
+    }
+
+    private func todayCount(_ items: [RecentCapture]) -> Int {
+        let cal = Calendar.current
+        return items.filter { cal.isDateInToday($0.date) }.count
     }
 
     // MARK: Recent row helpers
@@ -663,9 +755,11 @@ struct ScopeHomeView: View {
         .padding(.vertical, 10)
         .background(scheme.stripTopFill)
         .overlay(alignment: .bottom) {
+            // Header rule — uses scheme.edge (tinted to the panel's
+            // chassis color) at the canonical 1pt thickness.
             Rectangle()
                 .fill(scheme.edge)
-                .frame(height: 0.5)
+                .frame(height: 1)
                 .padding(.horizontal, 16)
         }
     }
@@ -680,8 +774,8 @@ struct ScopeHomeView: View {
                 statTile(
                     scheme: scheme,
                     seed: 2,
-                    value: streak > 0 ? "\(streak)d" : "0d",
-                    label: "STREAK",
+                    value: "\(streak)",
+                    label: "DAY STREAK",
                     extra: (bayHeatmap && !bayCompact) ? AnyView(ActivityHeatmap(scheme: scheme)) : nil
                 )
                 tileDivider(scheme: scheme)
@@ -700,9 +794,15 @@ struct ScopeHomeView: View {
     }
 
     private func tileDivider(scheme: BayScheme) -> some View {
+        // Vertical tile divider — uses ScopeRule with the scheme's own
+        // edge color overlaid for surfaces that need scheme tinting
+        // (the bay's stripTopFill is darker than a cream panel, so we
+        // keep using scheme.edge here instead of switching to the
+        // generic cool-ink rule). The thickness is canonicalized via
+        // the rule's standard 1pt.
         Rectangle()
             .fill(scheme.edge)
-            .frame(width: 0.5)
+            .frame(width: 1)
             .padding(.vertical, 18)
     }
 
@@ -1721,32 +1821,35 @@ private struct RoutinesPanel: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .overlay(alignment: .bottom) {
-                ScopeRule(.section)
-            }
+            .overlay(alignment: .bottom) { ScopeRule(.section) }
 
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { idx, row in
-                    HStack(spacing: 10) {
-                        Circle()
-                            .fill(row.leading == .filled ? ScopeBrass.solid : Color.clear)
-                            .overlay(
-                                Circle().stroke(ScopeBrass.solid, lineWidth: row.leading == .hollow ? 1 : 0)
-                            )
-                            .frame(width: 5, height: 5)
-                        Text(row.label)
-                            .font(.system(size: 12))
-                            .foregroundStyle(ScopeInk.primary)
-                        Spacer()
-                        Text(row.trailing.uppercased())
-                            .font(ScopeType.chrome)
-                            .tracking(ScopeType.Tracking.wide)
-                            .foregroundStyle(ScopeInk.subtle)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    if idx < rows.count - 1 {
-                        ScopeRule(.row)
+                    // Row + trailing rule wrapped in a VStack so the
+                    // conditional view has a stable layout slot.
+                    VStack(spacing: 0) {
+                        HStack(spacing: 10) {
+                            Circle()
+                                .fill(row.leading == .filled ? ScopeBrass.solid : Color.clear)
+                                .overlay(
+                                    Circle().stroke(ScopeBrass.solid, lineWidth: row.leading == .hollow ? 1 : 0)
+                                )
+                                .frame(width: 5, height: 5)
+                            Text(row.label)
+                                .font(.system(size: 12))
+                                .foregroundStyle(ScopeInk.primary)
+                            Spacer()
+                            Text(row.trailing.uppercased())
+                                .font(ScopeType.chrome)
+                                .tracking(ScopeType.Tracking.wide)
+                                .foregroundStyle(ScopeInk.subtle)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+
+                        if idx < rows.count - 1 {
+                            ScopeRule(.row)
+                        }
                     }
                 }
             }
@@ -2044,7 +2147,7 @@ private struct DiscoveryWidgetCard<Content: View>: View {
             }
             .padding(.bottom, 6)
             .overlay(alignment: .bottom) {
-                Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
+                ScopeRule(.section)
             }
             content
         }

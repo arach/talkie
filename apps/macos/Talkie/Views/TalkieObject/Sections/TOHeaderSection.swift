@@ -27,11 +27,21 @@ struct TOHeaderSection: View {
     @Binding var editedTitle: String
     @FocusState.Binding var titleFieldFocused: Bool
 
+    /// On-demand JSON inspector toggle. When the overflow menu's
+    /// "View as JSON" item flips this to true the transcript section
+    /// renders the JSON payload; otherwise the body reads as the normal
+    /// editorial document. Replaces the persistent TEXT/JSON tab pair.
+    var showJSON: Binding<Bool>? = nil
+
     var onToggleEdit: () -> Void = {}
     var onCancelEdit: () -> Void = {}
     var onSaveEdit: () -> Void = {}
     var onDelete: () -> Void = {}
     var onOpenInCompose: (() -> Void)? = nil
+    /// Memo-only — when set, surfaces a "Continue" chip in the inline
+    /// action row. Migrated out of the transcript-card's bottom overlay,
+    /// which was clipping the label and leaving a stranded red dot.
+    var onContinueMemo: (() -> Void)? = nil
     var isDirty: Bool = false
     var onTitleChange: (() -> Void)? = nil
 
@@ -74,14 +84,19 @@ struct TOHeaderSection: View {
 
     // MARK: - Layout constants
     //
-    // Mirrors design/studio/components/studies/MacMemoDetail.tsx
-    // `px-9` (36px horizontal), `pt-8 pb-6` (32 top / 24 bottom on masthead),
-    // `px-9 py-3` (36 horizontal / 12 vertical on toolbar).
+    // Mirrors design/studio/components/studies/MacMemoDetail.tsx but
+    // with a touch more breathing room than the studio numbers. Extra
+    // pre-toolbar space gives the slug clearance from the chrome bar's
+    // Talkie pill; extra masthead bottom puts air between the byline
+    // and the body so the title block reads as a distinct beat.
     private enum MastheadLayout {
         static let horizontalPadding: CGFloat = 36
-        static let topPadding: CGFloat = 32
-        static let bottomPadding: CGFloat = 24
-        static let toolbarVerticalPadding: CGFloat = 10
+        static let topPadding: CGFloat = 28
+        static let bottomPadding: CGFloat = 36
+        // Toolbar carries only the catalog number now (actions moved
+        // inline beneath the byline) — its breathing budget can shrink.
+        static let toolbarTopPadding: CGFloat = 16
+        static let toolbarBottomPadding: CGFloat = 6
     }
 
     // MARK: - Toolbar slug
@@ -89,30 +104,35 @@ struct TOHeaderSection: View {
     @ViewBuilder
     private var toolbarSlug: some View {
         HStack(alignment: .center, spacing: 12) {
+            // Catalog-number only at the top. Editorial actions
+            // (Copy / Share / Export / ⋯) migrated to an inline row
+            // beneath the byline so the document context owns them.
             Text(sequenceLabel)
-                .font(.system(size: 9, weight: .regular, design: .monospaced))
-                .tracking(2.0)
-                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.55))
-
-            Text("· \(recording.type.displayName.uppercased())")
-                .font(.system(size: 9, weight: .regular, design: .monospaced))
-                .tracking(1.6)
-                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.55))
+                .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                .tracking(2.2)
+                .foregroundColor(sequenceTint)
 
             Spacer(minLength: 8)
 
             if isEditing {
                 editingActions
-            } else {
-                readingActions
             }
         }
         .padding(.horizontal, MastheadLayout.horizontalPadding)
-        .padding(.vertical, MastheadLayout.toolbarVerticalPadding)
+        .padding(.top, MastheadLayout.toolbarTopPadding)
+        .padding(.bottom, MastheadLayout.toolbarBottomPadding)
+    }
+
+    /// Sequence label tint by item type. Adds a quiet identifier color
+    /// to the catalog number so M-/D-/N-/C- read distinctly without
+    /// adding chrome. Matches the kind-letter tints used in the Library
+    /// list rows.
+    private var sequenceTint: Color {
+        ThemedScopeAccent.kind(for: recording.type)
     }
 
     private var hairline: some View {
-        ScopeRule(.section)
+        ThemedScopeRule(.section)
     }
 
     /// "M-CB0B" / "D-3792" — type letter prefix + first four hex chars
@@ -147,6 +167,10 @@ struct TOHeaderSection: View {
                 Color.clear.frame(height: 12)
             }
             bylineRow
+            if !isEditing {
+                inlineActionRow
+                    .padding(.top, 14)
+            }
         }
     }
 
@@ -177,15 +201,18 @@ struct TOHeaderSection: View {
         let cue = Text("0:00 · ")
             .font(.system(size: 10, weight: .regular, design: .monospaced))
             .tracking(2.0)
-            .foregroundColor(Color.hex("9A6A22"))
+            .foregroundColor(ThemedScopeAccent.brass)
 
+        // Softened from full foreground to 0.78 so the standfirst reads
+        // as editorial prose, not bolded headline weight. Combined with
+        // the slightly wider line spacing it breathes.
         let prose = Text(lead)
             .font(standfirstFont)
-            .foregroundColor(Theme.current.foreground)
+            .foregroundColor(Theme.current.foreground.opacity(0.78))
             .tracking(-0.1)
 
         return (cue + prose)
-            .lineSpacing(8)
+            .lineSpacing(9)
             .textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -204,19 +231,33 @@ struct TOHeaderSection: View {
     // MARK: - Eyebrow
 
     private var eyebrowRow: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .firstTextBaseline, spacing: 14) {
             Text("· \(recording.type.displayName.uppercased())")
-                .font(.system(size: 9, weight: .regular, design: .monospaced))
-                .tracking(2.0)
-                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.60))
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .tracking(2.4)
+                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.62))
 
-            ScopeRule(.subtle)
+            ThemedScopeRule(.subtle)
 
+            // Editorial italic instead of mono — adds magazine cadence
+            // between the structural eyebrow and the serif headline below.
             Text(eyebrowDate(recording.createdAt))
-                .font(.system(size: 9, weight: .regular, design: .monospaced))
-                .tracking(2.0)
-                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.60))
+                .font(eyebrowItalicFont)
+                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.70))
         }
+    }
+
+    /// Italic Newsreader at the eyebrow size. Falls back to the system
+    /// serif italic if Newsreader-Italic isn't loaded.
+    private var eyebrowItalicFont: Font {
+        for name in ["Newsreader-Italic", "Newsreader-RegularItalic"] {
+            #if os(macOS)
+            if NSFont(name: name, size: 12) != nil {
+                return .custom(name, size: 12)
+            }
+            #endif
+        }
+        return .system(size: 12, weight: .regular, design: .serif).italic()
     }
 
     // MARK: - Headline
@@ -264,21 +305,37 @@ struct TOHeaderSection: View {
         HStack(spacing: 8) {
             Text(recording.source.displayName.uppercased())
                 .font(.system(size: 10, weight: .regular, design: .monospaced))
-                .tracking(1.6)
-                .foregroundColor(Theme.current.foreground)
+                .tracking(1.8)
+                .foregroundColor(Theme.current.foreground.opacity(0.78))
 
             if recording.duration > 0 {
-                Text("·")
-                    .font(.system(size: 10, weight: .regular, design: .monospaced))
-                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.55))
+                bylineDot
                 Text(formatDuration(recording.duration))
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .tracking(1.6)
-                    .foregroundColor(Theme.current.foreground)
+                    .foregroundColor(Theme.current.foreground.opacity(0.78))
+                    .monospacedDigit()
+            }
+
+            // Word count — adds a useful piece of context to the byline
+            // without expanding the line beyond mono caps. Falls back to
+            // the duration-only byline for items with no text.
+            if recording.wordCount > 0 {
+                bylineDot
+                Text("\(recording.wordCount) WORDS")
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .tracking(1.6)
+                    .foregroundColor(Theme.current.foreground.opacity(0.78))
                     .monospacedDigit()
             }
         }
-        .padding(.top, 4)
+        .padding(.top, 6)
+    }
+
+    private var bylineDot: some View {
+        Text("·")
+            .font(.system(size: 10, weight: .regular, design: .monospaced))
+            .foregroundColor(Theme.current.foregroundSecondary.opacity(0.48))
     }
 
     // MARK: - Toolbar Actions
@@ -301,21 +358,188 @@ struct TOHeaderSection: View {
 
     @ViewBuilder
     private var readingActions: some View {
-        HStack(spacing: 4) {
-            toolButton(label: copied ? "COPIED" : "COPY") {
-                copyTranscript()
-            }
-            toolButton(label: "Share") {
-                shareRecording()
-            }
-            toolButton(label: "Export") {
-                exportRecording()
-            }
-            ScopeRule(.subtle, axis: .vertical)
-                .frame(height: 12)
-                .padding(.horizontal, 4)
+        // Legacy in-toolbar action group — kept here only so the
+        // editing-actions branch can fall back to it if needed.
+        // The reading-mode inline action row is `inlineActionRow`.
+        HStack(spacing: 4) { EmptyView() }
+    }
+
+    /// Inline action row beneath the byline. Replaces the COPY · SHARE
+    /// · EXPORT · ⋯ cluster that used to hang in the top-right of the
+    /// pane. Reads as "tools for the document just identified above,"
+    /// not corner chrome. Copy is the primary action (amber); the rest
+    /// are secondary mono chips; ⋯ overflow holds Edit / Change Type /
+    /// Delete / Copy ID / View as JSON.
+    @ViewBuilder
+    private var inlineActionRow: some View {
+        // Pared row (2026-05-21): the Continue affordance lives as a
+        // centered standalone CTA above the bottom delete row now (it's
+        // the primary "add more to this memo" intent, not a peer of
+        // Copy/Share/Export). The JSON toggle migrated onto the
+        // transcript card itself so the affordance sits where its effect
+        // lives. `onContinueMemo` and `showJSON` remain on the API for
+        // call-site compatibility but no longer render here.
+        HStack(spacing: 8) {
+            inlineActionButton(label: copied ? "COPIED" : "COPY",
+                               icon: "doc.on.doc",
+                               isPrimary: true,
+                               action: copyTranscript)
+            inlineActionButton(label: "Share",
+                               icon: "square.and.arrow.up",
+                               action: shareRecording)
+            inlineActionButton(label: "Export",
+                               icon: "arrow.down.doc",
+                               action: exportRecording)
+            Spacer(minLength: 8)
             overflowMenu
         }
+    }
+
+    /// Continue-memo chip — replaces the stranded red dot that used to
+    /// float between sections. Red-tinted to stay recognizable as "this
+    /// continues the recording" without mimicking the primary amber.
+    @ViewBuilder
+    private func continueChip(action: @escaping () -> Void) -> some View {
+        let active = hoveredLabel == "Continue"
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(Color.red)
+                    .frame(width: 7, height: 7)
+                Text("CONTINUE")
+                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                    .tracking(1.6)
+            }
+            .foregroundColor(active ? Color.red : Color.red.opacity(0.85))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Color.red.opacity(active ? 0.14 : 0.07))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 3)
+                            .stroke(Color.red.opacity(active ? 0.45 : 0.28), lineWidth: 0.5)
+                    )
+            )
+            .animation(.easeOut(duration: 0.12), value: active)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            hoveredLabel = hovering ? "Continue" : (hoveredLabel == "Continue" ? nil : hoveredLabel)
+            NSCursor.pointingHand.set(); if !hovering { NSCursor.arrow.set() }
+        }
+        .help("Continue this memo")
+    }
+
+    /// View-as-JSON toggle — promoted out of the overflow menu so the
+    /// state is visible at a glance and one click away. Becomes the
+    /// active/lit state when JSON view is on, so the chip itself
+    /// reflects which mode the body is in.
+    @ViewBuilder
+    private func jsonToggleChip(showJSON: Binding<Bool>) -> some View {
+        let on = showJSON.wrappedValue
+        let active = hoveredLabel == "JSON"
+        Button {
+            showJSON.wrappedValue.toggle()
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: on ? "doc.text" : "curlybraces")
+                    .font(.system(size: 11, weight: .regular))
+                Text(on ? "TEXT" : "JSON")
+                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                    .tracking(1.6)
+            }
+            .foregroundColor(
+                on
+                    ? ThemedScopeAccent.brass
+                    : (active ? Theme.current.foreground : Theme.current.foregroundSecondary)
+            )
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(on
+                        ? ThemedScopeAccent.brass.opacity(0.10)
+                        : (active ? Theme.current.foreground.opacity(0.06) : Color.clear))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 3)
+                            .stroke(
+                                on
+                                    ? ThemedScopeAccent.brass.opacity(0.45)
+                                    : (active ? Theme.current.foreground.opacity(0.16) : Theme.current.foreground.opacity(0.10)),
+                                lineWidth: 0.5
+                            )
+                    )
+            )
+            .animation(.easeOut(duration: 0.12), value: active)
+            .animation(.easeOut(duration: 0.12), value: on)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            hoveredLabel = hovering ? "JSON" : (hoveredLabel == "JSON" ? nil : hoveredLabel)
+            NSCursor.pointingHand.set(); if !hovering { NSCursor.arrow.set() }
+        }
+        .help(on ? "View as text" : "View as JSON")
+    }
+
+    /// Single inline action chip. Mono caps label + SF Symbol glyph,
+    /// hover background, primary tinted amber.
+    @ViewBuilder
+    private func inlineActionButton(
+        label: String,
+        icon: String,
+        isPrimary: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        let active = hoveredLabel == label
+        let amber = ThemedScopeAccent.amber
+        let brass = ThemedScopeAccent.brass
+        let fg: Color = {
+            if isPrimary { return active ? amber : brass }
+            return active ? Theme.current.foreground : Theme.current.foregroundSecondary
+        }()
+        let bg: Color = {
+            if isPrimary { return active ? amber.opacity(0.14) : amber.opacity(0.07) }
+            return active ? Theme.current.foreground.opacity(0.06) : Color.clear
+        }()
+        let border: Color = {
+            if isPrimary { return active ? amber.opacity(0.55) : amber.opacity(0.32) }
+            return active ? Theme.current.foreground.opacity(0.16) : Theme.current.foreground.opacity(0.10)
+        }()
+
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: isPrimary ? .semibold : .regular))
+                Text(label.uppercased())
+                    .font(.system(size: 9.5,
+                                  weight: isPrimary ? .semibold : .medium,
+                                  design: .monospaced))
+                    .tracking(1.6)
+            }
+            .foregroundColor(fg)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(bg)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 3)
+                            .stroke(border, lineWidth: 0.5)
+                    )
+            )
+            .animation(.easeOut(duration: 0.12), value: active)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            hoveredLabel = hovering ? label : (hoveredLabel == label ? nil : hoveredLabel)
+            if hovering {
+                NSCursor.pointingHand.set()
+            } else {
+                NSCursor.arrow.set()
+            }
+        }
+        .help(label)
     }
 
     /// Studio toolbar button — mono-cased, no background.
@@ -361,6 +585,11 @@ struct TOHeaderSection: View {
     private var overflowMenu: some View {
         Menu {
             Button(action: onToggleEdit) { Label("Edit", systemImage: "pencil") }
+
+            // View as JSON promoted out of the overflow menu and into
+            // the inline action row as `jsonToggleChip` — kept here as a
+            // keyboard-menu fallback only would just re-bloat the
+            // overflow, so dropped.
 
             Menu("Change Type") {
                 ForEach(TalkieObjectType.allCases, id: \.self) { newType in
@@ -426,7 +655,15 @@ struct TOHeaderSection: View {
     // MARK: - Computed
 
     private var headerTitle: String {
+        // Dictations don't carry a user-set title. Derive a short
+        // headline from the first sentence of the transcript so the
+        // title doesn't repeat the eyebrow's "TODAY · 12:16 AM" stamp.
+        // Falls back to the timestamp only when there's no text yet.
         if recording.isDictation {
+            if let text = recording.text,
+               let derived = deriveDictationHeadline(from: text) {
+                return derived
+            }
             return formatDateProminent(recording.createdAt)
         }
 
@@ -448,6 +685,45 @@ struct TOHeaderSection: View {
         case .capture:
             return "Untitled Capture"
         }
+    }
+
+    /// First-sentence headline derivation for dictations. Cuts at the
+    /// first sentence terminator, capped at ~9 words, trims trailing
+    /// punctuation. Returns nil if the transcript is empty / unusable.
+    private func deriveDictationHeadline(from text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        // First sentence: take up to the first . ! ? (excluding trailing
+        // ellipses we'll trim later).
+        let terminators: Set<Character> = [".", "!", "?"]
+        var firstSentence = trimmed
+        if let idx = trimmed.firstIndex(where: { terminators.contains($0) }) {
+            firstSentence = String(trimmed[..<idx])
+        }
+
+        // Cap at 9 words so the headline fits one line at 34pt serif.
+        let words = firstSentence.split(separator: " ").prefix(9)
+        guard !words.isEmpty else { return nil }
+        var headline = words.joined(separator: " ")
+
+        // Trim hanging conjunctions / fragments at the end.
+        let hanging: Set<String> = ["and", "but", "or", "so", "if", "when", "to", "of", "the", "a", "an"]
+        while let last = headline.split(separator: " ").last,
+              hanging.contains(last.lowercased()) {
+            headline = headline
+                .split(separator: " ")
+                .dropLast()
+                .joined(separator: " ")
+        }
+
+        // Add an ellipsis if we truncated the source.
+        let originalWordCount = trimmed.split(separator: " ").count
+        if originalWordCount > 9 && !headline.hasSuffix("…") {
+            headline += "…"
+        }
+
+        return headline.isEmpty ? nil : headline
     }
 
     // MARK: - Actions
@@ -659,7 +935,7 @@ struct TOMetadataRow: View {
     }
 
     private var cellDivider: some View {
-        ScopeRule(.subtle, axis: .vertical)
+        ThemedScopeRule(.subtle, axis: .vertical)
             .frame(height: 12)
     }
 

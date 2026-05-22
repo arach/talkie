@@ -167,6 +167,18 @@ struct ScopeLibraryView: View {
                 viewModel.filterState.select(initialTypeFilter.semanticFilter)
             }
             await viewModel.loadWithSemanticFilters()
+            // Consume pending navigation params — when the home (or
+            // anywhere else) navigates to .recordings with a target
+            // item identifier, we select that recording so the
+            // inspector opens straight to the detail surface instead
+            // of dropping the user on the unfiltered list.
+            consumePendingNavigationParams()
+        }
+        .onChange(of: NavigationState.shared.params) { _, _ in
+            // A subsequent tap from elsewhere (e.g. the home Captures
+            // section while we're already on the Library) needs to
+            // re-select. `.task` only fires on first appearance.
+            consumePendingNavigationParams()
         }
         .onChange(of: typeFilter) { _, newValue in
             if suppressFilterReload {
@@ -255,6 +267,37 @@ struct ScopeLibraryView: View {
         }
     }
 
+    /// Read the navigation `params` and apply any target-item selection
+    /// so the inspector opens to a specific recording instead of leaving
+    /// the user on the bare list. Accepts both `recordingId` (the home
+    /// convention) and `selectedID` (the legacy RecordingsScreen
+    /// convention) so existing call sites keep working.
+    private func consumePendingNavigationParams() {
+        var consumedKeys: [String] = []
+        let params = NavigationState.shared.params
+
+        var resolved: UUID? = nil
+        if let uuid = params["recordingId"] as? UUID {
+            resolved = uuid
+            consumedKeys.append("recordingId")
+        } else if let uuidString = params["recordingId"] as? String,
+                  let uuid = UUID(uuidString: uuidString) {
+            resolved = uuid
+            consumedKeys.append("recordingId")
+        } else if let uuid = params["selectedID"] as? UUID {
+            resolved = uuid
+            consumedKeys.append("selectedID")
+        }
+
+        if let id = resolved {
+            selectedRecordingIDs = [id]
+        }
+
+        for key in consumedKeys {
+            NavigationState.shared.params.removeValue(forKey: key)
+        }
+    }
+
     private func filterCounts() -> FilterCounts {
         var memos = 0, dictations = 0, notes = 0, captures = 0
         for r in viewModel.recordings {
@@ -276,6 +319,9 @@ struct ScopeLibraryView: View {
     }
 
     /// Library list header — title row + filter pills + search row.
+    /// Sits below the chrome-bar zone: the centered Talkie pill occupies
+    /// the top ~38pt of the window, so we offset the list header further
+    /// down to keep the two from competing for the same vertical slot.
     @ViewBuilder
     private var topComponent: some View {
         VStack(spacing: 8) {
@@ -284,7 +330,7 @@ struct ScopeLibraryView: View {
             searchRow
         }
         .padding(.horizontal, 16)
-        .padding(.top, 12)
+        .padding(.top, 36)
         .padding(.bottom, 10)
         .overlay(alignment: .bottom) {
             ScopeRule(.section)
@@ -614,10 +660,26 @@ struct ScopeLibraryView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let recording = selectedRecording {
-                TalkieView(recording: recording, onDelete: {
-                    Task { await viewModel.deleteRecording(recording) }
-                    selectedRecordingIDs.remove(recording.id)
-                })
+                // Branch detail chrome on item kind so notes/captures
+                // don't inherit the memo's audio readout + player rail
+                // (the "bootleg composed view" the studio brief flagged).
+                Group {
+                    switch recording.type {
+                    case .note:
+                        ScopeNoteDetailView(note: recording)
+                    case .capture, .selection:
+                        // Selections are text-content captures (Quick
+                        // Selection grabs a passage). Same chrome as a
+                        // screenshot capture; the hero branches on
+                        // content.
+                        ScopeCaptureDetailView(capture: recording)
+                    default:
+                        TalkieView(recording: recording, onDelete: {
+                            Task { await viewModel.deleteRecording(recording) }
+                            selectedRecordingIDs.remove(recording.id)
+                        })
+                    }
+                }
                 .id(recording.id)
             } else {
                 ScopeLibraryEmptyState(

@@ -51,32 +51,13 @@ struct TOTranscriptSection: View {
                 onTranscriptChange: { onTranscriptChange() },
                 onRetranscribe: { modelId in onRetranscribe(modelId) }
             )
-            .overlay(alignment: .bottom) {
-                if let onContinueMemo, recording.isMemo && recording.hasAudio {
-                    Button(action: onContinueMemo) {
-                        HStack(spacing: 5) {
-                            Circle()
-                                .fill(Color.red)
-                                .frame(width: 8, height: 8)
-                            Text("Continue")
-                                .font(settings.fontSMMedium)
-                        }
-                        .foregroundColor(.red)
-                        .padding(.horizontal, Spacing.md)
-                        .padding(.vertical, Spacing.xs + 2)
-                        .background(
-                            Capsule()
-                                .fill(Color.red.opacity(0.1))
-                        )
-                        .overlay(
-                            Capsule()
-                                .stroke(Color.red.opacity(0.2), lineWidth: BorderWidth.thin)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.bottom, Spacing.sm)
-                }
-            }
+            // Continue-memo affordance moved into TOHeaderSection's
+            // inlineActionRow as a real labeled chip. The previous
+            // .overlay(alignment: .bottom) placement was clipping the
+            // label and leaving a bare red dot floating between
+            // sections; the new placement reads as "another action you
+            // can take" alongside Copy/Share/Export, which is what it
+            // is.
         } else if recording.hasAudio {
             transcriptionCTA
         } else {

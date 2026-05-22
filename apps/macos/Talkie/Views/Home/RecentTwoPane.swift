@@ -131,10 +131,7 @@ private struct RecentPane: View {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(RecentPaneTokens.cardBg)
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .stroke(ScopeEdge.normal, lineWidth: 0.5)
-        )
+        .scopeCardBorder(cornerRadius: 6)
         .shadow(color: Color.black.opacity(0.04), radius: 1, y: 1)
     }
 
@@ -145,17 +142,16 @@ private struct RecentPane: View {
                 .font(RecentFont.display(size: 14, medium: true))
                 .foregroundStyle(ScopeInk.primary)
             Spacer()
-            Text("\(sections.reduce(0) { $0 + $1.rows.count }) items".uppercased())
+            // Pluralize correctly — "1 ITEM" not "1 ITEMS".
+            let itemCount = sections.reduce(0) { $0 + $1.rows.count }
+            Text("\(itemCount) \(itemCount == 1 ? "item" : "items")".uppercased())
                 .font(RecentFont.mono(size: 9, weight: .semibold))
                 .tracking(1.8)
                 .foregroundStyle(ScopeInk.faint)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .overlay(
-            ScopeRule(.section),
-            alignment: .bottom
-        )
+        .overlay(ScopeRule(.section), alignment: .bottom)
     }
 }
 
@@ -233,12 +229,19 @@ private struct RecentRowView: View {
                     }
                 }
                 Spacer(minLength: 8)
-                VStack(alignment: .trailing, spacing: 2) {
+                // Meta + when inline — was a two-line VStack which wasted
+                // vertical space. "73 WORDS · 12:35 PM" on one line reads
+                // cleaner and matches how the bottom rows of other
+                // surfaces (Library row, sheaf card) present their meta.
+                HStack(spacing: 6) {
                     if !row.meta.isEmpty {
                         Text(row.meta.uppercased())
                             .font(RecentFont.mono(size: 9, weight: .medium))
                             .tracking(1.6)
                             .foregroundStyle(ScopeInk.faint)
+                        Text("·")
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundStyle(ScopeInk.subtle)
                     }
                     Text(row.when.uppercased())
                         .font(.system(size: 9, design: .monospaced))
@@ -252,10 +255,7 @@ private struct RecentRowView: View {
         }
         .buttonStyle(.plain)
         .onHover { hovered = $0 }
-        .overlay(
-            ScopeRule(.subtle),
-            alignment: .top
-        )
+        .overlay(ScopeRule(.subtle), alignment: .top)
     }
 }
 

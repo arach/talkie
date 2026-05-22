@@ -118,93 +118,125 @@ private enum SkillMarkupLine {
 
 private let SHIPPED_STARTERS: [Starter] = [
     Starter(
-        code: "S-0024",
-        category: "Productivity",
-        name: "Log Bug",
-        byline: "You see the bug, you say \"log bug.\" A region, your last sentence, a GitHub issue — done.",
-        pipeline: [("WHEN", "voice"), ("WITH", "region"), ("DO", "github"), ("THEN", "ack")],
-        mode: .atomic,
-        status: "READY",
-        markupBody: [
-            .keyword(kw: "WHEN", rest: "voice \"log bug\""),
-            .blank,
-            .keyword(kw: "WITH", rest: "region screenshot"),
-            .sub(text: "last paragraph"),
-            .blank,
-            .keyword(kw: "DO",   rest: "github.issue"),
-            .sub(text: "title  ← derive from selection"),
-            .sub(text: "body   ← selection + screenshot"),
-            .blank,
-            .keyword(kw: "THEN", rest: "voice ack"),
-        ],
-        savePrompt: """
-        You are a bug-report drafter. Read the user's voice memo about a bug and turn it into a clear, focused GitHub issue draft. Lead with one-sentence summary, then "Steps to reproduce" if any are present, then "Expected vs actual." Keep it terse — engineers will read this.
-
-        Voice memo:
-        {{TRANSCRIPT}}
-        """,
-        icon: "ant.fill",
-        color: .red,
-        skillFileName: "log-bug"
-    ),
-    Starter(
-        code: "S-0011",
-        category: "Comms",
-        name: "Daily Standup",
-        byline: "Three bullets, Claude tightens the language, posted to #standup before you stand up.",
-        pipeline: [("WHEN", "voice"), ("WITH", "dictation"), ("DO", "slack"), ("THEN", "ack")],
-        mode: .atomic,
-        status: "READY",
-        markupBody: [
-            .keyword(kw: "WHEN", rest: "voice \"standup\""),
-            .blank,
-            .keyword(kw: "WITH", rest: "dictation"),
-            .sub(text: "three bullets"),
-            .blank,
-            .keyword(kw: "DO",   rest: "slack.post"),
-            .sub(text: "channel: #standup"),
-            .sub(text: "polish: claude.tighten"),
-            .blank,
-            .keyword(kw: "THEN", rest: "voice ack"),
-        ],
-        savePrompt: """
-        You are a standup writer. Take the user's voice memo of three bullet points and tighten them into clear, scannable standup notes. Format as bullets, each one sentence. Cut filler words. Keep the speaker's voice.
-
-        Voice memo:
-        {{TRANSCRIPT}}
-        """,
-        icon: "person.3.fill",
-        color: .blue,
-        skillFileName: "daily-standup"
-    ),
-    Starter(
-        code: "S-0007",
-        category: "Personal",
-        name: "Capture Thought",
-        byline: "For the half-formed ideas — a quick voice memo, auto-tagged, filed to your library.",
-        pipeline: [("WHEN", "voice"), ("WITH", "dictation"), ("DO", "library"), ("THEN", "tag")],
+        code: "S-0031",
+        category: "Knowledge",
+        name: "Research",
+        byline: "Speak a topic; the agent digs through your memos and the web, then files the brief as a note.",
+        pipeline: [("WHEN", "voice"), ("WITH", "dictation"), ("DO", "research"), ("THEN", "note")],
         mode: .atomic,
         status: "DRAFT",
         markupBody: [
-            .keyword(kw: "WHEN", rest: "voice \"capture\""),
+            .keyword(kw: "WHEN", rest: "voice \"research\""),
             .blank,
             .keyword(kw: "WITH", rest: "dictation"),
+            .sub(text: "topic"),
             .blank,
-            .keyword(kw: "DO",   rest: "library.note"),
-            .sub(text: "title:  derived"),
-            .sub(text: "tags:   auto-classify"),
+            .keyword(kw: "DO",   rest: "llm.research"),
+            .sub(text: "depth: deep"),
+            .sub(text: "sources: memos + web"),
+            .blank,
+            .keyword(kw: "THEN", rest: "library.note"),
+        ],
+        savePrompt: """
+        You are a research assistant. Take the user's spoken topic and write a focused research brief: what we know, open questions, key sources to read next. Pull from any prior memos or notes about this topic if available. Keep it scannable — a brief, not an essay.
+
+        Topic:
+        {{TRANSCRIPT}}
+        """,
+        icon: "magnifyingglass.circle.fill",
+        color: .blue,
+        skillFileName: "research"
+    ),
+    Starter(
+        code: "S-0032",
+        category: "Context",
+        name: "Prepare",
+        byline: "Pull every memo, note, and capture about a topic; synthesize a brief — for a meeting, a doc, anything.",
+        pipeline: [("WHEN", "voice"), ("WITH", "dictation"), ("DO", "search"), ("THEN", "note")],
+        mode: .composed,
+        status: "DRAFT",
+        markupBody: [
+            .keyword(kw: "WHEN", rest: "voice \"prepare\""),
+            .blank,
+            .keyword(kw: "WITH", rest: "dictation"),
+            .sub(text: "for what"),
+            .blank,
+            .keyword(kw: "DO",   rest: "search.local"),
+            .sub(text: "scope: memos, notes, captures"),
+            .sub(text: "window: 14d"),
+            .blank,
+            .keyword(kw: "DO",   rest: "llm.synthesize"),
+            .blank,
+            .keyword(kw: "THEN", rest: "library.note"),
+        ],
+        savePrompt: """
+        You are a prep assistant. The user said what they're preparing for — pull together everything relevant from their recent activity (memos, notes, captures from the last two weeks) and synthesize a brief that's ready to scan five minutes before the thing.
+
+        Preparing for:
+        {{TRANSCRIPT}}
+        """,
+        icon: "doc.text.magnifyingglass",
+        color: .green,
+        skillFileName: "prepare"
+    ),
+    Starter(
+        code: "S-0033",
+        category: "Capture",
+        name: "Screenshot",
+        byline: "Say \"screenshot\" to capture without lifting a finger — voice-first version of the Hyper+S chord.",
+        pipeline: [("WHEN", "voice"), ("WITH", "context"), ("DO", "capture"), ("THEN", "ack")],
+        mode: .atomic,
+        status: "DRAFT",
+        markupBody: [
+            .keyword(kw: "WHEN", rest: "voice \"screenshot\""),
+            .blank,
+            .keyword(kw: "WITH", rest: "context"),
+            .sub(text: "active window"),
+            .blank,
+            .keyword(kw: "DO",   rest: "screenshot.capture"),
+            .sub(text: "mode: window"),
             .blank,
             .keyword(kw: "THEN", rest: "voice ack"),
         ],
         savePrompt: """
-        You are a personal-thought capturer. Take the user's quick voice memo and turn it into a clean note: a title (one phrase), the cleaned-up body, and 2-4 tags that classify it (e.g. idea, todo, question, observation). Don't lose any content — only tighten and structure.
+        Capture the active window via the screenshot service and file it in the Tray. Speak a short ack confirming the capture landed.
 
-        Voice memo:
+        Context:
         {{TRANSCRIPT}}
         """,
-        icon: "lightbulb.fill",
-        color: .yellow,
-        skillFileName: "capture-thought"
+        icon: "camera.viewfinder",
+        color: .orange,
+        skillFileName: "screenshot"
+    ),
+    Starter(
+        code: "S-0034",
+        category: "Awareness",
+        name: "Monitor",
+        byline: "A passive watcher that pings you when a topic moves — new memo, new mention, new context.",
+        pipeline: [("WHEN", "schedule"), ("WITH", "context"), ("DO", "watch"), ("THEN", "notify")],
+        mode: .workflow,
+        status: "DRAFT",
+        markupBody: [
+            .keyword(kw: "WHEN", rest: "schedule"),
+            .sub(text: "every 30m"),
+            .blank,
+            .keyword(kw: "WITH", rest: "context"),
+            .sub(text: "inbox + recent memos"),
+            .blank,
+            .keyword(kw: "DO",   rest: "llm.watch"),
+            .sub(text: "condition: meaningful change"),
+            .blank,
+            .keyword(kw: "THEN", rest: "notification"),
+        ],
+        savePrompt: """
+        You are a watcher. Look at recent activity (last 30 minutes of memos, notes, captures, and inbox). Detect any meaningful change related to the tracked topic. If there's a meaningful shift, write a one-sentence summary suitable for a system notification. If nothing notable, return an empty string.
+
+        Tracked topic:
+        {{TRANSCRIPT}}
+        """,
+        icon: "antenna.radiowaves.left.and.right",
+        color: .purple,
+        skillFileName: "monitor"
     ),
 ]
 
@@ -259,8 +291,8 @@ struct ScopeSkillsLandingView: View {
                     .padding(.top, 14)
                 sectionIntro(
                     label: "starters",
-                    meta: "3 shipped",
-                    intro: "Three skills shipped with Talkie. Click one to load it into the editor above, talk to the agent, save it as yours. The catalog grows from here."
+                    meta: "\(SHIPPED_STARTERS.count) shipped",
+                    intro: "Four skills shipped with Talkie — each leans on something the app already has: dictation, local context, the screenshot chord, scheduled awareness. Click one to load it into the editor above, talk to the agent, save it as yours."
                 )
                 startersRow
                 sectionLine(label: "your skills", hint: yourSkillsHint)

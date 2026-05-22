@@ -99,7 +99,28 @@ public enum ScopeEdge {
 // MARK: - Scope Rule — reusable hairline view
 //
 // Single source of truth for divider rendering across Scope surfaces.
-// Call sites choose semantic roles; the visual calibration stays here.
+// Calibrated to render visibly on cream-tinted panels (translucent
+// white over the Home canvas). Replaces hand-rolled
+// `Rectangle().fill(opacity).frame(height: 0.5)` cocktails, which
+// disappeared on translucent backgrounds.
+//
+// The role names below map to specific visual values. Call sites use
+// the role; the visual tuning happens here in one place. The role
+// vocabulary is intentional — each one names where it belongs, not how
+// loud it is.
+//
+//   .section      — strong inner break. Under panel titles, before
+//                   footer links, between major subsections.
+//   .row          — divider between peer rows in a list. The default.
+//   .subtle       — tertiary separation where the rhythm carries the
+//                   weight and the rule is just a whisper.
+//   .action       — accent-tinted rule for action contexts (brass
+//                   amber). The selection marker under an active tab,
+//                   the leading edge of a primary-action row.
+//
+// For card outer borders (rounded rectangles), use the
+// `.scopeCardBorder()` View modifier defined below — that's a stroke,
+// not a rule, and has its own role on the page.
 public struct ScopeRule: View {
 
     public enum Role {
@@ -138,9 +159,46 @@ public struct ScopeRule: View {
     }
 
     private var thickness: CGFloat {
-        // Action rules are stronger by accent color but still render as
-        // a marker, not a heavy bar.
+        // Action rules are stronger by their accent color but
+        // thinner so they read as a marker, not a heavy bar.
         role == .action ? 1.5 : 1
+    }
+}
+
+// MARK: - Scope Card Border — outer border modifier
+//
+// For rounded card / panel outer borders. Use instead of hand-rolled
+// `.overlay(RoundedRectangle(cornerRadius: r).stroke(opacity, lineWidth: w))`.
+// One place to tune card-edge rendering across all surfaces.
+
+public extension View {
+    /// Standard outer border for a Scope card or panel container.
+    /// Uses the same calibrated cool-ink color family as `ScopeRule`.
+    func scopeCardBorder(
+        cornerRadius: CGFloat = 6,
+        emphasis: ScopeCardEmphasis = .normal
+    ) -> some View {
+        self.overlay(
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .stroke(emphasis.color, lineWidth: 0.5)
+        )
+    }
+}
+
+public enum ScopeCardEmphasis {
+    /// Default container edge — visible but quiet.
+    case normal
+    /// Hover or focused state — reads as "this card is alive."
+    case strong
+    /// Disabled / dimmed state.
+    case muted
+
+    public var color: Color {
+        switch self {
+        case .normal: return Color.hex("0F1112").opacity(0.18)
+        case .strong: return Color.hex("0F1112").opacity(0.30)
+        case .muted:  return Color.hex("0F1112").opacity(0.10)
+        }
     }
 }
 

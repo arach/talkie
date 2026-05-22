@@ -14,8 +14,9 @@
 //  (provenance + tags) → attachment rail at the foot (replaces the
 //  player rail).
 //
-//  Palette: PEARL (#F5F8FA pane) on FROST (#F9FBFC canvas). Cool tones,
-//  less cream than the warm family. Amber stays as the single accent.
+//  Palette: Scope editorial tokens resolved through the active Talkie
+//  theme. Scope keeps the cool-gray paper canon; dark themes receive
+//  readable themed paper/ink instead of static Scope inks.
 //
 
 import SwiftUI
@@ -60,7 +61,7 @@ struct ScopeNoteDetailView: View {
                 attachmentRail(bodyPad: bodyPad)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background(ScopeCanvas.canvas)
+            .background(ThemedScopeCanvas.canvas)
         }
     }
 
@@ -121,20 +122,20 @@ struct ScopeNoteDetailView: View {
                     Text(sourceEyebrow)
                         .font(NoteFont.mono(size: 9, weight: .semibold))
                         .tracking(2.2)
-                        .foregroundStyle(ScopeInk.faint)
+                        .foregroundStyle(ThemedScopeInk.faint)
                 }
-                ScopeRule(.subtle)
+                ThemedScopeRule(.subtle)
                 Text("\(dateLabel) · \(timeLabel)")
                     .font(NoteFont.mono(size: 9))
                     .tracking(1.8)
-                    .foregroundStyle(ScopeInk.faint)
+                    .foregroundStyle(ThemedScopeInk.faint)
             }
 
             // Title
             Text(note.displayTitle)
                 .font(NoteFont.display(size: 26, weight: .medium))
                 .tracking(-0.3)
-                .foregroundStyle(ScopeInk.primary)
+                .foregroundStyle(ThemedScopeInk.primary)
                 .lineLimit(3)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -144,7 +145,7 @@ struct ScopeNoteDetailView: View {
             Text(bylineText)
                 .font(NoteFont.mono(size: 10))
                 .tracking(1.6)
-                .foregroundStyle(ScopeInk.faint)
+                .foregroundStyle(ThemedScopeInk.faint)
                 .padding(.top, 6)
 
             // Body — measure-capped. System sans (SF Pro) at regular
@@ -156,7 +157,7 @@ struct ScopeNoteDetailView: View {
                 ForEach(Array(bodyParagraphs.enumerated()), id: \.offset) { _, paragraph in
                     Text(paragraph)
                         .font(.system(size: 13.5, weight: .regular, design: .default))
-                        .foregroundStyle(ScopeInk.dim)
+                        .foregroundStyle(ThemedScopeInk.dim)
                         .lineSpacing(7)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
@@ -167,7 +168,7 @@ struct ScopeNoteDetailView: View {
                 // Marginal rule — like a printed page's gutter. Softer
                 // now that the prose itself is lighter.
                 Rectangle()
-                    .fill(ScopeKind.note.opacity(0.22))
+                    .fill(ThemedScopeAccent.note.opacity(0.22))
                     .frame(width: 1)
                     .offset(x: -16)
             }
@@ -209,7 +210,7 @@ struct ScopeNoteDetailView: View {
         .padding(.bottom, 28)
         .frame(width: width, alignment: .topLeading)
         .overlay(alignment: .leading) {
-            ScopeRule(.subtle, axis: .vertical)
+            ThemedScopeRule(.subtle, axis: .vertical)
         }
     }
 
@@ -219,14 +220,14 @@ struct ScopeNoteDetailView: View {
             Text("· ACTIONS")
                 .font(NoteFont.mono(size: 8.5, weight: .semibold))
                 .tracking(2.8)
-                .foregroundStyle(ScopeInk.faint)
+                .foregroundStyle(ThemedScopeInk.faint)
                 .padding(.bottom, 4)
             NoteRailAction(label: "Edit",   icon: "pencil",                 isPrimary: true, action: {})
             NoteRailAction(label: "Star",   icon: "star",                   action: {})
             NoteRailAction(label: "Pin",    icon: "pin",                    action: {})
             NoteRailAction(label: "Share",  icon: "square.and.arrow.up",    action: {})
             NoteRailAction(label: "Export", icon: "arrow.down.doc",         action: {})
-            ScopeRule(.subtle)
+            ThemedScopeRule(.subtle)
                 .padding(.vertical, 4)
             NoteRailAction(label: "More",   icon: "ellipsis",               action: {})
         }
@@ -238,19 +239,19 @@ struct ScopeNoteDetailView: View {
             Text("· \(title.uppercased())")
                 .font(NoteFont.mono(size: 8.5, weight: .semibold))
                 .tracking(2.8)
-                .foregroundStyle(ScopeInk.faint)
+                .foregroundStyle(ThemedScopeInk.faint)
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                     HStack(alignment: .firstTextBaseline) {
                         Text(row.0)
                             .font(NoteFont.mono(size: 9))
                             .tracking(1.4)
-                            .foregroundStyle(ScopeInk.faint)
+                            .foregroundStyle(ThemedScopeInk.faint)
                         Spacer()
                         Text(row.1)
                             .font(NoteFont.mono(size: 10))
                             .tracking(0.6)
-                            .foregroundStyle(row.2 ? ScopeBrass.solid : ScopeInk.primary)
+                            .foregroundStyle(row.2 ? ThemedScopeAccent.brass : ThemedScopeInk.primary)
                     }
                 }
             }
@@ -264,16 +265,16 @@ struct ScopeNoteDetailView: View {
                 Text("· ATTACHMENTS")
                     .font(NoteFont.mono(size: 9, weight: .semibold))
                     .tracking(2.8)
-                    .foregroundStyle(ScopeInk.faint)
+                    .foregroundStyle(ThemedScopeInk.faint)
                 Text("\(note.screenshots.count)")
                     .font(NoteFont.mono(size: 9))
-                    .foregroundStyle(ScopeInk.faint)
+                    .foregroundStyle(ThemedScopeInk.faint)
             }
             if note.screenshots.isEmpty {
                 Text("none yet")
                     .font(NoteFont.mono(size: 9))
                     .tracking(1.6)
-                    .foregroundStyle(ScopeInk.faint)
+                    .foregroundStyle(ThemedScopeInk.faint)
             } else {
                 ForEach(Array(note.screenshots.prefix(6).enumerated()), id: \.offset) { _, ss in
                     attachmentChip(filename: ss.filename, meta: "\(ss.width ?? 0)×\(ss.height ?? 0)")
@@ -284,15 +285,15 @@ struct ScopeNoteDetailView: View {
                 Text("+ ADD")
                     .font(NoteFont.mono(size: 9, weight: .semibold))
                     .tracking(2.2)
-                    .foregroundStyle(ScopeKind.note)
+                    .foregroundStyle(ThemedScopeAccent.note)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(
                         RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.white.opacity(0.5))
+                            .fill(ThemedScopeCanvas.canvasAlt.opacity(0.65))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 2)
-                                    .stroke(ScopeEdge.faint, lineWidth: 0.5)
+                                    .stroke(ThemedScopeEdge.faint, lineWidth: 0.5)
                             )
                     )
             }
@@ -301,8 +302,8 @@ struct ScopeNoteDetailView: View {
         .padding(.horizontal, bodyPad)
         .padding(.vertical, 14)
         .background(
-            Rectangle().fill(ScopeCanvas.surface)
-                .overlay(ScopeRule(.row), alignment: .top)
+            Rectangle().fill(ThemedScopeCanvas.surface)
+                .overlay(ThemedScopeRule(.row), alignment: .top)
         )
     }
 
@@ -311,27 +312,27 @@ struct ScopeNoteDetailView: View {
         HStack(spacing: 8) {
             Text("▢")
                 .font(NoteFont.mono(size: 11))
-                .foregroundStyle(ScopeKind.capture)
+                .foregroundStyle(ThemedScopeAccent.capture)
             VStack(alignment: .leading, spacing: 1) {
                 Text(filename)
                     .font(.system(size: 11))
-                    .foregroundStyle(ScopeInk.primary)
+                    .foregroundStyle(ThemedScopeInk.primary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Text(meta.uppercased())
                     .font(NoteFont.mono(size: 8.5))
                     .tracking(1.4)
-                    .foregroundStyle(ScopeInk.faint)
+                    .foregroundStyle(ThemedScopeInk.faint)
             }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
         .background(
             RoundedRectangle(cornerRadius: 3)
-                .fill(ScopeKind.capture.opacity(0.06))
+                .fill(ThemedScopeAccent.capture.opacity(0.06))
                 .overlay(
                     RoundedRectangle(cornerRadius: 3)
-                        .stroke(ScopeKind.capture.opacity(0.28), lineWidth: 0.5)
+                        .stroke(ThemedScopeAccent.capture.opacity(0.28), lineWidth: 0.5)
                 )
         )
         .frame(maxWidth: 220)
@@ -376,24 +377,15 @@ private struct NoteRailAction: View {
     }
 
     private var foregroundColor: Color {
-        if isPrimary { return hovered ? ScopeAmber.solid : ScopeBrass.solid }
-        if hovered { return ScopeInk.primary }
-        return ScopeInk.faint
+        if isPrimary { return hovered ? ThemedScopeAccent.amber : ThemedScopeAccent.brass }
+        if hovered { return ThemedScopeInk.primary }
+        return ThemedScopeInk.faint
     }
 
     private var backgroundFill: Color {
         if isPrimary {
-            return hovered ? ScopeAmber.solid.opacity(0.14) : ScopeAmber.solid.opacity(0.07)
+            return hovered ? ThemedScopeAccent.amber.opacity(0.14) : ThemedScopeAccent.amber.opacity(0.07)
         }
-        return hovered ? ScopeEdge.subtle : Color.clear
-    }
-}
-
-// MARK: - String helper
-
-private extension String {
-    func leftPadded(to length: Int, with pad: Character) -> String {
-        guard count < length else { return self }
-        return String(repeating: pad, count: length - count) + self
+        return hovered ? ThemedScopeEdge.subtle : Color.clear
     }
 }

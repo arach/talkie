@@ -9,6 +9,119 @@
 import SwiftUI
 import TalkieKit
 
+// MARK: - Theme-aware Scope detail tokens
+//
+// The editorial detail layouts keep the Scope typography/composition, but
+// their colors must follow the active Talkie theme. Scope still receives
+// the canonical cool-gray canvas/ink via Theme.current because the Scope
+// preset maps those values there; dark themes receive their own readable
+// surfaces, text, rules, and accents.
+
+@MainActor
+enum ThemedScopeCanvas {
+    static var canvas: Color { Theme.current.background }
+    static var canvasAlt: Color { Theme.current.surface1 }
+    static var surface: Color { Theme.current.surface2 }
+}
+
+@MainActor
+enum ThemedScopeInk {
+    static var primary: Color { Theme.current.foreground }
+    static var dim: Color { Theme.current.foreground.opacity(0.82) }
+    static var muted: Color { Theme.current.foregroundSecondary }
+    static var faint: Color { Theme.current.foregroundMuted }
+    static var subtle: Color { Theme.current.foregroundMuted.opacity(0.72) }
+}
+
+@MainActor
+enum ThemedScopeEdge {
+    static var strong: Color { Theme.current.foreground.opacity(0.24) }
+    static var normal: Color { Theme.current.foreground.opacity(0.16) }
+    static var faint: Color { Theme.current.foreground.opacity(0.10) }
+    static var subtle: Color { Theme.current.foreground.opacity(0.07) }
+}
+
+@MainActor
+enum ThemedScopeAccent {
+    static var amber: Color {
+        SettingsManager.shared.isScopeTheme ? ScopeAmber.solid : Color.accentColor
+    }
+
+    static var brass: Color {
+        SettingsManager.shared.isScopeTheme ? ScopeBrass.solid : Color.accentColor
+    }
+
+    static var tint: Color {
+        amber.opacity(SettingsManager.shared.isScopeTheme ? 0.06 : 0.14)
+    }
+
+    static var tintSubtle: Color {
+        amber.opacity(SettingsManager.shared.isScopeTheme ? 0.04 : 0.08)
+    }
+
+    static var memo: Color {
+        SettingsManager.shared.isScopeTheme ? ScopeKind.memo : Color.accentColor
+    }
+
+    static var dictation: Color {
+        SettingsManager.shared.isScopeTheme ? ScopeKind.dict : Color.accentColor
+    }
+
+    static var note: Color {
+        SettingsManager.shared.isScopeTheme ? ScopeKind.note : Theme.current.foregroundSecondary
+    }
+
+    static var capture: Color {
+        SettingsManager.shared.isScopeTheme ? ScopeKind.capture : Theme.current.foregroundSecondary
+    }
+
+    static func kind(for type: TalkieObjectType) -> Color {
+        switch type {
+        case .memo: return memo
+        case .dictation: return dictation
+        case .note: return note
+        case .capture, .selection: return capture
+        case .segment: return ThemedScopeInk.faint
+        }
+    }
+}
+
+struct ThemedScopeRule: View {
+    var role: ScopeRule.Role
+    var axis: Axis.Set
+
+    init(_ role: ScopeRule.Role = .row, axis: Axis.Set = .horizontal) {
+        self.role = role
+        self.axis = axis
+    }
+
+    var body: some View {
+        Rectangle()
+            .fill(color)
+            .frame(
+                width: axis == .vertical ? thickness : nil,
+                height: axis == .horizontal ? thickness : nil
+            )
+    }
+
+    private var color: Color {
+        switch role {
+        case .section:
+            return Theme.current.foreground.opacity(0.18)
+        case .row:
+            return Theme.current.foreground.opacity(0.12)
+        case .subtle:
+            return Theme.current.foreground.opacity(0.08)
+        case .action:
+            return ThemedScopeAccent.brass.opacity(0.72)
+        }
+    }
+
+    private var thickness: CGFloat {
+        role == .action ? 1.5 : 1
+    }
+}
+
 // MARK: - Attachment Thumbnail
 
 struct AttachmentThumbnail: View {
@@ -651,6 +764,7 @@ struct RecordingTranscriptCard: View {
 
     @State private var copied = false
     @State private var toolTrayHovered = false
+    @State private var jsonChipHovered = false
 
     private var hasTranscriptionData: Bool {
         recording.timedTranscription != nil || recording.isMemo || recording.isDictation || recording.isSelection
@@ -743,27 +857,25 @@ struct RecordingTranscriptCard: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if !isEditing {
-                if hasTranscriptionData {
-                    tabToggle
-                } else if !documentMode {
-                    HStack {
-                        Spacer()
-                        copyButton
-                            .padding(.trailing, Spacing.sm)
-                    }
-                    .padding(.vertical, Spacing.xs)
-                    .background(
-                        isTechnical ? TechnicalStyle.surface1 : Theme.current.foreground.opacity(0.02)
-                    )
-                }
+            // Top strip:
+            //  - editing mode: nothing (the TextEditor owns the surface).
+            //  - JSON mode: dismissal row with a BACK TO TEXT affordance.
+            //  - document mode: a flush-right TEXT/JSON toggle so the
+            //    affordance lives on the card whose body it changes
+            //    (was previously in the masthead's action row, which read
+            //    as detached chrome).
+            if !isEditing && showJSON {
+                jsonDismissalRow
+            } else if !isEditing {
+                cardModeStrip
             }
 
             contentArea
 
-            if !isEditing && (recording.isDictation || recording.hasAudio) {
-                toolTray
-            }
+            // Tool tray (Quick Open into Notion / ChatGPT / Notes / etc.)
+            // demoted for now — re-add when the affordance lands in the
+            // side rail Actions block, where it belongs alongside the
+            // other content actions instead of floating below the body.
         }
         .clipShape(RoundedRectangle(cornerRadius: documentMode ? 0 : (isTechnical ? CornerRadius.card : CornerRadius.md)))
         .overlay {
@@ -786,26 +898,22 @@ struct RecordingTranscriptCard: View {
         }
     }
 
-    // MARK: - Tab Toggle
+    // MARK: - JSON dismissal row
+    //
+    // Replaces the old persistent TEXT/JSON tab pair. Only renders when
+    // the user has actively flipped to JSON via the overflow menu;
+    // gives them a one-tap path back to the editorial text view.
 
-    // Studio-style text/JSON toggle: two quiet mono-caps buttons, the
-    // active one underlined with brass amber. Copy lives in the masthead
-    // toolbar (Share) — duplicating it here orphaned the affordance and
-    // gave the user three Copy paths for the same content.
-    private var tabToggle: some View {
-        HStack(spacing: 4) {
+    /// Top strip in document mode — flush-right TEXT/JSON toggle.
+    /// Sits over the transparent paper (no background) so it reads as
+    /// editorial chrome on the document, not a control bar.
+    private var cardModeStrip: some View {
+        HStack(spacing: 0) {
             Spacer(minLength: 8)
-            studioTabButton("Text", isSelected: !showJSON) {
-                withAnimation(.easeInOut(duration: 0.15)) { showJSON = false }
-            }
-            studioTabButton("JSON", isSelected: showJSON) {
-                withAnimation(.easeInOut(duration: 0.15)) { showJSON = true }
-            }
+            cardJSONToggleButton
         }
-        // Parent already supplies 36pt horizontal in documentMode via
-        // `recipeSections` padding. Adding our own would double-indent.
-        .padding(.horizontal, documentMode ? 0 : Spacing.md)
-        .padding(.vertical, documentMode ? 6 : Spacing.sm)
+        .padding(.horizontal, documentMode ? 0 : Spacing.sm)
+        .padding(.vertical, documentMode ? 2 : Spacing.xs)
         .background(
             documentMode
                 ? Color.clear
@@ -813,26 +921,80 @@ struct RecordingTranscriptCard: View {
         )
     }
 
-    private func studioTabButton(_ label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                Text(label.uppercased())
-                    .font(.system(size: 10, weight: .regular, design: .monospaced))
-                    .tracking(1.8)
-                    .foregroundColor(
-                        isSelected
-                            ? Theme.current.foreground
-                            : Theme.current.foregroundSecondary.opacity(0.55)
-                    )
-                Rectangle()
-                    .fill(isSelected ? Color.hex("9A6A22") : Color.clear)
-                    .frame(height: 1)
+    /// JSON entry chip — only shown in document mode. Mirrors the studio
+    /// `JSON` mono pill: subtle by default, lights up to brass on hover.
+    /// Tapping flips the card to JSON mode and the dismissal row takes
+    /// over from there.
+    private var cardJSONToggleButton: some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.12)) { showJSON = true }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "curlybraces")
+                    .font(.system(size: 10, weight: .regular))
+                Text("JSON")
+                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                    .tracking(1.6)
             }
+            .foregroundColor(
+                jsonChipHovered
+                    ? ThemedScopeAccent.brass
+                    : Theme.current.foregroundSecondary.opacity(0.62)
+            )
             .padding(.horizontal, 8)
-            .padding(.top, 2)
-            .contentShape(Rectangle())
+            .padding(.vertical, 3)
+            .background(
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(jsonChipHovered
+                        ? ThemedScopeAccent.brass.opacity(0.08)
+                        : Color.clear)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 3)
+                            .stroke(
+                                jsonChipHovered
+                                    ? ThemedScopeAccent.brass.opacity(0.35)
+                                    : Theme.current.foreground.opacity(0.10),
+                                lineWidth: 0.5
+                            )
+                    )
+            )
+            .animation(.easeOut(duration: 0.12), value: jsonChipHovered)
         }
         .buttonStyle(.plain)
+        .onHover { hovering in
+            jsonChipHovered = hovering
+            if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+        }
+        .help("View as JSON")
+    }
+
+    private var jsonDismissalRow: some View {
+        HStack(spacing: 8) {
+            Text("· JSON")
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .tracking(2.8)
+                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.62))
+            ThemedScopeRule(.subtle)
+            Button {
+                withAnimation(.easeOut(duration: 0.12)) { showJSON = false }
+            } label: {
+                Text("← BACK TO TEXT")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .tracking(2.2)
+                    .foregroundColor(ThemedScopeAccent.brass)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+            }
+            .buttonStyle(.plain)
+            .help("Return to editorial text view")
+        }
+        .padding(.horizontal, documentMode ? 0 : Spacing.md)
+        .padding(.vertical, documentMode ? 6 : Spacing.sm)
+        .background(
+            documentMode
+                ? Color.clear
+                : (isTechnical ? TechnicalStyle.surface1 : Theme.current.foreground.opacity(0.02))
+        )
     }
 
     private var studioCopyButton: some View {
@@ -947,10 +1109,18 @@ struct RecordingTranscriptCard: View {
     }
 
     private var jsonContent: some View {
+        // Min-height + max-height bracket: short payloads render at
+        // their natural height with a floor (so the card always has
+        // visible JSON when toggled — the previous bare ScrollView
+        // could collapse to zero inside a `.fixedSize`-free VStack and
+        // looked like clicking the toggle did nothing). Tall payloads
+        // get a scrollable cap.
         ScrollView {
             SyntaxHighlightedJSON(json: renderJSON())
                 .padding(Spacing.md)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(minHeight: 280, maxHeight: 520)
     }
 
     // MARK: - Tool Tray
@@ -1259,16 +1429,16 @@ struct DocumentBody: View {
 
         return HStack(alignment: .top, spacing: 20) {
             // Marginal rule — printed-page gutter.
-            ScopeRule(.action, axis: .vertical)
+            ThemedScopeRule(.action, axis: .vertical)
                 .opacity(0.35)
                 .padding(.vertical, 4)
 
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 20) {
                 ForEach(Array(rest.enumerated()), id: \.offset) { _, p in
                     Text(p)
-                        .font(.system(size: 14))
-                        .lineSpacing(6)
-                        .foregroundColor(Theme.current.foreground)
+                        .font(.system(size: 14, weight: .regular))
+                        .lineSpacing(8)
+                        .foregroundColor(Theme.current.foreground.opacity(0.78))
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -1281,13 +1451,13 @@ struct DocumentBody: View {
 
     private var endSlug: some View {
         HStack(spacing: 10) {
-            ScopeRule(.section)
+            ThemedScopeRule(.section)
                 .frame(width: 22)
             Text("END · \(formattedDuration) · \(wordCount) WORDS")
                 .font(.system(size: 9, weight: .regular, design: .monospaced))
                 .tracking(2.0)
                 .foregroundColor(Theme.current.foregroundSecondary.opacity(0.65))
-            ScopeRule(.subtle)
+            ThemedScopeRule(.subtle)
         }
     }
 
@@ -1315,7 +1485,7 @@ struct DocumentBody: View {
                                     .monospacedDigit()
                                     .foregroundColor(
                                         row.accent
-                                            ? Color.hex("9A6A22")
+                                            ? ThemedScopeAccent.brass
                                             : Theme.current.foreground
                                     )
                                     .lineLimit(1)
@@ -1325,7 +1495,7 @@ struct DocumentBody: View {
                     }
 
                     if gi < metadataGroups.count - 1 {
-                        ScopeRule(.subtle)
+                        ThemedScopeRule(.subtle)
                             .padding(.top, 4)
                     }
                 }

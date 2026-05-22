@@ -474,7 +474,15 @@ public extension ScopePageStrip where Trailing == EmptyView {
 public enum ScopeTopBandLayout {
     /// 44pt — matches the sidebar wordmark frame.
     public static let height: CGFloat = 44
-    /// 32pt — matches the standardized page horizontal padding.
+    /// 32pt — matches the standardized page horizontal padding. Must
+    /// stay in lock-step with each Scope page's content `.padding`
+    /// (Home, Drafts, Notes, etc. all use 32pt) so the band title
+    /// aligns flush with the body beneath it. Earlier attempts to
+    /// widen the title-to-pill gap by bumping this to 48pt broke that
+    /// alignment and made the page read as "chrome misaligned" /
+    /// non-Scope. If the title needs more room from the centered
+    /// chrome pill, push the pill or the title individually — don't
+    /// reach for this constant.
     public static let horizontalPadding: CGFloat = 32
     /// 30pt — vertical position of the text baseline measured from the
     /// top of the band. The wordmark anchors to the same value so the

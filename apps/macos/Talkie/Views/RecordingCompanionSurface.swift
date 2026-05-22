@@ -220,7 +220,12 @@ private struct WaveOnlyContent: View {
     private var animatedWave: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { context in
             let t = context.date.timeIntervalSinceReferenceDate
-            let phaseSpeed: CGFloat = 1.5
+            // Negative phase advance flows the wave right→left across
+            // the canvas (matches how the user reads "audio is being
+            // captured" — leading edge enters from the right). Bumped
+            // from 1.5 → 2.6 so the motion feels alive against an
+            // amplitude that's already breathing on voice level.
+            let phaseSpeed: CGFloat = -2.6
 
             InkFlourishShape(
                 amplitude: amplitude,
@@ -275,7 +280,7 @@ private struct WaveOnlyContent: View {
     }
 
     private var captionRow: some View {
-        HStack {
+        HStack(spacing: 14) {
             Text(captionText)
                 .font(RecordingCompanionFonts.mono(size: 10))
                 .tracking(2.8)
@@ -284,6 +289,8 @@ private struct WaveOnlyContent: View {
                 .allowsHitTesting(false)
             Spacer()
             if phase == .recording {
+                CancelButton(action: cancelRecording)
+                    .transition(.opacity)
                 StopButton(action: stopRecording)
                     .transition(.opacity)
             }
@@ -310,6 +317,13 @@ private struct WaveOnlyContent: View {
 
     private func stopRecording() {
         controller.stopRecording()
+    }
+
+    /// Discard the in-flight recording. Matches the X-affordance from
+    /// the legacy `inlineRecordingUI`. Clears continuingMemoId /
+    /// targetNoteId / temp file so the surface unmounts cleanly.
+    private func cancelRecording() {
+        controller.cancelRecording()
     }
 
     private var amberGradient: LinearGradient {
@@ -434,13 +448,14 @@ private struct FrontispieceContent: View {
                 .fill(RecordingCompanionTokens.ink.opacity(0.18))
                 .frame(height: 0.5)
 
-            HStack {
+            HStack(spacing: 14) {
                 Text("RECORDING MEMO")
                     .font(RecordingCompanionFonts.mono(size: 10))
                     .tracking(2.8)
                     .foregroundColor(RecordingCompanionTokens.inkFaint)
                     .allowsHitTesting(false)
                 Spacer()
+                CancelButton(action: cancelRecording)
                 StopButton(action: stopRecording)
             }
             .padding(.top, 12)
@@ -532,6 +547,10 @@ private struct FrontispieceContent: View {
         controller.stopRecording()
     }
 
+    private func cancelRecording() {
+        controller.cancelRecording()
+    }
+
     private var amberGradient: LinearGradient {
         LinearGradient(
             stops: [
@@ -584,6 +603,38 @@ private struct StopButton: View {
         .focusEffectDisabled()
         .onHover { hovered = $0 }
         .help("Stop recording (⌘.)")
+        .animation(.easeOut(duration: 0.12), value: hovered)
+    }
+}
+
+// MARK: - Cancel button
+
+/// Discard affordance — parity with the legacy `inlineRecordingUI` X.
+/// Reads as a secondary action (text-only, fainter ink) so it never
+/// competes with STOP for the primary slot, but stays close enough to
+/// be discovered without hunting.
+private struct CancelButton: View {
+    let action: () -> Void
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Text("CANCEL")
+                .font(RecordingCompanionFonts.mono(size: 10))
+                .tracking(2.8)
+                .foregroundColor(
+                    hovered
+                        ? RecordingCompanionTokens.ink
+                        : RecordingCompanionTokens.inkFainter
+                )
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .onHover { hovered = $0 }
+        .help("Discard recording")
         .animation(.easeOut(duration: 0.12), value: hovered)
     }
 }
