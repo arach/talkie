@@ -140,11 +140,16 @@ private struct LiquidGlassTray: View {
             }
 
             // Tray center: on home the standalone MicFAB (rendered by
-            // AppShellNext) is always visible — leave a 48pt gap so it
-            // shows through. On sub-surfaces the persistent FAB is
-            // gone, so the tray itself carries the FAB inline.
+            // AppShellNext) is always visible — leave a 48pt × 48pt
+            // gap so it shows through AND the capsule keeps the same
+            // 68pt height (HStack's max-child-height determines the
+            // capsule shape). Without 48pt height here the capsule
+            // would shrink to 56pt and the slot row would sit 6pt
+            // below the standalone FAB's center.
+            // On sub-surfaces the persistent FAB is gone, so the tray
+            // itself carries the FAB inline.
             if router.surface == .home {
-                Color.clear.frame(width: 48, height: 36)
+                Color.clear.frame(width: 48, height: 48)
             } else {
                 MicFAB()
             }
