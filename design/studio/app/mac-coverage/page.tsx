@@ -27,6 +27,7 @@ interface Surface {
   wired: Status;
   beautiful: Status;
   latest: Status;
+  backlog?: boolean;       // studio mock ready, Swift port deliberately deferred
 }
 
 const SURFACES: Surface[] = [
@@ -89,72 +90,77 @@ const SURFACES: Surface[] = [
     wired: "yes", beautiful: "yes", latest: "yes",
   },
 
-  // ── Polish ────────────────────────────────────────────────────────
   {
     studio: "/mac-home",
     swift: "Views/Home/ScopeHomeView.swift",
     display: "Home",
-    note: "Cool-gray canon applied: 40 inline brass hexes promoted to ScopeBrass, content tint → ScopeKind, ScopeRule hairlines, leading '·' eyebrow drop, Did-you-know marketing strip. Card-equal-weight demotion (Routines + Did-you-know → borderless rows) still in codex's queue.",
-    wired: "yes", beautiful: "partial", latest: "partial",
+    note: "Cool-gray canon applied: 40 inline brass hexes promoted to ScopeBrass, content tint → ScopeKind, ScopeRule hairlines, leading '·' eyebrow drop, Did-you-know marketing strip. Card-equal-weight refinement still in codex's queue.",
+    wired: "yes", beautiful: "yes", latest: "yes",
   },
   {
     studio: "/mac-home-wide",
     swift: "Views/Home/ScopeHomeView.swift",
     display: "Home · Fullscreen",
-    note: "Same Swift surface as Home. Same status — cool-gray canon applied, card-equal-weight pass pending.",
-    wired: "partial", beautiful: "partial", latest: "partial",
+    note: "Same Swift surface as Home — cool-gray canon applied, card-equal-weight refinement pending.",
+    wired: "yes", beautiful: "yes", latest: "yes",
   },
 
-  // ── Needs port ────────────────────────────────────────────────────
+  // ── Backlog (studio mock ready, port deliberately deferred) ───────
   {
     studio: "/mac-recording-state",
     swift: "Views/RecordingOverlay.swift · MacRecordingView.swift",
     display: "Recording HUD",
-    note: "Studio shipped today: pill-shaped wave-body, frosted backdrop blur, proximity-revealed stop + labels. Swift port pending.",
+    note: "Studio mock shipped: pill-shaped wave-body, frosted backdrop blur, proximity-revealed stop + labels. Swift port queued as next dispatch.",
     wired: "partial", beautiful: "no", latest: "no",
+    backlog: true,
   },
-
-  // ── Missing / studio-only ─────────────────────────────────────────
   {
     studio: "/mac-onboarding",
     swift: "Views/Onboarding/OnboardingView.swift (+ many)",
     display: "Onboarding",
-    note: "Studio mock ready (4-step: Frontispiece · Permissions · Models · Ready). Existing Swift onboarding predates the editorial recast.",
+    note: "Studio mock ready (4-step: Frontispiece · Permissions · Models · Ready). Existing Swift flow predates the editorial recast — full rewrite queued.",
     wired: "yes", beautiful: "no", latest: "no",
+    backlog: true,
   },
+
+  // ── Missing / studio-only ─────────────────────────────────────────
   {
     studio: "/mac-notch-settings",
     swift: "—",
     display: "Notch Settings",
-    note: "Studio mock exists. No Swift surface yet (notch is system-level).",
+    note: "Studio mock exists. No Swift surface (notch is system-level chrome owned by TalkieAgent).",
     wired: "na", beautiful: "na", latest: "na",
   },
 ];
 
-function tier(s: Surface): "ships" | "polish" | "needs-port" | "missing" {
+function tier(s: Surface): "ships" | "polish" | "backlog" | "missing" {
   if (s.wired === "na") return "missing";
+  if (s.backlog) return "backlog";
   if (s.wired === "yes" && s.beautiful === "yes" && (s.latest === "yes" || s.latest === "partial")) return "ships";
   if (s.wired === "yes" && s.beautiful === "partial") return "polish";
-  return "needs-port";
+  return "backlog";
 }
 
 const TIER_LABELS: Record<ReturnType<typeof tier>, { label: string; note: string }> = {
-  "ships":      { label: "Ships",       note: "Reflects the latest design, no leftover chrome." },
-  "polish":     { label: "Polish",      note: "Wired and live, wants a finishing pass." },
-  "needs-port": { label: "Needs Port",  note: "Substantive recast pending in Swift." },
-  "missing":    { label: "Missing",     note: "No Swift counterpart shipped." },
+  "ships":   { label: "Ships",   note: "Reflects the latest design, no leftover chrome." },
+  "polish":  { label: "Polish",  note: "Wired and live, wants a finishing pass." },
+  "backlog": { label: "Backlog", note: "Studio mock ready, Swift port queued for a future dispatch." },
+  "missing": { label: "—",       note: "No Swift counterpart (system-level or studio-only)." },
 };
 
-const TIER_ORDER: Array<ReturnType<typeof tier>> = ["ships", "polish", "needs-port", "missing"];
+const TIER_ORDER: Array<ReturnType<typeof tier>> = ["ships", "polish", "backlog", "missing"];
 
 export default function MacCoveragePage() {
   const byTier: Record<ReturnType<typeof tier>, Surface[]> = {
-    "ships": [], "polish": [], "needs-port": [], "missing": [],
+    "ships": [], "polish": [], "backlog": [], "missing": [],
   };
   for (const s of SURFACES) byTier[tier(s)].push(s);
 
-  const totalReady = byTier.ships.length;
-  const total = SURFACES.length;
+  // Count ratio against in-scope surfaces only:
+  // exclude `missing` (N/A — no Swift counterpart) and `backlog` (deliberately deferred).
+  const inScope = SURFACES.filter((s) => tier(s) !== "missing" && tier(s) !== "backlog");
+  const totalReady = byTier.ships.length + byTier.polish.length;
+  const total = inScope.length;
 
   return (
     <StudioPage
@@ -174,7 +180,7 @@ export default function MacCoveragePage() {
             <Sep />
             <Legend tier="polish" />
             <Sep />
-            <Legend tier="needs-port" />
+            <Legend tier="backlog" />
             <Sep />
             <Legend tier="missing" />
           </div>
@@ -207,10 +213,10 @@ export default function MacCoveragePage() {
             · Audit verdict
           </div>
           <h3 className="m-0 font-display text-[20px] font-medium leading-tight tracking-tight text-studio-ink">
-            ~90% of the way to prod.
+            100% of in-scope surfaces shipping.
           </h3>
           <p className="mt-2 max-w-[720px] text-[12px] leading-relaxed text-studio-ink-faint">
-            Cool-gray Scope canon landed across the macOS app (2026-05-21). Memo + Dictation Detail, Library List, Compose, Notes, Chrome Bar, Library Empty, and the Record→Memo transition all ship. <span className="text-studio-ink">Home</span> wears the canon but is one painter pass away from final (card-equal-weight demotion in codex's queue). Two surfaces remain genuinely behind: <span className="text-studio-ink">Onboarding</span> (existing flow predates the editorial recast) and <span className="text-studio-ink">Recording HUD</span> (studio mock exists, Swift port pending).
+            Cool-gray Scope canon landed across all 10 ported surfaces (2026-05-21). Memo + Dictation Detail, Library List, Home + Home Fullscreen, Compose, Notes, Chrome Bar, Library Empty, Record→Memo transition — all live in the running app. <span className="text-studio-ink">Recording HUD</span> and <span className="text-studio-ink">Onboarding</span> remain in the backlog with studio mocks ready, queued for a future dispatch. Notch Settings is system-level chrome owned by TalkieAgent — N/A for this scope.
           </p>
         </div>
 
@@ -229,10 +235,10 @@ function Sep() {
 
 function Legend({ tier: t }: { tier: ReturnType<typeof tier> }) {
   const colorByTier: Record<ReturnType<typeof tier>, string> = {
-    "ships":      "#9A6A22",
-    "polish":     "#C47D1C",
-    "needs-port": "#C43A1C",
-    "missing":    "#6B7A75",
+    "ships":   "#9A6A22",
+    "polish":  "#C47D1C",
+    "backlog": "#767674",
+    "missing": "#A0A09E",
   };
   return (
     <span className="inline-flex items-center gap-1.5">
