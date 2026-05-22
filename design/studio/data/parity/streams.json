@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-22T01:42:14.351Z",
+  "updatedAt": "2026-05-22T02:02:16Z",
   "streams": [
     {
       "key": "C1",
@@ -754,8 +754,8 @@
       "key": "C2",
       "title": "Capture",
       "scope": "CaptureDetailNext, CameraCaptureNext, WebCaptureBrowserNext, ScanPreviewOverlay, CaptureAICommandsSheet equivalent",
-      "owner": null,
-      "status": "done",
+      "owner": "talkie-codex-c2",
+      "status": "blocked",
       "lockedAt": "2026-05-21T22:42:28.485Z",
       "notes": [
         {
@@ -2301,7 +2301,7 @@
       "scope": "SettingsNext, OnboardingNext, SignInNext, AICredentialsNext, WorkspaceSwitcherNext",
       "owner": null,
       "status": "done",
-      "lockedAt": "2026-05-22T00:35:32.189Z",
+      "lockedAt": "2026-05-21T19:42:13.352Z",
       "notes": [
         {
           "ts": "2026-05-21T18:03:12.723Z",
@@ -2904,7 +2904,7 @@
       "scope": "ConnectionCenterNext, BridgeDetailNext, DeckMirrorNext, NetworkStatusBanner, MacConnectionChip, MacCoachCard",
       "owner": null,
       "status": "done",
-      "lockedAt": "2026-05-22T00:34:30.057Z",
+      "lockedAt": "2026-05-21T23:41:18.588Z",
       "notes": [
         {
           "ts": "2026-05-21T18:00:26.165Z",
