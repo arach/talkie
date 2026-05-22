@@ -229,11 +229,13 @@ private struct EdgeSwipeBack: View {
     /// intentional without being a long stroke.
     private let commitThreshold: CGFloat = 80
 
-    /// Width of the invisible hit zone. iOS-native edge gestures use
-    /// roughly the leftmost 20pt — match that so a finger landing at
-    /// the screen edge captures, but a finger landing 30pt in does
-    /// not, leaving room for normal in-surface drag interactions.
-    private let edgeWidth: CGFloat = 20
+    /// Width of the invisible hit zone. Was 20pt (matching iOS-native
+    /// edge gesture width) but that overlapped left-anchored UI like
+    /// the 28pt Settings rail — taps in the rail's leftmost 20pt got
+    /// absorbed by EdgeSwipeBack instead of reaching the rail chip.
+    /// 8pt is enough to catch genuine edge swipes (which start at
+    /// x < 5pt) without interfering with column-style UI.
+    private let edgeWidth: CGFloat = 8
 
     var body: some View {
         HStack(spacing: 0) {
