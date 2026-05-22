@@ -1,0 +1,28 @@
+// Signing.xcconfig
+//
+// Base configuration referenced by every Talkie iOS target. The
+// previous file was missing on disk, so $(TALKIE_DEVELOPMENT_TEAM)
+// resolved to empty and Xcode dropped into interactive prompting for
+// every dependency framework when archiving.
+//
+// Set the team ID once here and every target inherits it through the
+// build configurations declared in project.pbxproj.
+
+TALKIE_DEVELOPMENT_TEAM = 2U83JFPW66
+
+// Bundle ID env-var defaults so Build / Archive can resolve them even
+// when the shell that launched Xcode didn't have these set. Override
+// at the shell or scheme level if you need to target a different
+// app record.
+TALKIE_IOS_APP_BUNDLE_ID = to.talkie.app
+TALKIE_IOS_SHARE_BUNDLE_ID = to.talkie.app.share
+TALKIE_WATCH_WIDGET_BUNDLE_ID = to.talkie.app.watchwidget
+
+// Code signing: SPM dependency frameworks (swift-atomics, swift-nio,
+// FluidAudio, etc) inherit project-level settings since they don't
+// reference this xcconfig. The main app + extension targets here use
+// Automatic signing with the team above; nested SPM frameworks get
+// embedded into the host app's signature via @executable_path/Frameworks
+// and don't need their own provisioning profiles.
+CODE_SIGN_STYLE = Automatic
+DEVELOPMENT_TEAM = 2U83JFPW66
