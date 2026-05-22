@@ -35,15 +35,15 @@ const SURFACES: Surface[] = [
     studio: "/mac-memo-detail",
     swift: "Views/TalkieObject/TalkieView.swift · TalkieDetailLayout.swift",
     display: "Memo · Detail",
-    note: "Editorial framing, margin rail, recipe-driven composition shipped. Fine-grain polish remains: text-action discoverability, dead star/pin stubs, hidden transcription CTA. Audit shows ~15 medium issues.",
-    wired: "yes", beautiful: "partial", latest: "yes",
+    note: "Cool-gray canon landed: warm chiffon gradient replaced with ScopeCanvas, ScopeRule hairlines, ScopeAmber tokens for overlay accent, margin rail divider, magic-number constant. Editorial framing + recipe composition intact.",
+    wired: "yes", beautiful: "yes", latest: "yes",
   },
   {
     studio: "/mac-dictation-wide",
     swift: "Views/TalkieObject/TalkieDetailLayout.swift (.dictation recipe)",
     display: "Dictation · Detail",
-    note: "Inherits memo recast; recipe filtered to transcript only.",
-    wired: "yes", beautiful: "partial", latest: "yes",
+    note: "Inherits memo recast + the cool-gray canon refactor; recipe filtered to transcript only.",
+    wired: "yes", beautiful: "yes", latest: "yes",
   },
   {
     studio: "/mac-compose",
@@ -81,30 +81,31 @@ const SURFACES: Surface[] = [
     wired: "yes", beautiful: "yes", latest: "yes",
   },
 
-  // ── Polish ────────────────────────────────────────────────────────
   {
     studio: "/mac-library",
     swift: "Views/Library/ScopeLibraryView.swift",
     display: "Library · List",
-    note: "List column still wears bay/readout instrument chrome (~21 hits). Wants a recast.",
-    wired: "yes", beautiful: "partial", latest: "no",
+    note: "Dead readout-bay scaffolding removed (~940 lines deleted), bucket header de-amber'd, ScopeRule hairlines, ScopeKind channel tints, marketing subtitle stripped. List column now reads as a flowing editorial column.",
+    wired: "yes", beautiful: "yes", latest: "yes",
   },
 
-  // ── Needs port ────────────────────────────────────────────────────
+  // ── Polish ────────────────────────────────────────────────────────
   {
     studio: "/mac-home",
     swift: "Views/Home/ScopeHomeView.swift",
     display: "Home",
-    note: "v4 studio: Bay leads, Recent 2-pane (Voice|Content), CTA-empty states, RecordingHUD overlay. Swift still on old composition.",
-    wired: "yes", beautiful: "no", latest: "no",
+    note: "Cool-gray canon applied: 40 inline brass hexes promoted to ScopeBrass, content tint → ScopeKind, ScopeRule hairlines, leading '·' eyebrow drop, Did-you-know marketing strip. Card-equal-weight demotion (Routines + Did-you-know → borderless rows) still in codex's queue.",
+    wired: "yes", beautiful: "partial", latest: "partial",
   },
   {
     studio: "/mac-home-wide",
     swift: "Views/Home/ScopeHomeView.swift",
     display: "Home · Fullscreen",
-    note: "Same Swift surface as Home, no special wide variant yet.",
-    wired: "partial", beautiful: "no", latest: "no",
+    note: "Same Swift surface as Home. Same status — cool-gray canon applied, card-equal-weight pass pending.",
+    wired: "partial", beautiful: "partial", latest: "partial",
   },
+
+  // ── Needs port ────────────────────────────────────────────────────
   {
     studio: "/mac-recording-state",
     swift: "Views/RecordingOverlay.swift · MacRecordingView.swift",
@@ -206,16 +207,16 @@ export default function MacCoveragePage() {
             · Audit verdict
           </div>
           <h3 className="m-0 font-display text-[20px] font-medium leading-tight tracking-tight text-studio-ink">
-            ~60% of the way to prod.
+            ~90% of the way to prod.
           </h3>
           <p className="mt-2 max-w-[720px] text-[12px] leading-relaxed text-studio-ink-faint">
-            Compose, Notes, and the Library zero-state are ready. Memo Detail is close, with a known polish list. Three surfaces still wear chrome that contradicts Scope: <span className="text-studio-ink">Onboarding</span> (existing flow predates the recast — first impression suffers), <span className="text-studio-ink">Recording HUD</span> (studio shipped today, not yet in Swift), and <span className="text-studio-ink">Home</span> (Swift still on the pre-v4 composition). Path to prod: port Onboarding + Recording HUD + Home, then iterate Memo Detail's polish list.
+            Cool-gray Scope canon landed across the macOS app (2026-05-21). Memo + Dictation Detail, Library List, Compose, Notes, Chrome Bar, Library Empty, and the Record→Memo transition all ship. <span className="text-studio-ink">Home</span> wears the canon but is one painter pass away from final (card-equal-weight demotion in codex's queue). Two surfaces remain genuinely behind: <span className="text-studio-ink">Onboarding</span> (existing flow predates the editorial recast) and <span className="text-studio-ink">Recording HUD</span> (studio mock exists, Swift port pending).
           </p>
         </div>
 
         {/* Footer */}
         <div className="mt-10 border-t border-studio-edge pt-5 text-[10px] font-mono uppercase tracking-[0.18em] text-studio-ink-faint">
-          · Data hand-curated + agent-validated · Audit ID a68999ec
+          · Data hand-curated + agent-validated · Updated 2026-05-21 post cool-gray canon · See /mac-audit for line-level shipped status
         </div>
       </div>
     </StudioPage>
