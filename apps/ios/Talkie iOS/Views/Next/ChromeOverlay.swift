@@ -33,7 +33,7 @@ struct ChromeOverlay: View {
         ZStack {
             // Top corners — chrome destinations.
             CornerSlot(
-                position: .topLeading,
+                zone: .topLeading,
                 glyph: AnyView(Image(systemName: "chevron.down").font(.system(size: 15, weight: .medium))),
                 label: "Done"
             ) {
@@ -44,7 +44,7 @@ struct ChromeOverlay: View {
             }
 
             CornerSlot(
-                position: .topTrailing,
+                zone: .topTrailing,
                 glyph: AnyView(Image(systemName: "gearshape").font(.system(size: 15, weight: .regular))),
                 label: "Settings"
             ) {
@@ -53,7 +53,7 @@ struct ChromeOverlay: View {
 
             if showCreateTray {
                 CornerSlot(
-                    position: .bottomTrailing,
+                    zone: .bottomTrailing,
                     glyph: AnyView(Image(systemName: "keyboard").font(.system(size: 13, weight: .regular))),
                     label: "Keyboard"
                 ) {
@@ -66,39 +66,48 @@ struct ChromeOverlay: View {
     }
 }
 
-/// One of the four corner pill buttons. Position is a SwiftUI
-/// Alignment so we use the full screen to anchor each corner;
-/// safe-area-respecting padding handles the inset.
+/// One of the four corner pill buttons. Anchored via ScreenZone so
+/// it shares placement vocabulary with screen-native UI; safe-area-
+/// respecting padding handles the inset.
 private struct CornerSlot: View {
-    let position: Alignment
+    let zone: ScreenZone
     let glyph: AnyView
     let label: String
     let action: () -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
 
+    private var isTop: Bool {
+        zone == .topLeading || zone == .topTrailing
+    }
+
+    private var isBottom: Bool {
+        zone == .bottomLeading || zone == .bottomTrailing
+    }
+
     var body: some View {
         let hairline = theme.currentTheme.chrome.hairlineWidth
-        Button(action: action) {
-            ZStack {
-                Circle().fill(theme.colors.cardBackground)
-                Circle().strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: hairline)
-                glyph.foregroundStyle(theme.colors.textSecondary)
+        InZone(zone) {
+            Button(action: action) {
+                ZStack {
+                    Circle().fill(theme.colors.cardBackground)
+                    Circle().strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: hairline)
+                    glyph.foregroundStyle(theme.colors.textSecondary)
+                }
+                .frame(width: 40, height: 40)
+                .shadow(color: .black.opacity(0.10), radius: 4, y: 2)
             }
-            .frame(width: 40, height: 40)
-            .shadow(color: .black.opacity(0.10), radius: 4, y: 2)
+            .buttonStyle(.plain)
+            .accessibilityLabel(label)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: position)
         .padding(.horizontal, 20)
-        .padding(.top, position.isTop ? 6 : 0)
+        .padding(.top, isTop ? 6 : 0)
         // Bottom corner slots sit 20pt above the edge so their 40pt
         // circles share a center-Y (~40pt) with the LiquidGlassTray
         // and the bottom-left VoicePivotButton. Top corners keep the
         // tighter 6pt inset since the top band has no tray to align
         // against.
-        .padding(.bottom, position.isBottom ? 20 : 0)
+        .padding(.bottom, isBottom ? 20 : 0)
     }
 }
 

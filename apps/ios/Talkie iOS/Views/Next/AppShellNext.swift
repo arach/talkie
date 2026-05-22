@@ -416,6 +416,18 @@ final class ShellChrome: ObservableObject {
 
     @Published private(set) var state: State = .resting
 
+    /// Which screen corners chrome currently owns. Screen-native UI
+    /// in these zones should yield (fade out) so the complication
+    /// can render without collision. Derived from `state`; reading
+    /// it picks up changes through the @Published state observation.
+    var occupiedZones: Set<ScreenZone> {
+        switch state {
+        case .resting: return []
+        case .expanded, .listening:
+            return [.topLeading, .topTrailing, .bottomTrailing]
+        }
+    }
+
     var voiceCommandHandler: ((String) -> Void)?
 
     private let commandRecorder = AudioRecorderManager()

@@ -810,6 +810,7 @@ struct VoiceMemoDetailNext: View {
                 .foregroundStyle(theme.colors.textSecondary)
             }
             .buttonStyle(.plain)
+            .yieldsToChromeZone(.topLeading)
 
             Spacer()
 
@@ -850,6 +851,7 @@ struct VoiceMemoDetailNext: View {
                     .accessibilityLabel("More options")
             }
             .buttonStyle(.plain)
+            .yieldsToChromeZone(.topTrailing)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
