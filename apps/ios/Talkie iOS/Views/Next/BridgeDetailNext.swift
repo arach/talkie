@@ -52,7 +52,8 @@ struct BridgeDetailNext: View {
                                 .transition(.opacity)
                         }
 
-                        if let errorMessage = bridgeManager.errorMessage,
+                        if bridgeNetworkStatus == .ok,
+                           let errorMessage = bridgeManager.errorMessage,
                            bridgeManager.status == .error {
                             ErrorBanner(message: errorMessage) { reconnect() }
                         }
@@ -454,6 +455,11 @@ struct BridgeDetailNext: View {
            bridgeManager.status != .connected,
            reachability.status == .offline {
             return .offline
+        }
+
+        if bridgeManager.status == .error,
+           let message = bridgeManager.errorMessage {
+            return .requestFailed(message: message)
         }
 
         return .ok
