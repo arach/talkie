@@ -3,21 +3,55 @@
 import { useState } from "react";
 import { SCHEMES } from "@/lib/schemes";
 import { Bay, type BayTreatments } from "./Bay";
+import { RecordingHUD } from "./RecordingHUD";
+
+// Hover treatment progression. Default state keeps the bay quiet —
+// stat tiles + sparkline + faint graticule. On hover, the bay "wakes"
+// and reveals the deeper material study: heatmap (last 7d), corner
+// brackets (registration marks), and an inner bezel (subtle material
+// highlight). Timeline stays off because it changes layout height;
+// the rest are pure overlays.
+const BAY_REST: BayTreatments = {
+  sparkline: true,
+  compact: true,
+  heatmap: false,
+  timeline: false,
+  brackets: false,
+  bezel: false,
+  graticule: true,
+};
+const BAY_HOVER: BayTreatments = {
+  ...BAY_REST,
+  heatmap: true,
+  brackets: true,
+  bezel: true,
+};
 
 /**
  * Mac Home — the full macOS Home screen composition.
  *
- * v2: tightened identity on each section.
+ * v4: Bay leads. Hero + Capture Modes dropped.
  *
- *   • Top band         (kept)
- *   • Hero             (subhead added — contextual cadence)
- *   • Capture Modes    (per-card identity — distinct amber treatment + primary verb)
- *   • Agent bay        (kept) — the polished instrument bay
- *   • Routines strip   (RESTORED) — Workflows runs · Agent Console
- *   • Activity table   (row type differentiation — D/M/S badges + per-type meta)
- *   • Discovery row    (RESTORED + textured) — Today / Shortcuts / Trending
- *   • System status    (RESTORED — now a dark recessed rail, mirrors bay)
- *   • Ownership strip  (kept)
+ * The capture-mode cards were replay-redundant with the Recent two-pane
+ * below them (the "Last · 9:04 PM" line on each Mode card just restated
+ * the top row of the corresponding sub-band). Folded together: Recent
+ * sub-bands now carry the start-it CTA inline as their empty state, so
+ * the "begin a memo" affordance lives next to the "your recent memos"
+ * surface — one section, two states.
+ *
+ * Order now:
+ *
+ *   • Top band         — date strip
+ *   • Agent bay        — the instrument-stats moment, leads the page
+ *   • Recent · 2-pane  — Voice (Memos + Dictations) | Content (Captures + Notes)
+ *   • Routines strip   — Workflows · Console
+ *   • Discovery row    — Today · Shortcuts · Trending
+ *   • System status    — instrument rail; matches bay scheme
+ *   • Ownership strip
+ *
+ * Empty states in Recent sub-bands render a CTA row in the same row
+ * anatomy as a real item (glyph + label + kbd hint) so the section
+ * geometry doesn't shift between "you have memos" and "start a memo."
  *
  * Renders on the cream studio canvas, no SchemeCard wrapper — the
  * bay + system rail embed the AMBER scheme inline so the rest of the
@@ -32,7 +66,10 @@ import { Bay, type BayTreatments } from "./Bay";
 // available when the canonical pick feels off by one notch. AMBER is
 // kept as a reference anchor for the original dark identity.
 const BAY_GROUPS: { label: string; keys: string[] }[] = [
-  { label: "Modern",    keys: ["pearl", "porcelain", "aluminum"] },
+  // FROST sits at the cool extreme — even lighter than PEARL, almost
+  // disappears into the cream canvas. Use when you want the bay to
+  // recede further than the canonical PEARL.
+  { label: "Modern",    keys: ["pearl", "frost", "porcelain", "aluminum"] },
   { label: "Scope",     keys: ["chiffon", "vellum", "paper"] },
   { label: "Reference", keys: ["amber"] },
 ];
@@ -46,31 +83,35 @@ const CANONICAL: Record<string, string> = {
   Scope:  "chiffon",
 };
 
-const BAY_TREATMENTS: BayTreatments = {
-  sparkline: true,
-  compact: true,
-  heatmap: false,
-  timeline: false,
-  brackets: false,
-  bezel: false,
-  graticule: true,
-};
+// Real-content fixtures — sourced from a live Home snapshot 2026-05-20.
+// Iterating in studio against the actual shipped state (rather than
+// invented mocks) lets us see how the composition rests under real
+// dictation lengths, screenshot dimensions, and stretches where one
+// type runs empty. Update freely as iteration continues.
 
-type CaptureKind = "dictation" | "memo" | "screenshot";
-
-const CAPTURES: { kind: CaptureKind; src: string; line: string; meta: string; when: string }[] = [
-  { kind: "dictation", src: "iTerm2", line: "implement all of them and then give us toggles in the same screen using the designer shortcut and to", meta: "186 words", when: "9:34 AM" },
-  { kind: "dictation", src: "iTerm2", line: "Let's come up with a few treatments that make this look and feel better or at least like make best u", meta: "142 words", when: "9:28 AM" },
-  { kind: "memo",      src: "Voice",  line: "Alright, you gotta be able to see the scroll performance through the instrument lens. If you need to", meta: "0:42",     when: "9:04 PM" },
-  { kind: "dictation", src: "iTerm2", line: "Alright, so it's much nicer visually than it was. I think in general the rule of thumb is like thinn", meta: "98 words",  when: "8:37 PM" },
-  { kind: "screenshot",src: "Hyper+S",line: "Bay variant comparison — 9 schemes in studio. Captured at 1280×757.",                                  meta: "1280×757", when: "8:26 PM" },
-  { kind: "dictation", src: "iTerm2", line: "Yeah, that sounds good. Can you chair pick that? The bridge off stuff seems pretty good. I think I t", meta: "73 words",  when: "8:09 PM" },
+const RECENT_MEMOS = [
+  { line: "Ooh, I love the way this recording sheet uh looks on top of our screen. So elegant.", meta: "0:18", when: "5:14 PM" },
 ];
 
+const RECENT_DICTATIONS = [
+  { line: "I don't know. So what I had in mind with the way we could break things down or up actually is to take a lot more kind of visual elegance and content from the materials in Learn, which I re…", meta: "90 words", when: "7:39 PM" },
+  { line: "The app looks great and yeah basically the app looks great.", meta: "11 words", when: "7:33 PM" },
+  { line: "Might be a good moment to make sure that we're committing often and that we're able to push and start building towards a pull request.", meta: "25 words", when: "7:05 PM" },
+];
+
+const RECENT_CAPTURES = [
+  { line: "Built-in Display", meta: "2560×1664", when: "May 11" },
+  { line: "crop", meta: "1843×433", when: "Apr 23" },
+];
+
+// Notes intentionally empty — the live Home snapshot showed none this
+// week. Demonstrates how the CTA-empty pattern reads in practice.
+const RECENT_NOTES: { title: string; body: string; attachments: number; when: string }[] = [];
+
 const WORKFLOW_RUNS = [
-  { name: "Summarize standup", at: "9:31 AM", status: "ok" as const },
-  { name: "Dictation → Linear", at: "9:14 AM", status: "ok" as const },
-  { name: "Compose draft",      at: "Yesterday", status: "stale" as const },
+  { name: "Hey Talkie",  at: "Dec 26", status: "ok" as const },
+  { name: "Transcribe",  at: "Dec 26", status: "ok" as const },
+  { name: "Hey Talkie",  at: "Dec 26", status: "ok" as const },
 ];
 
 const SHORTCUTS = [
@@ -87,189 +128,157 @@ const TRENDING_THEMES = [
   { tag: "Design notes",   count: 2, max: 8 },
 ];
 
-// 24h event ticks for the Today widget — hour positions on the day
-// where something is scheduled.
-const TODAY_EVENTS = [
-  { hour: 9.5,  label: "09:30 · Design review" },
-  { hour: 11,   label: "11:00 · Standup" },
-  { hour: 14,   label: "14:00 · Bay polish merge" },
+// Learn hooks for the Discovery row's Learn widget — small "did you
+// know" snippets that surface Talkie features. Replaces the Today
+// calendar (felt informational rather than delightful). Material vocab
+// mirrors the RecapCard pattern in ScopeLearnScreen.swift.
+const LEARN_HOOKS = [
+  {
+    eyebrow: "Voice edit",
+    hook: "Talk back to a memo.",
+    detail: "Hit ⌃⇧⌘ E during playback to dictate an edit in place.",
+    action: "Try it",
+  },
+  {
+    eyebrow: "Smart actions",
+    hook: "Fix grammar with a chip.",
+    detail: "Compose has one-tap chips for grammar, concise, and tone.",
+    action: "See compose",
+  },
+  {
+    eyebrow: "Tray",
+    hook: "Hyper+S, anywhere.",
+    detail: "Screenshots drain into your next memo unless you pin them.",
+    action: "How it works",
+  },
 ];
 
-export function MacHome() {
+/**
+ * MacHome accepts a `width` prop so the same composition can be stamped
+ * inside `<MacWindowFrame>` at multiple widths (820 / 1180 / 1440).
+ *
+ * The outer card chrome (shadow, border, background) used to live here
+ * but moved to MacWindowFrame so all mac studies share the same window
+ * presentation. When MacHome is used standalone (no frame), the caller
+ * should wrap it in its own frame — see app/mac-home/page.tsx.
+ */
+export function MacHome({ width = 1100 }: { width?: number } = {}) {
   const [bayKey, setBayKey] = useState<string>("chiffon");
   const bayScheme = BAY_SCHEMES.find((s) => s.key === bayKey) ?? BAY_SCHEMES[0];
 
+  // Recording state — drives the RecordingHUD overlay (proximity-aware
+  // wave that blooms ingredients as cursor approaches). Toggle lives
+  // in TopBand. `hudScheme` lets us audition FROST vs PEARL as the
+  // HUD's surface material.
+  const [recording, setRecording] = useState(false);
+  const [hudScheme, setHudScheme] = useState<string>("frost");
+
+  // Inner horizontal padding scales subtly with width — 24px at the
+  // compact 820 size (so the 3-col Capture / Discovery rows still
+  // breathe), 32px at standard, 40px at wide.
+  const padX = width < 900 ? 24 : width >= 1300 ? 40 : 32;
+
   return (
-    <div
-      className="mx-auto rounded-md"
-      style={{
-        width: "1100px",
-        background: "#FBFBFA",
-        boxShadow: "0 8px 30px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04)",
-        border: "0.5px solid #E0DCD3",
-      }}
-    >
-      <TopBand />
-      <div className="px-8 pt-4 pb-8">
-        <div className="flex flex-col gap-9">
-          <Hero />
-          <CaptureModes />
+    <div style={{ width, position: "relative" }}>
+      <TopBand
+        recording={recording}
+        onToggleRecord={() => setRecording((v) => !v)}
+        hudScheme={hudScheme}
+        onPickHudScheme={setHudScheme}
+      />
+      <div style={{ paddingLeft: padX, paddingRight: padX, paddingTop: 20, paddingBottom: 32 }}>
+        <div
+          className="flex flex-col gap-9 transition-opacity duration-500"
+          style={{ opacity: recording ? 0.55 : 1 }}
+        >
           <BayBlock scheme={bayScheme} bayKey={bayKey} onPick={setBayKey} />
+          <RecentTwoPane />
           <RoutinesStrip />
-          <ActivitySignalTable />
           <DiscoveryRow />
-          <SystemStatusRail scheme={bayScheme} />
-          <OwnershipStrip />
         </div>
       </div>
+      {recording ? <RecordingHUD schemeKey={hudScheme} /> : null}
     </div>
   );
 }
 
 // ────────────────────────────────────────────────────────────────────
-// Top band — universal "Today" identity rail with chrome trailing.
+// Top band — universal "Today" identity rail. Also carries the record
+// toggle + HUD scheme picker so the recording-state mock can be driven
+// from the page without extra studio chrome.
 
-function TopBand() {
+function TopBand({
+  recording,
+  onToggleRecord,
+  hudScheme,
+  onPickHudScheme,
+}: {
+  recording: boolean;
+  onToggleRecord: () => void;
+  hudScheme: string;
+  onPickHudScheme: (k: string) => void;
+}) {
   return (
     <div className="flex items-center gap-3 border-b border-studio-edge px-8 py-3">
       <div className="font-display text-[15px] font-medium tracking-tight text-studio-ink">
         Today
       </div>
-      <div className="ml-auto text-[9px] font-mono uppercase tracking-[0.18em] text-studio-ink-faint">
-        1K WORDS · 2-DAY STREAK
+      <div className="ml-auto flex items-center gap-4">
+        {recording ? (
+          <div className="flex items-center gap-2">
+            <span className="text-[8px] font-mono uppercase tracking-[0.22em] text-studio-ink-faint">
+              HUD
+            </span>
+            {["frost", "pearl"].map((k) => {
+              const s = SCHEMES.find((x) => x.key === k)!;
+              const active = hudScheme === k;
+              return (
+                <button
+                  key={k}
+                  onClick={() => onPickHudScheme(k)}
+                  className="flex items-center gap-1.5 rounded-[3px] border px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] transition-colors"
+                  style={{
+                    borderColor: active ? "#232423" : "#DEDEDD",
+                    color: active ? "#232423" : "#76767A",
+                    background: active ? "#ECECEB" : "transparent",
+                  }}
+                >
+                  <span
+                    aria-hidden
+                    className="h-2 w-2 rounded-full"
+                    style={{ background: s.swatch }}
+                  />
+                  {s.name}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-studio-ink-faint">
+            1K WORDS · 2-DAY STREAK
+          </div>
+        )}
+        <button
+          onClick={onToggleRecord}
+          className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-semibold uppercase tracking-eyebrow transition-colors"
+          style={{
+            borderColor: recording ? "#C43A1C" : "#DEDEDD",
+            color: recording ? "#C43A1C" : "#232423",
+            background: recording ? "rgba(196,58,28,0.06)" : "transparent",
+          }}
+        >
+          <span
+            aria-hidden
+            className="inline-block h-1.5 w-1.5 rounded-full"
+            style={{
+              background: recording ? "#C43A1C" : "#9A6A22",
+              boxShadow: recording ? "0 0 4px rgba(196,58,28,0.6)" : "none",
+            }}
+          />
+          {recording ? "Stop" : "Start memo"}
+        </button>
       </div>
     </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────────
-// Hero — editorial count + contextual cadence subhead.
-
-function Hero() {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <h1 className="m-0 font-display text-[44px] font-medium leading-none tracking-tight text-studio-ink">
-        2 captures
-      </h1>
-      <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-studio-ink-faint">
-        Most active <span className="text-studio-ink">09–10</span> · 4 from iTerm2
-      </div>
-    </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────────
-// Capture modes — per-card identity. Each card gets a distinct amber
-// glyph (dot · ring · crosshair) and a primary-verb action label. The
-// amber-family stays consistent (no rainbow accents); each card varies
-// in *how* the amber lives on the surface.
-
-function CaptureModes() {
-  return (
-    <SectionBlock eyebrow="Capture modes">
-      <div className="grid grid-cols-3 gap-4">
-        <CaptureCard
-          glyph={<DotGlyph />}
-          eyebrow="Memo"
-          channel="CH-01"
-          state="Last · 9:04 PM"
-          action="START RECORDING"
-          hint="·"
-        />
-        <CaptureCard
-          glyph={<RingGlyph />}
-          eyebrow="Dictation"
-          channel="CH-02"
-          state="5 today · last 9:34 AM"
-          action="DICTATE"
-          hint="⌃⇧⌘ D"
-        />
-        <CaptureCard
-          glyph={<CrosshairGlyph />}
-          eyebrow="Capture"
-          channel="CH-03"
-          state="1 today · last 8:26 PM"
-          action="CAPTURE"
-          hint="⌃⇧⌘ S"
-        />
-      </div>
-    </SectionBlock>
-  );
-}
-
-function DotGlyph() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden>
-      <circle cx="11" cy="11" r="4.5" fill="#E89A3C" />
-      <circle cx="11" cy="11" r="9" fill="none" stroke="#E89A3C" strokeOpacity="0.18" strokeWidth="1" />
-    </svg>
-  );
-}
-
-function RingGlyph() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden>
-      <circle cx="11" cy="11" r="7" fill="none" stroke="#E89A3C" strokeWidth="1.5" />
-      <circle cx="11" cy="11" r="1.8" fill="#E89A3C" />
-    </svg>
-  );
-}
-
-function CrosshairGlyph() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden>
-      <path d="M 2 4 L 2 2 L 4 2" fill="none" stroke="#E89A3C" strokeWidth="1.2" />
-      <path d="M 18 2 L 20 2 L 20 4" fill="none" stroke="#E89A3C" strokeWidth="1.2" />
-      <path d="M 2 18 L 2 20 L 4 20" fill="none" stroke="#E89A3C" strokeWidth="1.2" />
-      <path d="M 18 20 L 20 20 L 20 18" fill="none" stroke="#E89A3C" strokeWidth="1.2" />
-      <circle cx="11" cy="11" r="2.5" fill="#E89A3C" />
-    </svg>
-  );
-}
-
-function CaptureCard({
-  glyph,
-  eyebrow,
-  channel,
-  state,
-  action,
-  hint,
-}: {
-  glyph: React.ReactNode;
-  eyebrow: string;
-  channel: string;
-  state: string;
-  action: string;
-  hint: string;
-}) {
-  return (
-    <button className="group flex flex-col rounded-md border border-studio-edge bg-white/40 text-left transition-colors hover:border-studio-ink">
-      {/* Identity row */}
-      <div className="flex items-center gap-3 px-4 pt-3.5 pb-2.5">
-        <span>{glyph}</span>
-        <span className="text-[10px] font-semibold uppercase tracking-eyebrow text-studio-ink">
-          {eyebrow}
-        </span>
-        <span className="ml-auto text-[9px] font-mono uppercase tracking-[0.20em] text-studio-ink-faint">
-          {channel}
-        </span>
-      </div>
-      {/* State row — single factual line */}
-      <div className="border-t border-studio-edge/70 px-4 py-2">
-        <div className="text-[10px] font-mono uppercase tracking-[0.16em] text-studio-ink-faint">
-          {state}
-        </div>
-      </div>
-      {/* Action row */}
-      <div className="flex items-center gap-3 border-t border-studio-edge/70 px-4 py-2.5">
-        <div className="text-[9px] font-mono uppercase tracking-[0.20em] text-[#9A6A22] group-hover:text-[#7A521A] transition-colors">
-          {action} →
-        </div>
-        <div className="ml-auto font-mono text-[10px] text-studio-ink-faint">
-          {hint}
-        </div>
-      </div>
-    </button>
   );
 }
 
@@ -287,6 +296,8 @@ function BayBlock({
   bayKey: string;
   onPick: (key: string) => void;
 }) {
+  const [hovered, setHovered] = useState(false);
+  const treatments = hovered ? BAY_HOVER : BAY_REST;
   return (
     <SectionBlock
       eyebrow="Agent"
@@ -308,9 +319,9 @@ function BayBlock({
                     title={canonical ? `${group.label} canonical` : undefined}
                     className="relative flex items-center gap-1.5 rounded-[3px] border px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] transition-colors"
                     style={{
-                      borderColor: active ? "#2A2620" : "#E0DCD3",
-                      color: active ? "#2A2620" : "#7A746C",
-                      background: active ? "#F2F2F1" : "transparent",
+                      borderColor: active ? "#232423" : "#DEDEDD",
+                      color: active ? "#232423" : "#76767A",
+                      background: active ? "#ECECEB" : "transparent",
                     }}
                   >
                     <span
@@ -324,8 +335,8 @@ function BayBlock({
                         aria-hidden
                         className="absolute -top-1 -right-1 h-1.5 w-1.5 rounded-full"
                         style={{
-                          background: "#2A2620",
-                          boxShadow: "0 0 0 1.5px #FBFBFA",
+                          background: "#232423",
+                          boxShadow: "0 0 0 1.5px #F8F8F7",
                         }}
                       />
                     ) : null}
@@ -336,7 +347,7 @@ function BayBlock({
                 <span
                   aria-hidden
                   className="ml-1 h-3 w-px"
-                  style={{ background: "#E0DCD3" }}
+                  style={{ background: "#DEDEDD" }}
                 />
               ) : null}
             </div>
@@ -344,8 +355,13 @@ function BayBlock({
         </div>
       }
     >
-      <div style={scheme.vars as React.CSSProperties}>
-        <Bay treatments={BAY_TREATMENTS} />
+      <div
+        style={scheme.vars as React.CSSProperties}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        className="transition-[filter] duration-150"
+      >
+        <Bay treatments={treatments} />
       </div>
     </SectionBlock>
   );
@@ -429,58 +445,271 @@ function Panel({
 }
 
 // ────────────────────────────────────────────────────────────────────
-// Activity — captures table with row-type differentiation.
+// Recent · two-pane — Voice (Memos + Dictations) | Content (Captures + Notes).
+//
+// Replaces the single mixed activity table. Each pane is a card with
+// two typed sub-bands separated by an interior hairline. Sub-bands
+// share row anatomy (glyph + line + meta + time) so the panes scan as
+// one consistent typography even though they cover four primitives.
+//
+// The pairing isn't arbitrary: Voice items recall by waveform/word
+// count (transient, time-stamped), Content items recall by visual or
+// excerpted thought (dimensions, title, attachments). Memos +
+// Dictations both surface a transcript excerpt; Captures + Notes
+// both surface a caption/title with a meta column.
 
-const KIND_BADGE: Record<CaptureKind, { letter: string; label: string }> = {
-  dictation:  { letter: "D", label: "Dictation" },
-  memo:       { letter: "M", label: "Memo" },
-  screenshot: { letter: "S", label: "Screenshot" },
-};
+const VOICE_TINT = "#9A6A22";   // brass
+const CONTENT_TINT = "#767674"; // slate
 
-function ActivitySignalTable() {
+function RecentTwoPane() {
   return (
     <SectionBlock
-      eyebrow="Captures"
+      eyebrow="Recent"
       trailingLink={{ label: "LIBRARY", href: "#" }}
     >
-      <div className="rounded-md border border-studio-edge">
-        {CAPTURES.map((c, i) => {
-          const badge = KIND_BADGE[c.kind];
-          const tint =
-            c.kind === "dictation" ? "#E89A3C" :
-            c.kind === "memo"      ? "#9A6A22" :
-                                     "#6B7A75";
-          return (
-            <button
-              key={i}
-              className="group flex w-full items-start gap-4 border-b border-studio-edge/70 px-4 py-3 text-left last:border-b-0 hover:bg-[#F2F2F1]/50"
-            >
-              <div
-                className="flex h-7 w-7 items-center justify-center rounded border font-mono text-[9px] font-bold uppercase tracking-[0.06em]"
-                style={{
-                  borderColor: `${tint}55`,
-                  background: `${tint}10`,
-                  color: tint,
-                }}
-                title={badge.label}
-              >
-                {badge.letter}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-medium text-studio-ink">{c.src}</div>
-                <div className="text-[12px] text-studio-ink-faint line-clamp-1">{c.line}</div>
-              </div>
-              <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-studio-ink-faint pt-0.5 w-24 text-right">
-                {c.meta}
-              </div>
-              <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-studio-ink-faint pt-0.5 w-16 text-right">
-                {c.when}
-              </div>
-            </button>
-          );
-        })}
+      <div className="grid grid-cols-2 gap-4">
+        <RecentPane
+          label="Voice"
+          tint={VOICE_TINT}
+          sections={[
+            {
+              eyebrow: "Memos",
+              count: countLabel(RECENT_MEMOS.length, "today"),
+              libraryLink: { label: "ALL MEMOS", href: "#" },
+              rows: RECENT_MEMOS.map((m) => ({
+                glyph: "●",
+                line: m.line,
+                meta: m.meta,
+                when: m.when,
+              })),
+              emptyCTA: {
+                glyph: "●",
+                label: "Start a memo",
+                kbd: ["⌃", "⇧", "⌘", "M"],
+              },
+            },
+            {
+              eyebrow: "Dictations",
+              count: countLabel(RECENT_DICTATIONS.length, "today"),
+              libraryLink: { label: "ALL DICTATIONS", href: "#" },
+              rows: RECENT_DICTATIONS.map((d) => ({
+                glyph: "○",
+                line: d.line,
+                meta: d.meta,
+                when: d.when,
+              })),
+              emptyCTA: {
+                glyph: "○",
+                label: "Dictate",
+                kbd: ["⌃", "⇧", "⌘", "D"],
+              },
+            },
+          ]}
+        />
+        <RecentPane
+          label="Content"
+          tint={CONTENT_TINT}
+          sections={[
+            {
+              eyebrow: "Captures",
+              count: countLabel(RECENT_CAPTURES.length, "today"),
+              libraryLink: { label: "ALL CAPTURES", href: "#" },
+              rows: RECENT_CAPTURES.map((c) => ({
+                glyph: "▢",
+                line: c.line,
+                meta: c.meta,
+                when: c.when,
+              })),
+              emptyCTA: {
+                glyph: "▢",
+                label: "Capture screen",
+                kbd: ["⌃", "⇧", "⌘", "S"],
+              },
+            },
+            {
+              eyebrow: "Notes",
+              count: countLabel(RECENT_NOTES.length, "this week"),
+              libraryLink: { label: "ALL NOTES", href: "#" },
+              rows: RECENT_NOTES.map((n) => ({
+                glyph: "¶",
+                line: n.title,
+                body: n.body,
+                meta: n.attachments > 0 ? `${n.attachments} attach.` : "",
+                when: n.when,
+              })),
+              emptyCTA: {
+                glyph: "¶",
+                label: "Write a note",
+                kbd: ["⌃", "⇧", "⌘", "N"],
+              },
+            },
+          ]}
+        />
       </div>
     </SectionBlock>
+  );
+}
+
+function countLabel(n: number, suffix: string): string {
+  return n === 0 ? `none ${suffix}` : `${n} ${suffix}`;
+}
+
+interface RecentRow {
+  glyph: string;
+  line: string;
+  body?: string;
+  meta: string;
+  when: string;
+}
+
+interface RecentSection {
+  eyebrow: string;
+  count: string;
+  libraryLink: { label: string; href: string };
+  rows: RecentRow[];
+  emptyCTA: { glyph: string; label: string; kbd: string[] };
+}
+
+function RecentPane({
+  label,
+  tint,
+  sections,
+}: {
+  label: string;
+  tint: string;
+  sections: RecentSection[];
+}) {
+  return (
+    <div className="flex flex-col rounded-md border border-studio-edge bg-white/40">
+      <div className="flex items-baseline gap-3 border-b border-studio-edge px-4 py-2.5">
+        <span
+          aria-hidden
+          className="h-1.5 w-1.5 rounded-full"
+          style={{ background: tint }}
+        />
+        <div className="font-display text-[14px] font-medium tracking-tight text-studio-ink">
+          {label}
+        </div>
+        <div className="ml-auto text-[9px] font-mono uppercase tracking-[0.18em] text-studio-ink-faint">
+          {sections.reduce((sum, s) => sum + s.rows.length, 0)} items
+        </div>
+      </div>
+      <div className="flex flex-col">
+        {sections.map((s, idx) => (
+          <RecentSubBand
+            key={s.eyebrow}
+            section={s}
+            tint={tint}
+            divided={idx > 0}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RecentSubBand({
+  section,
+  tint,
+  divided,
+}: {
+  section: RecentSection;
+  tint: string;
+  divided: boolean;
+}) {
+  const isEmpty = section.rows.length === 0;
+  return (
+    <div className={divided ? "border-t-2 border-studio-edge/80" : ""}>
+      <div className="flex items-baseline gap-3 px-4 pt-2.5 pb-1.5">
+        <div className="text-[9px] font-semibold uppercase tracking-eyebrow text-studio-ink-faint">
+          · {section.eyebrow}
+        </div>
+        <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-studio-ink-faint">
+          {section.count}
+        </div>
+        <a
+          href={section.libraryLink.href}
+          className="ml-auto text-[8px] font-mono uppercase tracking-[0.20em] text-studio-ink-faint hover:text-studio-ink"
+        >
+          {section.libraryLink.label} →
+        </a>
+      </div>
+      <div className="flex flex-col">
+        {isEmpty ? (
+          <EmptyCTARow cta={section.emptyCTA} tint={tint} />
+        ) : (
+          section.rows.map((r, i) => (
+            <RecentRowView key={i} row={r} tint={tint} />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EmptyCTARow({
+  cta,
+  tint,
+}: {
+  cta: { glyph: string; label: string; kbd: string[] };
+  tint: string;
+}) {
+  return (
+    <button className="group flex items-center gap-3 border-t border-studio-edge/40 px-4 py-2.5 text-left hover:bg-[#ECECEB]/50 first:border-t-0">
+      <span
+        className="font-mono text-[11px] leading-none"
+        style={{ color: tint }}
+        aria-hidden
+      >
+        {cta.glyph}
+      </span>
+      <span className="text-[11px] font-semibold uppercase tracking-eyebrow text-studio-ink group-hover:text-[#7A521A]">
+        {cta.label}
+      </span>
+      <span className="text-[10px] text-studio-ink-faint group-hover:text-studio-ink">→</span>
+      <div className="ml-auto flex items-center gap-1">
+        {cta.kbd.map((k, i) => (
+          <kbd
+            key={i}
+            className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-[2px] border border-studio-edge bg-white/70 px-1 font-mono text-[9px] text-studio-ink-faint"
+          >
+            {k}
+          </kbd>
+        ))}
+      </div>
+    </button>
+  );
+}
+
+function RecentRowView({ row, tint }: { row: RecentRow; tint: string }) {
+  return (
+    <button className="group flex items-start gap-3 border-t border-studio-edge/40 px-4 py-2 text-left hover:bg-[#ECECEB]/50 first:border-t-0">
+      <span
+        className="pt-0.5 font-mono text-[11px] leading-none"
+        style={{ color: tint }}
+        aria-hidden
+      >
+        {row.glyph}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-[12px] text-studio-ink line-clamp-1">{row.line}</div>
+        {row.body ? (
+          <div className="mt-0.5 text-[11px] text-studio-ink-faint line-clamp-1">
+            {row.body}
+          </div>
+        ) : null}
+      </div>
+      <div className="flex shrink-0 flex-col items-end pt-0.5">
+        {row.meta ? (
+          <div className="text-[9px] font-mono uppercase tracking-[0.16em] text-studio-ink-faint">
+            {row.meta}
+          </div>
+        ) : null}
+        <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-studio-ink-faint/80">
+          {row.when}
+        </div>
+      </div>
+    </button>
   );
 }
 
@@ -489,76 +718,105 @@ function ActivitySignalTable() {
 // visual treatment so they read as distinct surfaces, not three flat
 // lists.
 
+// "Did you know" row — full-width editorial section pulled from the
+// Learn screen's RecapCard vocabulary. Three cards per row: an
+// outline glyph + serif hook on top, body excerpt, hairline divider,
+// amber action with arrow. Reads as curated discovery — not
+// dashboard chrome — so the midsection actually rests.
+//
+// The previous Shortcuts/Trending widgets were informational tiles;
+// they didn't belong on the editorial midsection. Discovered through
+// the Settings shortcuts pane / search.
 function DiscoveryRow() {
   return (
-    <SectionBlock eyebrow="Discovery">
+    <SectionBlock eyebrow="Did you know">
       <div className="grid grid-cols-3 gap-4">
-        <TodayWidget />
-        <ShortcutsWidget />
-        <TrendingWidget />
+        {LEARN_HOOKS.map((hook, i) => (
+          <DidYouKnowCard key={i} hook={hook} />
+        ))}
       </div>
     </SectionBlock>
   );
 }
 
-function TodayWidget() {
-  // Mini 24h timeline ribbon — ticks every 2 hours, event dots at
-  // their hour position. Reads as a day-at-a-glance map.
+function DidYouKnowCard({
+  hook,
+}: {
+  hook: (typeof LEARN_HOOKS)[number];
+}) {
   return (
-    <WidgetCard title="Today" eyebrow="Calendar">
-      <div className="flex flex-col gap-3">
-        <div className="relative h-7 select-none">
-          {/* 24h baseline */}
-          <div
-            className="absolute left-0 right-0 top-3 h-px"
-            style={{ background: "#E0DCD3" }}
-          />
-          {/* hour ticks every 4h */}
-          {[0, 4, 8, 12, 16, 20, 24].map((h) => {
-            const left = `${(h / 24) * 100}%`;
-            return (
-              <div key={h} className="absolute top-2.5 -translate-x-1/2" style={{ left }}>
-                <div className="h-1 w-px bg-studio-edge" />
-                <div className="mt-1 font-mono text-[7px] tracking-[0.06em] text-studio-ink-faint">
-                  {h.toString().padStart(2, "0")}
-                </div>
-              </div>
-            );
-          })}
-          {/* event dots */}
-          {TODAY_EVENTS.map((e, i) => {
-            const left = `${(e.hour / 24) * 100}%`;
-            return (
-              <div
-                key={i}
-                className="absolute top-1.5 -translate-x-1/2"
-                style={{ left }}
-                title={e.label}
-              >
-                <span
-                  aria-hidden
-                  className="block h-3 w-3 rounded-full"
-                  style={{
-                    background: "#9A6A22",
-                    boxShadow: "0 0 0 2px #FBFBFA",
-                  }}
-                />
-              </div>
-            );
-          })}
-        </div>
-        <div className="flex flex-col gap-1 text-[11px]">
-          {TODAY_EVENTS.map((e, i) => (
-            <div key={i} className="flex justify-between text-studio-ink-faint">
-              <span className="font-mono text-[10px] text-studio-ink tracking-[0.02em]">
-                {e.label.split(" · ")[0]}
-              </span>
-              <span>{e.label.split(" · ")[1]}</span>
-            </div>
-          ))}
+    <button className="group flex h-full flex-col gap-3 rounded-md border border-studio-edge bg-white/40 px-5 py-5 text-left transition-colors hover:border-studio-ink/40">
+      <div className="flex items-start gap-3">
+        <DidYouKnowGlyph eyebrow={hook.eyebrow} />
+        <div className="flex-1 font-display text-[15px] font-medium leading-snug tracking-tight text-studio-ink">
+          {hook.hook}
         </div>
       </div>
-    </WidgetCard>
+      <div className="text-[11px] leading-relaxed text-studio-ink-faint line-clamp-2">
+        {hook.detail}
+      </div>
+      <div className="mt-auto pt-3 border-t border-studio-edge/60">
+        <div
+          className="text-[9px] font-mono uppercase tracking-[0.22em] group-hover:text-[#7A521A] transition-colors"
+          style={{ color: "#9A6A22" }}
+        >
+          {hook.action} →
+        </div>
+      </div>
+    </button>
+  );
+}
+
+// Outline glyph tile — quiet brass square with a different icon per
+// hook. Mirrors the RecapGlyphShape pattern from ScopeLearnScreen.
+function DidYouKnowGlyph({ eyebrow }: { eyebrow: string }) {
+  const icon = (() => {
+    if (eyebrow.toLowerCase().includes("voice")) return <VoiceEditGlyph />;
+    if (eyebrow.toLowerCase().includes("smart")) return <SmartActionsGlyph />;
+    if (eyebrow.toLowerCase().includes("tray")) return <TrayGlyph />;
+    return <VoiceEditGlyph />;
+  })();
+  return (
+    <div
+      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[3px]"
+      style={{ background: "rgba(196,125,28,0.06)", border: "0.5px solid rgba(196,125,28,0.18)" }}
+    >
+      {icon}
+    </div>
+  );
+}
+
+function VoiceEditGlyph() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+      <g fill="none" stroke="#9A6A22" strokeWidth="0.85" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M 3 7 L 5 7 M 9 7 L 11 7" />
+        <path d="M 5 4 L 5 10 M 7 5 L 7 9 M 9 4 L 9 10" />
+      </g>
+    </svg>
+  );
+}
+
+function SmartActionsGlyph() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+      <g fill="none" stroke="#9A6A22" strokeWidth="0.85" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M 3 4.5 L 11 4.5 M 3 7 L 8 7 M 3 9.5 L 9 9.5" />
+        <path d="M 10 6.5 L 11.5 8 L 10 9.5" />
+      </g>
+    </svg>
+  );
+}
+
+function TrayGlyph() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+      <g fill="none" stroke="#9A6A22" strokeWidth="0.85" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3.5" width="8" height="5" rx="1" />
+        <path d="M 5 10.5 L 9 10.5" />
+        <circle cx="7" cy="6" r="0.8" fill="#9A6A22" />
+      </g>
+    </svg>
   );
 }
 
@@ -596,7 +854,7 @@ function TrendingWidget() {
           return (
             <div key={t.tag} className="flex items-baseline gap-3 text-[11px]">
               <span className="w-[120px] truncate text-studio-ink">{t.tag}</span>
-              <div className="relative h-1.5 flex-1 overflow-hidden rounded-[1px]" style={{ background: "#EAE6DC" }}>
+              <div className="relative h-1.5 flex-1 overflow-hidden rounded-[1px]" style={{ background: "#DEDEDC" }}>
                 <div
                   className="absolute inset-y-0 left-0"
                   style={{ width: `${pct}%`, background: "#9A6A22" }}

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { StudioNav } from "@/components/StudioNav";
+import { SpecOverlay } from "@/components/SpecOverlay";
 
 export const metadata: Metadata = {
   title: "Talkie Studio",
@@ -34,6 +35,7 @@ export default function RootLayout({
       <body>
         <StudioNav />
         {children}
+        <SpecOverlay />
       </body>
     </html>
   );

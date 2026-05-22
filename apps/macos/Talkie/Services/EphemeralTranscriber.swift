@@ -38,6 +38,7 @@ public enum EphemeralCapturePurpose: String {
     case interstitialDictation
     case interstitialCommand
     case terminalDictation
+    case skillsChatDictation
 
     var displayName: String {
         switch self {
@@ -57,6 +58,8 @@ public enum EphemeralCapturePurpose: String {
             return "Interstitial command"
         case .terminalDictation:
             return "Terminal dictation"
+        case .skillsChatDictation:
+            return "Skills chat dictation"
         }
     }
 }

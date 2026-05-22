@@ -224,7 +224,6 @@ struct TODictationContextSection: View {
                     )
                 }
 
-                #if DEBUG
                 if let perf = recording.performanceMetrics, perf.engineMs != nil {
                     PerfContextCard(
                         perf: perf,
@@ -232,7 +231,6 @@ struct TODictationContextSection: View {
                         routing: recording.metadata?.routing
                     )
                 }
-                #endif
             }
 
             // Window title

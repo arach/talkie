@@ -24,11 +24,14 @@ const config: Config = {
     extend: {
       colors: {
         studio: {
-          canvas: "#FBFBFA",
-          "canvas-alt": "#F2F2F1",
-          ink: "#2A2620",
-          "ink-faint": "#7A746C",
-          edge: "#E0DCD3",
+          // Cool-gray canon (2026-05-21 pivot from warm cream).
+          // Slight cool-leaning (B channel +1 from R) — frosted instrument case.
+          // Accents (amber/brass) stay warm — they read as instrument metal.
+          canvas: "#F8F8F7",
+          "canvas-alt": "#ECECEB",
+          ink: "#232423",
+          "ink-faint": "#76767A",
+          edge: "#DEDEDD",
         },
         // Scheme-* tokens reference CSS vars set by <SchemeCard>.
         scheme: {

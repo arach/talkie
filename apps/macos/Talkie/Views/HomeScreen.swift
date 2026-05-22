@@ -142,8 +142,6 @@ struct HomeScreen: View {
             // same data sources HomeGrid would use.
             ScopeHomeView(
                 unifiedActivity: unifiedActivity,
-                todayMemos: todayMemos,
-                todayDictations: todayDictations,
                 totalWords: totalWords,
                 streak: streak,
                 onStartRecording: {
@@ -365,8 +363,6 @@ struct HomeScreen: View {
     }
 
     private func loadData(refreshSecondaryInsights: Bool = false) {
-        let calendar = Calendar.current
-
         // Build unified activity from memos + dictations
         var items: [UnifiedActivityItem] = []
 
@@ -406,9 +402,7 @@ struct HomeScreen: View {
         // Calculate stats - use memosVM for memo stats
         todayMemos = memosVM.todayCount
 
-        todayDictations = dictationStore.dictations.filter {
-            calendar.isDateInToday($0.timestamp)
-        }.count
+        todayDictations = dictationStore.todayCount
 
         totalWords = dictationStore.dictations.reduce(0) { $0 + $1.wordCount }
             + memosVM.memos.reduce(0) { $0 + ($1.transcription?.split(separator: " ").count ?? 0) }

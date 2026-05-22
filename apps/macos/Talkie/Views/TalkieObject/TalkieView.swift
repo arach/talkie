@@ -83,6 +83,7 @@ struct TalkieView: View {
 
     // Delete confirmation
     @State private var showDeleteConfirmation = false
+    @State private var deleteHovered = false
 
     // TTS / Readout
     @State private var isGeneratingTTS = false
@@ -106,32 +107,92 @@ struct TalkieView: View {
     @MainActor
     private var bodyContent: AnyView {
         AnyView(
-            ScrollView(.vertical, showsIndicators: true) {
-                scrollContent
+            VStack(spacing: 0) {
+                ScrollView(.vertical, showsIndicators: true) {
+                    scrollContent
+                }
+                playbackFooter
             }
         )
     }
 
+    /// Fixed footer at the bottom of the detail pane — the typesetter's
+    /// bar from the studio mock. Pinned regardless of recipe order so the
+    /// player is always at the foot of the document, edge-to-edge.
+    /// Self-gates: renders nothing if the recording has no audio.
+    @MainActor
+    @ViewBuilder
+    private var playbackFooter: some View {
+        if recording.hasAudio || fetchedAudioURL != nil {
+            TOPlaybackSection(
+                slot: SectionSlot(.playback, mode: .hero, chrome: .fullBleed),
+                recording: recording,
+                settings: settings,
+                isPlaying: isPlaying,
+                currentTime: currentTime,
+                duration: duration,
+                fetchedAudioURL: fetchedAudioURL,
+                onTogglePlayback: { togglePlayback() },
+                onSeek: { seekTo($0) },
+                onVolumeChange: { _ in },
+                onRevealAudio: { revealAudioInFinder() },
+                onFetchFromiCloud: { Task { await fetchAudioFromiCloud() } },
+                isFetchingAudio: isFetchingAudio,
+                fetchAudioError: fetchAudioError
+            )
+        }
+    }
+
     @MainActor
     private var scrollContent: AnyView {
+        // No outer horizontal padding — each top-tier section (toolbar
+        // slug, masthead, body, playback) controls its own 36pt internal
+        // padding so the studio composition can run edge-to-edge of the
+        // cool-gray document surface (hairlines, player rail) while body content keeps
+        // a comfortable measure.
         AnyView(
-            VStack(alignment: .leading, spacing: 0) {
-                // Fixed header zone — aligns with sidebar/list primary band
-                Color.clear
-                    .frame(height: PageLayout.headerHeight)
+            GeometryReader { proxy in
+                // Two gates on the rail: viewport width must allow it,
+                // AND the rail must have something to say. The content
+                // gate avoids reserving a 220pt column + 40pt gutter +
+                // a hairline rule for a memo whose rail would just be
+                // whitespace (single-paragraph, no model/perf/cwd).
+                let widthAllowsRail = proxy.size.width >= TOMarginRail.collapseBelow
+                let railHasContent = TOMarginRail.hasContent(for: recording)
+                let canShowRail = widthAllowsRail && railHasContent
 
-                // Metadata cells — sits directly under the structural line,
-                // aligned with the filter bar in the list column
-                TOMetadataRow(recording: recording, settings: settings)
-                    .padding(.bottom, Spacing.md)
+                VStack(alignment: .leading, spacing: 0) {
+                    // Fixed header zone — clears the chrome bar's overlay
+                    // footprint (pill capsule + shadow) so the masthead
+                    // slug doesn't touch the bar's bottom edge.
+                    Color.clear
+                        .frame(height: PageLayout.headerOverlayClearance)
 
-                detailContent
+                    if canShowRail {
+                        // 1fr / 220pt grid. Detail content keeps its
+                        // measure; rail occupies the right margin. The
+                        // gate is a hard hide/show — no animation on
+                        // resize, because flicker is worse than a clean
+                        // jump.
+                        HStack(alignment: .top, spacing: 40) {
+                            detailContent
+                                .frame(maxWidth: contentColumnMaxWidth, alignment: .leading)
+                            ThemedScopeRule(.subtle, axis: .vertical)
+                            TOMarginRail(recording: recording)
+                                .frame(width: TOMarginRail.preferredWidth, alignment: .leading)
+                                .padding(.trailing, MastheadPadding.horizontal)
+                        }
+                        .padding(.leading, 0)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        detailContent
+                            .frame(maxWidth: contentColumnMaxWidth, alignment: .leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(.top, 0)
+                .padding(.bottom, PageLayout.bottomPadding)
             }
-            .frame(maxWidth: contentColumnMaxWidth, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, PageLayout.horizontalPadding)
-            .padding(.top, 0)
-            .padding(.bottom, PageLayout.bottomPadding)
         )
     }
 
@@ -141,11 +202,85 @@ struct TalkieView: View {
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 headerSection
                 recipeSections
-                deleteButton
+                    .padding(.horizontal, MastheadPadding.horizontal)
 
-                Spacer()
+                Spacer(minLength: Spacing.xl)
+
+                if let continueAction = continueMemoAction {
+                    continueCTA(action: continueAction)
+                        .padding(.horizontal, MastheadPadding.horizontal)
+                        .padding(.bottom, Spacing.sm)
+                }
+
+                bottomActionRow
+                    .padding(.horizontal, MastheadPadding.horizontal)
+                    .padding(.bottom, Spacing.md)
             }
         )
+    }
+
+    /// Centered standalone "Continue this memo" CTA. Migrated out of the
+    /// masthead's inline action row (where it read as one of six peer
+    /// chips) and into its own band above the bottom delete row, where
+    /// the visual emphasis matches its role as the primary follow-up
+    /// intent. Red-tinted to stay recognizable as "this continues the
+    /// recording" without claiming the masthead's primary amber.
+    @MainActor
+    @ViewBuilder
+    private func continueCTA(action: @escaping () -> Void) -> some View {
+        HStack {
+            Spacer()
+            ContinueMemoCTA(action: action)
+            Spacer()
+        }
+    }
+
+    /// Trailing bottom-right action row. Anchors a *real* Delete
+    /// affordance below the document body so users don't have to dig
+    /// into the masthead's `···` overflow to discard. Sits above the
+    /// fixed playback footer (when present); when there's no audio the
+    /// scroll content ends with this row.
+    @MainActor
+    @ViewBuilder
+    private var bottomActionRow: some View {
+        HStack(spacing: 8) {
+            Spacer(minLength: 8)
+
+            Button { showDeleteConfirmation = true } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 11, weight: .regular))
+                    Text("DELETE")
+                        .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                        .tracking(1.6)
+                }
+                .foregroundColor(deleteHovered ? Color.red : Color.red.opacity(0.70))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.red.opacity(deleteHovered ? 0.12 : 0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 3)
+                                .stroke(Color.red.opacity(deleteHovered ? 0.40 : 0.22), lineWidth: 0.5)
+                        )
+                )
+                .animation(.easeOut(duration: 0.12), value: deleteHovered)
+            }
+            .buttonStyle(.plain)
+            .onHover { hovering in
+                deleteHovered = hovering
+                NSCursor.pointingHand.set(); if !hovering { NSCursor.arrow.set() }
+            }
+            .help("Delete this \(recording.type.displayName.lowercased())")
+        }
+    }
+
+    /// Shared horizontal padding for body content (recipe sections, delete
+    /// button). Top-tier studio sections (toolbar, masthead, playback)
+    /// manage their own internal padding and may run edge-to-edge.
+    private enum MastheadPadding {
+        static let horizontal: CGFloat = 36
     }
 
     @MainActor
@@ -157,14 +292,22 @@ struct TalkieView: View {
             isAlwaysEditable: isAlwaysEditable,
             editedTitle: $editedTitle,
             titleFieldFocused: $titleFieldFocused,
+            showJSON: $showJSON,
             onToggleEdit: { toggleEditMode() },
             onCancelEdit: { cancelEditing() },
             onSaveEdit: { saveChanges() },
             onDelete: { showDeleteConfirmation = true },
             onOpenInCompose: openInComposeAction,
+            onContinueMemo: continueMemoAction,
             isDirty: isDirty,
             onTitleChange: titleChangeAction
         )
+    }
+
+    @MainActor
+    private var continueMemoAction: (() -> Void)? {
+        guard recording.isMemo && recording.hasAudio else { return nil }
+        return { MemoRecordingController.shared.startContinuingMemo(memoId: recording.id) }
     }
 
     @MainActor
@@ -191,22 +334,6 @@ struct TalkieView: View {
         AnyView(sectionRouter(for: detailSlots[index]))
     }
 
-    @MainActor
-    private var deleteButton: some View {
-        HStack {
-            Spacer()
-            Button(role: .destructive) {
-                showDeleteConfirmation = true
-            } label: {
-                Label("Delete", systemImage: "trash")
-                    .font(settings.fontXS)
-                    .foregroundColor(Theme.current.foregroundMuted)
-            }
-            .buttonStyle(.plain)
-            .help("Delete this item")
-        }
-    }
-
     // MARK: - Body
 
     var body: some View {
@@ -215,8 +342,8 @@ struct TalkieView: View {
         .overlay {
             if isDropTargeted {
                 RoundedRectangle(cornerRadius: CornerRadius.lg)
-                    .strokeBorder(settings.resolvedAccentColor, style: StrokeStyle(lineWidth: 2, dash: [8, 4]))
-                    .background(settings.resolvedAccentColor.opacity(0.05))
+                    .strokeBorder(ThemedScopeAccent.amber, style: StrokeStyle(lineWidth: 2, dash: [8, 4]))
+                    .background(ThemedScopeAccent.tint)
                     .clipShape(RoundedRectangle(cornerRadius: CornerRadius.lg))
                     .padding(Spacing.sm)
                     .overlay {
@@ -224,9 +351,10 @@ struct TalkieView: View {
                             Image(systemName: "plus.circle")
                                 .font(.system(size: 32, weight: .thin))
                             Text("Drop files to attach")
-                                .font(Theme.current.fontSM)
+                                .font(ScopeType.eyebrow)
+                                .tracking(ScopeType.Tracking.wide)
                         }
-                        .foregroundColor(settings.resolvedAccentColor)
+                        .foregroundStyle(ThemedScopeAccent.amber)
                     }
                     .allowsHitTesting(false)
             }
@@ -236,20 +364,10 @@ struct TalkieView: View {
             return true
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            ZStack {
-                Theme.current.background
-                LinearGradient(
-                    colors: [
-                        Theme.current.foreground.opacity(0.02),
-                        Color.clear,
-                        Theme.current.background.opacity(0.02)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            }
-        )
+        // Editorial canvas resolved through the active theme. Scope maps
+        // this to the 2026-05-21 cool-gray canon; dark themes get their
+        // readable native background.
+        .background(ThemedScopeCanvas.canvas)
         // Lifecycle
         .onAppear {
             let title = recording.title ?? ""
@@ -965,5 +1083,49 @@ struct TalkieView: View {
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+}
+
+// MARK: - Continue Memo CTA
+//
+// Standalone, centered CTA rendered above the bottom-right delete row.
+// The "add more to this memo" intent reads as a primary follow-up
+// action, not a peer chip alongside Copy/Share/Export — so it gets its
+// own width-constrained capsule and a tinted background that pulls
+// the eye when the user finishes reading the body.
+
+private struct ContinueMemoCTA: View {
+    let action: () -> Void
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(Color.red)
+                    .frame(width: 8, height: 8)
+                Text("CONTINUE")
+                    .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                    .tracking(2.0)
+            }
+            .foregroundColor(hovered ? Color.red : Color.red.opacity(0.88))
+            .padding(.horizontal, 18)
+            .padding(.vertical, 9)
+            .background(
+                Capsule()
+                    .fill(Color.red.opacity(hovered ? 0.14 : 0.08))
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.red.opacity(hovered ? 0.50 : 0.32), lineWidth: 0.75)
+                    )
+            )
+            .animation(.easeOut(duration: 0.12), value: hovered)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            hovered = hovering
+            if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+        }
+        .help("Continue recording this memo")
     }
 }

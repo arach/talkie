@@ -114,7 +114,7 @@ struct AppNavigation: View {
     // Sidebar display mode
     @AppStorage("app.sidebar.iconsOnly") private var appSidebarIconsOnly = false
     @State private var didPrepareConsoleRegistry = false
-    @AppStorage("sidebar.isHidden") private var sidebarHidden = false
+    @AppStorage("sidebar.isHidden") private var sidebarHidden = true
     @AppStorage("sidebar.expandedLabelWidth") private var storedExpandedLabelWidth: Double = Double(SidebarLayout.labelWidth)
     @State private var expandedLabelWidth: Double
     @AppStorage(SidebarStyleStorage.surfaceKey) private var surfaceStyleRaw = SidebarSurfaceStyle.default.rawValue
@@ -362,11 +362,36 @@ struct AppNavigation: View {
             .overlay(alignment: .topLeading) {
                 SidebarTooltipOverlay()
             }
+            .overlay(alignment: .center) {
+                // Big-screen recording companion. Renders on the cream
+                // canvas while a memo recording is active; the title-bar
+                // pill is the always-on baseline. Sits beneath the chrome
+                // bar in z-order so the bar / page header stay readable.
+                RecordingCompanionSurface()
+                    .padding(.top, PageLayout.headerHeight)
+            }
             .overlay(alignment: .top) {
-                GlobalActionBar()
-                    .padding(.top, 7)
+                TalkieChromeBar()
+                    // Sits as close to the macOS title-bar baseline as
+                    // we can without colliding with the traffic-light
+                    // cluster. Gives the page content below room to
+                    // breathe — surface list headers no longer compete
+                    // with the pill for the same vertical slot.
+                    .padding(.top, 4)
                     .offset(x: (sidebarHidden ? 0 : sidebarTransition.width.ideal) / 2)
             }
+            .overlay(alignment: .top) {
+                // Page-header proxy. Renders above the chrome bar in z-order
+                // so the page title + chrome line stay visible where they
+                // would otherwise be overwritten by the bar's capsule. The
+                // page publishes its content via `ChromeBarHeader.shared`.
+                ChromeBarPageHeaderOverlay()
+                    .allowsHitTesting(false)
+            }
+            // Settings gear has moved to the status bar (bottom-left,
+            // next to SyncStatusIcon). The window's top-right is now
+            // clear, which gives the chrome bar's pill + each surface's
+            // header chrome room to breathe.
             .overlay(alignment: .bottomTrailing) {
                 AgentHealthBanner()
                     .padding(.trailing, Spacing.md)
@@ -390,12 +415,14 @@ struct AppNavigation: View {
         navigationSplitViewCore
             .navigationSplitViewStyle(.balanced)
             .overlay(alignment: .top) {
-                // Structural horizontal rule at the header datum (44pt).
-                // Decorative line that visually connects columns.
+                // Structural horizontal rule, offset to clear the chrome
+                // bar pill + its drop shadow. Sits just above where the
+                // page's own eyebrow row begins so it reads as a page rule
+                // rather than a line cutting through the pill capsule.
                 Rectangle()
                     .fill(Theme.current.foreground.opacity(0.06))
                     .frame(height: 0.5)
-                    .offset(y: PageLayout.headerHeight)
+                    .offset(y: PageLayout.headerHeight + 14)
                     .allowsHitTesting(false)
             }
             .toolbarBackground(
@@ -997,7 +1024,10 @@ struct AppNavigation: View {
                     }
                 case .notes:
                     if SettingsManager.shared.isScopeTheme {
-                        ScopeLibraryView(initialTypeFilter: .notes)
+                        // Scope ships Notes as its own surface — a two-
+                        // column Sheaf of editorial cards on cream paper.
+                        // See design/studio/app/mac-notes (Variant II).
+                        ScopeNotesScreen()
                     } else {
                         RecordingsScreen(initialTypeFilter: RecordingTypeFilter.notes)
                     }
@@ -1415,9 +1445,7 @@ extension View {
                 alert.addButton(withTitle: "Cancel")
 
                 if alert.runModal() == .alertFirstButtonReturn {
-                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
-                        NSWorkspace.shared.open(url)
-                    }
+                    PermissionsManager.shared.openMicrophoneSettings()
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .showEngineRequiredToast)) { _ in

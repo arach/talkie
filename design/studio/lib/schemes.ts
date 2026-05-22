@@ -365,6 +365,40 @@ export const SCHEMES: Scheme[] = [
     },
   },
 
+  // FROST — PEARL, one notch lighter still. We're up against the cream
+  // canvas at this point — there's almost no luminance room left, so
+  // FROST is more of a "cool sheen" than a panel. Cool tint preserved.
+  // Use only when you want the surface to disappear into the page and
+  // rely on borders + content density for differentiation.
+  {
+    key: "frost",
+    name: "FROST",
+    swatch: "#D49236",
+    bgHex: "#F9FBFC",
+    vars: {
+      "--scheme-bg": "#F9FBFC",
+      "--scheme-strip-top":
+        "linear-gradient(to bottom, #FDFEFF 0%, #F6F9FB 60%, #EBEEF1 100%)",
+      "--scheme-strip-bottom":
+        "linear-gradient(to bottom, #F1F4F6 0%, #F9FBFC 55%, #FCFDFE 100%)",
+      "--scheme-graticule": "rgba(212, 146, 54, 0.05)",
+      "--scheme-ink": "#2A2E32",
+      "--scheme-ink-faint": "#74798F",
+      "--scheme-ink-subtle": "#909598",
+      "--scheme-accent": "#D49236",
+      "--scheme-accent-glow": "rgba(212, 146, 54, 0.10)",
+      "--scheme-accent-ring": "rgba(212, 146, 54, 0.03)",
+      "--scheme-trace": "#D49236",
+      "--scheme-rec": "#C43A1C",
+      "--scheme-rec-glow": "rgba(196, 58, 28, 0.22)",
+      "--scheme-sparkle": "#C43A1C",
+      "--scheme-edge": "rgba(20, 24, 28, 0.06)",
+      "--scheme-edge-strong": "rgba(20, 24, 28, 0.15)",
+      "--scheme-details-bg": "rgba(20, 24, 28, 0.015)",
+      "--scheme-bezel-highlight": "rgba(255, 255, 255, 0.70)",
+      "--scheme-bezel-shadow": "rgba(0, 0, 0, 0.03)",
+    },
+  },
   // PEARL — PORCELAIN, ~15 units lighter. The lightest cool surface we
   // ship — barely-there sheen on top of the cream canvas. Cool tint
   // distinguishes it from a near-white warm surface (CHIFFON).

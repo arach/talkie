@@ -1573,7 +1573,7 @@ private struct ToolButton: View {
 
 // MARK: - Transform Rules Content (Symbolic Mapping)
 
-/// Symbolic mapping settings, used as a section in RulesSettingsView
+/// Symbolic mapping settings, embedded by the Processing tab of ContextSettingsView.
 struct TransformRulesContent: View {
     @ObservedObject private var manager = DictionaryManager.shared
     @State private var isReloadingRules = false

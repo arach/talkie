@@ -225,9 +225,7 @@ final class OnboardingManager {
 
         if currentStatus == .denied {
             // Permission was denied - need to open System Settings
-            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
-                NSWorkspace.shared.open(url)
-            }
+            PermissionsManager.shared.openMicrophoneSettings()
             startMicrophonePolling()
             isRequestingPermission = false
         } else {

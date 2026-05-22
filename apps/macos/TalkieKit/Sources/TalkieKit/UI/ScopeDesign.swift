@@ -17,6 +17,9 @@
 //
 
 import SwiftUI
+#if canImport(AppKit)
+import AppKit
+#endif
 
 // MARK: - Hex helper
 
@@ -44,19 +47,17 @@ public extension Color {
 /// keeps the "off-white instrument cover" feel without the
 /// parchment heat.
 public enum ScopeCanvas {
-    /// Primary page background — true off-white. Midpoint between the
-    /// website's `modern --canvas: #ffffff` and `--canvas-alt: #fafafa`.
-    /// Replaces the cream-paper `#FBFAF7`.
-    public static let canvas = Color.hex("FBFBFA")
+    /// Primary page background — cool-gray page substrate from the
+    /// 2026-05-21 Scope canon. Frosted instrument case; never blue.
+    public static let canvas = Color.hex("F8F8F7")
     /// "Bay" — sidebar / embedded structural surface. One step down
     /// from canvas so it reads as a distinct surface, no yellow.
     /// Mapped to `tacticalBackgroundSecondary` in SettingsManager.
-    public static let canvasAlt = Color.hex("F2F2F1")
-    /// Card surface — neutral gray-white card. From `slate
-    /// --panel-bg-alt: #ededed`.
-    public static let surface = Color.hex("EDEDEC")
+    public static let canvasAlt = Color.hex("ECECEB")
+    /// Card surface — cool neutral pane lift / mild emphasis.
+    public static let surface = Color.hex("EFEFEE")
     /// 85% canvas — for floating overlays / pill chrome.
-    public static let canvasOverlay = Color.hex("FBFBFA").opacity(0.85)
+    public static let canvasOverlay = Color.hex("F8F8F7").opacity(0.85)
 }
 
 // MARK: - Ink (text)
@@ -95,6 +96,112 @@ public enum ScopeEdge {
     public static let subtle  = base.opacity(0.08)
 }
 
+// MARK: - Scope Rule — reusable hairline view
+//
+// Single source of truth for divider rendering across Scope surfaces.
+// Calibrated to render visibly on cream-tinted panels (translucent
+// white over the Home canvas). Replaces hand-rolled
+// `Rectangle().fill(opacity).frame(height: 0.5)` cocktails, which
+// disappeared on translucent backgrounds.
+//
+// The role names below map to specific visual values. Call sites use
+// the role; the visual tuning happens here in one place. The role
+// vocabulary is intentional — each one names where it belongs, not how
+// loud it is.
+//
+//   .section      — strong inner break. Under panel titles, before
+//                   footer links, between major subsections.
+//   .row          — divider between peer rows in a list. The default.
+//   .subtle       — tertiary separation where the rhythm carries the
+//                   weight and the rule is just a whisper.
+//   .action       — accent-tinted rule for action contexts (brass
+//                   amber). The selection marker under an active tab,
+//                   the leading edge of a primary-action row.
+//
+// For card outer borders (rounded rectangles), use the
+// `.scopeCardBorder()` View modifier defined below — that's a stroke,
+// not a rule, and has its own role on the page.
+public struct ScopeRule: View {
+
+    public enum Role {
+        case section
+        case row
+        case subtle
+        case action
+    }
+
+    public enum Axis { case horizontal, vertical }
+
+    private let role: Role
+    private let axis: Axis
+
+    public init(_ role: Role = .row, axis: Axis = .horizontal) {
+        self.role = role
+        self.axis = axis
+    }
+
+    public var body: some View {
+        Rectangle()
+            .fill(color)
+            .frame(
+                width: axis == .vertical ? thickness : nil,
+                height: axis == .horizontal ? thickness : nil
+            )
+    }
+
+    private var color: Color {
+        switch role {
+        case .section: return ScopeInk.primary.opacity(0.22)
+        case .row:     return ScopeInk.primary.opacity(0.16)
+        case .subtle:  return ScopeInk.primary.opacity(0.10)
+        case .action:  return ScopeBrass.solid.opacity(0.85)
+        }
+    }
+
+    private var thickness: CGFloat {
+        // Action rules are stronger by their accent color but
+        // thinner so they read as a marker, not a heavy bar.
+        role == .action ? 1.5 : 1
+    }
+}
+
+// MARK: - Scope Card Border — outer border modifier
+//
+// For rounded card / panel outer borders. Use instead of hand-rolled
+// `.overlay(RoundedRectangle(cornerRadius: r).stroke(opacity, lineWidth: w))`.
+// One place to tune card-edge rendering across all surfaces.
+
+public extension View {
+    /// Standard outer border for a Scope card or panel container.
+    /// Uses the same calibrated cool-ink color family as `ScopeRule`.
+    func scopeCardBorder(
+        cornerRadius: CGFloat = 6,
+        emphasis: ScopeCardEmphasis = .normal
+    ) -> some View {
+        self.overlay(
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .stroke(emphasis.color, lineWidth: 0.5)
+        )
+    }
+}
+
+public enum ScopeCardEmphasis {
+    /// Default container edge — visible but quiet.
+    case normal
+    /// Hover or focused state — reads as "this card is alive."
+    case strong
+    /// Disabled / dimmed state.
+    case muted
+
+    public var color: Color {
+        switch self {
+        case .normal: return Color.hex("0F1112").opacity(0.18)
+        case .strong: return Color.hex("0F1112").opacity(0.30)
+        case .muted:  return Color.hex("0F1112").opacity(0.10)
+        }
+    }
+}
+
 // MARK: - Trace (phosphor / signal line)
 
 /// The "trace" color is the oscilloscope phosphor line. In the
@@ -128,6 +235,29 @@ public enum ScopeAmber {
     public static let glow = Color.hex("C47D1C").opacity(0.22)
     /// Brighter glow for dots / focal points.
     public static let glowStrong = Color.hex("C47D1C").opacity(0.32)
+}
+
+// MARK: - Brass (warm instrument metal)
+
+/// Brass is the secondary warm accent against the cool Scope substrate.
+/// It stays warm by canon; use it for memo/dictation metal and quieter
+/// secondary action chrome when amber would be too loud.
+public enum ScopeBrass {
+    /// Canonical brass / memo stripe.
+    public static let solid = Color.hex("9A6A22")
+    /// Deep brass / pressed or shadowed metal.
+    public static let deep = Color.hex("7A521A")
+}
+
+// MARK: - Kind tints
+
+/// Per-object-kind stripes. Memo/dictation stay warm; note/capture
+/// move to cool grays so the substrate does not reintroduce teal/blue.
+public enum ScopeKind {
+    public static let memo = Color.hex("9A6A22")
+    public static let dict = Color.hex("E89A3C")
+    public static let note = Color.hex("767674")
+    public static let capture = Color.hex("5C5E5C")
 }
 
 // MARK: - Panel (dark instrument bay on cream desk)
@@ -216,12 +346,27 @@ public enum ScopePanel {
 /// at the typical 10pt size. Tracking scales with font size in
 /// SwiftUI, which is fine — the visual ratio stays close.
 public enum ScopeType {
+    /// Studio's `font-mono` is JetBrains Mono. We mirror that here
+    /// so the SwiftUI surfaces don't drop to SF Mono (which reads
+    /// noticeably differently — wider, rounder digits). Falls back
+    /// to system monospaced if the font isn't loaded.
+    private static func mono(size: CGFloat) -> Font {
+        #if canImport(AppKit)
+        for name in ["JetBrainsMono-SemiBold", "JetBrainsMono-Medium"] {
+            if NSFont(name: name, size: size) != nil {
+                return .custom(name, size: size)
+            }
+        }
+        #endif
+        return .system(size: size, weight: .semibold, design: .monospaced)
+    }
+
     /// 10pt monospaced bold caps, wide tracking — eyebrow / section label.
-    public static let eyebrow = Font.system(size: 10, weight: .semibold, design: .monospaced)
+    public static var eyebrow: Font { mono(size: 10) }
     /// 9pt monospaced caps — channel / pin tags.
-    public static let channel = Font.system(size: 9, weight: .semibold, design: .monospaced)
+    public static var channel: Font { mono(size: 9) }
     /// 8pt monospaced — chrome footers, technical metadata.
-    public static let chrome  = Font.system(size: 8, weight: .semibold, design: .monospaced)
+    public static var chrome:  Font { mono(size: 8) }
 
     /// Tracking values matched to the homepage CSS tracking-[0.20–0.26em].
     /// SwiftUI tracking is points; at 10pt these read close to the site.

@@ -43,6 +43,24 @@ xcodebuild -project Talkie-iOS.xcodeproj -scheme Talkie \
 
 ### macOS
 
+Prefer the consolidated macOS script for rebuilding or relaunching the main apps. It knows the workspace shape, app aliases, local build output, signing defaults, dev app install path, and how to stop conflicting instances.
+
+```bash
+cd apps/macos
+
+# Build both main macOS apps without launching
+./run.sh TalkieAgent Talkie --clean --no-launch
+
+# Build and launch one app
+./run.sh TalkieAgent --clean
+./run.sh Talkie --clean
+
+# See aliases and options
+./run.sh --list
+```
+
+Use raw `xcodebuild` when you specifically need lower-level diagnostics, tests, or a project-only build:
+
 ```bash
 cd apps/macos/Talkie
 open Talkie.xcodeproj

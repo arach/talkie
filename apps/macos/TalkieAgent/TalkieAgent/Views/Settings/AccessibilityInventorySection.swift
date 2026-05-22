@@ -914,7 +914,7 @@ struct AccessibilityInventorySection: View {
             Spacer()
 
             Button("Open Settings") {
-                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+                PermissionManager.shared.requestAccessibility()
             }
             .font(.system(size: 11))
         }

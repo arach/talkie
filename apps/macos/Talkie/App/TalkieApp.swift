@@ -131,9 +131,18 @@ private struct TalkieRootWindow: View {
                 get: { OnboardingManager.shared.shouldShowOnboarding },
                 set: { OnboardingManager.shared.shouldShowOnboarding = $0 }
             )) {
-                OnboardingView()
-                    .environment(SettingsManager.shared)
-                    .environment(AgentSettings.shared)
+                Group {
+                    if UserDefaults.standard.bool(forKey: "useScopeOnboarding") {
+                        ScopeOnboardingView(onFinish: {
+                            OnboardingManager.shared.hasCompletedOnboarding = true
+                        })
+                        .frame(minWidth: 880, minHeight: 600)
+                    } else {
+                        OnboardingView()
+                    }
+                }
+                .environment(SettingsManager.shared)
+                .environment(AgentSettings.shared)
             }
             // Pro Tools onboarding — triggered from Settings → Mode
             // or via talkie://onboarding/pro (CLI: `talkie pro`).

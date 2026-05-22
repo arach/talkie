@@ -107,6 +107,7 @@ targets:
         TalkieCloudKitContainerIdentifier: $(TALKIE_CLOUDKIT_CONTAINER)
         TalkieMacAppGroupIdentifier: $(TALKIE_MAC_APP_GROUP)
         TalkieSharedSettingsSuite: $(TALKIE_MAC_SHARED_SETTINGS_SUITE)
+        ATSApplicationFontsPath: Resources/Fonts/
     dependencies:
       - package: TalkieKit
       - package: TermBridgeKit

@@ -9,6 +9,8 @@
 //  are no longer needed.
 //
 
+#if DEBUG
+
 import SwiftUI
 import AppKit
 
@@ -150,7 +152,9 @@ struct NotchSettingsView: View {
         } content: {
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 behaviorSection
+                #if DEBUG && __notchInspectorEnabled
                 animationInspectorSection
+                #endif
                 previewSection
                 geometrySection
                 presetSection
@@ -575,6 +579,7 @@ struct NotchSettingsView: View {
         .settingsSectionCard(padding: Spacing.md)
     }
 
+    #if DEBUG && __notchInspectorEnabled
     private var animationInspectorSection: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             DetailSectionHeader("ANIMATION INSPECTOR", uppercase: true)
@@ -603,6 +608,7 @@ struct NotchSettingsView: View {
         }
         .settingsSectionCard(padding: Spacing.md)
     }
+    #endif
 
     private var presetSection: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -1152,3 +1158,5 @@ private struct NotchSettingsGuideOverlay: View {
         context.fill(Circle().path(in: CGRect(x: end.x - dotSize / 2, y: end.y - dotSize / 2, width: dotSize, height: dotSize)), with: .color(.white.opacity(0.9)))
     }
 }
+
+#endif

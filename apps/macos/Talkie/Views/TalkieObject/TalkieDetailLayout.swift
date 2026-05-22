@@ -83,67 +83,75 @@ extension TalkieObjectType {
     var detailRecipe: [SectionSlot] {
         switch self {
         case .memo:
+            // actionBar + workflow pills dropped from the recipe — the
+            // toolbar slug at the top of TOHeaderSection now carries
+            // Copy/Share/Export/⋯ (and the workflow picker lives in the
+            // overflow menu). Keeping the action pills below the body
+            // duplicated those affordances and orphaned the workflow
+            // icons in dead space.
+            //
+            // Playback dropped — TalkieView pins it as a fixed footer.
+            // textProvenance dropped — its data lives in the right-margin
+            // metadata column alongside the masthead.
+            // .notes (scratchpad) removed per arach 2026-05-21 — never used,
+            // adds dead chrome to every memo detail.
             return [
                 SectionSlot(.transcript,    mode: .reader,  chrome: .card),
-                SectionSlot(.actionBar,     mode: .compact, chrome: .inline),
-                SectionSlot(.playback,      mode: .hero,    chrome: .card),
                 SectionSlot(.segments,      mode: .compact, chrome: .card),
                 SectionSlot(.workflowRuns,  mode: .compact, chrome: .card),
                 SectionSlot(.mediaGallery,  mode: .compact, chrome: .card),
-                SectionSlot(.textProvenance, mode: .compact, chrome: .card),
-                SectionSlot(.notes,         mode: .editor,  chrome: .inline),
                 SectionSlot(.attachments,   mode: .compact, chrome: .card),
             ]
 
         case .dictation:
+            // actionBar + refinement dropped (refinement is dev tooling,
+            // not part of the editorial reading view). dictationContext
+            // already dropped from the hero slot — its data lives in the
+            // right-margin metadata column.
             return [
-                SectionSlot(.dictationContext, mode: .hero,    chrome: .card),
                 SectionSlot(.transcript,       mode: .reader,  chrome: .card),
-                SectionSlot(.actionBar,        mode: .compact, chrome: .inline),
-                SectionSlot(.refinement,       mode: .compact, chrome: .inline),
-                SectionSlot(.playback,         mode: .compact, chrome: .card),
             ]
 
         case .note:
+            // Notes are content-first. The transcript editor IS the
+            // note; everything else is supplementary. Previous recipe
+            // had actionBar (Command / Fix Grammar / Concise /
+            // Professional chips), mediaGallery, a Scratchpad
+            // (`.notes` slot), and workflowRuns — that whole stack made
+            // a note look like a Compose surface, not a note.
+            //
+            // Filtered to: the note's text + its attachments. Sections
+            // self-gate, so attachments only render when there's data.
             return [
-                SectionSlot(.mediaGallery,   mode: .hero,    chrome: .fullBleed),
-                SectionSlot(.transcript,     mode: .editor,  chrome: .inline),
-                SectionSlot(.actionBar,      mode: .compact, chrome: .inline),
-                SectionSlot(.textProvenance, mode: .compact, chrome: .card),
-                SectionSlot(.attachments,    mode: .gallery, chrome: .card),
-                SectionSlot(.playback,       mode: .compact, chrome: .card),
-                SectionSlot(.notes,          mode: .editor,  chrome: .inline),
-                SectionSlot(.workflowRuns,   mode: .compact, chrome: .card),
+                SectionSlot(.transcript,  mode: .editor,  chrome: .inline),
+                SectionSlot(.attachments, mode: .gallery, chrome: .card),
             ]
 
         case .segment:
             return [
                 SectionSlot(.transcript,    mode: .reader,  chrome: .card),
-                SectionSlot(.playback,      mode: .compact, chrome: .card),
             ]
 
         case .selection:
             return [
-                SectionSlot(.mediaGallery,     mode: .hero,    chrome: .fullBleed),
                 SectionSlot(.transcript,       mode: .reader,  chrome: .card),
                 SectionSlot(.actionBar,        mode: .compact, chrome: .inline),
-                SectionSlot(.textProvenance,   mode: .compact, chrome: .card),
+                SectionSlot(.mediaGallery,     mode: .compact, chrome: .inline),
                 SectionSlot(.readout,          mode: .compact, chrome: .card),
                 SectionSlot(.refinement,       mode: .compact, chrome: .inline),
                 SectionSlot(.dictationContext, mode: .hero,    chrome: .card),
                 SectionSlot(.workflowRuns,     mode: .compact, chrome: .card),
-                SectionSlot(.notes,            mode: .editor,  chrome: .inline),
+                // .notes (scratchpad) removed per arach 2026-05-21.
             ]
 
         case .capture:
             return [
-                SectionSlot(.mediaGallery,   mode: .hero,    chrome: .fullBleed),
                 SectionSlot(.transcript,     mode: .editor,  chrome: .inline),
                 SectionSlot(.actionBar,      mode: .compact, chrome: .inline),
-                SectionSlot(.textProvenance, mode: .compact, chrome: .card),
+                SectionSlot(.mediaGallery,   mode: .compact, chrome: .inline),
                 SectionSlot(.attachments,    mode: .gallery, chrome: .card),
                 SectionSlot(.workflowRuns,   mode: .compact, chrome: .card),
-                SectionSlot(.notes,          mode: .editor,  chrome: .inline),
+                // .notes (scratchpad) removed per arach 2026-05-21.
             ]
         }
     }

@@ -321,13 +321,13 @@ struct RecordingsScreen: View {
                 showingRecordingView = true
             }
         }
-        .onChange(of: MemoRecordingController.shared.state) { _, newState in
-            if newState.isRecording && !showingRecordingView {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showingRecordingView = true
-                }
-            }
-        }
+        // Modal RecordingOverlay no longer auto-mounts on controller state.
+        // The canvas-level RecordingCompanionSurface (AppNavigation) is the
+        // canonical big-screen recording UI now; auto-flipping the modal on
+        // top of it was the source of the dual-recorder treatment for
+        // continuing-memo + chrome-bar-mic flows. Modal only shows when the
+        // user explicitly clicks New Recording (or the ShowRecordingView
+        // notification, retained above).
         .task(id: NavigationState.shared.selectedMemoID) {
             guard let id = NavigationState.shared.selectedMemoID else { return }
             await waitForRecordingsIfNeeded()

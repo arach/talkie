@@ -20,13 +20,13 @@ struct TONotesSection: View {
     var body: some View {
         if !editedNotes.isEmpty || slot.mode == .editor {
             VStack(alignment: .leading, spacing: Spacing.sm) {
-                HStack(alignment: .center, spacing: Spacing.xs) {
-                    Text("SCRATCHPAD")
-                        .font(settings.fontXSMedium)
-                        .tracking(Tracking.wide)
-                        .foregroundColor(Theme.current.foregroundSecondary)
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text("· SCRATCHPAD")
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .tracking(2.8)
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(0.62))
 
-                    Spacer()
+                    ThemedScopeRule(.subtle)
 
                     if showNotesSaved {
                         HStack(spacing: Spacing.xxs) {
