@@ -436,9 +436,9 @@ struct ScopeHomeView: View {
     // MARK: - Routines strip (Workflows · Console)
     //
     // RESTORED from the original HomeGrid taxonomy (actionWorkflows +
-    // actionHelpers + featureAgentConsole). Two light panels on the
-    // cream canvas so they read as cousins of the Capture Mode cards,
-    // not as competing dark slabs with the bay.
+    // actionHelpers + featureAgentConsole). Now demoted to borderless
+    // rule-separated rows on the canvas so Bay + Recent keep the only
+    // card weight on the page.
     //
     // Console data remains stubbed until an active ConsoleRegistry lands.
 
@@ -452,6 +452,7 @@ struct ScopeHomeView: View {
                     rows: workflowRunRows,
                     footer: "MANAGE WORKFLOWS"
                 )
+                ScopeRule(.section, axis: .vertical)
                 RoutinesPanel(
                     title: "Console",
                     trailing: "2 tabs",
@@ -510,7 +511,7 @@ struct ScopeHomeView: View {
     // recurring-theme aggregator. Shortcuts is the only one mostly
     // real today (HotkeyManager registrations).
 
-    // Tips row — compact instrument labels for common actions.
+    // Tips row — compact borderless instrument labels for common actions.
     private var discoveryRow: some View {
         VStack(alignment: .leading, spacing: 14) {
             Eyebrow("Tips")
@@ -521,12 +522,14 @@ struct ScopeHomeView: View {
                     detail: "Use ⌃⇧⌘ E during playback to dictate an edit.",
                     action: "Open"
                 )
+                ScopeRule(.section, axis: .vertical)
                 DidYouKnowCard(
                     glyph: .smartActions,
                     hook: "Compose chips",
                     detail: "Grammar, concise, and tone chips are available in Compose.",
                     action: "Compose"
                 )
+                ScopeRule(.section, axis: .vertical)
                 DidYouKnowCard(
                     glyph: .tray,
                     hook: "Screen capture",
@@ -1689,7 +1692,7 @@ struct BayCornerBrackets: View {
 
 // MARK: - Routines panel
 //
-// Light cream panel with header rail (title + trailing chrome), a
+// Borderless row block with header rail (title + trailing chrome), a
 // short list of rows, and a footer link. Used for both Workflows and
 // Console quick-entries in the Routines strip.
 
@@ -1763,16 +1766,6 @@ private struct RoutinesPanel: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
         }
-        .background(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color.white.opacity(0.40))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(isHovered ? ScopeEdge.strong : ScopeEdge.normal, lineWidth: 0.5)
-        )
-        .shadow(color: Color.black.opacity(0.04), radius: 1, y: 1)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
         .frame(maxWidth: .infinity)
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.16), value: isHovered)
@@ -1828,15 +1821,7 @@ private struct DidYouKnowCard: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 18)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color.white.opacity(0.40))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .stroke(isHovered ? ScopeEdge.strong : ScopeEdge.normal, lineWidth: 0.5)
-            )
-            .shadow(color: Color.black.opacity(0.04), radius: 1, y: 1)
+
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
