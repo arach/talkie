@@ -114,7 +114,13 @@ private struct LiquidGlassTray: View {
     var body: some View {
         HStack(spacing: 14) {
             TraySlot(
-                glyph: AnyView(Image(systemName: "house").font(.system(size: 16, weight: .regular))),
+                glyph: AnyView(
+                    Image("TalkieBowtie")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 22, height: 22)
+                ),
                 label: "Home"
             ) {
                 AppShellRouter.shared.openHome()
@@ -122,7 +128,7 @@ private struct LiquidGlassTray: View {
             }
 
             TraySlot(
-                glyph: AnyView(Image(systemName: "square.and.arrow.down").font(.system(size: 17, weight: .regular))),
+                glyph: AnyView(Image(systemName: "viewfinder").font(.system(size: 17, weight: .regular))),
                 label: "Capture"
             ) {
                 AppShellRouter.shared.openCaptureCompose()
