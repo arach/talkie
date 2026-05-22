@@ -882,6 +882,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             exit(0)
         }
 
+        cliHandler.register(
+            "test-skill-file-format",
+            description: "Run parser/serializer tests for bundled .skill.md files"
+        ) { _ in
+            print("")
+            SkillFileFormatTests.runAll()
+            exit(0)
+        }
+
     }
 
     // MARK: - URL Handling
@@ -999,6 +1008,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                         await self.speakTextFromSelection(text)
                     }
                 }
+            }
+            // Handle talkie://library and talkie://library/memo|dictation?id={uuid}
+            // — opens the Library view, optionally selecting a specific record.
+            // Useful as a launch-arg target (see scripts/run.sh --view library).
+            else if url.host == "library" {
+                NSApp.activate(ignoringOtherApps: true)
+                if let mainWindow = NSApp.windows.first(where: { $0.canBecomeMain }) {
+                    mainWindow.makeKeyAndOrderFront(nil)
+                }
+                let path = url.pathComponents.dropFirst().first ?? ""
+                let idString = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                    .queryItems?.first(where: { $0.name == "id" })?.value
+                if path == "memo", let idString, let id = UUID(uuidString: idString) {
+                    NavigationState.shared.navigateToMemo(id)
+                } else if path == "dictation", let idString, let id = UUID(uuidString: idString) {
+                    NavigationState.shared.navigateToDictation(id)
+                } else {
+                    NavigationState.shared.navigate(to: .recordings)
+                }
+            }
+            // Handle talkie://home — opens the Home view.
+            else if url.host == "home" {
+                NSApp.activate(ignoringOtherApps: true)
+                if let mainWindow = NSApp.windows.first(where: { $0.canBecomeMain }) {
+                    mainWindow.makeKeyAndOrderFront(nil)
+                }
+                NavigationState.shared.navigateToHome()
             }
             else if self.handleDebugURL(url) {
                 // Handled by debug URL handler

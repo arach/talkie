@@ -25,11 +25,13 @@ import SwiftUI
 public enum SidebarLayout {
     // ── Columns ──
     /// Fixed icon column at the leading edge. Never animates.
-    /// Widened from 32 → 36 so the 15pt SF Symbol icons (and the
-    /// logo, accent bar, hover pill) have ~10pt of margin per side
-    /// instead of 8.5pt — keeps the compact rail from feeling tight,
-    /// especially against the trailing separator line.
-    public static let railWidth: CGFloat = 36
+    /// 36 → 40 (arach 2026-05-21): another 2pt per side beyond the
+    /// previous 32 → 36 bump. The compact rail was still reading as
+    /// "exactly icon-width" against the trailing separator; the extra
+    /// shoulder lets the column breathe without losing its sliver
+    /// silhouette. ~12.5pt of margin per side for the 15pt SF Symbol
+    /// glyphs.
+    public static let railWidth: CGFloat = 40
 
     /// Maximum width of the label column when fully expanded.
     public static let labelWidth: CGFloat = 200

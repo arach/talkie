@@ -9,6 +9,119 @@
 import SwiftUI
 import TalkieKit
 
+// MARK: - Theme-aware Scope detail tokens
+//
+// The editorial detail layouts keep the Scope typography/composition, but
+// their colors must follow the active Talkie theme. Scope still receives
+// the canonical cool-gray canvas/ink via Theme.current because the Scope
+// preset maps those values there; dark themes receive their own readable
+// surfaces, text, rules, and accents.
+
+@MainActor
+enum ThemedScopeCanvas {
+    static var canvas: Color { Theme.current.background }
+    static var canvasAlt: Color { Theme.current.surface1 }
+    static var surface: Color { Theme.current.surface2 }
+}
+
+@MainActor
+enum ThemedScopeInk {
+    static var primary: Color { Theme.current.foreground }
+    static var dim: Color { Theme.current.foreground.opacity(0.82) }
+    static var muted: Color { Theme.current.foregroundSecondary }
+    static var faint: Color { Theme.current.foregroundMuted }
+    static var subtle: Color { Theme.current.foregroundMuted.opacity(0.72) }
+}
+
+@MainActor
+enum ThemedScopeEdge {
+    static var strong: Color { Theme.current.foreground.opacity(0.24) }
+    static var normal: Color { Theme.current.foreground.opacity(0.16) }
+    static var faint: Color { Theme.current.foreground.opacity(0.10) }
+    static var subtle: Color { Theme.current.foreground.opacity(0.07) }
+}
+
+@MainActor
+enum ThemedScopeAccent {
+    static var amber: Color {
+        SettingsManager.shared.isScopeTheme ? ScopeAmber.solid : Color.accentColor
+    }
+
+    static var brass: Color {
+        SettingsManager.shared.isScopeTheme ? ScopeBrass.solid : Color.accentColor
+    }
+
+    static var tint: Color {
+        amber.opacity(SettingsManager.shared.isScopeTheme ? 0.06 : 0.14)
+    }
+
+    static var tintSubtle: Color {
+        amber.opacity(SettingsManager.shared.isScopeTheme ? 0.04 : 0.08)
+    }
+
+    static var memo: Color {
+        SettingsManager.shared.isScopeTheme ? ScopeKind.memo : Color.accentColor
+    }
+
+    static var dictation: Color {
+        SettingsManager.shared.isScopeTheme ? ScopeKind.dict : Color.accentColor
+    }
+
+    static var note: Color {
+        SettingsManager.shared.isScopeTheme ? ScopeKind.note : Theme.current.foregroundSecondary
+    }
+
+    static var capture: Color {
+        SettingsManager.shared.isScopeTheme ? ScopeKind.capture : Theme.current.foregroundSecondary
+    }
+
+    static func kind(for type: TalkieObjectType) -> Color {
+        switch type {
+        case .memo: return memo
+        case .dictation: return dictation
+        case .note: return note
+        case .capture, .selection: return capture
+        case .segment: return ThemedScopeInk.faint
+        }
+    }
+}
+
+struct ThemedScopeRule: View {
+    var role: ScopeRule.Role
+    var axis: Axis.Set
+
+    init(_ role: ScopeRule.Role = .row, axis: Axis.Set = .horizontal) {
+        self.role = role
+        self.axis = axis
+    }
+
+    var body: some View {
+        Rectangle()
+            .fill(color)
+            .frame(
+                width: axis == .vertical ? thickness : nil,
+                height: axis == .horizontal ? thickness : nil
+            )
+    }
+
+    private var color: Color {
+        switch role {
+        case .section:
+            return Theme.current.foreground.opacity(0.18)
+        case .row:
+            return Theme.current.foreground.opacity(0.12)
+        case .subtle:
+            return Theme.current.foreground.opacity(0.08)
+        case .action:
+            return ThemedScopeAccent.brass.opacity(0.72)
+        }
+    }
+
+    private var thickness: CGFloat {
+        role == .action ? 1.5 : 1
+    }
+}
+
 // MARK: - Attachment Thumbnail
 
 struct AttachmentThumbnail: View {
@@ -339,9 +452,14 @@ struct WorkflowPickerRow: View {
     }
 }
 
-// MARK: - Performance Context Card (Debug)
+// MARK: - Performance Context Card
 
-#if DEBUG
+// Was previously `#if DEBUG`-gated when the card lived behind a hidden
+// developer toggle. Now ships in release — the call site in
+// TODictationContextSection.swift renders unconditionally so users can
+// see processing metrics. Removing the gate fixed a release-build link
+// error (cannot find PerfContextCard in scope) introduced when the use
+// site was un-DEBUG'd but the definition wasn't.
 struct PerfContextCard: View {
     let perf: PerformanceMetrics
     let audio: AudioMetrics?
@@ -528,7 +646,6 @@ struct PerfContextCard: View {
         }
     }
 }
-#endif
 
 // MARK: - Workflow Run Row
 
@@ -651,101 +768,254 @@ struct RecordingTranscriptCard: View {
 
     @State private var copied = false
     @State private var toolTrayHovered = false
+    @State private var jsonChipHovered = false
 
     private var hasTranscriptionData: Bool {
         recording.timedTranscription != nil || recording.isMemo || recording.isDictation || recording.isSelection
     }
 
+    /// Right-margin metadata aside groups. Only surface useful-but-not-
+    /// core technical particulars — model + confidence, perf timings, and
+    /// (for dictations) the originating app context. Notes/captures
+    /// don't get an aside; their content sits in the gallery instead.
+    private var documentMetadataGroups: [DocumentMetadataGroup] {
+        guard recording.isMemo || recording.isDictation || recording.isSelection else { return [] }
+        var groups: [DocumentMetadataGroup] = []
+
+        // Transcription: model (brass accent) + peak amplitude (proxy for confidence)
+        var transcription: [DocumentMetadataRow] = []
+        if let model = recording.transcriptionModel, !model.isEmpty {
+            transcription.append(.init(label: "model", value: prettyModel(model), accent: true))
+        }
+        if let peak = recording.metadata?.audio?.peakAmplitude {
+            transcription.append(.init(label: "peak", value: formatAmplitude(peak)))
+        }
+        if !transcription.isEmpty {
+            groups.append(.init(title: "Transcription", rows: transcription))
+        }
+
+        // Timing: end-to-end + in-app
+        var timing: [DocumentMetadataRow] = []
+        if let endToEnd = recording.metadata?.performance?.endToEndMs {
+            timing.append(.init(label: "end-to-end", value: formatMs(endToEnd)))
+        }
+        if let inApp = recording.metadata?.performance?.inAppMs {
+            timing.append(.init(label: "in-app", value: formatMs(inApp)))
+        }
+        if !timing.isEmpty {
+            groups.append(.init(title: "Timing", rows: timing))
+        }
+
+        // Context (dictations): captured-in app, terminal cwd. Quiet, gray.
+        if recording.isDictation || recording.isSelection {
+            var context: [DocumentMetadataRow] = []
+            if let appName = recording.metadata?.app?.name, !appName.isEmpty {
+                context.append(.init(label: "captured in", value: appName))
+            }
+            if let cwd = recording.metadata?.context?.terminalWorkingDir, !cwd.isEmpty {
+                context.append(.init(label: "cwd", value: shortPath(cwd)))
+            }
+            if !context.isEmpty {
+                groups.append(.init(title: "Context", rows: context))
+            }
+        }
+
+        return groups
+    }
+
+    private func prettyModel(_ raw: String) -> String {
+        // "parakeet:v3" → "Parakeet v3", "whisper:openai_whisper-small" → "Whisper small"
+        let parts = raw.split(separator: ":", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { return raw }
+        let family = parts[0].prefix(1).uppercased() + parts[0].dropFirst()
+        let variant = parts[1]
+            .replacingOccurrences(of: "openai_whisper-", with: "")
+            .replacingOccurrences(of: "distil-whisper_distil-", with: "")
+            .replacingOccurrences(of: "_", with: " ")
+        return "\(family) \(variant)"
+    }
+
+    private func formatAmplitude(_ value: Float) -> String {
+        String(format: "%.2f", value)
+    }
+
+    private func formatMs(_ ms: Int) -> String {
+        if ms < 1000 { return "\(ms) ms" }
+        return String(format: "%.2f s", Double(ms) / 1000.0)
+    }
+
+    private func shortPath(_ path: String) -> String {
+        let home = NSHomeDirectory()
+        let collapsed = path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
+        if collapsed.count <= 24 { return collapsed }
+        return "…" + collapsed.suffix(22)
+    }
+
+    // Document mode: default read view, no card chrome. The transcript
+    // reads as an editorial document sitting on the chiffon paper —
+    // serif lead, paragraph breaks, marginal rule, end slug.
+    //
+    // Boxed mode: editing or JSON. The card chrome returns so the user
+    // sees they're inside a control surface.
+    private var documentMode: Bool { !isEditing && !showJSON }
+
     var body: some View {
         VStack(spacing: 0) {
-            if !isEditing {
-                if hasTranscriptionData {
-                    tabToggle
-                } else {
-                    HStack {
-                        Spacer()
-                        copyButton
-                            .padding(.trailing, Spacing.sm)
-                    }
-                    .padding(.vertical, Spacing.xs)
-                    .background(
-                        isTechnical ? TechnicalStyle.surface1 : Theme.current.foreground.opacity(0.02)
-                    )
-                }
+            // Top strip:
+            //  - editing mode: nothing (the TextEditor owns the surface).
+            //  - JSON mode: dismissal row with a BACK TO TEXT affordance.
+            //  - document mode: a flush-right TEXT/JSON toggle so the
+            //    affordance lives on the card whose body it changes
+            //    (was previously in the masthead's action row, which read
+            //    as detached chrome).
+            if !isEditing && showJSON {
+                jsonDismissalRow
+            } else if !isEditing {
+                cardModeStrip
             }
 
             contentArea
 
-            if !isEditing && (recording.isDictation || recording.hasAudio) {
-                toolTray
-            }
+            // Tool tray (Quick Open into Notion / ChatGPT / Notes / etc.)
+            // demoted for now — re-add when the affordance lands in the
+            // side rail Actions block, where it belongs alongside the
+            // other content actions instead of floating below the body.
         }
-        .clipShape(RoundedRectangle(cornerRadius: isTechnical ? CornerRadius.card : CornerRadius.md))
+        .clipShape(RoundedRectangle(cornerRadius: documentMode ? 0 : (isTechnical ? CornerRadius.card : CornerRadius.md)))
         .overlay {
-            // Notes are always editable — use subtle border, not accent highlight
-            let showAccent = isEditing && !recording.isNote
-            if isTechnical {
-                RoundedRectangle(cornerRadius: CornerRadius.card)
-                    .strokeBorder(
-                        showAccent ? Color.accentColor.opacity(0.4) : TechnicalStyle.borderLevel1,
-                        lineWidth: settings.currentBorderWidth
-                    )
+            if documentMode {
+                EmptyView()
             } else {
-                RoundedRectangle(cornerRadius: CornerRadius.md)
-                    .stroke((showAccent ? Color.accentColor : Theme.current.foreground).opacity(showAccent ? 0.28 : 0.12), lineWidth: showAccent ? 1 : BorderWidth.thin)
+                // Notes are always editable — use subtle border, not accent highlight
+                let showAccent = isEditing && !recording.isNote
+                if isTechnical {
+                    RoundedRectangle(cornerRadius: CornerRadius.card)
+                        .strokeBorder(
+                            showAccent ? Color.accentColor.opacity(0.4) : TechnicalStyle.borderLevel1,
+                            lineWidth: settings.currentBorderWidth
+                        )
+                } else {
+                    RoundedRectangle(cornerRadius: CornerRadius.md)
+                        .stroke((showAccent ? Color.accentColor : Theme.current.foreground).opacity(showAccent ? 0.28 : 0.12), lineWidth: showAccent ? 1 : BorderWidth.thin)
+                }
             }
         }
     }
 
-    // MARK: - Tab Toggle
+    // MARK: - JSON dismissal row
+    //
+    // Replaces the old persistent TEXT/JSON tab pair. Only renders when
+    // the user has actively flipped to JSON via the overflow menu;
+    // gives them a one-tap path back to the editorial text view.
 
-    private var tabToggle: some View {
-        HStack {
-            Spacer()
-
-            HStack(spacing: 0) {
-                tabButton("Text", icon: "text.alignleft", isSelected: !showJSON) {
-                    withAnimation(.easeInOut(duration: 0.15)) { showJSON = false }
-                }
-
-                tabButton("JSON", icon: "curlybraces", isSelected: showJSON) {
-                    withAnimation(.easeInOut(duration: 0.15)) { showJSON = true }
-                }
-            }
-            .padding(2)
-            .background(
-                Capsule()
-                    .fill(Theme.current.foreground.opacity(0.04))
-            )
-
-            Spacer()
-
-            copyButton
-                .padding(.trailing, Spacing.sm)
+    /// Top strip in document mode — flush-right TEXT/JSON toggle.
+    /// Sits over the transparent paper (no background) so it reads as
+    /// editorial chrome on the document, not a control bar.
+    private var cardModeStrip: some View {
+        HStack(spacing: 0) {
+            Spacer(minLength: 8)
+            cardJSONToggleButton
         }
-        .padding(.vertical, isTechnical ? Spacing.xs : Spacing.sm)
+        .padding(.horizontal, documentMode ? 0 : Spacing.sm)
+        .padding(.vertical, documentMode ? 2 : Spacing.xs)
         .background(
-            isTechnical ? TechnicalStyle.surface1 : Theme.current.foreground.opacity(0.02)
+            documentMode
+                ? Color.clear
+                : (isTechnical ? TechnicalStyle.surface1 : Theme.current.foreground.opacity(0.02))
         )
     }
 
-    private func tabButton(_ label: String, icon: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: Spacing.xxs) {
-                Image(systemName: icon)
-                    .font(settings.fontXS)
-                Text(label)
-                    .font(settings.fontXSMedium)
+    /// JSON entry chip — only shown in document mode. Mirrors the studio
+    /// `JSON` mono pill: subtle by default, lights up to brass on hover.
+    /// Tapping flips the card to JSON mode and the dismissal row takes
+    /// over from there.
+    private var cardJSONToggleButton: some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.12)) { showJSON = true }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "curlybraces")
+                    .font(.system(size: 10, weight: .regular))
+                Text("JSON")
+                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                    .tracking(1.6)
             }
-            .foregroundColor(isSelected ? Theme.current.foreground : Theme.current.foregroundSecondary)
-            .padding(.horizontal, Spacing.sm)
-            .padding(.vertical, Spacing.xs)
-            .background(
-                Capsule()
-                    .fill(isSelected ? Theme.current.foreground.opacity(0.09) : Color.clear)
+            .foregroundColor(
+                jsonChipHovered
+                    ? ThemedScopeAccent.brass
+                    : Theme.current.foregroundSecondary.opacity(0.62)
             )
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(jsonChipHovered
+                        ? ThemedScopeAccent.brass.opacity(0.08)
+                        : Color.clear)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 3)
+                            .stroke(
+                                jsonChipHovered
+                                    ? ThemedScopeAccent.brass.opacity(0.35)
+                                    : Theme.current.foreground.opacity(0.10),
+                                lineWidth: 0.5
+                            )
+                    )
+            )
+            .animation(.easeOut(duration: 0.12), value: jsonChipHovered)
         }
         .buttonStyle(.plain)
+        .onHover { hovering in
+            jsonChipHovered = hovering
+            if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
+        }
+        .help("View as JSON")
+    }
+
+    private var jsonDismissalRow: some View {
+        HStack(spacing: 8) {
+            Text("· JSON")
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .tracking(2.8)
+                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.62))
+            ThemedScopeRule(.subtle)
+            Button {
+                withAnimation(.easeOut(duration: 0.12)) { showJSON = false }
+            } label: {
+                Text("← BACK TO TEXT")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .tracking(2.2)
+                    .foregroundColor(ThemedScopeAccent.brass)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+            }
+            .buttonStyle(.plain)
+            .help("Return to editorial text view")
+        }
+        .padding(.horizontal, documentMode ? 0 : Spacing.md)
+        .padding(.vertical, documentMode ? 6 : Spacing.sm)
+        .background(
+            documentMode
+                ? Color.clear
+                : (isTechnical ? TechnicalStyle.surface1 : Theme.current.foreground.opacity(0.02))
+        )
+    }
+
+    private var studioCopyButton: some View {
+        Button(action: copyContent) {
+            Text(copied ? "COPIED" : "COPY")
+                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .tracking(1.8)
+                .foregroundColor(
+                    copied
+                        ? Color.green.opacity(0.75)
+                        : Theme.current.foregroundSecondary.opacity(0.65)
+                )
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+        }
+        .buttonStyle(.plain)
+        .help("Copy to clipboard")
     }
 
     // MARK: - Content Area
@@ -765,19 +1035,26 @@ struct RecordingTranscriptCard: View {
                 } else if showJSON {
                     jsonContent
                 } else {
-                    Text(text)
-                        .font(settings.contentFontBody)
-                        .foregroundColor(Theme.current.foreground)
-                        .textSelection(.enabled)
-                        .lineSpacing(4)
-                        .padding(Spacing.md)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    DocumentBody(
+                        text: text,
+                        duration: recording.duration,
+                        wordCount: recording.wordCount
+                        // metadataGroups intentionally omitted — TOMarginRail
+                        // (rendered at TalkieView.scrollContent level) now
+                        // owns the right-margin metadata aside. Passing
+                        // groups here would produce a second right column
+                        // alongside the rail.
+                    )
                 }
             }
-            .background(
-                Rectangle()
-                    .fill(Theme.current.foreground.opacity((isEditing && !recording.isNote) ? 0.06 : 0.04))
-            )
+            .background {
+                if documentMode {
+                    Color.clear
+                } else {
+                    Rectangle()
+                        .fill(Theme.current.foreground.opacity((isEditing && !recording.isNote) ? 0.06 : 0.04))
+                }
+            }
             .contextMenu {
                 Button {
                     copyContent()
@@ -836,10 +1113,18 @@ struct RecordingTranscriptCard: View {
     }
 
     private var jsonContent: some View {
+        // Min-height + max-height bracket: short payloads render at
+        // their natural height with a floor (so the card always has
+        // visible JSON when toggled — the previous bare ScrollView
+        // could collapse to zero inside a `.fixedSize`-free VStack and
+        // looked like clicking the toggle did nothing). Tall payloads
+        // get a scrollable cap.
         ScrollView {
             SyntaxHighlightedJSON(json: renderJSON())
                 .padding(Spacing.md)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(minHeight: 280, maxHeight: 520)
     }
 
     // MARK: - Tool Tray
@@ -854,16 +1139,16 @@ struct RecordingTranscriptCard: View {
         }
         .padding(.horizontal, Spacing.md)
         .padding(.vertical, isTechnical ? 6 : 8)
-        .background(
-            Group {
-                if isTechnical {
-                    TechnicalStyle.surface1
-                } else {
-                    Rectangle()
-                        .fill(Theme.current.foreground.opacity(0.02))
-                }
+        .background {
+            if documentMode {
+                Color.clear
+            } else if isTechnical {
+                TechnicalStyle.surface1
+            } else {
+                Rectangle()
+                    .fill(Theme.current.foreground.opacity(0.02))
             }
-        )
+        }
         .onHover { toolTrayHovered = $0 }
     }
 
@@ -1029,6 +1314,201 @@ struct RecordingTranscriptCard: View {
     }
 }
 
+// MARK: - Document Body
+//
+// The transcript rendered as an editorial document — not a wall of mono
+// in a card, but paragraphs on the page. Lead paragraph in serif
+// display at a larger size; subsequent paragraphs in the body sans at
+// comfortable measure. Brass marginal rule on the left, end-of-document
+// slug at the bottom.
+//
+// Mirrors design/studio/components/studies/MacMemoDetail.tsx Body().
+
+struct DocumentMetadataRow {
+    let label: String
+    let value: String
+    var accent: Bool = false
+}
+
+struct DocumentMetadataGroup {
+    let title: String
+    let rows: [DocumentMetadataRow]
+}
+
+struct DocumentBody: View {
+    let text: String
+    let duration: TimeInterval
+    let wordCount: Int
+    /// Optional right-margin metadata aside. Renders the editor's caption
+    /// — grouped technical particulars — alongside the body in a 1fr/220pt
+    /// grid. Mirrors studio Body() aside.
+    var metadataGroups: [DocumentMetadataGroup] = []
+    /// Optional opener cue rendered before the lead paragraph (e.g.
+    /// "0:00 ·"). Renders in brass mono caps, inline with the lead.
+    var leadCue: String? = nil
+
+    /// Split the transcript into paragraphs. Double-newline wins; if
+    /// the model gave us one block (common for short dictations), we
+    /// fall back to single newlines, then to one paragraph.
+    private var paragraphs: [String] {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let byDouble = trimmed
+            .components(separatedBy: "\n\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if byDouble.count > 1 { return byDouble }
+
+        let bySingle = trimmed
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return bySingle.isEmpty ? [trimmed] : bySingle
+    }
+
+    private var formattedDuration: String {
+        let total = max(Int(duration.rounded()), 0)
+        let m = total / 60
+        let s = total % 60
+        return String(format: "%d:%02d", m, s)
+    }
+
+    private static func serif(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        for name in ["Newsreader-Regular", "Newsreader"] {
+            #if os(macOS)
+            if NSFont(name: name, size: size) != nil {
+                return .custom(name, size: size)
+            }
+            #endif
+        }
+        return .system(size: size, weight: weight, design: .serif)
+    }
+
+    /// Whether the body has visible content (paragraphs beyond the
+    /// masthead standfirst). Single-paragraph recordings have their
+    /// whole transcript in the standfirst — the body is silent.
+    private var hasBodyContent: Bool {
+        paragraphs.count > 1
+    }
+
+    var body: some View {
+        // For single-paragraph recordings the lead lives in the masthead
+        // and the body has nothing to say. Render only the aside (or
+        // nothing) — no orphan marginal rule, no end slug floating in
+        // whitespace.
+        //
+        // Horizontal padding is supplied by the parent (TalkieView's
+        // `recipeSections` 36pt body gutter) — DON'T add internal
+        // horizontal padding or content double-indents to 72pt.
+        Group {
+            if hasBodyContent {
+                HStack(alignment: .top, spacing: 40) {
+                    documentColumn
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if !metadataGroups.isEmpty {
+                        metadataAside
+                            .frame(width: 220, alignment: .leading)
+                    }
+                }
+                .padding(.top, 8)
+                .padding(.bottom, 40)
+            } else if !metadataGroups.isEmpty {
+                HStack(alignment: .top, spacing: 40) {
+                    Spacer(minLength: 0)
+                        .frame(maxWidth: .infinity)
+                    metadataAside
+                        .frame(width: 220, alignment: .leading)
+                }
+                .padding(.top, 0)
+                .padding(.bottom, 24)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var documentColumn: some View {
+        // Lead paragraph has been promoted to the masthead (TOHeaderSection
+        // standfirst). The body renders only paragraphs 2…n and the end
+        // slug.
+        let rest = Array(paragraphs.dropFirst())
+
+        return HStack(alignment: .top, spacing: 20) {
+            // Marginal rule — printed-page gutter.
+            ThemedScopeRule(.action, axis: .vertical)
+                .opacity(0.35)
+                .padding(.vertical, 4)
+
+            VStack(alignment: .leading, spacing: 20) {
+                ForEach(Array(rest.enumerated()), id: \.offset) { _, p in
+                    Text(p)
+                        .font(.system(size: 14, weight: .regular))
+                        .lineSpacing(8)
+                        .foregroundColor(Theme.current.foreground.opacity(0.78))
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                endSlug
+                    .padding(.top, 12)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var endSlug: some View {
+        HStack(spacing: 10) {
+            ThemedScopeRule(.section)
+                .frame(width: 22)
+            Text("END · \(formattedDuration) · \(wordCount) WORDS")
+                .font(.system(size: 9, weight: .regular, design: .monospaced))
+                .tracking(2.0)
+                .foregroundColor(Theme.current.foregroundSecondary.opacity(0.65))
+            ThemedScopeRule(.subtle)
+        }
+    }
+
+    // MARK: - Metadata aside
+
+    private var metadataAside: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            ForEach(Array(metadataGroups.enumerated()), id: \.offset) { gi, group in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("· \(group.title.uppercased())")
+                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                        .tracking(2.2)
+                        .foregroundColor(Theme.current.foregroundSecondary.opacity(0.55))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(Array(group.rows.enumerated()), id: \.offset) { _, row in
+                            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                                Text(row.label.lowercased())
+                                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                                    .tracking(1.6)
+                                    .foregroundColor(Theme.current.foregroundSecondary.opacity(0.60))
+                                Spacer(minLength: 8)
+                                Text(row.value)
+                                    .font(.system(size: 11, weight: .regular, design: .monospaced))
+                                    .monospacedDigit()
+                                    .foregroundColor(
+                                        row.accent
+                                            ? ThemedScopeAccent.brass
+                                            : Theme.current.foreground
+                                    )
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
+                        }
+                    }
+
+                    if gi < metadataGroups.count - 1 {
+                        ThemedScopeRule(.subtle)
+                            .padding(.top, 4)
+                    }
+                }
+            }
+        }
+        .padding(.top, 8)
+    }
+}
+
 // MARK: - Syntax Highlighted JSON
 
 struct SyntaxHighlightedJSON: View {
@@ -1170,6 +1650,9 @@ struct AudioPlayerCard: View {
     let onTogglePlayback: () -> Void
     let onSeek: (Double) -> Void
     var onVolumeChange: ((Float) -> Void)? = nil
+    /// When true, the card renders with no internal padding so a wrapping
+    /// band can supply its own (used by the full-bleed playback footer).
+    var noInternalPadding: Bool = false
 
     @State private var isPlayButtonHovered = false
     @State private var showVolumeSlider = false
@@ -1327,8 +1810,8 @@ struct AudioPlayerCard: View {
                 .help("Adjust volume")
             }
         }
-        .padding(.horizontal, Spacing.md)
-        .padding(.vertical, Spacing.sm)
+        .padding(.horizontal, noInternalPadding ? 0 : Spacing.md)
+        .padding(.vertical, noInternalPadding ? 0 : Spacing.sm)
         .onAppear {
             volume = SettingsManager.shared.playbackVolume
         }

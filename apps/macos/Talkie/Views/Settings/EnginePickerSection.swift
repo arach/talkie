@@ -1,45 +1,15 @@
 //
-//  TransformsSettings.swift
+//  EnginePickerSection.swift
 //  Talkie macOS
 //
-//  Rules settings: engine picker + symbolic mapping
+//  STT engine picker — selects the active model from downloaded ones.
+//  Embedded by the Processing tab of ContextSettingsView.
 //
 
 import SwiftUI
 import TalkieKit
 
 private let log = Log(.ui)
-
-// MARK: - Rules Settings
-
-/// Engine selection and transform rules applied to transcriptions
-struct RulesSettingsView: View {
-    var body: some View {
-        SettingsPageContainer {
-            SettingsPageHeader(
-                icon: "arrow.right.arrow.left",
-                title: "RULES",
-                subtitle: "Engine selection and post-processing rules for transcriptions."
-            )
-        } content: {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.lg) {
-                    // Engine picker (simple toggle)
-                    EnginePickerSection()
-
-                    // Symbolic mapping rules
-                    TransformRulesContent()
-                }
-                .padding(Spacing.lg)
-            }
-        }
-        .onAppear {
-            log.debug("RulesSettingsView appeared")
-        }
-    }
-}
-
-// MARK: - Engine Picker Section
 
 /// Simple picker for selecting the active STT model from downloaded models
 struct EnginePickerSection: View {
@@ -134,13 +104,4 @@ struct EnginePickerSection: View {
             }
         }
     }
-}
-
-// MARK: - Previews
-
-#Preview("Rules") {
-    RulesSettingsView()
-        .environment(SettingsManager.shared)
-        .environment(EngineClient.shared)
-        .frame(width: 600, height: 600)
 }

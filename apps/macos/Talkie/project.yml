@@ -107,6 +107,7 @@ targets:
         TalkieCloudKitContainerIdentifier: $(TALKIE_CLOUDKIT_CONTAINER)
         TalkieMacAppGroupIdentifier: $(TALKIE_MAC_APP_GROUP)
         TalkieSharedSettingsSuite: $(TALKIE_MAC_SHARED_SETTINGS_SUITE)
+        ATSApplicationFontsPath: Resources/Fonts/
     dependencies:
       - package: TalkieKit
       - package: TermBridgeKit
@@ -116,8 +117,8 @@ targets:
       - package: WFKit
     settings:
       base:
-        MARKETING_VERSION: "2.5.20"
-        CURRENT_PROJECT_VERSION: "14"
+        MARKETING_VERSION: "2.5.22"
+        CURRENT_PROJECT_VERSION: "15"
         INFOPLIST_KEY_CFBundleDisplayName: "Talkie"
         INFOPLIST_KEY_NSHumanReadableCopyright: ""
         CODE_SIGN_ENTITLEMENTS: Talkie.entitlements

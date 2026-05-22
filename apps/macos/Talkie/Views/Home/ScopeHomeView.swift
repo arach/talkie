@@ -39,12 +39,29 @@ private enum ScopeFont {
         }
         return .system(size: size, weight: medium ? .medium : .regular, design: .serif)
     }
+
+    /// JetBrains Mono with system fallback. Studio's `font-mono`
+    /// renders as JetBrains Mono; matching it here so SwiftUI surfaces
+    /// don't drop to SF Mono.
+    static func mono(size: CGFloat, weight: Font.Weight = .semibold) -> Font {
+        let candidates: [String]
+        switch weight {
+        case .semibold, .bold:
+            candidates = ["JetBrainsMono-SemiBold", "JetBrainsMono-Medium"]
+        default:
+            candidates = ["JetBrainsMono-Medium", "JetBrainsMono-Regular"]
+        }
+        for name in candidates {
+            if NSFont(name: name, size: size) != nil {
+                return .custom(name, size: size)
+            }
+        }
+        return .system(size: size, weight: weight, design: .monospaced)
+    }
 }
 
 struct ScopeHomeView: View {
     let unifiedActivity: [UnifiedActivityItem]
-    let todayMemos: Int
-    let todayDictations: Int
     let totalWords: Int
     let streak: Int
 
@@ -60,7 +77,6 @@ struct ScopeHomeView: View {
     @AppStorage("scopeAgentBay.sparkline") private var baySparkline: Bool = true
     @AppStorage("scopeAgentBay.waveform")  private var bayWaveform: Bool = false
     @AppStorage("scopeAgentBay.compact")   private var bayCompact: Bool = true
-    @AppStorage("scopeAgentBay.ambient")   private var bayAmbient: Bool = false
     @AppStorage("scopeAgentBay.bezel")     private var bayBezel: Bool = false
     @AppStorage("scopeAgentBay.heatmap")   private var bayHeatmap: Bool = false
     @AppStorage("scopeAgentBay.timeline")  private var bayTimeline: Bool = false
@@ -74,34 +90,66 @@ struct ScopeHomeView: View {
     // and should land on the Scope canonical, not the original amber.
     private var currentScheme: BayScheme { BayScheme(rawValue: bayScheme) ?? .chiffon }
 
+    @State private var memosStore = MemosViewModel.shared
+    @State private var dictationStore = DictationStore.shared
+    @State private var recordingsVM = RecordingsViewModel.shared
+    @State private var workflowExecutor = WorkflowExecutor.shared
+    @State private var screenshotTray = ScreenshotTray.shared
+    @State private var clipTray = ClipTray.shared
+    @State private var selectionTray = SelectionTray.shared
+
+    private var todayMemos: Int { memosStore.todayCount }
+    private var todayDictations: Int { dictationStore.todayCount }
     private var todayTotal: Int { todayMemos + todayDictations }
+    private var trayItemCount: Int {
+        _ = screenshotTray.items
+        _ = clipTray.items
+        _ = selectionTray.items
+        return TrayItem.allItems().count
+    }
 
     var body: some View {
         #if DEBUG
         let _ = FrameRateMonitor.shared.recordBodyAccess("ScopeHomeView")
         #endif
         return VStack(spacing: 0) {
-            ScopeTopBand(title: "Today", chrome: heroTrailing)
-
             ScrollView {
                 VStack(alignment: .leading, spacing: 36) {
-                    hero
-                    captureModes
                     agentPanel
+                    recentTwoPane
                     routinesStrip
-                    signalTable
                     discoveryRow
-                    systemStatusRail
-                    ownershipStrip
                 }
                 .padding(.horizontal, 32)
-                .padding(.top, 16)
+                // Top padding clears the universal ScopeTopBand (44pt
+                // tall, offset by 4pt) plus enough breathing room that
+                // the agent panel's RUNNING strip doesn't crowd the
+                // band's bottom rule. Was 8pt — felt clipped under the
+                // band.
+                .padding(.top, ScopeTopBandLayout.height + ScopeTopBandLayout.topInset + 20)
                 .padding(.bottom, 32)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(ScopeCanvas.canvas)
+        .task {
+            ChromeBarHeader.shared.set(title: "Today", subtitle: heroTrailing)
+            await memosStore.loadStats()
+            await workflowExecutor.refreshHomeHistory()
+            if recordingsVM.recordings.isEmpty {
+                await recordingsVM.loadRecordings()
+            }
+        }
+        .onChange(of: streak) { _, _ in
+            ChromeBarHeader.shared.subtitle = heroTrailing
+        }
+        .onChange(of: totalWords) { _, _ in
+            ChromeBarHeader.shared.subtitle = heroTrailing
+        }
+        .onDisappear {
+            ChromeBarHeader.shared.clear()
+        }
     }
 
     // MARK: - Hero
@@ -134,7 +182,10 @@ struct ScopeHomeView: View {
             ? "\(totalWords / 1000)K WORDS"
             : "\(totalWords) WORDS"
         if streak > 1 {
-            return "\(streak)-DAY STREAK · \(totalWordsStr)"
+            // Was "\(streak)-DAY STREAK …" — the hyphen glued the count
+            // to its unit and read tighter than the parallel "X WORDS"
+            // form. Now reads "15 DAY STREAK · 200 WORDS".
+            return "\(streak) DAY STREAK · \(totalWordsStr)"
         }
         return totalWordsStr
     }
@@ -174,7 +225,7 @@ struct ScopeHomeView: View {
                     glyph: .crosshair,
                     eyebrow: "Capture",
                     channel: "CH-03",
-                    state: "Hyper+S armed",       // TODO: wire to TrayState
+                    state: captureStateTray,
                     action: "CAPTURE",
                     hint: "⌃⇧⌘ S",
                     onTap: {}
@@ -183,9 +234,8 @@ struct ScopeHomeView: View {
         }
     }
 
-    /// Stub state lines for the capture cards. Stays factual (counts /
-    /// last-time) rather than editorial. TODO: wire to MemoStats /
-    /// DictationStore / TrayBadge live state.
+    /// State lines for the capture cards. Stays factual (counts /
+    /// last-time) rather than editorial.
     private var captureStateMemo: String {
         if todayMemos == 0 { return "Ready" }
         if todayMemos == 1 { return "1 today" }
@@ -196,17 +246,293 @@ struct ScopeHomeView: View {
         if todayDictations == 1 { return "1 today" }
         return "\(todayDictations) today"
     }
+    private var captureStateTray: String {
+        if trayItemCount == 0 { return "Hyper+S armed" }
+        if trayItemCount == 1 { return "1 in tray" }
+        return "\(trayItemCount) in tray"
+    }
+
+    // MARK: - Recent two-pane (Voice + Content)
+    //
+    // Ported from studio MacHome v4. Replaces the older mixed
+    // signalTable + captureModes pair: each Recent sub-band has a
+    // CTA-empty fallback ("● Start a memo · ⌃⇧⌘ M") that doubles as
+    // the start-it action, so there's no separate Capture Modes row
+    // duplicating the affordance.
+
+    private var recentTwoPane: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Eyebrow("Recent")
+            RecentTwoPaneSection(
+                voiceSections: [
+                    RecentSection(
+                        id: "memos",
+                        eyebrow: "Memos",
+                        count: countLabel(todayCount(recentMemos), "today"),
+                        libraryLabel: "ALL MEMOS",
+                        onLibrary: { NavigationState.shared.navigate(to: .recordings) },
+                        rows: recentMemos.prefix(3).map { obj in
+                            RecentRow(
+                                id: obj.id,
+                                glyph: "●",
+                                line: rowLine(for: obj),
+                                body: nil,
+                                meta: durationLabel(obj.duration),
+                                when: whenLabel(obj.createdAt),
+                                onTap: { NavigationState.shared.navigate(to: .recordings, params: ["recordingId": obj.id.uuidString]) }
+                            )
+                        },
+                        emptyCTA: RecentCTA(
+                            glyph: "●",
+                            label: "Start a memo",
+                            kbd: ["⌃", "⇧", "⌘", "M"],
+                            onTap: onStartRecording
+                        )
+                    ),
+                    RecentSection(
+                        id: "dictations",
+                        eyebrow: "Dictations",
+                        count: countLabel(todayCount(recentDictations), "today"),
+                        libraryLabel: "ALL DICTATIONS",
+                        onLibrary: { NavigationState.shared.navigate(to: .dictations) },
+                        rows: recentDictations.prefix(3).map { obj in
+                            RecentRow(
+                                id: obj.id,
+                                glyph: "○",
+                                line: rowLine(for: obj),
+                                body: nil,
+                                meta: wordCountLabel(obj.text),
+                                when: whenLabel(obj.createdAt),
+                                onTap: { NavigationState.shared.navigate(to: .dictations, params: ["recordingId": obj.id.uuidString]) }
+                            )
+                        },
+                        emptyCTA: RecentCTA(
+                            glyph: "○",
+                            label: "Dictate",
+                            kbd: ["⌃", "⇧", "⌘", "D"],
+                            onTap: {}
+                        )
+                    ),
+                ],
+                contentSections: [
+                    RecentSection(
+                        id: "captures",
+                        eyebrow: "Captures",
+                        count: countLabel(todayCount(recentCaptures), "today"),
+                        libraryLabel: "ALL CAPTURES",
+                        onLibrary: { NavigationState.shared.navigate(to: .screenshots) },
+                        rows: recentCaptures.prefix(3).map { item in
+                            RecentRow(
+                                id: item.id,
+                                glyph: "◫",
+                                line: item.line,
+                                body: nil,
+                                meta: item.meta,
+                                when: whenLabel(item.date),
+                                onTap: { NavigationState.shared.navigate(to: .screenshots) }
+                            )
+                        },
+                        emptyCTA: RecentCTA(
+                            glyph: "◫",
+                            label: "Capture screen",
+                            kbd: ["⌃", "⇧", "⌘", "S"],
+                            onTap: {}
+                        )
+                    ),
+                    RecentSection(
+                        id: "notes",
+                        eyebrow: "Notes",
+                        count: countLabel(recentNotes.count, "this week"),
+                        libraryLabel: "ALL NOTES",
+                        onLibrary: { NavigationState.shared.navigate(to: .notes) },
+                        rows: recentNotes.prefix(3).map { obj in
+                            RecentRow(
+                                id: obj.id,
+                                glyph: "¶",
+                                line: noteTitle(for: obj),
+                                body: noteBodyExcerpt(for: obj),
+                                meta: "",
+                                when: whenLabel(obj.createdAt),
+                                // Route via the Library so the inspector
+                                // swap (recording.type == .note →
+                                // ScopeNoteDetailView) actually fires.
+                                // `.notes` lands on the Sheaf grid and
+                                // ignores recordingId.
+                                onTap: { NavigationState.shared.navigate(to: .recordings, params: ["recordingId": obj.id.uuidString]) }
+                            )
+                        },
+                        emptyCTA: RecentCTA(
+                            glyph: "¶",
+                            label: "Write a note",
+                            kbd: ["⌃", "⇧", "⌘", "N"],
+                            onTap: {}
+                        )
+                    ),
+                ]
+            )
+        }
+    }
+
+    // MARK: Recent data sources
+
+    private var recentMemos: [TalkieObject] {
+        recordingsVM.recordings
+            .filter { $0.type == .memo && $0.deletedAt == nil }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+    private var recentDictations: [TalkieObject] {
+        recordingsVM.recordings
+            .filter { $0.type == .dictation && $0.deletedAt == nil }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+    private var recentNotes: [TalkieObject] {
+        recordingsVM.recordings
+            .filter { $0.type == .note && $0.deletedAt == nil }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// How many of `items` were created today. The Voice / Content
+    /// section labels say "X today" — they meant today specifically,
+    /// not all-time. Without this filter the label was rendering
+    /// "49 today" when the user had 49 dictations total but only 8
+    /// from today, and rows were collapsing to the CTA when the
+    /// all-time count happened to be 0 even though the user clearly
+    /// had older items.
+    private func todayCount(_ items: [TalkieObject]) -> Int {
+        let cal = Calendar.current
+        return items.filter { cal.isDateInToday($0.createdAt) }.count
+    }
+    private func todayCount(_ items: [TrayItem]) -> Int {
+        let cal = Calendar.current
+        return items.filter { cal.isDateInToday($0.capturedAt) }.count
+    }
+    private var recentTrayItems: [TrayItem] {
+        TrayItem.allItems().sorted { $0.capturedAt > $1.capturedAt }
+    }
+
+    /// Unified recent-capture stream. Screenshots and tray clips can
+    /// live in two stores: still-in-tray items (TrayItem) and items
+    /// that drained into a recording (RecordingScreenshot / .clips on
+    /// the parent TalkieObject). The home Captures section needs to
+    /// surface both so a screenshot taken this morning that drained
+    /// into a dictation still shows up under Captures.
+    private struct RecentCapture: Identifiable {
+        let id: UUID
+        let line: String
+        let meta: String
+        let date: Date
+    }
+
+    private var recentCaptures: [RecentCapture] {
+        var out: [RecentCapture] = []
+
+        // Tray items still in flight.
+        for item in TrayItem.allItems() {
+            out.append(RecentCapture(
+                id: item.id,
+                line: trayLine(for: item),
+                meta: trayMeta(for: item),
+                date: item.capturedAt
+            ))
+        }
+
+        // Drained screenshots that landed on recordings. Each shot gets
+        // its own row, dated by the recording's capture time (close
+        // enough to the actual snap timing for ranking).
+        for obj in recordingsVM.recordings where !obj.screenshots.isEmpty {
+            for ss in obj.screenshots {
+                let dims = (ss.width.map { "\($0)" } ?? "?") + "×" + (ss.height.map { "\($0)" } ?? "?")
+                let label = ss.windowTitle ?? ss.appName ?? obj.title ?? "Screenshot"
+                out.append(RecentCapture(
+                    id: stableUUID(from: "rec-\(ss.filename)"),
+                    line: label,
+                    meta: dims,
+                    date: obj.createdAt
+                ))
+            }
+        }
+
+        return out.sorted { $0.date > $1.date }
+    }
+
+    /// Deterministic UUID derived from a string — used so the rec-screenshot
+    /// rows keep stable identity across rerenders without colliding with
+    /// TrayItem.id (which is itself a UUID).
+    private func stableUUID(from string: String) -> UUID {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in string.utf8 {
+            hash ^= UInt64(byte)
+            hash &*= 0x100000001b3
+        }
+        let uuidString = String(format: "00000000-0000-4000-8000-%012llX", hash & 0x0000_FFFF_FFFF_FFFF)
+        return UUID(uuidString: uuidString) ?? UUID()
+    }
+
+    private func todayCount(_ items: [RecentCapture]) -> Int {
+        let cal = Calendar.current
+        return items.filter { cal.isDateInToday($0.date) }.count
+    }
+
+    // MARK: Recent row helpers
+
+    private func rowLine(for obj: TalkieObject) -> String {
+        let text = (obj.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.isEmpty { return obj.title ?? "Untitled" }
+        return text
+    }
+    private func noteTitle(for obj: TalkieObject) -> String {
+        if let title = obj.title, !title.isEmpty { return title }
+        let text = (obj.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let firstLine = text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: true).first.map(String.init) ?? ""
+        return firstLine.isEmpty ? "Untitled note" : firstLine
+    }
+    private func noteBodyExcerpt(for obj: TalkieObject) -> String? {
+        let text = (obj.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let parts = text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: true)
+        guard parts.count > 1 else { return nil }
+        return String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    private func durationLabel(_ seconds: Double) -> String {
+        let total = max(0, Int(seconds))
+        return String(format: "%d:%02d", total / 60, total % 60)
+    }
+    private func wordCountLabel(_ text: String?) -> String {
+        let words = (text ?? "").split { $0.isWhitespace }.count
+        return "\(words) WORDS"
+    }
+    private func trayLine(for item: TrayItem) -> String {
+        if let preview = item.previewText, !preview.isEmpty { return preview }
+        if let context = item.contextLabel, !context.isEmpty { return context }
+        return item.modeIcon
+    }
+    private func trayMeta(for item: TrayItem) -> String {
+        if item.isText { return "TEXT" }
+        return "\(item.width)×\(item.height)"
+    }
+    private func whenLabel(_ date: Date) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(date) {
+            return date.formatted(date: .omitted, time: .shortened)
+        }
+        if cal.isDateInYesterday(date) { return "Yesterday" }
+        if let days = cal.dateComponents([.day], from: date, to: Date()).day, days < 7 {
+            return date.formatted(.dateTime.weekday(.abbreviated))
+        }
+        return date.formatted(.dateTime.month(.abbreviated).day())
+    }
+    private func countLabel(_ n: Int, _ suffix: String) -> String {
+        if n == 0 { return "none \(suffix)" }
+        return "\(n) \(suffix)"
+    }
 
     // MARK: - Routines strip (Workflows · Console)
     //
     // RESTORED from the original HomeGrid taxonomy (actionWorkflows +
-    // actionHelpers + featureAgentConsole). Two light panels on the
-    // cream canvas so they read as cousins of the Capture Mode cards,
-    // not as competing dark slabs with the bay.
+    // actionHelpers + featureAgentConsole). Now demoted to borderless
+    // rule-separated rows on the canvas so Bay + Recent keep the only
+    // card weight on the page.
     //
-    // Data is stubbed at this stage. TODO: wire Workflows to
-    // WorkflowRunsStore (or equivalent); wire Console to the active
-    // ConsoleRegistry tabs.
+    // Console data remains stubbed until an active ConsoleRegistry lands.
 
     private var routinesStrip: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -214,14 +540,11 @@ struct ScopeHomeView: View {
             HStack(spacing: 16) {
                 RoutinesPanel(
                     title: "Workflows",
-                    trailing: "3 ran today",
-                    rows: [
-                        .init(leading: .filled, label: "Summarize standup",  trailing: "9:31 AM"),
-                        .init(leading: .filled, label: "Dictation → Linear", trailing: "9:14 AM"),
-                        .init(leading: .hollow, label: "Compose draft",      trailing: "Yesterday"),
-                    ],
+                    trailing: workflowRunsTodayText,
+                    rows: workflowRunRows,
                     footer: "MANAGE WORKFLOWS"
                 )
+                ScopeRule(.section, axis: .vertical)
                 RoutinesPanel(
                     title: "Console",
                     trailing: "2 tabs",
@@ -236,6 +559,39 @@ struct ScopeHomeView: View {
         }
     }
 
+    private var workflowRunsTodayText: String {
+        let count = workflowExecutor.homeSuccessfulRunsTodayCount
+        if count == 1 { return "1 ran today" }
+        return "\(count) ran today"
+    }
+
+    private var workflowRunRows: [RoutinesPanel.Row] {
+        let rows = workflowExecutor.homeRecentSuccessfulRuns.prefix(3).map { run in
+            RoutinesPanel.Row(
+                leading: .filled,
+                label: run.workflowName,
+                trailing: workflowRunTimeText(run.runDate)
+            )
+        }
+
+        if rows.isEmpty {
+            return [.init(leading: .hollow, label: "Ready", trailing: "")]
+        }
+
+        return rows
+    }
+
+    private func workflowRunTimeText(_ date: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) {
+            return date.formatted(date: .omitted, time: .shortened)
+        }
+        if calendar.isDateInYesterday(date) {
+            return "Yesterday"
+        }
+        return date.formatted(.dateTime.month(.abbreviated).day())
+    }
+
     // MARK: - Discovery row (Today · Shortcuts · Trending)
     //
     // RESTORED from widgetActivity + widgetShortcuts + widgetTrending.
@@ -247,13 +603,31 @@ struct ScopeHomeView: View {
     // recurring-theme aggregator. Shortcuts is the only one mostly
     // real today (HotkeyManager registrations).
 
+    // Tips row — compact borderless instrument labels for common actions.
     private var discoveryRow: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Eyebrow("Discovery")
-            HStack(spacing: 16) {
-                TodayWidget()
-                ShortcutsWidget()
-                TrendingWidget()
+            Eyebrow("Tips")
+            HStack(alignment: .top, spacing: 16) {
+                DidYouKnowCard(
+                    glyph: .voiceEdit,
+                    hook: "Memo edit",
+                    detail: "Use ⌃⇧⌘ E during playback to dictate an edit.",
+                    action: "Open"
+                )
+                ScopeRule(.section, axis: .vertical)
+                DidYouKnowCard(
+                    glyph: .smartActions,
+                    hook: "Compose chips",
+                    detail: "Grammar, concise, and tone chips are available in Compose.",
+                    action: "Compose"
+                )
+                ScopeRule(.section, axis: .vertical)
+                DidYouKnowCard(
+                    glyph: .tray,
+                    hook: "Screen capture",
+                    detail: "Use Hyper+S to add a screenshot to the capture tray.",
+                    action: "Details"
+                )
             }
         }
     }
@@ -266,8 +640,9 @@ struct ScopeHomeView: View {
     // recessed footer; on CHIFFON (Scope canonical) it's a barely-
     // there cream strip.
     //
-    // TODO: wire phosphor dots to live service state
-    // (ServiceManager.agent / .sync / .updater).
+    // AGENT / ICLOUD source launch-agent status; BRIDGE source is
+    // the local XPC connection to TalkieAgent. UPDATES stays stubbed
+    // until an updater source exists.
 
     private var systemStatusRail: some View {
         SystemStatusRail(scheme: currentScheme)
@@ -306,28 +681,12 @@ struct ScopeHomeView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
 
-                if bayAmbient {
-                    AmbientScanline(scheme: scheme)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-
                 VStack(alignment: .leading, spacing: 0) {
                     panelHeader(scheme: scheme)
                     panelBody(scheme: scheme)
                     panelFooter(scheme: scheme)
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                if bayHeatmap {
-                    // Floats in the body's negative space, anchored to
-                    // the top-right corner just below the header rail
-                    // — keeps the rail at its natural height.
-                    ActivityHeatmap(scheme: scheme)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                        .padding(.top, 40)
-                        .padding(.trailing, 18)
-                        .allowsHitTesting(false)
-                }
 
                 if bayBrackets {
                     BayCornerBrackets(color: scheme.edgeStrong)
@@ -381,11 +740,7 @@ struct ScopeHomeView: View {
 
     private func panelHeader(scheme: BayScheme) -> some View {
         HStack(spacing: 8) {
-            if bayAmbient {
-                BreathingDot(color: scheme.trace, size: 6)
-            } else {
-                PhosphorDot(color: scheme.trace, size: 6)
-            }
+            PhosphorDot(color: scheme.trace, size: 6)
             Text("RUNNING · AG-01 / TALKIE.AGENT")
                 .font(ScopeType.chrome)
                 .tracking(ScopeType.Tracking.wide)
@@ -400,9 +755,11 @@ struct ScopeHomeView: View {
         .padding(.vertical, 10)
         .background(scheme.stripTopFill)
         .overlay(alignment: .bottom) {
+            // Header rule — uses scheme.edge (tinted to the panel's
+            // chassis color) at the canonical 1pt thickness.
             Rectangle()
                 .fill(scheme.edge)
-                .frame(height: 0.5)
+                .frame(height: 1)
                 .padding(.horizontal, 16)
         }
     }
@@ -414,7 +771,13 @@ struct ScopeHomeView: View {
                 tileDivider(scheme: scheme)
                 statTile(scheme: scheme, seed: 1, value: "\(todayDictations)", label: "DICTATIONS · TODAY")
                 tileDivider(scheme: scheme)
-                statTile(scheme: scheme, seed: 2, value: streak > 0 ? "\(streak)d" : "0d", label: "STREAK")
+                statTile(
+                    scheme: scheme,
+                    seed: 2,
+                    value: "\(streak)",
+                    label: "DAY STREAK",
+                    extra: (bayHeatmap && !bayCompact) ? AnyView(ActivityHeatmap(scheme: scheme)) : nil
+                )
                 tileDivider(scheme: scheme)
                 statTile(scheme: scheme, seed: 3, value: wordsFormatted, label: "TOTAL WORDS")
             }
@@ -431,13 +794,19 @@ struct ScopeHomeView: View {
     }
 
     private func tileDivider(scheme: BayScheme) -> some View {
+        // Vertical tile divider — uses ScopeRule with the scheme's own
+        // edge color overlaid for surfaces that need scheme tinting
+        // (the bay's stripTopFill is darker than a cream panel, so we
+        // keep using scheme.edge here instead of switching to the
+        // generic cool-ink rule). The thickness is canonicalized via
+        // the rule's standard 1pt.
         Rectangle()
             .fill(scheme.edge)
-            .frame(width: 0.5)
+            .frame(width: 1)
             .padding(.vertical, 18)
     }
 
-    private func statTile(scheme: BayScheme, seed: Int, value: String, label: String) -> some View {
+    private func statTile(scheme: BayScheme, seed: Int, value: String, label: String, extra: AnyView? = nil) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(value)
                 .font(ScopeFont.display(size: bayCompact ? 26 : 34))
@@ -448,7 +817,10 @@ struct ScopeHomeView: View {
                 .font(ScopeType.chrome)
                 .tracking(ScopeType.Tracking.wide)
                 .foregroundStyle(scheme.inkFaint)
-            if baySparkline {
+            if let extra {
+                extra
+                    .padding(.top, 4)
+            } else if baySparkline {
                 StatSparkline(seed: seed, scheme: scheme)
                     .frame(height: bayCompact ? 12 : 16)
                     .padding(.top, 2)
@@ -510,7 +882,6 @@ struct ScopeHomeView: View {
                     bayChip("SPARKLINE", isOn: baySparkline) { baySparkline.toggle() }
                     bayChip("WAVEFORM",  isOn: bayWaveform)  { bayWaveform.toggle() }
                     bayChip("COMPACT",   isOn: bayCompact)   { bayCompact.toggle() }
-                    bayChip("AMBIENT",   isOn: bayAmbient)   { bayAmbient.toggle() }
                     bayChip("BEZEL",     isOn: bayBezel)     { bayBezel.toggle() }
                     bayChip("HEATMAP",   isOn: bayHeatmap)   { bayHeatmap.toggle() }
                     bayChip("TIMELINE",  isOn: bayTimeline)  { bayTimeline.toggle() }
@@ -521,7 +892,6 @@ struct ScopeHomeView: View {
                         baySparkline = true
                         bayWaveform = false
                         bayCompact = true
-                        bayAmbient = false
                         bayBezel = false
                         bayHeatmap = false
                         bayTimeline = false
@@ -650,7 +1020,7 @@ struct ScopeHomeView: View {
                     ForEach(unifiedActivity.prefix(6)) { item in
                         SignalRow(item: item, action: { onOpenItem(item) })
                             .overlay(alignment: .top) {
-                                Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
+                                ScopeRule(.row)
                             }
                     }
                 }
@@ -809,10 +1179,10 @@ private struct CaptureModeCard: View {
             Text(action)
                 .font(ScopeType.channel)
                 .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(isHovered ? ScopeAmber.solid : Color.hex("9A6A22"))
+                .foregroundStyle(isHovered ? ScopeAmber.solid : ScopeBrass.solid)
             Text("→")
                 .font(.system(size: 11))
-                .foregroundStyle(isHovered ? ScopeAmber.solid : Color.hex("9A6A22"))
+                .foregroundStyle(isHovered ? ScopeAmber.solid : ScopeBrass.solid)
             Spacer()
             Text(hint)
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
@@ -1021,55 +1391,6 @@ private struct BackgroundWaveform: View {
     }
 }
 
-/// Treatment 5a — slow breathing on the running dot. TimelineView is
-/// scoped to the dot only so the parent body doesn't re-evaluate.
-private struct BreathingDot: View {
-    let color: Color
-    let size: CGFloat
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { ctx in
-            let t = ctx.date.timeIntervalSinceReferenceDate
-            let phase = (sin(t * .pi / 1.5) + 1) / 2   // 0…1, ~3s cycle
-            let opacity = 0.55 + phase * 0.45           // 0.55 … 1.0
-            Circle()
-                .fill(color)
-                .frame(width: size, height: size)
-                .opacity(opacity)
-                .shadow(color: color.opacity(0.30 + phase * 0.30), radius: size * 0.6)
-        }
-    }
-}
-
-/// Treatment 5b — slow CRT scanline drifting top→bottom across the
-/// panel. ~14s cycle so it reads as ambient, not motion noise.
-private struct AmbientScanline: View {
-    let scheme: BayScheme
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 24.0, paused: false)) { ctx in
-            GeometryReader { geo in
-                let t = ctx.date.timeIntervalSinceReferenceDate
-                let cycle = 14.0
-                let progress = (t.truncatingRemainder(dividingBy: cycle)) / cycle
-                let y = CGFloat(progress) * geo.size.height
-                LinearGradient(
-                    stops: [
-                        .init(color: .clear, location: 0.0),
-                        .init(color: scheme.trace.opacity(0.10), location: 0.5),
-                        .init(color: .clear, location: 1.0)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 36)
-                .offset(y: y - 18)
-                .allowsHitTesting(false)
-            }
-        }
-    }
-}
-
 // MARK: - Bay color schemes
 //
 // Each scheme swaps the phosphor / accent family inside the agent bay
@@ -1123,9 +1444,9 @@ enum BayScheme: String, CaseIterable {
     /// phosphor.
     var trace: Color {
         switch self {
-        case .amber:                              return Color.hex("E89A3C")
+        case .amber:                              return ScopeKind.dict
         case .pearl, .porcelain, .aluminum:       return Color.hex("D49236")
-        case .chiffon, .vellum, .paper:           return Color.hex("9A6A22")
+        case .chiffon, .vellum, .paper:           return ScopeBrass.solid
         }
     }
 
@@ -1471,7 +1792,7 @@ struct BayCornerBrackets: View {
 
 // MARK: - Routines panel
 //
-// Light cream panel with header rail (title + trailing chrome), a
+// Borderless row block with header rail (title + trailing chrome), a
 // short list of rows, and a footer link. Used for both Workflows and
 // Console quick-entries in the Routines strip.
 
@@ -1500,57 +1821,54 @@ private struct RoutinesPanel: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .overlay(alignment: .bottom) {
-                Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
-            }
+            .overlay(alignment: .bottom) { ScopeRule(.section) }
 
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { idx, row in
-                    HStack(spacing: 10) {
-                        Circle()
-                            .fill(row.leading == .filled ? Color.hex("9A6A22") : Color.clear)
-                            .overlay(
-                                Circle().stroke(Color.hex("9A6A22"), lineWidth: row.leading == .hollow ? 1 : 0)
-                            )
-                            .frame(width: 5, height: 5)
-                        Text(row.label)
-                            .font(.system(size: 12))
-                            .foregroundStyle(ScopeInk.primary)
-                        Spacer()
-                        Text(row.trailing.uppercased())
-                            .font(ScopeType.chrome)
-                            .tracking(ScopeType.Tracking.wide)
-                            .foregroundStyle(ScopeInk.subtle)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    if idx < rows.count - 1 {
-                        Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
+                    // Row + trailing rule wrapped in a VStack so the
+                    // conditional view has a stable layout slot.
+                    VStack(spacing: 0) {
+                        HStack(spacing: 10) {
+                            Circle()
+                                .fill(row.leading == .filled ? ScopeBrass.solid : Color.clear)
+                                .overlay(
+                                    Circle().stroke(ScopeBrass.solid, lineWidth: row.leading == .hollow ? 1 : 0)
+                                )
+                                .frame(width: 5, height: 5)
+                            Text(row.label)
+                                .font(.system(size: 12))
+                                .foregroundStyle(ScopeInk.primary)
+                            Spacer()
+                            Text(row.trailing.uppercased())
+                                .font(ScopeType.chrome)
+                                .tracking(ScopeType.Tracking.wide)
+                                .foregroundStyle(ScopeInk.subtle)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+
+                        if idx < rows.count - 1 {
+                            ScopeRule(.row)
+                        }
                     }
                 }
             }
 
-            Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
+            ScopeRule(.section)
 
             HStack(spacing: 4) {
                 Spacer()
                 Text(footer)
                     .font(ScopeType.channel)
                     .tracking(ScopeType.Tracking.wide)
-                    .foregroundStyle(isHovered ? ScopeAmber.solid : Color.hex("9A6A22"))
+                    .foregroundStyle(isHovered ? ScopeAmber.solid : ScopeBrass.solid)
                 Text("→")
                     .font(.system(size: 11))
-                    .foregroundStyle(isHovered ? ScopeAmber.solid : Color.hex("9A6A22"))
+                    .foregroundStyle(isHovered ? ScopeAmber.solid : ScopeBrass.solid)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
         }
-        .background(ScopeCanvas.surface)
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(isHovered ? ScopeEdge.normal : ScopeEdge.faint, lineWidth: 0.5)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 6))
         .frame(maxWidth: .infinity)
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.16), value: isHovered)
@@ -1561,6 +1879,109 @@ private struct RoutinesPanel: View {
 
 /// Today — small 24h timeline with event dots. Reads as a day-at-a-
 /// glance map, not a list. Sample events for now.
+// "Did you know" card — full-width editorial card pulled from the
+// Learn screen's RecapCard vocabulary. Outline glyph + serif hook on
+// top, body excerpt, hairline divider, amber action with arrow.
+// Three per row in the Home midsection.
+private struct DidYouKnowCard: View {
+    enum Glyph { case voiceEdit, smartActions, tray }
+    let glyph: Glyph
+    let hook: String
+    let detail: String
+    let action: String
+
+    @State private var isHovered: Bool = false
+
+    var body: some View {
+        Button(action: { NavigationState.shared.navigate(to: .liveDashboard) }) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
+                    glyphTile
+                    Text(hook.uppercased())
+                        .font(ScopeType.channel)
+                        .tracking(ScopeType.Tracking.wide)
+                        .foregroundStyle(ScopeInk.primary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Text(detail)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(ScopeInk.faint)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .lineSpacing(2)
+                Spacer(minLength: 6)
+                ScopeRule(.section)
+                HStack(spacing: 4) {
+                    Text(action.uppercased())
+                        .font(ScopeFont.mono(size: 9, weight: .semibold))
+                        .tracking(2.4)
+                    Text("→").font(.system(size: 10))
+                }
+                .foregroundStyle(isHovered ? ScopeBrass.deep : ScopeBrass.solid)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+    }
+
+    private var glyphTile: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(Color(red: 0.769, green: 0.490, blue: 0.110).opacity(0.06))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .stroke(Color(red: 0.769, green: 0.490, blue: 0.110).opacity(0.18), lineWidth: 0.5)
+                )
+            glyphIcon
+        }
+        .frame(width: 28, height: 28)
+    }
+
+    @ViewBuilder
+    private var glyphIcon: some View {
+        let brass = ScopeBrass.solid
+        switch glyph {
+        case .voiceEdit:
+            Path { p in
+                p.move(to: .init(x: 6, y: 14));   p.addLine(to: .init(x: 10, y: 14))
+                p.move(to: .init(x: 18, y: 14));  p.addLine(to: .init(x: 22, y: 14))
+                p.move(to: .init(x: 10, y: 8));   p.addLine(to: .init(x: 10, y: 20))
+                p.move(to: .init(x: 14, y: 10));  p.addLine(to: .init(x: 14, y: 18))
+                p.move(to: .init(x: 18, y: 8));   p.addLine(to: .init(x: 18, y: 20))
+            }
+            .stroke(brass, style: StrokeStyle(lineWidth: 0.85, lineCap: .round, lineJoin: .round))
+            .frame(width: 28, height: 28)
+        case .smartActions:
+            Path { p in
+                p.move(to: .init(x: 6, y: 9));    p.addLine(to: .init(x: 22, y: 9))
+                p.move(to: .init(x: 6, y: 14));   p.addLine(to: .init(x: 16, y: 14))
+                p.move(to: .init(x: 6, y: 19));   p.addLine(to: .init(x: 18, y: 19))
+                p.move(to: .init(x: 20, y: 13));  p.addLine(to: .init(x: 23, y: 16)); p.addLine(to: .init(x: 20, y: 19))
+            }
+            .stroke(brass, style: StrokeStyle(lineWidth: 0.85, lineCap: .round, lineJoin: .round))
+            .frame(width: 28, height: 28)
+        case .tray:
+            ZStack {
+                Path { p in
+                    p.addRoundedRect(in: CGRect(x: 6, y: 7, width: 16, height: 10), cornerSize: CGSize(width: 2, height: 2))
+                    p.move(to: .init(x: 10, y: 21)); p.addLine(to: .init(x: 18, y: 21))
+                }
+                .stroke(brass, style: StrokeStyle(lineWidth: 0.85, lineCap: .round, lineJoin: .round))
+                Circle().fill(brass).frame(width: 2, height: 2).offset(x: 0, y: -2)
+            }
+            .frame(width: 28, height: 28)
+        }
+    }
+}
+
+// Legacy TodayWidget — dead from the Discovery row, kept for any
+// callers we might have missed. Will be removed in a cleanup pass.
 private struct TodayWidget: View {
     private struct Event { let hour: Double; let label: String }
     private let events: [Event] = [
@@ -1594,7 +2015,7 @@ private struct TodayWidget: View {
                         ForEach(Array(events.enumerated()), id: \.offset) { _, event in
                             let x = CGFloat(event.hour) / 24.0 * geo.size.width
                             Circle()
-                                .fill(Color.hex("9A6A22"))
+                                .fill(ScopeBrass.solid)
                                 .frame(width: 10, height: 10)
                                 .overlay(
                                     Circle().stroke(ScopeCanvas.surface, lineWidth: 2)
@@ -1687,7 +2108,7 @@ private struct TrendingWidget: View {
                             ZStack(alignment: .leading) {
                                 Rectangle().fill(ScopeEdge.faint)
                                 Rectangle()
-                                    .fill(Color.hex("9A6A22"))
+                                    .fill(ScopeBrass.solid)
                                     .frame(width: geo.size.width * CGFloat(t.count) / CGFloat(maxCount))
                             }
                         }
@@ -1726,7 +2147,7 @@ private struct DiscoveryWidgetCard<Content: View>: View {
             }
             .padding(.bottom, 6)
             .overlay(alignment: .bottom) {
-                Rectangle().fill(ScopeEdge.subtle).frame(height: 0.5)
+                ScopeRule(.section)
             }
             content
         }
@@ -1752,13 +2173,21 @@ private struct DiscoveryWidgetCard<Content: View>: View {
 private struct SystemStatusRail: View {
     let scheme: BayScheme
 
+    @State private var serviceManager = ServiceManager.shared
+
     var body: some View {
-        HStack(spacing: 18) {
-            phosphor(label: "AGENT",   detail: "AG-01 · RUNNING", state: .ok)
+        let launchAgentInfos = serviceManager.launchAgentInfos
+        let agentInfo = launchAgentInfo(named: "TalkieAgent", in: launchAgentInfos)
+        let syncInfo = launchAgentInfo(named: "TalkieSync", in: launchAgentInfos)
+        let _ = serviceManager.live.isRunning
+        let _ = serviceManager.sync.isRunning
+
+        return HStack(spacing: 18) {
+            phosphor(label: "AGENT",   detail: agentDetail(agentInfo), state: launchAgentDotState(agentInfo))
             divider
-            phosphor(label: "BRIDGE",  detail: "LOCAL · CONNECTED", state: .ok)
+            phosphor(label: "BRIDGE",  detail: bridgeDetail, state: bridgeDotState)
             divider
-            phosphor(label: "ICLOUD",  detail: "SYNCED", state: .ok)
+            phosphor(label: "ICLOUD",  detail: iCloudDetail(syncInfo), state: launchAgentDotState(syncInfo))
             divider
             phosphor(label: "UPDATES", detail: "CURRENT", state: .muted)
             Spacer()
@@ -1778,6 +2207,39 @@ private struct SystemStatusRail: View {
     }
 
     private enum DotState { case ok, warn, muted }
+
+    private func launchAgentInfo(named displayName: String, in infos: [LaunchAgentInfo]) -> LaunchAgentInfo? {
+        infos.first { $0.displayName == displayName }
+    }
+
+    private func agentDetail(_ info: LaunchAgentInfo?) -> String {
+        "AG-01 · \(launchAgentStatusText(info, loadedText: "RUNNING"))"
+    }
+
+    private var bridgeDetail: String {
+        serviceManager.live.isXPCConnected ? "LOCAL · CONNECTED" : "LOCAL · OFFLINE"
+    }
+
+    private func iCloudDetail(_ info: LaunchAgentInfo?) -> String {
+        launchAgentStatusText(info, loadedText: "SYNCED")
+    }
+
+    private var bridgeDotState: DotState {
+        serviceManager.live.isXPCConnected ? .ok : .warn
+    }
+
+    private func launchAgentStatusText(_ info: LaunchAgentInfo?, loadedText: String) -> String {
+        guard let info, info.isInstalled else { return "NOT INSTALLED" }
+        return info.isLoaded ? loadedText : "INSTALLED"
+    }
+
+    private func launchAgentDotState(_ info: LaunchAgentInfo?) -> DotState {
+        switch info?.statusColor {
+        case "green": return .ok
+        case "orange": return .warn
+        default: return .muted
+        }
+    }
 
     private func phosphor(label: String, detail: String, state: DotState) -> some View {
         HStack(spacing: 6) {
@@ -1810,8 +2272,25 @@ private struct SystemStatusRail: View {
     }
 
     private var uptimeChrome: String {
-        // TODO: wire to ProcessInfo / launchd state. Stub matches
-        // Mac Home study.
-        "PID \(ProcessInfo.processInfo.processIdentifier) · UPTIME 4H"
+        let uptime = CFAbsoluteTimeGetCurrent() - StartupProfiler.shared.processStart
+        return "PID \(ProcessInfo.processInfo.processIdentifier) · UPTIME \(Self.uptimeText(uptime))"
+    }
+
+    private static func uptimeText(_ uptime: TimeInterval) -> String {
+        let totalMinutes = max(0, Int(uptime / 60))
+        if totalMinutes < 1 { return "0M" }
+        if totalMinutes < 60 { return "\(totalMinutes)M" }
+
+        let totalHours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+        if totalHours < 24 {
+            if minutes == 0 { return "\(totalHours)H" }
+            return "\(totalHours)H \(minutes)M"
+        }
+
+        let days = totalHours / 24
+        let hours = totalHours % 24
+        if hours == 0 { return "\(days)D" }
+        return "\(days)D \(hours)H"
     }
 }

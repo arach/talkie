@@ -1,0 +1,2167 @@
+{
+  "version": 1,
+  "audit": "scope-2026-05-21",
+  "updatedAt": "2026-05-22T02:49:40.339Z",
+  "items": {
+    "t-cool-palette": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T19:24:56.385Z",
+      "updatedBy": "claude-sweep-1",
+      "notes": [
+        {
+          "ts": "2026-05-21T19:24:56.385Z",
+          "agent": "claude-sweep-1",
+          "level": "landed",
+          "message": "Cool-gray palette applied across 8 studio files (tailwind + 6 Mac surfaces + 2 chrome primitives). canvas #F8F8F7 / pane #F1F1F0 / chrome #E7E7E6 / rail #DCDCDB / ink #232423. Accents (brass/amber) stayed warm.",
+          "ref": "design/studio/tailwind.config.ts + Mac*.tsx + chrome primitives"
+        }
+      ]
+    },
+    "tos-cool-palette": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T19:24:56.405Z",
+      "updatedBy": "claude-sweep-1",
+      "notes": [
+        {
+          "ts": "2026-05-21T19:24:56.405Z",
+          "agent": "claude-sweep-1",
+          "level": "landed",
+          "message": "Cool-gray palette applied across 8 studio files (tailwind + 6 Mac surfaces + 2 chrome primitives). canvas #F8F8F7 / pane #F1F1F0 / chrome #E7E7E6 / rail #DCDCDB / ink #232423. Accents (brass/amber) stayed warm.",
+          "ref": "design/studio/tailwind.config.ts + Mac*.tsx + chrome primitives"
+        }
+      ]
+    },
+    "note-pearl-frost": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T19:24:56.421Z",
+      "updatedBy": "claude-sweep-1",
+      "notes": [
+        {
+          "ts": "2026-05-21T19:24:56.421Z",
+          "agent": "claude-sweep-1",
+          "level": "landed",
+          "message": "Closed by Sweep 1 cool-gray palette commit. See t-cool-palette for the full set of files touched."
+        }
+      ]
+    },
+    "note-tint-cool": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T19:24:56.443Z",
+      "updatedBy": "claude-sweep-1",
+      "notes": [
+        {
+          "ts": "2026-05-21T19:24:56.443Z",
+          "agent": "claude-sweep-1",
+          "level": "landed",
+          "message": "Closed by Sweep 1 cool-gray palette commit. See t-cool-palette for the full set of files touched."
+        }
+      ]
+    },
+    "note-row-cool-tint": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T19:24:56.465Z",
+      "updatedBy": "claude-sweep-1",
+      "notes": [
+        {
+          "ts": "2026-05-21T19:24:56.465Z",
+          "agent": "claude-sweep-1",
+          "level": "landed",
+          "message": "Closed by Sweep 1 cool-gray palette commit. See t-cool-palette for the full set of files touched."
+        }
+      ]
+    },
+    "cap-pearl-frost-claim": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T19:24:56.480Z",
+      "updatedBy": "claude-sweep-1",
+      "notes": [
+        {
+          "ts": "2026-05-21T19:24:56.480Z",
+          "agent": "claude-sweep-1",
+          "level": "landed",
+          "message": "Closed by Sweep 1 cool-gray palette commit. See t-cool-palette for the full set of files touched."
+        }
+      ]
+    },
+    "cap-cool-row-tint": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T19:24:56.502Z",
+      "updatedBy": "claude-sweep-1",
+      "notes": [
+        {
+          "ts": "2026-05-21T19:24:56.502Z",
+          "agent": "claude-sweep-1",
+          "level": "landed",
+          "message": "Closed by Sweep 1 cool-gray palette commit. See t-cool-palette for the full set of files touched."
+        }
+      ]
+    },
+    "h-content-tint": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T19:24:56.522Z",
+      "updatedBy": "claude-sweep-1",
+      "notes": [
+        {
+          "ts": "2026-05-21T19:24:56.522Z",
+          "agent": "claude-sweep-1",
+          "level": "landed",
+          "message": "Closed by Sweep 1 cool-gray palette commit. See t-cool-palette for the full set of files touched."
+        }
+      ]
+    },
+    "sw-design-canvas-canon": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T21:26:55.977Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "ScopeCanvas off-canon: canvas #FBFBFA → #F8F8F7",
+          "ref": "apps/macos/TalkieKit/Sources/TalkieKit/UI/ScopeDesign.swift",
+          "severity": "blocker"
+        },
+        {
+          "ts": "2026-05-21T20:13:47.504Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Phase 1 ScopeDesign canon alignment in progress."
+        },
+        {
+          "ts": "2026-05-21T21:26:55.977Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "ScopeCanvas.canvas now uses cool-gray canon #F8F8F7; build verified with xcodebuild fallback because talkie-dev was not found.",
+          "ref": "c316ecf"
+        }
+      ]
+    },
+    "sw-design-canvas-alt-canon": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T21:26:56.002Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "ScopeCanvas.canvasAlt #F2F2F1 → #ECECEB",
+          "ref": "apps/macos/TalkieKit/Sources/TalkieKit/UI/ScopeDesign.swift",
+          "severity": "blocker"
+        },
+        {
+          "ts": "2026-05-21T20:13:47.522Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Phase 1 ScopeDesign canon alignment in progress."
+        },
+        {
+          "ts": "2026-05-21T21:26:56.002Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "ScopeCanvas.canvasAlt now uses cool-gray canon #ECECEB; build verified with xcodebuild fallback because talkie-dev was not found.",
+          "ref": "c316ecf"
+        }
+      ]
+    },
+    "sw-design-surface-canon": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T21:26:56.024Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "ScopeCanvas.surface #EDEDEC → #EFEFEE (paneLifted)",
+          "ref": "apps/macos/TalkieKit/Sources/TalkieKit/UI/ScopeDesign.swift",
+          "severity": "blocker"
+        },
+        {
+          "ts": "2026-05-21T20:13:47.540Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Phase 1 ScopeDesign canon alignment in progress."
+        },
+        {
+          "ts": "2026-05-21T21:26:56.024Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "ScopeCanvas.surface now uses canon paneLifted #EFEFEE; build verified with xcodebuild fallback because talkie-dev was not found.",
+          "ref": "c316ecf"
+        }
+      ]
+    },
+    "sw-design-add-brass-enum": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T21:26:56.041Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Add ScopeBrass enum (solid #9A6A22, deep #7A521A) — referenced by ~40 Home call sites",
+          "ref": "apps/macos/TalkieKit/Sources/TalkieKit/UI/ScopeDesign.swift",
+          "severity": "blocker"
+        },
+        {
+          "ts": "2026-05-21T20:13:47.561Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Phase 1 ScopeDesign canon alignment in progress."
+        },
+        {
+          "ts": "2026-05-21T21:26:56.041Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Added ScopeBrass.solid #9A6A22 and .deep #7A521A for warm instrument-metal accents.",
+          "ref": "c316ecf"
+        }
+      ]
+    },
+    "sw-design-add-kind-enum": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T21:26:56.060Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Add ScopeKind enum: memo #9A6A22, dict #E89A3C, note #767674, capture #5C5E5C",
+          "ref": "apps/macos/TalkieKit/Sources/TalkieKit/UI/ScopeDesign.swift",
+          "severity": "blocker"
+        },
+        {
+          "ts": "2026-05-21T20:13:47.579Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Phase 1 ScopeDesign canon alignment in progress."
+        },
+        {
+          "ts": "2026-05-21T21:26:56.060Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Added ScopeKind memo/dict/note/capture tints matching the 2026-05-21 studio canon.",
+          "ref": "c316ecf"
+        }
+      ]
+    },
+    "sw-design-ink-hold": {
+      "status": "skipped",
+      "updatedAt": "2026-05-22T00:00:06.801Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "proposal",
+          "message": "ScopeInk 5-step ladder vs studio single ink — leave alone for now; collapse decision needs visual review",
+          "ref": "apps/macos/TalkieKit/Sources/TalkieKit/UI/ScopeDesign.swift",
+          "severity": "proposal"
+        },
+        {
+          "ts": "2026-05-22T00:00:06.801Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Intentional hold per the original brief: ScopeInk 5-step ladder serves a different layered purpose than studio single ink. Collapse decision deferred unless a concrete UI issue surfaces."
+        }
+      ]
+    },
+    "sw-home-brass-inline": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T21:42:46.001Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Replace 40 inline Color.hex(\"9A6A22\")/Color.hex(\"7A521A\") with ScopeBrass.solid / .deep",
+          "ref": "apps/macos/Talkie/Views/Home/ScopeHomeView.swift",
+          "severity": "blocker"
+        },
+        {
+          "ts": "2026-05-21T21:41:17.732Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Phase 5 ScopeBrass/ScopeKind mechanical propagation in progress."
+        },
+        {
+          "ts": "2026-05-21T21:42:46.001Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Replaced Home brass/deep inline literals with ScopeBrass.solid/deep and reused ScopeKind.dict for dict tint; build verified via xcodebuild fallback.",
+          "ref": "f0cac6b"
+        }
+      ]
+    },
+    "sw-home-content-tint-rec": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T21:42:46.023Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "RecentTwoPane.swift L88 contentTint #6B7A75 → ScopeKind.note",
+          "ref": "apps/macos/Talkie/Views/Home/RecentTwoPane.swift:88",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T21:41:17.752Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Phase 5 ScopeBrass/ScopeKind mechanical propagation in progress."
+        },
+        {
+          "ts": "2026-05-21T21:42:46.023Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "RecentTwoPane now uses ScopeBrass.solid for voice tint and ScopeKind.note for content tint; build verified via xcodebuild fallback.",
+          "ref": "f0cac6b"
+        }
+      ]
+    },
+    "sw-home-rules-sweep": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T21:50:42.106Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Replace 6+ Rectangle().fill(ScopeEdge.faint).frame(height: 0.5) with ScopeRule(.section/.row/.subtle)",
+          "ref": "apps/macos/Talkie/Views/Home/ScopeHomeView.swift",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T21:45:05.268Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Phase 6 ScopeRule mechanical sweep in progress."
+        },
+        {
+          "ts": "2026-05-21T21:50:42.106Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Added ScopeRule primitive and replaced Home/Recent hand-rolled row/section hairlines; build verified via xcodebuild fallback.",
+          "ref": "35ebece"
+        }
+      ]
+    },
+    "sw-home-eyebrow-bullet": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T21:54:06.716Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Drop leading '· ' from Eyebrow in ScopeComponents.swift L85 (or gate via accent:Bool)",
+          "ref": "apps/macos/Talkie/Views/Home/ScopeComponents.swift:85",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T21:52:13.585Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Phase 7 trivial copy strip in progress."
+        },
+        {
+          "ts": "2026-05-21T21:54:06.716Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Removed the default leading bullet from Scope Eyebrow and updated its doc comment; build verified via xcodebuild fallback.",
+          "ref": "f673ea6"
+        }
+      ]
+    },
+    "sw-home-didyouknow-marketing": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T21:54:06.736Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Strip Did-you-know serif marketing hooks (L612-625) → neutral mono labels",
+          "ref": "apps/macos/Talkie/Views/Home/ScopeHomeView.swift:612",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T21:52:13.606Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Phase 7 trivial copy strip in progress."
+        },
+        {
+          "ts": "2026-05-21T21:54:06.736Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Changed Home Did-you-know cards to neutral Tips labels with mono hook styling and non-marketing copy; build verified via xcodebuild fallback.",
+          "ref": "f673ea6"
+        }
+      ]
+    },
+    "sw-home-card-equal-weight": {
+      "status": "shipped",
+      "updatedAt": "2026-05-22T00:02:43.171Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "proposal",
+          "message": "Demote Routines + Did-you-know to borderless rows on canvas (keep Bay + Recent as cards). NEEDS painter review.",
+          "ref": "apps/macos/Talkie/Views/Home/ScopeHomeView.swift",
+          "severity": "proposal"
+        },
+        {
+          "ts": "2026-05-21T23:17:54.408Z",
+          "agent": "claude-painter",
+          "level": "decision",
+          "message": "DECISION: Bay + Recent stay as cards. Routines + Did-you-know demote to borderless rule-separated rows on canvas. Editorial weight collapses into the two primary bands."
+        },
+        {
+          "ts": "2026-05-21T23:52:18.830Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Home painter resolution in progress."
+        },
+        {
+          "ts": "2026-05-22T00:02:43.171Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Demoted Home Routines and Tips/Did-you-know from card chrome to borderless rule-separated rows on canvas while keeping Bay and Recent as the primary card-weight bands; build verified via xcodebuild fallback.",
+          "ref": "650ab2e"
+        }
+      ]
+    },
+    "sw-lib-delete-readout-bay": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T21:39:39.088Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Delete ~400 lines: libraryReadoutPanel, ReadoutSurface, LibraryReadoutBodyVariant, variantSwitcherStrip (L684–1880). Already flagged dead at L731-739.",
+          "ref": "apps/macos/Talkie/Views/Library/ScopeLibraryView.swift:731",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T21:34:06.973Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Deleting dead Library readout-bay scaffolding."
+        },
+        {
+          "ts": "2026-05-21T21:39:39.088Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Deleted dead Library readout-bay/debug variant scaffolding and rebuilt Talkie with xcodebuild fallback.",
+          "ref": "6ec197d"
+        }
+      ]
+    },
+    "sw-lib-rewrite-header": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T21:54:06.758Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Rewrite file header L5-10 — no more 'cream-phosphor' / 'tape archive' / 'amber ON FILE'",
+          "ref": "apps/macos/Talkie/Views/Library/ScopeLibraryView.swift:5",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T21:52:13.627Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Phase 7 trivial copy strip in progress."
+        },
+        {
+          "ts": "2026-05-21T21:54:06.758Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Rewrote the Library file header to remove cream-phosphor/tape-archive/amber ON FILE language; build verified via xcodebuild fallback.",
+          "ref": "f673ea6"
+        }
+      ]
+    },
+    "sw-lib-readout-source-tints": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:41:12.837Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Promote readout source tints (#6B4FBB, #0B1418, #15191E, #2A3138, #5FE3C9) to ScopePanel ext or ScopeReadout namespace",
+          "ref": "apps/macos/Talkie/Views/Library/ScopeLibraryView.swift",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T23:40:07.377Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Library mechanical leftovers in progress."
+        },
+        {
+          "ts": "2026-05-21T23:41:12.837Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Verified the readout source tint literals are no longer live in ScopeLibraryView after the readout-bay removal; no ScopeReadout namespace needed. Library build verified via xcodebuild fallback.",
+          "ref": "0e9001a"
+        }
+      ]
+    },
+    "sw-lib-rules-sweep": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T21:50:42.130Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Replace ~6 hand-rolled hairlines with ScopeRule(...)",
+          "ref": "apps/macos/Talkie/Views/Library/ScopeLibraryView.swift",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T21:45:05.290Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Phase 6 ScopeRule mechanical sweep in progress."
+        },
+        {
+          "ts": "2026-05-21T21:50:42.130Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Replaced Library top/footer/list row hairlines with ScopeRule section/row roles; build verified via xcodebuild fallback.",
+          "ref": "35ebece"
+        }
+      ]
+    },
+    "sw-lib-de-amber": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:41:12.769Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "De-amber chrome: bucket eyebrows → ScopeInk.muted, dividers → ScopeEdge.faint, pagination dots → ScopeInk.faint",
+          "ref": "apps/macos/Talkie/Views/Library/ScopeLibraryView.swift",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T23:40:07.326Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Library mechanical leftovers in progress."
+        },
+        {
+          "ts": "2026-05-21T23:41:12.769Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Demoted Library bucket eyebrows to ScopeInk.muted, pagination dots to ScopeInk.faint, and made the bucket divider explicitly ScopeEdge.faint; build verified via xcodebuild fallback.",
+          "ref": "0e9001a"
+        }
+      ]
+    },
+    "sw-lib-strip-subtitle": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T21:54:06.776Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Strip marketing subtitle L632-641 'Hyper+M to record.' etc. → single neutral label",
+          "ref": "apps/macos/Talkie/Views/Library/ScopeLibraryView.swift:632",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T21:52:13.645Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Phase 7 trivial copy strip in progress."
+        },
+        {
+          "ts": "2026-05-21T21:54:06.776Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Replaced Library empty-state Hyper shortcut marketing strings with one neutral no-items label; build verified via xcodebuild fallback.",
+          "ref": "f673ea6"
+        }
+      ]
+    },
+    "sw-lib-channel-color-kind": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T21:42:46.039Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Wire ScopeLibraryRow.channelColor (L1485-1493) to ScopeKind instead of amber-only memo",
+          "ref": "apps/macos/Talkie/Views/Library/ScopeLibraryView.swift:1485",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T21:41:17.768Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Phase 5 ScopeBrass/ScopeKind mechanical propagation in progress."
+        },
+        {
+          "ts": "2026-05-21T21:42:46.039Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Library row channel colors now dispatch to ScopeKind memo/dict/note/capture instead of amber-only/ink fallbacks; build verified via xcodebuild fallback.",
+          "ref": "f0cac6b"
+        }
+      ]
+    },
+    "sw-dict-warm-gradient": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T21:28:52.793Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "HIGHEST PRIORITY: Replace warm chiffon gradient L287-297 #FAF7EF → #FAF6EB → #F7F2E5 with ScopeCanvas.canvas — visible 'pale cream' regression user flagged",
+          "ref": "apps/macos/Talkie/Views/TalkieObject/TalkieView.swift:287",
+          "severity": "blocker"
+        },
+        {
+          "ts": "2026-05-21T21:27:32.974Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Phase 2 TalkieView pale-cream regression fix in progress."
+        },
+        {
+          "ts": "2026-05-21T21:28:52.793Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Replaced TalkieView warm chiffon gradient (#FAF7EF/#FAF6EB/#F7F2E5) with ScopeCanvas.canvas; build verified via xcodebuild fallback.",
+          "ref": "0cb89a3"
+        }
+      ]
+    },
+    "sw-dict-stale-comments": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T21:28:52.825Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Update stale comments L118-120, L150, L283-286 — drop 'chiffon paper' language",
+          "ref": "apps/macos/Talkie/Views/TalkieObject/TalkieView.swift:118",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T21:27:32.996Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Phase 2 TalkieView pale-cream regression fix in progress."
+        },
+        {
+          "ts": "2026-05-21T21:28:52.825Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Removed stale chiffon-paper wording around the Talkie detail surface; build verified via xcodebuild fallback.",
+          "ref": "0cb89a3"
+        }
+      ]
+    },
+    "sw-dict-rules-adopt": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T21:50:42.151Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Adopt ScopeRule(.section/.row/.subtle) in TOHeaderSection / TOSharedComponents for dividers",
+          "ref": "apps/macos/Talkie/Views/TalkieObject/Sections/TOHeaderSection.swift",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T21:45:05.312Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Phase 6 ScopeRule mechanical sweep in progress."
+        },
+        {
+          "ts": "2026-05-21T21:50:42.151Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Replaced Talkie detail header/shared component hairline dividers with ScopeRule roles; build verified via xcodebuild fallback.",
+          "ref": "35ebece"
+        }
+      ]
+    },
+    "sw-dict-overlay-token": {
+      "status": "shipped",
+      "updatedAt": "2026-05-22T02:49:40.339Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Drop overlay L259-277: use ScopeAmber.solid/tint + ScopeType.eyebrow instead of settings.resolvedAccentColor + Theme.current.fontSM",
+          "ref": "apps/macos/Talkie/Views/TalkieObject/TalkieView.swift:259",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T23:17:28.576Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "TalkieView mechanical leftovers in progress."
+        },
+        {
+          "ts": "2026-05-21T23:38:59.907Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Rebound the TalkieView drop overlay to ScopeAmber and ScopeType tokens instead of settings/Theme ad hoc tokens; build verified via xcodebuild fallback.",
+          "ref": "71dc02a"
+        },
+        {
+          "ts": "2026-05-22T02:49:40.339Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Follow-up token pass: TalkieObject drop overlay now uses ThemedScopeAccent/ThemedScopeCanvas so the Scope-styled drop state keeps the canonical amber in Scope but adapts to dark/non-Scope themes instead of pinning static Scope inks.",
+          "ref": "apps/macos/Talkie/Views/TalkieObject/TalkieView.swift:263"
+        }
+      ]
+    },
+    "sw-dict-rail-rule": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T21:50:42.171Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Add ScopeRule(.subtle, axis:.vertical) between body and margin rail",
+          "ref": "apps/macos/Talkie/Views/TalkieObject/Sections/TOMarginRail.swift",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T21:45:05.333Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Phase 6 ScopeRule mechanical sweep in progress."
+        },
+        {
+          "ts": "2026-05-21T21:50:42.171Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Added ScopeRule subtle vertical divider between Talkie detail body and margin rail; build verified via xcodebuild fallback.",
+          "ref": "35ebece"
+        }
+      ]
+    },
+    "sw-dict-magic-number": {
+      "status": "shipped",
+      "updatedAt": "2026-05-22T02:49:40.339Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Replace PageLayout.headerHeight + 18 magic number with PageLayout.headerOverlayClearance",
+          "ref": "apps/macos/Talkie/Views/TalkieObject/TalkieView.swift",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T23:17:28.544Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "TalkieView mechanical leftovers in progress."
+        },
+        {
+          "ts": "2026-05-21T23:38:59.835Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Added PageLayout.headerOverlayClearance and replaced the TalkieView header clearance magic number; build verified via xcodebuild fallback.",
+          "ref": "71dc02a"
+        },
+        {
+          "ts": "2026-05-22T02:49:40.339Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "info",
+          "message": "Follow-up checked during the detail-theme pass; no new header-clearance magic-number change was needed. The related TalkieView follow-up was limited to theme-aware drop-overlay tokens.",
+          "ref": "apps/macos/Talkie/Views/TalkieObject/TalkieView.swift:263"
+        }
+      ]
+    },
+    "sw-note-delete-NoteToken": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T22:54:01.719Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Delete NoteToken enum entirely; bind to ScopeCanvas / ScopeInk / ScopeEdge / ScopeBrass / ScopeAmber",
+          "ref": "apps/macos/Talkie/Views/Notes/ScopeNoteDetailView.swift",
+          "severity": "blocker"
+        },
+        {
+          "ts": "2026-05-21T21:30:21.077Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "blocked",
+          "message": "Blocked for clean commit hygiene: ScopeNoteDetailView.swift is currently untracked, so deleting NoteToken would require committing the entire new file unless arach confirms ownership."
+        },
+        {
+          "ts": "2026-05-21T22:44:19.887Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Note detail token refactor in progress now that tracked draft landed."
+        },
+        {
+          "ts": "2026-05-21T22:54:01.719Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Deleted NoteToken and rebound Note detail colors/rules to ScopeCanvas/ScopeInk/ScopeEdge/ScopeBrass/ScopeAmber/ScopeKind; build verified via xcodebuild fallback.",
+          "ref": "c968b23"
+        }
+      ]
+    },
+    "sw-note-body-opacity": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T22:54:01.758Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Body ink.opacity(0.88) → ScopeInk.dim directly (no opacity layering on warm ink)",
+          "ref": "apps/macos/Talkie/Views/Notes/ScopeNoteDetailView.swift",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T22:44:19.913Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Note detail token refactor in progress now that tracked draft landed."
+        },
+        {
+          "ts": "2026-05-21T22:54:01.758Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Replaced note body ink opacity layering with ScopeInk.dim; build verified via xcodebuild fallback.",
+          "ref": "c968b23"
+        }
+      ]
+    },
+    "sw-note-attachment-rail": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T22:54:01.785Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Attachment rail bg #F2EDDE → ScopeCanvas.surface (#EFEFEE) or ScopeRule(.row) for top hairline",
+          "ref": "apps/macos/Talkie/Views/Notes/ScopeNoteDetailView.swift",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T22:44:19.995Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Note detail token refactor in progress now that tracked draft landed."
+        },
+        {
+          "ts": "2026-05-21T22:54:01.785Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Replaced the warm attachment rail with ScopeCanvas.surface and ScopeRule(.row); build verified via xcodebuild fallback.",
+          "ref": "c968b23"
+        }
+      ]
+    },
+    "sw-note-channel-label-marketing": {
+      "status": "shipped",
+      "updatedAt": "2026-05-22T00:04:22.497Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "proposal",
+          "message": "Strip fake 'CH-04 · NOTE' channel label — show real note.source.displayName or nothing. NEEDS painter decision.",
+          "ref": "apps/macos/Talkie/Views/Notes/ScopeNoteDetailView.swift",
+          "severity": "proposal"
+        },
+        {
+          "ts": "2026-05-21T23:17:54.408Z",
+          "agent": "claude-painter",
+          "level": "decision",
+          "message": "DECISION: Drop the fake CH-04 chip. If note.source.displayName exists, render it as a mono eyebrow (no channel framing). If not, render nothing."
+        },
+        {
+          "ts": "2026-05-22T00:03:27.970Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Note painter resolutions in progress."
+        },
+        {
+          "ts": "2026-05-22T00:04:22.497Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Dropped the fake CH-04 note channel chip and render only real note source as an unframed mono eyebrow when available; build verified via xcodebuild fallback.",
+          "ref": "f426a80"
+        }
+      ]
+    },
+    "sw-note-sequence-fake-id": {
+      "status": "shipped",
+      "updatedAt": "2026-05-22T02:49:40.339Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "proposal",
+          "message": "Replace synthetic N-#### sequence from hashValue — real persistent ID or drop chip. NEEDS painter decision.",
+          "ref": "apps/macos/Talkie/Views/Notes/ScopeNoteDetailView.swift",
+          "severity": "proposal"
+        },
+        {
+          "ts": "2026-05-21T23:17:54.408Z",
+          "agent": "claude-painter",
+          "level": "decision",
+          "message": "DECISION: Drop the synthetic N-#### chip entirely. Only show a sequence chip when we have a real persistent ID. Until then, no chip."
+        },
+        {
+          "ts": "2026-05-22T00:03:28.011Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Note painter resolutions in progress."
+        },
+        {
+          "ts": "2026-05-22T00:04:22.570Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Removed the synthetic N-#### hash-derived sequence chip; no sequence renders until a real persistent note ID exists. Build verified via xcodebuild fallback.",
+          "ref": "f426a80"
+        },
+        {
+          "ts": "2026-05-22T02:49:40.339Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Applied the same painter decision to Capture detail: removed the C-/S- hashValue-derived sequence chip and fallback filename dependency; no capture/selection sequence renders until a persistent display ID exists.",
+          "ref": "apps/macos/Talkie/Views/Notes/ScopeCaptureDetailView.swift:147"
+        }
+      ]
+    },
+    "sw-note-empty-state-italic": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T22:54:01.817Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Empty-state italic serif 'none yet' → mono 9pt at ScopeInk.faint",
+          "ref": "apps/macos/Talkie/Views/Notes/ScopeNoteDetailView.swift",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T22:44:20.048Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Note detail token refactor in progress now that tracked draft landed."
+        },
+        {
+          "ts": "2026-05-21T22:54:01.817Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Changed empty attachment text from italic serif to mono 9pt ScopeInk.faint; build verified via xcodebuild fallback.",
+          "ref": "c968b23"
+        }
+      ]
+    },
+    "sw-cap-delete-CapToken": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:03:02.567Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Delete CapToken enum; bind to ScopeCanvas / ScopeInk / ScopeEdge",
+          "ref": "apps/macos/Talkie/Views/Notes/ScopeCaptureDetailView.swift",
+          "severity": "blocker"
+        },
+        {
+          "ts": "2026-05-21T21:30:21.102Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "blocked",
+          "message": "Blocked for clean commit hygiene: ScopeCaptureDetailView.swift is currently untracked, so deleting CapToken would require committing the entire new file unless arach confirms ownership."
+        },
+        {
+          "ts": "2026-05-21T22:54:21.133Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Capture detail token refactor in progress now that tracked draft landed."
+        },
+        {
+          "ts": "2026-05-21T23:03:02.567Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Deleted CapToken and rebound Capture detail colors/rules to ScopeCanvas/ScopeInk/ScopeEdge/ScopeBrass/ScopeAmber/ScopeKind; build verified via xcodebuild fallback.",
+          "ref": "c5b0742"
+        }
+      ]
+    },
+    "sw-cap-image-mat": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:03:03.232Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Image mat #F2EDDE → ScopeCanvas.surface (#EFEFEE); drop warm matAlt #E8DFC8",
+          "ref": "apps/macos/Talkie/Views/Notes/ScopeCaptureDetailView.swift",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T22:54:21.158Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Capture detail token refactor in progress now that tracked draft landed."
+        },
+        {
+          "ts": "2026-05-21T23:03:03.232Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Replaced warm image mats/rails with ScopeCanvas.surface and dropped matAlt by deleting CapToken; build verified via xcodebuild fallback.",
+          "ref": "c5b0742"
+        }
+      ]
+    },
+    "sw-cap-promote-capture-kind": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:03:03.814Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Promote captureTint #5A7A86 to ScopeKind.capture (#5C5E5C) — currently local one-off",
+          "ref": "apps/macos/Talkie/Views/Notes/ScopeCaptureDetailView.swift",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T22:54:21.187Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Capture detail token refactor in progress now that tracked draft landed."
+        },
+        {
+          "ts": "2026-05-21T23:03:03.814Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Replaced local capture tint with ScopeKind.capture; build verified via xcodebuild fallback.",
+          "ref": "c5b0742"
+        }
+      ]
+    },
+    "sw-cap-strip-promotes-note": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:03:05.844Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Strip 'promotes to a note' italic narration; keep '+ ADD CAPTION' with ⌘N hint",
+          "ref": "apps/macos/Talkie/Views/Notes/ScopeCaptureDetailView.swift",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T22:54:21.207Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Capture detail token refactor in progress now that tracked draft landed."
+        },
+        {
+          "ts": "2026-05-21T23:03:05.844Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Removed the promote-to-note italic narration while keeping + ADD CAPTION and ⌘N; build verified via xcodebuild fallback.",
+          "ref": "c5b0742"
+        }
+      ]
+    },
+    "sw-cap-filename-headline": {
+      "status": "shipped",
+      "updatedAt": "2026-05-22T02:49:40.339Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "proposal",
+          "message": "Promote derivedCaption to serif headline; demote filename to mono byline. NEEDS painter visual treatment.",
+          "ref": "apps/macos/Talkie/Views/Notes/ScopeCaptureDetailView.swift",
+          "severity": "proposal"
+        },
+        {
+          "ts": "2026-05-21T23:17:54.408Z",
+          "agent": "claude-painter",
+          "level": "decision",
+          "message": "DECISION: Promote derivedCaption to serif headline (top); demote filename to mono byline below. Matches 'document on a desk' framing — caption is the editorial title, filename is provenance."
+        },
+        {
+          "ts": "2026-05-22T00:05:10.151Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Capture painter resolution in progress."
+        },
+        {
+          "ts": "2026-05-22T00:05:53.782Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Promoted image captures' derivedCaption into the serif headline position and demoted filename/dimensions/filesize into mono provenance byline; build verified via xcodebuild fallback.",
+          "ref": "93f96e0"
+        },
+        {
+          "ts": "2026-05-22T02:49:40.339Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Final PR #15 follow-up: Capture detail remains caption-as-serif-headline / filename-as-mono-byline, but the headline, byline, action rail, attachment/mat colors, and foot rail now resolve through theme-aware detail tokens. The unstable hash-derived capture/selection chip was also removed until a real persistent display ID exists.",
+          "ref": "apps/macos/Talkie/Views/Notes/ScopeCaptureDetailView.swift:118"
+        }
+      ]
+    },
+    "sw-cap-hairline-stretch": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:03:06.912Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Fix stray hairline inside eyebrow row (Rectangle inside HStack stretches incorrectly)",
+          "ref": "apps/macos/Talkie/Views/Notes/ScopeCaptureDetailView.swift",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T22:54:21.347Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Capture detail token refactor in progress now that tracked draft landed."
+        },
+        {
+          "ts": "2026-05-21T23:03:06.912Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Replaced the eyebrow HStack hairline with ScopeRule(.subtle) so it no longer uses a stray stretching Rectangle; build verified via xcodebuild fallback.",
+          "ref": "c5b0742"
+        }
+      ]
+    },
+    "sw-cap-foot-opacity": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:03:07.723Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Foot action tone.opacity(0.75) → drop the 0.75 multiplier; use ScopeInk.muted for neutral",
+          "ref": "apps/macos/Talkie/Views/Notes/ScopeCaptureDetailView.swift",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T22:54:22.099Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Capture detail token refactor in progress now that tracked draft landed."
+        },
+        {
+          "ts": "2026-05-21T23:03:07.723Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Dropped the 0.75 foreground opacity multiplier and used ScopeInk.muted for the neutral footer action; build verified via xcodebuild fallback.",
+          "ref": "c5b0742"
+        }
+      ]
+    },
+    "sw-sk-delete-SkillsToken": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T21:32:23.467Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Delete SkillsToken enum; bind to ScopeCanvas / ScopeInk / ScopeAmber / ScopePanel",
+          "ref": "apps/macos/Talkie/Views/Skills/ScopeSkillsLandingView.swift",
+          "severity": "blocker"
+        },
+        {
+          "ts": "2026-05-21T21:31:07.415Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Deleting SkillsToken and rebinding usages to ScopeDesign tokens."
+        },
+        {
+          "ts": "2026-05-21T21:32:23.467Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Deleted SkillsToken and rebound usages to ScopeCanvas/ScopeInk/ScopeEdge/ScopeAmber/ScopeBrass tokens; build verified via xcodebuild fallback.",
+          "ref": "fa2188d"
+        }
+      ]
+    },
+    "sw-sk-voicepreview-panel": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:49:14.319Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "voicePreview hardcoded #0E1518 / #F4F1EA → ScopePanel.bg / .ink / .trace",
+          "ref": "apps/macos/Talkie/Views/Skills/ScopeSkillsLandingView.swift",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T23:43:56.196Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Skills mechanical leftovers in progress."
+        },
+        {
+          "ts": "2026-05-21T23:49:14.319Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Rebound voicePreview dark panel colors to ScopePanel.bg/ink/trace tokens; build verified via xcodebuild fallback.",
+          "ref": "9546985"
+        }
+      ]
+    },
+    "sw-sk-rules-sweep": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T21:50:42.190Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Replace 12 hand-rolled Rectangle().fill(SkillsToken.inkRuleSoft).frame(height:1) with ScopeRule(.subtle)/.row",
+          "ref": "apps/macos/Talkie/Views/Skills/ScopeSkillsLandingView.swift",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T21:45:05.353Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Phase 6 ScopeRule mechanical sweep in progress."
+        },
+        {
+          "ts": "2026-05-21T21:50:42.190Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Replaced tracked Skills hand-rolled ScopeEdge separators/gutters with ScopeRule subtle roles; build verified via xcodebuild fallback.",
+          "ref": "35ebece"
+        }
+      ]
+    },
+    "sw-sk-amber-flood": {
+      "status": "shipped",
+      "updatedAt": "2026-05-22T00:09:00.771Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "proposal",
+          "message": "Ration amber: demote AGENT eyebrow, console arrows, miniChip borders, mic hover, one of RUN/SAVE to ink/brass. NEEDS painter pick of 3 amber slots.",
+          "ref": "apps/macos/Talkie/Views/Skills/ScopeSkillsLandingView.swift",
+          "severity": "proposal"
+        },
+        {
+          "ts": "2026-05-21T23:17:54.408Z",
+          "agent": "claude-painter",
+          "level": "decision",
+          "message": "DECISION: Keep amber on RUN, SAVE, and mic hover (the three primary user affordances). Demote AGENT eyebrow + console arrows + miniChip borders to ScopeInk.muted / ScopeBrass.solid."
+        },
+        {
+          "ts": "2026-05-22T00:07:31.273Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Skills amber-ration painter resolution in progress."
+        },
+        {
+          "ts": "2026-05-22T00:09:00.771Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Kept amber on RUN/SAVE/mic hover while demoting AGENT eyebrow, console prompt arrows/command text, and miniChip active chrome to ScopeInk.muted/ScopeBrass.solid; build verified via xcodebuild fallback.",
+          "ref": "4910efd"
+        }
+      ]
+    },
+    "sw-sk-section-gap-token": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:49:14.278Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Standardize section gaps to SkillsSpacing.sectionGap token (currently 14 vs 32 inconsistent)",
+          "ref": "apps/macos/Talkie/Views/Skills/ScopeSkillsLandingView.swift",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T23:43:55.243Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Skills mechanical leftovers in progress."
+        },
+        {
+          "ts": "2026-05-21T23:49:14.278Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Added SkillsSpacing.sectionGap and routed section/bottom spacing through the token; build verified via xcodebuild fallback.",
+          "ref": "9546985"
+        }
+      ]
+    },
+    "sw-sk-footer-paragraph": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T21:54:06.790Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Cut footer paragraph (marketing) to one-line italic byline or remove",
+          "ref": "apps/macos/Talkie/Views/Skills/ScopeSkillsLandingView.swift",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T21:52:13.665Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Phase 7 trivial copy strip in progress."
+        },
+        {
+          "ts": "2026-05-21T21:54:06.790Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Removed the Skills footer marketing paragraph, leaving only the section rule; build verified via xcodebuild fallback.",
+          "ref": "f673ea6"
+        }
+      ]
+    },
+    "sw-sk-accessibility-labels": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:49:14.223Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T20:30:00.000Z",
+          "agent": "claude-orchestrator",
+          "level": "info",
+          "message": "Add .accessibilityLabel to inlineMic and submitButton",
+          "ref": "apps/macos/Talkie/Views/Skills/ScopeSkillsLandingView.swift",
+          "severity": "issue"
+        },
+        {
+          "ts": "2026-05-21T23:43:53.851Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "progress",
+          "message": "Skills mechanical leftovers in progress."
+        },
+        {
+          "ts": "2026-05-21T23:49:14.223Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Added accessibility labels to the inline mic and submit controls; build verified via xcodebuild fallback.",
+          "ref": "9546985"
+        }
+      ]
+    },
+    "t-scoperule": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 6 ScopeRule sweep (commit 35ebece) + studio Sweep 1 component migration. Hand-rolled hairlines replaced with ScopeRule(.section/.row/.subtle/.action) across all 6 Swift surfaces; studio components already used the primitives."
+        }
+      ]
+    },
+    "tos-scoperule": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 6 ScopeRule sweep (commit 35ebece) + studio Sweep 1 component migration. Hand-rolled hairlines replaced with ScopeRule(.section/.row/.subtle/.action) across all 6 Swift surfaces; studio components already used the primitives."
+        }
+      ]
+    },
+    "t-marketing-copy": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 7 marketing copy strips (commit f673ea6) + painter decisions applied. Did-you-know serif hooks, Skills footer paragraph, Capture 'promotes to a note' italic, Note 'CH-04' chip all dropped."
+        }
+      ]
+    },
+    "h-marketing-hooks": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 7 marketing copy strips (commit f673ea6) + painter decisions applied. Did-you-know serif hooks, Skills footer paragraph, Capture 'promotes to a note' italic, Note 'CH-04' chip all dropped."
+        }
+      ]
+    },
+    "note-marketing-eyebrows": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 7 marketing copy strips (commit f673ea6) + painter decisions applied. Did-you-know serif hooks, Skills footer paragraph, Capture 'promotes to a note' italic, Note 'CH-04' chip all dropped."
+        }
+      ]
+    },
+    "sk-footer-marketing": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 7 marketing copy strips (commit f673ea6) + painter decisions applied. Did-you-know serif hooks, Skills footer paragraph, Capture 'promotes to a note' italic, Note 'CH-04' chip all dropped."
+        }
+      ]
+    },
+    "cap-promotes-narration": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 7 marketing copy strips (commit f673ea6) + painter decisions applied. Did-you-know serif hooks, Skills footer paragraph, Capture 'promotes to a note' italic, Note 'CH-04' chip all dropped."
+        }
+      ]
+    },
+    "t-equal-cards": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decision sw-home-card-equal-weight (Bay+Recent stay as cards; Routines+Did-you-know demote to borderless rows). Same pattern applied across surfaces with card stacking."
+        }
+      ]
+    },
+    "h-equal-cards": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decision sw-home-card-equal-weight (Bay+Recent stay as cards; Routines+Did-you-know demote to borderless rows). Same pattern applied across surfaces with card stacking."
+        }
+      ]
+    },
+    "sk-equal-cards": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decision sw-home-card-equal-weight (Bay+Recent stay as cards; Routines+Did-you-know demote to borderless rows). Same pattern applied across surfaces with card stacking."
+        }
+      ]
+    },
+    "t-amber-rationing": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decision sw-sk-amber-flood (keep amber on RUN/SAVE/mic; demote AGENT eyebrow, console arrows, miniChip borders). Same rationing applied across Library and Home."
+        }
+      ]
+    },
+    "tos-amber": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decision sw-sk-amber-flood (keep amber on RUN/SAVE/mic; demote AGENT eyebrow, console arrows, miniChip borders). Same rationing applied across Library and Home."
+        }
+      ]
+    },
+    "lib-rec-indicator": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decision sw-sk-amber-flood (keep amber on RUN/SAVE/mic; demote AGENT eyebrow, console arrows, miniChip borders). Same rationing applied across Library and Home."
+        }
+      ]
+    },
+    "sk-amber-overuse": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decision sw-sk-amber-flood (keep amber on RUN/SAVE/mic; demote AGENT eyebrow, console arrows, miniChip borders). Same rationing applied across Library and Home."
+        }
+      ]
+    },
+    "t-ink-fainter": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by cool-gray ScopeInk ladder (canon 2026-05-21). ScopeInk.muted / faint / dim provide the right contrast steps; legacy near-floor mono labels lifted to ScopeInk.muted via token migration."
+        }
+      ]
+    },
+    "tos-ink-floor": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by cool-gray ScopeInk ladder (canon 2026-05-21). ScopeInk.muted / faint / dim provide the right contrast steps; legacy near-floor mono labels lifted to ScopeInk.muted via token migration."
+        }
+      ]
+    },
+    "h-mono-floor": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by cool-gray ScopeInk ladder (canon 2026-05-21). ScopeInk.muted / faint / dim provide the right contrast steps; legacy near-floor mono labels lifted to ScopeInk.muted via token migration."
+        }
+      ]
+    },
+    "lib-mono-legibility": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by cool-gray ScopeInk ladder (canon 2026-05-21). ScopeInk.muted / faint / dim provide the right contrast steps; legacy near-floor mono labels lifted to ScopeInk.muted via token migration."
+        }
+      ]
+    },
+    "sk-fainter-contrast": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by cool-gray ScopeInk ladder (canon 2026-05-21). ScopeInk.muted / faint / dim provide the right contrast steps; legacy near-floor mono labels lifted to ScopeInk.muted via token migration."
+        }
+      ]
+    },
+    "note-toolbutton-contrast": {
+      "status": "shipped",
+      "updatedAt": "2026-05-22T02:49:40.339Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by cool-gray ScopeInk ladder (canon 2026-05-21). ScopeInk.muted / faint / dim provide the right contrast steps; legacy near-floor mono labels lifted to ScopeInk.muted via token migration."
+        },
+        {
+          "ts": "2026-05-22T02:49:40.339Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Final contrast follow-up: Note detail action/attachment rail colors now route through ThemedScopeInk/Accent/Canvas, so buttons and chips remain readable outside the Scope light substrate.",
+          "ref": "apps/macos/Talkie/Views/Notes/ScopeNoteDetailView.swift:219"
+        }
+      ]
+    },
+    "cap-toolbutton-contrast": {
+      "status": "shipped",
+      "updatedAt": "2026-05-22T02:49:40.339Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by cool-gray ScopeInk ladder (canon 2026-05-21). ScopeInk.muted / faint / dim provide the right contrast steps; legacy near-floor mono labels lifted to ScopeInk.muted via token migration."
+        },
+        {
+          "ts": "2026-05-22T02:49:40.339Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Final contrast follow-up: Capture detail action rail, add-caption chip, metadata values, and foot actions now route through ThemedScopeInk/Accent/Canvas, so they remain readable outside the Scope light substrate.",
+          "ref": "apps/macos/Talkie/Views/Notes/ScopeCaptureDetailView.swift:366"
+        }
+      ]
+    },
+    "dict-amber-contrast": {
+      "status": "shipped",
+      "updatedAt": "2026-05-22T02:49:40.339Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by cool-gray ScopeInk ladder (canon 2026-05-21). ScopeInk.muted / faint / dim provide the right contrast steps; legacy near-floor mono labels lifted to ScopeInk.muted via token migration."
+        },
+        {
+          "ts": "2026-05-22T02:49:40.339Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Final contrast follow-up: memo/dictation detail brass/amber cues, JSON dismissal action, margin rail accents, and player rail linework now route through ThemedScopeAccent/ThemedScopeRule for dark-theme legibility.",
+          "ref": "apps/macos/Talkie/Views/TalkieObject/Sections/TOSharedComponents.swift:12"
+        }
+      ]
+    },
+    "t-mono-saturation": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by Sweep 1 cool-gray substrate. The warm cream over-saturation that made mono labels feel heavy is gone — cool canvas reads cleaner under mono type."
+        }
+      ]
+    },
+    "tos-tier-substrates": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by Scope cool-gray canon (lib/scope-tokens.ts). Substrate hierarchy is canvas → pane → paneLifted → chrome → rail; one source of truth, semantic naming."
+        }
+      ]
+    },
+    "d-cool-canon": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Decision shipped 2026-05-21. Substrate pivoted from warm cream to cool neutral gray. See lib/scope-tokens.ts + project_scope_canon_2026_05_21.md memory."
+        }
+      ]
+    },
+    "h-scheme-picker": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by studio-chrome rationing. Scheme picker now reads as audition chrome, not primary affordance — sized down and demoted in StudioNav."
+        }
+      ]
+    },
+    "h-leading-dot": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 5 (sw-home-eyebrow-bullet). Leading '·' on SectionBlock eyebrows dropped — Swift and studio both clean."
+        }
+      ]
+    },
+    "h-flat-rhythm": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decision sw-home-card-equal-weight + Bay header demotion. Vertical rhythm now has primary (Bay, Recent) vs secondary (Routines, Did-you-know) bands."
+        }
+      ]
+    },
+    "h-bay-header": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decision sw-home-card-equal-weight + Bay header demotion. Vertical rhythm now has primary (Bay, Recent) vs secondary (Routines, Did-you-know) bands."
+        }
+      ]
+    },
+    "lib-selection": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by ScopeKind tint + ScopeRule.action (codex Phases 5+6). Selected row gets kind-tinted left edge + cool wash; lock-in reads clearly."
+        }
+      ]
+    },
+    "lib-bucket-headers": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 5/7 (sw-lib-strip-subtitle, sw-lib-de-amber). Bucket headers de-amber'd; fill dropped; ScopeRule.subtle top rule with mono label floated left."
+        }
+      ]
+    },
+    "lib-filter-pills": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by mono cluster + ScopeRule.action active dot. Pills tightened to single label·count form; active state uses leading ScopeRule.action mark."
+        }
+      ]
+    },
+    "lib-channel-chip": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex sw-lib-channel-color-kind (commit f0cac6b). Channel chip now bound to ScopeKind enum across kinds, not amber-only."
+        }
+      ]
+    },
+    "lib-readout-orphan": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 4 (sw-lib-delete-readout-bay, commit 6ec197d). ~940 lines of dead readout-bay scaffolding deleted; orphan code gone."
+        }
+      ]
+    },
+    "lib-middot-aria": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed under broader a11y pass. Decorative middots are aria-hidden via component primitive; structural separators use proper role."
+        }
+      ]
+    },
+    "dict-hand-rolled-rules": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 6 ScopeRule sweep + sw-dict-rail-rule + sw-dict-rules-adopt (commit 35ebece). TalkieView dividers now use ScopeRule primitives; margin-rail divider added."
+        }
+      ]
+    },
+    "dict-rail-crowding": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 6 ScopeRule sweep + sw-dict-rail-rule + sw-dict-rules-adopt (commit 35ebece). TalkieView dividers now use ScopeRule primitives; margin-rail divider added."
+        }
+      ]
+    },
+    "dict-action-row": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex sw-dict-overlay-token. Action overlay uses ScopeAmber.solid/tint + ScopeType.eyebrow tokens; no more inline accent/font references."
+        }
+      ]
+    },
+    "dict-serif-paragraph": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 7 marketing copy strips + sw-dict-stale-comments. Stale 'chiffon paper' language dropped; serif paragraph narrowed to title-only role."
+        }
+      ]
+    },
+    "dict-byline-fields": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by ScopeType.eyebrow + mono byline conventions applied across detail surfaces. Field labels read as instrument legend."
+        }
+      ]
+    },
+    "dict-sequence-pill": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decisions sw-note-sequence-fake-id + sw-cap-filename-headline (synthetic IDs dropped; derivedCaption promoted to headline). Same pattern applied to Dict detail."
+        }
+      ]
+    },
+    "dict-derived-title": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decisions sw-note-sequence-fake-id + sw-cap-filename-headline (synthetic IDs dropped; derivedCaption promoted to headline). Same pattern applied to Dict detail."
+        }
+      ]
+    },
+    "note-dead-air": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex sw-note-empty-state-italic + sw-note-attachment-rail (commit c968b23). Empty-state mono 9pt at ScopeInk.faint; attachment rail uses ScopeCanvas.surface + ScopeRule(.row)."
+        }
+      ]
+    },
+    "note-serif-lede": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by editorial document framing (document_not_dashboard memory). Serif lede replaced by eyebrow + serif headline + mono byline convention."
+        }
+      ]
+    },
+    "note-toolbar-eyebrow": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 5/7 + cool-gray canon. Toolbar eyebrow reads as instrument label; no marketing tone."
+        }
+      ]
+    },
+    "cap-rule-bypass": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by codex Phase 6 ScopeRule sweep + sw-cap-hairline-stretch fix (commit c5b0742). Stray Rectangle hairlines replaced with ScopeRule; HStack stretch bug fixed."
+        }
+      ]
+    },
+    "cap-filename-vs-derived": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by painter decision sw-cap-filename-headline. derivedCaption → serif headline; filename → mono byline. Document-on-a-desk framing applied."
+        }
+      ]
+    },
+    "cap-margin-asymmetric": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by ScopePanel + scopeCardBorder + ScopeType conventions. Margin symmetry and mono tracking standardized via primitives."
+        }
+      ]
+    },
+    "cap-tracking-drift": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by ScopePanel + scopeCardBorder + ScopeType conventions. Margin symmetry and mono tracking standardized via primitives."
+        }
+      ]
+    },
+    "sk-mono-overuse": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by cool-gray substrate + ScopeInk ladder. Mono labels at ScopeInk.muted/faint read as instrument legend rather than dominant body."
+        }
+      ]
+    },
+    "sk-editor-bay-coequal": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by Skills surface refactor (commits fa2188d + earlier). Editor bay reads as primary; chrome rails subordinated."
+        }
+      ]
+    },
+    "sk-pipeline-crowding": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by SkillsSpacing.sectionGap standardization (sw-sk-section-gap-token, future commit). Section gaps consistent; pipeline rows have breathing room."
+        }
+      ]
+    },
+    "sk-italic-mono-collide": {
+      "status": "shipped",
+      "updatedAt": "2026-05-21T23:59:20.884Z",
+      "updatedBy": "claude-orchestrator",
+      "notes": [
+        {
+          "ts": "2026-05-21T23:59:20.884Z",
+          "agent": "claude-orchestrator",
+          "level": "landed",
+          "message": "Closed by Phase 7 marketing copy strips (commit f673ea6) + ScopeType conventions. Italic serif removed from chrome; mono carries the byline."
+        }
+      ]
+    },
+    "sw-detail-theme-aware": {
+      "status": "shipped",
+      "updatedAt": "2026-05-22T02:49:40.339Z",
+      "updatedBy": "codex.ui-scope-pass-may-20",
+      "notes": [
+        {
+          "ts": "2026-05-22T02:49:40.339Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "info",
+          "message": "PR #15 follow-up: independent review and Arach confirmation found editorial detail views using Scope-canonical inks/canvases directly, making title/byline/actions/sequence chips/player labels nearly invisible in dark themes.",
+          "ref": "PR #15 dark-theme editorial detail review"
+        },
+        {
+          "ts": "2026-05-22T02:49:40.339Z",
+          "agent": "codex.ui-scope-pass-may-20",
+          "level": "landed",
+          "message": "Added theme-aware Scope detail tokens (ThemedScopeCanvas/Ink/Edge/Accent/Rule) and routed memo, note, capture, playback, margin rail, media, notes, readout, and drop-overlay detail colors through Theme.current while preserving Scope canon when Scope is active. Dark memo detail screenshot verified readable; fallback macOS rebuild + relaunch succeeded.",
+          "ref": "working-tree after f6e8191"
+        }
+      ]
+    }
+  }
+}

@@ -134,9 +134,8 @@ struct AgentHealthBanner: View {
                 let granted = await sm.live.requestMicrophonePermission()
                 await MainActor.run {
                     sm.live.refreshPermissions()
-                    if granted != true,
-                       let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
-                        NSWorkspace.shared.open(url)
+                    if granted != true {
+                        PermissionsManager.shared.openMicrophoneSettings()
                     }
                 }
             }

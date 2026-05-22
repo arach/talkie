@@ -29,12 +29,36 @@ const STUDIES: Study[] = [
       "Replacement for the data-listing Stats page — an interstitial that surfaces what Talkie can do. Hero · Ask Talkie agent box · Did-you-know feature recap · feature atlas · integrations · what's new.",
   },
   {
+    slug: "mac-memo-detail",
+    name: "Memo Detail",
+    kind: "Composition study",
+    platform: "macOS",
+    blurb:
+      "Right-hand pane of the Library split view, redesigned as an editorial document. Masthead replaces the metric pills + four-column grid; transcript gets gutter timecodes + margin highlights; player rail sits as a typesetter's bar at the foot.",
+  },
+  {
     slug: "agent-bay",
     name: "Agent Bay",
     kind: "Scheme study",
     platform: "macOS",
     blurb:
       "Color schemes and treatment toggles for the macOS Home agent bay. 9 schemes × 6 treatments.",
+  },
+  {
+    slug: "mac-skills",
+    name: "Skills",
+    kind: "Composition study",
+    platform: "macOS",
+    blurb:
+      "Committed shape for the macOS Skills surface. One tab, one page, the whole loop — starters below, editor bay (chat ↔ markup) above, console under it, your skills at the foot. Semantic skill syntax (WHEN / WITH / DO / THEN). Pre-Swift.",
+  },
+  {
+    slug: "mac-skill-forge",
+    name: "Skill Forge",
+    kind: "Framing study (archive)",
+    platform: "macOS",
+    blurb:
+      "Earlier framing comparison that produced mac-skills — markup-primary, chat-driven, and trifold layouts. Kept as a record of the alternatives considered.",
   },
 
   // — iOS —

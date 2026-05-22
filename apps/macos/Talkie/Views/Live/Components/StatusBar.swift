@@ -186,8 +186,23 @@ struct StatusBar: View {
 
                 // LEFT/RIGHT edges overlay
                 HStack(spacing: Spacing.sm) {
-                    // LEFT SIDE - Sync status
-                    HStack(spacing: 6) {
+                    // LEFT SIDE - Settings + sync status
+                    HStack(spacing: 8) {
+                        Button {
+                            NavigationState.shared.navigate(to: .settings)
+                        } label: {
+                            Image(systemName: "gearshape")
+                                .font(.system(size: 11, weight: .regular))
+                                .foregroundColor(TalkieTheme.textMuted)
+                                .padding(.horizontal, 3)
+                                .padding(.vertical, 2)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .focusEffectDisabled()
+                        .help("Settings (⌘,)")
+                        .keyboardShortcut(",", modifiers: .command)
+
                         SyncStatusIcon(showSuccess: showSuccess)
                             .transition(.opacity.combined(with: .scale(scale: 0.9)))
                     }

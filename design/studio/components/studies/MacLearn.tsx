@@ -26,9 +26,9 @@ export function MacLearn() {
       className="mx-auto rounded-md"
       style={{
         width: "1100px",
-        background: "#FBFBFA",
+        background: "#F8F8F7",
         boxShadow: "0 8px 30px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04)",
-        border: "0.5px solid #E0DCD3",
+        border: "0.5px solid #DEDEDD",
       }}
     >
       <TopBand />
@@ -162,7 +162,7 @@ function AskTalkie() {
             selected, faded prompt otherwise. Studio fake only. */}
         <div
           className="min-h-[68px] rounded-md border border-dashed px-4 py-3"
-          style={{ borderColor: "#E0DCD3" }}
+          style={{ borderColor: "#DEDEDD" }}
         >
           {stub ? (
             <div className="flex flex-col gap-2">
@@ -242,7 +242,7 @@ function RecapCard({ recap }: { recap: Recap }) {
       <div className="flex items-start gap-3">
         <div
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[3px] border"
-          style={{ borderColor: "#E0DCD3", background: "#FAF6E8" }}
+          style={{ borderColor: "#DEDEDD", background: "#FAF6E8" }}
         >
           <RecapGlyph kind={recap.glyph} />
         </div>
@@ -483,7 +483,7 @@ function ProviderTile({ provider }: { provider: Provider }) {
   const statusColor =
     provider.status === "configured" ? "#54A06A" :
     provider.status === "available"  ? "#9A6A22" :
-                                       "#A8A29E";
+                                       "#A4A4A6";
   const statusLabel =
     provider.status === "configured" ? "CONFIGURED" :
     provider.status === "available"  ? "AVAILABLE"  :

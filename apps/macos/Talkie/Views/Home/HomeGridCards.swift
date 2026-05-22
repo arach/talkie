@@ -2003,7 +2003,7 @@ private struct SystemStatusCardView: View {
     }
 
     private func openMicSettings() {
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!)
+        PermissionsManager.shared.openMicrophoneSettings()
     }
 
     private func openAccessibilitySettings() {
