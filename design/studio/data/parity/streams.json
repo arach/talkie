@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-22T00:35:14.442Z",
+  "updatedAt": "2026-05-22T00:39:38.169Z",
   "streams": [
     {
       "key": "C1",
@@ -3021,6 +3021,13 @@
           "message": "Landed PORT: Bridge cluster surfaces now show NetworkStatusBanner offline/failed states in ConnectionCenterNext, BridgeDetailNext, and DeckMirrorNext.",
           "findingKey": "C5::(none — per-surface error handling)::Banner in Bridge cluster",
           "ref": "apps/ios/Talkie iOS/Views/Next/ConnectionCenterNext.swift:237"
+        },
+        {
+          "ts": "2026-05-22T00:39:38.132Z",
+          "agent": "talkie-codex-c5",
+          "level": "info",
+          "message": "PR: https://github.com/arach/talkie/pull/25",
+          "ref": "https://github.com/arach/talkie/pull/25"
         }
       ]
     },
