@@ -129,20 +129,14 @@ private struct ComposeHeader: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        HStack {
-            Button(action: onBack) {
-                HStack(spacing: 2) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 14))
-                    Text(backLabel)
-                        .talkieType(.preview)
-                }
-                .foregroundStyle(theme.colors.textSecondary)
-            }
-            .buttonStyle(.plain)
-
-            Spacer()
-
+        // ZStack-anchored layout: the centered title is positioned by
+        // the ZStack's default .center alignment so it stays on the
+        // screen's horizontal center regardless of how long the back
+        // button's label is. Back button + ellipsis are pinned to the
+        // leading/trailing edges via an overlaid HStack; the back
+        // text truncates instead of pushing the title around.
+        ZStack {
+            // Centered title (always at screen horizontal center)
             VStack(spacing: 2) {
                 Text(state == .diff ? "· COMPOSE WITH · v1 → v2" : "· COMPOSE WITH")
                     .talkieType(.channelLabelTiny)
@@ -183,16 +177,39 @@ private struct ComposeHeader: View {
                 .accessibilityLabel("Choose revision path · \(modelLabel)")
             }
 
-            Spacer()
+            // Edge-anchored controls
+            HStack {
+                Button(action: onBack) {
+                    HStack(spacing: 2) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 14))
+                        Text(backLabel)
+                            .talkieType(.preview)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    .foregroundStyle(theme.colors.textSecondary)
+                }
+                .buttonStyle(.plain)
+                // Cap back-button width so a long memo title can't
+                // grow into the centered title's territory. ~28% of
+                // screen leaves the center comfortably visible on
+                // 13 mini.
+                .frame(maxWidth: 120, alignment: .leading)
+                .yieldsToChromeZone(.topLeading)
 
-            Button(action: onShowNotes) {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 16))
-                    .foregroundStyle(theme.colors.textTertiary)
-                    .frame(width: 28, height: 28)
+                Spacer()
+
+                Button(action: onShowNotes) {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 16))
+                        .foregroundStyle(theme.colors.textTertiary)
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open notes")
+                .yieldsToChromeZone(.topTrailing)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Open notes")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
