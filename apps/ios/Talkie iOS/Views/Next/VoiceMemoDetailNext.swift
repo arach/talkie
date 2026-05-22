@@ -658,11 +658,23 @@ struct VoiceMemoDetailNext: View {
                     transcriptSection
                         .padding(.horizontal, 12)
 
-                    workflowTriggersSection
-                        .padding(.horizontal, 12)
+                    // Memo-scoped workflow triggers — only render
+                    // when there are memo-prefixed templates defined.
+                    // Empty list = no value in showing the header.
+                    if !memoWorkflowTemplates.isEmpty {
+                        workflowTriggersSection
+                            .padding(.horizontal, 12)
+                    }
 
-                    workflowRunsSection
-                        .padding(.horizontal, 12)
+                    // Mac workflow runs — only render when there are
+                    // actual runs synced back. The "Waiting for runs"
+                    // empty state was high-density-no-value clutter
+                    // for memos that never went through Mac workflows.
+                    if !store.workflowRuns.isEmpty {
+                        workflowRunsSection
+                            .padding(.horizontal, 12)
+                    }
+
                     attachmentsSection
                         .padding(.horizontal, 12)
 
@@ -1325,9 +1337,12 @@ struct VoiceMemoDetailNext: View {
             }
             .padding(.horizontal, 4)
 
-            if store.attachments.isEmpty {
-                emptyAttachmentsTile
-            } else {
+            // Compact empty state: when there are no attachments, the
+            // section header (with the · ADD chip) is enough — skip
+            // the large "Add screenshots or photos" tile that was
+            // taking up a third of the viewport on every memo. Tap
+            // the · ADD chip in the header to open the picker.
+            if !store.attachments.isEmpty {
                 LazyVGrid(
                     columns: [GridItem(.adaptive(minimum: 100), spacing: 8)],
                     spacing: 8
@@ -1572,25 +1587,57 @@ struct VoiceMemoDetailNext: View {
     /// to the bottom of the content. Either way they never start
     /// stacked on top of the chrome tray.
     private var actionBar: some View {
+        // Compact action bar: two prominent actions (Share + Refine)
+        // with a More menu folding the less-frequent Listen / Agent /
+        // CLI behind a "..." chip. Refine stays primary (filled accent)
+        // since it's the principal forward path from a memo.
         HStack(spacing: 8) {
             actionChip(label: "Share", isPrimary: false) {
                 showingShareSheet = true
             }
-            actionChip(label: "Listen", isPrimary: false) {
-                AppShellRouter.shared.openReadAloud(source: ReadAloudSource(
-                    title: store.memo.title,
-                    text: store.memo.transcript,
-                    meta: "MEMO · \(wordCount) WORDS · \(store.memo.durationLabel)",
-                    sourceURL: nil
-                ))
+
+            Menu {
+                Button {
+                    AppShellRouter.shared.openReadAloud(source: ReadAloudSource(
+                        title: store.memo.title,
+                        text: store.memo.transcript,
+                        meta: "MEMO · \(wordCount) WORDS · \(store.memo.durationLabel)",
+                        sourceURL: nil
+                    ))
+                } label: {
+                    Label("Listen", systemImage: "speaker.wave.2")
+                }
+                Button {
+                    showingAgentSheet = true
+                } label: {
+                    Label("Ask Agent", systemImage: "brain.head.profile")
+                }
+                Button {
+                    showingCLISheet = true
+                } label: {
+                    Label("Run CLI", systemImage: "terminal")
+                }
+            } label: {
+                Text("…")
+                    .talkieType(.fieldLabel)
+                    .foregroundStyle(theme.colors.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 11)
+                    .background(
+                        Capsule()
+                            .fill(Color.clear)
+                            .overlay(
+                                Capsule()
+                                    .strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                            )
+                    )
             }
-            actionChip(label: "Agent", isPrimary: false) {
-                showingAgentSheet = true
+            .buttonStyle(.plain)
+            .accessibilityLabel("More actions")
+
+            actionChip(label: "Refine ›", isPrimary: true) {
+                AppShellRouter.shared.openCompose(documentID: store.memo.id)
             }
-            actionChip(label: "CLI", isPrimary: false) {
-                showingCLISheet = true
-            }
-            actionChip(label: "Refine ›", isPrimary: true) { AppShellRouter.shared.openCompose(documentID: store.memo.id) }
         }
     }
 
