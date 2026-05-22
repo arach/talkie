@@ -32,18 +32,11 @@ struct ChromeOverlay: View {
     var body: some View {
         ZStack {
             // Top corners — chrome destinations.
-            CornerSlot(
-                zone: .topLeading,
-                glyph: AnyView(Image(systemName: "xmark").font(.system(size: 13, weight: .medium))),
-                label: "Close"
-            ) {
-                // Dismisses the summoned chrome. Going home lives in the
-                // tray (leftmost slot); back/pop is handled by the native
-                // NavigationStack chevron at the top of each sub-surface.
-                // xmark reads as "close this overlay" without competing
-                // with the screen's back chevron underneath.
-                chrome.dismissChrome()
-            }
+            // No top-leading chrome pill — the voice button already
+            // toggles chrome on/off (tap to summon, tap again to dismiss),
+            // so a dedicated Close pill in the corner was redundant. The
+            // freed zone lets the screen's native back chevron stay
+            // visible while chrome is summoned, no yield needed.
 
             CornerSlot(
                 zone: .topTrailing,

@@ -424,7 +424,11 @@ final class ShellChrome: ObservableObject {
         switch state {
         case .resting: return []
         case .expanded, .listening:
-            return [.topLeading, .topTrailing, .bottomTrailing]
+            // .topLeading is intentionally NOT claimed — chrome has no
+            // top-left pill (voice button handles dismiss), so screen
+            // back chevrons stay visible throughout. Settings owns
+            // .topTrailing; Keyboard owns .bottomTrailing.
+            return [.topTrailing, .bottomTrailing]
         }
     }
 
