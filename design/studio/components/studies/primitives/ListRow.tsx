@@ -54,20 +54,22 @@ export function ListRow({
 
       <div className="flex items-baseline gap-2">
         <span
-          className="min-w-0 flex-1 truncate text-[15px] font-medium leading-tight"
+          className="min-w-0 flex-1 truncate text-[15px] leading-tight"
           style={{
             color: "var(--theme-ink)",
             fontFamily: "var(--theme-font-body)",
+            fontWeight: 400,
             letterSpacing: "-0.003em",
           }}
         >
           {title}
         </span>
         <span
-          className="flex-none text-[10px] font-medium tabular-nums"
+          className="flex-none text-[10px] tabular-nums"
           style={{
             color: "var(--theme-ink-faint)",
             fontFamily: "var(--theme-font-mono)",
+            fontWeight: 400,
           }}
         >
           {inlineTime}
@@ -76,10 +78,11 @@ export function ListRow({
 
       {preview ? (
         <div
-          className="mt-1 truncate text-[12.5px] leading-snug"
+          className="mt-1 truncate text-[13px] leading-snug"
           style={{
             color: "var(--theme-ink-muted)",
             fontFamily: "var(--theme-font-body)",
+            fontWeight: 400,
           }}
         >
           {preview}

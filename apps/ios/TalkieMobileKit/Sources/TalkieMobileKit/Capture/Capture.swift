@@ -172,12 +172,14 @@ public final class CaptureStore {
     /// Delete a capture by ID
     public func delete(_ id: UUID) {
         var captures = all()
-        if let capture = captures.first(where: { $0.id == id }) {
-            deleteImageFile(for: capture)
-        }
-        captures.removeAll { $0.id == id }
-        save(captures)
-        log.info("Deleted capture: \(id)")
+        guard let capture = captures.first(where: { $0.id == id }) else { return }
+        delete(capture, from: &captures)
+    }
+
+    /// Delete a capture and its stored image/audio artifacts.
+    public func delete(_ capture: Capture) {
+        var captures = all()
+        delete(capture, from: &captures)
     }
 
     /// Mark a capture as synced to Mac
@@ -197,6 +199,30 @@ public final class CaptureStore {
         captures[index] = captures[index].withTitle(title)
         save(captures)
         log.info("Updated capture title: \(title)")
+        NotificationCenter.default.post(name: .capturesDidChange, object: nil)
+    }
+
+    /// Update user-editable capture content and mark it unsynced so the Mac receives the revision.
+    public func update(title: String?, text: String, for id: UUID) {
+        var captures = all()
+        guard let index = captures.firstIndex(where: { $0.id == id }) else { return }
+
+        let current = captures[index]
+        captures[index] = Capture(
+            id: current.id,
+            sourceType: current.sourceType,
+            text: text,
+            title: title,
+            sourceURL: current.sourceURL,
+            bookmark: current.bookmark,
+            imageFilename: current.imageFilename,
+            deferredPageFilenames: current.deferredPageFilenames,
+            totalPageCount: current.totalPageCount,
+            timestamp: current.timestamp,
+            syncedToMac: false
+        )
+        save(captures)
+        log.info("Updated capture content: \(id)")
         NotificationCenter.default.post(name: .capturesDidChange, object: nil)
     }
 
@@ -333,6 +359,15 @@ public final class CaptureStore {
         NotificationCenter.default.post(name: .capturesDidChange, object: nil)
     }
 
+    private func delete(_ capture: Capture, from captures: inout [Capture]) {
+        deleteImageFile(for: capture)
+        deleteAudioFile(for: capture)
+        captures.removeAll { $0.id == capture.id }
+        save(captures)
+        log.info("Deleted capture: \(capture.id)")
+        NotificationCenter.default.post(name: .capturesDidChange, object: nil)
+    }
+
     private func deleteImageFile(for capture: Capture) {
         guard let dir = imageDirectoryURL else { return }
         if let filename = capture.imageFilename {
@@ -340,6 +375,13 @@ public final class CaptureStore {
         }
         for filename in capture.deferredPageFilenames ?? [] {
             try? fileManager.removeItem(at: dir.appendingPathComponent(filename))
+        }
+    }
+
+    private func deleteAudioFile(for capture: Capture) {
+        guard let dir = audioDirectoryURL else { return }
+        for ext in ["wav", "mp3"] {
+            try? fileManager.removeItem(at: dir.appendingPathComponent("\(capture.id.uuidString).\(ext)"))
         }
     }
 }

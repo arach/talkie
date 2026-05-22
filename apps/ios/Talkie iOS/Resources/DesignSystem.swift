@@ -14,7 +14,7 @@ extension Color {
     // Primary Brand Colors
     static let brandPrimary = Color(hex: "0A0A0A")        // Deep black
     static let brandSecondary = Color(hex: "FAFAFA")      // Pure white
-    static let brandAccent = Color(hex: "0070F3")         // Vercel blue (legacy fixed brand)
+    static let brandAccent = Color(hex: "0084FF")         // Vercel blue (legacy fixed brand)
 
     // Tactical Grays (Palantir/Anduril inspired)
     static let tactical900 = Color(hex: "0A0A0A")
@@ -486,8 +486,8 @@ private let scopeChrome = ChromeTokens(
 )
 
 private let midnightChrome: ChromeTokens = {
-    let accent = Color(hex: "0070F3", darkHex: "0084FF")
-    let ink = Color(hex: "0A0A0A", darkHex: "FAFAFA")
+    let accent = Color(hex: "0084FF")
+    let ink = Color(hex: "FAFAFA")
     return ChromeTokens(
         accent: accent,
         accentTint: accent.opacity(0.10),
@@ -515,8 +515,8 @@ private let midnightChrome: ChromeTokens = {
 }()
 
 private let tacticalChrome: ChromeTokens = {
-    let accent = Color(hex: "FF6B00", darkHex: "FF8800")
-    let ink = Color(hex: "1A1A1A", darkHex: "F0F0F0")
+    let accent = Color(hex: "FF8800")
+    let ink = Color(hex: "F0F0F0")
     return ChromeTokens(
         accent: accent,
         accentTint: accent.opacity(0.12),
@@ -572,6 +572,35 @@ private let ghostChrome: ChromeTokens = {
     )
 }()
 
+private let liftChrome: ChromeTokens = {
+    let accent = Color(hex: "6366F1")
+    let ink = Color(hex: "1A1A1A", darkHex: "FAFAFA")
+    return ChromeTokens(
+        accent: accent,
+        accentTint: accent.opacity(0.06),
+        accentGlow: accent.opacity(0.10),
+        accentStrong: accent.opacity(0.32),
+        action: ink.opacity(0.55),
+        actionTint: ink.opacity(0.04),
+        panel: Color(hex: "1E1B4B", darkHex: "0F0F23"),
+        panelAlt: Color(hex: "27244F", darkHex: "16162C"),
+        panelInk: Color(hex: "F0F0FA"),
+        panelInkFaint: Color(hex: "9CA0C4"),
+        panelAccent: Color(hex: "A5B4FC"),
+        panelEdge: Color(hex: "A5B4FC").opacity(0.22),
+        trace: ink.opacity(0.45),
+        traceFaint: ink.opacity(0.04),
+        edgeStrong: ink.opacity(0.10),
+        edge: ink.opacity(0.06),
+        edgeFaint: ink.opacity(0.04),
+        edgeSubtle: ink.opacity(0.02),
+        glowRadius: 0,
+        chromeCorner: 8,
+        eyebrowLeader: "·",
+        hairlineWidth: 0.5
+    )
+}()
+
 extension AppTheme {
     var chrome: ChromeTokens {
         switch self {
@@ -579,6 +608,7 @@ extension AppTheme {
         case .midnight: return midnightChrome
         case .tactical: return tacticalChrome
         case .ghost:    return ghostChrome
+        case .lift:     return liftChrome
         }
     }
 }

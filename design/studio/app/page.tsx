@@ -94,6 +94,76 @@ const STUDIES: Study[] = [
     blurb:
       "Multi-theme iPhone mock shell with empty PhoneFrame slots. Use this when scaffolding a new iOS screen study before promoting it to its own route.",
   },
+  {
+    slug: "agent-bay",
+    name: "Agent Bay",
+    kind: "Scheme study (macOS)",
+    blurb:
+      "Color schemes and treatment toggles for the macOS Home agent bay. 9 schemes × 6 treatments.",
+  },
+  {
+    slug: "settings",
+    name: "Settings",
+    kind: "Pattern study",
+    blurb:
+      "Three directional sketches for Talkie's Settings surface — Console (dense single scroll), Stations (spatial card grid), Inspector (desktop-style chips + panel). Fresh ideas, no donor crutch.",
+  },
+  {
+    slug: "terminal",
+    name: "Terminal",
+    kind: "Surface study",
+    blurb:
+      "SSH session list — saved hosts with status dots, last-connected timestamps, source labels. Populated + empty states. Mirrors iOS TerminalNext.",
+  },
+  {
+    slug: "bridge-detail",
+    name: "Mac Bridge Detail",
+    kind: "Surface study",
+    blurb:
+      "Replaces the legacy BridgeSettingsView sheet. Status + link-health metric strip + saved sessions + actions. Paired and unpaired states. Mirrors iOS BridgeDetailNext.",
+  },
+  {
+    slug: "camera",
+    name: "Camera",
+    kind: "Surface study",
+    blurb:
+      "Full-screen camera capture with cropping marks, status pill, shutter FAB. Preview / captured / denied states. Mirrors iOS CameraCaptureNext.",
+  },
+  {
+    slug: "ask-ai",
+    name: "Ask AI",
+    kind: "Surface study",
+    blurb:
+      "Agentic loop surface — multi-turn prompt/response with channel-labelled turns (T01/T02…), agent presets, telemetry meta. Idle / thinking / multi-turn states.",
+  },
+  {
+    slug: "read-aloud",
+    name: "Read Aloud",
+    kind: "Surface study",
+    blurb:
+      "TTS playback surface — instrument-style transport, voice / rate / pitch controls, source picker, multi-item queue. Idle / playing / queue states. Audio-output counterpart to Camera.",
+  },
+  {
+    slug: "architecture",
+    name: "Architecture",
+    kind: "Site map",
+    blurb:
+      "Every routable surface in the Next shell, grouped by domain. Inbound + outbound entry counts, orphan flags, proposed wires to close gaps. v2 (in flight): canvas-based UX journey map with embedded mini-views.",
+  },
+  {
+    slug: "completion",
+    name: "Feature Completion",
+    kind: "Roadmap",
+    blurb:
+      "Release-train view of the rebuild — M1 (Next shell + Phase 1 + Phase 2) shipped, M2 entry-point wires queued, M3 polish, M4 missing donor surfaces, M5 new scope (share ext, widget, watch), M6 system polish.",
+  },
+  {
+    slug: "parity",
+    name: "Parity Audit",
+    kind: "Donor vs Next",
+    blurb:
+      "6-agent swarm review comparing master (donor) vs feat/ios-shell-phase-0 (Next) across 6 clusters — home/library, capture, compose/memo, settings/onboarding/sign-in, bridge/deck, recording/workflows/ask AI. Tagged MISSING / STUB / CHANGED / NEW.",
+  },
 ];
 
 const PLATFORMS: Platform[] = ["macOS", "iOS"];

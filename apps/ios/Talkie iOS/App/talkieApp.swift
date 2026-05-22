@@ -8,7 +8,6 @@
 import SwiftUI
 import BackgroundTasks
 import CoreData
-import ClerkKit
 import TalkieMobileKit
 
 @main
@@ -21,9 +20,9 @@ struct talkieApp: App {
     @State private var mainInterfaceVisible = false
     @ObservedObject private var deepLinkManager = DeepLinkManager.shared
     @State private var appSettings = TalkieAppSettings.shared
+    private let themeManager = ThemeManager.shared
 
     // First launch detection
-    @State private var showOnboarding = false
     private static let isScreenshotMode = ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT")
     @State private var screenshotSplashVisible: Bool = {
         // Show splash overlay unless --screenshotSkipSplash is passed
@@ -43,16 +42,13 @@ struct talkieApp: App {
 
     init() {
         let initStart = Date()
-        registerBackgroundTasks()
-        _ = TalkieAppSettings.shared
-        _ = TalkieAppConfigurationStore.shared.synchronizePinnedWorkflowMirror()
-
-        // Configure Clerk authentication (auto-restores existing sessions)
-        #if DEBUG
-        Clerk.configure(publishableKey: "pk_test_c3VwcmVtZS1zdGFsbGlvbi05LmNsZXJrLmFjY291bnRzLmRldiQ")
-        #else
-        Clerk.configure(publishableKey: "pk_live_Y2xlcmsudXNldGFsa2llLmNvbSQ")
-        #endif
+        Self.logPhase("bg-task-register", from: initStart) { registerBackgroundTasks() }
+        Self.logPhase("app-settings-load", from: initStart) { _ = TalkieAppSettings.shared }
+        Self.logPhase("workflow-mirror-sync", from: initStart) {
+            _ = TalkieAppConfigurationStore.shared.synchronizePinnedWorkflowMirror()
+        }
+        Self.logPhase("theme-override-check", from: initStart) { applyScreenshotThemeOverrideIfNeeded() }
+        Self.logPhase("network-reachability-start", from: initStart) { NetworkReachability.shared.start() }
 
         // Initialize ConnectionManager and register sync providers (async, non-blocking)
         Task {
@@ -66,31 +62,34 @@ struct talkieApp: App {
         AppLogger.app.info("📱 App.init: \(String(format: "%.0f", initDuration * 1000))ms")
     }
 
+    /// Run `work` and log the elapsed time as a boot-phase marker.
+    /// `elapsed` is wall time since the start of `init()` so phase rows
+    /// in the console form a cumulative timeline.
+    private static func logPhase(_ name: String, from start: Date, _ work: () -> Void) {
+        let before = Date()
+        work()
+        let phase = Date().timeIntervalSince(before) * 1000
+        let elapsed = Date().timeIntervalSince(start) * 1000
+        AppLogger.app.info("📱  · \(name): +\(String(format: "%.0f", phase))ms (t=\(String(format: "%.0f", elapsed))ms)")
+    }
+
     var body: some Scene {
         WindowGroup {
             @Bindable var appSettings = appSettings
             ZStack {
                 if let controller = persistenceController, mainInterfaceVisible {
                     // Database ready - show main content
-                    HomeView()
-                        .environment(Clerk.shared)
+                    AppShellNext { HomeNextView() }
                         .environment(\.managedObjectContext, controller.container.viewContext)
                         .environmentObject(deepLinkManager)
+                        .environmentObject(themeManager)
                         .onAppear {
                             if !appSettings.hasSeenOnboarding && !Self.isScreenshotMode {
-                                showOnboarding = true
+                                AppShellRouter.shared.openOnboarding()
                             }
                         }
                         .onReceive(NotificationCenter.default.publisher(for: Self.showOnboardingNotification)) { _ in
-                            showOnboarding = true
-                        }
-                        .fullScreenCover(isPresented: $showOnboarding) {
-                            OnboardingView(
-                                hasSeenOnboarding: $appSettings.hasSeenOnboarding,
-                                onStartRecording: {
-                                    deepLinkManager.pendingAction = .record
-                                }
-                            )
+                            AppShellRouter.shared.openOnboarding()
                         }
                         .transition(.opacity)
                 } else {
@@ -130,7 +129,7 @@ struct talkieApp: App {
                 appSettings.refreshPinnedWorkflowMirror()
             }
             .task {
-                // Load database (ClerkKit auto-restores auth sessions on configure)
+                // Load database
                 let loadStart = Date()
                 let controller = await PersistenceController.loadAsync()
                 let loadDuration = Date().timeIntervalSince(loadStart)
@@ -160,6 +159,20 @@ struct talkieApp: App {
                 }
             }
         }
+    }
+
+    // MARK: - Screenshot Theme Override
+
+    private func applyScreenshotThemeOverrideIfNeeded() {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard
+            let themeFlagIndex = arguments.firstIndex(of: "--screenshotTheme"),
+            arguments.indices.contains(themeFlagIndex + 1),
+            let theme = AppTheme(rawValue: arguments[themeFlagIndex + 1])
+        else { return }
+
+        themeManager.apply(theme: theme)
+        AppLogger.app.info("📸 Screenshot theme override: \(theme.rawValue)")
     }
 
     // MARK: - Screenshot Demo Data

@@ -1144,7 +1144,7 @@ struct CLIRequest: Codable {
     let timeout: Int?
 }
 
-struct CLIResponse: Codable {
+struct CLIResponse: Codable, Sendable {
     let success: Bool
     let output: String?
     let error: String?
@@ -1212,6 +1212,7 @@ struct CompanionStateResponse: Codable, Equatable {
     let requestedSurface: RequestedSurface
     let shortcutSlots: [String]?
     let shortcutPages: [CompanionShortcutPage]?
+    let commandDeck: DeckBoardSnapshot?
     let shortcutStates: [CompanionShortcutRuntimeState]?
     let recentResults: [CompanionShortcutRecentResult]?
     let appSwitcherApps: [CompanionAppSwitcherApp]?

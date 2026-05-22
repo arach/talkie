@@ -120,9 +120,20 @@ final class TalkieAppConfigurationStore {
 
         configuration.appearance.theme = defaults.string(forKey: "selectedTheme") ?? configuration.appearance.theme
         configuration.appearance.mode = defaults.string(forKey: "appearanceMode") ?? configuration.appearance.mode
+        configuration.appearance.density = defaults.string(forKey: "appearance.density") ?? configuration.appearance.density
+        configuration.appearance.accentIntensity = defaults.string(forKey: "appearance.accentIntensity") ?? configuration.appearance.accentIntensity
+        configuration.appearance.wordmarkStyle = defaults.string(forKey: "appearance.wordmarkStyle") ?? configuration.appearance.wordmarkStyle
+        if defaults.object(forKey: "appearance.reduceMotion") != nil {
+            configuration.appearance.reduceMotionEnabled = defaults.bool(forKey: "appearance.reduceMotion")
+        }
 
         configuration.recording.tagLocationEnabled = defaults.bool(forKey: "recording.tagLocation")
         configuration.recording.locationTipDismissed = defaults.bool(forKey: "tips.locationDismissed")
+        configuration.recording.inputDevice = defaults.string(forKey: "recording.inputDevice") ?? configuration.recording.inputDevice
+        configuration.recording.sampleRate = defaults.string(forKey: "recording.sampleRate") ?? configuration.recording.sampleRate
+        if defaults.object(forKey: "recording.echoCancellation") != nil {
+            configuration.recording.echoCancellationEnabled = defaults.bool(forKey: "recording.echoCancellation")
+        }
 
         if defaults.object(forKey: "keyboard.ledIndicators") != nil {
             configuration.keyboard.ledIndicatorsEnabled = defaults.bool(forKey: "keyboard.ledIndicators")

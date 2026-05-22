@@ -182,19 +182,19 @@ function StationCard() {
             style={{
               color: "var(--theme-ink)",
               fontFamily: "var(--theme-font-display)",
-              fontWeight: "var(--theme-display-weight, 500)",
-              letterSpacing: "var(--theme-display-tracking, -0.018em)",
+              fontWeight: 300,
+              letterSpacing: "-0.005em",
               fontSize: 22,
             }}
           >
             Conference Bio
           </h2>
           <p
-            className="m-0 mt-1.5 text-[10px] font-semibold uppercase"
+            className="m-0 mt-1.5 text-[10px] font-medium uppercase"
             style={{
               color: "var(--theme-ink-faint)",
               fontFamily: "var(--theme-font-mono)",
-              letterSpacing: "0.18em",
+              letterSpacing: "0.20em",
             }}
           >
             Compose · 31 words · 4m ago
@@ -202,12 +202,12 @@ function StationCard() {
         </div>
         <button
           aria-label="Continue"
-          className="flex-none rounded-full px-3 py-1.5 text-[11px] font-semibold"
+          className="flex-none rounded-full px-3 py-1.5 text-[10px] font-medium uppercase"
           style={{
             background: "var(--theme-amber)",
             color: "var(--theme-paper)",
-            fontFamily: "var(--theme-font-body)",
-            letterSpacing: "-0.005em",
+            fontFamily: "var(--theme-font-mono)",
+            letterSpacing: "0.20em",
           }}
         >
           Continue ›
@@ -278,9 +278,9 @@ function ActionBus() {
               style={{
                 color: "var(--theme-amber)",
                 fontFamily: "var(--theme-font-display)",
-                fontWeight: 500,
-                fontSize: 24,
-                letterSpacing: "-0.02em",
+                fontWeight: 300,
+                fontSize: 26,
+                letterSpacing: "-0.01em",
               }}
             >
               {cell.num}

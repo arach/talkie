@@ -1,0 +1,869 @@
+//
+//  HomeNextView.swift
+//  Talkie iOS
+//
+//  M1 — Talkie's canonical iPhone home, painted to match the
+//  studio mock at http://localhost:3000/home.
+//
+//  Composition: TALKIE wordmark · PICK UP card (continue last
+//  document) · smart Action Bus (auto-rolling 24h→7d→30d) ·
+//  Recent list (2-line iOS-Notes style). The ambient voice
+//  button lives in AppShellNext, not here.
+//
+//  Spec: design/studio/app/home/SWIFT_PORT.md
+//  Visual reference: design/studio/app/home/page.tsx
+//
+//  Type system: TalkieTypeStyle tokens (see TalkieType.swift).
+//  No raw .font(.system(...)) calls here — channel labels, body
+//  serif, and instrument readouts all flow through .talkieType(...).
+//
+
+import SwiftUI
+import UIKit
+
+struct HomeNextView: View {
+    @ObservedObject private var theme = ThemeManager.shared
+    @ObservedObject private var deepLinkManager = DeepLinkManager.shared
+    @ObservedObject private var iCloudStatus = iCloudStatusManager.shared
+    @StateObject private var feed: HomeFeed
+    @State private var isSearchPresented = false
+
+    init(feed: HomeFeed? = nil) {
+        _feed = StateObject(wrappedValue: feed ?? HomeFeed())
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 12) {
+                HomeHeader()
+
+                StationCard(pickUp: feed.lastDocument)
+                    .padding(.horizontal, 12)
+
+                RecentSection(
+                    items: feed.recentItems,
+                    totalCount: feed.totalRecentCount,
+                    isLoading: feed.isLoading,
+                    errorMessage: feed.errorMessage,
+                    isSearching: feed.isSearching,
+                    hasMore: feed.hasMoreRecentItems,
+                    remainingCount: feed.remainingRecentItems,
+                    contentFilter: $feed.contentFilter,
+                    sortOption: $feed.sortOption,
+                    showsSyncPrompt: iCloudStatus.status == .noAccount && !iCloudStatus.isDismissed,
+                    onLoadMore: { feed.loadMoreRecentItems() },
+                    onPromote: { feed.promoteToMemo($0) },
+                    onDelete: { feed.delete($0) },
+                    onOpenICloudSettings: openICloudSettings,
+                    onDismissSyncPrompt: {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            iCloudStatus.dismissBanner()
+                        }
+                    }
+                )
+                .padding(.horizontal, 12)
+
+                Spacer(minLength: 80)   // breathing room for the shell voice button
+            }
+        }
+        .scrollIndicators(.hidden)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .searchable(
+            text: $feed.searchText,
+            isPresented: $isSearchPresented,
+            prompt: "Search memos, dictations, and captures"
+        )
+        .onReceive(NotificationCenter.default.publisher(for: .voiceMemosDidChange)) { _ in feed.reload() }
+        .onReceive(NotificationCenter.default.publisher(for: .capturesDidChange)) { _ in feed.reload() }
+        .onReceive(NotificationCenter.default.publisher(for: .composeNotesDidChange)) { _ in feed.reload() }
+        .onChange(of: deepLinkManager.pendingAction) { _, action in
+            handleDeepLinkAction(action)
+        }
+        .onAppear {
+            handleDeepLinkAction(deepLinkManager.pendingAction)
+        }
+    }
+
+    private func handleDeepLinkAction(_ action: DeepLinkAction) {
+        switch action {
+        case .search(let query):
+            feed.searchText = query
+            isSearchPresented = true
+            deepLinkManager.clearAction()
+        case .openSearch:
+            isSearchPresented = true
+            deepLinkManager.clearAction()
+        default:
+            break
+        }
+    }
+
+    private func openICloudSettings() {
+        if let url = URL(string: "App-Prefs:root=APPLE_ACCOUNT") {
+            UIApplication.shared.open(url)
+        } else if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
+    }
+}
+
+// MARK: - Header
+
+private struct HomeHeader: View {
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        // Gear is 40×40 with the same chrome as the corner Settings
+        // complication (`ChromeOverlay.CornerSlot`) so when the shell
+        // summons, the gear stays visually in place — it doesn't shift
+        // size or move. Right-edge inset matches the corner slot
+        // padding (20pt) so x-coordinates line up. Left side mirrors
+        // that 40pt footprint with a row of three ambient status
+        // pixels (Mac · iCloud · Account) so the wordmark stays
+        // centered while the chrome carries live system state.
+        HStack {
+            // Single Mac connection complication on the left.
+            // 32pt circular icon — same footprint as the gear on the
+            // right so the wordmark stays centered. Hidden entirely
+            // when no Mac is paired; an invisible spacer keeps the
+            // wordmark centered in that case too.
+            ZStack {
+                MacConnectionChip()
+            }
+            .frame(width: 40, height: 40)
+            Spacer()
+            Text("TALKIE")
+                .talkieType(.wordmark)
+                .foregroundStyle(theme.colors.textPrimary.opacity(0.78))
+            Spacer()
+            Button(action: { AppShellRouter.shared.openSettings() }) {
+                ZStack {
+                    Circle().fill(theme.colors.cardBackground)
+                    Circle().strokeBorder(
+                        theme.currentTheme.chrome.edgeFaint,
+                        lineWidth: theme.currentTheme.chrome.hairlineWidth
+                    )
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(theme.colors.textSecondary)
+                }
+                .frame(width: 40, height: 40)
+                .shadow(color: .black.opacity(0.10), radius: 4, y: 2)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Settings")
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 6)
+        .padding(.bottom, 8)
+    }
+}
+
+// MARK: - Ambient status row (Mac · iCloud · Account)
+
+/// Single Mac connection complication at the top-left of Home.
+/// Replaces the prior four-pixel AmbientStatusRow — fingers can't
+/// reliably hit 6pt dots, and the row was visually noisy without
+/// being useful. This chip uses the `point.3.connected.trianglepath`
+/// SF Symbol (same one ConnectionCenterNext uses as its hero) and
+/// adapts based on bridge + deck state:
+///
+///   - Connected + deck snapshot available → tap opens DeckMirrorNext
+///   - Any other paired state                → tap opens ConnectionCenter
+///   - Not paired                            → chip hidden entirely
+///
+/// Account sign-in and iCloud sync pixels were removed from the
+/// home header — both live in Settings → CONNECT where they can be
+/// acted on. They didn't earn the home real estate.
+private struct MacConnectionChip: View {
+    @State private var bridgeManager = BridgeManager.shared
+    @ObservedObject private var deck = DeckMirrorStore.shared
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        if bridgeManager.isPaired {
+            Button(action: handleTap) {
+                ZStack {
+                    Circle().fill(theme.colors.cardBackground)
+                    Circle().strokeBorder(
+                        borderColor,
+                        lineWidth: theme.currentTheme.chrome.hairlineWidth
+                    )
+                    Image(systemName: "point.3.connected.trianglepath.dotted")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(iconColor)
+                }
+                .frame(width: 40, height: 40)
+                .shadow(color: .black.opacity(0.10), radius: 4, y: 2)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityHint(accessibilityHint)
+        }
+    }
+
+    // MARK: - State derivation
+
+    private var hasDeckBoard: Bool {
+        guard let board = deck.board else { return false }
+        return !board.spaces.isEmpty
+    }
+
+    private var isConnected: Bool {
+        bridgeManager.status == .connected
+    }
+
+    private func handleTap() {
+        if isConnected && hasDeckBoard {
+            AppShellRouter.shared.openDeck()
+        } else {
+            AppShellRouter.shared.openConnectionCenter()
+        }
+    }
+
+    private var showsChevron: Bool {
+        isConnected && hasDeckBoard
+    }
+
+    // MARK: - Visual treatment per state
+
+    private var chipLabel: String {
+        if bridgeManager.awaitingPairingApproval {
+            return "PENDING APPROVAL"
+        }
+        switch bridgeManager.status {
+        case .connected:
+            if hasDeckBoard { return "DECK" }
+            let name = bridgeManager.pairedMacDisplayName ?? "MAC"
+            return name.uppercased()
+        case .connecting:
+            return "CONNECTING…"
+        case .disconnected:
+            return "MAC · OFFLINE"
+        case .error:
+            return "MAC · ERROR"
+        }
+    }
+
+    private var iconColor: Color {
+        if bridgeManager.status == .error {
+            return Color(red: 0.85, green: 0.46, blue: 0.34)
+        }
+        if isConnected {
+            return hasDeckBoard
+                ? theme.currentTheme.chrome.accent
+                : Color(red: 0.36, green: 0.74, blue: 0.50)
+        }
+        return theme.colors.textTertiary
+    }
+
+    private var labelColor: Color {
+        if bridgeManager.status == .error {
+            return Color(red: 0.85, green: 0.46, blue: 0.34)
+        }
+        if isConnected && hasDeckBoard {
+            return theme.colors.textPrimary
+        }
+        return theme.colors.textSecondary
+    }
+
+    private var borderColor: Color {
+        if bridgeManager.status == .error {
+            return Color(red: 0.85, green: 0.46, blue: 0.34).opacity(0.5)
+        }
+        if isConnected && hasDeckBoard {
+            return theme.currentTheme.chrome.accent.opacity(0.55)
+        }
+        return theme.currentTheme.chrome.edgeFaint
+    }
+
+    private var accessibilityLabel: String {
+        let mac = bridgeManager.pairedMacDisplayName ?? "Mac"
+        if bridgeManager.awaitingPairingApproval { return "\(mac), pending approval" }
+        switch bridgeManager.status {
+        case .connected:
+            return hasDeckBoard ? "\(mac) deck" : "\(mac) connected"
+        case .connecting: return "\(mac) connecting"
+        case .disconnected: return "\(mac) offline"
+        case .error: return "\(mac) error"
+        }
+    }
+
+    private var accessibilityHint: String {
+        isConnected && hasDeckBoard ? "Opens deck" : "Opens connection center"
+    }
+}
+
+/// Legacy ambient row primitives below this point are no longer
+/// used in HomeNextView's header. Kept as private types so any
+/// downstream/per-test reference doesn't break — to be removed once
+/// the new chip is verified.
+private struct AmbientStatusRow_legacy: View {
+    @State private var bridgeManager = BridgeManager.shared
+    @ObservedObject private var iCloudStatus = iCloudStatusManager.shared
+
+    @ObservedObject private var deck = DeckMirrorStore.shared
+
+    var body: some View {
+        HStack(spacing: 0) {
+            StatusPixel(state: macPixelState, label: "Mac bridge", value: macPixelLabel) {
+                AppShellRouter.shared.openConnectionCenter()
+            }
+            StatusPixel(state: iCloudPixelState, label: "iCloud sync", value: iCloudPixelLabel) {
+                AppShellRouter.shared.openConnectionCenter()
+            }
+            StatusPixel(state: signInPixelState, label: "Account", value: isSignedIn ? "signed in" : "signed out") {
+                if isSignedIn {
+                    AppShellRouter.shared.openConnectionCenter()
+                } else {
+                    AppShellRouter.shared.openSignIn()
+                }
+            }
+            if bridgeManager.isPaired {
+                StatusPixel(state: deckPixelState, label: "Mac deck", value: deckPixelLabel) {
+                    AppShellRouter.shared.openDeck()
+                }
+            }
+        }
+    }
+
+    private var deckPixelState: StatusPixel.State {
+        if bridgeManager.status == .error { return .error }
+        if let board = deck.board, !board.spaces.isEmpty { return .good }
+        return .transient
+    }
+
+    private var deckPixelLabel: String {
+        if bridgeManager.status == .error { return "error" }
+        if let board = deck.board, !board.spaces.isEmpty {
+            return "\(board.spaces.count) space\(board.spaces.count == 1 ? "" : "s")"
+        }
+        return "waiting"
+    }
+
+    private var macPixelLabel: String {
+        switch macPixelState {
+        case .good: return "connected"
+        case .transient: return bridgeManager.isPaired ? "reconnecting" : "connecting"
+        case .dim: return "not paired"
+        case .error: return "connection failed"
+        }
+    }
+
+    private var iCloudPixelLabel: String {
+        switch iCloudPixelState {
+        case .good: return "available"
+        case .transient: return "syncing"
+        case .dim: return "no iCloud account"
+        case .error: return "error"
+        }
+    }
+
+    private var macPixelState: StatusPixel.State {
+        switch bridgeManager.status {
+        case .connected:    return .good
+        case .connecting:   return .transient
+        case .error:        return .error
+        case .disconnected: return bridgeManager.isPaired ? .transient : .dim
+        }
+    }
+
+    private var iCloudPixelState: StatusPixel.State {
+        switch iCloudStatus.status {
+        case .available:                                        return .good
+        case .checking, .temporarilyUnavailable,
+             .couldNotDetermine:                                return .transient
+        case .noAccount, .restricted:                           return .dim
+        case .error:                                            return .error
+        }
+    }
+
+    private var signInPixelState: StatusPixel.State {
+        isSignedIn ? .good : .dim
+    }
+
+    private var isSignedIn: Bool {
+        UserDefaults.standard.bool(forKey: SignInStore.signedInDefaultsKey)
+    }
+}
+
+private struct StatusPixel: View {
+    enum State { case good, transient, dim, error }
+
+    let state: State
+    let label: String
+    let value: String
+    let action: () -> Void
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Color.clear
+                Circle()
+                    .fill(fillColor)
+                    .frame(width: 6, height: 6)
+                    .overlay(
+                        Circle()
+                            .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                          lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                    )
+            }
+            .frame(width: 13, height: 40)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(label) · \(value)")
+        .accessibilityHint("Opens connection center")
+    }
+
+    private var fillColor: Color {
+        switch state {
+        case .good:      return Color(red: 0.36, green: 0.74, blue: 0.50)
+        case .transient: return theme.currentTheme.chrome.accent
+        case .dim:       return theme.colors.textTertiary.opacity(0.45)
+        case .error:     return Color(red: 0.85, green: 0.46, blue: 0.34)
+        }
+    }
+}
+
+// MARK: - STATION (PICK UP + Action Bus)
+
+private struct StationCard: View {
+    let pickUp: HomeFeed.PickUp?
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("PICK UP")
+                        .talkieType(.channelLabel)
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+
+                    if let pickUp {
+                        Text(pickUp.title)
+                            .talkieType(.headline)
+                            .foregroundStyle(theme.colors.textPrimary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+
+                        Text(pickUp.meta)
+                            .talkieType(.metaMono)
+                            .foregroundStyle(theme.colors.textTertiary)
+                    } else {
+                        Text("Nothing recent")
+                            .talkieType(.headlineSecondary)
+                            .foregroundStyle(theme.colors.textSecondary)
+                    }
+                }
+
+                Spacer()
+
+                if let pickUp {
+                    Button(action: pickUp.continueAction) {
+                        Text("CONTINUE ›")
+                            .talkieType(.chipLabel)
+                            .foregroundStyle(theme.colors.cardBackground)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(Capsule().fill(theme.currentTheme.chrome.accent))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+
+            QuickEntriesBar()
+        }
+        .background(theme.colors.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                              lineWidth: theme.currentTheme.chrome.hairlineWidth)
+        )
+        .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+    }
+}
+
+/// Bottom band of the PICK UP card. Originally the stat tally
+/// (LAST 7 DAYS · 3 CAPTURES + 3-cell readout), removed because it
+/// was decoration not action. This band keeps the same visual
+/// composition — full-width strip, hairline above, divided cells —
+/// but each cell is a quick-entry verb (Compose · Ask AI · Scan).
+private struct QuickEntriesBar: View {
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        HStack(spacing: 0) {
+            entryCell(label: "COMPOSE", icon: "square.and.pencil") {
+                AppShellRouter.shared.openCompose(documentID: "blank-\(UUID().uuidString.prefix(8))")
+            }
+            divider
+            entryCell(label: "ASK AI", icon: "sparkles") {
+                AppShellRouter.shared.openAskAI()
+            }
+            divider
+            entryCell(label: "SCAN", icon: "camera") {
+                AppShellRouter.shared.openCameraCapture()
+            }
+        }
+        .frame(height: 56)
+        .background(theme.colors.background)
+        .overlay(
+            Rectangle()
+                .fill(theme.currentTheme.chrome.edgeFaint)
+                .frame(height: theme.currentTheme.chrome.hairlineWidth),
+            alignment: .top
+        )
+    }
+
+    private func entryCell(label: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                Text(label)
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label.capitalized)
+        .accessibilityHint("Opens \(label.lowercased())")
+    }
+
+    private var divider: some View {
+        Rectangle()
+            .fill(theme.currentTheme.chrome.edgeFaint)
+            .frame(width: theme.currentTheme.chrome.hairlineWidth)
+            .padding(.vertical, 10)
+    }
+}
+
+// MARK: - RECENT
+
+private struct RecentSection: View {
+    let items: [HomeFeed.RecentItem]
+    let totalCount: Int
+    let isLoading: Bool
+    let errorMessage: String?
+    let isSearching: Bool
+    let hasMore: Bool
+    let remainingCount: Int
+    @Binding var contentFilter: HomeFeed.ContentFilter
+    @Binding var sortOption: HomeFeed.SortOption
+    let showsSyncPrompt: Bool
+    let onLoadMore: () -> Void
+    let onPromote: (HomeFeed.RecentItem) -> Void
+    let onDelete: (HomeFeed.RecentItem) -> Void
+    let onOpenICloudSettings: () -> Void
+    let onDismissSyncPrompt: () -> Void
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("· RECENT · \(totalCount)")
+                    .talkieType(.channelLabel)
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+
+                Spacer()
+
+                filterMenu
+                sortMenu
+
+                Button(action: { AppShellRouter.shared.openLibrary() }) {
+                    Text("ALL ›")
+                        .talkieType(.chipLabel)
+                        .foregroundStyle(theme.colors.textTertiary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 4)
+
+            VStack(spacing: 0) {
+                if isLoading && items.isEmpty {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 32)
+                } else if let errorMessage {
+                    FeedMessageState(
+                        icon: "exclamationmark.triangle",
+                        title: "Couldn’t load recents",
+                        message: errorMessage
+                    )
+                } else if items.isEmpty {
+                    EmptyHomeRecentState(
+                        isSearching: isSearching,
+                        showsSyncPrompt: showsSyncPrompt,
+                        onOpenICloudSettings: onOpenICloudSettings,
+                        onDismissSyncPrompt: onDismissSyncPrompt
+                    )
+                } else {
+                    List {
+                        ForEach(items.enumerated(), id: \.element.id) { idx, item in
+                            RecentRow(item: item, showDivider: idx > 0)
+                                .contentShape(Rectangle())
+                                .onTapGesture { open(item) }
+                                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                    if item.canPromoteToMemo {
+                                        Button {
+                                            onPromote(item)
+                                        } label: {
+                                            Label("Save as Memo", systemImage: "square.and.arrow.down.fill")
+                                        }
+                                        .tint(theme.currentTheme.chrome.accent)
+                                    }
+                                }
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        onDelete(item)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                                .listRowInsets(EdgeInsets())
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                        }
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .scrollDisabled(true)
+                    .frame(height: CGFloat(items.count) * 72)
+
+                    if hasMore {
+                        Button(action: {
+                            withAnimation { onLoadMore() }
+                        }) {
+                            HStack(spacing: 6) {
+                                Spacer()
+                                Image(systemName: "arrow.down")
+                                    .font(.system(size: 10, weight: .semibold))
+                                Text("Load \(min(10, remainingCount)) more")
+                                    .talkieType(.preview)
+                                Spacer()
+                            }
+                            .foregroundStyle(theme.colors.textSecondary)
+                            .padding(.vertical, 14)
+                        }
+                        .buttonStyle(.plain)
+                        .overlay(
+                            Rectangle()
+                                .fill(theme.currentTheme.chrome.edgeSubtle)
+                                .frame(height: theme.currentTheme.chrome.hairlineWidth)
+                                .padding(.leading, 36),
+                            alignment: .top
+                        )
+                    }
+                }
+            }
+            .background(theme.colors.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                  lineWidth: theme.currentTheme.chrome.hairlineWidth)
+            )
+        }
+    }
+
+    private var filterMenu: some View {
+        Menu {
+            ForEach(HomeFeed.ContentFilter.allCases, id: \.self) { filter in
+                Button {
+                    contentFilter = filter
+                } label: {
+                    Label(filter.label, systemImage: filter.icon)
+                }
+            }
+        } label: {
+            Label(contentFilter.label, systemImage: contentFilter.icon)
+                .labelStyle(.iconOnly)
+                .foregroundStyle(theme.colors.textTertiary)
+        }
+        .accessibilityLabel("Content filter")
+        .accessibilityValue(contentFilter.label)
+    }
+
+    private var sortMenu: some View {
+        Menu {
+            ForEach(HomeFeed.SortOption.allCases, id: \.self) { option in
+                Button {
+                    sortOption = option
+                } label: {
+                    Label(option.label, systemImage: option.menuIcon)
+                }
+            }
+        } label: {
+            Image(systemName: sortOption.menuIcon)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(theme.colors.textTertiary)
+        }
+        .accessibilityLabel("Sort recent items")
+        .accessibilityValue(sortOption.label)
+    }
+
+    private func open(_ item: HomeFeed.RecentItem) {
+        switch item.source {
+        case .dictation:        AppShellRouter.shared.openMemoDetail(memoID: item.id)
+        case .typed:            AppShellRouter.shared.openCompose(documentID: item.id)
+        case .link, .scan:      AppShellRouter.shared.openCaptureDetail(captureID: item.id)
+        }
+    }
+}
+
+private struct RecentRow: View {
+    let item: HomeFeed.RecentItem
+    let showDivider: Bool
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        VStack(spacing: 0) {
+                if showDivider {
+                    Rectangle()
+                        .fill(theme.currentTheme.chrome.edgeSubtle)
+                        .frame(height: theme.currentTheme.chrome.hairlineWidth)
+                        .padding(.leading, 36)
+                }
+                HStack(alignment: .top, spacing: 8) {
+                    sourceGlyph
+                        .foregroundStyle(theme.colors.textTertiary)
+                        .frame(width: 16, height: 16)
+                        .padding(.top, 2)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(item.title)
+                                .talkieType(.listTitle)
+                                .foregroundStyle(theme.colors.textPrimary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+
+                            Text(item.relativeTime)
+                                .talkieType(.timestamp)
+                                .foregroundStyle(theme.colors.textTertiary)
+                        }
+
+                        if let preview = item.preview {
+                            Text(preview)
+                                .talkieType(.preview)
+                                .foregroundStyle(theme.colors.textSecondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+
+                        if let meta = item.meta {
+                            Text(meta)
+                                .talkieType(.hint)
+                                .foregroundStyle(theme.colors.textTertiary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+        }
+    }
+
+    @ViewBuilder
+    private var sourceGlyph: some View {
+        switch item.source {
+        case .dictation:
+            Image(systemName: "waveform").font(.system(size: 13))
+        case .typed:
+            Image(systemName: "keyboard").font(.system(size: 12))
+        case .link:
+            Image(systemName: "link").font(.system(size: 12))
+        case .scan:
+            Image(systemName: "viewfinder").font(.system(size: 12))
+        }
+    }
+}
+
+private struct FeedMessageState: View {
+    let icon: String
+    let title: String
+    let message: String
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 24, weight: .light))
+                .foregroundStyle(theme.colors.textTertiary)
+            Text(title)
+                .talkieType(.channelLabel)
+                .foregroundStyle(theme.colors.textSecondary)
+            Text(message)
+                .talkieType(.preview)
+                .foregroundStyle(theme.colors.textTertiary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 32)
+        .padding(.horizontal, 16)
+    }
+}
+
+private struct EmptyHomeRecentState: View {
+    let isSearching: Bool
+    let showsSyncPrompt: Bool
+    let onOpenICloudSettings: () -> Void
+    let onDismissSyncPrompt: () -> Void
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        VStack(spacing: 12) {
+            FeedMessageState(
+                icon: isSearching ? "magnifyingglass" : "tray",
+                title: isSearching ? "· NO MATCHES" : "· NOTHING RECENT",
+                message: isSearching ? "Try a different search term" : "Record, dictate, compose, or scan to start your feed."
+            )
+
+            if showsSyncPrompt {
+                HStack(spacing: 10) {
+                    Image(systemName: "icloud.slash")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("iCloud is not signed in")
+                            .talkieType(.preview)
+                            .foregroundStyle(theme.colors.textPrimary)
+                        Text("Sign in to sync memos with your Mac.")
+                            .talkieType(.hint)
+                            .foregroundStyle(theme.colors.textTertiary)
+                    }
+                    Spacer()
+                    Button("Open") {
+                        onOpenICloudSettings()
+                    }
+                    .talkieType(.chipLabel)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                    Button(action: onDismissSyncPrompt) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(theme.colors.textTertiary)
+                }
+                .padding(12)
+                .background(theme.currentTheme.chrome.accentTint)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .padding(.horizontal, 12)
+                .padding(.bottom, 12)
+            }
+        }
+    }
+}

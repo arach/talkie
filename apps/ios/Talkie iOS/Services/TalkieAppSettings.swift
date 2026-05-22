@@ -19,8 +19,15 @@ final class TalkieAppSettings {
 
     var theme: AppTheme = .scope { didSet { persistIfNeeded() } }
     var appearanceMode: AppearanceMode = .system { didSet { persistIfNeeded() } }
+    var appearanceDensity = "standard" { didSet { persistIfNeeded() } }
+    var appearanceAccentIntensity = "theme" { didSet { persistIfNeeded() } }
+    var appearanceWordmarkStyle = "mono" { didSet { persistIfNeeded() } }
+    var reduceMotionEnabled = false { didSet { persistIfNeeded() } }
     var tagLocationEnabled = false { didSet { persistIfNeeded() } }
     var locationTipDismissed = false { didSet { persistIfNeeded() } }
+    var recordingInputDevice = "system" { didSet { persistIfNeeded() } }
+    var recordingSampleRate = "system" { didSet { persistIfNeeded() } }
+    var recordingEchoCancellationEnabled = true { didSet { persistIfNeeded() } }
     var keyboardLEDIndicatorsEnabled = true { didSet { persistIfNeeded() } }
     var keyboardHapticFeedbackEnabled = true { didSet { persistIfNeeded() } }
     var keyboardAutoCapitalizeEnabled = true { didSet { persistIfNeeded() } }
@@ -78,8 +85,15 @@ final class TalkieAppSettings {
 
         theme = AppTheme(rawValue: configuration.appearance.theme) ?? .scope
         appearanceMode = AppearanceMode(rawValue: configuration.appearance.mode) ?? .system
+        appearanceDensity = configuration.appearance.density
+        appearanceAccentIntensity = configuration.appearance.accentIntensity
+        appearanceWordmarkStyle = configuration.appearance.wordmarkStyle
+        reduceMotionEnabled = configuration.appearance.reduceMotionEnabled
         tagLocationEnabled = configuration.recording.tagLocationEnabled
         locationTipDismissed = configuration.recording.locationTipDismissed
+        recordingInputDevice = configuration.recording.inputDevice
+        recordingSampleRate = configuration.recording.sampleRate
+        recordingEchoCancellationEnabled = configuration.recording.echoCancellationEnabled
         keyboardLEDIndicatorsEnabled = configuration.keyboard.ledIndicatorsEnabled
         keyboardHapticFeedbackEnabled = configuration.keyboard.hapticFeedbackEnabled
         keyboardAutoCapitalizeEnabled = configuration.keyboard.autoCapitalizeEnabled
@@ -131,8 +145,15 @@ final class TalkieAppSettings {
         let updatedConfiguration = store.update { configuration in
             configuration.appearance.theme = theme.rawValue
             configuration.appearance.mode = appearanceMode.rawValue
+            configuration.appearance.density = appearanceDensity
+            configuration.appearance.accentIntensity = appearanceAccentIntensity
+            configuration.appearance.wordmarkStyle = appearanceWordmarkStyle
+            configuration.appearance.reduceMotionEnabled = reduceMotionEnabled
             configuration.recording.tagLocationEnabled = tagLocationEnabled
             configuration.recording.locationTipDismissed = locationTipDismissed
+            configuration.recording.inputDevice = recordingInputDevice
+            configuration.recording.sampleRate = recordingSampleRate
+            configuration.recording.echoCancellationEnabled = recordingEchoCancellationEnabled
             configuration.keyboard.ledIndicatorsEnabled = keyboardLEDIndicatorsEnabled
             configuration.keyboard.hapticFeedbackEnabled = keyboardHapticFeedbackEnabled
             configuration.keyboard.autoCapitalizeEnabled = keyboardAutoCapitalizeEnabled
@@ -180,10 +201,17 @@ final class TalkieAppSettings {
 
         defaults.set(configuration.appearance.theme, forKey: "selectedTheme")
         defaults.set(configuration.appearance.mode, forKey: "appearanceMode")
+        defaults.set(configuration.appearance.density, forKey: "appearance.density")
+        defaults.set(configuration.appearance.accentIntensity, forKey: "appearance.accentIntensity")
+        defaults.set(configuration.appearance.wordmarkStyle, forKey: "appearance.wordmarkStyle")
+        defaults.set(configuration.appearance.reduceMotionEnabled, forKey: "appearance.reduceMotion")
         groupDefaults?.set(configuration.appearance.mode, forKey: "appearanceMode")
 
         defaults.set(configuration.recording.tagLocationEnabled, forKey: "recording.tagLocation")
         defaults.set(configuration.recording.locationTipDismissed, forKey: "tips.locationDismissed")
+        defaults.set(configuration.recording.inputDevice, forKey: "recording.inputDevice")
+        defaults.set(configuration.recording.sampleRate, forKey: "recording.sampleRate")
+        defaults.set(configuration.recording.echoCancellationEnabled, forKey: "recording.echoCancellation")
 
         defaults.set(configuration.keyboard.ledIndicatorsEnabled, forKey: "keyboard.ledIndicators")
         defaults.set(configuration.keyboard.autoCapitalizeEnabled, forKey: "keyboard.autoCapitalize")

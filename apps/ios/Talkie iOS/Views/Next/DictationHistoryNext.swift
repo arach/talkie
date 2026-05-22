@@ -1,0 +1,350 @@
+//
+//  DictationHistoryNext.swift
+//  Talkie iOS
+//
+//  Faithful port of DictationListSection (DictationHistoryView.swift,
+//  ~line 285). Flat list with pagination, swipe actions, inline copy,
+//  empty state. Each row shows the cursor-ibeam badge + 1-line text
+//  + `duration · timestamp` footer.
+//
+//  Donor differences carried across:
+//  - Tap opens Compose seeded with the dictation id (M3 wire added
+//    KeyboardDictation lookup to ComposeStore). Donor opens a
+//    DictationDetailView in a sheet; deferred until that has a Next
+//    counterpart.
+//  - Swipe-leading "Save as memo" + swipe-trailing "Delete" closures
+//    are paint-side TODOs. Codex wires the side effects (promoteToMemo
+//    + deletion) when they're scoped.
+//
+
+import Foundation
+import SwiftUI
+import TalkieMobileKit
+
+@MainActor
+final class DictationHistoryFeed: ObservableObject {
+    @Published private(set) var entries: [Entry]
+    @Published var displayLimit: Int = 10
+
+    struct Entry: Identifiable {
+        let id: String
+        let text: String
+        let timestamp: Date
+        let durationSeconds: Double?
+        let wordCount: Int
+        let appContext: String?
+    }
+
+    init() {
+        self.entries = []
+        reload()
+    }
+
+    func reload() {
+        KeyboardDictationStore.shared.reload()
+        entries = KeyboardDictationStore.shared.all().map { dictation in
+            Entry(
+                id: dictation.id.uuidString,
+                text: dictation.text,
+                timestamp: dictation.timestamp,
+                durationSeconds: dictation.durationSeconds,
+                wordCount: dictation.wordCount,
+                appContext: dictation.appContext
+            )
+        }
+    }
+
+    func promoteToMemo(_ entry: Entry) {
+        guard let uuid = UUID(uuidString: entry.id),
+              let dictation = KeyboardDictationStore.shared.all().first(where: { $0.id == uuid }) else {
+            return
+        }
+        if VoiceMemoStore.shared.promoteKeyboardDictation(dictation) {
+            entries.removeAll { $0.id == entry.id }
+            displayLimit = min(displayLimit, max(entries.count, 10))
+        }
+    }
+
+    func delete(_ entry: Entry) {
+        guard let uuid = UUID(uuidString: entry.id) else { return }
+        KeyboardDictationStore.shared.delete(uuid)
+        entries.removeAll { $0.id == entry.id }
+        displayLimit = min(displayLimit, max(entries.count, 10))
+    }
+
+    var displayed: [Entry] { Array(entries.prefix(displayLimit)) }
+    var hasMore: Bool      { entries.count > displayLimit }
+    var totalCount: Int    { entries.count }
+
+    static let mockEntries: [Entry] = [
+        Entry(
+            id: "1",
+            text: "thanks for the breakdown — let's talk through it tomorrow",
+            timestamp: Date().addingTimeInterval(-3600),
+            durationSeconds: 8,
+            wordCount: 8,
+            appContext: "Messages"
+        ),
+        Entry(
+            id: "2",
+            text: "moving the meeting to 4pm if that works for everyone",
+            timestamp: Date().addingTimeInterval(-7200),
+            durationSeconds: 6,
+            wordCount: 10,
+            appContext: "Calendar"
+        ),
+        Entry(
+            id: "3",
+            text: "need to refactor the auth flow before we ship the migration",
+            timestamp: Date().addingTimeInterval(-10800),
+            durationSeconds: 9,
+            wordCount: 10,
+            appContext: "Notes"
+        ),
+        Entry(
+            id: "4",
+            text: "quick reminder to drop the docs in the channel",
+            timestamp: Date().addingTimeInterval(-86400),
+            durationSeconds: nil,
+            wordCount: 8,
+            appContext: nil
+        ),
+        Entry(
+            id: "5",
+            text: "the api rate limits hit us again on the analytics export",
+            timestamp: Date().addingTimeInterval(-90000),
+            durationSeconds: 7,
+            wordCount: 10,
+            appContext: "Slack"
+        ),
+    ]
+}
+
+struct DictationHistoryNext: View {
+    @ObservedObject private var theme = ThemeManager.shared
+    @StateObject private var feed = DictationHistoryFeed()
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+
+            if feed.entries.isEmpty {
+                emptyState
+            } else {
+                listBody
+            }
+        }
+    }
+
+    private var header: some View {
+        HStack {
+            Button(action: { AppShellRouter.shared.openHome() }) {
+                HStack(spacing: 2) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 14))
+                    Text("Done")
+                        .talkieType(.preview)
+                }
+                .foregroundStyle(theme.colors.textSecondary)
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            Text("Dictations")
+                .talkieType(.headlineSecondary)
+                .foregroundStyle(theme.colors.textPrimary)
+
+            Spacer()
+
+            Text("\(feed.totalCount)")
+                .talkieType(.channelLabelSmall)
+                .foregroundStyle(theme.currentTheme.chrome.accent)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(theme.currentTheme.chrome.accentTint))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .overlay(
+            Rectangle()
+                .fill(theme.currentTheme.chrome.edgeFaint)
+                .frame(height: theme.currentTheme.chrome.hairlineWidth),
+            alignment: .bottom
+        )
+    }
+
+    // MARK: - List (matches donor's List + swipeActions)
+
+    private var listBody: some View {
+        List {
+            ForEach(feed.displayed) { entry in
+                DictationEntryRow(entry: entry)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        AppShellRouter.shared.openCompose(documentID: entry.id)
+                    }
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        Button {
+                            feed.promoteToMemo(entry)
+                        } label: {
+                            Label("Save as Memo", systemImage: "square.and.arrow.down.fill")
+                        }
+                        .tint(theme.currentTheme.chrome.accent)
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            feed.delete(entry)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
+
+            if feed.hasMore {
+                Button(action: {
+                    withAnimation { feed.displayLimit += 10 }
+                }) {
+                    HStack(spacing: 6) {
+                        Spacer()
+                        Image(systemName: "arrow.down")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("Load \(min(10, feed.entries.count - feed.displayLimit)) more")
+                            .talkieType(.preview)
+                        Spacer()
+                    }
+                    .foregroundStyle(theme.colors.textSecondary)
+                    .padding(.vertical, 14)
+                }
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+    }
+
+    // MARK: - Empty state (matches donor)
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "keyboard")
+                .font(.system(size: 32, weight: .light))
+                .foregroundStyle(theme.colors.textTertiary)
+            Text("· NO DICTATIONS")
+                .talkieType(.channelLabel)
+                .foregroundStyle(theme.colors.textTertiary)
+            Text("Use the keyboard to add dictations")
+                .talkieType(.preview)
+                .foregroundStyle(theme.colors.textTertiary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.vertical, 40)
+    }
+}
+
+// MARK: - Row (cursor-ibeam badge + text + duration·timestamp + copy)
+
+private struct DictationEntryRow: View {
+    let entry: DictationHistoryFeed.Entry
+    @ObservedObject private var theme = ThemeManager.shared
+    @State private var speech = SpeechSynthesisService.shared
+    @State private var showCopied = false
+
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        return f
+    }()
+    private static let dateTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "M/d h:mm a"
+        return f
+    }()
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            // Type badge — cursor-ibeam in a soft circle (matches donor)
+            Image(systemName: "character.cursor.ibeam")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(theme.colors.textSecondary)
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(theme.colors.background))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(entry.text)
+                    .talkieType(.preview)
+                    .foregroundStyle(theme.colors.textPrimary)
+                    .lineLimit(1)
+
+                HStack(spacing: 0) {
+                    if let duration = entry.durationSeconds, duration > 0 {
+                        Text(formatDuration(duration))
+                        Text("  \u{00B7}  ").foregroundStyle(theme.colors.textTertiary.opacity(0.5))
+                    }
+                    Text(formatTimestamp(entry.timestamp))
+                    Text("  \u{00B7}  ").foregroundStyle(theme.colors.textTertiary.opacity(0.5))
+                    Text("\(entry.wordCount) \(entry.wordCount == 1 ? "word" : "words")")
+                    if let context = entry.appContext?.trimmingCharacters(in: .whitespacesAndNewlines), !context.isEmpty {
+                        Text("  \u{00B7}  ").foregroundStyle(theme.colors.textTertiary.opacity(0.5))
+                        Text(context)
+                    }
+                    Spacer()
+                }
+                .talkieType(.hint)
+                .foregroundStyle(theme.colors.textTertiary)
+            }
+
+            Button(action: toggleReadout) {
+                Image(systemName: speech.isSpeaking ? "stop.fill" : "speaker.wave.2.fill")
+                    .font(.system(size: 12, weight: .light))
+                    .foregroundStyle(speech.isSpeaking ? theme.currentTheme.chrome.accent : theme.colors.textTertiary)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(speech.isSpeaking ? "Stop read aloud" : "Read aloud")
+
+            Button(action: copyText) {
+                Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 12, weight: .light))
+                    .foregroundStyle(showCopied ? .green : theme.colors.textTertiary)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 16)
+    }
+
+    private func toggleReadout() {
+        speech.toggleReadout(entry.text)
+    }
+
+    private func copyText() {
+        UIPasteboard.general.string = entry.text
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        withAnimation(.easeInOut(duration: 0.2)) { showCopied = true }
+        Task {
+            try? await Task.sleep(for: .milliseconds(1200))
+            withAnimation(.easeInOut(duration: 0.2)) { showCopied = false }
+        }
+    }
+
+    private func formatDuration(_ duration: Double) -> String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        if minutes > 0 { return "\(minutes)m \(seconds)s" }
+        return "\(seconds)s"
+    }
+
+    private func formatTimestamp(_ date: Date) -> String {
+        if Calendar.current.isDateInToday(date) {
+            return Self.timeFormatter.string(from: date)
+        }
+        return Self.dateTimeFormatter.string(from: date)
+    }
+}

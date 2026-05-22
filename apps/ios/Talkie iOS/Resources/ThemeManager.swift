@@ -2,7 +2,7 @@
 //  ThemeManager.swift
 //  Talkie iOS
 //
-//  Manages app themes with 3 configurable options
+//  Manages app themes with 5 configurable options
 //
 
 import SwiftUI
@@ -44,28 +44,31 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
 // MARK: - Theme Definitions
 
 enum AppTheme: String, CaseIterable, Identifiable {
+    case scope = "scope"
     case midnight = "midnight"
     case tactical = "tactical"
     case ghost = "ghost"
-    case scope = "scope"
+    case lift = "lift"
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
+        case .scope: return "Scope"
         case .midnight: return "Midnight"
         case .tactical: return "Tactical"
         case .ghost: return "Ghost"
-        case .scope: return "Scope"
+        case .lift: return "Lift"
         }
     }
 
     var description: String {
         switch self {
+        case .scope: return "Paper chassis with brass instrument chrome"
         case .midnight: return "Deep black with subtle highlights"
         case .tactical: return "High contrast, sharp edges"
         case .ghost: return "Soft, muted elegance"
-        case .scope: return "Paper chassis with brass instrument chrome"
+        case .lift: return "Pure white surfaces with indigo lift"
         }
     }
 }
@@ -97,32 +100,32 @@ struct ThemeColors {
 // MARK: - Cached Theme Colors (parsed once at app launch, not on every access)
 
 private let cachedMidnightColors = ThemeColors(
-    tableHeaderBackground: Color(hex: "F0F0F0", darkHex: "1A1A1A"),
-    tableCellBackground: Color(hex: "F5F5F5", darkHex: "000000"),
-    tableDivider: Color(hex: "E0E0E0", darkHex: "FFFFFF").opacity(0.08),
-    tableBorder: Color(hex: "D0D0D0", darkHex: "333333"),
-    background: Color(hex: "FFFFFF", darkHex: "0A0A0A"),
-    cardBackground: Color(hex: "F8F8F8", darkHex: "111111"),
-    searchBackground: Color(hex: "F0F0F0", darkHex: "151515"),
-    textPrimary: Color(hex: "0A0A0A", darkHex: "FAFAFA"),
-    textSecondary: Color(hex: "6A6A6A", darkHex: "9A9A9A"),
-    textTertiary: Color(hex: "9A9A9A", darkHex: "6A6A6A"),
-    accent: Color(hex: "0070F3"),
+    tableHeaderBackground: Color(hex: "111111"),
+    tableCellBackground: Color(hex: "000000"),
+    tableDivider: Color(hex: "FFFFFF").opacity(0.08),
+    tableBorder: Color(hex: "333333"),
+    background: Color(hex: "0A0A0A"),
+    cardBackground: Color(hex: "111111"),
+    searchBackground: Color(hex: "151515"),
+    textPrimary: Color(hex: "FAFAFA"),
+    textSecondary: Color(hex: "9A9A9A"),
+    textTertiary: Color(hex: "6A6A6A"),
+    accent: Color(hex: "0084FF"),
     success: Color(hex: "22C55E")
 )
 
 private let cachedTacticalColors = ThemeColors(
-    tableHeaderBackground: Color(hex: "E8E8E8", darkHex: "252525"),
-    tableCellBackground: Color(hex: "FAFAFA", darkHex: "0F0F0F"),
-    tableDivider: Color(hex: "CCCCCC", darkHex: "3A3A3A"),
-    tableBorder: Color(hex: "BBBBBB", darkHex: "4A4A4A"),
-    background: Color(hex: "F0F0F0", darkHex: "0A0A0A"),
-    cardBackground: Color(hex: "FFFFFF", darkHex: "1A1A1A"),
-    searchBackground: Color(hex: "FFFFFF", darkHex: "181818"),
-    textPrimary: Color(hex: "1A1A1A", darkHex: "F0F0F0"),
-    textSecondary: Color(hex: "5A5A5A", darkHex: "A0A0A0"),
-    textTertiary: Color(hex: "8A8A8A", darkHex: "707070"),
-    accent: Color(hex: "FF6B00"),
+    tableHeaderBackground: Color(hex: "1A1A1A"),
+    tableCellBackground: Color(hex: "0F0F0F"),
+    tableDivider: Color(hex: "3A3A3A"),
+    tableBorder: Color(hex: "4A4A4A"),
+    background: Color(hex: "0A0A0A"),
+    cardBackground: Color(hex: "1A1A1A"),
+    searchBackground: Color(hex: "181818"),
+    textPrimary: Color(hex: "F0F0F0"),
+    textSecondary: Color(hex: "A0A0A0"),
+    textTertiary: Color(hex: "707070"),
+    accent: Color(hex: "FF8800"),
     success: Color(hex: "00D26A")
 )
 
@@ -136,7 +139,30 @@ private let cachedGhostColors = ThemeColors(
     searchBackground: Color(hex: "FFFFFF", darkHex: "1A1A1A"),
     textPrimary: Color(hex: "2A2A2A", darkHex: "E5E5E5"),
     textSecondary: Color(hex: "7A7A7A", darkHex: "8A8A8A"),
-    textTertiary: Color(hex: "A0A0A0", darkHex: "5A5A5A"),
+    // textTertiary was A0A0A0 / 5A5A5A — both failed WCAG AA at the
+    // 3:1 large-text bar (light 2.40:1 / dark 2.68:1). Bumped to land
+    // at 3.17:1 (light) and 4.40:1 (dark) while preserving the
+    // secondary > tertiary hierarchy.
+    textTertiary: Color(hex: "8A8A8A", darkHex: "7A7A7A"),
+    accent: Color(hex: "6366F1"),
+    success: Color(hex: "10B981")
+)
+
+private let cachedLiftColors = ThemeColors(
+    tableHeaderBackground: Color(hex: "FAFAFA", darkHex: "1A1A1A"),
+    tableCellBackground: Color(hex: "FFFFFF", darkHex: "1A1A1A"),
+    tableDivider: Color(hex: "000000", darkHex: "FFFFFF").opacity(0.04),
+    tableBorder: Color(hex: "000000", darkHex: "FFFFFF").opacity(0.10),
+    background: Color(hex: "FFFFFF", darkHex: "1A1A1A"),
+    cardBackground: Color(hex: "FFFFFF", darkHex: "1A1A1A"),
+    searchBackground: Color(hex: "FAFAFA", darkHex: "181818"),
+    textPrimary: Color(hex: "1A1A1A", darkHex: "FAFAFA"),
+    textSecondary: Color(hex: "525252", darkHex: "A0A0A0"),
+    // textTertiary was A0A0A0 / 707070 — light failed AA at 3:1
+    // large-text bar (2.63:1). Bumped light to 8A8A8A → 3.45:1.
+    // Dark side stays at 707070 (already passes large-text on
+    // 1A1A1A at 3.10:1).
+    textTertiary: Color(hex: "8A8A8A", darkHex: "707070"),
     accent: Color(hex: "6366F1"),
     success: Color(hex: "10B981")
 )
@@ -155,7 +181,10 @@ private let cachedScopeColors = ThemeColors(
     searchBackground: Color(hex: "F2F0EA", darkHex: "151310"),
     textPrimary: Color(hex: "1A1612", darkHex: "F5F3EE"),
     textSecondary: Color(hex: "5A5045", darkHex: "A8A096"),
-    textTertiary: Color(hex: "A39989", darkHex: "7D6E5E"),
+    // textTertiary light A39989 failed at 2.69:1 (large-text 3:1).
+    // Darkened to 8A7E6C → 3.78:1 while keeping the warm graphite
+    // tone the theme depends on. Dark side stays at 7D6E5E (4.06:1).
+    textTertiary: Color(hex: "8A7E6C", darkHex: "7D6E5E"),
     accent: Color(hex: "B5823A", darkHex: "E89A3C"),
     success: Color(hex: "6F7D3E", darkHex: "9CB35A")
 )
@@ -165,10 +194,11 @@ private let cachedScopeColors = ThemeColors(
 extension AppTheme {
     var colors: ThemeColors {
         switch self {
+        case .scope: return cachedScopeColors
         case .midnight: return cachedMidnightColors
         case .tactical: return cachedTacticalColors
         case .ghost: return cachedGhostColors
-        case .scope: return cachedScopeColors
+        case .lift: return cachedLiftColors
         }
     }
 
@@ -204,5 +234,18 @@ class ThemeManager: ObservableObject {
         let configuration = TalkieAppConfigurationStore.shared.configuration
         self.currentTheme = AppTheme(rawValue: configuration.appearance.theme) ?? .scope
         self.appearanceMode = AppearanceMode(rawValue: configuration.appearance.mode) ?? .system
+    }
+
+    func reloadFromDisk() {
+        let configuration = TalkieAppConfigurationStore.shared.reload()
+        currentTheme = AppTheme(rawValue: configuration.appearance.theme) ?? .scope
+        appearanceMode = AppearanceMode(rawValue: configuration.appearance.mode) ?? .system
+    }
+
+    func apply(theme: AppTheme, appearanceMode: AppearanceMode? = nil) {
+        currentTheme = theme
+        if let appearanceMode {
+            self.appearanceMode = appearanceMode
+        }
     }
 }

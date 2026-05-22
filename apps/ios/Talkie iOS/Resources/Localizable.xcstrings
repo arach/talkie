@@ -1,0 +1,30 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "PUSH_NOTIFICATION_TITLE" : {
+      "comment" : "CloudKit push notification title; %1$@ = CD_title from the macOS sender",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@"
+          }
+        }
+      }
+    },
+    "PUSH_NOTIFICATION_BODY" : {
+      "comment" : "CloudKit push notification body; %1$@ = CD_body from the macOS sender",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

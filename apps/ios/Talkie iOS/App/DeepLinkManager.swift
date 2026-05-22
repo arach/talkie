@@ -150,6 +150,17 @@ class DeepLinkManager: ObservableObject {
             AppLogger.app.info("Deep link: open settings")
             pendingAction = .openSettings
 
+        case "theme":
+            if let key = components?.queryItems?.first(where: { $0.name == "key" })?.value,
+               let theme = AppTheme(rawValue: key) {
+                AppLogger.app.info("Deep link: apply theme \(key)")
+                Task { @MainActor in
+                    ThemeManager.shared.apply(theme: theme)
+                }
+            } else {
+                AppLogger.app.warning("Deep link: theme missing or invalid key")
+            }
+
         case "ssh":
             let path = components?.path ?? ""
             if path == "/import-key" {
@@ -183,8 +194,9 @@ class DeepLinkManager: ObservableObject {
             }
 
         case "auth":
-            // ClerkKit handles OAuth callbacks internally; this is a no-op
-            AppLogger.app.info("Deep link: auth callback (handled by ClerkKit)")
+            // Legacy Clerk OAuth callback URL — Apple Sign-In uses
+            // ASAuthorization's native completion path, not a deep link.
+            AppLogger.app.info("Deep link: auth callback (no-op; native ASAuthorization in use)")
 
         default:
             AppLogger.app.warning("Unknown deep link: \(url.absoluteString)")

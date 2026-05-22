@@ -25,11 +25,20 @@ struct TalkieAIProviderResolver {
             return cachedProvider
         }
 
+        if let savedKeyProvider = keychainBackedProvider(
+            providerId: providerId.isEmpty ? "openai" : providerId,
+            modelId: modelId.isEmpty ? nil : modelId
+        ) {
+            return savedKeyProvider
+        }
+
         return legacyOpenAITTSProvider(modelId: modelId.isEmpty ? nil : modelId)
     }
 
     func provider(providerId requestedProviderId: String, modelId requestedModelId: String? = nil) -> ComposeBorrowedProvider? {
-        let providerId = requestedProviderId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let providerId = requestedProviderId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
         guard !providerId.isEmpty else { return nil }
 
         let modelId = requestedModelId?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -40,8 +49,32 @@ struct TalkieAIProviderResolver {
             return cachedProvider
         }
 
+        if let savedKeyProvider = keychainBackedProvider(
+            providerId: providerId,
+            modelId: modelId?.isEmpty == true ? nil : modelId
+        ) {
+            return savedKeyProvider
+        }
+
         guard providerId == "openai" else { return nil }
         return legacyOpenAITTSProvider(modelId: modelId?.isEmpty == true ? nil : modelId)
+    }
+
+    private func keychainBackedProvider(providerId: String, modelId: String?) -> ComposeBorrowedProvider? {
+        let providerId = providerId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard Self.directProviderIDs.contains(providerId),
+              let apiKey = AICredentialStore.shared.key(for: providerId) else {
+            return nil
+        }
+
+        return ComposeBorrowedProvider(
+            providerId: providerId,
+            providerName: TalkieAIProviderCredentialPayload.displayName(for: providerId),
+            modelId: modelId ?? TalkieAIProviderCredentialPayload.defaultModel(for: providerId),
+            apiKey: apiKey,
+            assistantPrompt: TalkieAIProviderCredentialPayload.defaultAssistantPrompt,
+            fallbackReason: "Using the API key saved in AI Keys on this iPhone."
+        )
     }
 
     private func legacyOpenAITTSProvider(modelId: String?) -> ComposeBorrowedProvider? {
@@ -58,4 +91,6 @@ struct TalkieAIProviderResolver {
             fallbackReason: "Using the iPhone OpenAI speech key for AI commands."
         )
     }
+
+    private static let directProviderIDs: Set<String> = ["openai", "groq"]
 }
