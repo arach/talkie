@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-22T00:32:56Z",
+  "updatedAt": "2026-05-22T01:37:07Z",
   "streams": [
     {
       "key": "C1",
@@ -2199,7 +2199,7 @@
       "scope": "SettingsNext, OnboardingNext, SignInNext, AICredentialsNext, WorkspaceSwitcherNext",
       "owner": null,
       "status": "done",
-      "lockedAt": "2026-05-21T23:41:52.069Z",
+      "lockedAt": "2026-05-22T00:35:32.189Z",
       "notes": [
         {
           "ts": "2026-05-21T18:03:12.723Z",
@@ -2692,6 +2692,107 @@
           "level": "info",
           "message": "Opened fresh PR for post-merge C4 second-pass drain: https://github.com/arach/talkie/pull/24 (parity/c4 → feat/ios-shell-phase-0).",
           "ref": "https://github.com/arach/talkie/pull/24"
+        },
+        {
+          "ts": "2026-05-22T00:41:22.929Z",
+          "agent": "talkie-codex-c4",
+          "level": "progress",
+          "message": "Correction pass: prior C4 notes used non-audit finding keys. Reposting exact landed refs and wiring WorkspaceStore on bab3db9 before setting done.",
+          "ref": "bab3db9"
+        },
+        {
+          "ts": "2026-05-22T00:41:22.945Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Exact-key landed: CONNECT panel includes the Command Deck auto-open toggle bound to TalkieAppSettings.followComputerShortcutMode.",
+          "findingKey": "C4::SettingsView (10 sections)::COMPANION section",
+          "ref": "apps/ios/Talkie iOS/Views/Next/SettingsNext.swift:517"
+        },
+        {
+          "ts": "2026-05-22T00:41:22.959Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Exact-key landed: RECORDING section contains mic input, sample-rate, location tagging, and echo-cancellation controls.",
+          "findingKey": "C4::SettingsView (10 sections)::RECORDING section",
+          "ref": "apps/ios/Talkie iOS/Views/Next/SettingsNext.swift:282"
+        },
+        {
+          "ts": "2026-05-22T00:41:22.974Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Exact-key landed: TEXT-TO-SPEECH section has provider/route picker, voice, API key, AI-key reuse, and output controls.",
+          "findingKey": "C4::SettingsView (10 sections)::TEXT-TO-SPEECH section",
+          "ref": "apps/ios/Talkie iOS/Views/Next/SettingsNext.swift:326"
+        },
+        {
+          "ts": "2026-05-22T00:41:22.987Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Exact-key landed: REMOTE ACCESS includes DEBUG SSH Terminal plus Connection Center/Workspaces/Sync conflict routes.",
+          "findingKey": "C4::SettingsView (10 sections)::REMOTE ACCESS section",
+          "ref": "apps/ios/Talkie iOS/Views/Next/SettingsNext.swift:532"
+        },
+        {
+          "ts": "2026-05-22T00:41:23.000Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Exact-key landed: SettingsNext has the horizontal rail and six active panels.",
+          "findingKey": "C4::SettingsView (10 sections)::Inspector layout",
+          "ref": "apps/ios/Talkie iOS/Views/Next/SettingsNext.swift:174"
+        },
+        {
+          "ts": "2026-05-22T00:41:23.014Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Exact-key landed: LOOK panel binds density, accent intensity, wordmark style, and reduce-motion through persisted TalkieAppSettings.",
+          "findingKey": "C4::SettingsView (10 sections)::Appearance bindings",
+          "ref": "apps/ios/Talkie iOS/Views/Next/SettingsNext.swift:409"
+        },
+        {
+          "ts": "2026-05-22T00:41:23.029Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Exact-key landed: CONNECT panel renders latest CloudKit import/export timestamp with sync-health hint.",
+          "findingKey": "C4::SettingsView (10 sections)::iCloud last-sync timestamp",
+          "ref": "apps/ios/Talkie iOS/Views/Next/SettingsNext.swift:509"
+        },
+        {
+          "ts": "2026-05-22T00:41:23.042Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Exact-key landed: standalone AICredentialsNext surface is present and backed by AICredentialStore.",
+          "findingKey": "C4::(none)::Standalone AI credentials surface",
+          "ref": "apps/ios/Talkie iOS/Views/Next/AICredentialsNext.swift:55"
+        },
+        {
+          "ts": "2026-05-22T00:41:23.056Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Exact-key landed: TalkieAIProviderResolver checks ComposeProviderCredentialStore and keychain-backed AICredentialStore before legacy TTS fallback.",
+          "findingKey": "C4::(none)::Provider resolver wiring",
+          "ref": "apps/ios/Talkie iOS/Services/TalkieAIProviderResolver.swift:28"
+        },
+        {
+          "ts": "2026-05-22T00:41:23.069Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Exact-key landed: standalone WorkspaceSwitcherNext surface lists active identities and add-account/switch affordances.",
+          "findingKey": "C4::(none)::Standalone workspace switcher",
+          "ref": "apps/ios/Talkie iOS/Views/Next/WorkspaceSwitcherNext.swift:39"
+        },
+        {
+          "ts": "2026-05-22T00:41:23.083Z",
+          "agent": "talkie-codex-c4",
+          "level": "landed",
+          "message": "Exact-key landed: WorkspaceStore now seeds identities from the native Apple Sign-In keychain, persists active identity selection, records last-used state, and refreshes capture counts.",
+          "findingKey": "C4::(none)::WorkspaceStore wiring",
+          "ref": "apps/ios/Talkie iOS/Views/Next/WorkspaceSwitcherNext.swift:195"
+        },
+        {
+          "ts": "2026-05-22T00:41:23.097Z",
+          "agent": "talkie-codex-c4",
+          "level": "info",
+          "message": "Correction pass complete: all 18 effective PORT C4 findings now have exact audit-key landed notes; KeyboardSettingsView remains user-DEFERed."
         }
       ]
     },
@@ -2701,7 +2802,7 @@
       "scope": "ConnectionCenterNext, BridgeDetailNext, DeckMirrorNext, NetworkStatusBanner, MacConnectionChip, MacCoachCard",
       "owner": null,
       "status": "done",
-      "lockedAt": "2026-05-21T23:41:18.588Z",
+      "lockedAt": "2026-05-22T00:34:30.057Z",
       "notes": [
         {
           "ts": "2026-05-21T18:00:26.165Z",
@@ -3005,6 +3106,29 @@
           "message": "Landed PORT: Bridge cluster now uses NetworkStatusBanner in ConnectionCenterNext; BridgeDetailNext:50 and DeckMirrorNext:123/154 carry the companion placements.",
           "findingKey": "C5::NetworkStatusBanner::Banner in Bridge cluster",
           "ref": "apps/ios/Talkie iOS/Views/Next/ConnectionCenterNext.swift:237"
+        },
+        {
+          "ts": "2026-05-22T00:35:14.411Z",
+          "agent": "talkie-codex-c5",
+          "level": "landed",
+          "message": "Landed acknowledgment: NetworkStatusBanner is the shared ok/offline/requestFailed component for per-surface error handling.",
+          "findingKey": "C5::(none — per-surface error handling)::Shared banner component",
+          "ref": "apps/ios/Talkie iOS/Views/Next/NetworkStatusBanner.swift:23"
+        },
+        {
+          "ts": "2026-05-22T00:35:14.426Z",
+          "agent": "talkie-codex-c5",
+          "level": "landed",
+          "message": "Landed PORT: Bridge cluster surfaces now show NetworkStatusBanner offline/failed states in ConnectionCenterNext, BridgeDetailNext, and DeckMirrorNext.",
+          "findingKey": "C5::(none — per-surface error handling)::Banner in Bridge cluster",
+          "ref": "apps/ios/Talkie iOS/Views/Next/ConnectionCenterNext.swift:237"
+        },
+        {
+          "ts": "2026-05-22T00:39:38.132Z",
+          "agent": "talkie-codex-c5",
+          "level": "info",
+          "message": "PR: https://github.com/arach/talkie/pull/25",
+          "ref": "https://github.com/arach/talkie/pull/25"
         }
       ]
     },
