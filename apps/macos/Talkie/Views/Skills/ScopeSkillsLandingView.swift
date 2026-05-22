@@ -384,7 +384,7 @@ struct ScopeSkillsLandingView: View {
             Text("· AGENT")
                 .font(ScopeFont.mono(size: 9, weight: .semibold))
                 .tracking(2.2)
-                .foregroundStyle(ScopeAmber.solid)
+                .foregroundStyle(ScopeInk.muted)
             Text(text)
                 .font(ScopeFont.displayItalic(size: 12.5))
                 .foregroundStyle(ScopeInk.primary)
@@ -1056,7 +1056,7 @@ struct ScopeSkillsLandingView: View {
             HStack(spacing: 8) {
                 Text("›")
                     .font(ScopeFont.mono(size: 11.5))
-                    .foregroundStyle(ScopeAmber.solid)
+                    .foregroundStyle(ScopeInk.muted)
                 Text(selectedStarter == nil
                      ? "pick a starter below to load it into the editor"
                      : "press ⌘S to save \"\(selectedStarter!.name)\" as a skill")
@@ -1069,10 +1069,10 @@ struct ScopeSkillsLandingView: View {
                 HStack(spacing: 8) {
                     Text("›")
                         .font(ScopeFont.mono(size: 11.5))
-                        .foregroundStyle(ScopeAmber.solid)
+                        .foregroundStyle(ScopeInk.muted)
                     Text("save skill \"\(name.lowercased())\"")
                         .font(ScopeFont.mono(size: 11.5))
-                        .foregroundStyle(ScopeAmber.solid)
+                        .foregroundStyle(ScopeBrass.solid)
                     Spacer()
                 }
                 HStack(spacing: 8) {
@@ -1100,10 +1100,10 @@ struct ScopeSkillsLandingView: View {
                 HStack(spacing: 8) {
                     Text("›")
                         .font(ScopeFont.mono(size: 11.5))
-                        .foregroundStyle(ScopeAmber.solid)
+                        .foregroundStyle(ScopeInk.muted)
                     Text("run \(name.lowercased())")
                         .font(ScopeFont.mono(size: 11.5))
-                        .foregroundStyle(ScopeAmber.solid)
+                        .foregroundStyle(ScopeBrass.solid)
                     Spacer()
                 }
                 HStack(spacing: 8) {
@@ -1121,10 +1121,10 @@ struct ScopeSkillsLandingView: View {
                 HStack(spacing: 8) {
                     Text("›")
                         .font(ScopeFont.mono(size: 11.5))
-                        .foregroundStyle(ScopeAmber.solid)
+                        .foregroundStyle(ScopeInk.muted)
                     Text("run \(name.lowercased())")
                         .font(ScopeFont.mono(size: 11.5))
-                        .foregroundStyle(ScopeAmber.solid)
+                        .foregroundStyle(ScopeBrass.solid)
                     Spacer()
                 }
                 HStack(spacing: 8) {
@@ -1142,10 +1142,10 @@ struct ScopeSkillsLandingView: View {
                 HStack(spacing: 8) {
                     Text("›")
                         .font(ScopeFont.mono(size: 11.5))
-                        .foregroundStyle(ScopeAmber.solid)
+                        .foregroundStyle(ScopeInk.muted)
                     Text("run \(name.lowercased())")
                         .font(ScopeFont.mono(size: 11.5))
-                        .foregroundStyle(ScopeAmber.solid)
+                        .foregroundStyle(ScopeBrass.solid)
                     Spacer()
                 }
                 HStack(spacing: 8) {
@@ -1528,16 +1528,16 @@ struct ScopeSkillsLandingView: View {
         Text(label)
             .font(ScopeFont.mono(size: 9, weight: active ? .semibold : .medium))
             .tracking(1.6)
-            .foregroundStyle(active ? ScopeAmber.solid : (muted ? ScopeInk.subtle : ScopeInk.faint))
+            .foregroundStyle(active ? ScopeBrass.solid : (muted ? ScopeInk.subtle : ScopeInk.faint))
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
             .background(
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(active ? ScopeAmber.tint : Color.clear)
+                    .fill(active ? ScopeBrass.solid.opacity(0.08) : Color.clear)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 2)
-                    .stroke(active ? ScopeAmber.solid : ScopeEdge.subtle, lineWidth: 1)
+                    .stroke(active ? ScopeBrass.solid : ScopeInk.muted.opacity(0.24), lineWidth: 1)
             )
     }
 
