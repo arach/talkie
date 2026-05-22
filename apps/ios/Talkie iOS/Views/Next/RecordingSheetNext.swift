@@ -490,6 +490,21 @@ struct RecordingSheetNext: View {
             if let memoID = memo.id {
                 persistQueuedContext(for: memoID, memoTitle: memo.title ?? defaultTitle)
             }
+
+            // Kick off transcription on the saved memo. Matches the
+            // donor RecordingView flow: ~500ms grace so Core Data
+            // settles the write, then hand the memo + context to
+            // TranscriptionService.shared which writes the transcript
+            // back via isTranscribing toggling + transcription field.
+            let memoObjectID = memo.objectID
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(500))
+                if let savedMemo = context.object(with: memoObjectID) as? VoiceMemo {
+                    AppLogger.transcription.info("Starting transcription for persisted memo")
+                    TranscriptionService.shared.transcribeVoiceMemo(savedMemo, context: context)
+                }
+            }
+
             phase = .saved
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 700_000_000)

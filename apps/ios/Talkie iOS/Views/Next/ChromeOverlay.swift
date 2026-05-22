@@ -138,7 +138,13 @@ private struct LiquidGlassTray: View {
                 AppShellRouter.shared.openCaptureCompose()
             }
 
-            TrayFAB()
+            // Center hole for the always-visible MicFAB (rendered by
+            // AppShellNext, not the tray). 48pt width matches the FAB
+            // diameter so the tray's HStack still resolves to a
+            // symmetric 5-element layout (Home · Capture · gap · Ask AI
+            // · Terminal) when summoned, and the FAB's visual center
+            // sits exactly in the gap.
+            Color.clear.frame(width: 48, height: 36)
 
             TraySlot(
                 glyph: AnyView(Image(systemName: "sparkles").font(.system(size: 15, weight: .regular))),
@@ -167,6 +173,10 @@ private struct LiquidGlassTray: View {
         )
         .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        // 12pt outer padding so the tray capsule doesn't touch the
+        // screen edges on smaller iPhones (was overlapping ~5pt per
+        // side without it).
+        .padding(.horizontal, 12)
         .padding(.bottom, 6)
     }
 }
@@ -189,9 +199,12 @@ private struct TraySlot: View {
     }
 }
 
-/// The center mic FAB inside the tray — primary create action.
-/// Filled with theme accent so it reads as the hero among the row.
-private struct TrayFAB: View {
+/// The always-visible mic FAB — primary create action. Lives at the
+/// bottom-center of the shell whether or not chrome is summoned, so
+/// "record a memo" is a single tap. When chrome IS summoned the
+/// FAB sits visually centered in the tray's gap; when chrome is
+/// resting the FAB still anchors the bottom on its own.
+struct MicFAB: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {

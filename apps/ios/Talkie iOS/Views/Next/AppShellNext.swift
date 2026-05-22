@@ -55,7 +55,17 @@ struct AppShellNext<Content: View>: View {
                     )
             }
 
-            // Ambient voice button — always visible, bottom-left.
+            // Always-visible mic FAB — primary create action. One tap
+            // opens RecordingSheet regardless of chrome state. When
+            // chrome is summoned the FAB sits inside the tray's gap;
+            // when chrome is resting it anchors the bottom solo.
+            MicFAB()
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .padding(.bottom, 16)
+
+            // Ambient voice button — always visible, bottom-left. Pure
+            // summon affordance now (tap = chrome, long-press = voice
+            // command); recording moved to the always-visible MicFAB.
             VoicePivotButton()
         }
         .environmentObject(chrome)
