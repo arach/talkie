@@ -863,6 +863,9 @@ struct VoiceMemoDetailNext: View {
                 Button("Run CLI", systemImage: "terminal") {
                     showingCLISheet = true
                 }
+                Button("Retranscribe", systemImage: "arrow.clockwise") {
+                    retranscribe()
+                }
                 if store.hasTranscriptVersionHistory {
                     Button("Version history", systemImage: "clock.arrow.circlepath") {
                         showingVersionHistory = true
@@ -1467,6 +1470,20 @@ struct VoiceMemoDetailNext: View {
         case "memo-reminders": return "Remind"
         default: return template.name
         }
+    }
+
+    /// Re-runs transcription against the existing audio file. Useful
+    /// when the original attempt produced 'No transcript yet.' (silent
+    /// failure, permission issues at save time, etc) or when you want
+    /// to redo the pass with a refreshed model. TranscriptionService
+    /// .transcribeVoiceMemo overwrites the transcript field and toggles
+    /// isTranscribing → so the UI flips to a transcribing state, then
+    /// settles with the new transcript.
+    private func retranscribe() {
+        let context = store.memo.managedObjectContext
+            ?? PersistenceController.shared.container.viewContext
+        TranscriptionService.shared.transcribeVoiceMemo(store.memo, context: context)
+        AppLogger.transcription.info("User-triggered retranscribe for memo \(store.memo.id?.uuidString ?? "?")")
     }
 
     private func runMemoWorkflow(_ template: WorkflowTemplate) {
