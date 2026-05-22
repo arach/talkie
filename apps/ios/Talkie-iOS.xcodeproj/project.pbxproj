@@ -1001,7 +1001,7 @@
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Talkie iOS/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
+				INFOPLIST_KEY_CFBundleDisplayName = "Talkie T";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_LSRequiresIPhoneOS = YES;
@@ -1047,7 +1047,7 @@
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Talkie iOS/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
+				INFOPLIST_KEY_CFBundleDisplayName = "Talkie T";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_LSRequiresIPhoneOS = YES;
