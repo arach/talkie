@@ -452,9 +452,14 @@ struct WorkflowPickerRow: View {
     }
 }
 
-// MARK: - Performance Context Card (Debug)
+// MARK: - Performance Context Card
 
-#if DEBUG
+// Was previously `#if DEBUG`-gated when the card lived behind a hidden
+// developer toggle. Now ships in release — the call site in
+// TODictationContextSection.swift renders unconditionally so users can
+// see processing metrics. Removing the gate fixed a release-build link
+// error (cannot find PerfContextCard in scope) introduced when the use
+// site was un-DEBUG'd but the definition wasn't.
 struct PerfContextCard: View {
     let perf: PerformanceMetrics
     let audio: AudioMetrics?
@@ -641,7 +646,6 @@ struct PerfContextCard: View {
         }
     }
 }
-#endif
 
 // MARK: - Workflow Run Row
 
