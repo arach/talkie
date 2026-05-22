@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-22T01:37:07Z",
+  "updatedAt": "2026-05-22T01:41:44.550Z",
   "streams": [
     {
       "key": "C1",
@@ -1317,6 +1317,102 @@
           "level": "info",
           "message": "PR updated: https://github.com/arach/talkie/pull/20 (parity/c2 → feat/ios-shell-phase-0).",
           "ref": "c518cac"
+        },
+        {
+          "ts": "2026-05-22T01:38:51.995Z",
+          "agent": "user-art",
+          "level": "landed",
+          "message": "Already shipped: ScanPreviewOverlay struct lives inline in CameraCaptureNext as a full-bleed overlay (not a sheet).",
+          "findingKey": "C2::CameraImagePicker + OCRPreviewSheet::Sheet → full-bleed overlay",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CameraCaptureNext.swift:72"
+        },
+        {
+          "ts": "2026-05-22T01:38:52.027Z",
+          "agent": "user-art",
+          "level": "landed",
+          "message": "Already shipped: ScanPreviewOverlay flips chunks into a TextEditor seeded with combinedText so users can correct OCR before save.",
+          "findingKey": "C2::CameraImagePicker + OCRPreviewSheet::Inline edit mode in scan preview",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CameraCaptureNext.swift:72"
+        },
+        {
+          "ts": "2026-05-22T01:38:52.043Z",
+          "agent": "user-art",
+          "level": "landed",
+          "message": "Already shipped: ScanPreviewOverlay surfaces low-confidence banner when OCR chunk scores are below threshold.",
+          "findingKey": "C2::CameraImagePicker + OCRPreviewSheet::Low-confidence coaching banner",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CameraCaptureNext.swift:72"
+        },
+        {
+          "ts": "2026-05-22T01:38:52.062Z",
+          "agent": "user-art",
+          "level": "landed",
+          "message": "Already shipped: WebCaptureBrowserNext wraps state in WebCaptureBrowserStore (@MainActor). Equivalent donor behavior, cleaner binding shape.",
+          "findingKey": "C2::WebCaptureBrowser::State machine refactor",
+          "ref": "apps/ios/Talkie iOS/Views/Next/WebCaptureBrowserNext.swift"
+        },
+        {
+          "ts": "2026-05-22T01:38:52.077Z",
+          "agent": "user-art",
+          "level": "landed",
+          "message": "Already shipped: Next reuses donor CaptureAICommandsSheet from CaptureDetailNext. Path selection (CaptureAICommandPath enum) lives in the donor sheet.",
+          "findingKey": "C2::CaptureAICommandsSheet::Path selection (direct vs Mac)",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CaptureDetailNext.swift:319"
+        },
+        {
+          "ts": "2026-05-22T01:38:52.093Z",
+          "agent": "user-art",
+          "level": "landed",
+          "message": "Already shipped via donor reuse: the 5 quick-prompt buttons (Two Key Points / Summarize / Explain / Relate / Research) ship from CaptureAICommandsSheet itself, surfaced through CaptureDetailNext.",
+          "findingKey": "C2::CaptureAICommandsSheet::Quick prompts carousel",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CaptureDetailNext.swift:319"
+        },
+        {
+          "ts": "2026-05-22T01:38:52.108Z",
+          "agent": "user-art",
+          "level": "landed",
+          "message": "Already shipped via donor reuse: DictationWrapper inline mic is wired in the donor sheet that CaptureDetailNext surfaces.",
+          "findingKey": "C2::CaptureAICommandsSheet::Dictation mic in command field",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CaptureDetailNext.swift:319"
+        },
+        {
+          "ts": "2026-05-22T01:38:52.125Z",
+          "agent": "user-art",
+          "level": "landed",
+          "message": "Already shipped via donor reuse: AudioPlayerManager-backed speak-back is in the donor sheet wired through CaptureDetailNext.",
+          "findingKey": "C2::CaptureAICommandsSheet::TTS speak-back of response",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CaptureDetailNext.swift:319"
+        },
+        {
+          "ts": "2026-05-22T01:38:52.141Z",
+          "agent": "user-art",
+          "level": "landed",
+          "message": "Already shipped via donor reuse: bridge-down reconnect surface lives in the donor sheet wired through CaptureDetailNext.",
+          "findingKey": "C2::CaptureAICommandsSheet::Bridge reconnect on failure",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CaptureDetailNext.swift:319"
+        },
+        {
+          "ts": "2026-05-22T01:39:11.718Z",
+          "agent": "user-art",
+          "level": "landed",
+          "message": "Already shipped: CaptureDetailNext calls CaptureStore.shared.loadImageData(filename:) for image preview + share base64 encoding.",
+          "findingKey": "C2::CaptureDetailView::Image loading from MemoAttachmentStore",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CaptureDetailNext.swift:101"
+        },
+        {
+          "ts": "2026-05-22T01:39:11.745Z",
+          "agent": "user-art",
+          "level": "landed",
+          "message": "Already shipped: CaptureDetailNext observes .capturesDidChange via NotificationCenter publisher and refreshes loaded assets.",
+          "findingKey": "C2::CaptureDetailView::capturesDidChange refresh",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CaptureDetailNext.swift:342"
+        },
+        {
+          "ts": "2026-05-22T01:41:44.550Z",
+          "agent": "painter-c2",
+          "level": "landed",
+          "message": "Painted CaptureListSectionNext per the approved contract — init(store:onSelect:onSyncAll:onDelete:). Lives in apps/ios/Talkie iOS/Views/Next/. Empty state, source icons (text/url/photo), sync indicator (checkmark.circle.fill vs circle.dotted), unsynced count + Sync all CTA in header, swipe-to-delete. Codex-c2 can now wire the callbacks to CaptureStore.sync/.delete + CaptureSyncService.",
+          "findingKey": "C2::CaptureListSection::Entire surface absent",
+          "ref": "apps/ios/Talkie iOS/Views/Next/CaptureListSectionNext.swift"
         }
       ]
     },
