@@ -1,22 +1,20 @@
-# Security Notifications Proposal
+# TLK-015 — Security Notifications
+
+**Status**: Draft
+**Owner**: TBD
 
 ## Summary
 
-Talkie pairing should produce visible security events, not silent state changes.
-The goal is to make trust expansion legible across the user's Talkie devices
-without turning pairing into a heavy approval workflow by default.
+Talkie pairing should produce visible security events, not silent state changes. The goal is to make trust expansion legible across the user's Talkie devices without turning pairing into a heavy approval workflow by default.
 
 This spec proposes a two-tier delivery model:
 
-- Tier 1 uses CloudKit identity and push/synced state when the user is on the
-  cloud-backed Talkie path.
-- Tier 2 uses local/direct device delivery when devices are paired directly or
-  connected over the bridge without CloudKit.
+- **Tier 1** uses CloudKit identity and push/synced state when the user is on the cloud-backed Talkie path.
+- **Tier 2** uses local/direct device delivery when devices are paired directly or connected over the bridge without CloudKit.
 
-## Security Event Model
+## Security event model
 
-Security events are small, append-only records with enough metadata to explain
-what happened and where it should appear.
+Security events are small, append-only records with enough metadata to explain what happened and where it should appear.
 
 Recommended fields:
 
@@ -32,10 +30,9 @@ Recommended fields:
 - `summary`
 - `details`
 
-Security events should be durable enough to sync, but small enough to display
-as a timeline item or banner.
+Security events should be durable enough to sync, but small enough to display as a timeline item or banner.
 
-## Event Types
+## Event types
 
 Bridge pairing events:
 
@@ -52,13 +49,11 @@ SSH terminal events:
 - `ssh_terminal_imported`
 - `ssh_terminal_connected`
 
-Optional follow-up events may include `bridge_device_removed`,
-`bridge_device_expired`, or `ssh_terminal_revoked`.
+Optional follow-up events may include `bridge_device_removed`, `bridge_device_expired`, or `ssh_terminal_revoked`.
 
-## Tier 1: CloudKit Push and Synced Identity
+## Tier 1 — CloudKit push and synced identity
 
-When the user is signed into the cloud-backed Talkie identity, security events
-should be written to the private CloudKit-backed event stream.
+When the user is signed into the cloud-backed Talkie identity, security events should be written to the private CloudKit-backed event stream.
 
 Behavior:
 
@@ -69,23 +64,20 @@ Behavior:
 
 This tier is the best default for users who already rely on Talkie sync.
 
-## Tier 2: Local and Direct Paired Devices
+## Tier 2 — local and direct paired devices
 
-When CloudKit is unavailable or disabled, Talkie should still surface pairing
-activity through local and direct connected devices.
+When CloudKit is unavailable or disabled, Talkie should still surface pairing activity through local and direct connected devices.
 
 Behavior:
 
 - the Mac records the event locally
-- currently connected paired devices receive the event immediately when
-  possible
+- currently connected paired devices receive the event immediately when possible
 - reconnecting devices fetch unread events later
 - the originating Mac keeps the event visible until it is acknowledged
 
-This tier should use the existing bridge or direct device channel instead of a
-new transport. It is best-effort delivery, not a guaranteed push system.
+This tier should use the existing bridge or direct device channel instead of a new transport. It is best-effort delivery, not a guaranteed push system.
 
-## Delivery and Acknowledgement
+## Delivery and acknowledgement
 
 Delivery states:
 
@@ -100,7 +92,7 @@ Suggested UX:
 - other connected Talkie devices show a subtle alert or inbox item
 - a pairing-related event can remain visible until explicitly dismissed
 
-## Privacy and Security Principles
+## Privacy and security principles
 
 - Never broadcast secret material in the event payload.
 - Do not include private keys, tokens, or raw auth material in notifications.
@@ -109,31 +101,33 @@ Suggested UX:
 - Let the user see what was paired, from where, and when.
 - Make approval optional for Bridge pairing, but always visible.
 
-## Phased Implementation
+## Phased implementation
 
-Phase 1:
+### Phase 1
 
 - add the event model and local persistence on the Mac side
 - surface pairing and terminal events in the Mac UI
 - deliver events to connected paired devices through existing bridge state
 
-Phase 2:
+### Phase 2
 
 - sync security events through CloudKit for signed-in users
 - add push-backed delivery across all Talkie devices
 - add an in-app security timeline and acknowledgment controls
 
-Phase 3:
+### Phase 3
 
 - add optional require-approval flows for sensitive pairings
-- add event filtering, retention rules, and device-level notification
-  preferences
+- add event filtering, retention rules, and device-level notification preferences
 
-## Non-Goals
+## Non-goals
 
-- replacing pairing with a separate auth system
-- blocking local shell users from creating their own trust changes
-- turning every pairing step into a modal approval gate
+- Replacing pairing with a separate auth system
+- Blocking local shell users from creating their own trust changes
+- Turning every pairing step into a modal approval gate
 
-The intent is visibility first, with stronger approval and retention controls
-layered on afterward.
+The intent is visibility first, with stronger approval and retention controls layered on afterward.
+
+## References
+
+- Bridge pairing infrastructure: see TLK-001 (`docs/specs/tlk-001-bridge-api-unification.md`)

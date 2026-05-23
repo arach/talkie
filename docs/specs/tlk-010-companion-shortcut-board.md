@@ -1,8 +1,12 @@
-# Device Shortcut Board V1
+# TLK-010 — Companion Shortcut Board V1
 
-## Purpose
+**Status**: Draft
+**Owner**: TBD
 
-Define a file-backed, Mac-authored shortcut board for paired iPhone and iPad devices.
+## Summary
+
+Defines a file-backed, Mac-authored shortcut board for paired iPhone and iPad devices.
+
 V1 intentionally stays narrow:
 
 - exactly 3 swipeable spaces
@@ -14,8 +18,7 @@ This is the next shape after the current 12-slot `companionShortcutSlots` implem
 
 ## Canonical Storage
 
-Do not add a new `Talkie/Companion/...` directory in App Support for this.
-The board definition should live inside the existing macOS declarative settings file, under a broader device-settings concept:
+Do not add a new `Talkie/Companion/...` directory in App Support for this. The board definition should live inside the existing macOS declarative settings file, under a broader device-settings concept:
 
 - canonical file: `~/Library/Application Support/Talkie/settings/config.json`
 - owning schema/store:
@@ -84,11 +87,10 @@ This keeps the current experience working while we expand from 12 keys to 3 spac
 
 The board object itself is described by:
 
-- schema: [companion-shortcut-board.schema.json](/Users/example/dev/talkie-main-sync/docs/specs/companion-shortcut-board.schema.json)
-- example: [companion-shortcut-board.example.json](/Users/example/dev/talkie-main-sync/docs/specs/companion-shortcut-board.example.json)
+- schema: `docs/specs/companion-shortcut-board.schema.json`
+- example: `docs/specs/companion-shortcut-board.example.json`
 
-Those files describe the board object itself.
-Device-level overrides live in the broader `devices` settings shape shown above.
+Those files describe the board object itself. Device-level overrides live in the broader `devices` settings shape shown above.
 
 ### Top-level rules
 
@@ -186,9 +188,7 @@ Expected behavior:
 
 ## Runtime State Model
 
-Runtime state should stay separate from the board definition.
-The definition says what the board is.
-Runtime says what is currently happening.
+Runtime state should stay separate from the board definition. The definition says what the board is. Runtime says what is currently happening.
 
 ### Proposed runtime payload
 
@@ -234,8 +234,7 @@ Runtime says what is currently happening.
 - `waveformLevels`
   - small normalized sample set for a compact sparkline / waveform treatment on the tile
 
-For V1, only `memo-record` and `dictation` should be treated as required live-action tiles.
-`screen-record` can use the same shape but is optional if we need to keep the first ship tight.
+For V1, only `memo-record` and `dictation` should be treated as required live-action tiles. `screen-record` can use the same shape but is optional if we need to keep the first ship tight.
 
 ## UX Rules
 
@@ -260,11 +259,9 @@ This is the main UI distinction that makes the board feel useful every day rathe
 
 ### Editing model
 
-The Mac owns the board definition.
-The iPad and iPhone render it.
+The Mac owns the board definition. The iPad and iPhone render it.
 
-The settings UI should remain a view/editor for the same file-backed object, not a competing source of truth.
-Agents should also be able to update the same object directly through the file-backed configuration layer.
+The settings UI should remain a view/editor for the same file-backed object, not a competing source of truth. Agents should also be able to update the same object directly through the file-backed configuration layer.
 
 ## Starter V1 Board
 
@@ -302,14 +299,14 @@ Those fit the future design language, but not the first implementation.
 Current implementation seams that this board is meant to replace or extend:
 
 - current mobile renderer:
-  - [CompanionShortcutModeView.swift](/Users/example/dev/talkie-main-sync/apps/ios/Talkie%20apps/ios/Views/CompanionShortcutModeView.swift)
+  - `apps/ios/Talkie iOS/Views/CompanionShortcutModeView.swift`
 - current bridge payload:
-  - [BridgeClient.swift](/Users/example/dev/talkie-main-sync/apps/ios/Talkie%20apps/ios/Bridge/BridgeClient.swift)
-  - [companion.ts](/Users/example/dev/talkie-main-sync/apps/macos/TalkieServer/src/bridge/routes/companion.ts)
+  - `apps/ios/Talkie iOS/Bridge/BridgeClient.swift`
+  - `apps/macos/TalkieServer/src/bridge/routes/companion.ts`
 - current macOS authoring surface:
-  - [DictationSettings.swift](/Users/example/dev/talkie-main-sync/apps/macos/Talkie/Views/Settings/DictationSettings.swift)
+  - `apps/macos/Talkie/Views/Settings/DictationSettings.swift`
 - current settings schema:
-  - [TalkieSettingsConfiguration.swift](/Users/example/dev/talkie-main-sync/apps/macos/Talkie/Services/TalkieSettingsConfiguration.swift)
+  - `apps/macos/Talkie/Services/TalkieSettingsConfiguration.swift`
 
 Recommended implementation order:
 
@@ -319,3 +316,8 @@ Recommended implementation order:
 4. keep deriving `companionShortcutSlots` as a compatibility mirror
 5. extend the bridge payload from `shortcutSlots` to full `spaces`
 6. update the iOS renderer to page across spaces and render `liveAction` tiles from runtime state
+
+## References
+
+- Companion mode product spec: `docs/specs/tlk-009-local-network-companion-mode.md`
+- Bridge API plan: `docs/specs/tlk-001-bridge-api-unification.md`

@@ -1,11 +1,12 @@
-# TalkieKeys Architecture Critique
+# TLK-003 — Keyboard Extension Remediation
+
+**Status**: Draft
+**Owner**: TBD
 
 > Critical review of the keyboard extension architecture.
 > Goal: identify design flaws, race conditions, unnecessary complexity, and paths to simplification.
 
----
-
-## Executive Summary
+## Summary
 
 - **Three overlapping IPC channels** (SharedStore, StateMachine, Bridge) create a reconciliation burden that is the root cause of most bugs. Two of the three should be eliminated.
 - **KeyboardViewController at 4,300 lines** is a monolithic god-class that mixes UI construction, dictation orchestration, state polling, slot configuration, and debug logging into a single file with no separation of concerns.
@@ -13,9 +14,7 @@
 - **The `DictationStateMachine` is dead weight.** Every consumer already prefers SharedStore for active phases and only falls back to StateMachine for the `.ready` state. Adding `.ready` to SharedStore's Phase enum would eliminate an entire IPC channel, ~310 lines of code, and the reconciliation logic in `KeyboardActivationView`.
 - **Memory pressure is underestimated.** The extension creates three `UIImpactFeedbackGenerator` instances, a `UINotificationFeedbackGenerator`, a `CompactKeyboardView` with ~50 `UIButton` subviews, accent popup infrastructure, multiple `CAGradientLayer` shimmer effects, and the full `VoiceEmojiOverlay` particle system -- all within a 48MB limit that also includes the host app's keyboard infrastructure.
 
----
-
-## Critical Issues (Must Fix)
+## Critical issues (must fix)
 
 ### 1. Non-Atomic Read-Modify-Write in SharedStore
 
@@ -58,9 +57,7 @@
 - **Impact**: On older devices or under memory pressure, `synchronize()` can take 10-50ms. During recording, the keyboard calls `updateKeyboardHeartbeat()` (sync), polls `sharedStore.read()` (sync), and updates UI -- all on the main thread. This can cause dropped frames and janky animations.
 - **Suggested fix**: Remove all `synchronize()` calls. UserDefaults automatically coalesces writes. For the rare cases where cross-process freshness is critical (start/stop commands), the Darwin notification (`DictationNotificationCenter`) already provides an out-of-band signal that triggers an immediate read.
 
----
-
-## Design Concerns (Should Fix)
+## Design concerns (should fix)
 
 ### 5. KeyboardViewController Uses ObjC Runtime Hack for URL Opening
 
@@ -90,9 +87,7 @@
 - **Impact**: If the user enables keyboard mode and leaves Talkie in the background for hours, the warm recording file can grow to hundreds of megabytes. This is particularly concerning because the keyboard extension's 48MB limit doesn't apply to the app process, but the file I/O and disk space consumption are still real problems. On low-storage devices, this could trigger iOS storage warnings.
 - **Suggested fix**: Implement a rolling window for the warm recorder. Either (a) restart the warm recorder every N minutes with a new file (deleting the old one), or (b) use a circular buffer approach. Option (a) is simpler -- a 5-minute rolling window would cap the file at ~4.8MB.
 
----
-
-## Complexity Hotspots
+## Complexity hotspots
 
 ### Three IPC Channels -- Can We Consolidate?
 
@@ -135,9 +130,7 @@ The reconciliation logic in `KeyboardActivationView.reconcileState()` exists bec
 
 If StateMachine is eliminated (by adding `.ready` to SharedStore's Phase), reconciliation becomes unnecessary. The single source of truth would be SharedStore, and all consumers would read from one place.
 
----
-
-## Race Conditions & Timing Issues
+## Race conditions & timing issues
 
 ### Race 1: Simultaneous Start Command and Heartbeat Update
 
@@ -175,9 +168,7 @@ If StateMachine is eliminated (by adding `.ready` to SharedStore's Phase), recon
 - **Impact**: The keyboard's start command is silently rejected. The code recovers via the `handleDictationRequest()` path which creates a new session, but this adds 1-2 seconds of unnecessary delay and duplicates the start logic.
 - **Fix**: Don't bump epoch on init. Epoch should only be bumped on explicit force-reset scenarios. The init is already a clean slate -- there's no zombie command to guard against.
 
----
-
-## Simplification Opportunities
+## Simplification opportunities
 
 ### Can StateMachine Be Removed Entirely?
 
@@ -221,9 +212,7 @@ The polling exists because:
 
 **Recommended approach**: Use Darwin notifications as the primary trigger for reads (react immediately), but keep a slow background poll (every 2-5 seconds) as a fallback for missed notifications. The current 0.2s poll interval is unnecessarily aggressive -- it means 5 full JSON decode cycles per second during recording, which is wasteful.
 
----
-
-## What's Done Well
+## What's done well
 
 ### Warm Recorder Design
 The warm recorder is genuinely clever. Keeping a continuously-running `AVAudioRecorder` and extracting segments via `AVAssetExportSession` achieves <100ms start latency without an app switch. The implementation correctly handles the tricky "start new warm recorder immediately after extracting a segment" pattern (line 1346), which is essential for continuous dictation. The capture of `sessionId` before async transcription (line 1390) correctly prevents a new recording from clobbering the old session.

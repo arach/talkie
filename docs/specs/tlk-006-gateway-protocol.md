@@ -1,8 +1,9 @@
-# Talkie Gateway Protocol v1
+# TLK-006 — Gateway Protocol v1
 
-> Status: Draft
+**Status**: Draft
+**Owner**: TBD
 
-## Overview
+## Summary
 
 The Gateway Protocol is a WebSocket contract for AI services. It defines the wire format between Talkie (the client) and any server that provides inference, transcription, or speech synthesis.
 

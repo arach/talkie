@@ -1,34 +1,32 @@
-#
-# Talkie macOS: Direct Distribution, Updates, Telemetry, Paywall Gate
-#
+# TLK-008 — macOS Distribution, Telemetry, Paywall Gate
 
-## Overview
+**Status**: Draft
+**Owner**: TBD
 
-This spec defines a direct‑distribution macOS app stack with:
-- Secure, home‑managed auto‑updates
-- Privacy‑forward, batch telemetry with full user transparency
+## Summary
+
+This spec defines a direct-distribution macOS app stack with:
+
+- Secure, home-managed auto-updates
+- Privacy-forward, batch telemetry with full user transparency
 - Remote paywall gate (off by default, toggleable later)
 
 The goal is to ship v1 as free while keeping a clean path to paywall enablement and basic usage insights.
 
----
-
 ## Goals
 
 - Direct distribution (not Mac App Store)
-- Secure auto‑updates under our control
-- Telemetry that is minimal, transparent, and non‑invasive
+- Secure auto-updates under our control
+- Telemetry that is minimal, transparent, and non-invasive
 - Remote paywall gate available in first build, default off
 
-## Non‑Goals
+## Non-Goals
 
-- Real‑time telemetry or session replay
+- Real-time telemetry or session replay
 - Deep user identity tracking or content capture
 - Complex paywall experimentation at launch
 
----
-
-## Auto‑Updates (Sparkle 2, Self‑Hosted)
+## Auto-Updates (Sparkle 2, Self-Hosted)
 
 ### Requirements
 - Use Sparkle 2 for secure updates
@@ -51,12 +49,10 @@ The goal is to ship v1 as free while keeping a clean path to paywall enablement 
 - Updates install from a signed appcast
 - Invalid signatures are rejected
 
----
-
-## Telemetry (Batch, Privacy‑Forward)
+## Telemetry (Batch, Privacy-Forward)
 
 ### Principles
-- Batch‑only, no real‑time reporting
+- Batch-only, no real-time reporting
 - No content capture (no transcripts, audio, user text)
 - Ephemeral install ID with rotation
 - User can see exactly what is sent
@@ -98,16 +94,14 @@ The goal is to ship v1 as free while keeping a clean path to paywall enablement 
 ```
 
 ### Transparency UI
-- Settings → Privacy → “Your Data”
+- Settings → Privacy → "Your Data"
 - Show last payload (or a readable summary)
-- Toggle: “Share anonymous usage stats”
+- Toggle: "Share anonymous usage stats"
 
 ### Acceptance Criteria
 - Telemetry OFF means no collection, no sends
 - Telemetry ON stores locally and flushes daily
-- “Your Data” reflects the real payload
-
----
+- "Your Data" reflects the real payload
 
 ## Remote Paywall Gate (Default Off)
 
@@ -134,15 +128,11 @@ The goal is to ship v1 as free while keeping a clean path to paywall enablement 
 - Default experience is free
 - Flip remote flag → paywall appears without new build
 
----
-
 ## Security + Privacy
 
 - All endpoints HTTPS
 - Minimal data collection
-- Clear privacy policy and in‑app disclosure
-
----
+- Clear privacy policy and in-app disclosure
 
 ## Suggested Folder Structure
 
@@ -164,8 +154,6 @@ apps/macos/Talkie/Views/Settings/
   PrivacySettingsView.swift
   UpdatesSettingsView.swift
 ```
-
----
 
 ## Proposed Swift APIs (Sketch)
 
@@ -224,19 +212,14 @@ final class UpdateManager {
 }
 ```
 
----
-
 ## Implementation Phases
 
 1. Updates (Sparkle 2, appcast + signing)
-2. Telemetry (local queue + batch sender + “Your Data” UI)
+2. Telemetry (local queue + batch sender + "Your Data" UI)
 3. Remote config + paywall gate
-
----
 
 ## Open Questions
 
 - Update hosting location and CDN choice
 - Paywall entry points for v1
-- Telemetry opt‑in default (on vs off)
-
+- Telemetry opt-in default (on vs off)

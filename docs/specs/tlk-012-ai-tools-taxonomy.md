@@ -1,8 +1,13 @@
-# Taxonomy prior art — AI / agentic tools
+# TLK-012 — AI Tools Taxonomy (Prior Art Survey)
 
-**Status:** research brief · AI-tools survey · 2026-05-20
-**Context:** companion to `2026-05-20-taxonomy-prior-art.md` (classical automation tools)
-**Scope:** How modern AI/agentic tools name their packaged-capability units. Includes light read on what it means for Talkie at the end.
+**Status**: Research Brief
+**Owner**: TBD
+**Context**: companion to `docs/planning/2026-05-20-taxonomy-prior-art.md` (classical automation tools)
+**Scope**: How modern AI/agentic tools name their packaged-capability units. Includes light read on what it means for Talkie at the end.
+
+## Summary
+
+Survey of vocabulary used by modern AI/agentic tools to name their packaged-capability units. The convergent finding: **"Skill" has become the cross-vendor term for packaged, reusable, file-based agent capabilities** — Anthropic originated the SKILL.md format and Cursor + Windsurf adopted it unchanged. "Tool" is the convergent atomic-verb name via MCP. "Action" is fading in the AI space. "Workflow" is largely absent at the unit level.
 
 ## Claude Skills (Anthropic)
 
@@ -96,4 +101,10 @@ The cleanest taxonomy stack, if we lean into the agentic convention:
 - **Action** = a one-shot transformation on current content (the Compose chip). Distinct sense from AI "action."
 - **Workflow** = internal data-model name only. Not surfaced to users.
 
-That's the synthesis. The fork from `2026-05-20-workflows-skills-actions-taxonomy.md` lands on Option 1 (one user-facing concept), and the cross-vendor evidence now points to that concept being called **Skill**.
+That's the synthesis. The fork from `docs/planning/2026-05-20-workflows-skills-actions-taxonomy.md` lands on Option 1 (one user-facing concept), and the cross-vendor evidence now points to that concept being called **Skill**.
+
+## References
+
+- Skill presentation spec: `docs/specs/tlk-011-skill-presentation.md`
+- Classical automation prior art: `docs/planning/2026-05-20-taxonomy-prior-art.md`
+- Codebase-state survey: `docs/planning/2026-05-20-taxonomy-codebase-state.md`

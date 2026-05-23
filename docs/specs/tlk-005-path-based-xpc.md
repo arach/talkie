@@ -1,34 +1,26 @@
-# Path-Based XPC Architecture for TalkieEngine
+# TLK-005 — Path-Based XPC Serialization
 
-*December 14, 2025*
+**Status**: Shipped
+**Owner**: TBD
+**Original date**: 2025-12-14
 
-## Overview
+## Summary
 
-This document traces the evolution of TalkieEngine's transcription architecture from a Data-based XPC approach to a Path-based approach, including the reasoning, performance implications, and final implementation.
-
-## The Problem
-
-TalkieAgent captures audio and sends it to TalkieEngine for transcription via XPC (Cross-Process Communication). The original implementation passed audio data directly over XPC:
+TalkieAgent captures audio and sends it to TalkieEngine for transcription via XPC. The original implementation passed audio data directly over XPC, serializing potentially megabytes of audio across process boundaries:
 
 ```swift
 // Original XPC protocol
 func transcribe(audioData: Data, modelId: String, reply: ...)
 ```
 
-This meant serializing potentially megabytes of audio data across process boundaries.
-
-## The Solution
-
-Pass the file path instead of the data:
+The new design passes the file path instead:
 
 ```swift
 // New XPC protocol
 func transcribe(audioPath: String, modelId: String, reply: ...)
 ```
 
-The engine reads directly from the client's file. Simple change, significant implications.
-
----
+The engine reads directly from the client's file. Simple change, significant implications: fewer disk operations, 5000× smaller XPC payload, 68% less overhead, and a truly stateless engine.
 
 ## Architecture Comparison
 
@@ -67,8 +59,6 @@ TalkieAgent                              TalkieEngine
 
 **I/O Cost:** 2 writes, 2 reads, minimal XPC payload
 
----
-
 ## The Key Insight: No Contention
 
 A natural concern with the path-based approach: what if there's file contention between TalkieAgent writing and TalkieEngine reading?
@@ -83,8 +73,6 @@ TalkieEngine: opens file for reading
 
 The file is fully written and the handle is closed before the engine ever touches it. No locks, no contention, no race conditions.
 
----
-
 ## Sandbox Considerations
 
 | Component | Sandboxed | Implication |
@@ -92,9 +80,7 @@ The file is fully written and the handle is closed before the engine ever touche
 | TalkieAgent | Yes | Files live in `~/Library/Containers/to.talkie.app.agent/` |
 | TalkieEngine | No | Can read any path on the filesystem |
 
-The engine's lack of sandboxing is intentional—it needs to read files from client containers. The path sent over XPC is just a string; the engine opens it with standard file I/O.
-
----
+The engine's lack of sandboxing is intentional — it needs to read files from client containers. The path sent over XPC is just a string; the engine opens it with standard file I/O.
 
 ## Happy Path Latency Trace
 
@@ -180,8 +166,6 @@ The engine's lack of sandboxing is intentional—it needs to read files from cli
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
----
-
 ## Timing Summary
 
 | Phase | Time | % Total |
@@ -195,8 +179,6 @@ The engine's lack of sandboxing is intentional—it needs to read files from cli
 
 **Real-Time Factor:** 1.8% (540ms to transcribe 30,000ms of audio)
 
----
-
 ## Performance Comparison
 
 | Metric | Before (Data) | After (Path) | Improvement |
@@ -205,8 +187,6 @@ The engine's lack of sandboxing is intentional—it needs to read files from cli
 | XPC Payload | ~500KB | ~100 bytes | 5000x smaller |
 | Total Overhead | ~80ms | ~26ms | 68% reduction |
 | Overhead % | 13.8% | 4.9% | 2.8x better |
-
----
 
 ## Design Principles Validated
 
@@ -235,8 +215,6 @@ Output: "transcribed text"
 - **TalkieEngine:** Processes audio, returns transcripts
 - **XPC:** Thin coordination layer (just passes paths)
 
----
-
 ## Files Changed
 
 | File | Change |
@@ -250,8 +228,6 @@ Output: "transcribed text"
 | `AudioCapture.swift` | Callback passes path, not Data |
 | `TranscriptionTypes.swift` | `TranscriptionRequest.audioPath` |
 | `TranscriptionRetryManager.swift` | Passes path directly |
-
----
 
 ## Observability Additions
 
@@ -271,8 +247,6 @@ As part of this work, we added performance observability:
    - All timing logs show milliseconds for fast operations
    - Seconds with 2 decimal places for longer operations
 
----
-
 ## Conclusion
 
 The path-based architecture is objectively better:
@@ -283,8 +257,4 @@ The path-based architecture is objectively better:
 - **Cleaner separation** (engine is truly stateless)
 - **Same reliability** (sequential access, no contention)
 
-The transcription model is the bottleneck (95% of time). Everything else is noise. Our job is to minimize that noise—and we did.
-
----
-
-*This document serves as a reference for the TalkieEngine architecture and can be expanded for blog posts or technical documentation.*
+The transcription model is the bottleneck (95% of time). Everything else is noise. Our job is to minimize that noise — and we did.

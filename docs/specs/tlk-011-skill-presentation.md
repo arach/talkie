@@ -1,16 +1,16 @@
-# Skill — presentation & data model spec
+# TLK-011 — Skill Presentation & Data Model
 
-**Status:** spec · pre-implementation · 2026-05-20
-**Author:** arach + claude
-**Predecessors:**
-- Taxonomy thinking → `2026-05-20-workflows-skills-actions-taxonomy.md`
-- Classical prior art → `2026-05-20-taxonomy-prior-art.md`
-- AI/agentic prior art → `2026-05-20-taxonomy-ai-tools.md`
-- Codebase-state survey → `2026-05-20-taxonomy-codebase-state.md`
+**Status**: Spec · Pre-implementation
+**Owner**: arach + claude
+**Predecessors**:
+- Taxonomy thinking → `docs/planning/2026-05-20-workflows-skills-actions-taxonomy.md`
+- Classical prior art → `docs/planning/2026-05-20-taxonomy-prior-art.md`
+- AI/agentic prior art → `docs/specs/tlk-012-ai-tools-taxonomy.md`
+- Codebase-state survey → `docs/planning/2026-05-20-taxonomy-codebase-state.md`
 - Studio committed surface → `design/studio/app/mac-skills/`
 - Studio framing archive → `design/studio/app/mac-skill-forge/`
 
-## Pinned decision
+## Summary
 
 **Talkie surfaces one user-facing automation concept: the Skill.** Backed by:
 
@@ -140,7 +140,7 @@ When a future Skill needs something the catalog doesn't have, we add a `Workflow
 
 **Decision: "Action" stays narrow. Intentional overload. No renames.**
 
-The codebase-state brief (`2026-05-20-taxonomy-codebase-state.md` §3) found "Action" already overloaded across ~10 user-facing surfaces: SmartAction chips in Compose, ActionEditorSheet in Settings, Context-Aware Quick Actions, PendingActions, Mac Actions (iOS), ComposeWorkflowAction (iOS), Quick Actions, plus WFKit's `NodeType.action`. This was a real ambiguity that could have argued for a rename.
+The codebase-state brief (`docs/planning/2026-05-20-taxonomy-codebase-state.md` §3) found "Action" already overloaded across ~10 user-facing surfaces: SmartAction chips in Compose, ActionEditorSheet in Settings, Context-Aware Quick Actions, PendingActions, Mac Actions (iOS), ComposeWorkflowAction (iOS), Quick Actions, plus WFKit's `NodeType.action`. This was a real ambiguity that could have argued for a rename.
 
 The decision is to keep it. The reasoning: **Skill and Action live at different abstraction tiers.** Skill = the definition (you author a Skill, save it, the gallery lists it). Action = the manifestation (a chip in Compose, a button in Quick Actions, a row in Pending). Users don't see them collide because they never appear at the same tier in the same surface. This matches the prior-art convention — Shortcut+Action, Flow+Action, Scenario+Module/Action — every surveyed tool keeps "Action" as the secondary tier under a top-level container.
 
@@ -282,7 +282,7 @@ This spec doesn't commit to a build order, but the data-model design above impli
 6. Starter skills shipped: Log Bug, Daily Standup, Capture Thought as `.skill.md` in app bundle.
 7. iOS-side renames: "Mac Actions" → "Skills", `pinnedMacActions` → `pinnedSkills`, `PinnedWorkflow` → `PinnedSkill`, Compose chip group label.
 
-## Open questions for arach
+## Open questions
 
 1. **Sidebar copy: "Skills" or "Skill"?** Plural-as-section-name (matches "Notes", "Memos", "Dictations") vs singular. Lean plural.
 2. **File extension: `.skill.md` or `.skill`?** Lean `.skill.md` for SKILL.md interop, but it's two-token and unusual.
@@ -302,10 +302,17 @@ This spec doesn't commit to a build order, but the data-model design above impli
 
 ## Refinements from the codebase-state brief (landed 2026-05-20)
 
-The brief at `2026-05-20-taxonomy-codebase-state.md` confirmed the spec's shape and refined three things:
+The brief at `docs/planning/2026-05-20-taxonomy-codebase-state.md` confirmed the spec's shape and refined three things:
 
 - **Step-type count.** 19 variants, not 21 (corrected in §"Step / Tool tier").
 - **Bucket density.** ~48% of existing workflows would carry ADVANCED on day one (added to §"Escape hatch").
 - **"Action" overload.** Confirmed as broader than the spec initially claimed (~10 user-facing surfaces). The decision to keep Action narrow is intentional and documented in §"What about 'Action'?".
 - **iOS surface.** No `WorkflowDefinition` model exists on iOS — just a pinned-skill mirror. The macOS-coined vocab is echoed via copy + storage-key renames (§"iOS surface").
 - **Adjacent bugs.** `thenSteps`/`elseSteps` routing isn't implemented; flagged separately to avoid conflation.
+
+## References
+
+- AI/agentic prior art: `docs/specs/tlk-012-ai-tools-taxonomy.md`
+- Classical prior art: `docs/planning/2026-05-20-taxonomy-prior-art.md`
+- Codebase-state survey: `docs/planning/2026-05-20-taxonomy-codebase-state.md`
+- Studio surface: `design/studio/app/mac-skills/`

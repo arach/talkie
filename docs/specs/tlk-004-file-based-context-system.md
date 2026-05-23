@@ -1,8 +1,9 @@
-# RFC: File-Based Context System
+# TLK-004 — File-Based Context System
 
-**Status:** Draft
-**Date:** 2026-03-21
-**Audience:** Product, platform, workflow, dictation, and developer-experience work
+**Status**: Draft
+**Owner**: TBD
+**Date**: 2026-03-21
+**Audience**: Product, platform, workflow, dictation, and developer-experience work
 
 ## Summary
 
@@ -64,7 +65,7 @@ We need a model that:
 This RFC is adjacent to, but distinct from:
 
 - `specs/multi-dictionary-architecture.md`
-- `docs/CONTEXT_SETTINGS_PLAN.md`
+- `docs/engineering/context-settings-plan.md`
 
 Those documents focus on user-facing organization and dictionary evolution. This RFC focuses on file-based definition, discovery, and execution.
 
@@ -100,7 +101,7 @@ A Talkie-native execution graph. Workflows remain the preferred way to express m
 
 A schedule or event binding that runs a workflow or tool later, periodically, or in the background.
 
-## Design Principle
+## Design principle
 
 The system should be organized by pipeline phase, not by settings page.
 
@@ -165,7 +166,7 @@ Each root uses a conventional layout:
 
 Talkie discovers behavior by walking these folders and validating known entry files.
 
-## Why Folder-Based Definitions
+## Why folder-based definitions
 
 Each capability is a directory instead of a single flat file because a directory gives us room for:
 
@@ -178,7 +179,7 @@ Each capability is a directory instead of a single flat file because a directory
 
 That makes each item self-contained, movable, and easy to share.
 
-## Root Discovery
+## Root discovery
 
 Talkie should support three root classes:
 
@@ -213,7 +214,7 @@ Discovery precedence:
 
 Later roots are lower priority by default unless a manifest or rule priority overrides them.
 
-## Directory Conventions
+## Directory conventions
 
 ### Rules
 
@@ -333,7 +334,7 @@ run:
   workflow: inbox-review
 ```
 
-## Rule Semantics
+## Rule semantics
 
 Rules are intentionally declarative.
 
@@ -411,7 +412,7 @@ produce:
     topic: "$1"
 ```
 
-## Execution Model
+## Execution model
 
 Talkie remains the runtime.
 
@@ -424,7 +425,7 @@ This keeps the system:
 - policy-controlled
 - safer than arbitrary in-process plugins
 
-## Tool Runtime Contract
+## Tool runtime contract
 
 Tools are invoked by Talkie as subprocesses.
 
@@ -482,7 +483,7 @@ Example:
 
 This should stay intentionally small at first.
 
-## Runtime Invocation
+## Runtime invocation
 
 The `runtime` field defines how Talkie launches the tool entrypoint.
 
@@ -499,7 +500,7 @@ TypeScript does not need a separate runtime if we define a documented Node-based
 
 This avoids exploding product scope into "Talkie supports every language" while still making the system language-agnostic in practice.
 
-## Event Model
+## Event model
 
 The event model is the seam that keeps the system coherent.
 
@@ -515,7 +516,7 @@ Proposed starter events:
 
 We should start with a small number of stable events and expand later.
 
-## Matching Model
+## Matching model
 
 Rules should support a constrained but useful matcher set in v1:
 
@@ -533,7 +534,7 @@ Future possibilities:
 
 Those should not be required for the first version.
 
-## Context Selectors
+## Context selectors
 
 All rule kinds should support the same contextual selectors so the system feels unified.
 
@@ -549,7 +550,7 @@ Suggested selectors:
 
 These selectors should be additive and optional.
 
-## Validation and Diagnostics
+## Validation and diagnostics
 
 Talkie should validate every discovered item before enabling it.
 
@@ -573,7 +574,7 @@ Examples:
 - workflow reference not found
 - unsupported runtime
 
-## Security and Safety
+## Security and safety
 
 The system must assume that user-provided roots are trusted by the user but still not fully safe.
 
@@ -592,7 +593,7 @@ Future enhancements:
 - "dry run" mode
 - tool capability permissions
 
-## UI Implications
+## UI implications
 
 The UI should not be the source of truth for this system.
 
@@ -605,7 +606,7 @@ Instead, the UI should act as:
 
 This keeps the file-first model intact while still supporting discoverability.
 
-## Example Root
+## Example root
 
 ```text
 .talkie/
@@ -664,7 +665,7 @@ input: talkie/v1
 timeoutMs: 10000
 ```
 
-## Proposed Rollout
+## Proposed rollout
 
 ### Phase 1
 
@@ -690,7 +691,7 @@ timeoutMs: 10000
 - higher-level authoring templates
 - shared examples and starter packs
 
-## Open Questions
+## Open questions
 
 1. Should built-in workflows continue to live in their current location and be mirrored into discovered roots, or should roots become the only source of truth over time?
 2. Should `rule.yaml` allow an inline shell or script block, or should all executable logic be forced into `tools/`?

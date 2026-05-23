@@ -1,4 +1,7 @@
-# Media Capture Quality Validation
+# TLK-017 — Media Capture Quality Validation
+
+**Status**: Draft
+**Owner**: TBD
 
 ## Summary
 
@@ -6,11 +9,11 @@ Talkie's current media capture defaults are generally reasonable for a **high-fi
 
 The practical answer is:
 
-- **Screenshots:** currently high quality, full-resolution, lossless PNG
-- **Screen clips:** currently fixed H.264 MP4 at a medium-high bitrate
-- **Camera clips:** already configurable in settings
-- **Screenshot quality:** **not configurable today**
-- **Lower-quality region capture for agent workflows:** **absolutely possible**, but requires code changes
+- **Screenshots** — currently high quality, full-resolution, lossless PNG
+- **Screen clips** — currently fixed H.264 MP4 at a medium-high bitrate
+- **Camera clips** — already configurable in settings
+- **Screenshot quality** — **not configurable today**
+- **Lower-quality region capture for agent workflows** — **absolutely possible**, but requires code changes
 
 ## What the app does today
 
@@ -131,23 +134,23 @@ Yes. The codebase is structurally ready for this, even though screenshot quality
 
 Instead of a single "quality" toggle, the better model is probably **capture intent**.
 
-Suggested presets:
+### Suggested presets
 
-### 1. Archive
+#### 1. Archive
 
 - screenshots: PNG
 - no downscaling
 - clips: H.264 or HEVC at current/high bitrate
 - best for long-term storage, annotation, and human review
 
-### 2. Balanced
+#### 2. Balanced
 
 - screenshots: JPEG or HEIC for region/window, PNG for fullscreen if needed
 - optional max dimension cap
 - clips: slightly lower bitrate than current defaults
 - best default for most users
 
-### 3. Agent
+#### 3. Agent
 
 - screenshots: aggressively optimized for AI context
 - region/window captures downscaled if large
@@ -159,7 +162,7 @@ Suggested presets:
 
 ### Screenshots
 
-For screenshots, I would recommend:
+For screenshots:
 
 1. Keep `PNG` as the default archival format.
 2. Add a screenshot capture preset in settings.
@@ -230,3 +233,7 @@ If we want to move carefully, the best second pass is:
 5. Track file size in metadata so we can validate real savings
 
 That gives us a low-risk way to test whether smaller, AI-oriented captures are materially better without regressing the current high-fidelity workflow.
+
+## References
+
+- Companion media surface direction: TLK-018 (`docs/specs/tlk-018-media-surface-roundup.md`)

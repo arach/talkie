@@ -1,7 +1,11 @@
-# Talkie-Owned Live Workflows API
+# TLK-007 — Talkie-Owned Live Workflows API
 
-This document describes the V1 API contract for live iPhone-to-Mac
-workflow execution using Talkie's own backend queue.
+**Status**: Implemented (pending production deploy)
+**Owner**: TBD
+
+## Summary
+
+V1 API contract for live iPhone-to-Mac workflow execution using Talkie's own backend queue.
 
 The intended product model is:
 
@@ -13,17 +17,15 @@ The intended product model is:
 
 ## Status
 
-The API contract and client wiring have already been implemented locally
-in:
+The API contract and client wiring have already been implemented locally in:
 
-- `/Users/example/dev/talkie/services/talkie-api/src/app.ts`
-- `/Users/example/dev/talkie/services/talkie-api/src/workflowQueue.ts`
-- `/Users/example/dev/talkie/apps/macos/Talkie/Services/WorkflowControlPlaneClient.swift`
-- `/Users/example/dev/talkie/apps/macos/Talkie/Services/WorkflowControlPlaneService.swift`
-- `/Users/example/dev/talkie/apps/ios/Talkie iOS/Views/VoiceMemoDetailView.swift`
+- `services/talkie-api/src/app.ts`
+- `services/talkie-api/src/workflowQueue.ts`
+- `apps/macos/Talkie/Services/WorkflowControlPlaneClient.swift`
+- `apps/macos/Talkie/Services/WorkflowControlPlaneService.swift`
+- `apps/ios/Talkie iOS/Views/VoiceMemoDetailView.swift`
 
-At the time of writing, production deployment still needs to be updated
-so these routes exist at `api.usetalkie.com`.
+At the time of writing, production deployment still needs to be updated so these routes exist at `api.usetalkie.com`.
 
 ## Core requirements
 
@@ -41,8 +43,7 @@ All workflow endpoints are authenticated with:
 
 - `Authorization: Bearer <Talkie account token>`
 
-The backend verifies the Talkie account token through Clerk and scopes all
-workflow runs and executor registrations by `userId`.
+The backend verifies the Talkie account token through Clerk and scopes all workflow runs and executor registrations by `userId`.
 
 That means:
 
@@ -115,8 +116,7 @@ Each executor registration includes:
 - Claiming is single-winner via a per-run lock
 - Lease duration is currently `30s`
 - Executor heartbeat TTL is currently `120s`
-- A claimed or running run whose lease expires is reconciled back to
-  `queued`
+- A claimed or running run whose lease expires is reconciled back to `queued`
 - Completion and failure clear the lock
 
 This gives:
@@ -476,8 +476,7 @@ Expected status codes:
 
 Important invariant:
 
-- once deployed correctly, these routes should return `401` when signed out
-  and not `404`
+- once deployed correctly, these routes should return `401` when signed out and not `404`
 
 ## Storage requirements
 
@@ -535,9 +534,7 @@ Current environment variables used by the workflow queue layer:
 
 ## Notes for the Talkie Server team
 
-If the Talkie Server team wants to own this path, the easiest route is not
-to change the client contract. Keep the above endpoints and auth model
-stable, and move the implementation behind them.
+If the Talkie Server team wants to own this path, the easiest route is not to change the client contract. Keep the above endpoints and auth model stable, and move the implementation behind them.
 
 That lets:
 

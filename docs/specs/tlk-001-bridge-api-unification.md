@@ -1,10 +1,13 @@
-# BridgeServer Unified API + Shared Data Layer
+# TLK-001 — Bridge API Unification
 
-## Overview
+**Status**: Draft
+**Owner**: TBD
 
-Move TalkieObject model and read-only queries into TalkieKit. Make Agent's BridgeServer (:8767) the single local API. CLI becomes a thin HTTP client.
+## Summary
 
-## Current State
+Move the `TalkieObject` model and read-only queries into `TalkieKit`. Make the Agent's BridgeServer (:8767) the single local API. The CLI becomes a thin HTTP client.
+
+## What exists today
 
 | Component | Location | Protocol | Status |
 |-----------|----------|----------|--------|
@@ -17,7 +20,7 @@ Move TalkieObject model and read-only queries into TalkieKit. Make Agent's Bridg
 | CLI | `packages/npm/cli/src/` | Direct SQLite + WebSocket | Duplicates query logic, fictional WS ports |
 | Engine/Sync/Inference | XPC services | XPC only | No network ports |
 
-## Target Architecture
+## Target architecture
 
 ```
 External clients (SDK, Lattices, CLI, iOS Bridge)
@@ -35,7 +38,7 @@ External clients (SDK, Lattices, CLI, iOS Bridge)
   stats)
 ```
 
-## Route Namespaces
+## Route namespaces
 
 ### `/talkie` — Data (GRDB direct)
 
@@ -71,7 +74,7 @@ External clients (SDK, Lattices, CLI, iOS Bridge)
 | `/engine/models` | GET | XPC -> TalkieEngine | List available models |
 | `/engine/status` | GET | XPC -> TalkieEngine | Engine health + loaded model |
 
-## Implementation Phases
+## Implementation phases
 
 ### Phase 1: Move TalkieObject Model to TalkieKit
 
@@ -211,7 +214,7 @@ After Phase 1, `TalkieObject` is in TalkieKit. Agent replaces:
 
 **Deletes**: `LiveRecording` struct, most of `UnifiedDatabase.swift`'s custom code.
 
-## Phase Dependencies
+## Phase dependencies
 
 ```
 Phase 1 (Model -> TalkieKit)
@@ -230,7 +233,7 @@ Phase 2 (TalkieObjectReader)
 
 Each phase produces a working build. Phases 3-6 can be parallelized after Phase 2.
 
-## File Structure (Final)
+## File structure (final)
 
 ```
 apps/macos/TalkieKit/Sources/TalkieKit/
@@ -266,3 +269,7 @@ packages/npm/cli/src/
 | Column parity between Agent and app migrations | Silent data corruption | Verify migrations match before Phase 6 |
 | CLI fallback complexity (direct SQLite + HTTP) | Maintenance burden | Remove direct SQLite once BridgeServer proven reliable |
 | BridgeServer HTTP parsing is minimal | Edge cases | Only handles localhost; keep parsing simple |
+
+## References
+
+- TalkieObject refactor: `docs/specs/tlk-002-talkie-object-refactor.md`

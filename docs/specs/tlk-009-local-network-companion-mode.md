@@ -1,8 +1,11 @@
-# Local Network Companion Mode
+# TLK-009 — Local Network Companion Mode
+
+**Status**: Draft
+**Owner**: TBD
 
 ## Summary
 
-This spec proposes an opt-in `Companion Mode` that turns an iPhone or iPad into a live secondary control surface for a Mac running Talkie.
+An opt-in `Companion Mode` that turns an iPhone or iPad into a live secondary control surface for a Mac running Talkie.
 
 The key product constraint is presence, not geography:
 
@@ -11,7 +14,7 @@ The key product constraint is presence, not geography:
 - the user has explicitly opted into Companion Mode
 - the devices belong to the same Talkie account and/or trusted pairing relationship
 
-This creates a new surface that is closer to a hardware control deck than a traditional mobile companion app. The iPhone becomes a fast remote. The iPad becomes a richer “AI shortcut keyboard” with larger programmable action tiles, lightweight context, and workflow launch affordances.
+This creates a new surface that is closer to a hardware control deck than a traditional mobile companion app. The iPhone becomes a fast remote. The iPad becomes a richer "AI shortcut keyboard" with larger programmable action tiles, lightweight context, and workflow launch affordances.
 
 An important simplification for V1 is coordinated layout control: when a device is already paired and connected, the Mac can explicitly request that the mobile device enter a companion layout such as `Shortcut Mode`. The mobile device then decides whether to follow that request based on its own preference. That makes the experience deterministic without making the phone or iPad subordinate by default.
 
@@ -20,7 +23,7 @@ An important simplification for V1 is coordinated layout control: when a device 
 Talkie already has three strong ingredients:
 
 - a Mac-side workflow engine and live workflow queue
-- iPhone-side pairing and “paired Mac” concepts
+- iPhone-side pairing and "paired Mac" concepts
 - iOS keyboard-style configurable shortcut surfaces
 
 Companion Mode combines those into a fourth surface:
@@ -28,7 +31,7 @@ Companion Mode combines those into a fourth surface:
 - not a memo browser
 - not a keyboard extension
 - not remote desktop
-- a low-latency command deck for “run this now on my Mac”
+- a low-latency command deck for "run this now on my Mac"
 
 That is especially compelling for users who are already operating from a desk, couch, kitchen, or meeting room and want fast access to AI-enabled actions without touching the Mac directly.
 
@@ -36,11 +39,11 @@ That is especially compelling for users who are already operating from a desk, c
 
 ### 1. Presence-gated, not location-gated
 
-The app should not infer “home” from geography. The surface appears only when the Mac is actually reachable on the current local network and advertising Companion availability.
+The app should not infer "home" from geography. The surface appears only when the Mac is actually reachable on the current local network and advertising Companion availability.
 
 ### 2. Opt-in and legible
 
-Companion Mode must be explicitly enabled on the Mac and on each apps/ios/iPadOS device. Users should always understand why the surface is visible or unavailable.
+Companion Mode must be explicitly enabled on the Mac and on each iOS/iPadOS device. Users should always understand why the surface is visible or unavailable.
 
 For the initial version, the simplest mental model is:
 
@@ -70,7 +73,7 @@ The Mac remains the executor for desktop-specific capabilities. The phone/tablet
 
 ## Core User Story
 
-“While my Mac is running Talkie on the same network, I can glance at my iPad or iPhone and see a live deck of actions. I can tap one to capture a screenshot, dictate a thought, or launch an AI workflow on the Mac without digging through menus.”
+"While my Mac is running Talkie on the same network, I can glance at my iPad or iPhone and see a live deck of actions. I can tap one to capture a screenshot, dictate a thought, or launch an AI workflow on the Mac without digging through menus."
 
 ## Primary Use Cases
 
@@ -79,11 +82,11 @@ The Mac remains the executor for desktop-specific capabilities. The phone/tablet
 Best for:
 
 - push-to-talk
-- “capture screen”
-- “run last workflow again”
-- “summarize latest memo”
-- “create reminder from latest transcript”
-- “start/stop ambient mode”
+- "capture screen"
+- "run last workflow again"
+- "summarize latest memo"
+- "create reminder from latest transcript"
+- "start/stop ambient mode"
 
 Recommended UI:
 
@@ -98,7 +101,7 @@ Best for:
 - a larger programmable action grid
 - workflow launch pads by theme or context
 - context-aware AI shortcuts
-- a “mission control” layout for running life/admin flows
+- a "mission control" layout for running life/admin flows
 
 Recommended UI:
 
@@ -168,7 +171,7 @@ Mac runtime controls:
 
 ### iPhone/iPad-side controls
 
-New apps/ios/iPadOS settings area:
+New iOS/iPadOS settings area:
 
 - `Enable Companion Mode`
 - `Discover Macs on local network`
@@ -203,7 +206,7 @@ This supports the workflow you described:
 6. Devices set to `Keep my own layout` ignore the request and stay where they are.
 7. When the mode is turned off, compliant devices fall back to their normal layout.
 
-This is better than trying to infer the “right” surface from context because it makes the state explicit, reversible, and user-controlled on both sides.
+This is better than trying to infer the "right" surface from context because it makes the state explicit, reversible, and user-controlled on both sides.
 
 ## UX Flow
 
@@ -380,7 +383,7 @@ Use local network discovery on the LAN.
 Recommended approach:
 
 - macOS advertises a Bonjour service such as `_talkie-companion._tcp`
-- apps/ios/iPadOS uses `Network.framework` browsing to discover available Macs
+- iOS/iPadOS uses `Network.framework` browsing to discover available Macs
 - discovery payload includes:
   - device name
   - stable device ID
@@ -390,15 +393,15 @@ Recommended approach:
 
 Why this fits Talkie:
 
-- it satisfies the “same network right now” requirement
+- it satisfies the "same network right now" requirement
 - it avoids inferring physical location
 - it keeps latency low
 - it gives a clean availability signal tied to the running app
 
 For V1, discovery should be subordinate to pairing and connection state, not a separate product concept. In other words, the user experience should feel like:
 
-- “my paired Mac is available”
-- not “a random Talkie service appeared on my network”
+- "my paired Mac is available"
+- not "a random Talkie service appeared on my network"
 
 ### Trust and authentication
 
@@ -472,7 +475,7 @@ This idea aligns well with current building blocks.
 ### Existing iOS assets we can reuse
 
 - `BridgeManager` for paired-Mac identity and trust concepts
-- `DirectMacRegistry` for “known Macs” modeling
+- `DirectMacRegistry` for "known Macs" modeling
 - `TalkieAppConfiguration` for file-backed iPhone settings
 - existing keyboard layout and active-layout persistence concepts in `TalkieAppSettings`
 - keyboard configurator concepts for tile/slot customization
@@ -487,7 +490,7 @@ This idea aligns well with current building blocks.
 
 ### Important architectural note
 
-The current cloud-backed live workflow queue is good for deferred or cross-network execution. Companion Mode should not depend on that queue for its baseline interaction model because the core promise here is “instant local control while the Mac is present.”
+The current cloud-backed live workflow queue is good for deferred or cross-network execution. Companion Mode should not depend on that queue for its baseline interaction model because the core promise here is "instant local control while the Mac is present."
 
 Cloud queueing remains a useful fallback for long-running workflow tracking, but not for the first tap latency.
 
@@ -544,7 +547,7 @@ Add a `companion` section to the macOS settings config with fields such as:
 
 ## Companion Deck Configuration
 
-The deck should not just mirror “all pinned workflows.” It needs first-class curation.
+The deck should not just mirror "all pinned workflows." It needs first-class curation.
 
 Recommended deck item types:
 
@@ -632,7 +635,7 @@ The companion should expose presence and actions, not broad ambient browsing by 
 
 ### 1. Too much overlap with Bridge
 
-If Companion Mode feels like “Bridge, but again,” it will create product confusion. We should position it as a presence-based local control surface, not as a generic connection mechanism.
+If Companion Mode feels like "Bridge, but again," it will create product confusion. We should position it as a presence-based local control surface, not as a generic connection mechanism.
 
 ### 2. Too much overlap with keyboard mode
 
@@ -685,7 +688,7 @@ Ship:
 
 Ship:
 
-- “capture + transform + route” one-tap actions
+- "capture + transform + route" one-tap actions
 - light parameter prompts
 - result cards and recent-run rail
 
@@ -705,7 +708,7 @@ If we want the smallest compelling version, build this:
 5. A live availability model that disappears when Talkie is not running on the Mac.
 6. A minimal editor that lets the user choose which pinned workflows appear.
 
-That gives us the distinctive “shortcut keyboard for your life” direction without overcommitting to a huge remote-control surface on day one.
+That gives us the distinctive "shortcut keyboard for your life" direction without overcommitting to a huge remote-control surface on day one.
 
 ## Proof Of Concept
 
@@ -777,7 +780,7 @@ Why:
 
 - iOS already knows about pinned Mac workflows
 - Talkie already has workflow execution concepts
-- it proves the “AI shortcut” story
+- it proves the "AI shortcut" story
 - it avoids solving live microphone routing immediately
 
 POC behavior:
@@ -813,7 +816,7 @@ Do not build these yet:
 - group/section customization
 - per-device layout catalogs
 - complex result views
-- “ask each time” prompts
+- "ask each time" prompts
 - companion-specific workflow curation UI
 - cross-network support
 - multiple simultaneous Macs
@@ -884,7 +887,7 @@ Fields:
 - `Companion Available`
 - `Shortcut Mode` toggle
 
-#### apps/ios/iPadOS
+#### iOS/iPadOS
 
 One minimal screen is enough:
 
@@ -902,7 +905,7 @@ No editor, no per-layout navigation, no extra onboarding flow beyond one toggle.
 2. Add one Mac runtime toggle:
    - `Shortcut Mode`
 3. Expose a tiny bridge payload for current requested surface.
-4. Make apps/ios/iPadOS switch to a fixed shortcut screen when conditions match.
+4. Make iOS/iPadOS switch to a fixed shortcut screen when conditions match.
 5. Wire one real action:
    - `Run pinned workflow`
 6. Optionally wire a second real action:
@@ -935,7 +938,7 @@ It still proves:
 
 It just avoids spending time on customization, discovery polish, and multi-surface richness before we know whether the basic interaction feels great.
 
-## Open Questions
+## Open questions
 
 - Should Companion Mode require existing bridge pairing, or allow same-account local approval without prior bridge setup?
 - Should iPad support a persistent landscape dashboard intended to stay open on a stand?
@@ -958,3 +961,8 @@ The strongest version of the idea is:
 - differentiated by form factor between iPhone and iPad
 
 That gives Talkie a distinctive multi-device interaction model: your Mac does the work, and your phone or iPad becomes the instantly available deck for steering it.
+
+## References
+
+- Companion shortcut board V1: `docs/specs/tlk-010-companion-shortcut-board.md`
+- Bridge API plan: `docs/specs/tlk-001-bridge-api-unification.md`

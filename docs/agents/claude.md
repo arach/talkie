@@ -119,7 +119,7 @@ Swift clients use canonical domains:
 
 The Vercel URLs (`*.vercel.app`) are implementation details - always use `useTalkie.com` subdomains in client code.
 
-See [docs/WEB_SERVICES.md](docs/WEB_SERVICES.md) for detailed architecture.
+See [docs/specs/web-services.md](docs/specs/web-services.md) for detailed architecture.
 
 ## Build & Dev Workflow
 

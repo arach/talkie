@@ -1,17 +1,20 @@
-# TalkieObject Refactor Plan
+# TLK-002 — Talkie Object Refactor
 
-## Vision
+**Status**: Draft
+**Owner**: TBD
+
+## Summary
 
 Every piece of content in Talkie is a **TalkieObject**. The `.type` (memo, dictation, note, segment, future types) determines what asset is primary and how it's presented. A single `TalkieView` renders any TalkieObject using a **SectionSlot** recipe — same sections, different emphasis, order, and chrome per type.
 
-## End State
+## End state
 
-### Model Layer
+### Model layer
 - `Recording` renamed to `TalkieObject`
 - `RecordingType` renamed to `TalkieObjectType`
 - Same GRDB table (`recordings`), same columns — only Swift naming changes
 
-### Layout System
+### Layout system
 ```
 TalkieObjectType → [SectionSlot] (the "recipe")
 
@@ -27,7 +30,7 @@ SectionChrome: .card, .inline, .fullBleed
 
 Each type declares its recipe. `TalkieView` loops the recipe. Sections self-gate (render nothing if no data).
 
-### View Structure
+### View structure
 ```
 Views/
   TalkieObject/
@@ -48,12 +51,12 @@ Views/
       DictationContextSection.swift
 ```
 
-### List Layer
+### List layer
 - `RecordingsScreen` + `NotesScreen` → `TalkieObjectsList`
 - Single list view with type filter (All / Memos / Dictations / Notes)
 - Uses `TalkieRowView` for all types
 
-## Recipes Per Type
+## Recipes per type
 
 ### Memo (audio-primary)
 ```
@@ -128,3 +131,7 @@ playback        .compact   .card
 - Consolidate JSON blob columns into `assetsJSON`
 - GRDB migration
 - Do when adding a new type motivates it
+
+## References
+
+- Bridge API unification: `docs/specs/tlk-001-bridge-api-unification.md`

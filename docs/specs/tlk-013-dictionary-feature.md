@@ -1,28 +1,37 @@
-# Dictionary & Vocabulary Feature Spec
+# TLK-013 — Dictionary & Vocabulary
 
-## Overview
+**Status**: Draft
+**Owner**: TBD
 
-Two related features for improving transcription quality through post-processing:
+## Summary
 
-1. **Personal Dictionary** - User-defined word replacements and technical terms
-2. **Filler Word Removal** - Automatic detection and removal of personal speech patterns
+Two related post-processing features for improving transcription quality:
 
----
+1. **Personal Dictionary** — user-defined word replacements and technical terms (e.g. `react → React`, `hippa → HIPAA`, `gonna → going to`).
+2. **Filler Word Removal** — automatic detection and removal of personal speech patterns (`um`, `uh`, `like`, `you know`).
 
-## Feature 1: Personal Dictionary
+Both run as passes between raw transcription and the final text that lands in the paste target, memo, or scratchpad.
 
-### Inspiration
-- [VoiceInk](https://github.com/Beingpax/VoiceInk) - "Train the AI to understand your unique terminology with custom words, industry terms, and smart text replacements"
-- [Wispr Flow](https://wisprflow.ai/) - Custom dictionary up to 800 words/phrases
+Inspiration: [VoiceInk](https://github.com/Beingpax/VoiceInk) ("Train the AI to understand your unique terminology with custom words, industry terms, and smart text replacements") and [Wispr Flow](https://wisprflow.ai/) (custom dictionary up to 800 words/phrases).
 
-### User Stories
+## User stories
 
-1. As a developer, I want "react" to always be capitalized as "React"
-2. As a medical professional, I want "HIPAA" spelled correctly, not "hippa"
-3. As a user, I want "gonna" replaced with "going to" automatically
-4. As a user, I want shorthand like "btw" expanded to "by the way"
+Dictionary:
 
-### Data Model
+- As a developer, I want "react" to always be capitalized as "React"
+- As a medical professional, I want "HIPAA" spelled correctly, not "hippa"
+- As a user, I want "gonna" replaced with "going to" automatically
+- As a user, I want shorthand like "btw" expanded to "by the way"
+
+Filler removal:
+
+- As a user, I want to identify my personal filler words from my history
+- As a user, I want automatic removal of "um", "uh", "like" from dictations
+- As a power user, I want to analyze my speech patterns over time
+
+## Feature 1 — Personal Dictionary
+
+### Data model
 
 ```swift
 struct DictionaryEntry: Codable, Identifiable {
@@ -46,11 +55,11 @@ struct DictionaryEntry: Codable, Identifiable {
 
 ### Storage
 
-- Store in UserDefaults or dedicated JSON file: `~/Library/Application Support/Talkie/dictionary.json`
-- Sync via CloudKit (optional)
+- UserDefaults or dedicated JSON file: `~/Library/Application Support/Talkie/dictionary.json`
+- CloudKit sync (optional)
 - Import/Export as JSON for sharing
 
-### Processing Pipeline
+### Processing pipeline
 
 ```
 [Raw Transcription]
@@ -58,7 +67,7 @@ struct DictionaryEntry: Codable, Identifiable {
     → [Final Text]
 ```
 
-**Performance Target**: < 5ms for 1000-word transcription with 500 dictionary entries
+**Performance target**: < 5 ms for 1000-word transcription with 500 dictionary entries.
 
 ### Algorithm
 
@@ -94,7 +103,7 @@ func applyDictionary(to text: String, entries: [DictionaryEntry]) -> String {
 }
 ```
 
-### UI: Settings → Dictionary
+### UI sketch — Settings → Dictionary
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -115,7 +124,7 @@ func applyDictionary(to text: String, entries: [DictionaryEntry]) -> String {
 └─────────────────────────────────────────────────────────┘
 ```
 
-### Add/Edit Entry Modal
+### Add/Edit entry modal
 
 ```
 ┌────────────────────────────────────────┐
@@ -134,25 +143,15 @@ func applyDictionary(to text: String, entries: [DictionaryEntry]) -> String {
 └────────────────────────────────────────┘
 ```
 
-### Integration Points
+### Integration points
 
-1. **TalkieAgent** - Apply after transcription, before paste
-2. **Talkie Memos** - Apply when transcription completes
-3. **ScratchPad** - Apply on dictation insert (optional)
+1. **TalkieAgent** — apply after transcription, before paste
+2. **Talkie Memos** — apply when transcription completes
+3. **ScratchPad** — apply on dictation insert (optional)
 
----
+## Feature 2 — Filler word detection & removal
 
-## Feature 2: Filler Word Detection & Removal
-
-### User Stories
-
-1. As a user, I want to identify my personal filler words from my history
-2. As a user, I want automatic removal of "um", "uh", "like" from dictations
-3. As a power user, I want to analyze my speech patterns over time
-
-### Phase 1: Static Filler List (Ship First)
-
-Common filler words (configurable):
+### Phase 1: Static filler list (ship first)
 
 ```swift
 struct FillerWordConfig {
@@ -171,9 +170,9 @@ struct FillerWordConfig {
 }
 ```
 
-### Phase 2: Personalized Filler Detection (LLM-Powered)
+### Phase 2: Personalized filler detection (LLM-powered)
 
-**Input**: Last 1000+ dictations from user history
+**Input**: last 1000+ dictations from user history.
 
 **Process**:
 1. Batch dictations into chunks (100 at a time)
@@ -181,7 +180,7 @@ struct FillerWordConfig {
 3. Identify candidate filler phrases
 4. Present to user for confirmation
 
-**Prompt for Local LLM**:
+**Prompt for local LLM**:
 
 ```
 Analyze these transcriptions from the same speaker. Identify repeated
@@ -204,7 +203,7 @@ Transcriptions:
 ]
 ```
 
-### UI: Filler Word Settings
+### UI sketch — Filler Word Settings
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -226,7 +225,7 @@ Transcriptions:
 └─────────────────────────────────────────────────────────┘
 ```
 
-### Algorithm: Smart Filler Removal
+### Algorithm — smart filler removal
 
 ```swift
 func removeFillers(from text: String, fillers: [String], mode: ProcessingMode) -> String {
@@ -250,43 +249,37 @@ func contextAwareRemoval(_ text: String, fillers: [String]) -> String {
 }
 ```
 
----
+## Implementation priority
 
-## Implementation Priority
-
-### MVP (Week 1)
-- [ ] DictionaryEntry model and storage
+### MVP (week 1)
+- [ ] `DictionaryEntry` model and storage
 - [ ] Basic dictionary UI in Settings
 - [ ] Apply dictionary to TalkieAgent transcriptions
 - [ ] Static filler word removal (regex)
 
-### V1.1 (Week 2)
+### V1.1 (week 2)
 - [ ] Dictionary import/export
 - [ ] Usage statistics
 - [ ] Context-aware filler removal
 
-### V1.2 (Future)
+### V1.2 (future)
 - [ ] LLM-powered filler detection from history
 - [ ] CloudKit sync for dictionary
 - [ ] Suggested entries based on common corrections
 
----
+## Files to create/modify
 
-## Files to Create/Modify
-
-### New Files
-- `apps/macos/Talkie/Models/DictionaryEntry.swift` - Data model
-- `apps/macos/Talkie/Services/DictionaryManager.swift` - Storage & processing
-- `apps/macos/Talkie/Views/Settings/DictionarySettings.swift` - Settings UI
-- `apps/macos/TalkieAgent/Services/TextPostProcessor.swift` - Apply to live dictation
+### New files
+- `apps/macos/Talkie/Models/DictionaryEntry.swift` — data model
+- `apps/macos/Talkie/Services/DictionaryManager.swift` — storage & processing
+- `apps/macos/Talkie/Views/Settings/DictionarySettings.swift` — settings UI
+- `apps/macos/TalkieAgent/Services/TextPostProcessor.swift` — apply to live dictation
 
 ### Modify
-- `apps/macos/TalkieAgent/Services/TranscriptionPipeline.swift` - Hook in post-processing
-- `apps/macos/Talkie/Views/Settings/SettingsView.swift` - Add dictionary section
+- `apps/macos/TalkieAgent/Services/TranscriptionPipeline.swift` — hook in post-processing
+- `apps/macos/Talkie/Views/Settings/SettingsView.swift` — add dictionary section
 
----
-
-## Open Questions
+## Open questions
 
 1. Should dictionary sync across devices via CloudKit?
 2. Max number of dictionary entries before performance degrades?
