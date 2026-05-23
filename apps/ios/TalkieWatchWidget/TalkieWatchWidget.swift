@@ -62,8 +62,10 @@ struct TalkieComplicationEntryView: View {
             circularView
         case .accessoryRectangular:
             rectangularView
+        #if os(watchOS)
         case .accessoryCorner:
             cornerView
+        #endif
         case .accessoryInline:
             inlineView
         default:
@@ -109,6 +111,7 @@ struct TalkieComplicationEntryView: View {
         .widgetURL(URL(string: "talkie://record/go"))
     }
 
+    #if os(watchOS)
     private var cornerView: some View {
         Image(systemName: "mic.fill")
             .font(.system(size: 20, weight: .bold))
@@ -118,11 +121,36 @@ struct TalkieComplicationEntryView: View {
             }
             .widgetURL(URL(string: "talkie://record/go"))
     }
+    #endif
 
     private var inlineView: some View {
         Label("Talkie", systemImage: "mic.fill")
             .widgetURL(URL(string: "talkie://record/go"))
     }
+}
+
+// MARK: - Supported families
+//
+// `accessoryCorner` is watchOS-only — the iOS slice of this extension
+// (built for the iPhone host) doesn't have it on `WidgetFamily`. Swift
+// rejects `#if` inside array literals, so the families are computed
+// here once and passed as a value.
+private enum ComplicationFamilies {
+    static let all: [WidgetFamily] = {
+        #if os(watchOS)
+        return [.accessoryCircular, .accessoryRectangular, .accessoryCorner, .accessoryInline]
+        #else
+        return [.accessoryCircular, .accessoryRectangular, .accessoryInline]
+        #endif
+    }()
+
+    static let preset: [WidgetFamily] = {
+        #if os(watchOS)
+        return [.accessoryCircular, .accessoryCorner]
+        #else
+        return [.accessoryCircular]
+        #endif
+    }()
 }
 
 // MARK: - Main Widget
@@ -137,12 +165,7 @@ struct TalkieComplication: Widget {
         }
         .configurationDisplayName("Talkie")
         .description("One-tap voice recording")
-        .supportedFamilies([
-            .accessoryCircular,
-            .accessoryRectangular,
-            .accessoryCorner,
-            .accessoryInline
-        ])
+        .supportedFamilies(ComplicationFamilies.all)
     }
 }
 
@@ -164,6 +187,7 @@ struct PresetComplicationView: View {
             }
             .widgetURL(URL(string: "talkie://record/\(preset.id)"))
 
+        #if os(watchOS)
         case .accessoryCorner:
             Image(systemName: preset.icon)
                 .font(.system(size: 18, weight: .bold))
@@ -172,6 +196,7 @@ struct PresetComplicationView: View {
                     Text(preset.name)
                 }
                 .widgetURL(URL(string: "talkie://record/\(preset.id)"))
+        #endif
 
         default:
             ZStack {
@@ -196,7 +221,7 @@ struct ThoughtComplication: Widget {
         }
         .configurationDisplayName("Thought")
         .description("Record a thought")
-        .supportedFamilies([.accessoryCircular, .accessoryCorner])
+        .supportedFamilies(ComplicationFamilies.preset)
     }
 }
 
@@ -210,7 +235,7 @@ struct MeetingComplication: Widget {
         }
         .configurationDisplayName("Meeting")
         .description("Record meeting notes")
-        .supportedFamilies([.accessoryCircular, .accessoryCorner])
+        .supportedFamilies(ComplicationFamilies.preset)
     }
 }
 
@@ -224,7 +249,7 @@ struct TaskComplication: Widget {
         }
         .configurationDisplayName("Task")
         .description("Record a task")
-        .supportedFamilies([.accessoryCircular, .accessoryCorner])
+        .supportedFamilies(ComplicationFamilies.preset)
     }
 }
 

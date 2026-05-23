@@ -12,6 +12,8 @@
 //
 
 import SwiftUI
+import TalkieMobileKit
+import UIKit
 
 enum ComposeState: Equatable {
     case idle           // doc shown, caret blinking, ready
@@ -28,8 +30,7 @@ struct ComposeNextView: View {
     @EnvironmentObject private var chrome: ShellChrome
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var compose: ComposeStore
-    @FocusState private var keyboardFieldFocused: Bool
-    @State private var keyboardBridgeText: String = ""
+    @State private var isTalkieKeyboardFocused = false
     @State private var showingNotesList = false
 
     init(documentID: String = "mock", store: ComposeStore? = nil) {
@@ -49,7 +50,7 @@ struct ComposeNextView: View {
         VStack(spacing: 0) {
             ComposeHeader(
                 backLabel: backTitle,
-                modelLabel: compose.modelLabel,
+                modelDisplay: compose.modelDisplay,
                 revisionPath: compose.revisionPath,
                 state: compose.state,
                 onBack: { AppShellRouter.shared.openHome() },
@@ -94,16 +95,25 @@ struct ComposeNextView: View {
                 onKeyboard: { compose.toggleKeyboard() }
             )
 
-            TextField("", text: $keyboardBridgeText)
-                .focused($keyboardFieldFocused)
-                .textInputAutocapitalization(.sentences)
-                .autocorrectionDisabled(false)
-                .frame(width: 1, height: 1)
-                .opacity(0.01)
-                .accessibilityHidden(true)
+            // Hidden bridge that hosts the in-app Talkie keyboard
+            // (HostedTalkieKeyboardView). Tap → keyboard slides up;
+            // its own collapse button slides it back down. Typed text
+            // flows into the document via `compose.applyKeyboardInsert`.
+            TalkieKeyboardBridge(
+                isFocused: $isTalkieKeyboardFocused,
+                onInsert: { fragment in
+                    compose.applyKeyboardInsert(fragment)
+                },
+                onDeleteBackward: {
+                    compose.applyKeyboardDelete()
+                }
+            )
+            .frame(width: 1, height: 1)
+            .opacity(0.01)
+            .accessibilityHidden(true)
         }
         .onChange(of: compose.keyboardFocusRequested) { _, _ in
-            keyboardFieldFocused = true
+            isTalkieKeyboardFocused = true
         }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .inactive || newPhase == .background else { return }
@@ -115,11 +125,151 @@ struct ComposeNextView: View {
     }
 }
 
+// MARK: - Talkie keyboard bridge
+
+/// Hidden UITextField whose `inputView` is `HostedTalkieKeyboardView`.
+/// When `isFocused` flips true the field becomes first responder, which
+/// slides the in-app Talkie keyboard up. The keyboard's own collapse
+/// button calls `resignFirstResponder` to slide it back down; we mirror
+/// that back into the binding via the editing-did-end target so the
+/// next button tap re-opens cleanly.
+///
+/// Text input doesn't accumulate in the field — every keystroke fans
+/// out through `onInsert` / `onDeleteBackward` so the owning store can
+/// drop the fragment at the document's tail. Keeping the field's own
+/// `text` empty avoids the system "selection moved" notifications that
+/// would otherwise spam the host.
+private struct TalkieKeyboardBridge: UIViewRepresentable {
+    @Binding var isFocused: Bool
+    let onInsert: (String) -> Void
+    let onDeleteBackward: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onInsert: onInsert, onDeleteBackward: onDeleteBackward)
+    }
+
+    func makeUIView(context: Context) -> _TalkieKeyboardBridgeField {
+        let field = _TalkieKeyboardBridgeField(frame: .zero)
+        field.isAccessibilityElement = false
+        field.autocorrectionType = .no
+        field.spellCheckingType = .no
+        field.autocapitalizationType = .none
+        field.smartDashesType = .no
+        field.smartQuotesType = .no
+        field.tintColor = .clear   // hide caret on the invisible bridge
+        field.inputAssistantItem.leadingBarButtonGroups = []
+        field.inputAssistantItem.trailingBarButtonGroups = []
+
+        let keyboard = HostedTalkieKeyboardView()
+        keyboard.preferredInitialLayout = .compact
+        keyboard.inputHost = context.coordinator
+        keyboard.onRequestCollapse = { [weak field] in
+            field?.resignFirstResponder()
+        }
+        keyboard.onLayoutHeightChange = { [weak field] in
+            field?.reloadInputViews()
+        }
+
+        field.inputView = keyboard
+        context.coordinator.field = field
+        context.coordinator.keyboard = keyboard
+
+        field.addTarget(
+            context.coordinator,
+            action: #selector(Coordinator.editingDidEnd),
+            for: .editingDidEnd
+        )
+
+        return field
+    }
+
+    func updateUIView(_ uiView: _TalkieKeyboardBridgeField, context: Context) {
+        context.coordinator.onInsert = onInsert
+        context.coordinator.onDeleteBackward = onDeleteBackward
+        context.coordinator.onResign = {
+            // Bounce the binding flip out of UIKit's responder callback
+            // so SwiftUI's update pass picks it up cleanly.
+            DispatchQueue.main.async { isFocused = false }
+        }
+
+        if isFocused {
+            if !uiView.isFirstResponder {
+                uiView.becomeFirstResponder()
+            }
+        } else if uiView.isFirstResponder {
+            uiView.resignFirstResponder()
+        }
+    }
+
+    static func dismantleUIView(_ uiView: _TalkieKeyboardBridgeField, coordinator: Coordinator) {
+        uiView.inputView = nil
+        if uiView.isFirstResponder {
+            uiView.resignFirstResponder()
+        }
+        coordinator.field = nil
+        coordinator.keyboard?.inputHost = nil
+        coordinator.keyboard?.onRequestCollapse = nil
+        coordinator.keyboard?.onLayoutHeightChange = nil
+        coordinator.keyboard = nil
+    }
+
+    @MainActor
+    final class Coordinator: NSObject, KeyboardInputHost {
+        var onInsert: (String) -> Void
+        var onDeleteBackward: () -> Void
+        var onResign: (() -> Void)?
+        weak var field: _TalkieKeyboardBridgeField?
+        weak var keyboard: HostedTalkieKeyboardView?
+
+        init(onInsert: @escaping (String) -> Void, onDeleteBackward: @escaping () -> Void) {
+            self.onInsert = onInsert
+            self.onDeleteBackward = onDeleteBackward
+        }
+
+        @objc func editingDidEnd() {
+            onResign?()
+        }
+
+        func performKeyboardAction(_ action: KeyboardAction) {
+            switch action {
+            case .insert(let fragment):
+                guard !fragment.isEmpty else { return }
+                onInsert(fragment)
+            case .deleteBackward:
+                onDeleteBackward()
+            case .enter:
+                onInsert("\n")
+            case .tab:
+                onInsert("\t")
+            case .escape, .dismissKeyboard:
+                field?.resignFirstResponder()
+            case .paste:
+                if let clipboard = UIPasteboard.general.string, !clipboard.isEmpty {
+                    onInsert(clipboard)
+                }
+            case .copy, .toggleShift, .toggleControl, .interrupt, .moveCursor:
+                break
+            }
+        }
+    }
+}
+
+/// Custom UITextField subclass that suppresses the iOS edit menu and
+/// keeps its own text buffer empty — input is routed through
+/// `KeyboardInputHost` rather than accumulated locally.
+fileprivate final class _TalkieKeyboardBridgeField: UITextField {
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        false
+    }
+
+    override var canBecomeFirstResponder: Bool { true }
+}
+
 // MARK: - Header
 
 private struct ComposeHeader: View {
     let backLabel: String
-    let modelLabel: String
+    let modelDisplay: ComposeStore.ModelDisplay
     let revisionPath: ComposeStore.RevisionPath
     let state: ComposeState
     let onBack: () -> Void
@@ -127,6 +277,14 @@ private struct ComposeHeader: View {
     let onShowNotes: () -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
+
+    private var accessibilityLabel: String {
+        if let standalone = modelDisplay.standaloneLabel { return standalone }
+        if let provider = modelDisplay.providerName, let model = modelDisplay.modelId {
+            return "\(provider) \(model)"
+        }
+        return "Choose model"
+    }
 
     var body: some View {
         // ZStack-anchored layout: the centered title is positioned by
@@ -159,13 +317,11 @@ private struct ComposeHeader: View {
                         Label("Open notes", systemImage: "list.bullet.rectangle")
                     }
                 } label: {
-                    HStack(spacing: 3) {
+                    HStack(spacing: 6) {
                         Image(systemName: revisionPath.systemImage)
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(theme.currentTheme.chrome.accent)
-                        Text(modelLabel)
-                            .talkieType(.listTitle)
-                            .foregroundStyle(theme.colors.textPrimary)
+                        ComposeModelGlyph(display: modelDisplay)
                         Image(systemName: "chevron.down")
                             .font(.system(size: 9, weight: .semibold))
                             .foregroundStyle(theme.colors.textTertiary)
@@ -174,7 +330,7 @@ private struct ComposeHeader: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Choose revision path · \(modelLabel)")
+                .accessibilityLabel("Choose revision path · \(accessibilityLabel)")
             }
 
             // Edge-anchored controls
@@ -219,6 +375,135 @@ private struct ComposeHeader: View {
                 .frame(height: theme.currentTheme.chrome.hairlineWidth),
             alignment: .bottom
         )
+    }
+}
+
+// MARK: - Model glyph
+
+/// Renders the active model as Family (serif) + Version (mono) + optional
+/// Variant tag — e.g. "GPT 5.5", "Llama 3.3 70B", "Sonnet 4.6". Replaces
+/// the flat "OpenAI · gpt-5.5" line so the header reads as a typographied
+/// model signature instead of a settings string.
+private struct ComposeModelGlyph: View {
+    let display: ComposeStore.ModelDisplay
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    private struct Parsed {
+        let family: String
+        let version: String?
+        let variant: String?
+    }
+
+    var body: some View {
+        if let standalone = display.standaloneLabel {
+            // "Mac Bridge" et al — render as a single serif headline,
+            // no version split.
+            Text(standalone)
+                .talkieType(.headline)
+                .foregroundStyle(theme.colors.textPrimary)
+                .lineLimit(1)
+        } else if let modelId = display.modelId {
+            let parsed = Self.parse(modelId)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(parsed.family)
+                    .talkieType(.headline)
+                    .foregroundStyle(theme.colors.textPrimary)
+                    .lineLimit(1)
+
+                if let version = parsed.version {
+                    Text(version)
+                        .font(Font.system(size: 12, weight: .regular, design: .monospaced).monospacedDigit())
+                        .tracking(0.4)
+                        .foregroundStyle(theme.colors.textSecondary)
+                        .baselineOffset(2)
+                }
+
+                if let variant = parsed.variant {
+                    Text(variant)
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(theme.colors.textTertiary)
+                        .baselineOffset(2)
+                }
+            }
+        } else {
+            // No credentials → quiet sans fallback. Avoids the loud
+            // "Direct API" string and invites the menu tap.
+            Text("Choose model")
+                .talkieType(.headlineSecondary)
+                .foregroundStyle(theme.colors.textTertiary)
+                .lineLimit(1)
+        }
+    }
+
+    /// Parse a provider model id ("gpt-5.5", "llama-3.3-70b-versatile",
+    /// "claude-sonnet-4-6") into a renderable family / version / variant
+    /// trio. Heuristic — not exhaustive; falls back to capitalized id.
+    private static func parse(_ modelId: String) -> Parsed {
+        let cleaned = modelId.lowercased()
+        // Drop noise tokens that read as marketing strings, not specs.
+        let noise: Set<String> = [
+            "chat", "latest", "instruct", "preview", "versatile", "turbo",
+        ]
+        let pieces = cleaned
+            .split(whereSeparator: { $0 == "-" || $0 == "_" })
+            .map(String.init)
+            .filter { !noise.contains($0) }
+
+        guard let head = pieces.first else {
+            return Parsed(family: modelId, version: nil, variant: nil)
+        }
+
+        // Claude's id puts the size tier ("sonnet") after "claude" — pull
+        // it forward so the headline reads as "Sonnet 4.6" rather than
+        // "Claude · sonnet · 4 · 6".
+        if head == "claude" {
+            let rest = Array(pieces.dropFirst())
+            let sizeToken = rest.first(where: { ["sonnet", "opus", "haiku"].contains($0) })
+            let numeric = rest.filter { $0.first?.isNumber == true }
+            let family = sizeToken.map { $0.capitalized } ?? "Claude"
+            let version = numeric.isEmpty ? nil : numeric.joined(separator: ".")
+            let variantTokens = rest.filter {
+                $0 != sizeToken
+                    && $0.first?.isNumber != true
+            }
+            let variant = variantTokens.isEmpty
+                ? nil
+                : variantTokens.map { $0.uppercased() }.joined(separator: " ")
+            return Parsed(family: family, version: version, variant: variant)
+        }
+
+        let family = familyName(head)
+
+        var version: String?
+        var variantTokens: [String] = []
+        for piece in pieces.dropFirst() {
+            if version == nil, piece.first?.isNumber == true {
+                version = piece
+            } else {
+                variantTokens.append(piece)
+            }
+        }
+        let variant = variantTokens.isEmpty
+            ? nil
+            : variantTokens.map { $0.uppercased() }.joined(separator: " ")
+        return Parsed(family: family, version: version, variant: variant)
+    }
+
+    private static func familyName(_ token: String) -> String {
+        switch token {
+        case "gpt": return "GPT"
+        case "llama": return "Llama"
+        case "mistral": return "Mistral"
+        case "mixtral": return "Mixtral"
+        case "gemini": return "Gemini"
+        case "qwen": return "Qwen"
+        case "sonnet": return "Sonnet"
+        case "opus": return "Opus"
+        case "haiku": return "Haiku"
+        case "claude": return "Claude"
+        default: return token.capitalized
+        }
     }
 }
 

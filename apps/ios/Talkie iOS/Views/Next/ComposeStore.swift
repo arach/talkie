@@ -38,6 +38,34 @@ final class ComposeStore: ObservableObject {
         }
     }
 
+    /// Structured form of `modelLabel` so the header can render the
+    /// family / version / variant with distinct typography instead of
+    /// a flat string. `providerName` and `modelId` are nil when no
+    /// credentials are configured for the Direct path.
+    struct ModelDisplay {
+        let providerName: String?
+        let modelId: String?
+        /// Special-case label that bypasses the model-id parser (e.g.
+        /// "Mac Bridge" — no version glyph to extract).
+        let standaloneLabel: String?
+    }
+
+    var modelDisplay: ModelDisplay {
+        switch revisionPath {
+        case .direct:
+            if let provider = TalkieAIProviderResolver.shared.configuredProvider() {
+                return ModelDisplay(
+                    providerName: provider.providerName,
+                    modelId: provider.modelId,
+                    standaloneLabel: nil
+                )
+            }
+            return ModelDisplay(providerName: nil, modelId: nil, standaloneLabel: nil)
+        case .mac:
+            return ModelDisplay(providerName: nil, modelId: nil, standaloneLabel: "Mac Bridge")
+        }
+    }
+
     private let context: NSManagedObjectContext
     private let inlineDictationController = InlineDictationController()
     private let voiceCommandController = InlineDictationController()
@@ -123,6 +151,46 @@ final class ComposeStore: ObservableObject {
 
     func toggleKeyboard() {
         keyboardFocusRequested.toggle()
+    }
+
+    /// Append a fragment of typed text from the in-app Talkie keyboard
+    /// to the active paragraph. Mirrors `appendDictation` semantics so
+    /// keystrokes land in the same place a transcript would.
+    func applyKeyboardInsert(_ fragment: String) {
+        guard !fragment.isEmpty else { return }
+        var paragraphs = document.paragraphs.isEmpty ? [""] : document.paragraphs
+        let index = paragraphs.indices.last ?? 0
+        if fragment == "\n" {
+            paragraphs.append("")
+        } else {
+            paragraphs[index].append(fragment)
+        }
+        document = Document(title: document.title, paragraphs: paragraphs)
+        persistDocument()
+    }
+
+    /// Delete-backward from the in-app Talkie keyboard. Pops the last
+    /// character of the last paragraph; collapses empty trailing
+    /// paragraphs into the previous one so cursor walks back across
+    /// the Enter key.
+    func applyKeyboardDelete() {
+        var paragraphs = document.paragraphs
+        guard !paragraphs.isEmpty else { return }
+        var last = paragraphs.removeLast()
+        if last.isEmpty {
+            if paragraphs.isEmpty {
+                paragraphs.append("")
+            } else {
+                last = paragraphs.removeLast()
+                if !last.isEmpty { last.removeLast() }
+                paragraphs.append(last)
+            }
+        } else {
+            last.removeLast()
+            paragraphs.append(last)
+        }
+        document = Document(title: document.title, paragraphs: paragraphs)
+        persistDocument()
     }
 
     func voiceCommandReceived(_ text: String) {
