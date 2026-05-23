@@ -3,7 +3,7 @@
 //  Talkie
 //
 //  Chord controller for the HUD bar capture menu.
-//  Same keyboard/mouse handling as CaptureRadialController, using CaptureHUDPanel.
+//  Owns the keyboard chord lifecycle and forwards into CaptureHUDPanel.
 //
 
 import AppKit
@@ -15,11 +15,7 @@ final class CaptureHUDController: CaptureChordController {
     private let panel = CaptureHUDPanel()
     private var globalMonitor: Any?
     private var localMonitor: Any?
-    private var mouseMonitor: Any?
-    private var localMouseMonitor: Any?
     private let timeoutSeconds: TimeInterval = 30
-    private let cursorGracePeriod: TimeInterval = 0.6
-    private let cursorPadding: CGFloat = 50
 
     func beginChord(initialMode: CaptureBarMode) async -> CaptureBarResult? {
         let allItems = TrayItem.allItems()
@@ -37,12 +33,23 @@ final class CaptureHUDController: CaptureChordController {
                 continuation.resume(returning: result)
             }
 
-            panel.show(
-                mode: initialMode,
-                showTrayOption: hasTrayItems,
-                showSelectionOption: hasSelectionItems,
-                trayCount: trayCount
+            // Sample wallpaper behind the HUD's future position so we can
+            // pick the trio scheme that contrasts with what's actually
+            // behind the panel (PEARL / SLATE / AMBER). One-shot at show.
+            let expectedFrame = CaptureHUDPanel.expectedFrame(
+                for: NSEvent.mouseLocation,
+                position: SettingsManager.shared.captureHUDPosition
             )
+            Task { @MainActor in
+                let palette = await WallpaperLuminanceSampler.samplePalette(for: expectedFrame)
+                panel.show(
+                    mode: initialMode,
+                    showTrayOption: hasTrayItems,
+                    showSelectionOption: hasSelectionItems,
+                    trayCount: trayCount,
+                    palette: palette
+                )
+            }
 
             var timeout = Task { @MainActor in
                 try? await Task.sleep(for: .seconds(self.timeoutSeconds))
@@ -67,8 +74,16 @@ final class CaptureHUDController: CaptureChordController {
                 }
             }
 
+            var shouldIgnoreOpeningKey = true
             let handleKey: (NSEvent) -> Void = { [weak self] event in
                 guard let self else { return }
+                if shouldIgnoreOpeningKey {
+                    shouldIgnoreOpeningKey = false
+                    if event.isOpeningCaptureChordKey(initialMode: initialMode) {
+                        resetTimeout()
+                        return
+                    }
+                }
                 let key = event.charactersIgnoringModifiers?.lowercased()
                 let currentMode = self.panel.state.mode
 
@@ -145,34 +160,6 @@ final class CaptureHUDController: CaptureChordController {
                 handleKey(event)
                 return nil
             }
-
-            var cursorDismissTask: Task<Void, Never>?
-
-            let trackMouse: (NSEvent) -> Void = { [weak self] _ in
-                guard let self, let panelFrame = self.panel.frame else { return }
-                let mouseLocation = NSEvent.mouseLocation
-                let zone = panelFrame.insetBy(dx: -self.cursorPadding, dy: -self.cursorPadding)
-
-                if zone.contains(mouseLocation) {
-                    cursorDismissTask?.cancel()
-                    cursorDismissTask = nil
-                } else if cursorDismissTask == nil {
-                    cursorDismissTask = Task { @MainActor in
-                        try? await Task.sleep(for: .seconds(self.cursorGracePeriod))
-                        guard !Task.isCancelled else { return }
-                        timeout.cancel()
-                        resume(nil)
-                    }
-                }
-            }
-
-            mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { event in
-                trackMouse(event)
-            }
-            localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .mouseMoved) { event in
-                trackMouse(event)
-                return event
-            }
         }
     }
 
@@ -187,14 +174,6 @@ final class CaptureHUDController: CaptureChordController {
         if let monitor = localMonitor {
             NSEvent.removeMonitor(monitor)
             localMonitor = nil
-        }
-        if let monitor = mouseMonitor {
-            NSEvent.removeMonitor(monitor)
-            mouseMonitor = nil
-        }
-        if let monitor = localMouseMonitor {
-            NSEvent.removeMonitor(monitor)
-            localMouseMonitor = nil
         }
     }
 }

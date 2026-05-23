@@ -830,7 +830,7 @@ struct CameraSettingsView: View {
         let registry = HotkeyRegistry.shared
         let captureActions: [HotkeyAction] = [
             .captureChord, .screenRecordChord,
-            .captureFullscreen, .captureRegion, .captureWindow, .openTrayViewer,
+            .captureFullscreen, .captureRegion, .captureWindow, .openTrayViewer, .openTrayShelf,
             .pasteLastScreenshot
         ]
 
@@ -894,26 +894,26 @@ struct CameraSettingsView: View {
             }
 
             HStack(spacing: Spacing.sm) {
-                ForEach(CaptureChordStyle.allCases, id: \.self) { style in
-                    chordStyleOption(style)
+                ForEach(CaptureHUDPosition.allCases, id: \.self) { position in
+                    hudPositionOption(position)
                 }
             }
         }
         .settingsSectionCard(padding: Spacing.md)
     }
 
-    private func chordStyleOption(_ style: CaptureChordStyle) -> some View {
-        let isSelected = settingsManager.captureChordStyle == style
+    private func hudPositionOption(_ position: CaptureHUDPosition) -> some View {
+        let isSelected = settingsManager.captureHUDPosition == position
 
         return Button(action: {
-            settingsManager.captureChordStyle = style
+            settingsManager.captureHUDPosition = position
         }) {
             VStack(spacing: Spacing.xs) {
-                Image(systemName: style.icon)
+                Image(systemName: position.icon)
                     .font(.system(size: 18))
                     .foregroundColor(isSelected ? Theme.current.foreground : Theme.current.foregroundSecondary)
 
-                Text(style.label)
+                Text(position.label)
                     .font(Theme.current.fontSMBold)
                     .foregroundColor(isSelected ? Theme.current.foreground : Theme.current.foregroundSecondary)
             }

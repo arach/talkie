@@ -23,23 +23,39 @@ protocol CaptureChordController {
     func beginChord(initialMode: CaptureBarMode) async -> CaptureBarResult?
 }
 
-// MARK: - Capture Chord Style
+extension NSEvent {
+    func isOpeningCaptureChordKey(initialMode: CaptureBarMode) -> Bool {
+        let expectedKey = switch initialMode {
+        case .screenshot: "s"
+        case .video: "r"
+        }
+        guard charactersIgnoringModifiers?.lowercased() == expectedKey else { return false }
 
-enum CaptureChordStyle: String, CaseIterable, Codable {
-    case radial
-    case hud
+        let hyperModifiers: NSEvent.ModifierFlags = [.command, .option, .control, .shift]
+        let activeModifiers = modifierFlags.intersection(.deviceIndependentFlagsMask)
+        return activeModifiers.isSuperset(of: hyperModifiers)
+    }
+}
+
+// MARK: - Capture HUD Position
+
+enum CaptureHUDPosition: String, CaseIterable, Codable {
+    /// Anchor the HUD near the mouse cursor (default — smart edge flip).
+    case cursor
+    /// Always pin the HUD to the top-center of the main display, near the notch / tray.
+    case fixed
 
     var label: String {
         switch self {
-        case .radial: return "Radial"
-        case .hud: return "HUD Bar"
+        case .cursor: return "Near cursor"
+        case .fixed:  return "Fixed (notch)"
         }
     }
 
     var icon: String {
         switch self {
-        case .radial: return "circle.grid.cross"
-        case .hud: return "rectangle.grid.2x2"
+        case .cursor: return "cursorarrow.rays"
+        case .fixed:  return "rectangle.tophalf.inset.filled"
         }
     }
 }

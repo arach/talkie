@@ -2,12 +2,21 @@
 //  CaptureHUDPanel.swift
 //  Talkie
 //
-//  Grid-style HUD bar for the capture chord (Hyper+S / Hyper+R).
-//  Alternative to the radial pie menu — a compact 3-row grid near the cursor.
+//  Top-center floating chord menu for Hyper+S / Hyper+R. Built against
+//  the SchemeTokens trio (PEARL · SLATE · AMBER) so the chrome adapts to
+//  the wallpaper behind the panel — the previous one-tone slab was
+//  always near-black, which sank into light desktops.
 //
-//  Row 1: Dimension presets + settings
-//  Row 2: A (Area), S (Screen), D (Window) — primary actions
-//  Row 3: Mode toggle, Camera (C), Save Selection (N), Tray (W)
+//  Anatomy (one rounded surface, hardware feel):
+//    ┌─ TOP STRIP (stripTop gradient) ─────────────────────────────┐
+//    │  ● Screenshot              ⎋ dismiss                         │
+//    ├─ GRATICULE FIELD (3 primary cells) ─────────────────────────┤
+//    │   [crop]        [display]      [window]                     │
+//    │    A              S              D                          │
+//    │  Region        Screen         Window                        │
+//    ├─ BOTTOM STRIP (stripBottom gradient) ───────────────────────┤
+//    │  ⇥ Mode    C Camera   N Save    F Paste    W Tray N         │
+//    └─────────────────────────────────────────────────────────────┘
 //
 
 import AppKit
@@ -18,27 +27,105 @@ import SwiftUI
 @MainActor
 final class CaptureHUDPanel {
 
+    static let panelWidth: CGFloat = 360
+    static let panelHeight: CGFloat = 156
+
     private var panel: NSPanel?
     let state = CaptureBarState()
+    private var palette: Palette = .amber
 
     var frame: NSRect? { panel?.frame }
 
-    func show(mode: CaptureBarMode, showTrayOption: Bool, showSelectionOption: Bool, trayCount: Int) {
+    /// Where the HUD will land for a given cursor position + position
+    /// preference. Pulled out so `WallpaperLuminanceSampler` can sample
+    /// the same rect we're about to draw into, with no chance of drift.
+    static func expectedFrame(
+        for mouseLocation: NSPoint,
+        position: CaptureHUDPosition
+    ) -> NSRect {
+        let cursorScreen = NSScreen.screens.first(where: { NSMouseInRect(mouseLocation, $0.frame, false) })
+        let screen: NSScreen? = {
+            switch position {
+            case .cursor: return cursorScreen ?? NSScreen.main ?? NSScreen.screens.first
+            case .fixed:  return NSScreen.main ?? cursorScreen ?? NSScreen.screens.first
+            }
+        }()
+        guard let screen else {
+            return NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight)
+        }
+        let margin: CGFloat = 8
+        let visibleFrame = screen.visibleFrame
+
+        switch position {
+        case .fixed:
+            // Top-center of the main display, hugging the notch / menu bar.
+            let x = clamp(
+                visibleFrame.midX - panelWidth / 2,
+                min: visibleFrame.minX + margin,
+                max: visibleFrame.maxX - panelWidth - margin
+            )
+            let y = visibleFrame.maxY - panelHeight - 18
+            return NSRect(x: x, y: y, width: panelWidth, height: panelHeight)
+
+        case .cursor:
+            // Anchor centered on the cursor's X. Y: prefer below the cursor;
+            // flip above if the cursor is near the bottom of the screen.
+            // Clamp both axes inside visibleFrame.
+            let gap: CGFloat = 24
+            let x = clamp(
+                mouseLocation.x - panelWidth / 2,
+                min: visibleFrame.minX + margin,
+                max: visibleFrame.maxX - panelWidth - margin
+            )
+            // In macOS coords (Y grows up), "below the cursor" means a smaller Y.
+            let below = mouseLocation.y - gap - panelHeight
+            let above = mouseLocation.y + gap
+            let preferBelow = mouseLocation.y > visibleFrame.midY
+            var y = preferBelow ? below : above
+            if y < visibleFrame.minY + margin {
+                y = above
+            }
+            if y + panelHeight > visibleFrame.maxY - margin {
+                y = below
+            }
+            y = clamp(
+                y,
+                min: visibleFrame.minY + margin,
+                max: visibleFrame.maxY - panelHeight - margin
+            )
+            return NSRect(x: x, y: y, width: panelWidth, height: panelHeight)
+        }
+    }
+
+    private static func clamp(_ v: CGFloat, min lo: CGFloat, max hi: CGFloat) -> CGFloat {
+        Swift.max(lo, Swift.min(v, hi))
+    }
+
+    func show(
+        mode: CaptureBarMode,
+        showTrayOption: Bool,
+        showSelectionOption: Bool,
+        trayCount: Int,
+        palette: Palette
+    ) {
         dismiss()
 
         state.mode = mode
         state.showTrayOption = showTrayOption
         state.showSelectionOption = showSelectionOption
         state.trayCount = trayCount
+        self.palette = palette
 
-        let hostingView = NSHostingView(rootView: CaptureHUDView(state: state))
+        let hostingView = NSHostingView(rootView: CaptureHUDView(state: state, palette: palette))
         hostingView.layer?.isOpaque = false
 
-        let width: CGFloat = 280
-        let height: CGFloat = 160
+        let origin = Self.expectedFrame(
+            for: NSEvent.mouseLocation,
+            position: SettingsManager.shared.captureHUDPosition
+        )
 
         let p = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: width, height: height),
+            contentRect: NSRect(origin: .zero, size: origin.size),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -55,21 +142,7 @@ final class CaptureHUDPanel {
         p.hidesOnDeactivate = false
         p.canHide = false
 
-        // Position near cursor, clamped to screen bounds
-        let mouseLocation = NSEvent.mouseLocation
-        guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouseLocation, $0.frame, false) })
-            ?? NSScreen.main
-            ?? NSScreen.screens.first else { return }
-
-        let offset: CGFloat = 20
-        var x = mouseLocation.x - width / 2
-        var y = mouseLocation.y - height / 2 - offset
-
-        let margin: CGFloat = 8
-        x = max(screen.frame.minX + margin, min(x, screen.frame.maxX - width - margin))
-        y = max(screen.frame.minY + margin, min(y, screen.frame.maxY - height - margin))
-
-        p.setFrameOrigin(NSPoint(x: x, y: y))
+        p.setFrameOrigin(origin.origin)
 
         p.alphaValue = 0
         p.orderFrontRegardless()
@@ -103,275 +176,308 @@ final class CaptureHUDPanel {
 
 private struct CaptureHUDView: View {
     @Bindable var state: CaptureBarState
+    let palette: Palette
 
     @State private var appeared = false
     @State private var hoveredKey: String?
+    @State private var pulseOn = false
 
+    private var tokens: SchemeTokens { palette.tokens }
     private var isVideo: Bool { state.mode == .video }
 
-    private var borderGradient: LinearGradient {
-        if isVideo {
-            return LinearGradient(
-                colors: [Color.red.opacity(0.4), Color.red.opacity(0.15)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        } else {
-            return LinearGradient(
-                colors: [Color.white.opacity(0.25), Color.white.opacity(0.06)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        }
+    /// Accent color: scheme-warm for screenshot, scheme-red for video.
+    private var accent: Color {
+        isVideo ? Color(hex: tokens.recHex) : Color(hex: tokens.accentHex)
     }
-
-    private var chromeBaseColor: Color {
-        isVideo
-            ? Color(red: 0.11, green: 0.045, blue: 0.055)
-            : Color(red: 0.055, green: 0.06, blue: 0.075)
+    private var accentGlow: Color {
+        (isVideo ? tokens.recGlow : tokens.accentGlow).color
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Row 1: Mode indicator + dimensions
-            row1DimensionsBar
-                .padding(.horizontal, 10)
-                .padding(.top, 10)
-                .padding(.bottom, 6)
-
-            // Divider
-            Rectangle()
-                .fill(Color.white.opacity(0.08))
-                .frame(height: 0.5)
-                .padding(.horizontal, 10)
-
-            // Row 2: Primary capture actions (A/S/D)
-            row2CaptureActions
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-
-            // Divider
-            Rectangle()
-                .fill(Color.white.opacity(0.08))
-                .frame(height: 0.5)
-                .padding(.horizontal, 10)
-
-            // Row 3: Mode toggle + extras
-            row3Extras
-                .padding(.horizontal, 10)
-                .padding(.top, 6)
-                .padding(.bottom, 10)
+            topStrip
+            primaryCells
+            bottomStrip
         }
-        .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(chromeBaseColor.opacity(0.96))
-
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.09),
-                                Color.white.opacity(0.02),
-                                Color.black.opacity(0.18)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                Color.white.opacity(isVideo ? 0.04 : 0.05),
-                                Color.clear
-                            ],
-                            center: .top,
-                            startRadius: 8,
-                            endRadius: 120
-                        )
-                    )
-
-                if isVideo {
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.red.opacity(0.06))
-                }
-            }
-            .shadow(color: .black.opacity(0.34), radius: 18, y: 8)
+        .frame(width: CaptureHUDPanel.panelWidth, height: CaptureHUDPanel.panelHeight)
+        .background(Color(hex: tokens.bgHex))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(tokens.edgeStrong.color, lineWidth: 0.5)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(borderGradient, lineWidth: 0.75)
+            // Inner bezel: highlight at top, shadow at bottom — reads as a
+            // milled hardware part rather than a flat sticker.
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .inset(by: 0.5)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [tokens.bezelHighlight.color, .clear, tokens.bezelShadow.color],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 1
+                )
+                .blendMode(.plusLighter)
+                .opacity(0.75)
         )
-        .scaleEffect(appeared ? 1 : 0.9)
+        .shadow(color: .black.opacity(0.32), radius: 18, y: 10)
+        .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
+        .scaleEffect(appeared ? 1 : 0.94)
         .opacity(appeared ? 1 : 0)
-        .animation(.easeInOut(duration: 0.2), value: state.mode)
-        .animation(.spring(response: 0.2, dampingFraction: 0.7), value: hoveredKey)
+        .animation(.easeInOut(duration: 0.18), value: state.mode)
+        .animation(.spring(response: 0.22, dampingFraction: 0.78), value: hoveredKey)
         .onAppear {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {
-                appeared = true
-            }
+            withAnimation(.spring(response: 0.24, dampingFraction: 0.78)) { appeared = true }
+            pulseOn = true
         }
     }
 
-    // MARK: - Row 1: Dimensions & Mode
+    // MARK: - Top strip
 
-    private var row1DimensionsBar: some View {
+    private var topStrip: some View {
         HStack(spacing: 6) {
-            // Mode indicator
-            HStack(spacing: 4) {
-                if isVideo {
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: 5, height: 5)
-                        .modifier(HUDPulseModifier())
-                    Text("Video")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(.red.opacity(0.8))
-                } else {
-                    Image(systemName: "camera.fill")
-                        .font(.system(size: 7))
-                        .foregroundColor(.white.opacity(0.5))
-                    Text("Screenshot")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(.white.opacity(0.5))
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // Accent dot — pulses in video mode.
+            Circle()
+                .fill(accent)
+                .frame(width: 7, height: 7)
+                .shadow(color: accentGlow, radius: 4)
+                .opacity(isVideo && pulseOn ? 0.35 : 1)
+                .animation(
+                    isVideo
+                        ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
+                        : .default,
+                    value: pulseOn
+                )
+
+            Text(isVideo ? "Video · Record" : "Screenshot")
+                .font(.system(size: 9.5, weight: .semibold))
+                .tracking(1.6)
+                .foregroundColor(accent)
+                .textCase(.uppercase)
+
+            Spacer(minLength: 0)
+
+            Text("⎋ dismiss")
+                .font(.system(size: 9, weight: .regular))
+                .tracking(1.6)
+                .foregroundColor(Color(hex: tokens.inkFaintHex))
+                .textCase(.uppercase)
         }
+        .padding(.horizontal, 12)
+        .frame(height: 26)
+        .background(gradient(from: tokens.stripTop))
+        .overlay(
+            Rectangle()
+                .fill(tokens.edge.color)
+                .frame(height: 0.5)
+                .frame(maxHeight: .infinity, alignment: .bottom)
+        )
     }
 
-    // MARK: - Row 2: Primary Capture Actions
+    // MARK: - Primary cells
 
-    private var row2CaptureActions: some View {
+    private var primaryCells: some View {
         HStack(spacing: 8) {
-            captureCell("A", label: "Region", icon: "crop")
-            captureCell("S", label: "Screen", icon: "display")
-            captureCell("D", label: "Window", icon: "macwindow")
+            primaryCell(key: "A", icon: .crop,    label: "Region")
+            primaryCell(key: "S", icon: .display, label: "Screen")
+            primaryCell(key: "D", icon: .window,  label: "Window")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background(graticule)
+    }
+
+    /// 12-pt graticule wash behind the primary cells. Instrument-bay
+    /// vocabulary — reads as a precision field, not a flat plate.
+    private var graticule: some View {
+        Canvas { context, size in
+            let step: CGFloat = 12
+            let color = GraphicsContext.Shading.color(tokens.graticule.color)
+            var x: CGFloat = 0
+            while x <= size.width {
+                let path = Path { p in
+                    p.move(to: CGPoint(x: x, y: 0))
+                    p.addLine(to: CGPoint(x: x, y: size.height))
+                }
+                context.stroke(path, with: color, lineWidth: 0.5)
+                x += step
+            }
+            var y: CGFloat = 0
+            while y <= size.height {
+                let path = Path { p in
+                    p.move(to: CGPoint(x: 0, y: y))
+                    p.addLine(to: CGPoint(x: size.width, y: y))
+                }
+                context.stroke(path, with: color, lineWidth: 0.5)
+                y += step
+            }
         }
     }
 
-    private func captureCell(_ key: String, label: String, icon: String) -> some View {
+    private func primaryCell(key: String, icon: HUDIcon, label: String) -> some View {
         let isHovered = hoveredKey == key
+        let iconColor: Color = isHovered ? accent : Color(hex: tokens.inkHex)
 
         return Button(action: { tapAction(key: key) }) {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white.opacity(isHovered ? 0.95 : 0.7))
-
-                HStack(spacing: 3) {
-                    Text(key)
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.95))
-                        .frame(width: 16, height: 16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(Color.white.opacity(0.1))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 3)
-                                        .strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5)
-                                )
-                        )
-                    Text(label)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.white.opacity(0.5))
-                }
+            VStack(spacing: 6) {
+                icon.view(color: iconColor, size: 18)
+                keyChip(key)
+                Text(label)
+                    .font(.system(size: 9.5, weight: .medium))
+                    .tracking(1.2)
+                    .foregroundColor(Color(hex: tokens.inkFaintHex))
+                    .textCase(.uppercase)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
+            .padding(.vertical, 8)
             .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isHovered ? Color.white.opacity(0.1) : Color.clear)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isHovered ? tokens.detailsBg.color : Color(hex: tokens.bgHex).opacity(0.5))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .strokeBorder(
-                        isVideo && isHovered
-                            ? Color.red.opacity(0.3)
-                            : Color.white.opacity(isHovered ? 0.15 : 0),
+                        isHovered ? tokens.edgeStrong.color : tokens.edge.color,
                         lineWidth: 0.5
                     )
             )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .inset(by: 0.5)
+                    .strokeBorder(tokens.bezelHighlight.color, lineWidth: 0.5)
+                    .blendMode(.plusLighter)
+                    .opacity(isHovered ? 0.9 : 0)
+            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .scaleEffect(isHovered ? 1.04 : 1.0)
         .onHover { inside in
             hoveredKey = inside ? key : (hoveredKey == key ? nil : hoveredKey)
             if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
         }
     }
 
-    // MARK: - Row 3: Mode + Extras
+    private func keyChip(_ key: String) -> some View {
+        Text(key)
+            .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+            .foregroundColor(Color(hex: tokens.inkHex))
+            .frame(minWidth: 18, minHeight: 16)
+            .padding(.horizontal, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(tokens.detailsBg.color)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(tokens.edgeStrong.color, lineWidth: 0.5)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .inset(by: 0.5)
+                    .strokeBorder(tokens.bezelHighlight.color, lineWidth: 0.5)
+                    .blendMode(.plusLighter)
+                    .opacity(0.6)
+            )
+    }
 
-    private var row3Extras: some View {
-        HStack(spacing: 8) {
-            // Tab / Mode toggle
-            extraCell("⇥", label: "Mode", color: .white) {
+    // MARK: - Bottom strip (extras)
+
+    private var bottomStrip: some View {
+        HStack(spacing: 2) {
+            extraCell(key: "⇥", label: "Mode", tone: .ink) {
                 state.mode = state.mode == .screenshot ? .video : .screenshot
                 state.onAction?(nil)
             }
-
-            // Camera toggle
-            extraCell("C", label: "Camera", color: .orange) {
+            extraCell(key: "C", label: "Camera", tone: .accent) {
                 state.onAction?(.toggleCamera)
             }
-
             if state.showSelectionOption {
-                extraCell("N", label: "Save Selection", color: .mint) {
+                extraCell(key: "N", label: "Save", tone: .ink) {
                     state.onAction?(.saveSelection)
                 }
             }
-
             if state.showTrayOption {
-                // Paste last
-                extraCell("F", label: "Paste", color: .green) {
+                extraCell(key: "F", label: "Paste", tone: .ink) {
                     state.onAction?(.pasteLastTray)
                 }
-
-                // Tray viewer
-                extraCell("W", label: "Tray (\(state.trayCount))", color: .cyan) {
+                extraCell(key: "W", label: "Tray \(state.trayCount)", tone: .ink) {
                     state.onAction?(.viewTray)
                 }
             }
         }
+        .padding(.horizontal, 8)
+        .frame(height: 28)
+        .background(gradient(from: tokens.stripBottom))
+        .overlay(
+            Rectangle()
+                .fill(tokens.edge.color)
+                .frame(height: 0.5)
+                .frame(maxHeight: .infinity, alignment: .top)
+        )
     }
 
-    private func extraCell(_ key: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
-        let isHovered = hoveredKey == "extra_\(key)"
+    private enum ExtraTone { case ink, accent }
+
+    private func extraCell(
+        key: String,
+        label: String,
+        tone: ExtraTone,
+        action: @escaping () -> Void
+    ) -> some View {
+        let id = "extra_\(key)"
+        let isHovered = hoveredKey == id
+        let keyColor: Color = tone == .accent ? accent : Color(hex: tokens.inkHex)
 
         return Button(action: action) {
             HStack(spacing: 4) {
                 Text(key)
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundColor(color)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
+                    .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                    .foregroundColor(keyColor)
+                    .frame(minWidth: 14, minHeight: 14)
+                    .padding(.horizontal, key.count > 1 ? 3 : 0)
                     .background(
-                        RoundedRectangle(cornerRadius: 3)
-                            .strokeBorder(color.opacity(0.3), lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .fill(tokens.detailsBg.color)
                     )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .strokeBorder(tokens.edgeStrong.color, lineWidth: 0.5)
+                    )
+
                 Text(label)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(color.opacity(0.6))
+                    .font(.system(size: 9, weight: .medium))
+                    .tracking(0.9)
+                    .foregroundColor(Color(hex: tokens.inkFaintHex))
+                    .textCase(.uppercase)
+                    .lineLimit(1)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 4)
             .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isHovered ? color.opacity(0.08) : Color.clear)
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(isHovered ? tokens.detailsBg.color : Color.clear)
             )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .scaleEffect(isHovered ? 1.04 : 1.0)
         .onHover { inside in
-            hoveredKey = inside ? "extra_\(key)" : (hoveredKey == "extra_\(key)" ? nil : hoveredKey)
+            hoveredKey = inside ? id : (hoveredKey == id ? nil : hoveredKey)
             if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
         }
     }
 
-    // MARK: - Actions
+    // MARK: - Helpers
+
+    private func gradient(from stops: [GradientStop]) -> LinearGradient {
+        LinearGradient(
+            stops: stops.map { Gradient.Stop(color: Color(hex: $0.hex), location: $0.location) },
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
 
     private func tapAction(key: String) {
         let mode: CaptureMode
@@ -389,15 +495,89 @@ private struct CaptureHUDView: View {
     }
 }
 
-// MARK: - Pulse Animation
+// MARK: - Icons
 
-private struct HUDPulseModifier: ViewModifier {
-    @State private var isPulsing = false
+private enum HUDIcon {
+    case crop, display, window
 
-    func body(content: Content) -> some View {
-        content
-            .opacity(isPulsing ? 0.4 : 1.0)
-            .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isPulsing)
-            .onAppear { isPulsing = true }
+    @ViewBuilder
+    func view(color: Color, size: CGFloat) -> some View {
+        switch self {
+        case .crop:    CropIcon(color: color).frame(width: size, height: size)
+        case .display: DisplayIcon(color: color).frame(width: size, height: size)
+        case .window:  WindowIcon(color: color).frame(width: size, height: size)
+        }
+    }
+}
+
+private struct CropIcon: View {
+    let color: Color
+    var body: some View {
+        Canvas { ctx, size in
+            // Outer L (top-left → bottom-right)
+            let s = size.width
+            let stroke = GraphicsContext.Shading.color(color)
+            let strokeFaint = GraphicsContext.Shading.color(color.opacity(0.5))
+
+            var p1 = Path()
+            p1.move(to: CGPoint(x: s * 0.28, y: 0.08 * s))
+            p1.addLine(to: CGPoint(x: s * 0.28, y: s * 0.72))
+            p1.addLine(to: CGPoint(x: s * 0.92, y: s * 0.72))
+            ctx.stroke(p1, with: stroke, lineWidth: 1.2)
+
+            var p2 = Path()
+            p2.move(to: CGPoint(x: s * 0.08, y: s * 0.28))
+            p2.addLine(to: CGPoint(x: s * 0.72, y: s * 0.28))
+            p2.addLine(to: CGPoint(x: s * 0.72, y: s * 0.92))
+            ctx.stroke(p2, with: strokeFaint, lineWidth: 1.2)
+        }
+    }
+}
+
+private struct DisplayIcon: View {
+    let color: Color
+    var body: some View {
+        Canvas { ctx, size in
+            let s = size.width
+            let stroke = GraphicsContext.Shading.color(color)
+            let rect = CGRect(x: 0.08 * s, y: 0.16 * s, width: 0.84 * s, height: 0.56 * s)
+            let body = Path(roundedRect: rect, cornerRadius: 1.4)
+            ctx.stroke(body, with: stroke, lineWidth: 1.2)
+
+            var stand = Path()
+            stand.move(to: CGPoint(x: 0.5 * s, y: 0.72 * s))
+            stand.addLine(to: CGPoint(x: 0.5 * s, y: 0.88 * s))
+            stand.move(to: CGPoint(x: 0.33 * s, y: 0.88 * s))
+            stand.addLine(to: CGPoint(x: 0.67 * s, y: 0.88 * s))
+            ctx.stroke(stand, with: stroke, lineWidth: 1.2)
+        }
+    }
+}
+
+private struct WindowIcon: View {
+    let color: Color
+    var body: some View {
+        Canvas { ctx, size in
+            let s = size.width
+            let stroke = GraphicsContext.Shading.color(color)
+            let rect = CGRect(x: 0.10 * s, y: 0.16 * s, width: 0.80 * s, height: 0.68 * s)
+            let body = Path(roundedRect: rect, cornerRadius: 1.6)
+            ctx.stroke(body, with: stroke, lineWidth: 1.2)
+
+            var titlebar = Path()
+            titlebar.move(to: CGPoint(x: 0.10 * s, y: 0.34 * s))
+            titlebar.addLine(to: CGPoint(x: 0.90 * s, y: 0.34 * s))
+            ctx.stroke(titlebar, with: stroke, lineWidth: 1.2)
+
+            let dotR: CGFloat = 0.04 * s
+            for (i, opacity) in [(0, 1.0), (1, 0.55), (2, 0.35)] {
+                let cx = 0.18 * s + CGFloat(i) * 0.10 * s
+                let dot = Path(ellipseIn: CGRect(
+                    x: cx - dotR, y: 0.25 * s - dotR,
+                    width: dotR * 2, height: dotR * 2
+                ))
+                ctx.fill(dot, with: GraphicsContext.Shading.color(color.opacity(opacity)))
+            }
+        }
     }
 }

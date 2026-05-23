@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private let ssRegionHotKey     = HotKeyManager(signature: "\(sig)S4", hotkeyID: 10)
     private let ssBufferHotKey     = HotKeyManager(signature: "\(sig)S5", hotkeyID: 11)
     private let ssWindowHotKey     = HotKeyManager(signature: "\(sig)S6", hotkeyID: 12)
+    private let ssShelfHotKey      = HotKeyManager(signature: "\(sig)ST", hotkeyID: 17)
     private let screenRecordHotKeyManager = HotKeyManager(signature: "\(sig)SR", hotkeyID: 13)  // Screen recording chord
     private let pasteChordHotKeyManager = HotKeyManager(signature: "\(sig)PV", hotkeyID: 15)  // Quick Paste chord
     private let pasteLastScreenshotHotKey = HotKeyManager(signature: "\(sig)PF", hotkeyID: 16)  // Paste last screenshot
@@ -784,9 +785,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         ) { [weak self] _ in
             Task { @MainActor in
                 if let controller = self?.agentController, controller.state == .listening {
-                    controller.captureScreenshot()
+                    let selectionPayload = self?.selectionCaptureUserInfo()
+                    DistributedNotificationCenter.default().postNotificationName(
+                        NSNotification.Name("to.talkie.app.screenshotChord"),
+                        object: nil,
+                        userInfo: selectionPayload,
+                        deliverImmediately: true
+                    )
                     if self?.captureHotPathLoggingEnabled == true {
-                        Log(.system).info("Screenshot chord: captured in Agent (recording active)")
+                        Log(.system).info("Screenshot chord: forwarded to Talkie picker (recording active)")
                     }
                 } else {
                     DistributedNotificationCenter.default().postNotificationName(
@@ -839,11 +846,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         log.info("Paste chord hotkey registered: keyCode=\(pasteChord.keyCode) modifiers=\(pasteChord.modifiers)")
 
         let cmdShift = UInt32(cmdKey | shiftKey)
+        let hyper = UInt32(cmdKey | optionKey | controlKey | shiftKey)
         let directShortcuts: [(HotKeyManager, String, UInt32, UInt32, String)] = [
             (ssFullscreenHotKey, "hotkeyCapture.fullscreen", 20, cmdShift, "fullscreen"),
             (ssRegionHotKey,     "hotkeyCapture.region",     21, cmdShift, "region"),
             (ssBufferHotKey,     "hotkeyCapture.trayViewer", 23, cmdShift, "viewTray"),
             (ssWindowHotKey,     "hotkeyCapture.window",     22, cmdShift, "window"),
+            (ssShelfHotKey,      "hotkeyCapture.trayShelf",  17, hyper,    "viewShelf"),
         ]
 
         for (manager, settingsKey, defaultKeyCode, defaultModifiers, mode) in directShortcuts {
@@ -852,34 +861,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 fallbackKeyCode: defaultKeyCode,
                 fallbackModifiers: defaultModifiers
             )
-            manager.registerHotKey(modifiers: config.modifiers, keyCode: config.keyCode) { [weak self] _ in
-                Task { @MainActor in
-                    if mode == "fullscreen",
-                       let controller = self?.agentController, controller.state == .listening {
-                        let selectionPayload = self?.selectionCaptureUserInfo()
-                        if let selectionPayload {
-                            DistributedNotificationCenter.default().postNotificationName(
-                                NSNotification.Name("to.talkie.app.captureSelectionContext"),
-                                object: nil,
-                                userInfo: selectionPayload,
-                                deliverImmediately: true
-                            )
-                        }
-                        controller.captureScreenshot()
-                        return
-                    }
-
-                    DistributedNotificationCenter.default().postNotificationName(
-                        NSNotification.Name("to.talkie.app.screenshotDirect"),
-                        object: mode,
-                        userInfo: nil,
-                        deliverImmediately: true
-                    )
-                }
+            if config.keyCode == captureChord.keyCode && config.modifiers == captureChord.modifiers {
+                log.info("Direct screenshot hotkey skipped because it matches the capture chord: \(settingsKey)")
+                continue
+            }
+            if config.keyCode == screenRecordChord.keyCode && config.modifiers == screenRecordChord.modifiers {
+                log.info("Direct screenshot hotkey skipped because it matches the screen record chord: \(settingsKey)")
+                continue
+            }
+            manager.registerHotKey(modifiers: config.modifiers, keyCode: config.keyCode) { _ in
+                DistributedNotificationCenter.default().postNotificationName(
+                    NSNotification.Name("to.talkie.app.screenshotDirect"),
+                    object: mode,
+                    userInfo: nil,
+                    deliverImmediately: true
+                )
             }
         }
 
-        log.info("Direct screenshot hotkeys registered from shared settings (defaults: ⌘⇧3/4/5/6)")
+        log.info("Direct screenshot hotkeys registered from shared settings (defaults: ⌘⇧3/4/5/6, Hyper+T shelf)")
 
         let pasteLastScreenshot = Self.loadHotkeyConfig(
             key: AgentSettingsKey.pasteLastScreenshotHotkey,
@@ -909,6 +909,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         ssRegionHotKey.unregisterAll()
         ssBufferHotKey.unregisterAll()
         ssWindowHotKey.unregisterAll()
+        ssShelfHotKey.unregisterAll()
         pasteLastScreenshotHotKey.unregisterAll()
     }
 
@@ -941,6 +942,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             managers.append(("⌘⇧4 Region", ssRegionHotKey))
             managers.append(("⌘⇧5 Tray", ssBufferHotKey))
             managers.append(("⌘⇧6 Window", ssWindowHotKey))
+            managers.append(("Hyper+T Shelf", ssShelfHotKey))
             managers.append(("⌘⇧V Paste Last Screenshot", pasteLastScreenshotHotKey))
         }
 

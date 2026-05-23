@@ -257,10 +257,7 @@ final class ConsoleTerminalCaptureController {
         Task {
             defer { isCapturingScreenshot = false }
 
-            let chord: any CaptureChordController =
-                SettingsManager.shared.captureChordStyle == .hud
-                    ? CaptureHUDController()
-                    : CaptureRadialController()
+            let chord: any CaptureChordController = CaptureHUDController()
 
             guard let result = await chord.beginChord(initialMode: .screenshot) else { return }
 

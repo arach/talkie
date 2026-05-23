@@ -52,6 +52,7 @@ const GROUPS: NavGroup[] = [
       { href: "/mac-notes", label: "Notes" },
       { href: "/mac-note-detail", label: "Note Detail" },
       { href: "/mac-capture-detail", label: "Capture Detail" },
+      { href: "/mac-capture-hud", label: "Capture HUD" },
       { href: "/mac-onboarding", label: "Onboarding" },
       { href: "/mac-recording-state", label: "Recording" },
       { href: "/mac-record-to-memo", label: "Rec → Memo" },

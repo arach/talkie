@@ -2013,8 +2013,12 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
             if screenshotTray.hasUnpinnedItems {
                 screenshotTray.clearUnpinned()
             }
+            let clipTray = ClipTray.shared
+            if clipTray.hasUnpinnedItems {
+                clipTray.clearUnpinned()
+            }
             DictationStore.shared.refresh()
-            logger.info("[Tray] Cleared consumed unpinned screenshot tray items for recording \(recordingId.prefix(8))")
+            logger.info("[Tray] Cleared consumed unpinned tray assets for recording \(recordingId.prefix(8))")
         }
     }
 
@@ -2085,6 +2089,124 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
 
             let json = RecordingScreenshot.toJSON(screenshots)
             logger.info("[Tray] Saved \(screenshots.count) screenshots to ScreenshotStorage, returning JSON to Agent")
+            reply(json)
+        }
+    }
+
+    /// Called by Agent BEFORE the DB store — saves unpinned tray screenshots and
+    /// screen clips to permanent storage and returns a TalkieObjectAssets JSON blob.
+    nonisolated public func fetchTrayAssets(
+        recordingId: String,
+        recordingStartedAt: TimeInterval,
+        reply: @escaping (String?) -> Void
+    ) {
+        Task { @MainActor in
+            if ScreenRecordingController.shared.state == .recording {
+                await ScreenRecordingController.shared.stopRecording()
+            }
+
+            guard let recordingUUID = UUID(uuidString: recordingId) else {
+                logger.warning("[Tray] fetchTrayAssets: invalid recording ID: \(recordingId)")
+                reply(nil)
+                return
+            }
+
+            let recordingStart = recordingStartedAt > 0
+                ? Date(timeIntervalSince1970: recordingStartedAt)
+                : Date()
+
+            func timestampMs(for capturedAt: Date) -> Int {
+                guard capturedAt >= recordingStart else { return 0 }
+                return max(0, Int(capturedAt.timeIntervalSince(recordingStart) * 1000))
+            }
+
+            let screenshotItems = ScreenshotTray.shared.unpinnedItems
+            let clipItems = ClipTray.shared.unpinnedItems
+            guard !screenshotItems.isEmpty || !clipItems.isEmpty else {
+                reply(nil)
+                return
+            }
+
+            logger.info("[Tray] Agent pulling \(screenshotItems.count) screenshots and \(clipItems.count) clips for recording \(recordingId.prefix(8))")
+
+            var screenshots: [RecordingScreenshot] = []
+            for (index, item) in screenshotItems.enumerated() {
+                let timestamp = timestampMs(for: item.capturedAt)
+                guard let data = item.loadData(),
+                      let savedURL = ScreenshotStorage.save(
+                        data,
+                        recordingId: recordingUUID,
+                        timestampMs: timestamp,
+                        index: index,
+                        capturedAt: item.capturedAt,
+                        captureMode: item.mode.rawValue,
+                        width: item.width,
+                        height: item.height,
+                        windowTitle: item.windowTitle,
+                        appName: item.appName,
+                        displayName: item.displayName
+                      ) else {
+                    logger.warning("[Tray] Failed to save tray screenshot to permanent storage")
+                    continue
+                }
+
+                screenshots.append(RecordingScreenshot(
+                    filename: savedURL.lastPathComponent,
+                    timestampMs: timestamp,
+                    captureMode: item.mode.rawValue,
+                    width: item.width,
+                    height: item.height,
+                    windowTitle: item.windowTitle,
+                    appName: item.appName,
+                    displayName: item.displayName
+                ))
+            }
+
+            var clips: [RecordingClip] = []
+            for (index, item) in clipItems.enumerated() {
+                let timestamp = timestampMs(for: item.capturedAt)
+                guard let savedURL = VideoClipStorage.save(
+                    item.tempURL,
+                    recordingId: recordingUUID,
+                    timestampMs: timestamp,
+                    index: index,
+                    capturedAt: item.capturedAt,
+                    captureMode: item.captureMode,
+                    width: item.width,
+                    height: item.height,
+                    windowTitle: item.windowTitle,
+                    appName: item.appName,
+                    displayName: item.displayName
+                ) else {
+                    logger.warning("[Tray] Failed to save tray clip to permanent storage")
+                    continue
+                }
+
+                clips.append(RecordingClip(
+                    filename: savedURL.lastPathComponent,
+                    timestampMs: timestamp,
+                    durationMs: item.durationMs,
+                    width: item.width,
+                    height: item.height,
+                    captureMode: item.captureMode,
+                    windowTitle: item.windowTitle,
+                    appName: item.appName,
+                    displayName: item.displayName
+                ))
+            }
+
+            let assets = TalkieObjectAssets(
+                screenshots: screenshots.isEmpty ? nil : screenshots,
+                clips: clips.isEmpty ? nil : clips
+            )
+
+            guard !assets.isEmpty, let json = assets.toJSON() else {
+                logger.warning("[Tray] No tray assets saved — returning nil")
+                reply(nil)
+                return
+            }
+
+            logger.info("[Tray] Saved \(screenshots.count) screenshots and \(clips.count) clips, returning assets JSON to Agent")
             reply(json)
         }
     }

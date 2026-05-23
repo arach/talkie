@@ -1196,7 +1196,7 @@ final class SettingsManager {
         selectedTTSVoiceId = declarativeSettings.audio.selectedTTSVoiceId
         selectedModel = declarativeSettings.models.selectedModel
         liveTranscriptionModelId = declarativeSettings.models.liveTranscriptionModelId
-        captureChordStyle = declarativeSettings.capture.chordStyle
+        captureHUDPosition = declarativeSettings.capture.hudPosition
         preferredScreenshotLauncher = declarativeSettings.capture.screenshotLauncher
         screenshotCapturePreset = declarativeSettings.capture.screenshotCapturePreset
         screenRecordingQualityPreset = declarativeSettings.capture.screenRecordingQuality
@@ -2242,30 +2242,30 @@ final class SettingsManager {
         }
     }
 
-    // MARK: - Capture Chord Style (UserDefaults - device-specific)
+    // MARK: - Capture HUD Position (UserDefaults - device-specific)
 
-    private let captureChordStyleKey = "captureChordStyle"
+    private let captureHUDPositionKey = "captureHUDPosition"
     private let screenshotCapturePresetKey = "screenshotCapturePreset"
     private let screenRecordingQualityKey = "screenRecordingQuality"
 
-    var captureChordStyle: CaptureChordStyle {
+    var captureHUDPosition: CaptureHUDPosition {
         get {
             _ = settingsConfigurationRevision
-            guard let raw = UserDefaults.standard.string(forKey: captureChordStyleKey),
-                  let style = CaptureChordStyle(rawValue: raw) else {
-                return TalkieSettingsConfigurationStore.shared.configuration.capture.chordStyle
+            guard let raw = UserDefaults.standard.string(forKey: captureHUDPositionKey),
+                  let position = CaptureHUDPosition(rawValue: raw) else {
+                return TalkieSettingsConfigurationStore.shared.configuration.capture.hudPosition
             }
-            return style
+            return position
         }
         set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: captureChordStyleKey)
-            persistDeclarativeSettings { $0.capture.chordStyle = newValue }
-            captureChordStyleRevision += 1
+            UserDefaults.standard.set(newValue.rawValue, forKey: captureHUDPositionKey)
+            persistDeclarativeSettings { $0.capture.hudPosition = newValue }
+            captureHUDPositionRevision += 1
         }
     }
 
     /// Revision counter so @Observable tracks the UserDefaults-backed property above.
-    private(set) var captureChordStyleRevision: Int = 0
+    private(set) var captureHUDPositionRevision: Int = 0
 
     var screenshotCapturePreset: ScreenshotCapturePreset {
         get {
@@ -2279,7 +2279,7 @@ final class SettingsManager {
         set {
             UserDefaults.standard.set(newValue.rawValue, forKey: screenshotCapturePresetKey)
             persistDeclarativeSettings { $0.capture.screenshotCapturePreset = newValue }
-            captureChordStyleRevision += 1
+            captureHUDPositionRevision += 1
         }
     }
 
@@ -2295,7 +2295,7 @@ final class SettingsManager {
         set {
             UserDefaults.standard.set(newValue.rawValue, forKey: screenRecordingQualityKey)
             persistDeclarativeSettings { $0.capture.screenRecordingQuality = newValue }
-            captureChordStyleRevision += 1
+            captureHUDPositionRevision += 1
         }
     }
 

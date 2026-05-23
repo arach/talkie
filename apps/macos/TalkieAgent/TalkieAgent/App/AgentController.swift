@@ -315,15 +315,118 @@ final class AgentController: ObservableObject {
         to recording: inout LiveRecording,
         segmentsJSON: String? = nil,
         screenshotsJSON: String? = nil,
+        clipsJSON: String? = nil,
         captureSessionId: UUID?
     ) async -> Set<UUID> {
         let textProvenance = await currentLiveSidecarProvenance(for: captureSessionId)
         recording.setAssets(
             segmentsJSON: segmentsJSON,
             screenshotsJSON: screenshotsJSON,
+            clipsJSON: clipsJSON,
             textProvenance: textProvenance
         )
         return Set(textProvenance?.map(\.id) ?? [])
+    }
+
+    private nonisolated static func mergedScreenshotsJSON(
+        baseJSON: String?,
+        trayAssetsJSON: String?
+    ) -> String? {
+        var screenshots = RecordingScreenshot.fromArray(json: baseJSON)
+        if let trayAssets = TalkieObjectAssets.from(json: trayAssetsJSON) {
+            screenshots.append(contentsOf: trayAssets.screenshots ?? [])
+        }
+        return screenshots.isEmpty ? nil : RecordingScreenshot.toJSON(screenshots)
+    }
+
+    /// Critical-path output of the screenshot merge + interleave.
+    /// `text` is the dictation transcript with `[N]` markers + footnote URLs
+    /// inline if screenshots were captured during recording; otherwise it
+    /// equals the plain transcript. Both stored `text` and paste destination
+    /// use this value.
+    struct PreparedDictation: Sendable {
+        let text: String
+        let mergedScreenshotsJSON: String?
+        let clipsJSON: String?
+    }
+
+    /// Runs on the critical path before paste. Fetches tray assets via XPC,
+    /// merges screenshots from Talkie's tray with the agent's local set, and
+    /// interleaves `[N]` markers + footnote URLs into the transcript text.
+    /// The resulting `text` is what gets pasted into the foreground app AND
+    /// stored as the dictation's transcription. Plain transcript remains in
+    /// `assetsJSON.segments.text` if anything needs the screenshot-free version.
+    private nonisolated static func prepareMergedDictation(
+        plainText: String,
+        localScreenshotsJSON: String?,
+        captureSessionId: UUID?,
+        recordingStartedAt: Date?,
+        timed: TimedTranscription?
+    ) async -> PreparedDictation {
+        let trayAssetsJSON: String?
+        if let recId = captureSessionId {
+            trayAssetsJSON = await TalkieAgentXPCService.shared.fetchTrayAssets(
+                recordingId: recId,
+                recordingStartedAt: recordingStartedAt
+            )
+        } else {
+            trayAssetsJSON = nil
+        }
+        let mergedScreenshotsJSON = mergedScreenshotsJSON(
+            baseJSON: localScreenshotsJSON,
+            trayAssetsJSON: trayAssetsJSON
+        )
+        let clipsJSON = clipsJSON(from: trayAssetsJSON)
+
+        let screenshots = RecordingScreenshot.fromArray(json: mergedScreenshotsJSON)
+        let text: String
+        if let timed, !screenshots.isEmpty {
+            text = ScreenshotInserter.interleave(
+                timedTranscription: timed,
+                screenshots: screenshots,
+                screenshotDirectory: ScreenshotStorage.screenshotsDirectory
+            ).markdown
+        } else {
+            text = plainText
+        }
+
+        return PreparedDictation(
+            text: text,
+            mergedScreenshotsJSON: mergedScreenshotsJSON,
+            clipsJSON: clipsJSON
+        )
+    }
+
+    /// Stores a live-dictation recording. Callers pass pre-merged screenshot
+    /// data from `prepareMergedDictation` so the tray fetch isn't repeated.
+    private nonisolated static func persistDictationRecording(
+        utterance: LiveDictation,
+        segmentsJSON: String?,
+        mergedScreenshotsJSON: String?,
+        clipsJSON: String?,
+        captureSessionId: UUID?
+    ) async -> UUID? {
+        var recording = LiveRecording(from: utterance)
+        let includedProvenanceIDs = await applyRecordingAssets(
+            to: &recording,
+            segmentsJSON: segmentsJSON,
+            screenshotsJSON: mergedScreenshotsJSON,
+            clipsJSON: clipsJSON,
+            captureSessionId: captureSessionId
+        )
+        return await storeRecording(
+            recording,
+            captureSessionId: captureSessionId,
+            includedProvenanceIDs: includedProvenanceIDs
+        )
+    }
+
+    private nonisolated static func clipsJSON(from trayAssetsJSON: String?) -> String? {
+        guard let clips = TalkieObjectAssets.from(json: trayAssetsJSON)?.clips,
+              !clips.isEmpty else {
+            return nil
+        }
+        return RecordingClip.toJSON(clips)
     }
 
     @discardableResult
@@ -1042,73 +1145,6 @@ final class AgentController: ObservableObject {
         }
     }
 
-    // MARK: - Screenshot Capture
-
-    /// Capture a fullscreen screenshot during recording
-    /// Called via Hyper+S hotkey — only acts while recording
-    func captureScreenshot() {
-        guard state == .listening else {
-            log.debug("Screenshot ignored — not recording (state=\(state.rawValue))")
-            return
-        }
-        guard let startTime = recordingStartTime, let recId = recordingId else {
-            log.warning("Screenshot ignored — missing recording state")
-            return
-        }
-
-        let timestampMs = Int(Date().timeIntervalSince(startTime) * 1000)
-        log.info("Capturing screenshot at \(timestampMs)ms")
-
-        Task {
-            guard let image = await ScreenshotService.shared.captureMainDisplay() else {
-                log.warning("Screenshot capture failed")
-                ToastOverlayController.shared.show(
-                    ToastMessage(icon: "camera", text: "Screenshot failed", detail: nil, actionLabel: nil, action: nil),
-                    duration: 1.5
-                )
-                return
-            }
-
-            guard let pngData = await ScreenshotService.shared.encodeAsPNG(image) else {
-                log.warning("Screenshot PNG encoding failed")
-                return
-            }
-
-            let width = Int(image.size.width)
-            let height = Int(image.size.height)
-            guard let savedURL = ScreenshotStorage.save(
-                pngData,
-                recordingId: recId,
-                timestampMs: timestampMs,
-                captureMode: "fullscreen",
-                width: width,
-                height: height
-            ) else {
-                log.error("Screenshot save failed")
-                return
-            }
-
-            let screenshot = RecordingScreenshot(
-                filename: savedURL.lastPathComponent,
-                timestampMs: timestampMs,
-                captureMode: "fullscreen",
-                width: width,
-                height: height
-            )
-            capturedScreenshots.append(screenshot)
-
-            let count = capturedScreenshots.count
-            log.info("Screenshot \(count) captured: \(savedURL.lastPathComponent) (\(width)x\(height))")
-            AppLogger.shared.log(.system, "Screenshot captured", detail: "#\(count) at \(timestampMs)ms")
-
-            // Brief toast feedback
-            ToastOverlayController.shared.show(
-                ToastMessage(icon: "camera.fill", text: "Screenshot \(count)", detail: nil, actionLabel: nil, action: nil),
-                duration: 1.0
-            )
-        }
-    }
-
     private func start(hotkeyTimestamp: HotKeyTimestamp? = nil, allowDelayedStart: Bool = true) async {
         guard await waitForAudioInputRecoveryIfNeeded(allowDelay: allowDelayedStart) else { return }
         guard state == .idle else { return }
@@ -1751,19 +1787,18 @@ final class AgentController: ObservableObject {
             // Track milestone
             ProcessingMilestones.shared.markRouting()
 
-            // Interleave screenshots with transcript if both are available
-            let notesMarkdown: String? = if !capturedScreenshots.isEmpty, let timed = timedTranscription {
-                ScreenshotInserter.interleave(
-                    timedTranscription: timed,
-                    screenshots: capturedScreenshots,
-                    screenshotDirectory: ScreenshotStorage.screenshotsDirectory
-                ).markdown
-            } else {
-                nil
-            }
-
-            // Use interleaved text (with screenshot refs) for pasting when available
-            let textToPaste = notesMarkdown ?? result.text
+            // Merge tray + agent-local screenshots and interleave into the
+            // transcript on the critical path so paste destinations AND the
+            // stored transcription both carry `[N]` markers + footnote URLs.
+            // Costs one XPC roundtrip (~10–50ms) before paste.
+            let prepared = await Self.prepareMergedDictation(
+                plainText: result.text,
+                localScreenshotsJSON: RecordingScreenshot.toJSON(capturedScreenshots),
+                captureSessionId: captureSessionId,
+                recordingStartedAt: recordingStartTime,
+                timed: timedTranscription
+            )
+            let textToPaste = prepared.text
 
             // Save as Memo mode: Shift+A to auto-promote to permanent memo
             if case .saveMemo = intent {
@@ -1787,7 +1822,7 @@ final class AgentController: ObservableObject {
                 // Store in GRDB first
                 logTiming("Creating LiveDictation for memo")
                 let dictation = LiveDictation(
-                    text: result.text,
+                    text: prepared.text,
                     mode: "memo",  // Mark as memo mode
                     appBundleID: metadata.activeAppBundleID,
                     appName: metadata.activeAppName,
@@ -1804,18 +1839,12 @@ final class AgentController: ObservableObject {
                     pasteTimestamp: Date()  // Mark as delivered
                 )
 
-                var recording = LiveRecording(from: dictation)
-                let includedProvenanceIDs = await Self.applyRecordingAssets(
-                    to: &recording,
+                if let id = await Self.persistDictationRecording(
+                    utterance: dictation,
                     segmentsJSON: segmentsJSON,
-                    screenshotsJSON: RecordingScreenshot.toJSON(capturedScreenshots),
+                    mergedScreenshotsJSON: prepared.mergedScreenshotsJSON,
+                    clipsJSON: prepared.clipsJSON,
                     captureSessionId: captureSessionId
-                )
-                recording.notes = notesMarkdown
-                if let id = await Self.storeRecording(
-                    recording,
-                    captureSessionId: captureSessionId,
-                    includedProvenanceIDs: includedProvenanceIDs
                 ) {
                     logTiming("UnifiedDatabase stored")
 
@@ -1891,7 +1920,7 @@ final class AgentController: ObservableObject {
                     interstitialMetadata["sourceAppBundleID"] = sourceAppBundleID
                 }
                 let utterance = LiveDictation(
-                    text: result.text,
+                    text: prepared.text,
                     mode: "interstitial",
                     appBundleID: metadata.activeAppBundleID,
                     appName: metadata.activeAppName,
@@ -1908,18 +1937,12 @@ final class AgentController: ObservableObject {
                     pasteTimestamp: nil  // Not pasted yet → interstitial will handle
                 )
 
-                var recording = LiveRecording(from: utterance)
-                let includedProvenanceIDs = await Self.applyRecordingAssets(
-                    to: &recording,
+                if let id = await Self.persistDictationRecording(
+                    utterance: utterance,
                     segmentsJSON: segmentsJSON,
-                    screenshotsJSON: RecordingScreenshot.toJSON(capturedScreenshots),
+                    mergedScreenshotsJSON: prepared.mergedScreenshotsJSON,
+                    clipsJSON: prepared.clipsJSON,
                     captureSessionId: captureSessionId
-                )
-                recording.notes = notesMarkdown
-                if let id = await Self.storeRecording(
-                    recording,
-                    captureSessionId: captureSessionId,
-                    includedProvenanceIDs: includedProvenanceIDs
                 ) {
                     logTiming("UnifiedDatabase stored")
 
@@ -2023,40 +2046,21 @@ final class AgentController: ObservableObject {
                     let capturedMetadata = metadata
                     let capturedContext = self.capturedContext
                     let capturedStartApp = self.startApp
-                    let finalText = refinedText ?? result.text
+                    let finalText = refinedText ?? textToPaste
                     let currentTrace = trace
                     let returnToOrigin = settings.returnToOriginAfterPaste
                     let routingModeStr = settings.routingMode == .paste ? "paste" : "clipboard"
-                    let screenshotsJSON = RecordingScreenshot.toJSON(self.capturedScreenshots)
-                    let notesForPaste = notesMarkdown
+                    let capturedMergedScreenshotsJSON = prepared.mergedScreenshotsJSON
+                    let capturedClipsJSON = prepared.clipsJSON
                     let capturedRecordingId = self.recordingId
 
-                    Task.detached { [transcriptionMs, wordCount, externalRefId, audioFilename, durationSeconds, traceSuffix, totalMs, appMs, segmentsJSON, screenshotsJSON, notesForPaste, capturedRecordingId, metadataDict] in
+                    Task.detached { [transcriptionMs, wordCount, externalRefId, audioFilename, durationSeconds, traceSuffix, totalMs, appMs, segmentsJSON, capturedMergedScreenshotsJSON, capturedClipsJSON, capturedRecordingId, metadataDict] in
                         await MainActor.run { SoundManager.shared.playPasted() }
 
                         if returnToOrigin,
                            let originApp = capturedStartApp,
                            capturedMetadata.contextChanged {
                             await MainActor.run { ContextCapture.activateApp(originApp) }
-                        }
-
-                        var mergedScreenshotsJSON = screenshotsJSON
-                        if let recId = capturedRecordingId {
-                            if let trayJSON = await TalkieAgentXPCService.shared.fetchTrayScreenshots(recordingId: recId) {
-                                if let base = screenshotsJSON,
-                                   let baseData = base.data(using: .utf8),
-                                   let trayData = trayJSON.data(using: .utf8),
-                                   var baseArray = try? JSONSerialization.jsonObject(with: baseData) as? [[String: Any]],
-                                   let trayArray = try? JSONSerialization.jsonObject(with: trayData) as? [[String: Any]] {
-                                    baseArray.append(contentsOf: trayArray)
-                                    if let merged = try? JSONSerialization.data(withJSONObject: baseArray),
-                                       let mergedStr = String(data: merged, encoding: .utf8) {
-                                        mergedScreenshotsJSON = mergedStr
-                                    }
-                                } else {
-                                    mergedScreenshotsJSON = trayJSON
-                                }
-                            }
                         }
 
                         let utterance = LiveDictation(
@@ -2077,18 +2081,12 @@ final class AgentController: ObservableObject {
                             pasteTimestamp: Date()
                         )
 
-                        var recording = LiveRecording(from: utterance)
-                        let includedProvenanceIDs = await Self.applyRecordingAssets(
-                            to: &recording,
+                        if let id = await Self.persistDictationRecording(
+                            utterance: utterance,
                             segmentsJSON: segmentsJSON,
-                            screenshotsJSON: mergedScreenshotsJSON,
+                            mergedScreenshotsJSON: capturedMergedScreenshotsJSON,
+                            clipsJSON: capturedClipsJSON,
                             captureSessionId: capturedRecordingId
-                        )
-                        recording.notes = notesForPaste
-                        if let id = await Self.storeRecording(
-                            recording,
-                            captureSessionId: capturedRecordingId,
-                            includedProvenanceIDs: includedProvenanceIDs
                         ), var baseline = capturedContext {
                             if let recId = capturedRecordingId {
                                 await TalkieAgentXPCService.shared.notifyDictationPasted(recordingId: recId)
@@ -2148,7 +2146,7 @@ final class AgentController: ObservableObject {
                     interstitialMetadata["contextRuleName"] = contextRule.name
 
                     let utterance = LiveDictation(
-                        text: result.text,
+                        text: prepared.text,
                         mode: "interstitial",
                         appBundleID: metadata.activeAppBundleID,
                         appName: metadata.activeAppName,
@@ -2165,18 +2163,12 @@ final class AgentController: ObservableObject {
                         pasteTimestamp: nil
                     )
 
-                    var recording = LiveRecording(from: utterance)
-                    let includedProvenanceIDs = await Self.applyRecordingAssets(
-                        to: &recording,
+                    if let id = await Self.persistDictationRecording(
+                        utterance: utterance,
                         segmentsJSON: segmentsJSON,
-                        screenshotsJSON: RecordingScreenshot.toJSON(capturedScreenshots),
+                        mergedScreenshotsJSON: prepared.mergedScreenshotsJSON,
+                        clipsJSON: prepared.clipsJSON,
                         captureSessionId: captureSessionId
-                    )
-                    recording.notes = notesMarkdown
-                    if let id = await Self.storeRecording(
-                        recording,
-                        captureSessionId: captureSessionId,
-                        includedProvenanceIDs: includedProvenanceIDs
                     ) {
                         TalkieAgentXPCService.shared.notifyDictationAdded()
                         TranscriptionRetryManager.shared.refreshPendingCount()
@@ -2236,11 +2228,11 @@ final class AgentController: ObservableObject {
                     let capturedStartApp = self.startApp
                     let currentTrace = trace
                     let returnToOrigin = settings.returnToOriginAfterPaste
-                    let screenshotsJSON = RecordingScreenshot.toJSON(self.capturedScreenshots)
-                    let notesForPaste = notesMarkdown
+                    let capturedMergedScreenshotsJSON = prepared.mergedScreenshotsJSON
+                    let capturedClipsJSON = prepared.clipsJSON
                     let capturedRecordingId = self.recordingId
 
-                    Task.detached { [transcriptionMs, wordCount, externalRefId, audioFilename, durationSeconds, traceSuffix, totalMs, appMs, segmentsJSON, screenshotsJSON, notesForPaste, capturedRecordingId, metadataDict] in
+                    Task.detached { [transcriptionMs, wordCount, externalRefId, audioFilename, durationSeconds, traceSuffix, totalMs, appMs, segmentsJSON, capturedMergedScreenshotsJSON, capturedClipsJSON, capturedRecordingId, metadataDict] in
                         await MainActor.run { SoundManager.shared.playPasted() }
 
                         if returnToOrigin,
@@ -2267,18 +2259,12 @@ final class AgentController: ObservableObject {
                             pasteTimestamp: Date()
                         )
 
-                        var recording = LiveRecording(from: utterance)
-                        let includedProvenanceIDs = await Self.applyRecordingAssets(
-                            to: &recording,
+                        if let id = await Self.persistDictationRecording(
+                            utterance: utterance,
                             segmentsJSON: segmentsJSON,
-                            screenshotsJSON: screenshotsJSON,
+                            mergedScreenshotsJSON: capturedMergedScreenshotsJSON,
+                            clipsJSON: capturedClipsJSON,
                             captureSessionId: capturedRecordingId
-                        )
-                        recording.notes = notesForPaste
-                        if let id = await Self.storeRecording(
-                            recording,
-                            captureSessionId: capturedRecordingId,
-                            includedProvenanceIDs: includedProvenanceIDs
                         ), var baseline = capturedContext {
                             if let recId = capturedRecordingId {
                                 await TalkieAgentXPCService.shared.notifyDictationPasted(recordingId: recId)
@@ -2351,7 +2337,7 @@ final class AgentController: ObservableObject {
                 // Store in GRDB with createdInTalkieView = true, pasteTimestamp = nil
                 logTiming("Creating LiveDictation")
                 let utterance = LiveDictation(
-                    text: result.text,
+                    text: prepared.text,
                     mode: "queued",
                     appBundleID: metadata.activeAppBundleID,
                     appName: metadata.activeAppName,
@@ -2367,18 +2353,12 @@ final class AgentController: ObservableObject {
                     createdInTalkieView: true,
                     pasteTimestamp: nil  // Not pasted yet → queued
                 )
-                var recording = LiveRecording(from: utterance)
-                let includedProvenanceIDs = await Self.applyRecordingAssets(
-                    to: &recording,
+                if let id = await Self.persistDictationRecording(
+                    utterance: utterance,
                     segmentsJSON: segmentsJSON,
-                    screenshotsJSON: RecordingScreenshot.toJSON(capturedScreenshots),
+                    mergedScreenshotsJSON: prepared.mergedScreenshotsJSON,
+                    clipsJSON: prepared.clipsJSON,
                     captureSessionId: captureSessionId
-                )
-                recording.notes = notesMarkdown
-                if let id = await Self.storeRecording(
-                    recording,
-                    captureSessionId: captureSessionId,
-                    includedProvenanceIDs: includedProvenanceIDs
                 ), var baseline = capturedContext {
                     TalkieAgentXPCService.shared.notifyDictationAdded()
                     TranscriptionRetryManager.shared.refreshPendingCount()
@@ -2421,17 +2401,17 @@ final class AgentController: ObservableObject {
                 let capturedMetadata = metadata
                 let capturedContext = self.capturedContext
                 let capturedStartApp = self.startApp
-                let resultText = result.text
+                let dictationText = prepared.text  // Stored text matches paste destination
                 let metadataDict = buildMetadataDict(from: metadata)
                 let currentTrace = trace
                 let returnToOrigin = settings.returnToOriginAfterPaste
                 let routingModeStr = settings.routingMode == .paste ? "paste" : "clipboard"
-                let screenshotsJSON = RecordingScreenshot.toJSON(self.capturedScreenshots)
-                let notesForPaste = notesMarkdown
+                let capturedMergedScreenshotsJSON = prepared.mergedScreenshotsJSON
+                let capturedClipsJSON = prepared.clipsJSON
                 let capturedRecordingId = self.recordingId
 
                 // Fire-and-forget: ALL post-paste work runs in background
-                Task.detached { [transcriptionMs, wordCount, externalRefId, audioFilename, durationSeconds, traceSuffix, totalMs, appMs, segmentsJSON, screenshotsJSON, notesForPaste, capturedRecordingId] in
+                Task.detached { [transcriptionMs, wordCount, externalRefId, audioFilename, durationSeconds, traceSuffix, totalMs, appMs, segmentsJSON, capturedMergedScreenshotsJSON, capturedClipsJSON, capturedRecordingId] in
                     // Play sound
                     await MainActor.run { SoundManager.shared.playPasted() }
 
@@ -2442,32 +2422,8 @@ final class AgentController: ObservableObject {
                         await MainActor.run { ContextCapture.activateApp(originApp) }
                     }
 
-                    // Pull tray screenshots from Talkie (all unpinned items)
-                    // This is included in the initial DB write — no merge needed later
-                    var mergedScreenshotsJSON = screenshotsJSON
-                    if let recId = capturedRecordingId {
-                        if let trayJSON = await TalkieAgentXPCService.shared.fetchTrayScreenshots(recordingId: recId) {
-                            // Merge during-recording screenshots with tray screenshots
-                            if let base = screenshotsJSON,
-                               let baseData = base.data(using: .utf8),
-                               let trayData = trayJSON.data(using: .utf8),
-                               var baseArray = try? JSONSerialization.jsonObject(with: baseData) as? [[String: Any]],
-                               let trayArray = try? JSONSerialization.jsonObject(with: trayData) as? [[String: Any]] {
-                                baseArray.append(contentsOf: trayArray)
-                                if let merged = try? JSONSerialization.data(withJSONObject: baseArray),
-                                   let mergedStr = String(data: merged, encoding: .utf8) {
-                                    mergedScreenshotsJSON = mergedStr
-                                }
-                            } else {
-                                // No during-recording screenshots — tray screenshots are the only ones
-                                mergedScreenshotsJSON = trayJSON
-                            }
-                        }
-                    }
-
-                    // Database store
                     let utterance = LiveDictation(
-                        text: resultText,
+                        text: dictationText,
                         mode: routingModeStr,
                         appBundleID: capturedMetadata.activeAppBundleID,
                         appName: capturedMetadata.activeAppName,
@@ -2484,18 +2440,12 @@ final class AgentController: ObservableObject {
                         pasteTimestamp: Date()
                     )
 
-                    var recording = LiveRecording(from: utterance)
-                    let includedProvenanceIDs = await Self.applyRecordingAssets(
-                        to: &recording,
+                    if let id = await Self.persistDictationRecording(
+                        utterance: utterance,
                         segmentsJSON: segmentsJSON,
-                        screenshotsJSON: mergedScreenshotsJSON,
+                        mergedScreenshotsJSON: capturedMergedScreenshotsJSON,
+                        clipsJSON: capturedClipsJSON,
                         captureSessionId: capturedRecordingId
-                    )
-                    recording.notes = notesForPaste
-                    if let id = await Self.storeRecording(
-                        recording,
-                        captureSessionId: capturedRecordingId,
-                        includedProvenanceIDs: includedProvenanceIDs
                     ), var baseline = capturedContext {
                         // DB store complete — notify Talkie to clear unpinned tray items
                         if let recId = capturedRecordingId {
@@ -2508,7 +2458,7 @@ final class AgentController: ObservableObject {
                         baseline.perfEndToEndMs = capturedMetadata.perfEndToEndMs
                         baseline.perfInAppMs = capturedMetadata.perfInAppMs
                         baseline.sessionID = capturedMetadata.sessionID
-                        await ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline, dictationText: resultText)
+                        await ContextCaptureService.shared.scheduleEnrichment(utteranceId: id, baseline: baseline, dictationText: dictationText)
                     }
 
                     // Refresh store
@@ -2527,7 +2477,7 @@ final class AgentController: ObservableObject {
                                 wordCount: wordCount,
                                 audioFilename: audioFilename,
                                 audioDurationSeconds: durationSeconds,
-                                transcriptPreview: String(resultText.prefix(50))
+                                transcriptPreview: String(dictationText.prefix(50))
                             )
                             LivePerformanceStore.shared.add(metric)
                             // Log for E2ETraceView correlation (matches Engine format)

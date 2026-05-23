@@ -321,6 +321,8 @@ struct ScopeHomeView: View {
                         count: countLabel(todayCount(recentCaptures), "today"),
                         libraryLabel: "ALL CAPTURES",
                         onLibrary: { NavigationState.shared.navigate(to: .screenshots) },
+                        secondaryLabel: "OPEN TRAY",
+                        onSecondary: { TrayViewer.shared.show() },
                         rows: recentCaptures.prefix(3).map { item in
                             RecentRow(
                                 id: item.id,
@@ -329,7 +331,7 @@ struct ScopeHomeView: View {
                                 body: nil,
                                 meta: item.meta,
                                 when: whenLabel(item.date),
-                                onTap: { NavigationState.shared.navigate(to: .screenshots) }
+                                onTap: { openRecentCapture(item) }
                             )
                         },
                         emptyCTA: RecentCTA(
@@ -410,49 +412,65 @@ struct ScopeHomeView: View {
         TrayItem.allItems().sorted { $0.capturedAt > $1.capturedAt }
     }
 
-    /// Unified recent-capture stream. Screenshots and tray clips can
-    /// live in two stores: still-in-tray items (TrayItem) and items
-    /// that drained into a recording (RecordingScreenshot / .clips on
-    /// the parent TalkieObject). The home Captures section needs to
-    /// surface both so a screenshot taken this morning that drained
-    /// into a dictation still shows up under Captures.
+    /// Unified screenshot-capture stream for Home. Keep this scoped to
+    /// screenshots: still-in-tray `ScreenshotTray` items and saved
+    /// `.capture` objects. It intentionally excludes text selections,
+    /// camera clips, standalone notes, and iPhone/watch imports.
     private struct RecentCapture: Identifiable {
+        enum Source {
+            case tray
+            case savedCapture
+        }
+
         let id: UUID
         let line: String
         let meta: String
         let date: Date
+        let source: Source
     }
 
     private var recentCaptures: [RecentCapture] {
         var out: [RecentCapture] = []
 
-        // Tray items still in flight.
-        for item in TrayItem.allItems() {
+        // Screenshot tray items still in flight. Clips and selected text
+        // stay available in TrayViewer, but Home's Captures list stays
+        // screenshot-specific.
+        for item in screenshotTray.items {
             out.append(RecentCapture(
                 id: item.id,
                 line: trayLine(for: item),
-                meta: trayMeta(for: item),
-                date: item.capturedAt
+                meta: screenshotMeta(width: item.width, height: item.height),
+                date: item.capturedAt,
+                source: .tray
             ))
         }
 
-        // Drained screenshots that landed on recordings. Each shot gets
-        // its own row, dated by the recording's capture time (close
-        // enough to the actual snap timing for ranking).
-        for obj in recordingsVM.recordings where !obj.screenshots.isEmpty {
+        // Saved capture objects created from screenshots. Do not pull
+        // screenshots attached to notes/memos or imports from synced
+        // phone/watch content into the Home Captures rail.
+        for obj in recordingsVM.recordings where obj.type == .capture && obj.deletedAt == nil && !obj.screenshots.isEmpty {
             for ss in obj.screenshots {
-                let dims = (ss.width.map { "\($0)" } ?? "?") + "×" + (ss.height.map { "\($0)" } ?? "?")
                 let label = ss.windowTitle ?? ss.appName ?? obj.title ?? "Screenshot"
                 out.append(RecentCapture(
                     id: stableUUID(from: "rec-\(ss.filename)"),
                     line: label,
-                    meta: dims,
-                    date: obj.createdAt
+                    meta: screenshotMeta(width: ss.width, height: ss.height),
+                    date: obj.createdAt,
+                    source: .savedCapture
                 ))
             }
         }
 
         return out.sorted { $0.date > $1.date }
+    }
+
+    private func openRecentCapture(_ item: RecentCapture) {
+        switch item.source {
+        case .tray:
+            TrayViewer.shared.show()
+        case .savedCapture:
+            NavigationState.shared.navigate(to: .screenshots)
+        }
     }
 
     /// Deterministic UUID derived from a string — used so the rec-screenshot
@@ -500,14 +518,23 @@ struct ScopeHomeView: View {
         let words = (text ?? "").split { $0.isWhitespace }.count
         return "\(words) WORDS"
     }
-    private func trayLine(for item: TrayItem) -> String {
-        if let preview = item.previewText, !preview.isEmpty { return preview }
-        if let context = item.contextLabel, !context.isEmpty { return context }
-        return item.modeIcon
+    private func trayLine(for item: TrayScreenshot) -> String {
+        if let appName = item.appName, !appName.isEmpty { return appName }
+        if let windowTitle = item.windowTitle, !windowTitle.isEmpty { return windowTitle }
+        if let displayName = item.displayName, !displayName.isEmpty { return displayName }
+        switch item.mode {
+        case .region: return "crop"
+        case .fullscreen: return "fullscreen"
+        case .window: return "macwindow"
+        }
     }
-    private func trayMeta(for item: TrayItem) -> String {
-        if item.isText { return "TEXT" }
-        return "\(item.width)×\(item.height)"
+    private func screenshotMeta(width: Int?, height: Int?) -> String {
+        let widthLabel = width.map(String.init) ?? "?"
+        let heightLabel = height.map(String.init) ?? "?"
+        return "\(widthLabel)×\(heightLabel)"
+    }
+    private func screenshotMeta(width: Int, height: Int) -> String {
+        screenshotMeta(width: Optional(width), height: Optional(height))
     }
     private func whenLabel(_ date: Date) -> String {
         let cal = Calendar.current
@@ -537,14 +564,16 @@ struct ScopeHomeView: View {
     private var routinesStrip: some View {
         VStack(alignment: .leading, spacing: 14) {
             Eyebrow("Routines")
-            HStack(spacing: 16) {
+            HStack(spacing: 0) {
                 RoutinesPanel(
                     title: "Workflows",
                     trailing: workflowRunsTodayText,
                     rows: workflowRunRows,
-                    footer: "MANAGE WORKFLOWS"
+                    footer: "MANAGE WORKFLOWS",
+                    accent: ScopeBrass.solid
                 )
-                ScopeRule(.section, axis: .vertical)
+                ScopeRule(.subtle, axis: .vertical)
+                    .padding(.vertical, 14)
                 RoutinesPanel(
                     title: "Console",
                     trailing: "2 tabs",
@@ -553,8 +582,32 @@ struct ScopeHomeView: View {
                         .init(leading: .filled, label: "Codex",  trailing: "IDLE"),
                         .init(leading: .hollow, label: "Claude", trailing: "OFF"),
                     ],
-                    footer: "OPEN CONSOLE"
+                    footer: "OPEN CONSOLE",
+                    accent: ScopeAmber.solid
                 )
+            }
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.white.opacity(0.30))
+                    LinearGradient(
+                        colors: [
+                            ScopeAmber.tintSubtle,
+                            Color.clear,
+                            Color.black.opacity(0.015)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                }
+            )
+            .scopeCardBorder(cornerRadius: 6, emphasis: .muted)
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(ScopeAmber.solid.opacity(0.10))
+                    .frame(height: 1)
+                    .padding(.horizontal, 14)
             }
         }
     }
@@ -610,20 +663,25 @@ struct ScopeHomeView: View {
             HStack(alignment: .top, spacing: 16) {
                 DidYouKnowCard(
                     glyph: .voiceEdit,
+                    marker: "01",
                     hook: "Memo edit",
                     detail: "Use ⌃⇧⌘ E during playback to dictate an edit.",
                     action: "Open"
                 )
                 ScopeRule(.section, axis: .vertical)
+                    .padding(.vertical, 2)
                 DidYouKnowCard(
                     glyph: .smartActions,
+                    marker: "02",
                     hook: "Compose chips",
                     detail: "Grammar, concise, and tone chips are available in Compose.",
                     action: "Compose"
                 )
                 ScopeRule(.section, axis: .vertical)
+                    .padding(.vertical, 2)
                 DidYouKnowCard(
                     glyph: .tray,
+                    marker: "03",
                     hook: "Screen capture",
                     detail: "Use Hyper+S to add a screenshot to the capture tray.",
                     action: "Details"
@@ -1804,24 +1862,32 @@ private struct RoutinesPanel: View {
     let trailing: String
     let rows: [Row]
     let footer: String
+    let accent: Color
 
-    @State private var isHovered = false
+    @State private var footerHovered = false
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                Text(title)
-                    .font(ScopeFont.display(size: 14, medium: true))
-                    .foregroundStyle(ScopeInk.primary)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    PhosphorDot(color: accent.opacity(0.72), size: 4)
+                    Text(title)
+                        .font(ScopeFont.display(size: 15, medium: true))
+                        .foregroundStyle(ScopeInk.primary)
+                }
                 Spacer()
                 Text(trailing.uppercased())
                     .font(ScopeType.chrome)
                     .tracking(ScopeType.Tracking.wide)
                     .foregroundStyle(ScopeInk.faint)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .overlay(alignment: .bottom) { ScopeRule(.section) }
+            .padding(.horizontal, 16)
+            .padding(.top, 13)
+            .padding(.bottom, 10)
+            .overlay(alignment: .bottom) {
+                ScopeRule(.section)
+                    .padding(.horizontal, 16)
+            }
 
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { idx, row in
@@ -1830,13 +1896,14 @@ private struct RoutinesPanel: View {
                     VStack(spacing: 0) {
                         HStack(spacing: 10) {
                             Circle()
-                                .fill(row.leading == .filled ? ScopeBrass.solid : Color.clear)
+                                .fill(row.leading == .filled ? accent : Color.clear)
                                 .overlay(
-                                    Circle().stroke(ScopeBrass.solid, lineWidth: row.leading == .hollow ? 1 : 0)
+                                    Circle().stroke(accent.opacity(0.88), lineWidth: row.leading == .hollow ? 1 : 0)
                                 )
+                                .shadow(color: row.leading == .filled ? accent.opacity(0.22) : .clear, radius: 2)
                                 .frame(width: 5, height: 5)
                             Text(row.label)
-                                .font(.system(size: 12))
+                                .font(.system(size: 12, weight: .regular))
                                 .foregroundStyle(ScopeInk.primary)
                             Spacer()
                             Text(row.trailing.uppercased())
@@ -1844,34 +1911,45 @@ private struct RoutinesPanel: View {
                                 .tracking(ScopeType.Tracking.wide)
                                 .foregroundStyle(ScopeInk.subtle)
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 7.5)
 
                         if idx < rows.count - 1 {
                             ScopeRule(.row)
+                                .padding(.horizontal, 16)
                         }
                     }
                 }
             }
 
             ScopeRule(.section)
+                .padding(.horizontal, 16)
 
-            HStack(spacing: 4) {
-                Spacer()
-                Text(footer)
-                    .font(ScopeType.channel)
-                    .tracking(ScopeType.Tracking.wide)
-                    .foregroundStyle(isHovered ? ScopeAmber.solid : ScopeBrass.solid)
-                Text("→")
-                    .font(.system(size: 11))
-                    .foregroundStyle(isHovered ? ScopeAmber.solid : ScopeBrass.solid)
+            Button {
+                if footer == "OPEN CONSOLE" {
+                    NavigationState.shared.navigate(to: .systemConsole)
+                } else {
+                    NavigationState.shared.navigate(to: .workflows)
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Spacer()
+                    Text(footer)
+                        .font(ScopeType.channel)
+                        .tracking(ScopeType.Tracking.wide)
+                    Text("→")
+                        .font(.system(size: 11))
+                }
+                .foregroundStyle(footerHovered ? ScopeAmber.solid : ScopeBrass.solid)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
+                .background(footerHovered ? ScopeAmber.tintSubtle : Color.clear)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .buttonStyle(.plain)
+            .onHover { footerHovered = $0 }
         }
         .frame(maxWidth: .infinity)
-        .onHover { isHovered = $0 }
-        .animation(.easeOut(duration: 0.16), value: isHovered)
+        .animation(.easeOut(duration: 0.16), value: footerHovered)
     }
 }
 
@@ -1886,6 +1964,7 @@ private struct RoutinesPanel: View {
 private struct DidYouKnowCard: View {
     enum Glyph { case voiceEdit, smartActions, tray }
     let glyph: Glyph
+    let marker: String
     let hook: String
     let detail: String
     let action: String
@@ -1894,53 +1973,69 @@ private struct DidYouKnowCard: View {
 
     var body: some View {
         Button(action: { NavigationState.shared.navigate(to: .liveDashboard) }) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top, spacing: 12) {
-                    glyphTile
-                    Text(hook.uppercased())
-                        .font(ScopeType.channel)
+            VStack(alignment: .leading, spacing: 11) {
+                HStack(alignment: .center, spacing: 10) {
+                    glyphMark
+                    Text("TIP \(marker)")
+                        .font(ScopeType.chrome)
                         .tracking(ScopeType.Tracking.wide)
+                        .foregroundStyle(ScopeInk.subtle)
+                    Spacer(minLength: 0)
+                }
+
+                VStack(alignment: .leading, spacing: 7) {
+                    Text(hook)
+                        .font(ScopeFont.display(size: 17, medium: true))
                         .foregroundStyle(ScopeInk.primary)
+                        .lineLimit(1)
+                    Text(detail)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(ScopeInk.faint)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .lineSpacing(2)
                 }
-                Text(detail)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(ScopeInk.faint)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .lineSpacing(2)
-                Spacer(minLength: 6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Spacer(minLength: 8)
                 ScopeRule(.section)
+
                 HStack(spacing: 4) {
                     Text(action.uppercased())
-                        .font(ScopeFont.mono(size: 9, weight: .semibold))
-                        .tracking(2.4)
+                        .font(ScopeType.channel)
+                        .tracking(ScopeType.Tracking.wide)
                     Text("→").font(.system(size: 10))
                 }
-                .foregroundStyle(isHovered ? ScopeBrass.deep : ScopeBrass.solid)
+                .foregroundStyle(isHovered ? ScopeAmber.solid : ScopeBrass.solid)
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 18)
+            .padding(.top, 16)
+            .padding(.bottom, 14)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .background(isHovered ? ScopeAmber.tintSubtle : Color.clear)
+            .overlay(alignment: .topLeading) {
+                Rectangle()
+                    .fill(isHovered ? ScopeAmber.solid.opacity(0.45) : ScopeEdge.subtle)
+                    .frame(width: 34, height: 1)
+                    .padding(.leading, 20)
+            }
 
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
     }
 
-    private var glyphTile: some View {
+    private var glyphMark: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .fill(Color(red: 0.769, green: 0.490, blue: 0.110).opacity(0.06))
+            Circle()
+                .fill(isHovered ? ScopeAmber.solid.opacity(0.12) : Color.clear)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .stroke(Color(red: 0.769, green: 0.490, blue: 0.110).opacity(0.18), lineWidth: 0.5)
+                    Circle()
+                        .stroke(ScopeBrass.solid.opacity(isHovered ? 0.44 : 0.24), lineWidth: 0.5)
                 )
             glyphIcon
         }
-        .frame(width: 28, height: 28)
+        .frame(width: 22, height: 22)
     }
 
     @ViewBuilder
@@ -1949,33 +2044,33 @@ private struct DidYouKnowCard: View {
         switch glyph {
         case .voiceEdit:
             Path { p in
-                p.move(to: .init(x: 6, y: 14));   p.addLine(to: .init(x: 10, y: 14))
-                p.move(to: .init(x: 18, y: 14));  p.addLine(to: .init(x: 22, y: 14))
-                p.move(to: .init(x: 10, y: 8));   p.addLine(to: .init(x: 10, y: 20))
-                p.move(to: .init(x: 14, y: 10));  p.addLine(to: .init(x: 14, y: 18))
-                p.move(to: .init(x: 18, y: 8));   p.addLine(to: .init(x: 18, y: 20))
+                p.move(to: .init(x: 5, y: 11));   p.addLine(to: .init(x: 8, y: 11))
+                p.move(to: .init(x: 14, y: 11));  p.addLine(to: .init(x: 17, y: 11))
+                p.move(to: .init(x: 8, y: 6));    p.addLine(to: .init(x: 8, y: 16))
+                p.move(to: .init(x: 11, y: 8));   p.addLine(to: .init(x: 11, y: 14))
+                p.move(to: .init(x: 14, y: 6));   p.addLine(to: .init(x: 14, y: 16))
             }
             .stroke(brass, style: StrokeStyle(lineWidth: 0.85, lineCap: .round, lineJoin: .round))
-            .frame(width: 28, height: 28)
+            .frame(width: 22, height: 22)
         case .smartActions:
             Path { p in
-                p.move(to: .init(x: 6, y: 9));    p.addLine(to: .init(x: 22, y: 9))
-                p.move(to: .init(x: 6, y: 14));   p.addLine(to: .init(x: 16, y: 14))
-                p.move(to: .init(x: 6, y: 19));   p.addLine(to: .init(x: 18, y: 19))
-                p.move(to: .init(x: 20, y: 13));  p.addLine(to: .init(x: 23, y: 16)); p.addLine(to: .init(x: 20, y: 19))
+                p.move(to: .init(x: 5, y: 7));    p.addLine(to: .init(x: 17, y: 7))
+                p.move(to: .init(x: 5, y: 11));   p.addLine(to: .init(x: 13, y: 11))
+                p.move(to: .init(x: 5, y: 15));   p.addLine(to: .init(x: 14, y: 15))
+                p.move(to: .init(x: 15, y: 10));  p.addLine(to: .init(x: 18, y: 13)); p.addLine(to: .init(x: 15, y: 16))
             }
             .stroke(brass, style: StrokeStyle(lineWidth: 0.85, lineCap: .round, lineJoin: .round))
-            .frame(width: 28, height: 28)
+            .frame(width: 22, height: 22)
         case .tray:
             ZStack {
                 Path { p in
-                    p.addRoundedRect(in: CGRect(x: 6, y: 7, width: 16, height: 10), cornerSize: CGSize(width: 2, height: 2))
-                    p.move(to: .init(x: 10, y: 21)); p.addLine(to: .init(x: 18, y: 21))
+                    p.addRoundedRect(in: CGRect(x: 5, y: 6, width: 12, height: 8), cornerSize: CGSize(width: 2, height: 2))
+                    p.move(to: .init(x: 8, y: 17)); p.addLine(to: .init(x: 14, y: 17))
                 }
                 .stroke(brass, style: StrokeStyle(lineWidth: 0.85, lineCap: .round, lineJoin: .round))
-                Circle().fill(brass).frame(width: 2, height: 2).offset(x: 0, y: -2)
+                Circle().fill(brass).frame(width: 2, height: 2).offset(x: 0, y: -1.5)
             }
-            .frame(width: 28, height: 28)
+            .frame(width: 22, height: 22)
         }
     }
 }

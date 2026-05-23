@@ -241,6 +241,19 @@ struct AppNavigation: View {
         section.perfName
     }
 
+    private func navigateFromLearn(to section: NavigationSection) {
+        if section == .workflows || section == .settings {
+            columnVisibility = .all
+        }
+        selectedSection = section
+    }
+
+    private func openSettingsFromLearn(_ section: SettingsSection) {
+        selectedSettingsSection = section
+        columnVisibility = .all
+        selectedSection = .settings
+    }
+
     private var sidebarWidthExpanded: (min: CGFloat, ideal: CGFloat, max: CGFloat) {
         let total = SidebarLayout.railWidth + CGFloat(expandedLabelWidth)
         return (total, total, total)
@@ -1067,7 +1080,10 @@ struct AppNavigation: View {
                         // top band via ScopeTopBand; no wrapInTalkieSection
                         // here. ScopeStatsScreen kept in source but no
                         // longer mounted on this branch.
-                        ScopeLearnScreen()
+                        ScopeLearnScreen(
+                            onNavigate: navigateFromLearn,
+                            onOpenSettings: openSettingsFromLearn
+                        )
                     } else {
                         StatsScreen(
                             onSelectDictation: { _ in selectedSection = .dictations }

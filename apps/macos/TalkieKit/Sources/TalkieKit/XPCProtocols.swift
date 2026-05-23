@@ -339,6 +339,19 @@ public struct HotKeyStatusInfo: Codable, Sendable, Identifiable {
     ///   - reply: JSON-encoded [RecordingScreenshot], or nil if no tray items
     func fetchTrayScreenshots(recordingId: String, reply: @escaping (_ screenshotsJSON: String?) -> Void)
 
+    /// Pull tray screenshots and video clips from Talkie at transcription time.
+    /// Talkie saves unpinned tray media to permanent storage and returns a
+    /// JSON-encoded TalkieObjectAssets blob for Agent to include in the initial DB write.
+    /// - Parameters:
+    ///   - recordingId: The UUID string of the dictation recording
+    ///   - recordingStartedAt: Unix timestamp for the start of the dictation
+    ///   - reply: JSON-encoded TalkieObjectAssets, or nil if no tray assets
+    @objc optional func fetchTrayAssets(
+        recordingId: String,
+        recordingStartedAt: TimeInterval,
+        reply: @escaping (_ assetsJSON: String?) -> Void
+    )
+
     /// Called when TalkieServer supervision status changes (started, stopped, error, etc.)
     /// JSON-encoded `TalkieAgentServerStatus`. Optional so old builds don't crash.
     @objc optional func talkieAgentServerStatusDidChange(_ statusJSON: Data)
