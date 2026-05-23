@@ -2030,8 +2030,9 @@ final class AgentController: ObservableObject {
                     let screenshotsJSON = RecordingScreenshot.toJSON(self.capturedScreenshots)
                     let notesForPaste = notesMarkdown
                     let capturedRecordingId = self.recordingId
+                    let capturedRecordingStart = self.recordingStartTime ?? Date()
 
-                    Task.detached { [transcriptionMs, wordCount, externalRefId, audioFilename, durationSeconds, traceSuffix, totalMs, appMs, segmentsJSON, screenshotsJSON, notesForPaste, capturedRecordingId, metadataDict] in
+                    Task.detached { [transcriptionMs, wordCount, externalRefId, audioFilename, durationSeconds, traceSuffix, totalMs, appMs, segmentsJSON, screenshotsJSON, notesForPaste, capturedRecordingId, capturedRecordingStart, metadataDict] in
                         await MainActor.run { SoundManager.shared.playPasted() }
 
                         if returnToOrigin,
@@ -2042,7 +2043,7 @@ final class AgentController: ObservableObject {
 
                         var mergedScreenshotsJSON = screenshotsJSON
                         if let recId = capturedRecordingId {
-                            if let trayJSON = await TalkieAgentXPCService.shared.fetchTrayScreenshots(recordingId: recId) {
+                            if let trayJSON = await TalkieAgentXPCService.shared.fetchTrayScreenshots(recordingId: recId, recordingStartedAt: capturedRecordingStart) {
                                 if let base = screenshotsJSON,
                                    let baseData = base.data(using: .utf8),
                                    let trayData = trayJSON.data(using: .utf8),
@@ -2091,7 +2092,7 @@ final class AgentController: ObservableObject {
                             includedProvenanceIDs: includedProvenanceIDs
                         ), var baseline = capturedContext {
                             if let recId = capturedRecordingId {
-                                await TalkieAgentXPCService.shared.notifyDictationPasted(recordingId: recId)
+                                await TalkieAgentXPCService.shared.notifyDictationPasted(recordingId: recId, recordingStartedAt: capturedRecordingStart)
                             }
                             await TalkieAgentXPCService.shared.notifyDictationAdded()
                             await TranscriptionRetryManager.shared.refreshPendingCount()
@@ -2239,8 +2240,9 @@ final class AgentController: ObservableObject {
                     let screenshotsJSON = RecordingScreenshot.toJSON(self.capturedScreenshots)
                     let notesForPaste = notesMarkdown
                     let capturedRecordingId = self.recordingId
+                    let capturedRecordingStart = self.recordingStartTime ?? Date()
 
-                    Task.detached { [transcriptionMs, wordCount, externalRefId, audioFilename, durationSeconds, traceSuffix, totalMs, appMs, segmentsJSON, screenshotsJSON, notesForPaste, capturedRecordingId, metadataDict] in
+                    Task.detached { [transcriptionMs, wordCount, externalRefId, audioFilename, durationSeconds, traceSuffix, totalMs, appMs, segmentsJSON, screenshotsJSON, notesForPaste, capturedRecordingId, capturedRecordingStart, metadataDict] in
                         await MainActor.run { SoundManager.shared.playPasted() }
 
                         if returnToOrigin,
@@ -2281,7 +2283,7 @@ final class AgentController: ObservableObject {
                             includedProvenanceIDs: includedProvenanceIDs
                         ), var baseline = capturedContext {
                             if let recId = capturedRecordingId {
-                                await TalkieAgentXPCService.shared.notifyDictationPasted(recordingId: recId)
+                                await TalkieAgentXPCService.shared.notifyDictationPasted(recordingId: recId, recordingStartedAt: capturedRecordingStart)
                             }
                             await TalkieAgentXPCService.shared.notifyDictationAdded()
                             await TranscriptionRetryManager.shared.refreshPendingCount()
@@ -2429,9 +2431,10 @@ final class AgentController: ObservableObject {
                 let screenshotsJSON = RecordingScreenshot.toJSON(self.capturedScreenshots)
                 let notesForPaste = notesMarkdown
                 let capturedRecordingId = self.recordingId
+                let capturedRecordingStart = self.recordingStartTime ?? Date()
 
                 // Fire-and-forget: ALL post-paste work runs in background
-                Task.detached { [transcriptionMs, wordCount, externalRefId, audioFilename, durationSeconds, traceSuffix, totalMs, appMs, segmentsJSON, screenshotsJSON, notesForPaste, capturedRecordingId] in
+                Task.detached { [transcriptionMs, wordCount, externalRefId, audioFilename, durationSeconds, traceSuffix, totalMs, appMs, segmentsJSON, screenshotsJSON, notesForPaste, capturedRecordingId, capturedRecordingStart] in
                     // Play sound
                     await MainActor.run { SoundManager.shared.playPasted() }
 
@@ -2442,11 +2445,10 @@ final class AgentController: ObservableObject {
                         await MainActor.run { ContextCapture.activateApp(originApp) }
                     }
 
-                    // Pull tray screenshots from Talkie (all unpinned items)
-                    // This is included in the initial DB write — no merge needed later
+                    // Pull tray screenshots captured during this recording (window-gated)
                     var mergedScreenshotsJSON = screenshotsJSON
                     if let recId = capturedRecordingId {
-                        if let trayJSON = await TalkieAgentXPCService.shared.fetchTrayScreenshots(recordingId: recId) {
+                        if let trayJSON = await TalkieAgentXPCService.shared.fetchTrayScreenshots(recordingId: recId, recordingStartedAt: capturedRecordingStart) {
                             // Merge during-recording screenshots with tray screenshots
                             if let base = screenshotsJSON,
                                let baseData = base.data(using: .utf8),
@@ -2497,9 +2499,9 @@ final class AgentController: ObservableObject {
                         captureSessionId: capturedRecordingId,
                         includedProvenanceIDs: includedProvenanceIDs
                     ), var baseline = capturedContext {
-                        // DB store complete — notify Talkie to clear unpinned tray items
+                        // DB store complete — notify Talkie to clear the in-window tray items
                         if let recId = capturedRecordingId {
-                            await TalkieAgentXPCService.shared.notifyDictationPasted(recordingId: recId)
+                            await TalkieAgentXPCService.shared.notifyDictationPasted(recordingId: recId, recordingStartedAt: capturedRecordingStart)
                         }
                         await TalkieAgentXPCService.shared.notifyDictationAdded()
                         await TranscriptionRetryManager.shared.refreshPendingCount()
