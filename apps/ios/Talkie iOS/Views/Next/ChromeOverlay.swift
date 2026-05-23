@@ -31,12 +31,22 @@ struct ChromeOverlay: View {
 
     var body: some View {
         ZStack {
-            // Top corners — chrome destinations.
-            // No top-leading chrome pill — the voice button already
-            // toggles chrome on/off (tap to summon, tap again to dismiss),
-            // so a dedicated Close pill in the corner was redundant. The
-            // freed zone lets the screen's native back chevron stay
-            // visible while chrome is summoned, no yield needed.
+            // topLeading: the view owns this slot at rest (back chevrons,
+            // titles, etc). When chrome is summoned the view's content
+            // yields and chrome registers a Home pill in its place —
+            // a "back to root" affordance from anywhere. On the home
+            // surface itself the pill is suppressed (Home → Home is a
+            // no-op), so the slot stays clean.
+            if router.surface != .home {
+                CornerSlot(
+                    zone: .topLeading,
+                    glyph: AnyView(Image(systemName: "house").font(.system(size: 15, weight: .regular))),
+                    label: "Home"
+                ) {
+                    AppShellRouter.shared.openHome()
+                    chrome.dismissChrome()
+                }
+            }
 
             CornerSlot(
                 zone: .topTrailing,
@@ -47,12 +57,27 @@ struct ChromeOverlay: View {
             }
 
             if showCreateTray {
+                // Toggle: tap to open the keyboard surface; tap again
+                // while it's up to dismiss back to home. The glyph
+                // swaps (keyboard → keyboard.chevron.compact.down) so
+                // the second-tap behavior reads visually.
+                let keyboardUp: Bool = {
+                    if case .keyboardActivation = router.surface { return true }
+                    return false
+                }()
                 CornerSlot(
                     zone: .bottomTrailing,
-                    glyph: AnyView(Image(systemName: "keyboard").font(.system(size: 13, weight: .regular))),
-                    label: "Keyboard"
+                    glyph: AnyView(
+                        Image(systemName: keyboardUp ? "keyboard.chevron.compact.down" : "keyboard")
+                            .font(.system(size: 13, weight: .regular))
+                    ),
+                    label: keyboardUp ? "Dismiss keyboard" : "Keyboard"
                 ) {
-                    AppShellRouter.shared.openKeyboardActivation()
+                    if keyboardUp {
+                        AppShellRouter.shared.openHome()
+                    } else {
+                        AppShellRouter.shared.openKeyboardActivation()
+                    }
                 }
 
                 LiquidGlassTray()

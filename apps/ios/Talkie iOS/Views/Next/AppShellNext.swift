@@ -489,11 +489,16 @@ final class ShellChrome: ObservableObject {
         switch state {
         case .resting: return []
         case .expanded, .listening:
-            // .topLeading is intentionally NOT claimed — chrome has no
-            // top-left pill (voice button handles dismiss), so screen
-            // back chevrons stay visible throughout. Settings owns
-            // .topTrailing; Keyboard owns .bottomTrailing.
-            return [.topTrailing, .bottomTrailing]
+            // Settings owns .topTrailing; Keyboard owns .bottomTrailing.
+            // .topLeading is claimed by the Home pill on every sub-
+            // surface (so screen back chevrons yield to make room);
+            // on home itself chrome shows no top-left pill, so the
+            // slot stays free for whatever the home view wants there.
+            var zones: Set<ScreenZone> = [.topTrailing, .bottomTrailing]
+            if AppShellRouter.shared.surface != .home {
+                zones.insert(.topLeading)
+            }
+            return zones
         }
     }
 
