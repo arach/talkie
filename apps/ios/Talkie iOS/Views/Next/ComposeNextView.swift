@@ -915,7 +915,7 @@ private struct QuickTransforms: View {
 
             Spacer()
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 24)
         .padding(.vertical, 6)
         .opacity(muted ? 0.5 : 1)
         .overlay(
