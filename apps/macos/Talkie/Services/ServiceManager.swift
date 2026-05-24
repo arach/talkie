@@ -2004,7 +2004,7 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
         }
     }
 
-    /// Called by Agent AFTER the DB store completes.
+    /// Called by Agent after tray assets were attached to a stored dictation.
     /// Clear consumed unpinned screenshot tray items so they are not reattached
     /// to later dictations. Pinned items remain available in the tray.
     nonisolated public func dictationWasPasted(recordingId: String) {
@@ -2022,9 +2022,8 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
         }
     }
 
-    /// Called by Agent BEFORE the DB store — saves unpinned tray screenshots to
-    /// ScreenshotStorage and returns their metadata as JSON.
-    /// Agent includes this in the initial recording write (atomic, no merge needed).
+    /// Saves unpinned tray screenshots to ScreenshotStorage and returns metadata
+    /// that Agent can attach to an existing recording.
     nonisolated public func fetchTrayScreenshots(recordingId: String, reply: @escaping (String?) -> Void) {
         Task { @MainActor in
             let screenshotTray = ScreenshotTray.shared
@@ -2093,8 +2092,8 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
         }
     }
 
-    /// Called by Agent BEFORE the DB store — saves unpinned tray screenshots and
-    /// screen clips to permanent storage and returns a TalkieObjectAssets JSON blob.
+    /// Saves unpinned tray screenshots and screen clips to permanent storage and
+    /// returns a TalkieObjectAssets JSON blob Agent can attach after DB storage.
     nonisolated public func fetchTrayAssets(
         recordingId: String,
         recordingStartedAt: TimeInterval,

@@ -573,6 +573,68 @@ extension UnifiedDatabase {
         }
     }
 
+    /// Merge peripheral assets into an existing recording after the core
+    /// dictation row has already been written.
+    @discardableResult
+    static func mergeAssets(id: UUID, assetsJSON incomingJSON: String) -> Bool {
+        guard let incoming = TalkieObjectAssets.from(json: incomingJSON), !incoming.isEmpty else {
+            return false
+        }
+
+        do {
+            var updated = false
+            try shared.write { db in
+                let existingJSON: String? = try String.fetchOne(
+                    db,
+                    sql: "SELECT assetsJSON FROM recordings WHERE id = ?",
+                    arguments: [id.uuidString]
+                )
+
+                var assets = TalkieObjectAssets.from(json: existingJSON) ?? TalkieObjectAssets()
+                if assets.segments == nil {
+                    assets.segments = incoming.segments
+                }
+                assets.screenshots = mergedUnique(
+                    existing: assets.screenshots,
+                    incoming: incoming.screenshots,
+                    key: { $0.filename }
+                )
+                assets.clips = mergedUnique(
+                    existing: assets.clips,
+                    incoming: incoming.clips,
+                    key: { $0.filename }
+                )
+                assets.attachments = mergedUnique(
+                    existing: assets.attachments,
+                    incoming: incoming.attachments,
+                    key: { $0.filename }
+                )
+                assets.textProvenance = mergedUnique(
+                    existing: assets.textProvenance,
+                    incoming: incoming.textProvenance,
+                    key: { $0.id }
+                )
+
+                guard let mergedJSON = assets.toJSON() else { return }
+                try db.execute(
+                    sql: "UPDATE recordings SET assetsJSON = ? WHERE id = ?",
+                    arguments: [mergedJSON, id.uuidString]
+                )
+                updated = db.changesCount > 0
+            }
+
+            if updated {
+                log.info("[UnifiedDatabase] Merged peripheral assets for \(id.uuidString.prefix(8))")
+            } else {
+                log.warning("[UnifiedDatabase] mergeAssets: record not found \(id.uuidString.prefix(8))")
+            }
+            return updated
+        } catch {
+            log.error("[UnifiedDatabase] mergeAssets failed: \(error)")
+            return false
+        }
+    }
+
     /// Merge enriched metadata into an existing record, preserving keys
     /// already present (like refinement info set during initial store).
     static func mergeMetadata(id: UUID, enrichedJSON: String?) {
@@ -612,6 +674,19 @@ extension UnifiedDatabase {
         } catch {
             log.error("[UnifiedDatabase] mergeMetadata error: \(error)")
         }
+    }
+
+    private static func mergedUnique<T, Key: Hashable>(
+        existing: [T]?,
+        incoming: [T]?,
+        key: (T) -> Key
+    ) -> [T]? {
+        var merged = existing ?? []
+        var seen = Set(merged.map(key))
+        for item in incoming ?? [] where seen.insert(key(item)).inserted {
+            merged.append(item)
+        }
+        return merged.isEmpty ? nil : merged
     }
 
     /// Merge additional screenshots into an existing dictation record's assetsJSON.

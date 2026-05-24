@@ -128,8 +128,8 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         broadcastDictationAdded()
     }
 
-    /// Notify observers that dictated text was pasted and DB store is complete.
-    /// Talkie clears unpinned tray items (data was already pulled via fetchTrayAssets).
+    /// Notify observers that tray assets were attached to a stored dictation.
+    /// Talkie can now clear consumed unpinned tray items.
     func notifyDictationPasted(recordingId: UUID) {
         let idString = recordingId.uuidString
         for connection in observers {
@@ -141,8 +141,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         NSLog("[TalkieAgentXPC] ✓ Notified \(observers.count) observers about dictation paste (recording: \(idString.prefix(8)))")
     }
 
-    /// Pull tray screenshots from Talkie before DB store.
-    /// Returns JSON metadata for all unpinned items — Agent includes this in the initial recording write.
+    /// Pull tray screenshots from Talkie for attachment to an existing DB record.
     func fetchTrayScreenshots(recordingId: UUID) async -> String? {
         let idString = recordingId.uuidString
         guard let connection = observers.first,
@@ -161,7 +160,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         }
     }
 
-    /// Pull all pending tray media from Talkie before DB store.
+    /// Pull all pending tray media from Talkie for attachment to an existing DB record.
     /// Prefer the newer assets callback so screen clips are included, but fall
     /// back to screenshots for older observers during development.
     func fetchTrayAssets(recordingId: UUID, recordingStartedAt: Date?) async -> String? {
