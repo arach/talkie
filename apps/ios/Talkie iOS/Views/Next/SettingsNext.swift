@@ -60,6 +60,15 @@ struct SettingsNext: View {
         let title: String
     }
 
+    /// Transcription engine choices for the Voice panel's keyboard
+    /// (dictation) preference. Mirrors `TranscriptionEnginePreference`
+    /// — the model layer's source of truth.
+    private static let transcriptionEngineChoices: [SettingsChoice] = [
+        SettingsChoice(id: "auto", title: "Auto"),
+        SettingsChoice(id: "parakeet", title: "Parakeet"),
+        SettingsChoice(id: "apple", title: "Apple Speech")
+    ]
+
     private static let recordingInputChoices: [SettingsChoice] = [
         SettingsChoice(id: "system", title: "System default"),
         SettingsChoice(id: "builtIn", title: "Built-in mic"),
@@ -393,13 +402,39 @@ struct SettingsNext: View {
     private var voicePanel: some View {
         VStack(alignment: .leading, spacing: 0) {
             sectionHeader("TRANSCRIPTION")
-            field("Engine", appSettings.transcriptionMemoEngine.displayName, hint: appSettings.preferredParakeetModel.shortDescription)
-            field("Channels", "System") // TODO: no TalkieAppSettings key exists yet.
-            field("Gain", "Auto") // TODO: no TalkieAppSettings key exists yet.
-            field("Pre-roll", "System") // TODO: no TalkieAppSettings key exists yet.
-            field("Noise gate", "System") // TODO: no TalkieAppSettings key exists yet.
+            // Dictation (keyboard) engine — the one Compose + the
+            // in-app keyboard actually use. Memo engine has its own
+            // row further down so the two don't get conflated.
+            cycleRow(
+                "Dictation engine",
+                selection: Binding(
+                    get: { appSettings.transcriptionKeyboardEngine.rawValue },
+                    set: { raw in
+                        if let pref = TranscriptionEnginePreference(rawValue: raw) {
+                            appSettings.transcriptionKeyboardEngine = pref
+                            TranscriptionService.shared.keyboardEnginePreference = pref
+                        }
+                    }
+                ),
+                choices: Self.transcriptionEngineChoices,
+                hint: "Used by Compose mic + Talkie keyboard"
+            )
+            cycleRow(
+                "Memo engine",
+                selection: Binding(
+                    get: { appSettings.transcriptionMemoEngine.rawValue },
+                    set: { raw in
+                        if let pref = TranscriptionEnginePreference(rawValue: raw) {
+                            appSettings.transcriptionMemoEngine = pref
+                            TranscriptionService.shared.memoEnginePreference = pref
+                        }
+                    }
+                ),
+                choices: Self.transcriptionEngineChoices,
+                hint: "Used by background voice memo transcription"
+            )
             metricStrip(
-                title: "ENGINE TELEMETRY",
+                title: "ENGINE STATE",
                 metrics: [("LATENCY", "—"), ("WER", "—"), ("LOADED", parakeetManager.statusDescription.uppercased())]
             )
 
