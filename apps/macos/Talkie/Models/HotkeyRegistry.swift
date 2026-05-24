@@ -32,6 +32,7 @@ enum HotkeyAction: String, CaseIterable, Identifiable {
     case captureRegion          // ⌘⇧4
     case captureWindow          // ⌘⇧6
     case openTrayViewer         // ⌘⇧5
+    case openTrayShelf          // Hyper+T
     case pasteLastScreenshot    // ⌘⇧V
 
     // Paste
@@ -54,6 +55,7 @@ enum HotkeyAction: String, CaseIterable, Identifiable {
         case .captureRegion:       return "Region Capture"
         case .captureWindow:       return "Window Capture"
         case .openTrayViewer:      return "Open Tray Viewer"
+        case .openTrayShelf:       return "Open Tray Shelf"
         case .pasteLastScreenshot: return "Paste Last Screenshot"
         case .pasteChord:          return "Quick Paste HUD"
         case .selectionQuickAction: return "Quick Selection"
@@ -64,7 +66,7 @@ enum HotkeyAction: String, CaseIterable, Identifiable {
         switch self {
         case .toggleRecording, .pushToTalk:
             return .recording
-        case .captureChord, .screenRecordChord, .captureFullscreen, .captureRegion, .captureWindow, .openTrayViewer, .pasteLastScreenshot, .pasteChord:
+        case .captureChord, .screenRecordChord, .captureFullscreen, .captureRegion, .captureWindow, .openTrayViewer, .openTrayShelf, .pasteLastScreenshot, .pasteChord:
             return .capture
         case .selectionQuickAction:
             return .selection
@@ -93,6 +95,8 @@ enum HotkeyAction: String, CaseIterable, Identifiable {
             return HotkeyConfig(keyCode: 22, modifiers: UInt32(cmdKey | shiftKey))                // ⌘⇧6
         case .openTrayViewer:
             return HotkeyConfig(keyCode: 23, modifiers: UInt32(cmdKey | shiftKey))                // ⌘⇧5
+        case .openTrayShelf:
+            return HotkeyConfig(keyCode: 17, modifiers: UInt32(cmdKey | optionKey | controlKey | shiftKey)) // Hyper+T
         case .pasteLastScreenshot:
             return HotkeyConfig(keyCode: 9, modifiers: UInt32(cmdKey | shiftKey))                 // ⌘⇧V
         case .selectionQuickAction:
@@ -117,6 +121,7 @@ enum HotkeyAction: String, CaseIterable, Identifiable {
         case .captureRegion:        return "hotkeyCapture.region"
         case .captureWindow:        return "hotkeyCapture.window"
         case .openTrayViewer:       return "hotkeyCapture.trayViewer"
+        case .openTrayShelf:        return "hotkeyCapture.trayShelf"
         }
     }
 }

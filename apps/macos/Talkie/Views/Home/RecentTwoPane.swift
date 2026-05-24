@@ -77,8 +77,32 @@ struct RecentSection: Identifiable {
     let count: String
     let libraryLabel: String
     let onLibrary: () -> Void
+    let secondaryLabel: String?
+    let onSecondary: (() -> Void)?
     let rows: [RecentRow]
     let emptyCTA: RecentCTA
+
+    init(
+        id: String,
+        eyebrow: String,
+        count: String,
+        libraryLabel: String,
+        onLibrary: @escaping () -> Void,
+        secondaryLabel: String? = nil,
+        onSecondary: (() -> Void)? = nil,
+        rows: [RecentRow],
+        emptyCTA: RecentCTA
+    ) {
+        self.id = id
+        self.eyebrow = eyebrow
+        self.count = count
+        self.libraryLabel = libraryLabel
+        self.onLibrary = onLibrary
+        self.secondaryLabel = secondaryLabel
+        self.onSecondary = onSecondary
+        self.rows = rows
+        self.emptyCTA = emptyCTA
+    }
 }
 
 // MARK: - Tokens
@@ -174,6 +198,15 @@ private struct RecentSubBand: View {
                     .tracking(1.8)
                     .foregroundStyle(ScopeInk.faint)
                 Spacer()
+                if let secondaryLabel = section.secondaryLabel, let onSecondary = section.onSecondary {
+                    Button(action: onSecondary) {
+                        Text("\(secondaryLabel) →")
+                            .font(RecentFont.mono(size: 8, weight: .semibold))
+                            .tracking(2.0)
+                            .foregroundStyle(tint.opacity(0.86))
+                    }
+                    .buttonStyle(.plain)
+                }
                 Button(action: section.onLibrary) {
                     Text("\(section.libraryLabel) →")
                         .font(RecentFont.mono(size: 8, weight: .semibold))

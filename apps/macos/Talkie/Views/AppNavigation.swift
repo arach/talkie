@@ -241,6 +241,19 @@ struct AppNavigation: View {
         section.perfName
     }
 
+    private func navigateFromLearn(to section: NavigationSection) {
+        if section == .workflows || section == .settings {
+            columnVisibility = .all
+        }
+        selectedSection = section
+    }
+
+    private func openSettingsFromLearn(_ section: SettingsSection) {
+        selectedSettingsSection = section
+        columnVisibility = .all
+        selectedSection = .settings
+    }
+
     private var sidebarWidthExpanded: (min: CGFloat, ideal: CGFloat, max: CGFloat) {
         let total = SidebarLayout.railWidth + CGFloat(expandedLabelWidth)
         return (total, total, total)
@@ -252,8 +265,10 @@ struct AppNavigation: View {
         SidebarLayout.railWidth
     )
     private static let workflowsColumnWidth: (min: CGFloat, ideal: CGFloat, max: CGFloat) = (260, 300, 400)
+    private static let libraryColumnWidth: (min: CGFloat, ideal: CGFloat, max: CGFloat) = (280, 320, 440)
     private var contentColumnWidth: (min: CGFloat, ideal: CGFloat, max: CGFloat) {
         if selectedSection == .workflows { return Self.workflowsColumnWidth }
+        if selectedSection == .recordings { return Self.libraryColumnWidth }
         return (selectedSection == .settings && settings.settingsSidebarIconsOnly)
             ? SettingsSidebarState.compactColumnWidth
             : SettingsSidebarState.expandedColumnWidth
@@ -501,6 +516,13 @@ struct AppNavigation: View {
             } detail: {
                 mainContentView
             }
+            // Drop the system-provided NavigationSplitView sidebar toggle
+            // — the inline collapse button inside the content column header
+            // (e.g. ScopeWorkflowListColumn) carries that intent now. When
+            // the column is collapsed, SidebarButtonOverlayModifier surfaces
+            // a "show sidebar" button so the user can bring it back.
+            .toolbar(removing: .sidebarToggle)
+            .modifier(SidebarButtonOverlayModifier(columnVisibility: $columnVisibility))
         }
     }
 
@@ -988,7 +1010,8 @@ struct AppNavigation: View {
             if SettingsManager.shared.isScopeTheme {
                 ScopeWorkflowListColumn(
                     selectedWorkflowID: $selectedWorkflowID,
-                    editingWorkflow: $editingWorkflow
+                    editingWorkflow: $editingWorkflow,
+                    columnVisibility: $columnVisibility
                 )
             } else {
                 WorkflowListColumn(
@@ -1067,7 +1090,10 @@ struct AppNavigation: View {
                         // top band via ScopeTopBand; no wrapInTalkieSection
                         // here. ScopeStatsScreen kept in source but no
                         // longer mounted on this branch.
-                        ScopeLearnScreen()
+                        ScopeLearnScreen(
+                            onNavigate: navigateFromLearn,
+                            onOpenSettings: openSettingsFromLearn
+                        )
                     } else {
                         StatsScreen(
                             onSelectDictation: { _ in selectedSection = .dictations }

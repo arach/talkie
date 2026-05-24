@@ -78,7 +78,9 @@ public enum ScreenshotInserter {
             insertions.append((charPos, ss))
         }
 
-        // Split original text at insertion points
+        // Split original text at insertion points. `[N]` markers go inline
+        // at the screenshot's word position; the URL footnotes stack at the
+        // end of the transcript.
         var blocks: [ContentBlock] = []
         var markdownParts: [String] = []
         var references: [String] = []
@@ -117,7 +119,7 @@ public enum ScreenshotInserter {
             }
         }
 
-        // Append references at the end
+        // Append references at the end (stacked, one per line)
         if !references.isEmpty {
             markdownParts.append("\n\n")
             markdownParts.append(references.joined(separator: "\n"))

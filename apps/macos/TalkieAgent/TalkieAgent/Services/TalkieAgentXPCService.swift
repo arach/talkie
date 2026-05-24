@@ -129,25 +129,22 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
     }
 
     /// Notify observers that dictated text was pasted and DB store is complete.
-    /// Talkie clears only the in-window tray items (pulled via fetchTrayScreenshots).
-    func notifyDictationPasted(recordingId: UUID, recordingStartedAt: Date) {
+    /// Talkie clears unpinned tray items (data was already pulled via fetchTrayAssets).
+    func notifyDictationPasted(recordingId: UUID) {
         let idString = recordingId.uuidString
-        let startedAt = recordingStartedAt.timeIntervalSince1970
         for connection in observers {
             guard let observer = connection.remoteObjectProxyWithErrorHandler({ error in
                 NSLog("[TalkieAgentXPC] Error sending dictationWasPasted: \(error)")
             }) as? TalkieAgentStateObserverProtocol else { continue }
-            observer.dictationWasPasted(recordingId: idString, recordingStartedAt: startedAt)
+            observer.dictationWasPasted(recordingId: idString)
         }
         NSLog("[TalkieAgentXPC] ✓ Notified \(observers.count) observers about dictation paste (recording: \(idString.prefix(8)))")
     }
 
     /// Pull tray screenshots from Talkie before DB store.
-    /// Returns JSON metadata for tray items captured at/after `recordingStartedAt`
-    /// — Agent includes this in the initial recording write.
-    func fetchTrayScreenshots(recordingId: UUID, recordingStartedAt: Date) async -> String? {
+    /// Returns JSON metadata for all unpinned items — Agent includes this in the initial recording write.
+    func fetchTrayScreenshots(recordingId: UUID) async -> String? {
         let idString = recordingId.uuidString
-        let startedAt = recordingStartedAt.timeIntervalSince1970
         guard let connection = observers.first,
               let observer = connection.remoteObjectProxyWithErrorHandler({ error in
                   NSLog("[TalkieAgentXPC] Error fetching tray screenshots: \(error)")
@@ -157,9 +154,44 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         }
 
         return await withCheckedContinuation { continuation in
-            observer.fetchTrayScreenshots(recordingId: idString, recordingStartedAt: startedAt) { json in
-                NSLog("[TalkieAgentXPC] Fetched tray screenshots: \(json != nil ? "✓ got JSON" : "nil (no in-window items)")")
+            observer.fetchTrayScreenshots(recordingId: idString) { json in
+                NSLog("[TalkieAgentXPC] Fetched tray screenshots: \(json != nil ? "✓ got JSON" : "nil (no tray items)")")
                 continuation.resume(returning: json)
+            }
+        }
+    }
+
+    /// Pull all pending tray media from Talkie before DB store.
+    /// Prefer the newer assets callback so screen clips are included, but fall
+    /// back to screenshots for older observers during development.
+    func fetchTrayAssets(recordingId: UUID, recordingStartedAt: Date?) async -> String? {
+        let idString = recordingId.uuidString
+        guard let connection = observers.first,
+              let observer = connection.remoteObjectProxyWithErrorHandler({ error in
+                  NSLog("[TalkieAgentXPC] Error fetching tray assets: \(error)")
+              }) as? TalkieAgentStateObserverProtocol else {
+            NSLog("[TalkieAgentXPC] No observers connected — cannot fetch tray assets")
+            return nil
+        }
+
+        let startedAt = recordingStartedAt?.timeIntervalSince1970 ?? 0
+        if observer.fetchTrayAssets != nil {
+            return await withCheckedContinuation { continuation in
+                observer.fetchTrayAssets?(recordingId: idString, recordingStartedAt: startedAt) { json in
+                    NSLog("[TalkieAgentXPC] Fetched tray assets: \(json != nil ? "✓ got JSON" : "nil (no tray assets)")")
+                    continuation.resume(returning: json)
+                }
+            }
+        }
+
+        return await withCheckedContinuation { continuation in
+            observer.fetchTrayScreenshots(recordingId: idString) { json in
+                let screenshots = RecordingScreenshot.fromArray(json: json)
+                let assetsJSON = screenshots.isEmpty
+                    ? nil
+                    : TalkieObjectAssets(screenshots: screenshots).toJSON()
+                NSLog("[TalkieAgentXPC] Fetched legacy tray screenshots: \(assetsJSON != nil ? "✓ got assets JSON" : "nil")")
+                continuation.resume(returning: assetsJSON)
             }
         }
     }

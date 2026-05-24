@@ -73,8 +73,16 @@ final class CaptureBarController {
             }
 
             // Key handler shared by both monitors
+            var shouldIgnoreOpeningKey = true
             let handleKey: (NSEvent) -> Void = { [weak self] event in
                 guard let self else { return }
+                if shouldIgnoreOpeningKey {
+                    shouldIgnoreOpeningKey = false
+                    if event.isOpeningCaptureChordKey(initialMode: initialMode) {
+                        resetTimeout()
+                        return
+                    }
+                }
                 let key = event.charactersIgnoringModifiers?.lowercased()
                 let currentMode = self.panel.state.mode
 

@@ -353,15 +353,17 @@ struct LiveRecording: Identifiable {
     static func buildAssetsJSON(
         segmentsJSON: String? = nil,
         screenshotsJSON: String? = nil,
+        clipsJSON: String? = nil,
         textProvenance: [ProvenanceSegment]? = nil
     ) -> String? {
         let screenshots = RecordingScreenshot.fromArray(json: screenshotsJSON)
+        let clips = RecordingClip.fromArray(json: clipsJSON)
         let provenance = textProvenance?.isEmpty == false ? textProvenance : nil
 
         let assets = TalkieObjectAssets(
             segments: TimedTranscription.from(json: segmentsJSON),
             screenshots: screenshots,
-            clips: [],
+            clips: clips,
             attachments: [],
             textProvenance: provenance
         )
@@ -373,11 +375,13 @@ struct LiveRecording: Identifiable {
     mutating func setAssets(
         segmentsJSON: String? = nil,
         screenshotsJSON: String? = nil,
+        clipsJSON: String? = nil,
         textProvenance: [ProvenanceSegment]? = nil
     ) {
         self.assetsJSON = Self.buildAssetsJSON(
             segmentsJSON: segmentsJSON,
             screenshotsJSON: screenshotsJSON,
+            clipsJSON: clipsJSON,
             textProvenance: textProvenance
         )
     }
