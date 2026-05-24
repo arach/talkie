@@ -349,6 +349,14 @@ export const STUDIO_PAGES: StudioPage[] = [
 
   // ── Lab ─────────────────────────────────────────────────────────
   {
+    href: "/eng",
+    label: "Eng Docs",
+    bucket: "lab",
+    platform: "cross",
+    status: "shipped",
+    blurb: "TLK-NNN decision series — rendered from docs/specs/.",
+  },
+  {
     href: "/mac-audit",
     label: "Mac Audit",
     bucket: "lab",
