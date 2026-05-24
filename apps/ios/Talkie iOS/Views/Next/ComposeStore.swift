@@ -36,6 +36,11 @@ final class ComposeStore: ObservableObject {
     /// enum lets the mounted `HostedTalkieKeyboardView` mirror state on
     /// its mic glyph without exposing the controller's type to views.
     @Published var dictationFeedback: DictationFeedback = .idle
+    /// Transient feedback when a dictation or voice-command transcript
+    /// comes back empty / fails. Surfaces the actual error (engine not
+    /// loaded, no speech, etc.) so the user has signal instead of a
+    /// silent reset. Auto-clears after `dictationErrorTimeout`.
+    @Published var dictationErrorMessage: String?
 
     let documentID: String
 
@@ -86,6 +91,7 @@ final class ComposeStore: ObservableObject {
     private var dictationTask: Task<Void, Never>?
     private var commandTask: Task<Void, Never>?
     private var voiceCommandTask: Task<Void, Never>?
+    private var dictationErrorTask: Task<Void, Never>?
     private var isVoiceCommandCapturing = false
     private var voiceCommandDidSubmit = false
     private var lastRevisionProviderName = "Local fallback"
@@ -103,6 +109,13 @@ final class ComposeStore: ObservableObject {
         cursorParagraphIndex = max(0, document.paragraphs.count - 1)
         loadAppliedRevisions()
         seedFromLaunchArgumentsIfNeeded()
+
+        // Compose is a dictation-heavy surface — proactively load the
+        // Parakeet model so the first mic tap doesn't fall back to
+        // Apple Speech. Fire-and-forget; ParakeetModelManager has
+        // internal re-entry guards (already-warm / already-loading /
+        // no-models-on-disk), so it's safe to call unconditionally.
+        ParakeetModelManager.shared.preheatForKeyboard()
     }
 
     deinit {
@@ -164,6 +177,33 @@ final class ComposeStore: ObservableObject {
 
     func hideKeyboard() {
         keyboardVisible = false
+    }
+
+    /// Show a transient dictation/voice-command failure banner. Maps
+    /// the controller's error message onto a short user-facing string
+    /// and auto-clears after a couple of seconds.
+    private func showDictationError(_ raw: String) {
+        let normalized = raw.lowercased()
+        let friendly: String
+        if normalized.contains("no transcription result")
+            || normalized.contains("no result")
+            || normalized.contains("no speech")
+            || normalized.contains("empty") {
+            friendly = "No speech detected — try again"
+        } else if normalized.contains("speech model")
+            || normalized.contains("recognizer is not available") {
+            friendly = "Transcription engine isn't ready (check Voice settings)"
+        } else {
+            friendly = raw
+        }
+
+        dictationErrorTask?.cancel()
+        dictationErrorMessage = friendly
+        dictationErrorTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(2600))
+            guard let self, !Task.isCancelled else { return }
+            self.dictationErrorMessage = nil
+        }
     }
 
     /// Append a fragment of typed text from the in-app Talkie keyboard
@@ -396,9 +436,10 @@ final class ComposeStore: ObservableObject {
         inlineDictationController.onTranscript = { [weak self] transcript in
             self?.appendDictation(transcript)
         }
-        inlineDictationController.onError = { [weak self] _ in
+        inlineDictationController.onError = { [weak self] message in
             self?.dictationFeedback = .idle
             self?.state = .idle
+            self?.showDictationError(message)
         }
 
         voiceCommandController.onStateChange = { [weak self] state in
@@ -408,11 +449,12 @@ final class ComposeStore: ObservableObject {
             self?.voiceCommandDidSubmit = true
             self?.voiceCommandReceived(transcript)
         }
-        voiceCommandController.onError = { [weak self] _ in
+        voiceCommandController.onError = { [weak self] message in
             self?.isVoiceCommandCapturing = false
             self?.voiceCommandDidSubmit = false
             self?.lastCommandTranscript = nil
             self?.state = .idle
+            self?.showDictationError(message)
         }
     }
 
