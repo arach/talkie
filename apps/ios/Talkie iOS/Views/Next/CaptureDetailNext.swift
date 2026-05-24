@@ -240,6 +240,7 @@ private extension CaptureDetailStore.CaptureDisplay {
 }
 
 struct CaptureDetailNext: View {
+    @EnvironmentObject private var chrome: ShellChrome
     @ObservedObject private var theme = ThemeManager.shared
     @StateObject private var store: CaptureDetailStore
     @StateObject private var audioPlayer = AudioPlayerManager()
@@ -248,6 +249,7 @@ struct CaptureDetailNext: View {
     @State private var showCopied = false
     @State private var isShowingImageViewer = false
     @State private var aiCommandsCapture: Capture?
+    @State private var pendingAICommandInstruction: String?
     @State private var isEditingCapture = false
     @State private var editedTitle = ""
     @State private var editedText = ""
@@ -314,9 +316,10 @@ struct CaptureDetailNext: View {
         }
         .animation(.easeInOut(duration: 0.18), value: isShowingImageViewer)
         .sheet(item: $aiCommandsCapture, onDismiss: {
+            pendingAICommandInstruction = nil
             store.refresh()
         }) { capture in
-            CaptureAICommandsSheet(capture: capture) {
+            CaptureAICommandsSheet(capture: capture, initialInstruction: pendingAICommandInstruction) {
                 store.refresh()
             }
         }
@@ -345,7 +348,16 @@ struct CaptureDetailNext: View {
         .onChange(of: store.audioURL) { _, newURL in
             audioPlayer.preloadDuration(for: newURL)
         }
+        .onAppear {
+            chrome.voiceCommandHandler = { transcript in
+                pendingAICommandInstruction = transcript
+                aiCommandsCapture = store.sourceCapture
+            }
+        }
         .onDisappear {
+            chrome.voiceCommandHandler = { transcript in
+                AppShellRouter.shared.submitVoiceCommand(transcript)
+            }
             audioPlayer.stopPlayback()
             speechService.stop()
         }

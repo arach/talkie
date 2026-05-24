@@ -9,6 +9,7 @@ import SwiftUI
 
 struct MemoAgentSheetNext: View {
     let memo: VoiceMemoDetailStore.MemoDisplay
+    let initialInstruction: String?
 
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var theme = ThemeManager.shared
@@ -21,6 +22,7 @@ struct MemoAgentSheetNext: View {
     @State private var turns: [AgentTurn] = []
     @State private var claudeSessionId: String?
     @State private var handoffState: HandoffState = .idle
+    @State private var didConsumeSeed = false
 
     private enum AgentState {
         case idle
@@ -86,6 +88,7 @@ struct MemoAgentSheetNext: View {
         .onAppear {
             setupDictation()
             loadSession()
+            consumeInitialInstructionIfNeeded()
         }
         .onDisappear {
             dictation.controller.cancel()
@@ -362,7 +365,7 @@ struct MemoAgentSheetNext: View {
                     )
             )
 
-            Button(action: sendToAgent) {
+            Button(action: { sendToAgent() }) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 28, weight: .semibold))
                     .foregroundStyle(canSend ? theme.currentTheme.chrome.accent : theme.colors.textTertiary.opacity(0.45))
@@ -407,6 +410,11 @@ struct MemoAgentSheetNext: View {
         return theme.colors.textTertiary
     }
 
+    init(memo: VoiceMemoDetailStore.MemoDisplay, initialInstruction: String? = nil) {
+        self.memo = memo
+        self.initialInstruction = initialInstruction
+    }
+
     private func loadSession() {
         guard let session = AgentSessionStore.shared.existingSession(forMemoId: memo.id) else { return }
         turns = session.turns
@@ -437,8 +445,21 @@ struct MemoAgentSheetNext: View {
         }
     }
 
-    private func sendToAgent() {
-        let trimmed = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func consumeInitialInstructionIfNeeded() {
+        guard !didConsumeSeed else { return }
+        guard turns.isEmpty else { return }
+        guard agentState == .idle else { return }
+        guard let initialInstruction = initialInstruction?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !initialInstruction.isEmpty
+        else { return }
+
+        didConsumeSeed = true
+        instruction = initialInstruction
+        sendToAgent(initialInstruction)
+    }
+
+    private func sendToAgent(_ overrideInstruction: String? = nil) {
+        let trimmed = (overrideInstruction ?? instruction).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
         guard BridgeManager.shared.isPaired else {
