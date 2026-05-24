@@ -35,6 +35,10 @@ struct ComposeNextView: View {
     /// natural size; default fits the compact layout on a 17 Pro Max.
     @State private var keyboardHeight: CGFloat = 280
     @State private var showingNotesList = false
+    /// Hoisted from ActionTray so DocumentBody can react to it — when
+    /// the joystick popover is open we dim non-cursor paragraphs so
+    /// the eye lands on where the cursor actually is.
+    @State private var joystickShown: Bool = false
 
     init(documentID: String = "mock", store: ComposeStore? = nil) {
         self.documentID = documentID
@@ -69,6 +73,7 @@ struct ComposeNextView: View {
                 diff: compose.pendingDiff,
                 cursorParagraphIndex: compose.cursorParagraphIndex,
                 dictationFeedback: compose.dictationFeedback,
+                joystickShown: joystickShown,
                 onMic: { compose.toggleDictation() }
             )
             .padding(.horizontal, 12)
@@ -93,6 +98,7 @@ struct ComposeNextView: View {
             ActionTray(
                 state: compose.state,
                 keyboardVisible: compose.keyboardVisible,
+                joystickShown: $joystickShown,
                 onAccept: { compose.acceptDiff() },
                 onDiscard: { compose.discardDiff() },
                 onRefine: { compose.discardDiff() },
@@ -118,6 +124,7 @@ struct ComposeNextView: View {
             }
         }
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: compose.keyboardVisible)
+        .animation(.easeInOut(duration: 0.18), value: joystickShown)
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .inactive || newPhase == .background else { return }
             compose.autosave()
@@ -497,6 +504,10 @@ private struct DocumentBody: View {
     let diff: ComposeStore.Diff?
     let cursorParagraphIndex: Int
     let dictationFeedback: ComposeStore.DictationFeedback
+    /// When the joystick popover is open, dim every paragraph that
+    /// isn't under the cursor so the eye lands on the active row.
+    /// Distance-based falloff per `spotlightOpacity(distance:)`.
+    let joystickShown: Bool
     let onMic: () -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
@@ -518,6 +529,11 @@ private struct DocumentBody: View {
                             isLast: idx == document.paragraphs.count - 1,
                             showCaret: state == .idle && idx == cursorParagraphIndex,
                             accent: theme.currentTheme.chrome.accent
+                        )
+                        .opacity(
+                            joystickShown
+                                ? spotlightOpacity(distance: abs(idx - cursorParagraphIndex))
+                                : 1.0
                         )
                     }
 
@@ -1012,11 +1028,31 @@ private struct ComposeNotesListSheet: View {
 
 // MARK: - Cursor joystick
 
+/// Per-paragraph dim factor when the joystick popover is open. The
+/// cursor paragraph stays at full opacity; everything else fades by
+/// index-distance so the eye lands on the active row when the popover
+/// first appears.
+private func spotlightOpacity(distance: Int) -> Double {
+    switch distance {
+    case 0: return 1.0
+    case 1: return 0.4
+    case 2: return 0.22
+    default: return 0.16
+    }
+}
+
 private struct CursorJoystickPopover: View {
     @Binding var cursorParagraphIndex: Int
     let paragraphCount: Int
+    let onDismiss: () -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
+    @State private var scrubAnchor: Int = 0
+
+    /// Vertical drag distance, in points, that scrubs one paragraph.
+    /// Small enough that a thumb-sized drag walks the whole doc; large
+    /// enough that you can pause-and-stop without overshooting.
+    private static let pointsPerParagraph: CGFloat = 28
 
     var body: some View {
         VStack(spacing: 8) {
@@ -1029,11 +1065,7 @@ private struct CursorJoystickPopover: View {
                 joystickGlyph("chevron.left")
                     .opacity(0.35)
 
-                Image(systemName: "scope")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(theme.currentTheme.chrome.accent)
-                    .frame(width: 34, height: 34)
-                    .background(Circle().fill(theme.currentTheme.chrome.accentTint))
+                scopeButton
 
                 joystickGlyph("chevron.right")
                     .opacity(0.35)
@@ -1043,15 +1075,10 @@ private struct CursorJoystickPopover: View {
                 joystickGlyph("chevron.down")
             }
             .disabled(cursorParagraphIndex >= max(0, paragraphCount - 1))
-
-            Text("Paragraph \(min(cursorParagraphIndex + 1, max(1, paragraphCount))) of \(max(1, paragraphCount))")
-                .talkieType(.channelLabelTiny)
-                .foregroundStyle(theme.colors.textTertiary)
-                .monospacedDigit()
         }
         .buttonStyle(.plain)
         .padding(12)
-        .frame(width: 140, height: 140)
+        .frame(width: 132, height: 132)
         .background(
             RoundedRectangle(cornerRadius: theme.currentTheme.chrome.chromeCorner + 4)
                 .fill(theme.colors.cardBackground)
@@ -1062,6 +1089,37 @@ private struct CursorJoystickPopover: View {
                 )
         )
         .presentationCompactAdaptation(.popover)
+    }
+
+    /// Center "scope" target. Tap to confirm + dismiss; drag vertically
+    /// to scrub the cursor through paragraphs continuously. The drag
+    /// gesture anchors to the cursor position at touch-down so the
+    /// movement maps relative-to-start, not absolute.
+    private var scopeButton: some View {
+        Image(systemName: "scope")
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(theme.currentTheme.chrome.accent)
+            .frame(width: 38, height: 38)
+            .background(Circle().fill(theme.currentTheme.chrome.accentTint))
+            .contentShape(Circle())
+            .gesture(
+                DragGesture(minimumDistance: 4)
+                    .onChanged { value in
+                        if value.translation == .zero {
+                            scrubAnchor = cursorParagraphIndex
+                        }
+                        let steps = Int((value.translation.height / Self.pointsPerParagraph).rounded())
+                        let target = max(0, min(paragraphCount - 1, scrubAnchor + steps))
+                        if target != cursorParagraphIndex {
+                            cursorParagraphIndex = target
+                        }
+                    }
+                    .onEnded { _ in scrubAnchor = cursorParagraphIndex }
+            )
+            .simultaneousGesture(
+                TapGesture().onEnded { onDismiss() }
+            )
+            .accessibilityLabel("Confirm cursor position")
     }
 
     private func moveUp() {
@@ -1094,6 +1152,7 @@ private struct CursorJoystickPopover: View {
 private struct ActionTray: View {
     let state: ComposeState
     let keyboardVisible: Bool
+    @Binding var joystickShown: Bool
     let onAccept: () -> Void
     let onDiscard: () -> Void
     let onRefine: () -> Void
@@ -1102,7 +1161,6 @@ private struct ActionTray: View {
     @Binding var cursorParagraphIndex: Int
     let paragraphCount: Int
 
-    @State private var showJoystick = false
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
@@ -1123,13 +1181,18 @@ private struct ActionTray: View {
                 // are the real wins on mobile edits.
                 HStack(spacing: 14) {
                     trayButton(systemImage: "scissors", accessibilityLabel: "Cut") { /* TODO M3: cut */ }
-                    trayButton(systemImage: "arrow.up.and.down.and.arrow.left.and.right", accessibilityLabel: "Cursor") {
-                        showJoystick = true
+                    trayButton(
+                        systemImage: "arrow.up.and.down.and.arrow.left.and.right",
+                        accessibilityLabel: "Cursor",
+                        active: joystickShown
+                    ) {
+                        joystickShown.toggle()
                     }
-                    .popover(isPresented: $showJoystick) {
+                    .popover(isPresented: $joystickShown) {
                         CursorJoystickPopover(
                             cursorParagraphIndex: $cursorParagraphIndex,
-                            paragraphCount: paragraphCount
+                            paragraphCount: paragraphCount,
+                            onDismiss: { joystickShown = false }
                         )
                     }
                     trayButton(systemImage: "doc.on.clipboard", accessibilityLabel: "Paste") { /* TODO M3: paste */ }
