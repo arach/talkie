@@ -35,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private let screenRecordHotKeyManager = HotKeyManager(signature: "\(sig)SR", hotkeyID: 13)  // Screen recording chord
     private let pasteChordHotKeyManager = HotKeyManager(signature: "\(sig)PV", hotkeyID: 15)  // Quick Paste chord
     private let pasteLastScreenshotHotKey = HotKeyManager(signature: "\(sig)PF", hotkeyID: 16)  // Paste last screenshot
+    private let walkieHotKeyManager = HotKeyManager(signature: "\(sig)WT", hotkeyID: 17)  // Hyper+T walkie instrument (TLK-020)
     private let captureHotPathLoggingEnabled = ProcessInfo.processInfo.environment["CAPTURE_PERF"] == "1"
 
     #if DEBUG
@@ -931,6 +932,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             ("Queue Picker", queuePickerHotKeyManager),
             ("Compose", composeHotKeyManager),
             ("Speak Selection", speakSelectionHotKeyManager),
+            ("Walkie", walkieHotKeyManager),
         ]
 
         if TalkieSharedSettings.bool(forKey: AgentSettingsKey.featureCaptureEnabled) {
@@ -1006,6 +1008,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             )
         }
 
+        // Register walkie hotkey — default Hyper+T (⇧⌃⌥⌘T). Press-and-hold
+        // semantics: press blooms the floating instrument, release dismisses.
+        // Unit 1 (TLK-020): mechanic only — no audio, no LLM yet.
+        walkieHotKeyManager.registerHotKey(
+            modifiers: UInt32(cmdKey | controlKey | optionKey | shiftKey),
+            keyCode: 17,
+            onPress: { _ in
+                Task { @MainActor in
+                    WalkieController.shared.press()
+                }
+            },
+            onRelease: {
+                Task { @MainActor in
+                    WalkieController.shared.release()
+                }
+            }
+        )
+        log.info("Walkie hotkey registered: ⇧⌃⌥⌘T")
+
         // Track what we registered to avoid needless re-registration
         lastHotkey = settings.hotkey
         lastPTTHotkey = settings.pttHotkey
@@ -1024,6 +1045,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         hotKeyManager.unregisterAll()
         pttHotKeyManager.unregisterAll()
         speakSelectionHotKeyManager.unregisterAll()
+        walkieHotKeyManager.unregisterAll()
         unregisterCaptureHotkeys()
         registerHotkeys()
         registerSelectionQuickHotkey()

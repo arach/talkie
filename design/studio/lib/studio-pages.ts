@@ -236,6 +236,15 @@ export const STUDIO_PAGES: StudioPage[] = [
     family: "chrome",
     status: "wip",
   },
+  {
+    href: "/mac-walkie",
+    label: "Walkie",
+    bucket: "surfaces",
+    platform: "mac",
+    family: "agent",
+    status: "concept",
+    blurb: "Hyper+T transmission loop — verbal ♪ / async ⟳ modes.",
+  },
 
   // ── Surfaces · iPhone ───────────────────────────────────────────
   {
