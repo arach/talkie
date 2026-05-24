@@ -35,11 +35,6 @@ struct ComposeNextView: View {
     /// natural size; default fits the compact layout on a 17 Pro Max.
     @State private var keyboardHeight: CGFloat = 280
     @State private var showingNotesList = false
-    /// Joystick (cursor-scrub) mode. When engaged, the document body
-    /// fades out paragraphs further from the cursor, places a reticle
-    /// on the active paragraph, and lets the user tap or drag on the
-    /// card to move the cursor. Tap the cursor tray button to toggle.
-    @State private var joystickActive: Bool = false
 
     init(documentID: String = "mock", store: ComposeStore? = nil) {
         self.documentID = documentID
@@ -74,8 +69,6 @@ struct ComposeNextView: View {
                 diff: compose.pendingDiff,
                 cursorParagraphIndex: compose.cursorParagraphIndex,
                 dictationFeedback: compose.dictationFeedback,
-                joystickActive: joystickActive,
-                onJumpCursor: { idx in compose.cursorParagraphIndex = idx },
                 onMic: { compose.toggleDictation() }
             )
             .padding(.horizontal, 12)
@@ -100,13 +93,16 @@ struct ComposeNextView: View {
             ActionTray(
                 state: compose.state,
                 keyboardVisible: compose.keyboardVisible,
-                joystickActive: joystickActive,
                 onAccept: { compose.acceptDiff() },
                 onDiscard: { compose.discardDiff() },
                 onRefine: { compose.discardDiff() },
                 onVoice: { compose.toggleVoiceCommand() },
                 onKeyboard: { compose.toggleKeyboard() },
-                onJoystickToggle: { joystickActive.toggle() }
+                cursorParagraphIndex: Binding(
+                    get: { compose.cursorParagraphIndex },
+                    set: { compose.cursorParagraphIndex = $0 }
+                ),
+                paragraphCount: compose.document.paragraphs.count
             )
 
             // In-app Talkie keyboard. Same shape as the SSH terminal —
@@ -122,7 +118,6 @@ struct ComposeNextView: View {
             }
         }
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: compose.keyboardVisible)
-        .animation(.easeInOut(duration: 0.18), value: joystickActive)
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .inactive || newPhase == .background else { return }
             compose.autosave()
@@ -502,12 +497,9 @@ private struct DocumentBody: View {
     let diff: ComposeStore.Diff?
     let cursorParagraphIndex: Int
     let dictationFeedback: ComposeStore.DictationFeedback
-    let joystickActive: Bool
-    let onJumpCursor: (Int) -> Void
     let onMic: () -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
-    @State private var paragraphFrames: [Int: CGRect] = [:]
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -525,27 +517,8 @@ private struct DocumentBody: View {
                             text: para,
                             isLast: idx == document.paragraphs.count - 1,
                             showCaret: state == .idle && idx == cursorParagraphIndex,
-                            showCursorMarker: joystickActive && idx == cursorParagraphIndex,
                             accent: theme.currentTheme.chrome.accent
                         )
-                        .opacity(
-                            joystickActive
-                                ? spotlightOpacity(distance: abs(idx - cursorParagraphIndex))
-                                : 1.0
-                        )
-                        .background(
-                            GeometryReader { geo in
-                                Color.clear.preference(
-                                    key: ParagraphFramePreference.self,
-                                    value: [idx: geo.frame(in: .named("composeBody"))]
-                                )
-                            }
-                        )
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            guard joystickActive else { return }
-                            onJumpCursor(idx)
-                        }
                     }
 
                     if state == .listening, let voiceCommand {
@@ -575,34 +548,6 @@ private struct DocumentBody: View {
             }
         }
         .padding(.top, 8)
-        .coordinateSpace(name: "composeBody")
-        .onPreferenceChange(ParagraphFramePreference.self) { paragraphFrames = $0 }
-        .simultaneousGesture(joystickActive ? scrubGesture : nil)
-    }
-
-    /// Drag gesture used while the joystick is engaged. The user can
-    /// touch anywhere on the card and slide vertically; whichever
-    /// paragraph the finger is over becomes the new cursor row. Tap
-    /// gestures on individual rows take a separate path above.
-    private var scrubGesture: some Gesture {
-        DragGesture(minimumDistance: 4, coordinateSpace: .named("composeBody"))
-            .onChanged { value in
-                let y = value.location.y
-                guard let idx = paragraphIndex(forY: y) else { return }
-                if idx != cursorParagraphIndex {
-                    onJumpCursor(idx)
-                }
-            }
-    }
-
-    private func paragraphIndex(forY y: CGFloat) -> Int? {
-        guard !paragraphFrames.isEmpty else { return nil }
-        // Pick the row whose midY is closest to the finger. Handles
-        // the gap-between-paragraphs case better than `contains`,
-        // because the 12pt VStack spacing leaves dead zones.
-        return paragraphFrames.min(by: { lhs, rhs in
-            abs(lhs.value.midY - y) < abs(rhs.value.midY - y)
-        })?.key
     }
 
     private var cardSurface: some View {
@@ -620,29 +565,20 @@ private struct ParagraphView: View {
     let text: String
     let isLast: Bool
     let showCaret: Bool
-    let showCursorMarker: Bool
     let accent: Color
 
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            if showCursorMarker {
-                ParagraphCursorMarker(accent: accent)
-                    .alignmentGuide(.firstTextBaseline) { d in d[VerticalAlignment.center] }
-                    .transition(.scale.combined(with: .opacity))
-            }
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            Text(text)
+                .foregroundStyle(theme.colors.textPrimary)
+                .talkieType(.listTitle)
+                .lineSpacing(4)
 
-            HStack(alignment: .firstTextBaseline, spacing: 0) {
-                Text(text)
-                    .foregroundStyle(theme.colors.textPrimary)
-                    .talkieType(.listTitle)
-                    .lineSpacing(4)
-
-                if showCaret {
-                    BlinkingCaret(color: accent)
-                        .padding(.leading, 1)
-                }
+            if showCaret {
+                BlinkingCaret(color: accent)
+                    .padding(.leading, 1)
             }
         }
     }
@@ -1074,44 +1010,82 @@ private struct ComposeNotesListSheet: View {
     }
 }
 
-// MARK: - Cursor joystick (spotlight)
+// MARK: - Cursor joystick
 
-/// Preference key that collects the per-paragraph frame in the
-/// document-body coordinate space. The drag gesture uses these to map
-/// finger Y back to a paragraph index for live spotlight scrubbing.
-private struct ParagraphFramePreference: PreferenceKey {
-    static var defaultValue: [Int: CGRect] = [:]
-    static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
-        value.merge(nextValue(), uniquingKeysWith: { $1 })
-    }
-}
+private struct CursorJoystickPopover: View {
+    @Binding var cursorParagraphIndex: Int
+    let paragraphCount: Int
 
-/// Opacity of a paragraph row given its index distance from the cursor.
-/// 1.0 at the cursor, fading down past it — closer to a film-style
-/// rack-focus than the previous popover, which is what the user asked
-/// for: "stronger dimming further from the cursor … spotlight effect."
-private func spotlightOpacity(distance: Int) -> Double {
-    switch distance {
-    case 0: return 1.0
-    case 1: return 0.4
-    case 2: return 0.22
-    default: return 0.16
-    }
-}
-
-/// Small reticle marker on the active paragraph while the joystick is
-/// engaged. Sits to the left of the row at the same baseline so the eye
-/// reads the marker as "you are here" without crowding the text.
-private struct ParagraphCursorMarker: View {
-    let accent: Color
+    @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        Image(systemName: "scope")
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(accent)
-            .frame(width: 18, height: 18)
-            .background(Circle().fill(accent.opacity(0.16)))
-            .accessibilityHidden(true)
+        VStack(spacing: 8) {
+            Button(action: moveUp) {
+                joystickGlyph("chevron.up")
+            }
+            .disabled(cursorParagraphIndex <= 0)
+
+            HStack(spacing: 8) {
+                joystickGlyph("chevron.left")
+                    .opacity(0.35)
+
+                Image(systemName: "scope")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(theme.currentTheme.chrome.accentTint))
+
+                joystickGlyph("chevron.right")
+                    .opacity(0.35)
+            }
+
+            Button(action: moveDown) {
+                joystickGlyph("chevron.down")
+            }
+            .disabled(cursorParagraphIndex >= max(0, paragraphCount - 1))
+
+            Text("Paragraph \(min(cursorParagraphIndex + 1, max(1, paragraphCount))) of \(max(1, paragraphCount))")
+                .talkieType(.channelLabelTiny)
+                .foregroundStyle(theme.colors.textTertiary)
+                .monospacedDigit()
+        }
+        .buttonStyle(.plain)
+        .padding(12)
+        .frame(width: 140, height: 140)
+        .background(
+            RoundedRectangle(cornerRadius: theme.currentTheme.chrome.chromeCorner + 4)
+                .fill(theme.colors.cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: theme.currentTheme.chrome.chromeCorner + 4)
+                        .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                      lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                )
+        )
+        .presentationCompactAdaptation(.popover)
+    }
+
+    private func moveUp() {
+        cursorParagraphIndex = max(0, cursorParagraphIndex - 1)
+    }
+
+    private func moveDown() {
+        cursorParagraphIndex = min(max(0, paragraphCount - 1), cursorParagraphIndex + 1)
+    }
+
+    private func joystickGlyph(_ systemImage: String) -> some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(theme.colors.textSecondary)
+            .frame(width: 34, height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(theme.colors.background)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                          lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                    )
+            )
     }
 }
 
@@ -1120,14 +1094,15 @@ private struct ParagraphCursorMarker: View {
 private struct ActionTray: View {
     let state: ComposeState
     let keyboardVisible: Bool
-    let joystickActive: Bool
     let onAccept: () -> Void
     let onDiscard: () -> Void
     let onRefine: () -> Void
     let onVoice: () -> Void
     let onKeyboard: () -> Void
-    let onJoystickToggle: () -> Void
+    @Binding var cursorParagraphIndex: Int
+    let paragraphCount: Int
 
+    @State private var showJoystick = false
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
@@ -1144,16 +1119,19 @@ private struct ActionTray: View {
                 trayButton(systemImage: "dot.radiowaves.left.and.right", accessibilityLabel: "Voice command", action: onVoice)
                 Spacer()
                 // Edit cluster — cut · cursor · paste. Cursor button
-                // toggles joystick mode (spotlight + drag on the doc);
-                // cut/paste are the real wins on mobile edits.
+                // still useful for jumping around the doc; cut/paste
+                // are the real wins on mobile edits.
                 HStack(spacing: 14) {
                     trayButton(systemImage: "scissors", accessibilityLabel: "Cut") { /* TODO M3: cut */ }
-                    trayButton(
-                        systemImage: joystickActive ? "scope" : "arrow.up.and.down.and.arrow.left.and.right",
-                        accessibilityLabel: joystickActive ? "Exit cursor mode" : "Cursor mode",
-                        active: joystickActive,
-                        action: onJoystickToggle
-                    )
+                    trayButton(systemImage: "arrow.up.and.down.and.arrow.left.and.right", accessibilityLabel: "Cursor") {
+                        showJoystick = true
+                    }
+                    .popover(isPresented: $showJoystick) {
+                        CursorJoystickPopover(
+                            cursorParagraphIndex: $cursorParagraphIndex,
+                            paragraphCount: paragraphCount
+                        )
+                    }
                     trayButton(systemImage: "doc.on.clipboard", accessibilityLabel: "Paste") { /* TODO M3: paste */ }
                 }
                 Spacer()
