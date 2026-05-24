@@ -1,0 +1,17 @@
+{
+  "name": "talkie-agent-runtime-node",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Thin stdio dispatcher for TalkieAgentRuntime.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node ./index.mjs",
+    "smoke:ping": "printf '{\"op\":\"ping\"}\\n' | node ./index.mjs"
+  },
+  "dependencies": {
+    "@openscout/agent-sessions": "0.2.68"
+  }
+}
