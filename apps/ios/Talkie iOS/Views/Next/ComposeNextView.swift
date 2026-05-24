@@ -65,6 +65,7 @@ struct ComposeNextView: View {
                 voiceCommand: compose.lastCommandTranscript,
                 generatingETA: compose.generatingETA,
                 diff: compose.pendingDiff,
+                cursorParagraphIndex: compose.cursorParagraphIndex,
                 onMic: { compose.toggleDictation() }
             )
             .padding(.horizontal, 12)
@@ -92,13 +93,21 @@ struct ComposeNextView: View {
                 onDiscard: { compose.discardDiff() },
                 onRefine: { compose.discardDiff() },
                 onVoice: { compose.toggleVoiceCommand() },
-                onKeyboard: { compose.toggleKeyboard() }
+                onKeyboard: { compose.toggleKeyboard() },
+                cursorParagraphIndex: Binding(
+                    get: { compose.cursorParagraphIndex },
+                    set: { compose.cursorParagraphIndex = $0 }
+                ),
+                paragraphCount: compose.document.paragraphs.count
             )
-
-            // Hidden bridge that hosts the in-app Talkie keyboard
-            // (HostedTalkieKeyboardView). Tap → keyboard slides up;
-            // its own collapse button slides it back down. Typed text
-            // flows into the document via `compose.applyKeyboardInsert`.
+        }
+        .overlay(alignment: .bottomTrailing) {
+            // Bridge that hosts the in-app Talkie keyboard
+            // (HostedTalkieKeyboardView). Keep UIKit's responder view
+            // non-zero sized and fully opaque at the UIView level; a
+            // nearly-transparent SwiftUI wrapper can make UITextField
+            // first-responder activation flaky, so the field itself hides
+            // its visuals with clear colors instead.
             TalkieKeyboardBridge(
                 isFocused: $isTalkieKeyboardFocused,
                 onInsert: { fragment in
@@ -108,8 +117,8 @@ struct ComposeNextView: View {
                     compose.applyKeyboardDelete()
                 }
             )
-            .frame(width: 1, height: 1)
-            .opacity(0.01)
+            .frame(width: 44, height: 44)
+            .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
         .onChange(of: compose.keyboardFocusRequested) { _, _ in
@@ -156,6 +165,9 @@ private struct TalkieKeyboardBridge: UIViewRepresentable {
         field.autocapitalizationType = .none
         field.smartDashesType = .no
         field.smartQuotesType = .no
+        field.borderStyle = .none
+        field.backgroundColor = .clear
+        field.textColor = .clear
         field.tintColor = .clear   // hide caret on the invisible bridge
         field.inputAssistantItem.leadingBarButtonGroups = []
         field.inputAssistantItem.trailingBarButtonGroups = []
@@ -193,9 +205,7 @@ private struct TalkieKeyboardBridge: UIViewRepresentable {
         }
 
         if isFocused {
-            if !uiView.isFirstResponder {
-                uiView.becomeFirstResponder()
-            }
+            context.coordinator.requestFocus(for: uiView)
         } else if uiView.isFirstResponder {
             uiView.resignFirstResponder()
         }
@@ -228,6 +238,24 @@ private struct TalkieKeyboardBridge: UIViewRepresentable {
 
         @objc func editingDidEnd() {
             onResign?()
+        }
+
+        func requestFocus(for field: _TalkieKeyboardBridgeField) {
+            guard !field.isFirstResponder else { return }
+            guard field.window != nil else {
+                Task { @MainActor [weak field] in
+                    guard let field, !field.isFirstResponder else { return }
+                    _ = field.becomeFirstResponder()
+                }
+                return
+            }
+
+            if !field.becomeFirstResponder() {
+                Task { @MainActor [weak field] in
+                    guard let field, !field.isFirstResponder else { return }
+                    _ = field.becomeFirstResponder()
+                }
+            }
         }
 
         func performKeyboardAction(_ action: KeyboardAction) {
@@ -294,43 +322,57 @@ private struct ComposeHeader: View {
         // leading/trailing edges via an overlaid HStack; the back
         // text truncates instead of pushing the title around.
         ZStack {
-            // Centered title (always at screen horizontal center)
+            // Centered title (always at screen horizontal center).
+            // In .diff state the model picker is suppressed — the
+            // decision view should focus on the diff itself, not on
+            // which API is wired up. Model selection still reachable
+            // via the ⋯ menu.
             VStack(spacing: 2) {
                 Text(state == .diff ? "· COMPOSE WITH · v1 → v2" : "· COMPOSE WITH")
                     .talkieType(.channelLabelTiny)
                     .foregroundStyle(theme.colors.textTertiary)
 
-                Menu {
-                    Section("Revision path") {
-                        ForEach(ComposeStore.RevisionPath.allCases) { path in
-                            Button {
-                                onSelectRevisionPath(path)
-                            } label: {
-                                Label(path.title, systemImage: path.systemImage)
+                if state != .diff {
+                    Menu {
+                        Section("Revision path") {
+                            ForEach(ComposeStore.RevisionPath.allCases) { path in
+                                Button {
+                                    onSelectRevisionPath(path)
+                                } label: {
+                                    Label(path.title, systemImage: path.systemImage)
+                                }
                             }
                         }
-                    }
 
-                    Button {
-                        onShowNotes()
+                        Section("Provider") {
+                            Button {
+                                AppShellRouter.shared.openAICredentials()
+                            } label: {
+                                Label("Manage AI keys", systemImage: "key.fill")
+                            }
+                        }
+
+                        Button {
+                            onShowNotes()
+                        } label: {
+                            Label("Open notes", systemImage: "list.bullet.rectangle")
+                        }
                     } label: {
-                        Label("Open notes", systemImage: "list.bullet.rectangle")
+                        HStack(spacing: 6) {
+                            Image(systemName: revisionPath.systemImage)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(theme.currentTheme.chrome.accent)
+                            ComposeModelGlyph(display: modelDisplay)
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(theme.colors.textTertiary)
+                                .padding(.leading, 1)
+                                .accessibilityHidden(true)
+                        }
                     }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: revisionPath.systemImage)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(theme.currentTheme.chrome.accent)
-                        ComposeModelGlyph(display: modelDisplay)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(theme.colors.textTertiary)
-                            .padding(.leading, 1)
-                            .accessibilityHidden(true)
-                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Choose revision path · \(accessibilityLabel)")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Choose revision path · \(accessibilityLabel)")
             }
 
             // Edge-anchored controls
@@ -516,6 +558,7 @@ private struct DocumentBody: View {
     let voiceCommand: String?
     let generatingETA: String?
     let diff: ComposeStore.Diff?
+    let cursorParagraphIndex: Int
     let onMic: () -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
@@ -526,24 +569,27 @@ private struct DocumentBody: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 if state == .diff, let diff {
+                    if let voiceCommand {
+                        RequestedStrip(commandText: voiceCommand)
+                    }
                     DiffInline(diff: diff)
                 } else {
                     ForEach(Array(document.paragraphs.enumerated()), id: \.offset) { idx, para in
                         ParagraphView(
                             text: para,
                             isLast: idx == document.paragraphs.count - 1,
-                            dictationPreview: idx == document.paragraphs.count - 1 ? dictationPreview : nil,
-                            showCaret: state == .idle && idx == document.paragraphs.count - 1,
+                            dictationPreview: idx == cursorParagraphIndex ? dictationPreview : nil,
+                            showCaret: state == .idle && idx == cursorParagraphIndex,
                             accent: theme.currentTheme.chrome.accent
                         )
                     }
-                }
 
-                if state == .listening, let voiceCommand {
-                    ListeningStrip(commandText: voiceCommand)
-                }
-                if state == .generating {
-                    GeneratingStrip(eta: generatingETA ?? "~3s")
+                    if state == .listening, let voiceCommand {
+                        ListeningStrip(commandText: voiceCommand)
+                    }
+                    if state == .generating {
+                        GeneratingStrip(eta: generatingETA ?? "~3s")
+                    }
                 }
 
                 Spacer(minLength: 0)
@@ -681,6 +727,42 @@ private struct GeneratingStrip: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                      lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                )
+        )
+    }
+}
+
+private struct RequestedStrip: View {
+    let commandText: String
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(theme.currentTheme.chrome.accent)
+
+            Text("REQUESTED")
+                .talkieType(.channelLabel)
+                .foregroundStyle(theme.currentTheme.chrome.accent)
+
+            Text("\u{201C}\(commandText)\u{201D}")
+                .talkieType(.fieldLabel)
+                .italic()
+                .foregroundStyle(theme.colors.textSecondary)
+                .lineLimit(2)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(theme.currentTheme.chrome.accentTint)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(theme.currentTheme.chrome.accentStrong,
                                       lineWidth: theme.currentTheme.chrome.hairlineWidth)
                 )
         )
@@ -984,6 +1066,85 @@ private struct ComposeNotesListSheet: View {
     }
 }
 
+// MARK: - Cursor joystick
+
+private struct CursorJoystickPopover: View {
+    @Binding var cursorParagraphIndex: Int
+    let paragraphCount: Int
+
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Button(action: moveUp) {
+                joystickGlyph("chevron.up")
+            }
+            .disabled(cursorParagraphIndex <= 0)
+
+            HStack(spacing: 8) {
+                joystickGlyph("chevron.left")
+                    .opacity(0.35)
+
+                Image(systemName: "scope")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(theme.currentTheme.chrome.accentTint))
+
+                joystickGlyph("chevron.right")
+                    .opacity(0.35)
+            }
+
+            Button(action: moveDown) {
+                joystickGlyph("chevron.down")
+            }
+            .disabled(cursorParagraphIndex >= max(0, paragraphCount - 1))
+
+            Text("Paragraph \(min(cursorParagraphIndex + 1, max(1, paragraphCount))) of \(max(1, paragraphCount))")
+                .talkieType(.channelLabelTiny)
+                .foregroundStyle(theme.colors.textTertiary)
+                .monospacedDigit()
+        }
+        .buttonStyle(.plain)
+        .padding(12)
+        .frame(width: 140, height: 140)
+        .background(
+            RoundedRectangle(cornerRadius: theme.currentTheme.chrome.chromeCorner + 4)
+                .fill(theme.colors.cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: theme.currentTheme.chrome.chromeCorner + 4)
+                        .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                      lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                )
+        )
+        .presentationCompactAdaptation(.popover)
+    }
+
+    private func moveUp() {
+        cursorParagraphIndex = max(0, cursorParagraphIndex - 1)
+    }
+
+    private func moveDown() {
+        cursorParagraphIndex = min(max(0, paragraphCount - 1), cursorParagraphIndex + 1)
+    }
+
+    private func joystickGlyph(_ systemImage: String) -> some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(theme.colors.textSecondary)
+            .frame(width: 34, height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(theme.colors.background)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                          lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                    )
+            )
+    }
+}
+
 // MARK: - Action tray (or accept/discard during diff)
 
 private struct ActionTray: View {
@@ -993,7 +1154,10 @@ private struct ActionTray: View {
     let onRefine: () -> Void
     let onVoice: () -> Void
     let onKeyboard: () -> Void
+    @Binding var cursorParagraphIndex: Int
+    let paragraphCount: Int
 
+    @State private var showJoystick = false
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
@@ -1014,7 +1178,15 @@ private struct ActionTray: View {
                 // are the real wins on mobile edits.
                 HStack(spacing: 14) {
                     trayButton(systemImage: "scissors", accessibilityLabel: "Cut") { /* TODO M3: cut */ }
-                    trayButton(systemImage: "arrow.up.and.down.and.arrow.left.and.right", accessibilityLabel: "Cursor") { /* TODO M3: cursor jump */ }
+                    trayButton(systemImage: "arrow.up.and.down.and.arrow.left.and.right", accessibilityLabel: "Cursor") {
+                        showJoystick = true
+                    }
+                    .popover(isPresented: $showJoystick) {
+                        CursorJoystickPopover(
+                            cursorParagraphIndex: $cursorParagraphIndex,
+                            paragraphCount: paragraphCount
+                        )
+                    }
                     trayButton(systemImage: "doc.on.clipboard", accessibilityLabel: "Paste") { /* TODO M3: paste */ }
                 }
                 Spacer()

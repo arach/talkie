@@ -53,7 +53,10 @@ struct AskAINext: View {
             }
             .animation(.easeInOut(duration: 0.18), value: networkStatus)
         }
-        .onAppear(perform: bindShellVoice)
+        .onAppear {
+            bindShellVoice()
+            consumePendingPrompt()
+        }
         .onDisappear {
             chrome.voiceCommandHandler = { transcript in
                 AppShellRouter.shared.submitVoiceCommand(transcript)
@@ -226,6 +229,16 @@ struct AskAINext: View {
             session.receiveVoicePrompt(transcript)
             isPromptFocused = true
         }
+    }
+
+    private func consumePendingPrompt() {
+        guard let pending = AppShellRouter.shared.pendingAskAIPrompt?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !pending.isEmpty
+        else { return }
+
+        session.receiveVoicePrompt(pending)
+        isPromptFocused = true
+        AppShellRouter.shared.pendingAskAIPrompt = nil
     }
 
     private func applyPreset(_ preset: AskAIPreset) {

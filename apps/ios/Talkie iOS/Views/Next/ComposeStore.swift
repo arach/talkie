@@ -15,7 +15,9 @@ import TalkieMobileKit
 @MainActor
 final class ComposeStore: ObservableObject {
     @Published var state: ComposeState = .idle
-    @Published var document: Document
+    @Published var document: Document {
+        didSet { clampCursorParagraphIndex() }
+    }
     @Published var livePartialTranscript: String?
     @Published var lastCommandTranscript: String?
     @Published var generatingETA: String?
@@ -23,6 +25,9 @@ final class ComposeStore: ObservableObject {
     @Published var keyboardFocusRequested: Bool = false
     @Published var revisionPath: RevisionPath
     @Published var appliedRevisions: [ComposeNoteStore.RevisionRecord] = []
+    @Published var cursorParagraphIndex: Int = 0 {
+        didSet { clampCursorParagraphIndex() }
+    }
 
     let documentID: String
 
@@ -87,6 +92,7 @@ final class ComposeStore: ObservableObject {
 
         configureDictationControllers()
         loadDocument(documentID: documentID)
+        cursorParagraphIndex = max(0, document.paragraphs.count - 1)
         loadAppliedRevisions()
         seedFromLaunchArgumentsIfNeeded()
     }
@@ -159,12 +165,19 @@ final class ComposeStore: ObservableObject {
     func applyKeyboardInsert(_ fragment: String) {
         guard !fragment.isEmpty else { return }
         var paragraphs = document.paragraphs.isEmpty ? [""] : document.paragraphs
-        let index = paragraphs.indices.last ?? 0
-        if fragment == "\n" {
-            paragraphs.append("")
-        } else {
-            paragraphs[index].append(fragment)
+        var index = clampedCursorIndex(in: paragraphs)
+
+        for component in fragment.components(separatedBy: .newlines).enumerated() {
+            if component.offset > 0 {
+                index += 1
+                paragraphs.insert("", at: index)
+            }
+            if !component.element.isEmpty {
+                paragraphs[index].append(component.element)
+            }
         }
+
+        cursorParagraphIndex = index
         document = Document(title: document.title, paragraphs: paragraphs)
         persistDocument()
     }
@@ -476,7 +489,8 @@ final class ComposeStore: ObservableObject {
         }
 
         var paragraphs = document.paragraphs.isEmpty ? [""] : document.paragraphs
-        let index = paragraphs.indices.last ?? 0
+        let index = clampedCursorIndex(in: paragraphs)
+        cursorParagraphIndex = index
         let existing = paragraphs[index].trimmingCharacters(in: .whitespacesAndNewlines)
         paragraphs[index] = existing.isEmpty ? trimmed : [existing, trimmed].joined(separator: " ")
         document = Document(title: document.title, paragraphs: paragraphs)
@@ -613,6 +627,18 @@ final class ComposeStore: ObservableObject {
         }
 
         return trimmed
+    }
+
+    private func clampedCursorIndex(in paragraphs: [String]) -> Int {
+        guard !paragraphs.isEmpty else { return 0 }
+        return min(max(0, cursorParagraphIndex), paragraphs.count - 1)
+    }
+
+    private func clampCursorParagraphIndex() {
+        let clamped = clampedCursorIndex(in: document.paragraphs)
+        if cursorParagraphIndex != clamped {
+            cursorParagraphIndex = clamped
+        }
     }
 
     private func persistDocument() {

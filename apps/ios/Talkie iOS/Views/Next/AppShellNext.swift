@@ -321,6 +321,12 @@ final class AppShellRouter: ObservableObject {
     /// Codex wires VoiceMemoStore to create a memo from the payload
     /// and route to its detail surface. Paint side just sets this.
     @Published var pendingNewMemoText: String?
+    /// Prompt routed into the next Ask AI surface. Set by `openAskAISeeded`
+    /// — typically the fallthrough path when a voice command lands on a
+    /// surface with no specific intent handler. AskAINext consumes +
+    /// clears this on appear (sets `session.prompt = pending`, user
+    /// reviews + sends).
+    @Published var pendingAskAIPrompt: String?
     @Published var transitionDirection: TransitionDirection = .forward
 
     private init() {
@@ -447,9 +453,27 @@ final class AppShellRouter: ObservableObject {
         pendingNewMemoText = text
     }
 
+    /// Open Ask AI with the prompt pre-filled. Used as the fallthrough
+    /// target when a voice command lands on a surface that has no
+    /// specific intent handler — the user gets a fresh Ask AI session
+    /// seeded with what they said.
+    func openAskAISeeded(prompt: String) {
+        pendingAskAIPrompt = prompt
+        openAskAI()
+    }
+
+    /// Routes a voice-command transcript to the right place. Surfaces
+    /// that override `chrome.voiceCommandHandler` on appear (AskAI,
+    /// MemoDetail, CaptureDetail) intercept before reaching this
+    /// method. For Compose we route into the active store; for
+    /// everything else we fall through to a seeded Ask AI session so
+    /// the walkie-talkie always lands somewhere instead of dropping.
     func submitVoiceCommand(_ transcript: String) {
-        guard case .compose = surface else { return }
-        activeComposeStore?.voiceCommandReceived(transcript)
+        if case .compose = surface {
+            activeComposeStore?.voiceCommandReceived(transcript)
+            return
+        }
+        openAskAISeeded(prompt: transcript)
     }
 }
 
@@ -571,16 +595,21 @@ final class ShellChrome: ObservableObject {
             let recordingURL = self.commandRecorder.currentRecordingURL
             self.commandRecorder.finalizeRecording()
 
-            let transcript: String
-            if let recordingURL,
-               let captured = try? await TranscriptionService.shared.transcribe(audioURL: recordingURL, useCase: .keyboard),
-               !captured.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                transcript = captured
-            } else {
-                transcript = "tighten the second paragraph"
+            guard
+                let recordingURL,
+                let captured = try? await TranscriptionService.shared.transcribe(
+                    audioURL: recordingURL,
+                    useCase: .keyboard
+                ),
+                !captured.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            else {
+                // Real-device transcription failed or returned empty —
+                // don't synthesize a fake command. Screenshot mode is
+                // handled by the early-return above.
+                return
             }
 
-            self.voiceCommandHandler?(transcript)
+            self.voiceCommandHandler?(captured)
         }
     }
 

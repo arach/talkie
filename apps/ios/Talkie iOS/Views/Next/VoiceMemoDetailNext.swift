@@ -604,6 +604,7 @@ private extension VoiceMemoDetailStore.MemoDisplay {
 }
 
 struct VoiceMemoDetailNext: View {
+    @EnvironmentObject private var chrome: ShellChrome
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var workflows = WorkflowsStore.shared
     @StateObject private var store: VoiceMemoDetailStore
@@ -638,6 +639,7 @@ struct VoiceMemoDetailNext: View {
     @State private var showingDeleteConfirmation: Bool = false
     @State private var showingShareSheet: Bool = false
     @State private var showingAgentSheet: Bool = false
+    @State private var pendingAgentInstruction: String?
     @State private var showingCLISheet: Bool = false
     @State private var showingVersionHistory: Bool = false
     @State private var knownWorkflowStatuses: [String: String] = [:]
@@ -766,8 +768,10 @@ struct VoiceMemoDetailNext: View {
         .sheet(isPresented: $showingShareSheet) {
             VoiceMemoShareSheet(items: store.shareItems())
         }
-        .sheet(isPresented: $showingAgentSheet) {
-            MemoAgentSheetNext(memo: store.memo)
+        .sheet(isPresented: $showingAgentSheet, onDismiss: {
+            pendingAgentInstruction = nil
+        }) {
+            MemoAgentSheetNext(memo: store.memo, initialInstruction: pendingAgentInstruction)
         }
         .sheet(isPresented: $showingCLISheet) {
             MemoCLISheetNext(memo: store.memo)
@@ -816,6 +820,17 @@ struct VoiceMemoDetailNext: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: workflowToast?.id)
+        .onAppear {
+            chrome.voiceCommandHandler = { transcript in
+                pendingAgentInstruction = transcript
+                showingAgentSheet = true
+            }
+        }
+        .onDisappear {
+            chrome.voiceCommandHandler = { transcript in
+                AppShellRouter.shared.submitVoiceCommand(transcript)
+            }
+        }
         .task(id: store.memo.id) {
             await pollWorkflowRuns()
         }

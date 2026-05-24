@@ -49,6 +49,7 @@ private struct CaptureAICommandExecution {
 
 struct CaptureAICommandsSheet: View {
     let capture: Capture
+    let initialInstruction: String?
     let onExecutionSaved: () -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -76,6 +77,7 @@ struct CaptureAICommandsSheet: View {
     @State private var dictationError: String?
     @State private var dictationController = InlineDictationController()
     @State private var didConfigureDictation = false
+    @State private var didConsumeSeed = false
     @State private var showingBridgeSettings = false
 
     private let quickPrompts: [CaptureAIQuickPrompt] = [
@@ -101,8 +103,13 @@ struct CaptureAICommandsSheet: View {
         ),
     ]
 
-    init(capture: Capture, onExecutionSaved: @escaping () -> Void = {}) {
+    init(
+        capture: Capture,
+        initialInstruction: String? = nil,
+        onExecutionSaved: @escaping () -> Void = {}
+    ) {
         self.capture = capture
+        self.initialInstruction = initialInstruction
         self.onExecutionSaved = onExecutionSaved
     }
 
@@ -168,6 +175,7 @@ struct CaptureAICommandsSheet: View {
                 audioPlayer.setPlaybackRate(Float(appSettings.ttsPlaybackRate))
                 loadLatestExecution()
                 refreshDirectOptionsIfNeeded()
+                consumeInitialInstructionIfNeeded()
             }
             .onChange(of: appSettings.ttsPlaybackRate) { _, newRate in
                 audioPlayer.setPlaybackRate(Float(newRate))
@@ -693,6 +701,19 @@ struct CaptureAICommandsSheet: View {
                 createdAt: run.createdAt
             )
         }
+    }
+
+    private func consumeInitialInstructionIfNeeded() {
+        guard !didConsumeSeed else { return }
+        guard executionHistory.isEmpty else { return }
+        guard !isRunning else { return }
+        guard let command = initialInstruction?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !command.isEmpty
+        else { return }
+
+        didConsumeSeed = true
+        instruction = command
+        submitCommand(command)
     }
 
     private func toggleDictation() {
