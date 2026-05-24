@@ -31,12 +31,22 @@ struct ChromeOverlay: View {
 
     var body: some View {
         ZStack {
-            // Top corners — chrome destinations.
-            // No top-leading chrome pill — the voice button already
-            // toggles chrome on/off (tap to summon, tap again to dismiss),
-            // so a dedicated Close pill in the corner was redundant. The
-            // freed zone lets the screen's native back chevron stay
-            // visible while chrome is summoned, no yield needed.
+            // topLeading: the view owns this slot at rest (back chevrons,
+            // titles, etc). When chrome is summoned the view's content
+            // yields and chrome registers a Home pill in its place —
+            // a "back to root" affordance from anywhere. On the home
+            // surface itself the pill is suppressed (Home → Home is a
+            // no-op), so the slot stays clean.
+            if router.surface != .home {
+                CornerSlot(
+                    zone: .topLeading,
+                    glyph: AnyView(Image(systemName: "house").font(.system(size: 15, weight: .regular))),
+                    label: "Home"
+                ) {
+                    AppShellRouter.shared.openHome()
+                    chrome.dismissChrome()
+                }
+            }
 
             CornerSlot(
                 zone: .topTrailing,
@@ -47,12 +57,27 @@ struct ChromeOverlay: View {
             }
 
             if showCreateTray {
+                // Toggle: tap to open the keyboard surface; tap again
+                // while it's up to dismiss back to home. The glyph
+                // swaps (keyboard → keyboard.chevron.compact.down) so
+                // the second-tap behavior reads visually.
+                let keyboardUp: Bool = {
+                    if case .keyboardActivation = router.surface { return true }
+                    return false
+                }()
                 CornerSlot(
                     zone: .bottomTrailing,
-                    glyph: AnyView(Image(systemName: "keyboard").font(.system(size: 13, weight: .regular))),
-                    label: "Keyboard"
+                    glyph: AnyView(
+                        Image(systemName: keyboardUp ? "keyboard.chevron.compact.down" : "keyboard")
+                            .font(.system(size: 13, weight: .regular))
+                    ),
+                    label: keyboardUp ? "Dismiss keyboard" : "Keyboard"
                 ) {
-                    AppShellRouter.shared.openKeyboardActivation()
+                    if keyboardUp {
+                        AppShellRouter.shared.openHome()
+                    } else {
+                        AppShellRouter.shared.openKeyboardActivation()
+                    }
                 }
 
                 LiquidGlassTray()
@@ -89,7 +114,7 @@ private struct CornerSlot: View {
                     Circle().strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: hairline)
                     glyph.foregroundStyle(theme.colors.textSecondary)
                 }
-                .frame(width: 40, height: 40)
+                .frame(width: 48, height: 48)
                 .shadow(color: .black.opacity(0.10), radius: 4, y: 2)
             }
             .buttonStyle(.plain)
@@ -97,12 +122,12 @@ private struct CornerSlot: View {
         }
         .padding(.horizontal, 20)
         .padding(.top, isTop ? 6 : 0)
-        // Bottom corner slots sit 20pt above the edge so their 40pt
-        // circles share a center-Y (~40pt) with the LiquidGlassTray
-        // and the bottom-left VoicePivotButton. Top corners keep the
-        // tighter 6pt inset since the top band has no tray to align
-        // against.
-        .padding(.bottom, isBottom ? 20 : 0)
+        // Bottom corner slots sit 16pt above the edge so their 48pt
+        // circles share a center-Y (40pt from safe area) with the
+        // LiquidGlassTray, the bottom-left VoicePivotButton, and the
+        // bottom-center MicFAB. Top corners keep the tighter 6pt inset
+        // since the top band has no tray to align against.
+        .padding(.bottom, isBottom ? 16 : 0)
     }
 }
 
@@ -114,6 +139,7 @@ private struct CornerSlot: View {
 private struct LiquidGlassTray: View {
     @ObservedObject private var theme = ThemeManager.shared
     @EnvironmentObject private var chrome: ShellChrome
+    @EnvironmentObject private var router: AppShellRouter
 
     var body: some View {
         HStack(spacing: 14) {
@@ -138,7 +164,20 @@ private struct LiquidGlassTray: View {
                 AppShellRouter.shared.openCaptureCompose()
             }
 
-            TrayFAB()
+            // Tray center: on home the standalone MicFAB (rendered by
+            // AppShellNext) is always visible — leave a 48pt × 48pt
+            // gap so it shows through AND the capsule keeps the same
+            // 68pt height (HStack's max-child-height determines the
+            // capsule shape). Without 48pt height here the capsule
+            // would shrink to 56pt and the slot row would sit 6pt
+            // below the standalone FAB's center.
+            // On sub-surfaces the persistent FAB is gone, so the tray
+            // itself carries the FAB inline.
+            if router.surface == .home {
+                Color.clear.frame(width: 48, height: 48)
+            } else {
+                MicFAB()
+            }
 
             TraySlot(
                 glyph: AnyView(Image(systemName: "sparkles").font(.system(size: 15, weight: .regular))),
@@ -167,6 +206,11 @@ private struct LiquidGlassTray: View {
         )
         .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        // 20pt outer padding so the tray capsule sits clearly inset
+        // from screen edges on smaller iPhones (was 12pt; bumped on
+        // 13 mini feedback). Tray content is ~276pt wide so even at
+        // 20pt outer padding × 2 there's room on a 375pt screen.
+        .padding(.horizontal, 20)
         .padding(.bottom, 6)
     }
 }
@@ -189,9 +233,12 @@ private struct TraySlot: View {
     }
 }
 
-/// The center mic FAB inside the tray — primary create action.
-/// Filled with theme accent so it reads as the hero among the row.
-private struct TrayFAB: View {
+/// The always-visible mic FAB — primary create action. Lives at the
+/// bottom-center of the shell whether or not chrome is summoned, so
+/// "record a memo" is a single tap. When chrome IS summoned the
+/// FAB sits visually centered in the tray's gap; when chrome is
+/// resting the FAB still anchors the bottom on its own.
+struct MicFAB: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {

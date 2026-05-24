@@ -101,9 +101,19 @@ final class WatchSessionManager: NSObject, ObservableObject {
         try? data.write(to: memosFileURL)
     }
 
-    /// Send audio file to iPhone for transcription
-    func sendAudio(fileURL: URL, duration: TimeInterval = 0, preset: WatchPreset? = nil) {
-        print("⌚️ [Watch] sendAudio called with: \(fileURL.lastPathComponent), preset: \(preset?.name ?? "none")")
+    /// Send audio file to iPhone for transcription.
+    ///
+    /// `autoRoute` flags that the phone should classify intent from the
+    /// transcript and choose memo vs Ask AI on its own. When `preset`
+    /// is provided (e.g. the "ASK AI" pill), the explicit `intent` in
+    /// metadata wins and the phone skips classification.
+    func sendAudio(
+        fileURL: URL,
+        duration: TimeInterval = 0,
+        preset: WatchPreset? = nil,
+        autoRoute: Bool = false
+    ) {
+        print("⌚️ [Watch] sendAudio called with: \(fileURL.lastPathComponent), preset: \(preset?.name ?? "none"), autoRoute: \(autoRoute)")
         print("⌚️ [Watch] File exists: \(FileManager.default.fileExists(atPath: fileURL.path))")
 
         guard let session = session, session.activationState == .activated else {
@@ -145,6 +155,13 @@ final class WatchSessionManager: NSObject, ObservableObject {
             if let intent = preset.intent {
                 metadata["intent"] = intent
             }
+        }
+
+        // Flag for the phone-side intent classifier. Phone reads
+        // transcript and picks memo vs Ask AI when this is true and no
+        // explicit `intent` was sent.
+        if autoRoute {
+            metadata["autoRoute"] = true
         }
 
         guard session.isReachable else {

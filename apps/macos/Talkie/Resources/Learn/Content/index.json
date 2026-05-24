@@ -1,0 +1,25 @@
+{
+  "$schema": "talkie.learn.index.v1",
+  "version": 1,
+  "updated": "2026-05-22",
+  "categories": [
+    { "id": "capture",    "label": "Capture",      "order": 10 },
+    { "id": "shortcuts",  "label": "Shortcuts",    "order": 20 },
+    { "id": "compose",    "label": "Compose",      "order": 30 },
+    { "id": "workflows",  "label": "Workflows",    "order": 40 },
+    { "id": "context",    "label": "Context",      "order": 50 },
+    { "id": "console",    "label": "Console",      "order": 60 },
+    { "id": "providers",  "label": "Providers",    "order": 70 },
+    { "id": "privacy",    "label": "Privacy",      "order": 80 }
+  ],
+  "articles": [
+    { "id": "tray-shelf",        "category": "capture",   "path": "articles/tray-shelf.md" },
+    { "id": "hyper-keys",        "category": "shortcuts", "path": "articles/hyper-keys.md" },
+    { "id": "compose-diffs",     "category": "compose",   "path": "articles/compose-diffs.md" },
+    { "id": "workflows",         "category": "workflows", "path": "articles/workflows.md" },
+    { "id": "context-rules",     "category": "context",   "path": "articles/context-rules.md" },
+    { "id": "console-agents",    "category": "console",   "path": "articles/console-agents.md" },
+    { "id": "llm-providers",     "category": "providers", "path": "articles/llm-providers.md" },
+    { "id": "privacy-local-sync","category": "privacy",   "path": "articles/privacy-local-sync.md" }
+  ]
+}

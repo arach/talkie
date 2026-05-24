@@ -368,6 +368,18 @@ final class VoiceMemoDetailStore: ObservableObject {
         return true
     }
 
+    /// Re-runs transcription on the existing audio file. Sets
+    /// isTranscribing → true on the entity; TranscriptionService
+    /// overwrites the transcript field when the pass settles.
+    @discardableResult
+    func retranscribe() -> Bool {
+        guard !isMock, let sourceMemo else { return false }
+        let context = sourceMemo.managedObjectContext
+            ?? PersistenceController.shared.container.viewContext
+        TranscriptionService.shared.transcribeVoiceMemo(sourceMemo, context: context)
+        return true
+    }
+
     func image(for attachment: MemoImageAttachment) -> UIImage? {
         MemoAttachmentStore.shared.image(for: attachment)
     }
@@ -658,11 +670,23 @@ struct VoiceMemoDetailNext: View {
                     transcriptSection
                         .padding(.horizontal, 12)
 
-                    workflowTriggersSection
-                        .padding(.horizontal, 12)
+                    // Memo-scoped workflow triggers — only render
+                    // when there are memo-prefixed templates defined.
+                    // Empty list = no value in showing the header.
+                    if !memoWorkflowTemplates.isEmpty {
+                        workflowTriggersSection
+                            .padding(.horizontal, 12)
+                    }
 
-                    workflowRunsSection
-                        .padding(.horizontal, 12)
+                    // Mac workflow runs — only render when there are
+                    // actual runs synced back. The "Waiting for runs"
+                    // empty state was high-density-no-value clutter
+                    // for memos that never went through Mac workflows.
+                    if !store.workflowRuns.isEmpty {
+                        workflowRunsSection
+                            .padding(.horizontal, 12)
+                    }
+
                     attachmentsSection
                         .padding(.horizontal, 12)
 
@@ -819,6 +843,28 @@ struct VoiceMemoDetailNext: View {
 
             Spacer()
 
+            // Single global "Edit" pill — opens the transcript edit
+            // sheet which also exposes the title field. Replaces the
+            // inline pencil next to the title and the EDIT chip in
+            // the transcript section header.
+            if store.canEditTranscript {
+                Button(action: beginTranscriptEdit) {
+                    Text("Edit")
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .overlay(
+                            Capsule().strokeBorder(
+                                theme.currentTheme.chrome.accent.opacity(0.4),
+                                lineWidth: theme.currentTheme.chrome.hairlineWidth
+                            )
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Edit memo")
+            }
+
             Menu {
                 Button("Share", systemImage: "square.and.arrow.up") {
                     showingShareSheet = true
@@ -829,13 +875,13 @@ struct VoiceMemoDetailNext: View {
                 Button("Run CLI", systemImage: "terminal") {
                     showingCLISheet = true
                 }
+                Button("Retranscribe", systemImage: "arrow.clockwise") {
+                    retranscribe()
+                }
                 if store.hasTranscriptVersionHistory {
                     Button("Version history", systemImage: "clock.arrow.circlepath") {
                         showingVersionHistory = true
                     }
-                }
-                if store.canEditTranscript {
-                    Button("Edit transcript", systemImage: "text.quote", action: beginTranscriptEdit)
                 }
                 if store.canDeleteMemo {
                     Button("Delete memo", systemImage: "trash", role: .destructive) {
@@ -859,6 +905,9 @@ struct VoiceMemoDetailNext: View {
 
     private var metaRow: some View {
         VStack(alignment: .leading, spacing: 6) {
+            // Title — no inline pencil; the global "Edit" pill in the
+            // header is the single entry point for editing the memo
+            // (title + transcript both live in the edit sheet).
             if isEditingTitle {
                 titleEditor
             } else {
@@ -866,16 +915,6 @@ struct VoiceMemoDetailNext: View {
                     Text(store.memo.title)
                         .talkieType(.headline)
                         .foregroundStyle(theme.colors.textPrimary)
-
-                    if store.canEditTitle {
-                        Button(action: beginTitleEdit) {
-                            Image(systemName: "pencil")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(theme.currentTheme.chrome.accent)
-                                .accessibilityLabel("Edit title")
-                        }
-                        .buttonStyle(.plain)
-                    }
 
                     Spacer(minLength: 0)
                 }
@@ -1018,24 +1057,14 @@ struct VoiceMemoDetailNext: View {
 
     private var transcriptSection: some View {
         VStack(alignment: .leading, spacing: 8) {
+            // Section header: no inline EDIT chip — global Edit pill
+            // in the header is the single entry point. Just label +
+            // word count here.
             HStack(spacing: 6) {
                 Text("· TRANSCRIPT")
                     .talkieType(.channelLabelTiny)
                     .foregroundStyle(theme.colors.textTertiary)
                 Spacer()
-                if store.canEditTranscript {
-                    Button(action: beginTranscriptEdit) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "pencil")
-                                .font(.system(size: 10, weight: .semibold))
-                            Text("EDIT")
-                                .talkieType(.channelLabelTiny)
-                        }
-                        .foregroundStyle(theme.currentTheme.chrome.accent)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Edit transcript")
-                }
                 Text("\(wordCount) WORDS")
                     .talkieType(.channelLabelTiny)
                     .foregroundStyle(theme.colors.textTertiary)
@@ -1325,9 +1354,12 @@ struct VoiceMemoDetailNext: View {
             }
             .padding(.horizontal, 4)
 
-            if store.attachments.isEmpty {
-                emptyAttachmentsTile
-            } else {
+            // Compact empty state: when there are no attachments, the
+            // section header (with the · ADD chip) is enough — skip
+            // the large "Add screenshots or photos" tile that was
+            // taking up a third of the viewport on every memo. Tap
+            // the · ADD chip in the header to open the picker.
+            if !store.attachments.isEmpty {
                 LazyVGrid(
                     columns: [GridItem(.adaptive(minimum: 100), spacing: 8)],
                     spacing: 8
@@ -1414,18 +1446,16 @@ struct VoiceMemoDetailNext: View {
                         .foregroundStyle(isRunning ? theme.colors.textTertiary : theme.currentTheme.chrome.accent)
                 }
 
-                Text(template.name)
+                Text(memoCardLabel(for: template))
                     .talkieType(.fieldLabel)
                     .foregroundStyle(theme.colors.textPrimary)
                     .lineLimit(1)
-
-                Text(template.blurb)
-                    .talkieType(.channelLabelTiny)
-                    .foregroundStyle(theme.colors.textTertiary)
-                    .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(width: 154, alignment: .leading)
+            // Tighter card — was 154pt wide with a verbose blurb;
+            // now icon + short verb. Three fit in a screen-width
+            // scroll on 13 mini without horizontal scrolling.
+            .frame(width: 120, alignment: .leading)
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 10)
@@ -1439,6 +1469,27 @@ struct VoiceMemoDetailNext: View {
         }
         .buttonStyle(.plain)
         .disabled(runningWorkflowID != nil)
+    }
+
+    /// Short verb-phrase label for the memo workflow trigger card.
+    /// Source templates have full sentences (`"Summarize this memo"`
+    /// etc) that work in the Hub but read as wordy on the per-memo
+    /// trigger card next to the icon. Map to 1-2 word forms.
+    private func memoCardLabel(for template: WorkflowTemplate) -> String {
+        switch template.id {
+        case "memo-summary": return "Summarize"
+        case "memo-tasks": return "Taskify"
+        case "memo-reminders": return "Remind"
+        default: return template.name
+        }
+    }
+
+    /// Re-runs transcription via the store, which holds the
+    /// underlying VoiceMemo entity. Useful when the original attempt
+    /// produced 'No transcript yet.' or you want to redo the pass.
+    private func retranscribe() {
+        store.retranscribe()
+        AppLogger.transcription.info("User-triggered retranscribe for memo \(store.memo.id)")
     }
 
     private func runMemoWorkflow(_ template: WorkflowTemplate) {
@@ -1572,25 +1623,57 @@ struct VoiceMemoDetailNext: View {
     /// to the bottom of the content. Either way they never start
     /// stacked on top of the chrome tray.
     private var actionBar: some View {
+        // Compact action bar: two prominent actions (Share + Refine)
+        // with a More menu folding the less-frequent Listen / Agent /
+        // CLI behind a "..." chip. Refine stays primary (filled accent)
+        // since it's the principal forward path from a memo.
         HStack(spacing: 8) {
             actionChip(label: "Share", isPrimary: false) {
                 showingShareSheet = true
             }
-            actionChip(label: "Listen", isPrimary: false) {
-                AppShellRouter.shared.openReadAloud(source: ReadAloudSource(
-                    title: store.memo.title,
-                    text: store.memo.transcript,
-                    meta: "MEMO · \(wordCount) WORDS · \(store.memo.durationLabel)",
-                    sourceURL: nil
-                ))
+
+            Menu {
+                Button {
+                    AppShellRouter.shared.openReadAloud(source: ReadAloudSource(
+                        title: store.memo.title,
+                        text: store.memo.transcript,
+                        meta: "MEMO · \(wordCount) WORDS · \(store.memo.durationLabel)",
+                        sourceURL: nil
+                    ))
+                } label: {
+                    Label("Listen", systemImage: "speaker.wave.2")
+                }
+                Button {
+                    showingAgentSheet = true
+                } label: {
+                    Label("Ask Agent", systemImage: "brain.head.profile")
+                }
+                Button {
+                    showingCLISheet = true
+                } label: {
+                    Label("Run CLI", systemImage: "terminal")
+                }
+            } label: {
+                Text("…")
+                    .talkieType(.fieldLabel)
+                    .foregroundStyle(theme.colors.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 11)
+                    .background(
+                        Capsule()
+                            .fill(Color.clear)
+                            .overlay(
+                                Capsule()
+                                    .strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                            )
+                    )
             }
-            actionChip(label: "Agent", isPrimary: false) {
-                showingAgentSheet = true
+            .buttonStyle(.plain)
+            .accessibilityLabel("More actions")
+
+            actionChip(label: "Refine ›", isPrimary: true) {
+                AppShellRouter.shared.openCompose(documentID: store.memo.id)
             }
-            actionChip(label: "CLI", isPrimary: false) {
-                showingCLISheet = true
-            }
-            actionChip(label: "Refine ›", isPrimary: true) { AppShellRouter.shared.openCompose(documentID: store.memo.id) }
         }
     }
 

@@ -55,7 +55,32 @@ struct AppShellNext<Content: View>: View {
                     )
             }
 
-            // Ambient voice button — always visible, bottom-left.
+            // Persistent MicFAB lives on the home surface — recording
+            // is the primary action there, so it's one tap regardless
+            // of chrome state. On sub-surfaces the FAB is tucked back
+            // inside the summoned tray (see LiquidGlassTray), keeping
+            // those screens focused on their own content.
+            if router.surface == .home {
+                MicFAB()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, 16)
+            }
+
+            // Left-edge swipe-back: on any sub-surface, a horizontal
+            // drag that starts in the leftmost 20pt and crosses the
+            // threshold (~80pt to the right) pops back to home. Mimics
+            // the iOS native interactivePopGesture without requiring
+            // each surface to live inside a NavigationStack. The
+            // hit zone is 20pt wide so it doesn't fight scroll views
+            // inside surfaces — only drags that *start* at the edge
+            // are captured.
+            if router.surface != .home {
+                EdgeSwipeBack()
+            }
+
+            // Ambient voice button — always visible, bottom-left. Pure
+            // summon affordance now (tap = chrome, long-press = voice
+            // command); recording moved to the always-visible MicFAB.
             VoicePivotButton()
         }
         .environmentObject(chrome)
@@ -188,6 +213,46 @@ struct AppShellNext<Content: View>: View {
             ThemeContrastDebugNext()
         case .deck:
             DeckMirrorNext()
+        }
+    }
+}
+
+/// Left-edge hit zone that pops to home on a horizontal swipe past
+/// threshold. Sits invisible at the very left of the screen so it
+/// only catches drags that *start* at the edge — scroll views and
+/// other gestures inside the surface are unaffected.
+private struct EdgeSwipeBack: View {
+    @EnvironmentObject private var router: AppShellRouter
+
+    /// Horizontal distance the user must drag to commit the back
+    /// navigation. ~25% of typical screen width; tuned to feel
+    /// intentional without being a long stroke.
+    private let commitThreshold: CGFloat = 80
+
+    /// Width of the invisible hit zone. Was 20pt (matching iOS-native
+    /// edge gesture width) but that overlapped left-anchored UI like
+    /// the 28pt Settings rail — taps in the rail's leftmost 20pt got
+    /// absorbed by EdgeSwipeBack instead of reaching the rail chip.
+    /// 8pt is enough to catch genuine edge swipes (which start at
+    /// x < 5pt) without interfering with column-style UI.
+    private let edgeWidth: CGFloat = 8
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Color.clear
+                .frame(width: edgeWidth)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 12)
+                        .onEnded { value in
+                            guard value.translation.width > commitThreshold else { return }
+                            // Vertical-dominant drags shouldn't pop —
+                            // make sure the horizontal component wins.
+                            guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                            router.openHome()
+                        }
+                )
+            Spacer()
         }
     }
 }
@@ -424,11 +489,16 @@ final class ShellChrome: ObservableObject {
         switch state {
         case .resting: return []
         case .expanded, .listening:
-            // .topLeading is intentionally NOT claimed — chrome has no
-            // top-left pill (voice button handles dismiss), so screen
-            // back chevrons stay visible throughout. Settings owns
-            // .topTrailing; Keyboard owns .bottomTrailing.
-            return [.topTrailing, .bottomTrailing]
+            // Settings owns .topTrailing; Keyboard owns .bottomTrailing.
+            // .topLeading is claimed by the Home pill on every sub-
+            // surface (so screen back chevrons yield to make room);
+            // on home itself chrome shows no top-left pill, so the
+            // slot stays free for whatever the home view wants there.
+            var zones: Set<ScreenZone> = [.topTrailing, .bottomTrailing]
+            if AppShellRouter.shared.surface != .home {
+                zones.insert(.topLeading)
+            }
+            return zones
         }
     }
 

@@ -446,7 +446,7 @@ signposter.emitEvent("DatabaseQuery", id: id, "Table: memos, Count: \(count)")
 ## Additional Resources
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md) - Overall app architecture
-- [2025-12-14-path-based-xpc-architecture.md](./2025-12-14-path-based-xpc-architecture.md) - XPC performance case study
+- [tlk-005-path-based-xpc.md](../specs/tlk-005-path-based-xpc.md) - XPC performance case study
 - [proposals/PROPOSALS.md](./proposals/PROPOSALS.md) - Future performance improvements
 
 ---

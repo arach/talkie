@@ -26,6 +26,8 @@
 import SwiftUI
 import TalkieKit
 
+private let learnLog = Log(.ui)
+
 // MARK: - Display font (mirrors ScopeHomeView's ScopeFont)
 private enum LearnFont {
     private static let regular  = ["CormorantGaramond-Regular", "Cormorant Garamond", "CormorantGaramond"]
@@ -44,6 +46,17 @@ private enum LearnFont {
 // MARK: - Screen
 
 struct ScopeLearnScreen: View {
+    let onNavigate: (NavigationSection) -> Void
+    let onOpenSettings: (SettingsSection) -> Void
+
+    init(
+        onNavigate: @escaping (NavigationSection) -> Void = { _ in },
+        onOpenSettings: @escaping (SettingsSection) -> Void = { _ in }
+    ) {
+        self.onNavigate = onNavigate
+        self.onOpenSettings = onOpenSettings
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ScopeTopBand(title: "Learn", chrome: "AGENT · INTERSTITIAL")
@@ -51,7 +64,7 @@ struct ScopeLearnScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 36) {
                     hero
-                    askTalkieBlock
+                    knowledgeBaseBlock
                     didYouKnowBlock
                     featureAtlasBlock
                     integrationsBlock
@@ -65,6 +78,88 @@ struct ScopeLearnScreen: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(ScopeCanvas.canvas)
+    }
+
+    private func open(_ destination: LearnDestination) {
+        switch destination {
+        case .section(let section):
+            onNavigate(section)
+        case .settings(let section):
+            onOpenSettings(section)
+        }
+    }
+
+    private func handleLearnBridgeURL(_ url: URL) {
+        let host = url.host?.localizedLowercase ?? ""
+        let path = url.pathComponents.dropFirst().first?.localizedLowercase ?? ""
+
+        switch host {
+        case "open":
+            if !openBridgeSection(path) {
+                learnLog.warning("Unhandled Learn open bridge: \(url.absoluteString)")
+            }
+        case "settings":
+            guard !path.isEmpty else {
+                open(.section(.settings))
+                return
+            }
+            if let section = SettingsSection.from(path: path) {
+                open(.settings(section.canonicalSection))
+            } else {
+                learnLog.warning("Unhandled Learn settings bridge: \(url.absoluteString)")
+            }
+        case "tray":
+            if path == "shelf" {
+                TrayShelf.shared.toggle()
+            } else {
+                TrayViewer.shared.show()
+            }
+        case "home":
+            open(.section(.home))
+        case "compose":
+            open(.section(.drafts))
+        case "library":
+            open(.section(.recordings))
+        default:
+            if !openBridgeSection(host) {
+                learnLog.warning("Unhandled Learn bridge URL: \(url.absoluteString)")
+            }
+        }
+    }
+
+    @discardableResult
+    private func openBridgeSection(_ rawTarget: String) -> Bool {
+        let target = rawTarget
+            .replacing("_", with: "-")
+            .localizedLowercase
+
+        switch target {
+        case "home", "today":
+            open(.section(.home))
+        case "compose", "drafts":
+            open(.section(.drafts))
+        case "notes":
+            open(.section(.notes))
+        case "memos", "recordings", "library":
+            open(.section(.recordings))
+        case "dictations":
+            open(.section(.dictations))
+        case "workflows", "workflow":
+            open(.section(.workflows))
+        case "context", "context-rules", "rules":
+            open(.section(.contextRules))
+        case "console", "system-console", "agents":
+            open(.section(.systemConsole))
+        case "screenshots", "captures":
+            open(.section(.screenshots))
+        case "models":
+            open(.section(.models))
+        case "settings":
+            open(.section(.settings))
+        default:
+            return false
+        }
+        return true
     }
 
     // MARK: - Hero
@@ -94,7 +189,22 @@ struct ScopeLearnScreen: View {
                     .tracking(ScopeType.Tracking.wide)
                     .foregroundStyle(ScopeInk.faint)
             }
-            AskTalkieBox()
+            AskTalkieBox(onOpen: open)
+        }
+    }
+
+    private var knowledgeBaseBlock: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Eyebrow("Knowledge")
+                Spacer()
+                Text("LOCAL HTML · NATIVE BRIDGE")
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopeInk.faint)
+            }
+
+            LearnKnowledgeBaseView(onBridgeAction: handleLearnBridgeURL)
         }
     }
 
@@ -122,19 +232,22 @@ struct ScopeLearnScreen: View {
                     glyph: .diff,
                     hook: "You can diff Compose edits",
                     detail: "Voice instructions revise existing text; the changes show as inline diffs before you accept.",
-                    action: "OPEN COMPOSE"
+                    action: "OPEN COMPOSE",
+                    onOpen: { open(.section(.drafts)) }
                 )
                 RecapCard(
                     glyph: .screenshot,
                     hook: "Hyper+S captures with audio",
                     detail: "The screen grab joins the current recording — pinned alongside the words, not separately.",
-                    action: "TRY HYPER+S"
+                    action: "SHORTCUTS",
+                    onOpen: { open(.settings(.surface)) }
                 )
                 RecapCard(
                     glyph: .context,
                     hook: "Context rules scope to apps",
                     detail: "Bind a rule to iTerm only, or to anywhere except Slack. The matcher reads the foreground app at trigger time.",
-                    action: "MANAGE RULES"
+                    action: "MANAGE RULES",
+                    onOpen: { open(.section(.contextRules)) }
                 )
             }
         }
@@ -153,12 +266,24 @@ struct ScopeLearnScreen: View {
                 ],
                 spacing: 16
             ) {
-                FeatureCard(glyph: .workflows, name: "Workflows",     state: "3 ran today",       action: "OPEN")
-                FeatureCard(glyph: .context,   name: "Context rules", state: "12 active",          action: "OPEN")
-                FeatureCard(glyph: .console,   name: "Console",       state: "2 tabs open",        action: "OPEN")
-                FeatureCard(glyph: .compose,   name: "Compose",       state: "Last · 9:34 AM",     action: "OPEN")
-                FeatureCard(glyph: .keys,      name: "Hyper keys",    state: "5 bindings",         action: "MANAGE")
-                FeatureCard(glyph: .memos,     name: "Memos",         state: "436 in last 7 days", action: "OPEN")
+                FeatureCard(glyph: .workflows, name: "Workflows",     state: "3 ran today",       action: "OPEN") {
+                    open(.section(.workflows))
+                }
+                FeatureCard(glyph: .context,   name: "Context rules", state: "12 active",          action: "OPEN") {
+                    open(.section(.contextRules))
+                }
+                FeatureCard(glyph: .console,   name: "Console",       state: "2 tabs open",        action: "OPEN") {
+                    open(.section(.systemConsole))
+                }
+                FeatureCard(glyph: .compose,   name: "Compose",       state: "Last · 9:34 AM",     action: "OPEN") {
+                    open(.section(.drafts))
+                }
+                FeatureCard(glyph: .keys,      name: "Hyper keys",    state: "5 bindings",         action: "MANAGE") {
+                    open(.settings(.surface))
+                }
+                FeatureCard(glyph: .memos,     name: "Memos",         state: "436 in last 7 days", action: "OPEN") {
+                    open(.section(.recordings))
+                }
             }
         }
     }
@@ -183,14 +308,30 @@ struct ScopeLearnScreen: View {
                 ],
                 spacing: 12
             ) {
-                ProviderTile(name: "Apple Intelligence", category: "LLM",     status: .available,  detail: "on-device · macOS 15.1+")
-                ProviderTile(name: "Anthropic",          category: "LLM",     status: .configured, detail: "claude-opus-4-7")
-                ProviderTile(name: "OpenAI",             category: "LLM",     status: .configured, detail: "gpt-4o")
-                ProviderTile(name: "Local",              category: "LLM",     status: .available,  detail: "ollama · mistral 7b")
-                ProviderTile(name: "Gemini",             category: "LLM",     status: .available,  detail: "your API key")
-                ProviderTile(name: "Hugging Face",       category: "LLM",     status: .soon,       detail: "inference endpoints")
-                ProviderTile(name: "iCloud",             category: "Service", status: .configured, detail: "private sync")
-                ProviderTile(name: "Bridge API",         category: "Service", status: .available,  detail: "local HTTP · port 7745")
+                ProviderTile(name: "Apple Intelligence", category: "LLM",     status: .available,  detail: "on-device · macOS 15.1+") {
+                    open(.settings(.aiProviders))
+                }
+                ProviderTile(name: "Anthropic",          category: "LLM",     status: .configured, detail: "claude-opus-4-7") {
+                    open(.settings(.aiProviders))
+                }
+                ProviderTile(name: "OpenAI",             category: "LLM",     status: .configured, detail: "gpt-4o") {
+                    open(.settings(.aiProviders))
+                }
+                ProviderTile(name: "Local",              category: "LLM",     status: .available,  detail: "ollama · mistral 7b") {
+                    open(.settings(.aiProviders))
+                }
+                ProviderTile(name: "Gemini",             category: "LLM",     status: .available,  detail: "your API key") {
+                    open(.settings(.aiProviders))
+                }
+                ProviderTile(name: "Hugging Face",       category: "LLM",     status: .soon,       detail: "inference endpoints") {
+                    open(.settings(.aiProviders))
+                }
+                ProviderTile(name: "iCloud",             category: "Service", status: .configured, detail: "private sync") {
+                    open(.settings(.sync))
+                }
+                ProviderTile(name: "Bridge API",         category: "Service", status: .available,  detail: "local HTTP · port 7745") {
+                    open(.settings(.helpers))
+                }
             }
         }
     }
@@ -230,9 +371,16 @@ struct ScopeLearnScreen: View {
     }
 }
 
+private enum LearnDestination {
+    case section(NavigationSection)
+    case settings(SettingsSection)
+}
+
 // MARK: - Ask Talkie box
 
 private struct AskTalkieBox: View {
+    let onOpen: (LearnDestination) -> Void
+
     @State private var prompt: String = ""
 
     var body: some View {
@@ -299,7 +447,7 @@ private struct AskTalkieBox: View {
                         .foregroundStyle(ScopeInk.primary)
                         .lineSpacing(2)
                 }
-                Button(action: {}) {
+                Button(action: { onOpen(stub.destination) }) {
                     HStack(spacing: 4) {
                         Text(stub.link.uppercased())
                             .font(ScopeType.channel)
@@ -327,20 +475,44 @@ private struct AskTalkieBox: View {
         )
     }
 
-    private struct StubAnswer { let body: String; let link: String }
+    private struct StubAnswer {
+        let body: String
+        let link: String
+        let destination: LearnDestination
+    }
 
     private func stubAnswer(for q: String) -> StubAnswer? {
         switch q.trimmingCharacters(in: .whitespaces) {
         case "How do workflows trigger?":
-            return .init(body: "Three triggers — recording finished, context rule matched, manual run. Each step pipes its output to the next.", link: "Open Workflows")
+            return .init(
+                body: "Three triggers — recording finished, context rule matched, manual run. Each step pipes its output to the next.",
+                link: "Open Workflows",
+                destination: .section(.workflows)
+            )
         case "Can a context rule scope to one app?":
-            return .init(body: "Yes. The matcher reads the foreground app at trigger time. You can scope to one app, a list, or an everywhere-except set.", link: "Manage Context Rules")
+            return .init(
+                body: "Yes. The matcher reads the foreground app at trigger time. You can scope to one app, a list, or an everywhere-except set.",
+                link: "Manage Context Rules",
+                destination: .section(.contextRules)
+            )
         case "What's bound to Hyper+S?":
-            return .init(body: "Hyper+S triggers the screenshot chord. Pick A (region), S (fullscreen), or D (window). The grab attaches to the current recording if one's running.", link: "Open Shortcuts")
+            return .init(
+                body: "Hyper+S triggers the screenshot chord. Pick A (region), S (fullscreen), or D (window). The grab attaches to the current recording if one's running.",
+                link: "Open Shortcuts",
+                destination: .settings(.surface)
+            )
         case "Which LLM providers can I plug in?":
-            return .init(body: "Anthropic and OpenAI by API key, local via Ollama, Apple Intelligence on-device on 15.1+. Provider chosen per-feature in Settings.", link: "Open Integrations")
+            return .init(
+                body: "Anthropic and OpenAI by API key, local via Ollama, Apple Intelligence on-device on 15.1+. Provider chosen per-feature in Settings.",
+                link: "Open Integrations",
+                destination: .settings(.aiProviders)
+            )
         case "How do diffs work in Compose?":
-            return .init(body: "Voice instructions revise existing text. The change shows as an inline diff — accept the whole thing, accept span-by-span, or reject.", link: "Open Compose")
+            return .init(
+                body: "Voice instructions revise existing text. The change shows as an inline diff — accept the whole thing, accept span-by-span, or reject.",
+                link: "Open Compose",
+                destination: .section(.drafts)
+            )
         default:
             return nil
         }
@@ -381,11 +553,12 @@ private struct RecapCard: View {
     let hook: String
     let detail: String
     let action: String
+    let onOpen: () -> Void
 
     @State private var isHovered = false
 
     var body: some View {
-        Button(action: {}) {
+        Button(action: onOpen) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 12) {
                     glyphTile
@@ -511,11 +684,12 @@ private struct FeatureCard: View {
     let name: String
     let state: String
     let action: String
+    let onOpen: () -> Void
 
     @State private var isHovered = false
 
     var body: some View {
-        Button(action: {}) {
+        Button(action: onOpen) {
             VStack(alignment: .leading, spacing: 0) {
                 // Illustration band
                 ZStack {
@@ -668,11 +842,12 @@ private struct ProviderTile: View {
     let category: String
     let status: Status
     let detail: String
+    let onOpen: () -> Void
 
     @State private var isHovered = false
 
     var body: some View {
-        Button(action: {}) {
+        Button(action: onOpen) {
             HStack(spacing: 10) {
                 Circle()
                     .fill(dotColor)

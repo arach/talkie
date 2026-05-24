@@ -2,7 +2,7 @@
 
 **Status:** inventory only · 2026-05-20  
 **Scope:** Swift files under `apps/macos/Talkie` and `apps/macos/TalkieAgent`  
-**Spec read first:** `docs/planning/2026-05-20-skill-presentation-spec.md`
+**Spec read first:** `docs/specs/tlk-011-skill-presentation.md`
 
 ## Scope and method
 

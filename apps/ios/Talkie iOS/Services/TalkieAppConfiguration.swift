@@ -104,7 +104,15 @@ struct TalkieAppConfiguration: Codable {
     }
 
     struct Transcription: Codable {
+        // Parakeet is the better engine for the live/streaming flows
+        // (keyboard dictation, agentic voice commands, terminal SSH
+        // dictation) — those want low-latency continuous results that
+        // Parakeet can stream on-device once warm. `auto` here means
+        // Parakeet when its model is loaded, Apple Speech otherwise.
         var keyboardEngine = "auto"
+        // Memos are post-processed audio files (no latency concern,
+        // no model warm-up overhead worth paying). Apple Speech is
+        // the right default; users can opt into Parakeet via Settings.
         var memoEngine = "apple"
         var preferredParakeetModel = "v3"
     }

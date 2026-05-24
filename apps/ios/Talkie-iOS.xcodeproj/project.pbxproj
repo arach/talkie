@@ -123,7 +123,7 @@
 		41853AEEFE9958C42884B375 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		4B36D4B771340B490C02BD1A /* TalkieShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TalkieShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		531A90C22EEE73370084EC25 /* TalkieWatchWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TalkieWatchWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		539C69312ED39ADE00BC034F /* Talkie.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Talkie.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		539C69312ED39ADE00BC034F /* Talkie iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Talkie iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		539C69432ED39ADF00BC034F /* TalkieTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TalkieTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		539C694D2ED39ADF00BC034F /* TalkieUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TalkieUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		53AF32842F26B2E30000561A /* TalkieKeys.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TalkieKeys.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -133,7 +133,7 @@
 		53B43EDF2EDB541600C09544 /* TalkieWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TalkieWidgetExtension.entitlements; sourceTree = "<group>"; };
 		53BF5B8C2EED010000FDEB2A /* TalkieWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "TalkieWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		8E0B6437C3F6576AA5FD09A5 /* ShareViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
-		F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = Signing.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
+		F55C63F8EFA5F2435E022C98 /* Signing.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -202,22 +202,16 @@
 		};
 		53BF5B8D2EED010000FDEB2A /* TalkieWatch Watch App */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = "TalkieWatch Watch App";
 			sourceTree = "<group>";
 		};
 		AABB00012F4D000000000001 /* TalkieUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = TalkieUITests;
 			sourceTree = "<group>";
 		};
 		AABB00012F4D000000000002 /* TalkieTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = TalkieTests;
 			sourceTree = "<group>";
 		};
@@ -326,7 +320,7 @@
 		539C69322ED39ADE00BC034F /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				539C69312ED39ADE00BC034F /* Talkie.app */,
+				539C69312ED39ADE00BC034F /* Talkie iOS.app */,
 				539C69432ED39ADF00BC034F /* TalkieTests.xctest */,
 				539C694D2ED39ADF00BC034F /* TalkieUITests.xctest */,
 				53B43EC02EDB539100C09544 /* TalkieWidgetExtension.appex */,
@@ -419,7 +413,7 @@
 				54C100092F60000100000001 /* NIOTransportServices */,
 			);
 			productName = talkie;
-			productReference = 539C69312ED39ADE00BC034F /* Talkie.app */;
+			productReference = 539C69312ED39ADE00BC034F /* Talkie iOS.app */;
 			productType = "com.apple.product-type.application";
 		};
 		539C69422ED39ADF00BC034F /* TalkieTests */ = {
@@ -1007,7 +1001,7 @@
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Talkie iOS/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
+				INFOPLIST_KEY_CFBundleDisplayName = "Talkie Phone";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_LSRequiresIPhoneOS = YES;
@@ -1027,7 +1021,7 @@
 				);
 				MARKETING_VERSION = 2.5.22;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_APP_BUNDLE_ID)";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Talkie iOS";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -1053,7 +1047,7 @@
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Talkie iOS/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
+				INFOPLIST_KEY_CFBundleDisplayName = "Talkie Phone";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_LSRequiresIPhoneOS = YES;
@@ -1073,7 +1067,7 @@
 				);
 				MARKETING_VERSION = 2.5.22;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_IOS_APP_BUNDLE_ID)";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Talkie iOS";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;

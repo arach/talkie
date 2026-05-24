@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		8916A7F5EAA14144B7648143 /* LearnKnowledgeWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8D1301F1F6B4D728A7A34C6 /* LearnKnowledgeWebView.swift */; };
+		AED5E2D3778C4B56A1338855 /* LearnKnowledgeBaseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDA16434575D45AD985DD6D7 /* LearnKnowledgeBaseView.swift */; };
+		BADAAA5B264F41FCA0F1D142 /* LearnArticle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 081AD24B307B4C758F54DB18 /* LearnArticle.swift */; };
 		000B06752659571E4EA8208D /* ClaudeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA2846DC98F2A0A65B237633 /* ClaudeView.swift */; };
 		002E40F62A1545B7D7AE2CD9 /* CaptureRadialPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E46A5885BA07F1A04FDD14B /* CaptureRadialPanel.swift */; };
 		003E46C586EEA89FF2196307 /* NotchRecordingPillView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 559904F06C63DF1AC81FC2B5 /* NotchRecordingPillView.swift */; };
@@ -524,6 +527,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		F8D1301F1F6B4D728A7A34C6 /* LearnKnowledgeWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearnKnowledgeWebView.swift; sourceTree = "<group>"; };
+		BDA16434575D45AD985DD6D7 /* LearnKnowledgeBaseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearnKnowledgeBaseView.swift; sourceTree = "<group>"; };
+		081AD24B307B4C758F54DB18 /* LearnArticle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearnArticle.swift; sourceTree = "<group>"; };
 		0005DBD402FA866318CD2439 /* WorkflowListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowListView.swift; sourceTree = "<group>"; };
 		0015AD90597F690662A7F1D3 /* SyncClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncClient.swift; sourceTree = "<group>"; };
 		01985189454C04D200B36B2E /* WorkflowControlPlaneClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowControlPlaneClient.swift; sourceTree = "<group>"; };
@@ -1092,6 +1098,9 @@
 		0E4BA7AE77835902B92C920F /* Learn */ = {
 			isa = PBXGroup;
 			children = (
+				F8D1301F1F6B4D728A7A34C6 /* LearnKnowledgeWebView.swift */,
+				BDA16434575D45AD985DD6D7 /* LearnKnowledgeBaseView.swift */,
+				081AD24B307B4C758F54DB18 /* LearnArticle.swift */,
 				98748A66CC1457CAA5A47ED7 /* ScopeLearnScreen.swift */,
 			);
 			path = Learn;
@@ -2288,6 +2297,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8916A7F5EAA14144B7648143 /* LearnKnowledgeWebView.swift in Sources */,
+				AED5E2D3778C4B56A1338855 /* LearnKnowledgeBaseView.swift in Sources */,
+				BADAAA5B264F41FCA0F1D142 /* LearnArticle.swift in Sources */,
 				46BCB0361A074CFCE3C32252 /* AIResultsViews.swift in Sources */,
 				FF50DD21DD6B6C2C95BE8EBD /* APIKeyStore.swift in Sources */,
 				A99F74DC6D3F9B3A38A11425 /* APISettings.swift in Sources */,

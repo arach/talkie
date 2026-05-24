@@ -9,7 +9,7 @@ This directory contains a mix of public-facing references, active engineering no
 - [`../SECURITY.md`](../SECURITY.md): local auth, HMAC, Tailscale/LAN, and secret policy
 - [`../LICENSE`](../LICENSE): source-available PolyForm Noncommercial license
 - [`engineering/ARCHITECTURE.md`](engineering/ARCHITECTURE.md): broad architecture notes
-- [`specs/gateway-protocol.md`](specs/gateway-protocol.md): gateway protocol wire format
+- [`specs/tlk-006-gateway-protocol.md`](specs/tlk-006-gateway-protocol.md): gateway protocol wire format
 - [`specs/gateway-reference.md`](specs/gateway-reference.md): TalkieServer gateway reference
 
 ## Categories
@@ -17,7 +17,8 @@ This directory contains a mix of public-facing references, active engineering no
 | Area | Path | Notes |
 |------|------|-------|
 | Engineering | `engineering/` | Architecture, performance, onboarding, testing, and proposals |
-| Specs | `specs/` | Protocols and product/technical specs; some are proposed rather than implemented |
+| Numbered specs | `specs/tlk-*.md` | TLK-NNN eng-doc series. Each is a discrete decision/proposal with Status, Summary, and Open Questions. TLK-001 through TLK-019 currently. |
+| Reference specs | `specs/*.md` (non-numbered) | Protocol references, inventories, and supporting specs that don't carry a TLK decision. |
 | Product | `product/` | Positioning and product direction |
 | Legal | `legal/` | App EULA and non-source-license legal references |
 | Review | `review/` | Codebase review notes and subsystem audits |

@@ -188,8 +188,16 @@ struct OnboardingNext: View {
     }
 
     private func complete() {
+        // Write through the in-memory TalkieAppSettings.shared so
+        // talkieApp.swift's .onAppear sees the fresh value on the
+        // next home render. Setting just @AppStorage / UserDefaults
+        // updates the persisted value but leaves the cached
+        // appSettings.hasSeenOnboarding=false, which then re-routes
+        // back to onboarding on every home appear. The settings
+        // setter calls persistIfNeeded() → writes UserDefaults
+        // "hasSeenOnboarding" so both sides stay in sync.
+        TalkieAppSettings.shared.hasSeenOnboarding = true
         hasSeenOnboarding = true
-        UserDefaults.standard.set(true, forKey: "hasSeenOnboarding")
         AppShellRouter.shared.openHome()
     }
 

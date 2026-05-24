@@ -1,0 +1,108 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "talkie.learn.article.v1",
+  "title": "Learn KB article front matter",
+  "description": "Contract for the YAML front matter at the top of every article in apps/macos/Talkie/Resources/Learn/Content/articles/. The Markdown body that follows the front matter is free-form prose.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "title", "summary", "category", "tags", "updated"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Stable kebab-case identifier. Used as the article's slug and as the value for related[] entries in other articles. Must match the filename: articles/<id>.md."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 80,
+      "description": "Short article title. Rendered as the h1 above the body."
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 12,
+      "maxLength": 220,
+      "description": "One-sentence lead. Rendered as the article's snippet in the KB sidebar and as the search-result preview."
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "capture",
+        "shortcuts",
+        "compose",
+        "workflows",
+        "context",
+        "console",
+        "providers",
+        "privacy"
+      ],
+      "description": "Top-level grouping in the KB sidebar. Stable set — add a new category only after talking with the maintainers."
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 2 },
+      "minItems": 1,
+      "description": "Free-form retrieval hints. Lowercase, hyphenated. Used by the agent to retrieve relevant articles for an Ask Talkie query."
+    },
+    "updated": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "description": "Date of the last meaningful edit. ISO 8601 date only."
+    },
+    "surfaces": {
+      "type": "array",
+      "description": "Native-bridge links rendered as 'Open in Talkie' pills. The URL is a talkie:// scheme path the shell maps onto a NavigationSection / SettingsSection (see README → Bridge URLs).",
+      "items": {
+        "type": "object",
+        "required": ["label", "url"],
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 40,
+            "description": "Short button label (sentence case, max ~3 words)."
+          },
+          "url": {
+            "type": "string",
+            "pattern": "^talkie://",
+            "description": "talkie:// bridge URL. Existing schemes: home, agent, library, compose, speak, settings, settings/agent. Proposed (see README): open/<section>, settings/<section>, tray, tray/viewer, workflows/run."
+          }
+        }
+      }
+    },
+    "shortcuts": {
+      "type": "array",
+      "description": "Keyboard shortcuts relevant to the article. Rendered as kbd badges in a side rail. Mirror the format that HotkeyConfig.displayString produces.",
+      "items": {
+        "type": "object",
+        "required": ["chord", "action"],
+        "additionalProperties": false,
+        "properties": {
+          "chord": {
+            "type": "string",
+            "description": "Chord display string — e.g. '⌃⌥⇧⌘S' (Hyper+S), '⌘⇧4', '⌥⌘L'."
+          },
+          "action": {
+            "type": "string",
+            "description": "What the chord does."
+          },
+          "default": {
+            "type": "boolean",
+            "description": "Optional. False if the chord is configurable and the user may have rebound it. Authors should leave true for hard-coded chords (⌘⇧3 etc) and false for HotkeyAction bindings."
+          }
+        }
+      }
+    },
+    "related": {
+      "type": "array",
+      "description": "Sibling article ids. Rendered as 'Related' cards at the bottom of the article. Bidirectional links are not required — the KB collapses duplicates.",
+      "items": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" }
+    },
+    "agent_facts": {
+      "type": "array",
+      "description": "High-signal sentences the Ask Talkie box can quote verbatim. Keep one fact per line, ≤180 chars. The agent treats these as ground truth and is permitted to use them without paraphrase.",
+      "items": { "type": "string", "minLength": 8, "maxLength": 220 }
+    }
+  }
+}
