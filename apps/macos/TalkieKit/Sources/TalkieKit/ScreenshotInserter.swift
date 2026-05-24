@@ -31,6 +31,28 @@ public struct InterleaveResult: Sendable {
 
 public enum ScreenshotInserter {
 
+    /// Render transcript text for a delivery surface with screenshot
+    /// references, without changing the canonical transcript text.
+    public static func deliveryMarkdown(
+        text: String,
+        timedTranscription: TimedTranscription?,
+        screenshots: [RecordingScreenshot],
+        screenshotDirectory: URL? = nil
+    ) -> String {
+        guard !screenshots.isEmpty else { return text }
+
+        let timed = TimedTranscription(
+            text: text,
+            words: timedTranscription?.words ?? []
+        )
+
+        return interleave(
+            timedTranscription: timed,
+            screenshots: screenshots,
+            screenshotDirectory: screenshotDirectory
+        ).markdown
+    }
+
     /// Interleave screenshots into a timed transcription by timestamp.
     ///
     /// Uses the original transcript text (not reconstructed from word tokens)
