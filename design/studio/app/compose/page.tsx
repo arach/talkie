@@ -12,7 +12,7 @@ import {
 import { IOS_THEMES } from "@/lib/themes";
 
 export default function ComposeStudy() {
-  const [state, setState] = useState<ComposeState>("empty");
+  const [state, setState] = useState<ComposeState>("idle");
 
   const toggles: Toggle[] = COMPOSE_STATES.map((s) => ({
     key: s.key,
