@@ -18,16 +18,24 @@ final class ComposeStore: ObservableObject {
     @Published var document: Document {
         didSet { clampCursorParagraphIndex() }
     }
-    @Published var livePartialTranscript: String?
     @Published var lastCommandTranscript: String?
     @Published var generatingETA: String?
     @Published var pendingDiff: Diff?
-    @Published var keyboardFocusRequested: Bool = false
+    /// Whether the in-app Talkie keyboard is currently mounted at the
+    /// bottom of the Compose surface. Mirrors `isTerminalKeyboardPresented`
+    /// in the SSH terminal — the keyboard is a SwiftUI view, not a UIKit
+    /// inputView, so visibility is a plain Bool.
+    @Published var keyboardVisible: Bool = false
     @Published var revisionPath: RevisionPath
     @Published var appliedRevisions: [ComposeNoteStore.RevisionRecord] = []
     @Published var cursorParagraphIndex: Int = 0 {
         didSet { clampCursorParagraphIndex() }
     }
+    /// Feedback signal for the keyboard's built-in dictation indicator.
+    /// The store owns the inline dictation controller; this published
+    /// enum lets the mounted `HostedTalkieKeyboardView` mirror state on
+    /// its mic glyph without exposing the controller's type to views.
+    @Published var dictationFeedback: DictationFeedback = .idle
 
     let documentID: String
 
@@ -105,13 +113,7 @@ final class ComposeStore: ObservableObject {
 
     func toggleDictation() {
         if isMockDocument {
-            if state == .dictating {
-                state = .idle
-                livePartialTranscript = nil
-            } else {
-                state = .dictating
-                livePartialTranscript = "and that's when the model surfaced"
-            }
+            state = (state == .dictating) ? .idle : .dictating
             return
         }
 
@@ -121,7 +123,9 @@ final class ComposeStore: ObservableObject {
         case .recording:
             finishDictation()
         case .transcribing:
-            inlineDictationController.cancel()
+            // Let the in-flight transcript land; tapping again would
+            // discard the recording the user just made.
+            break
         }
     }
 
@@ -135,7 +139,6 @@ final class ComposeStore: ObservableObject {
             }
 
             pendingDiff = nil
-            livePartialTranscript = nil
             lastCommandTranscript = "tighten the second paragraph"
             generatingETA = "~3s"
             state = .listening
@@ -156,7 +159,11 @@ final class ComposeStore: ObservableObject {
     }
 
     func toggleKeyboard() {
-        keyboardFocusRequested.toggle()
+        keyboardVisible.toggle()
+    }
+
+    func hideKeyboard() {
+        keyboardVisible = false
     }
 
     /// Append a fragment of typed text from the in-app Talkie keyboard
@@ -212,7 +219,6 @@ final class ComposeStore: ObservableObject {
 
         commandTask?.cancel()
         lastCommandTranscript = command
-        livePartialTranscript = nil
         pendingDiff = nil
         state = .listening
         generatingETA = "~3s"
@@ -267,13 +273,21 @@ final class ComposeStore: ObservableObject {
     func restoreRevision(_ revision: ComposeNoteStore.RevisionRecord) {
         pendingDiff = nil
         lastCommandTranscript = nil
-        livePartialTranscript = nil
         state = .idle
         document = Document(
             title: document.title,
             paragraphs: Self.paragraphs(from: revision.documentText)
         )
         persistDocument()
+    }
+
+    /// Surface-level dictation indicator. Maps directly onto the
+    /// keyboard's mic glyph so the user has a single visual cue while
+    /// recording — no overlaid "Listening…" or "Transcribing…" prose.
+    enum DictationFeedback {
+        case idle
+        case recording
+        case processing
     }
 
     struct Document {
@@ -383,7 +397,7 @@ final class ComposeStore: ObservableObject {
             self?.appendDictation(transcript)
         }
         inlineDictationController.onError = { [weak self] _ in
-            self?.livePartialTranscript = nil
+            self?.dictationFeedback = .idle
             self?.state = .idle
         }
 
@@ -405,7 +419,6 @@ final class ComposeStore: ObservableObject {
     private func beginDictation() {
         dictationTask?.cancel()
         pendingDiff = nil
-        livePartialTranscript = "Listening…"
         state = .dictating
 
         dictationTask = Task { @MainActor [weak self] in
@@ -415,22 +428,21 @@ final class ComposeStore: ObservableObject {
     }
 
     private func finishDictation() {
-        livePartialTranscript = "Transcribing…"
         inlineDictationController.stop(insertTranscript: true)
     }
 
     private func applyInlineDictationState(_ controllerState: InlineDictationController.State) {
         switch controllerState {
         case .idle:
+            dictationFeedback = .idle
             if state == .dictating {
-                livePartialTranscript = nil
                 state = .idle
             }
         case .recording:
-            livePartialTranscript = "Listening…"
+            dictationFeedback = .recording
             state = .dictating
         case .transcribing:
-            livePartialTranscript = "Transcribing…"
+            dictationFeedback = .processing
             state = .dictating
         }
     }
@@ -438,8 +450,7 @@ final class ComposeStore: ObservableObject {
     private func beginVoiceCommandCapture() {
         voiceCommandTask?.cancel()
         pendingDiff = nil
-        livePartialTranscript = nil
-        lastCommandTranscript = "Listening…"
+        lastCommandTranscript = nil
         generatingETA = "~3s"
         state = .listening
         isVoiceCommandCapturing = true
@@ -453,7 +464,6 @@ final class ComposeStore: ObservableObject {
 
     private func finishVoiceCommandCapture() {
         guard isVoiceCommandCapturing || voiceCommandController.currentState != .idle else { return }
-        lastCommandTranscript = "Transcribing…"
         voiceCommandController.stop(insertTranscript: true)
     }
 
@@ -470,11 +480,9 @@ final class ComposeStore: ObservableObject {
         case .recording:
             isVoiceCommandCapturing = true
             voiceCommandDidSubmit = false
-            lastCommandTranscript = "Listening…"
             state = .listening
         case .transcribing:
             if isVoiceCommandCapturing {
-                lastCommandTranscript = "Transcribing…"
                 state = .listening
             }
         }
@@ -483,7 +491,6 @@ final class ComposeStore: ObservableObject {
     private func appendDictation(_ transcript: String) {
         let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            livePartialTranscript = nil
             state = .idle
             return
         }
@@ -494,7 +501,6 @@ final class ComposeStore: ObservableObject {
         let existing = paragraphs[index].trimmingCharacters(in: .whitespacesAndNewlines)
         paragraphs[index] = existing.isEmpty ? trimmed : [existing, trimmed].joined(separator: " ")
         document = Document(title: document.title, paragraphs: paragraphs)
-        livePartialTranscript = nil
         state = .idle
         persistDocument()
     }
@@ -791,6 +797,11 @@ final class ComposeStore: ObservableObject {
 
     private func seedFromLaunchArgumentsIfNeeded() {
         let args = ProcessInfo.processInfo.arguments
+
+        if args.contains("--composeKeyboardVisible") {
+            keyboardVisible = true
+        }
+
         guard let i = args.firstIndex(of: "--composeState"), i + 1 < args.count else { return }
         switch args[i + 1].lowercased() {
         case "idle":       seed(.idle)
@@ -812,7 +823,6 @@ final class ComposeStore: ObservableObject {
             state = .idle
         case .dictating:
             state = .dictating
-            livePartialTranscript = "and that's when the model surfaced"
         case .listening:
             state = .listening
             lastCommandTranscript = "tighten the second paragraph"

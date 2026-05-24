@@ -30,7 +30,10 @@ struct ComposeNextView: View {
     @EnvironmentObject private var chrome: ShellChrome
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var compose: ComposeStore
-    @State private var isTalkieKeyboardFocused = false
+    /// Intrinsic height reported by the mounted `HostedTalkieKeyboardView`.
+    /// Drives the slide-in frame so the keyboard always lands at its
+    /// natural size; default fits the compact layout on a 17 Pro Max.
+    @State private var keyboardHeight: CGFloat = 280
     @State private var showingNotesList = false
 
     init(documentID: String = "mock", store: ComposeStore? = nil) {
@@ -61,11 +64,11 @@ struct ComposeNextView: View {
             DocumentBody(
                 document: compose.document,
                 state: compose.state,
-                dictationPreview: compose.livePartialTranscript,
                 voiceCommand: compose.lastCommandTranscript,
                 generatingETA: compose.generatingETA,
                 diff: compose.pendingDiff,
                 cursorParagraphIndex: compose.cursorParagraphIndex,
+                dictationFeedback: compose.dictationFeedback,
                 onMic: { compose.toggleDictation() }
             )
             .padding(.horizontal, 12)
@@ -89,6 +92,7 @@ struct ComposeNextView: View {
 
             ActionTray(
                 state: compose.state,
+                keyboardVisible: compose.keyboardVisible,
                 onAccept: { compose.acceptDiff() },
                 onDiscard: { compose.discardDiff() },
                 onRefine: { compose.discardDiff() },
@@ -100,30 +104,20 @@ struct ComposeNextView: View {
                 ),
                 paragraphCount: compose.document.paragraphs.count
             )
+
+            // In-app Talkie keyboard. Same shape as the SSH terminal —
+            // a real SwiftUI view mounted at the bottom behind a Bool.
+            // No bridge, no hidden UITextField, no responder games.
+            if compose.keyboardVisible {
+                ComposeHostedKeyboardView(
+                    store: compose,
+                    preferredHeight: $keyboardHeight
+                )
+                .frame(height: keyboardHeight)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
-        .overlay(alignment: .bottomTrailing) {
-            // Bridge that hosts the in-app Talkie keyboard
-            // (HostedTalkieKeyboardView). Keep UIKit's responder view
-            // non-zero sized and fully opaque at the UIView level; a
-            // nearly-transparent SwiftUI wrapper can make UITextField
-            // first-responder activation flaky, so the field itself hides
-            // its visuals with clear colors instead.
-            TalkieKeyboardBridge(
-                isFocused: $isTalkieKeyboardFocused,
-                onInsert: { fragment in
-                    compose.applyKeyboardInsert(fragment)
-                },
-                onDeleteBackward: {
-                    compose.applyKeyboardDelete()
-                }
-            )
-            .frame(width: 44, height: 44)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-        }
-        .onChange(of: compose.keyboardFocusRequested) { _, _ in
-            isTalkieKeyboardFocused = true
-        }
+        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: compose.keyboardVisible)
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .inactive || newPhase == .background else { return }
             compose.autosave()
@@ -134,163 +128,107 @@ struct ComposeNextView: View {
     }
 }
 
-// MARK: - Talkie keyboard bridge
+// MARK: - In-app Talkie keyboard mount
 
-/// Hidden UITextField whose `inputView` is `HostedTalkieKeyboardView`.
-/// When `isFocused` flips true the field becomes first responder, which
-/// slides the in-app Talkie keyboard up. The keyboard's own collapse
-/// button calls `resignFirstResponder` to slide it back down; we mirror
-/// that back into the binding via the editing-did-end target so the
-/// next button tap re-opens cleanly.
-///
-/// Text input doesn't accumulate in the field — every keystroke fans
-/// out through `onInsert` / `onDeleteBackward` so the owning store can
-/// drop the fragment at the document's tail. Keeping the field's own
-/// `text` empty avoids the system "selection moved" notifications that
-/// would otherwise spam the host.
-private struct TalkieKeyboardBridge: UIViewRepresentable {
-    @Binding var isFocused: Bool
-    let onInsert: (String) -> Void
-    let onDeleteBackward: () -> Void
+/// Direct mount of `HostedTalkieKeyboardView` — no UITextField bridge,
+/// no responder games. Pattern lifted from `SSHTerminalHostedKeyboardView`:
+/// the keyboard is a real UIView dropped into the SwiftUI hierarchy via
+/// `UIViewRepresentable`. Visibility is driven by the owning view's
+/// SwiftUI state, and a `KeyboardInputHost` coordinator routes keystrokes
+/// into the compose store.
+private struct ComposeHostedKeyboardView: UIViewRepresentable {
+    let store: ComposeStore
+    @Binding var preferredHeight: CGFloat
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onInsert: onInsert, onDeleteBackward: onDeleteBackward)
+        Coordinator(store: store)
     }
 
-    func makeUIView(context: Context) -> _TalkieKeyboardBridgeField {
-        let field = _TalkieKeyboardBridgeField(frame: .zero)
-        field.isAccessibilityElement = false
-        field.autocorrectionType = .no
-        field.spellCheckingType = .no
-        field.autocapitalizationType = .none
-        field.smartDashesType = .no
-        field.smartQuotesType = .no
-        field.borderStyle = .none
-        field.backgroundColor = .clear
-        field.textColor = .clear
-        field.tintColor = .clear   // hide caret on the invisible bridge
-        field.inputAssistantItem.leadingBarButtonGroups = []
-        field.inputAssistantItem.trailingBarButtonGroups = []
-
+    func makeUIView(context: Context) -> HostedTalkieKeyboardView {
         let keyboard = HostedTalkieKeyboardView()
         keyboard.preferredInitialLayout = .compact
         keyboard.inputHost = context.coordinator
-        keyboard.onRequestCollapse = { [weak field] in
-            field?.resignFirstResponder()
+        keyboard.onDictationToggle = { [weak coordinator = context.coordinator] in
+            coordinator?.toggleDictation()
         }
-        keyboard.onLayoutHeightChange = { [weak field] in
-            field?.reloadInputViews()
+        keyboard.onRequestCollapse = { [weak coordinator = context.coordinator] in
+            coordinator?.collapse()
         }
-
-        field.inputView = keyboard
-        context.coordinator.field = field
+        keyboard.onLayoutHeightChange = { [weak keyboard] in
+            guard let keyboard else { return }
+            let nextHeight = keyboard.intrinsicContentSize.height
+            DispatchQueue.main.async {
+                preferredHeight = nextHeight
+            }
+        }
         context.coordinator.keyboard = keyboard
-
-        field.addTarget(
-            context.coordinator,
-            action: #selector(Coordinator.editingDidEnd),
-            for: .editingDidEnd
-        )
-
-        return field
+        DispatchQueue.main.async {
+            preferredHeight = keyboard.intrinsicContentSize.height
+        }
+        keyboard.setDictationState(Self.mapped(store.dictationFeedback))
+        return keyboard
     }
 
-    func updateUIView(_ uiView: _TalkieKeyboardBridgeField, context: Context) {
-        context.coordinator.onInsert = onInsert
-        context.coordinator.onDeleteBackward = onDeleteBackward
-        context.coordinator.onResign = {
-            // Bounce the binding flip out of UIKit's responder callback
-            // so SwiftUI's update pass picks it up cleanly.
-            DispatchQueue.main.async { isFocused = false }
-        }
-
-        if isFocused {
-            context.coordinator.requestFocus(for: uiView)
-        } else if uiView.isFirstResponder {
-            uiView.resignFirstResponder()
-        }
+    func updateUIView(_ uiView: HostedTalkieKeyboardView, context: Context) {
+        context.coordinator.store = store
+        uiView.setDictationState(Self.mapped(store.dictationFeedback))
     }
 
-    static func dismantleUIView(_ uiView: _TalkieKeyboardBridgeField, coordinator: Coordinator) {
-        uiView.inputView = nil
-        if uiView.isFirstResponder {
-            uiView.resignFirstResponder()
-        }
-        coordinator.field = nil
-        coordinator.keyboard?.inputHost = nil
-        coordinator.keyboard?.onRequestCollapse = nil
-        coordinator.keyboard?.onLayoutHeightChange = nil
+    static func dismantleUIView(_ uiView: HostedTalkieKeyboardView, coordinator: Coordinator) {
+        uiView.inputHost = nil
+        uiView.onDictationToggle = nil
+        uiView.onRequestCollapse = nil
+        uiView.onLayoutHeightChange = nil
         coordinator.keyboard = nil
+    }
+
+    private static func mapped(_ feedback: ComposeStore.DictationFeedback) -> HostedTalkieKeyboardView.DictationState {
+        switch feedback {
+        case .idle: return .idle
+        case .recording: return .recording
+        case .processing: return .processing
+        }
     }
 
     @MainActor
     final class Coordinator: NSObject, KeyboardInputHost {
-        var onInsert: (String) -> Void
-        var onDeleteBackward: () -> Void
-        var onResign: (() -> Void)?
-        weak var field: _TalkieKeyboardBridgeField?
+        var store: ComposeStore
         weak var keyboard: HostedTalkieKeyboardView?
 
-        init(onInsert: @escaping (String) -> Void, onDeleteBackward: @escaping () -> Void) {
-            self.onInsert = onInsert
-            self.onDeleteBackward = onDeleteBackward
-        }
-
-        @objc func editingDidEnd() {
-            onResign?()
-        }
-
-        func requestFocus(for field: _TalkieKeyboardBridgeField) {
-            guard !field.isFirstResponder else { return }
-            guard field.window != nil else {
-                Task { @MainActor [weak field] in
-                    guard let field, !field.isFirstResponder else { return }
-                    _ = field.becomeFirstResponder()
-                }
-                return
-            }
-
-            if !field.becomeFirstResponder() {
-                Task { @MainActor [weak field] in
-                    guard let field, !field.isFirstResponder else { return }
-                    _ = field.becomeFirstResponder()
-                }
-            }
+        init(store: ComposeStore) {
+            self.store = store
         }
 
         func performKeyboardAction(_ action: KeyboardAction) {
             switch action {
             case .insert(let fragment):
                 guard !fragment.isEmpty else { return }
-                onInsert(fragment)
+                store.applyKeyboardInsert(fragment)
             case .deleteBackward:
-                onDeleteBackward()
+                store.applyKeyboardDelete()
             case .enter:
-                onInsert("\n")
+                store.applyKeyboardInsert("\n")
             case .tab:
-                onInsert("\t")
+                store.applyKeyboardInsert("\t")
             case .escape, .dismissKeyboard:
-                field?.resignFirstResponder()
+                store.hideKeyboard()
             case .paste:
-                if let clipboard = UIPasteboard.general.string, !clipboard.isEmpty {
-                    onInsert(clipboard)
+                if let clip = UIPasteboard.general.string, !clip.isEmpty {
+                    store.applyKeyboardInsert(clip)
                 }
             case .copy, .toggleShift, .toggleControl, .interrupt, .moveCursor:
                 break
             }
         }
-    }
-}
 
-/// Custom UITextField subclass that suppresses the iOS edit menu and
-/// keeps its own text buffer empty — input is routed through
-/// `KeyboardInputHost` rather than accumulated locally.
-fileprivate final class _TalkieKeyboardBridgeField: UITextField {
-    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
-        false
-    }
+        func toggleDictation() {
+            store.toggleDictation()
+        }
 
-    override var canBecomeFirstResponder: Bool { true }
+        func collapse() {
+            store.hideKeyboard()
+        }
+    }
 }
 
 // MARK: - Header
@@ -554,11 +492,11 @@ private struct ComposeModelGlyph: View {
 private struct DocumentBody: View {
     let document: ComposeStore.Document
     let state: ComposeState
-    let dictationPreview: String?
     let voiceCommand: String?
     let generatingETA: String?
     let diff: ComposeStore.Diff?
     let cursorParagraphIndex: Int
+    let dictationFeedback: ComposeStore.DictationFeedback
     let onMic: () -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
@@ -578,7 +516,6 @@ private struct DocumentBody: View {
                         ParagraphView(
                             text: para,
                             isLast: idx == document.paragraphs.count - 1,
-                            dictationPreview: idx == cursorParagraphIndex ? dictationPreview : nil,
                             showCaret: state == .idle && idx == cursorParagraphIndex,
                             accent: theme.currentTheme.chrome.accent
                         )
@@ -598,9 +535,16 @@ private struct DocumentBody: View {
             .frame(maxWidth: .infinity, alignment: .topLeading)
 
             // Inline mic — floats over the bottom of the card; only
-            // active outside of the AI loop (idle/diff states).
+            // active outside of the AI loop (idle/diff states). The
+            // button's own icon flips between mic.fill and stop.fill
+            // and gets a recording glow, so we don't paint any extra
+            // "Listening…" / "Transcribing…" prose over the document.
             if state == .idle || state == .dictating {
-                InlineMicButton(state: state, action: onMic)
+                InlineMicButton(
+                    state: state,
+                    feedback: dictationFeedback,
+                    action: onMic
+                )
             }
         }
         .padding(.top, 8)
@@ -620,7 +564,6 @@ private struct DocumentBody: View {
 private struct ParagraphView: View {
     let text: String
     let isLast: Bool
-    let dictationPreview: String?
     let showCaret: Bool
     let accent: Color
 
@@ -628,17 +571,10 @@ private struct ParagraphView: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 0) {
-            (
-                Text(text)
-                    .foregroundStyle(theme.colors.textPrimary)
-                + (dictationPreview.map { preview in
-                    Text(" \(preview)")
-                        .foregroundStyle(accent)
-                        .italic()
-                } ?? Text(""))
-            )
-            .talkieType(.listTitle)
-            .lineSpacing(4)
+            Text(text)
+                .foregroundStyle(theme.colors.textPrimary)
+                .talkieType(.listTitle)
+                .lineSpacing(4)
 
             if showCaret {
                 BlinkingCaret(color: accent)
@@ -773,41 +709,49 @@ private struct RequestedStrip: View {
 
 private struct InlineMicButton: View {
     let state: ComposeState
+    let feedback: ComposeStore.DictationFeedback
     let action: () -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
+
+    private var isHot: Bool { state == .dictating }
 
     var body: some View {
         Button(action: action) {
             ZStack {
                 Circle()
-                    .fill(state == .dictating ? theme.currentTheme.chrome.accent : theme.colors.cardBackground)
+                    .fill(isHot ? theme.currentTheme.chrome.accent : theme.colors.cardBackground)
                     .overlay(Circle().strokeBorder(
-                        state == .dictating
-                            ? Color.clear
-                            : theme.currentTheme.chrome.edgeFaint,
+                        isHot ? Color.clear : theme.currentTheme.chrome.edgeFaint,
                         lineWidth: theme.currentTheme.chrome.hairlineWidth
                     ))
-                Image(systemName: state == .dictating ? "stop.fill" : "mic.fill")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(
-                        state == .dictating
-                            ? theme.colors.cardBackground
-                            : theme.colors.textSecondary
-                    )
+
+                if feedback == .processing {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .scaleEffect(0.7)
+                        .tint(theme.colors.cardBackground)
+                } else {
+                    Image(systemName: isHot ? "stop.fill" : "mic.fill")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(
+                            isHot ? theme.colors.cardBackground : theme.colors.textSecondary
+                        )
+                }
             }
             .frame(width: 38, height: 38)
             .shadow(
-                color: state == .dictating
+                color: isHot
                     ? theme.currentTheme.chrome.accentGlow
                     : Color.black.opacity(0.14),
-                radius: state == .dictating ? 8 : 5,
+                radius: isHot ? 8 : 5,
                 y: 2
             )
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .padding(.bottom, 14)
+        .disabled(feedback == .processing)
     }
 }
 
@@ -1149,6 +1093,7 @@ private struct CursorJoystickPopover: View {
 
 private struct ActionTray: View {
     let state: ComposeState
+    let keyboardVisible: Bool
     let onAccept: () -> Void
     let onDiscard: () -> Void
     let onRefine: () -> Void
@@ -1190,11 +1135,16 @@ private struct ActionTray: View {
                     trayButton(systemImage: "doc.on.clipboard", accessibilityLabel: "Paste") { /* TODO M3: paste */ }
                 }
                 Spacer()
-                trayButton(systemImage: "keyboard", accessibilityLabel: "Keyboard", action: onKeyboard)
+                trayButton(
+                    systemImage: keyboardVisible ? "keyboard.chevron.compact.down" : "keyboard",
+                    accessibilityLabel: keyboardVisible ? "Hide keyboard" : "Show keyboard",
+                    active: keyboardVisible,
+                    action: onKeyboard
+                )
             }
             .padding(.horizontal, 24)
             .padding(.top, 4)
-            .padding(.bottom, 18)
+            .padding(.bottom, keyboardVisible ? 6 : 18)
         }
     }
 
@@ -1221,17 +1171,24 @@ private struct ActionTray: View {
     }
 
     @ViewBuilder
-    private func trayButton(systemImage: String, accessibilityLabel: String, action: @escaping () -> Void) -> some View {
+    private func trayButton(
+        systemImage: String,
+        accessibilityLabel: String,
+        active: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 17, weight: .regular))
-                .foregroundStyle(theme.colors.textSecondary)
+                .foregroundStyle(active ? theme.colors.cardBackground : theme.colors.textSecondary)
                 .frame(width: 40, height: 40)
                 .background(
                     Circle()
-                        .fill(theme.colors.cardBackground)
-                        .overlay(Circle().strokeBorder(theme.currentTheme.chrome.edgeFaint,
-                                                       lineWidth: theme.currentTheme.chrome.hairlineWidth))
+                        .fill(active ? theme.currentTheme.chrome.accent : theme.colors.cardBackground)
+                        .overlay(Circle().strokeBorder(
+                            active ? Color.clear : theme.currentTheme.chrome.edgeFaint,
+                            lineWidth: theme.currentTheme.chrome.hairlineWidth
+                        ))
                 )
         }
         .buttonStyle(.plain)
