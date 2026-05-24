@@ -123,7 +123,7 @@ public enum ScreenshotInserter {
             }
 
             blocks.append(.screenshot(ss))
-            markdownParts.append(" [\(refNum)]")
+            markdownParts.append("[\(refNum)]")
 
             let ref = screenshotRef(ss, directory: screenshotDirectory)
             references.append("[\(refNum)](\(ref))")
@@ -141,15 +141,14 @@ public enum ScreenshotInserter {
             }
         }
 
-        // Append references at the end (stacked, one per line)
-        if !references.isEmpty {
-            markdownParts.append("\n\n")
-            markdownParts.append(references.joined(separator: "\n"))
-        }
+        let body = markdownParts.joined(separator: " ")
+        let markdown = [body, references.joined(separator: "\n")]
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
 
         return InterleaveResult(
             blocks: blocks,
-            markdown: markdownParts.joined()
+            markdown: markdown
         )
     }
 

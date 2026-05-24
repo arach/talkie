@@ -182,7 +182,7 @@ public struct HotKeyStatusInfo: Codable, Sendable, Identifiable {
 
     /// Attach screenshots to an existing dictation record
     ///
-    /// Called by Talkie after draining tray screenshots to ScreenshotStorage.
+    /// Called by Talkie after copying tray screenshots to ScreenshotStorage.
     /// Agent merges these into the dictation's screenshotsJSON in UnifiedDatabase.
     ///
     /// - Parameters:
@@ -326,8 +326,7 @@ public struct HotKeyStatusInfo: Codable, Sendable, Identifiable {
     ///   - rawText: The original transcribed text
     func voiceNavigationReceived(intent: String, confidence: Float, rawText: String)
 
-    /// Called when TalkieAgent pastes dictated text and stores the recording.
-    /// Talkie uses this to clear unpinned tray items after the DB store completes.
+    /// Legacy paste callback retained for older agents. Dictation does not mutate tray items.
     /// - Parameter recordingId: The UUID string of the dictation recording
     func dictationWasPasted(recordingId: String)
 
@@ -339,16 +338,18 @@ public struct HotKeyStatusInfo: Codable, Sendable, Identifiable {
     ///   - reply: JSON-encoded [RecordingScreenshot], or nil if no tray items
     func fetchTrayScreenshots(recordingId: String, reply: @escaping (_ screenshotsJSON: String?) -> Void)
 
-    /// Pull tray screenshots and video clips from Talkie at transcription time.
-    /// Talkie saves unpinned tray media to permanent storage and returns a
-    /// JSON-encoded TalkieObjectAssets blob for Agent to include in the initial DB write.
+    /// Pull tray screenshots and video clips captured during the dictation window.
+    /// Talkie saves eligible unpinned tray media to permanent storage and returns a
+    /// JSON-encoded TalkieObjectAssets blob for Agent to merge after the DB write.
     /// - Parameters:
     ///   - recordingId: The UUID string of the dictation recording
     ///   - recordingStartedAt: Unix timestamp for the start of the dictation
+    ///   - recordingEndedAt: Unix timestamp for the end of the dictation
     ///   - reply: JSON-encoded TalkieObjectAssets, or nil if no tray assets
     @objc optional func fetchTrayAssets(
         recordingId: String,
         recordingStartedAt: TimeInterval,
+        recordingEndedAt: TimeInterval,
         reply: @escaping (_ assetsJSON: String?) -> Void
     )
 
