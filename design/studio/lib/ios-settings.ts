@@ -65,7 +65,7 @@ export interface SettingsRow {
   note?: string;
 }
 
-export const IOS_SETTINGS_EXTRACTED_AT = "2026-05-24T04:48:00Z";
+export const IOS_SETTINGS_EXTRACTED_AT = "2026-05-24T16:20:00Z";
 
 export const IOS_SETTINGS_SOURCE =
   "apps/ios/Talkie iOS/Views/Next/SettingsNext.swift";
@@ -432,11 +432,20 @@ export const IOS_SETTINGS_ROWS: SettingsRow[] = [
   {
     panel: "connect",
     type: "action",
-    label: "Sign in with Apple / Sign out",
+    label: "Sign out",
     value: null,
     status: "conditional",
     line: 699,
-    note: "Toggles based on isNativelySignedIn.",
+    note: 'Rendered when `isNativelySignedIn == true`. Tone: warn.',
+  },
+  {
+    panel: "connect",
+    type: "action",
+    label: "Sign in with Apple",
+    value: null,
+    status: "conditional",
+    line: 701,
+    note: 'Rendered when `isNativelySignedIn == false`. Tone: accent.',
   },
 
   // ── keys (in-app Talkie keyboard preferences) ───────────────────
