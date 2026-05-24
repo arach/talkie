@@ -19,8 +19,16 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
+/**
+ * Whole-file scan. `\s*` includes newlines, so a helper call whose
+ * label sits on the next line (the common shape for cycleRow /
+ * toggleRow / textEntryRow with binding args) is matched the same as
+ * a single-line `field("X", "Y")`. The `g` flag walks every match;
+ * line numbers are recovered from the match index by counting `\n`
+ * up to that offset.
+ */
 const HELPER_RE =
-  /(field|cycleRow|toggleRow|textEntryRow|actionRow|navRow)\(\s*"([^"]+)"/g;
+  /(field|cycleRow|toggleRow|textEntryRow|actionRow|navRow)\s*\(\s*"([^"]+)"/g;
 
 export interface ScannedRow {
   type: string;
@@ -42,21 +50,29 @@ export interface ScanError {
 
 const SETTINGS_PATH = "apps/ios/Talkie iOS/Views/Next/SettingsNext.swift";
 
+function lineNumberAt(content: string, index: number): number {
+  let line = 1;
+  for (let i = 0; i < index; i++) {
+    if (content.charCodeAt(i) === 10 /* \n */) line++;
+  }
+  return line;
+}
+
 export async function scanIOSSettings(): Promise<ScanResult | ScanError> {
   try {
     // Studio lives at `design/studio`; repo root is two levels up.
     const filePath = path.resolve(process.cwd(), "..", "..", SETTINGS_PATH);
     const content = await fs.readFile(filePath, "utf8");
-    const lines = content.split("\n");
 
     const rows: ScannedRow[] = [];
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      HELPER_RE.lastIndex = 0;
-      let m: RegExpExecArray | null;
-      while ((m = HELPER_RE.exec(line)) !== null) {
-        rows.push({ type: m[1], label: m[2], line: i + 1 });
-      }
+    HELPER_RE.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = HELPER_RE.exec(content)) !== null) {
+      rows.push({
+        type: m[1],
+        label: m[2],
+        line: lineNumberAt(content, m.index),
+      });
     }
 
     return {
