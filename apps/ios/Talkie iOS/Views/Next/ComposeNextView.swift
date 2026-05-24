@@ -383,42 +383,51 @@ private struct ComposeModelGlyph: View {
         let variant: String?
     }
 
+    /// Family name font — smaller than `.headline` (22pt) so short
+    /// names like "GPT" don't dominate the header. Still Newsreader
+    /// serif for the editorial character, just sized to the role.
+    private static let familyFont: Font = Font.custom(
+        "Newsreader", size: 17, relativeTo: .body
+    ).weight(.regular)
+
     var body: some View {
         if let standalone = display.standaloneLabel {
-            // "Mac Bridge" et al — render as a single serif headline,
+            // "Mac Bridge" et al — render as a single serif name,
             // no version split.
             Text(standalone)
-                .talkieType(.headline)
+                .font(Self.familyFont)
+                .tracking(-0.1)
                 .foregroundStyle(theme.colors.textPrimary)
                 .lineLimit(1)
         } else if let modelId = display.modelId {
             let parsed = Self.parse(modelId)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(parsed.family)
-                    .talkieType(.headline)
+                    .font(Self.familyFont)
+                    .tracking(-0.1)
                     .foregroundStyle(theme.colors.textPrimary)
                     .lineLimit(1)
 
                 if let version = parsed.version {
                     Text(version)
-                        .font(Font.system(size: 12, weight: .regular, design: .monospaced).monospacedDigit())
+                        .font(Font.system(size: 11, weight: .regular, design: .monospaced).monospacedDigit())
                         .tracking(0.4)
                         .foregroundStyle(theme.colors.textSecondary)
-                        .baselineOffset(2)
+                        .baselineOffset(1)
                 }
 
                 if let variant = parsed.variant {
                     Text(variant)
                         .talkieType(.channelLabelTiny)
                         .foregroundStyle(theme.colors.textTertiary)
-                        .baselineOffset(2)
+                        .baselineOffset(1)
                 }
             }
         } else {
             // No credentials → quiet sans fallback. Avoids the loud
             // "Direct API" string and invites the menu tap.
             Text("Choose model")
-                .talkieType(.headlineSecondary)
+                .font(.system(size: 16, weight: .light))
                 .foregroundStyle(theme.colors.textTertiary)
                 .lineLimit(1)
         }
