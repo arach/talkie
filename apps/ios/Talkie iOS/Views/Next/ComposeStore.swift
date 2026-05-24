@@ -110,12 +110,8 @@ final class ComposeStore: ObservableObject {
         loadAppliedRevisions()
         seedFromLaunchArgumentsIfNeeded()
 
-        // Compose is a dictation-heavy surface — proactively load the
-        // Parakeet model so the first mic tap doesn't fall back to
-        // Apple Speech. Fire-and-forget; ParakeetModelManager has
-        // internal re-entry guards (already-warm / already-loading /
-        // no-models-on-disk), so it's safe to call unconditionally.
-        ParakeetModelManager.shared.preheatForKeyboard()
+        // Parakeet is preheated centrally by AppShellNext.onAppear;
+        // no per-store warmup needed.
     }
 
     deinit {
