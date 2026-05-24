@@ -15,7 +15,7 @@
 //    │    A              S              D                          │
 //    │  Region        Screen         Window                        │
 //    ├─ BOTTOM STRIP (stripBottom gradient) ───────────────────────┤
-//    │  ⇥ Mode    C Camera   N Save    F Paste    W Tray N         │
+//    │  ⇥ Mode    optional contextual actions                     │
 //    └─────────────────────────────────────────────────────────────┘
 //
 
@@ -103,6 +103,7 @@ final class CaptureHUDPanel {
 
     func show(
         mode: CaptureBarMode,
+        showCameraOption: Bool,
         showTrayOption: Bool,
         showSelectionOption: Bool,
         trayCount: Int,
@@ -111,6 +112,7 @@ final class CaptureHUDPanel {
         dismiss()
 
         state.mode = mode
+        state.showCameraOption = showCameraOption
         state.showTrayOption = showTrayOption
         state.showSelectionOption = showSelectionOption
         state.trayCount = trayCount
@@ -400,8 +402,10 @@ private struct CaptureHUDView: View {
                 state.mode = state.mode == .screenshot ? .video : .screenshot
                 state.onAction?(nil)
             }
-            extraCell(key: "C", label: "Camera", tone: .accent) {
-                state.onAction?(.toggleCamera)
+            if state.showCameraOption {
+                extraCell(key: "C", label: "Camera", tone: .accent) {
+                    state.onAction?(.toggleCamera)
+                }
             }
             if state.showSelectionOption {
                 extraCell(key: "N", label: "Save", tone: .ink) {

@@ -1827,13 +1827,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         }
 
         let chord: any CaptureChordController = CaptureHUDController()
+        let chordOptions: CaptureChordOptions
+        if MemoRecordingController.shared.state.isRecording {
+            chordOptions = .captureOnly
+        } else {
+            chordOptions = .captureWithPeripherals
+        }
 
         let trackCapturePerf = capturePerfLoggingEnabled && initialMode == .screenshot
         if trackCapturePerf {
             CapturePerformanceMonitor.shared.beginSession(trigger: "capture-chord", mode: "pending")
             CapturePerformanceMonitor.shared.mark("chord.panel.begin")
         }
-        guard let result = await chord.beginChord(initialMode: initialMode) else {
+        guard let result = await chord.beginChord(initialMode: initialMode, options: chordOptions) else {
             if trackCapturePerf {
                 CapturePerformanceMonitor.shared.endSession(outcome: "cancelled")
             }
@@ -1859,6 +1865,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 CapturePerformanceMonitor.shared.endSession(outcome: "screen_record_selected")
             }
         case .toggleCamera:
+            guard FeatureFlags.shared.enableCameraBubble else {
+                if trackCapturePerf {
+                    CapturePerformanceMonitor.shared.endSession(outcome: "camera_unavailable")
+                }
+                return
+            }
             CameraBubbleController.shared.toggle()
             if trackCapturePerf {
                 CapturePerformanceMonitor.shared.endSession(outcome: "toggle_camera_selected")

@@ -22,10 +22,11 @@ final class CaptureBarController {
     /// Begin the unified capture chord flow.
     /// Shows the bar in the given mode and waits for user input.
     /// Returns the chosen result, or nil if cancelled/timed out.
-    func beginChord(initialMode: CaptureBarMode) async -> CaptureBarResult? {
+    func beginChord(initialMode: CaptureBarMode, options: CaptureChordOptions = .captureOnly) async -> CaptureBarResult? {
         let allItems = TrayItem.allItems()
-        let hasTrayItems = !allItems.isEmpty
-        let hasSelectionItems = SelectionTray.shared.isNotEmpty
+        let showCameraOption = options.showCameraOption && FeatureFlags.shared.enableCameraBubble
+        let hasTrayItems = options.showTrayOption && !allItems.isEmpty
+        let hasSelectionItems = options.showSelectionOption && SelectionTray.shared.isNotEmpty
         let trayCount = allItems.count
 
         return await withCheckedContinuation { continuation in
@@ -41,6 +42,7 @@ final class CaptureBarController {
             // Show the bar
             panel.show(
                 mode: initialMode,
+                showCameraOption: showCameraOption,
                 showTrayOption: hasTrayItems,
                 showSelectionOption: hasSelectionItems,
                 trayCount: trayCount
@@ -108,8 +110,12 @@ final class CaptureBarController {
                     }
 
                 case "c":
-                    timeout.cancel()
-                    resume(.toggleCamera)
+                    if showCameraOption {
+                        timeout.cancel()
+                        resume(.toggleCamera)
+                    } else {
+                        resetTimeout()
+                    }
 
                 case "n":
                     if hasSelectionItems {
