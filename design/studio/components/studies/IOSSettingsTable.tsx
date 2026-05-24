@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import type {
   SettingsPanel,
   SettingsRow,
   SettingsRowType,
   SettingsStatus,
 } from "@/lib/ios-settings";
+import type { ScannedRow, ScanResult, ScanError } from "@/app/ios-settings/actions";
 
 const PANEL_ORDER: SettingsPanel[] = [
   "voice",
@@ -49,9 +50,75 @@ const STATUS_PALETTE: Record<
   debug: { fg: "#5A554C", bg: "#ECECEB", label: "DEBUG" },
 };
 
-export function IOSSettingsTable({ rows }: { rows: SettingsRow[] }) {
+interface DriftReport {
+  scannedAt: string;
+  totalScanned: number;
+  /** Snapshot rows still present in the live scan (matched by label). */
+  matchedLabels: Set<string>;
+  /** Live-scan rows whose label isn't in the snapshot — new in Swift. */
+  newRows: ScannedRow[];
+  /** Snapshot rows whose label isn't in the live scan — likely removed. */
+  removedFromSnapshot: SettingsRow[];
+}
+
+function computeDrift(
+  snapshot: SettingsRow[],
+  scan: ScannedRow[],
+  scannedAt: string,
+): DriftReport {
+  const snapshotByLabel = new Map(snapshot.map((r) => [r.label, r]));
+  const scanByLabel = new Map(scan.map((r) => [r.label, r]));
+
+  const matchedLabels = new Set<string>();
+  const newRows: ScannedRow[] = [];
+  for (const s of scan) {
+    if (snapshotByLabel.has(s.label)) matchedLabels.add(s.label);
+    else newRows.push(s);
+  }
+  const removedFromSnapshot = snapshot.filter(
+    (r) =>
+      // Only flag removals for row types the scanner would have caught.
+      // Skip metric / install / swatch — they're not label-based regex
+      // matches and would always look "removed".
+      (
+        ["field", "cycle", "toggle", "text", "action", "nav"] as SettingsRow["type"][]
+      ).includes(r.type) && !scanByLabel.has(r.label),
+  );
+
+  return {
+    scannedAt,
+    totalScanned: scan.length,
+    matchedLabels,
+    newRows,
+    removedFromSnapshot,
+  };
+}
+
+export function IOSSettingsTable({
+  rows,
+  rescan,
+}: {
+  rows: SettingsRow[];
+  rescan?: () => Promise<ScanResult | ScanError>;
+}) {
   const [activePanel, setActivePanel] = useState<SettingsPanel | "all">("all");
   const [query, setQuery] = useState("");
+  const [drift, setDrift] = useState<DriftReport | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [scanPending, startScan] = useTransition();
+
+  function handleRescan() {
+    if (!rescan) return;
+    setScanError(null);
+    startScan(async () => {
+      const result = await rescan();
+      if (!result.ok) {
+        setScanError(result.message);
+        return;
+      }
+      setDrift(computeDrift(rows, result.rows, result.scannedAt));
+    });
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -113,7 +180,39 @@ export function IOSSettingsTable({ rows }: { rows: SettingsRow[] }) {
           placeholder="Filter labels, settings keys, hints…"
           className="ml-auto w-full max-w-sm rounded border border-studio-edge bg-studio-canvas px-3 py-1.5 text-[12.5px] text-studio-ink placeholder:text-studio-ink-faint/60 focus:border-studio-edge-strong focus:outline-none"
         />
+        {rescan && (
+          <button
+            onClick={handleRescan}
+            disabled={scanPending}
+            className={
+              "rounded-[3px] border px-2.5 py-1 font-mono text-[10.5px] font-semibold uppercase tracking-eyebrow transition-colors " +
+              (scanPending
+                ? "border-studio-edge bg-studio-canvas-warm/60 text-studio-ink-faint/60"
+                : "border-studio-edge-strong bg-studio-canvas text-studio-ink hover:bg-studio-canvas-warm/60")
+            }
+            title="Re-walk SettingsNext.swift and diff against this snapshot"
+          >
+            {scanPending ? "Scanning…" : "Re-walk Swift"}
+          </button>
+        )}
       </div>
+
+      {scanError && (
+        <div
+          className="rounded border border-orange-300/60 bg-orange-50/60 px-3 py-2 font-mono text-[11px] text-orange-900"
+          role="alert"
+        >
+          Re-walk failed: {scanError}
+        </div>
+      )}
+
+      {drift && (
+        <DriftPanel
+          drift={drift}
+          totalSnapshot={rows.length}
+          onClear={() => setDrift(null)}
+        />
+      )}
 
       <div className="overflow-hidden rounded border border-studio-edge bg-studio-canvas/95">
         <table className="w-full border-collapse text-left">
@@ -208,6 +307,129 @@ export function IOSSettingsTable({ rows }: { rows: SettingsRow[] }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function DriftPanel({
+  drift,
+  totalSnapshot,
+  onClear,
+}: {
+  drift: DriftReport;
+  totalSnapshot: number;
+  onClear: () => void;
+}) {
+  const scannedAt = new Date(drift.scannedAt);
+  const inSync =
+    drift.newRows.length === 0 && drift.removedFromSnapshot.length === 0;
+
+  return (
+    <div className="rounded border border-studio-edge bg-studio-canvas-warm/40 p-4 space-y-3">
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <span className="font-mono text-[10px] uppercase tracking-eyebrow text-studio-ink-faint/80">
+          Re-walk · {scannedAt.toUTCString()}
+        </span>
+        <span className="font-mono text-[11px] text-studio-ink/80">
+          {drift.totalScanned} scanned · {totalSnapshot} in snapshot
+        </span>
+        <button
+          onClick={onClear}
+          className="ml-auto font-mono text-[10px] uppercase tracking-eyebrow text-studio-ink-faint/70 hover:text-studio-ink"
+        >
+          Clear
+        </button>
+      </div>
+
+      {inSync ? (
+        <div className="font-mono text-[12px] text-emerald-800">
+          In sync — every snapshot row still appears in SettingsNext.swift, no
+          new helper-row labels detected.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <DriftList
+            tone="new"
+            title="New in Swift, not in snapshot"
+            rows={drift.newRows.map((r) => ({
+              label: r.label,
+              meta: `${r.type} · line ${r.line}`,
+            }))}
+            emptyText="No new rows."
+          />
+          <DriftList
+            tone="removed"
+            title="In snapshot, not in Swift"
+            rows={drift.removedFromSnapshot.map((r) => ({
+              label: r.label,
+              meta: `${r.type} · ${r.panel}`,
+            }))}
+            emptyText="No removed rows."
+          />
+        </div>
+      )}
+
+      <div className="font-mono text-[10px] text-studio-ink-faint/65">
+        The scanner only catches label-bearing helpers (field / cycleRow /
+        toggleRow / textEntryRow / actionRow / navRow). Metric strip entries,
+        the Parakeet install row, and theme swatches are not in scope and never
+        appear as "removed".
+      </div>
+    </div>
+  );
+}
+
+function DriftList({
+  tone,
+  title,
+  rows,
+  emptyText,
+}: {
+  tone: "new" | "removed";
+  title: string;
+  rows: Array<{ label: string; meta: string }>;
+  emptyText: string;
+}) {
+  const accent =
+    tone === "new"
+      ? { fg: "#1F4A6A", bg: "#DDE9F4", label: "NEW" }
+      : { fg: "#8A4B17", bg: "#F4DEC2", label: "REMOVED" };
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-2">
+        <span
+          className="inline-block rounded-[3px] px-1.5 py-0.5 font-mono text-[9px] font-semibold tracking-[0.18em]"
+          style={{ color: accent.fg, background: accent.bg }}
+        >
+          {accent.label}
+        </span>
+        <span className="font-mono text-[10px] uppercase tracking-eyebrow text-studio-ink-faint/85">
+          {title}
+        </span>
+        <span className="font-mono text-[10px] text-studio-ink-faint/60">
+          · {rows.length}
+        </span>
+      </div>
+      {rows.length === 0 ? (
+        <div className="font-mono text-[11px] text-studio-ink-faint/60">
+          {emptyText}
+        </div>
+      ) : (
+        <ul className="space-y-1">
+          {rows.map((r, i) => (
+            <li
+              key={`${r.label}-${i}`}
+              className="rounded bg-studio-canvas px-2 py-1.5 text-[12px]"
+            >
+              <div className="font-medium text-studio-ink">{r.label}</div>
+              <div className="font-mono text-[10.5px] text-studio-ink-faint/70">
+                {r.meta}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

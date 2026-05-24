@@ -6,6 +6,7 @@ import {
   statusSummary,
 } from "@/lib/ios-settings";
 import { IOSSettingsTable } from "@/components/studies/IOSSettingsTable";
+import { scanIOSSettings } from "./actions";
 
 export const dynamic = "force-static";
 
@@ -38,7 +39,7 @@ export default function IOSSettingsPage() {
             <Tag color="slate">{summary.debug} debug</Tag>
           </span>
         </header>
-        <IOSSettingsTable rows={IOS_SETTINGS_ROWS} />
+        <IOSSettingsTable rows={IOS_SETTINGS_ROWS} rescan={scanIOSSettings} />
       </div>
     </StudioPage>
   );
