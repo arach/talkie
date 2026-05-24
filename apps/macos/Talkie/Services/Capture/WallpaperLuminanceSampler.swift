@@ -27,6 +27,10 @@ enum WallpaperLuminanceSampler {
         return appearanceFallback()
     }
 
+    static func fallbackPalette() -> Palette {
+        appearanceFallback()
+    }
+
     // MARK: - Classification
 
     /// Three-bucket split. Boundaries chosen so plain Sonoma defaults

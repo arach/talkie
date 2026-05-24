@@ -164,6 +164,10 @@ docs/feature-research-*.md
 # ASC CLI local state
 .asc/
 
+# talkie-dev local build state (written by apps/macos/run.sh,
+# consumed by `talkie-dev launch` to pick up `build/macos/` artifacts)
+.talkie/
+
 # Open-source cleanup: generated/private artifacts
 apps/macos/Logs/
 packaging/macos/*.zip

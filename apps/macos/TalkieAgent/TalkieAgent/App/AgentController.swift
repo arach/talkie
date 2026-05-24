@@ -339,29 +339,24 @@ final class AgentController: ObservableObject {
         return screenshots.isEmpty ? nil : RecordingScreenshot.toJSON(screenshots)
     }
 
-    /// Critical-path output of the screenshot merge + interleave.
-    /// `text` is the dictation transcript with `[N]` markers + footnote URLs
-    /// inline if screenshots were captured during recording; otherwise it
-    /// equals the plain transcript. Both stored `text` and paste destination
-    /// use this value.
+    /// Critical-path output for the dictation text plus peripheral capture metadata.
+    /// Captures stay out of the dictated text; delivery surfaces can decide how
+    /// to present them without changing the transcript.
     struct PreparedDictation: Sendable {
         let text: String
         let mergedScreenshotsJSON: String?
         let clipsJSON: String?
     }
 
-    /// Runs on the critical path before paste. Fetches tray assets via XPC,
-    /// merges screenshots from Talkie's tray with the agent's local set, and
-    /// interleaves `[N]` markers + footnote URLs into the transcript text.
-    /// The resulting `text` is what gets pasted into the foreground app AND
-    /// stored as the dictation's transcription. Plain transcript remains in
-    /// `assetsJSON.segments.text` if anything needs the screenshot-free version.
+    /// Runs on the critical path before paste. Fetches tray assets via XPC and
+    /// merges screenshots from Talkie's tray with the agent's local set, but
+    /// leaves the transcript text untouched.
     private nonisolated static func prepareMergedDictation(
         plainText: String,
         localScreenshotsJSON: String?,
         captureSessionId: UUID?,
         recordingStartedAt: Date?,
-        timed: TimedTranscription?
+        timed _: TimedTranscription?
     ) async -> PreparedDictation {
         let trayAssetsJSON: String?
         if let recId = captureSessionId {
@@ -378,20 +373,8 @@ final class AgentController: ObservableObject {
         )
         let clipsJSON = clipsJSON(from: trayAssetsJSON)
 
-        let screenshots = RecordingScreenshot.fromArray(json: mergedScreenshotsJSON)
-        let text: String
-        if let timed, !screenshots.isEmpty {
-            text = ScreenshotInserter.interleave(
-                timedTranscription: timed,
-                screenshots: screenshots,
-                screenshotDirectory: ScreenshotStorage.screenshotsDirectory
-            ).markdown
-        } else {
-            text = plainText
-        }
-
         return PreparedDictation(
-            text: text,
+            text: plainText,
             mergedScreenshotsJSON: mergedScreenshotsJSON,
             clipsJSON: clipsJSON
         )

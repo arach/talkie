@@ -167,6 +167,15 @@ final class CaptureHUDPanel {
         })
     }
 
+    func updatePalette(_ palette: Palette) {
+        guard let p = panel, palette != self.palette else { return }
+        self.palette = palette
+
+        let hostingView = NSHostingView(rootView: CaptureHUDView(state: state, palette: palette))
+        hostingView.layer?.isOpaque = false
+        p.contentView = hostingView
+    }
+
     func toggleMode() {
         state.mode = (state.mode == .screenshot) ? .video : .screenshot
     }

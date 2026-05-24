@@ -15,6 +15,7 @@ final class CaptureHUDController: CaptureChordController {
     private let panel = CaptureHUDPanel()
     private var globalMonitor: Any?
     private var localMonitor: Any?
+    private var paletteTask: Task<Void, Never>?
     private let timeoutSeconds: TimeInterval = 30
 
     func beginChord(initialMode: CaptureBarMode) async -> CaptureBarResult? {
@@ -33,22 +34,23 @@ final class CaptureHUDController: CaptureChordController {
                 continuation.resume(returning: result)
             }
 
-            // Sample wallpaper behind the HUD's future position so we can
-            // pick the trio scheme that contrasts with what's actually
-            // behind the panel (PEARL / SLATE / AMBER). One-shot at show.
+            // Draw immediately with the appearance fallback. Wallpaper sampling
+            // uses ScreenCaptureKit, so it must never hold up showing the HUD.
             let expectedFrame = CaptureHUDPanel.expectedFrame(
                 for: NSEvent.mouseLocation,
                 position: SettingsManager.shared.captureHUDPosition
             )
-            Task { @MainActor in
+            panel.show(
+                mode: initialMode,
+                showTrayOption: hasTrayItems,
+                showSelectionOption: hasSelectionItems,
+                trayCount: trayCount,
+                palette: WallpaperLuminanceSampler.fallbackPalette()
+            )
+            paletteTask = Task { @MainActor [weak self] in
                 let palette = await WallpaperLuminanceSampler.samplePalette(for: expectedFrame)
-                panel.show(
-                    mode: initialMode,
-                    showTrayOption: hasTrayItems,
-                    showSelectionOption: hasSelectionItems,
-                    trayCount: trayCount,
-                    palette: palette
-                )
+                guard !Task.isCancelled else { return }
+                self?.panel.updatePalette(palette)
             }
 
             var timeout = Task { @MainActor in
@@ -74,15 +76,14 @@ final class CaptureHUDController: CaptureChordController {
                 }
             }
 
-            var shouldIgnoreOpeningKey = true
+            // The opening chord's keyDown can be delivered more than once
+            // while the HUD is coming up. Ignore every still-held Hyper+S/R
+            // event so it never gets mistaken for Screen/Record selection.
             let handleKey: (NSEvent) -> Void = { [weak self] event in
                 guard let self else { return }
-                if shouldIgnoreOpeningKey {
-                    shouldIgnoreOpeningKey = false
-                    if event.isOpeningCaptureChordKey(initialMode: initialMode) {
-                        resetTimeout()
-                        return
-                    }
+                if event.isOpeningCaptureChordKey(initialMode: initialMode) {
+                    resetTimeout()
+                    return
                 }
                 let key = event.charactersIgnoringModifiers?.lowercased()
                 let currentMode = self.panel.state.mode
@@ -166,6 +167,8 @@ final class CaptureHUDController: CaptureChordController {
     // MARK: - Private
 
     private func tearDown() {
+        paletteTask?.cancel()
+        paletteTask = nil
         panel.dismiss()
         if let monitor = globalMonitor {
             NSEvent.removeMonitor(monitor)
