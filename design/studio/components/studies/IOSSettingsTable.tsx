@@ -7,7 +7,12 @@ import type {
   SettingsRowType,
   SettingsStatus,
 } from "@/lib/ios-settings";
-import type { ScannedRow, ScanResult, ScanError } from "@/app/ios-settings/actions";
+import { rowLabels } from "@/lib/ios-settings";
+import type {
+  ScannedRow,
+  ScanResult,
+  ScanError,
+} from "@/app/ios-settings/actions";
 
 const PANEL_ORDER: SettingsPanel[] = [
   "voice",
@@ -61,28 +66,53 @@ interface DriftReport {
   removedFromSnapshot: SettingsRow[];
 }
 
+/**
+ * Label-set match: for every snapshot row, walk its label + aliases
+ * and try to claim a scanned row. Both directions:
+ *
+ * - Snapshot row matches if ANY of its claimed labels appears in scan
+ * - Scanned row is matched (not "new") if some snapshot row claims it
+ *
+ * This is what makes the `aliases` field on a snapshot row work — one
+ * collapsed entry can claim several literal Swift labels.
+ */
 function computeDrift(
   snapshot: SettingsRow[],
   scan: ScannedRow[],
   scannedAt: string,
 ): DriftReport {
-  const snapshotByLabel = new Map(snapshot.map((r) => [r.label, r]));
-  const scanByLabel = new Map(scan.map((r) => [r.label, r]));
-
-  const matchedLabels = new Set<string>();
-  const newRows: ScannedRow[] = [];
-  for (const s of scan) {
-    if (snapshotByLabel.has(s.label)) matchedLabels.add(s.label);
-    else newRows.push(s);
+  // Pre-compute: label → snapshot row that claims it.
+  const claimedBy = new Map<string, SettingsRow>();
+  for (const r of snapshot) {
+    for (const lbl of rowLabels(r)) claimedBy.set(lbl, r);
   }
+
+  // Each snapshot row's match status (any of its labels appeared in scan).
+  const scanLabels = new Set(scan.map((s) => s.label));
+  const matchedLabels = new Set<string>();
+  for (const r of snapshot) {
+    if (rowLabels(r).some((l) => scanLabels.has(l))) {
+      for (const l of rowLabels(r)) matchedLabels.add(l);
+    }
+  }
+
+  const newRows = scan.filter((s) => !claimedBy.has(s.label));
+
   const removedFromSnapshot = snapshot.filter(
     (r) =>
-      // Only flag removals for row types the scanner would have caught.
-      // Skip metric / install / swatch — they're not label-based regex
-      // matches and would always look "removed".
+      // Only label-bearing helper rows are in scope for the scanner.
+      // Skip metric / install / swatch — the regex never sees those.
       (
-        ["field", "cycle", "toggle", "text", "action", "nav"] as SettingsRow["type"][]
-      ).includes(r.type) && !scanByLabel.has(r.label),
+        [
+          "field",
+          "cycle",
+          "toggle",
+          "text",
+          "action",
+          "nav",
+        ] as SettingsRow["type"][]
+      ).includes(r.type) &&
+      !rowLabels(r).some((l) => scanLabels.has(l)),
   );
 
   return {

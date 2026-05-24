@@ -1,35 +1,34 @@
 import { StudioPage } from "@/components/StudioPage";
-import {
-  IOS_SETTINGS_EXTRACTED_AT,
-  IOS_SETTINGS_ROWS,
-  IOS_SETTINGS_SOURCE,
-  statusSummary,
-} from "@/lib/ios-settings";
+import { loadSnapshot, statusSummary } from "@/lib/ios-settings";
 import { IOSSettingsTable } from "@/components/studies/IOSSettingsTable";
 import { scanIOSSettings } from "./actions";
 
-export const dynamic = "force-static";
+export const dynamic = "force-dynamic";
 
-export default function IOSSettingsPage() {
-  const summary = statusSummary(IOS_SETTINGS_ROWS);
-  const extractedAt = new Date(IOS_SETTINGS_EXTRACTED_AT);
+export default async function IOSSettingsPage() {
+  const snapshot = await loadSnapshot();
+  const summary = statusSummary(snapshot.rows);
+  const extractedAt = new Date(snapshot.extractedAt);
 
   return (
     <StudioPage
       eyebrow="iOS · Settings audit"
       title="iOS Settings"
-      help={`Flat extraction · ${IOS_SETTINGS_ROWS.length} rows · snapshot ${extractedAt.toISOString()}`}
+      help={`Flat extraction · ${snapshot.rows.length} rows · snapshot ${extractedAt.toISOString()}`}
     >
       <div className="space-y-4">
         <header className="flex flex-wrap items-baseline gap-x-6 gap-y-1 text-[11px] uppercase tracking-eyebrow text-studio-ink-faint/80">
           <span>
             Source:{" "}
             <code className="font-mono text-studio-ink/80">
-              {IOS_SETTINGS_SOURCE}
+              {snapshot.source}
             </code>
           </span>
           <span>
-            Extracted: <span className="text-studio-ink/80">{extractedAt.toUTCString()}</span>
+            Extracted:{" "}
+            <span className="text-studio-ink/80">
+              {extractedAt.toUTCString()}
+            </span>
           </span>
           <span className="ml-auto flex gap-3">
             <Tag color="green">{summary.wired} wired</Tag>
@@ -39,7 +38,7 @@ export default function IOSSettingsPage() {
             <Tag color="slate">{summary.debug} debug</Tag>
           </span>
         </header>
-        <IOSSettingsTable rows={IOS_SETTINGS_ROWS} rescan={scanIOSSettings} />
+        <IOSSettingsTable rows={snapshot.rows} rescan={scanIOSSettings} />
       </div>
     </StudioPage>
   );
