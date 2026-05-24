@@ -31,6 +31,28 @@ public struct InterleaveResult: Sendable {
 
 public enum ScreenshotInserter {
 
+    /// Render transcript text for a delivery surface with screenshot
+    /// references, without changing the canonical transcript text.
+    public static func deliveryMarkdown(
+        text: String,
+        timedTranscription: TimedTranscription?,
+        screenshots: [RecordingScreenshot],
+        screenshotDirectory: URL? = nil
+    ) -> String {
+        guard !screenshots.isEmpty else { return text }
+
+        let timed = TimedTranscription(
+            text: text,
+            words: timedTranscription?.words ?? []
+        )
+
+        return interleave(
+            timedTranscription: timed,
+            screenshots: screenshots,
+            screenshotDirectory: screenshotDirectory
+        ).markdown
+    }
+
     /// Interleave screenshots into a timed transcription by timestamp.
     ///
     /// Uses the original transcript text (not reconstructed from word tokens)
@@ -78,7 +100,9 @@ public enum ScreenshotInserter {
             insertions.append((charPos, ss))
         }
 
-        // Split original text at insertion points
+        // Split original text at insertion points. `[N]` markers go inline
+        // at the screenshot's word position; the URL footnotes stack at the
+        // end of the transcript.
         var blocks: [ContentBlock] = []
         var markdownParts: [String] = []
         var references: [String] = []
@@ -117,7 +141,7 @@ public enum ScreenshotInserter {
             }
         }
 
-        // Append references at the end
+        // Append references at the end (stacked, one per line)
         if !references.isEmpty {
             markdownParts.append("\n\n")
             markdownParts.append(references.joined(separator: "\n"))

@@ -131,11 +131,7 @@ private extension LearnArticle {
             \(metadataHTML)
             \(articleBodyHTML)
             \(shortcutHTML)
-            <section class="callout">
-              <div class="callout-kicker">NOTE</div>
-              <h2>\(fallback.calloutTitle.htmlEscaped)</h2>
-              <p>\(fallback.calloutBody.htmlEscaped)</p>
-            </section>
+            \(calloutHTML)
             \(stepsHTML)
             \(actionsHTML)
             \(tagsHTML)
@@ -179,6 +175,24 @@ private extension LearnArticle {
         <section class="block">
           <div class="block-title">Shortcuts</div>
           <div class="shortcut-strip">\(rows)</div>
+        </section>
+        """
+    }
+
+    private var calloutHTML: String {
+        // Only render when the article (bundled or markdown-frontmatter)
+        // provides a callout body. No generic "Native bridge" filler —
+        // empty space here is better than boilerplate.
+        guard let title = fallback.calloutTitle,
+              let body = fallback.calloutBody,
+              !title.isEmpty,
+              !body.isEmpty
+        else { return "" }
+        return """
+        <section class="callout">
+          <div class="callout-kicker">NOTE</div>
+          <h2>\(title.htmlEscaped)</h2>
+          <p>\(body.htmlEscaped)</p>
         </section>
         """
     }

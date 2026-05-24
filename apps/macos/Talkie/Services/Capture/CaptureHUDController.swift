@@ -3,7 +3,7 @@
 //  Talkie
 //
 //  Chord controller for the HUD bar capture menu.
-//  Same keyboard/mouse handling as CaptureRadialController, using CaptureHUDPanel.
+//  Owns the keyboard chord lifecycle and forwards into CaptureHUDPanel.
 //
 
 import AppKit
@@ -15,16 +15,14 @@ final class CaptureHUDController: CaptureChordController {
     private let panel = CaptureHUDPanel()
     private var globalMonitor: Any?
     private var localMonitor: Any?
-    private var mouseMonitor: Any?
-    private var localMouseMonitor: Any?
+    private var paletteTask: Task<Void, Never>?
     private let timeoutSeconds: TimeInterval = 30
-    private let cursorGracePeriod: TimeInterval = 0.6
-    private let cursorPadding: CGFloat = 50
 
-    func beginChord(initialMode: CaptureBarMode) async -> CaptureBarResult? {
+    func beginChord(initialMode: CaptureBarMode, options: CaptureChordOptions = .captureOnly) async -> CaptureBarResult? {
         let allItems = TrayItem.allItems()
-        let hasTrayItems = !allItems.isEmpty
-        let hasSelectionItems = SelectionTray.shared.isNotEmpty
+        let showCameraOption = options.showCameraOption && FeatureFlags.shared.enableCameraBubble
+        let hasTrayItems = options.showTrayOption && !allItems.isEmpty
+        let hasSelectionItems = options.showSelectionOption && SelectionTray.shared.isNotEmpty
         let trayCount = allItems.count
 
         return await withCheckedContinuation { continuation in
@@ -37,12 +35,25 @@ final class CaptureHUDController: CaptureChordController {
                 continuation.resume(returning: result)
             }
 
+            // Draw immediately with the appearance fallback. Wallpaper sampling
+            // uses ScreenCaptureKit, so it must never hold up showing the HUD.
+            let expectedFrame = CaptureHUDPanel.expectedFrame(
+                for: NSEvent.mouseLocation,
+                position: SettingsManager.shared.captureHUDPosition
+            )
             panel.show(
                 mode: initialMode,
+                showCameraOption: showCameraOption,
                 showTrayOption: hasTrayItems,
                 showSelectionOption: hasSelectionItems,
-                trayCount: trayCount
+                trayCount: trayCount,
+                palette: WallpaperLuminanceSampler.fallbackPalette()
             )
+            paletteTask = Task { @MainActor [weak self] in
+                let palette = await WallpaperLuminanceSampler.samplePalette(for: expectedFrame)
+                guard !Task.isCancelled else { return }
+                self?.panel.updatePalette(palette)
+            }
 
             var timeout = Task { @MainActor in
                 try? await Task.sleep(for: .seconds(self.timeoutSeconds))
@@ -67,8 +78,15 @@ final class CaptureHUDController: CaptureChordController {
                 }
             }
 
+            // The opening chord's keyDown can be delivered more than once
+            // while the HUD is coming up. Ignore every still-held Hyper+S/R
+            // event so it never gets mistaken for Screen/Record selection.
             let handleKey: (NSEvent) -> Void = { [weak self] event in
                 guard let self else { return }
+                if event.isOpeningCaptureChordKey(initialMode: initialMode) {
+                    resetTimeout()
+                    return
+                }
                 let key = event.charactersIgnoringModifiers?.lowercased()
                 let currentMode = self.panel.state.mode
 
@@ -95,8 +113,12 @@ final class CaptureHUDController: CaptureChordController {
                     }
 
                 case "c":
-                    timeout.cancel()
-                    resume(.toggleCamera)
+                    if showCameraOption {
+                        timeout.cancel()
+                        resume(.toggleCamera)
+                    } else {
+                        resetTimeout()
+                    }
 
                 case "n":
                     if hasSelectionItems {
@@ -145,40 +167,14 @@ final class CaptureHUDController: CaptureChordController {
                 handleKey(event)
                 return nil
             }
-
-            var cursorDismissTask: Task<Void, Never>?
-
-            let trackMouse: (NSEvent) -> Void = { [weak self] _ in
-                guard let self, let panelFrame = self.panel.frame else { return }
-                let mouseLocation = NSEvent.mouseLocation
-                let zone = panelFrame.insetBy(dx: -self.cursorPadding, dy: -self.cursorPadding)
-
-                if zone.contains(mouseLocation) {
-                    cursorDismissTask?.cancel()
-                    cursorDismissTask = nil
-                } else if cursorDismissTask == nil {
-                    cursorDismissTask = Task { @MainActor in
-                        try? await Task.sleep(for: .seconds(self.cursorGracePeriod))
-                        guard !Task.isCancelled else { return }
-                        timeout.cancel()
-                        resume(nil)
-                    }
-                }
-            }
-
-            mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { event in
-                trackMouse(event)
-            }
-            localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .mouseMoved) { event in
-                trackMouse(event)
-                return event
-            }
         }
     }
 
     // MARK: - Private
 
     private func tearDown() {
+        paletteTask?.cancel()
+        paletteTask = nil
         panel.dismiss()
         if let monitor = globalMonitor {
             NSEvent.removeMonitor(monitor)
@@ -187,14 +183,6 @@ final class CaptureHUDController: CaptureChordController {
         if let monitor = localMonitor {
             NSEvent.removeMonitor(monitor)
             localMonitor = nil
-        }
-        if let monitor = mouseMonitor {
-            NSEvent.removeMonitor(monitor)
-            mouseMonitor = nil
-        }
-        if let monitor = localMouseMonitor {
-            NSEvent.removeMonitor(monitor)
-            localMouseMonitor = nil
         }
     }
 }

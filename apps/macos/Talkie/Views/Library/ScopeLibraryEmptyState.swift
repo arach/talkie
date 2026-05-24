@@ -292,39 +292,68 @@ private struct WeekRow: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(alignment: .firstTextBaseline, spacing: 14) {
-                Text(dayLabel(memo.createdAt))
-                    .font(.system(size: 10, weight: .regular, design: .monospaced))
-                    .tracking(0.6)
-                    .foregroundStyle(ScopeInk.faint)
-                    .frame(width: 70, alignment: .leading)
-                    .monospacedDigit()
+            HStack(alignment: .center, spacing: 10) {
+                // Datetime — stacked day-of-week / time-of-day in a tight
+                // monospace brick. Replaces the 220pt three-column header
+                // (day · time · TYPE) so the title gets the real estate.
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(dayLabel(memo.createdAt))
+                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                        .tracking(0.4)
+                        .foregroundStyle(ScopeInk.faint)
+                    Text(timeOfDay(memo.createdAt))
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .tracking(0.2)
+                        .foregroundStyle(ScopeInk.subtle)
+                        .monospacedDigit()
+                }
+                .frame(width: 48, alignment: .leading)
 
-                Text(timeOfDay(memo.createdAt))
-                    .font(.system(size: 10, weight: .regular, design: .monospaced))
-                    .tracking(0.6)
-                    .foregroundStyle(ScopeInk.faint)
-                    .frame(width: 70, alignment: .leading)
-                    .monospacedDigit()
+                // Type icon — color-keyed glyph replaces the "DICTATION"
+                // text label. Same channel-color palette ScopeLibraryRow
+                // uses for the letter tag.
+                Image(systemName: memo.type.icon)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(typeColor)
+                    .frame(width: 22, height: 22, alignment: .center)
 
-                Text(memo.type.displayName.uppercased())
-                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                    .tracking(1.4)
-                    .foregroundStyle(ScopeAmber.solid)
-                    .frame(width: 80, alignment: .leading)
+                // Title + inline sub-object badges (refined, promoted,
+                // attachments). Title is the row's emphasis.
+                HStack(spacing: 6) {
+                    Text(rowTitle)
+                        .font(ScopeFont.display(size: 18))
+                        .foregroundStyle(Color.primary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
 
-                Text(rowTitle)
-                    .font(ScopeFont.display(size: 17))
-                    .foregroundStyle(Color.primary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    if memo.wasRefined {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 9))
+                            .foregroundStyle(ScopeAmber.solid.opacity(0.7))
+                    }
+                    if memo.wasPromoted {
+                        Image(systemName: "arrow.up.circle")
+                            .font(.system(size: 9))
+                            .foregroundStyle(ScopeAmber.solid.opacity(0.7))
+                    }
+                    if memo.attachments.count > 0 {
+                        HStack(spacing: 2) {
+                            Image(systemName: "paperclip")
+                                .font(.system(size: 9))
+                            Text("\(memo.attachments.count)")
+                                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                .monospacedDigit()
+                        }
+                        .foregroundStyle(ScopeInk.faint)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 Text(formatDuration(memo.duration))
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .tracking(0.6)
                     .foregroundStyle(ScopeInk.faint)
-                    .frame(width: 52, alignment: .trailing)
+                    .frame(width: 44, alignment: .trailing)
                     .monospacedDigit()
             }
             .padding(.horizontal, 6)
@@ -350,6 +379,16 @@ private struct WeekRow: View {
         return "Untitled \(memo.type.displayName)"
     }
 
+    private var typeColor: Color {
+        switch memo.type {
+        case .memo: return ScopeKind.memo
+        case .dictation: return ScopeKind.dict
+        case .note: return ScopeKind.note
+        case .capture, .selection: return ScopeKind.capture
+        default: return ScopeInk.subtle
+        }
+    }
+
     private func dayLabel(_ date: Date) -> String {
         let fmt = DateFormatter()
         fmt.dateFormat = "EEE d"
@@ -358,8 +397,8 @@ private struct WeekRow: View {
 
     private func timeOfDay(_ date: Date) -> String {
         let fmt = DateFormatter()
-        fmt.dateFormat = "h:mm a"
-        return fmt.string(from: date)
+        fmt.dateFormat = "h:mma"
+        return fmt.string(from: date).lowercased()
     }
 
     private func formatDuration(_ seconds: Double) -> String {

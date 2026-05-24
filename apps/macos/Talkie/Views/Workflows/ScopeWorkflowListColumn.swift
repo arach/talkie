@@ -14,6 +14,7 @@ import WFKit
 struct ScopeWorkflowListColumn: View {
     @Binding var selectedWorkflowID: UUID?
     @Binding var editingWorkflow: WorkflowDefinition?
+    @Binding var columnVisibility: NavigationSplitViewVisibility
 
     private let workflowService = WorkflowService.shared
     private let fileRepo = WorkflowFileRepository.shared
@@ -78,22 +79,41 @@ struct ScopeWorkflowListColumn: View {
             chrome: "\(workflowService.workflows.count) ON FILE",
             horizontalPadding: 16
         ) {
-            Button(action: { showingTemplatePicker = true }) {
-                Image(systemName: "plus")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(ScopeAmber.solid)
-                    .frame(width: 24, height: 24)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4)
-                            .stroke(ScopeEdge.normal, lineWidth: 1)
-                    )
-                    .background(
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(ScopeAmber.tintSubtle)
-                    )
+            HStack(spacing: 6) {
+                Button(action: { showingTemplatePicker = true }) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(ScopeAmber.solid)
+                        .frame(width: 24, height: 24)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(ScopeEdge.normal, lineWidth: 1)
+                        )
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(ScopeAmber.tintSubtle)
+                        )
+                }
+                .buttonStyle(.plain)
+                .help("New workflow")
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        columnVisibility = .detailOnly
+                    }
+                } label: {
+                    Image(systemName: "sidebar.left")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(ScopeInk.muted)
+                        .frame(width: 24, height: 24)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(ScopeEdge.subtle, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .help("Hide workflows sidebar")
             }
-            .buttonStyle(.plain)
-            .help("New workflow")
         }
     }
 

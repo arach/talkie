@@ -219,16 +219,12 @@ final class InlineDictationController: NSObject {
     }
 
     private func shouldSuppressTranscriptionError(_ error: Error) -> Bool {
-        if let transcriptionError = error as? TranscriptionError,
-           case .noResult = transcriptionError {
-            return true
-        }
-
-        let description = error.localizedDescription.localizedLowercase
-        return description.contains("no speech")
-            || description.contains("empty recording")
-            || description.contains("empty audio")
-            || description.contains("no transcription result")
-            || description.contains("no result")
+        // We deliberately do NOT suppress `.noResult` here anymore.
+        // Hosts (compose, terminal, …) need to know when the engine
+        // ran but returned nothing so they can surface "no speech
+        // detected" instead of silently resetting. The donor's behavior
+        // before this change was masking a broken transcription path —
+        // see PR #27 + the engine-not-loaded session diagnosis.
+        return false
     }
 }

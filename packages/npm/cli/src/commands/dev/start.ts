@@ -1,11 +1,12 @@
 import type { Command } from "commander";
-import { readdirSync, statSync, existsSync, writeFileSync } from "fs";
+import { readdirSync, readFileSync, statSync, existsSync, writeFileSync } from "fs";
 import { join } from "path";
 import { getFormatOptions, output } from "../../format";
 import {
   SERVICES,
   resolveService,
   getDerivedDataRoot,
+  getProjectRoot,
   getUid,
   type TalkieService,
 } from "./services";
@@ -25,38 +26,70 @@ export interface BuildCandidate {
 }
 
 /**
- * Find all DerivedData builds for a service, sorted newest-first.
- * Scans ~/Library/Developer/Xcode/DerivedData/{prefix}* for
- * Build/Products/Debug/{appName}.
+ * Find all builds for a service, sorted newest-first.
+ *
+ * Two sources:
+ *   1. DerivedData — ~/Library/Developer/Xcode/DerivedData/{prefix}*
+ *   2. `.talkie/last-build.json` at the project root — populated by
+ *      `apps/macos/run.sh` for builds that go to `build/macos/` instead
+ *      of DerivedData. Lets `talkie-dev launch` pick up `run.sh` output
+ *      without changing where the script writes.
  */
 export function findAllBuilds(service: TalkieService): BuildCandidate[] {
-  const root = getDerivedDataRoot();
-  if (!existsSync(root)) return [];
-
   const candidates: BuildCandidate[] = [];
 
-  try {
-    const prefixes = Array.isArray(service.derivedDataPrefix)
-      ? service.derivedDataPrefix
-      : [service.derivedDataPrefix];
-    const dirs = readdirSync(root).filter((d) =>
-      prefixes.some((p) => d.startsWith(p))
-    );
+  // 1. DerivedData scan
+  const root = getDerivedDataRoot();
+  if (existsSync(root)) {
+    try {
+      const prefixes = Array.isArray(service.derivedDataPrefix)
+        ? service.derivedDataPrefix
+        : [service.derivedDataPrefix];
+      const dirs = readdirSync(root).filter((d) =>
+        prefixes.some((p) => d.startsWith(p))
+      );
 
-    for (const dir of dirs) {
-      const appPath = join(root, dir, "Build", "Products", "Debug", service.appName);
-      if (existsSync(appPath)) {
-        // Stat the binary inside the .app, not the .app directory itself.
-        // xcodebuild updates the binary mtime but not always the .app dir mtime.
-        const execName = service.appName.replace(".app", "");
-        const binaryPath = join(appPath, "Contents", "MacOS", execName);
-        const target = existsSync(binaryPath) ? binaryPath : appPath;
+      for (const dir of dirs) {
+        const appPath = join(root, dir, "Build", "Products", "Debug", service.appName);
+        if (existsSync(appPath)) {
+          // Stat the binary inside the .app, not the .app directory itself.
+          // xcodebuild updates the binary mtime but not always the .app dir mtime.
+          const execName = service.appName.replace(".app", "");
+          const binaryPath = join(appPath, "Contents", "MacOS", execName);
+          const target = existsSync(binaryPath) ? binaryPath : appPath;
+          const stat = statSync(target);
+          candidates.push({ path: appPath, mtime: stat.mtime, derivedDataDir: dir });
+        }
+      }
+    } catch {
+      // ignore DerivedData read errors; external state still has a chance
+    }
+  }
+
+  // 2. External state file written by run.sh
+  try {
+    const stateFile = join(getProjectRoot(), ".talkie", "last-build.json");
+    if (existsSync(stateFile)) {
+      const state = JSON.parse(readFileSync(stateFile, "utf-8")) as Record<
+        string,
+        { path?: string; builtAt?: string }
+      >;
+      const product = service.appName.replace(".app", "");
+      const entry = state[product] ?? state[service.name];
+      if (entry?.path && existsSync(entry.path)) {
+        const execName = product;
+        const binaryPath = join(entry.path, "Contents", "MacOS", execName);
+        const target = existsSync(binaryPath) ? binaryPath : entry.path;
         const stat = statSync(target);
-        candidates.push({ path: appPath, mtime: stat.mtime, derivedDataDir: dir });
+        candidates.push({
+          path: entry.path,
+          mtime: stat.mtime,
+          derivedDataDir: "external",
+        });
       }
     }
   } catch {
-    return [];
+    // ignore — external state is best-effort
   }
 
   candidates.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
@@ -64,12 +97,24 @@ export function findAllBuilds(service: TalkieService): BuildCandidate[] {
 }
 
 /**
- * Find the latest DerivedData build for a service.
- * Returns the newest build from findAllBuilds.
+ * Find the latest build for a service.
+ *
+ * Picks the newest external (run.sh / `.talkie/last-build.json`) build
+ * when it leads — that's the whole point of the state file: if you
+ * built via `apps/macos/run.sh`, `talkie-dev launch` should pick that
+ * up instead of an older DerivedData artifact. Among DerivedData
+ * candidates, honors `preferredDerivedDataPrefix` so a stale legacy
+ * prefix doesn't shadow the canonical one.
  */
 export function findLatestBuild(service: TalkieService): { path: string; buildDate: Date } | null {
   const builds = findAllBuilds(service);
   if (builds.length === 0) return null;
+
+  // External (run.sh) build wins if it's the newest across all sources.
+  const newest = builds[0];
+  if (newest.derivedDataDir === "external") {
+    return { path: newest.path, buildDate: newest.mtime };
+  }
 
   if (service.preferredDerivedDataPrefix) {
     const preferred = builds.find((build) =>
@@ -80,7 +125,7 @@ export function findLatestBuild(service: TalkieService): { path: string; buildDa
     }
   }
 
-  return { path: builds[0].path, buildDate: builds[0].mtime };
+  return { path: newest.path, buildDate: newest.mtime };
 }
 
 /**

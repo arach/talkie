@@ -37,10 +37,4 @@ final class SimpleGlassFallbackPaletteTests: XCTestCase {
     }
 }
 
-private extension NSColor {
-    var perceivedBrightness: CGFloat {
-        let rgb = usingColorSpace(.extendedSRGB) ?? self
-        return (0.2126 * rgb.redComponent) + (0.7152 * rgb.greenComponent) + (0.0722 * rgb.blueComponent)
-    }
-}
 #endif

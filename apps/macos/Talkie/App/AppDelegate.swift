@@ -49,8 +49,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     private var captureChordLocalMonitor: Any?
     // Direct screenshot shortcuts local monitor
     private var screenshotDirectLocalMonitor: Any?
-    // Shelf toggle local monitor
-    private var shelfLocalMonitor: Any?
 
     // MARK: - Window Restoration
 
@@ -1828,17 +1826,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             prev.activate()
         }
 
-        let chord: any CaptureChordController =
-            SettingsManager.shared.captureChordStyle == .hud
-                ? CaptureHUDController()
-                : CaptureRadialController()
+        let chord: any CaptureChordController = CaptureHUDController()
+        let chordOptions: CaptureChordOptions
+        if MemoRecordingController.shared.state.isRecording {
+            chordOptions = .captureOnly
+        } else {
+            chordOptions = .captureWithPeripherals
+        }
 
         let trackCapturePerf = capturePerfLoggingEnabled && initialMode == .screenshot
         if trackCapturePerf {
             CapturePerformanceMonitor.shared.beginSession(trigger: "capture-chord", mode: "pending")
             CapturePerformanceMonitor.shared.mark("chord.panel.begin")
         }
-        guard let result = await chord.beginChord(initialMode: initialMode) else {
+        guard let result = await chord.beginChord(initialMode: initialMode, options: chordOptions) else {
             if trackCapturePerf {
                 CapturePerformanceMonitor.shared.endSession(outcome: "cancelled")
             }
@@ -1864,6 +1865,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 CapturePerformanceMonitor.shared.endSession(outcome: "screen_record_selected")
             }
         case .toggleCamera:
+            guard FeatureFlags.shared.enableCameraBubble else {
+                if trackCapturePerf {
+                    CapturePerformanceMonitor.shared.endSession(outcome: "camera_unavailable")
+                }
+                return
+            }
             CameraBubbleController.shared.toggle()
             if trackCapturePerf {
                 CapturePerformanceMonitor.shared.endSession(outcome: "toggle_camera_selected")
@@ -2139,12 +2146,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 .captureFullscreen: "fullscreen",
                 .captureRegion:     "region",
                 .openTrayViewer:    "viewTray",
+                .openTrayShelf:     "viewShelf",
                 .captureWindow:     "window",
                 .pasteLastScreenshot: "pasteLastScreenshot",
             ]
 
             for (action, mode) in actionMap {
                 let cfg = registry.config(for: action)
+                let captureChord = HotkeyConfig.fromSharedSettings(
+                    key: AgentSettingsKey.captureChordHotkey,
+                    default: .defaultCaptureChord
+                )
+                let screenRecordChord = HotkeyConfig.fromSharedSettings(
+                    key: AgentSettingsKey.screenRecordChordHotkey,
+                    default: .defaultScreenRecordChord
+                )
+                if cfg == captureChord || cfg == screenRecordChord {
+                    continue
+                }
                 let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
                 if event.keyCode == UInt16(cfg.keyCode) && mods == cfg.nsModifierFlags {
                     Task { @MainActor in
@@ -2174,7 +2193,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         isDirectScreenshotCaptureActive = true
         defer { isDirectScreenshotCaptureActive = false }
 
-        let trackCapturePerfSession = capturePerfLoggingEnabled && mode != "viewTray" && mode != "pasteLastScreenshot"
+        let trackCapturePerfSession = capturePerfLoggingEnabled
+            && mode != "viewTray"
+            && mode != "viewShelf"
+            && mode != "pasteLastScreenshot"
         if trackCapturePerfSession {
             CapturePerformanceMonitor.shared.beginSession(trigger: "direct-shortcut", mode: mode)
             CapturePerformanceMonitor.shared.mark("direct.dispatch.begin")
@@ -2191,6 +2213,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         case "viewTray":
             await handleCaptureChord(initialMode: .screenshot, previousApp: NSWorkspace.shared.frontmostApplication)
             outcome = "view_tray"
+        case "viewShelf":
+            TrayShelf.shared.toggle()
+            outcome = "view_shelf"
         case "pasteLastScreenshot":
             await pasteLatestScreenshot(previousApp: NSWorkspace.shared.frontmostApplication)
             outcome = "paste_last_screenshot"
@@ -2266,38 +2291,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             object: nil
         )
 
-        // Local shortcuts when Talkie is focused:
-        // - Cmd+Shift+T (keyCode 17) = Shelf toggle
-        // - Cmd+Shift+W (keyCode 13) = Tray viewer toggle
-        shelfLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            if HotkeyRecordingCoordinator.shared.isRecording {
-                return event
-            }
-
-            let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-            guard mods.contains([.command, .shift]) else { return event }
-
-            switch event.keyCode {
-            case 17: // T
-                Task { @MainActor in
-                    TrayShelf.shared.toggle()
-                }
-                return nil
-            case 13: // W
-                Task { @MainActor in
-                    if TrayViewer.shared.isVisible {
-                        TrayViewer.shared.dismiss()
-                    } else {
-                        TrayViewer.shared.show()
-                    }
-                }
-                return nil
-            default:
-                return event
-            }
-        }
-
-        logger.info("Tray shortcuts registered: Cmd+Shift+T (shelf), Cmd+Shift+W (viewer)")
+        logger.info("Tray shelf/viewer notification observers registered; hotkeys are handled via HotkeyRegistry")
     }
 
     @objc private func shelfToggleReceived(_ notification: Notification) {

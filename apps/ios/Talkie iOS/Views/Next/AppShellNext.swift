@@ -97,6 +97,13 @@ struct AppShellNext<Content: View>: View {
             chrome.voiceCommandHandler = { transcript in
                 AppShellRouter.shared.submitVoiceCommand(transcript)
             }
+            // Warm the Parakeet model at shell mount so the first
+            // transcription request — whether from Compose dictation,
+            // the voice memo save path, or the in-app keyboard — finds
+            // a ready engine instead of falling back to Apple Speech
+            // (which returns empty on the simulator). Fire-and-forget;
+            // ParakeetModelManager has its own re-entry guards.
+            ParakeetModelManager.shared.preheatForKeyboard()
         }
     }
 

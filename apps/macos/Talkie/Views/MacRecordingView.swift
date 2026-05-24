@@ -490,6 +490,10 @@ struct LiveWaveformBars: View {
     private let barWidth: CGFloat = 3
     private let gap: CGFloat = 4
     @State private var barLevels: [CGFloat] = Array(repeating: 0.15, count: 80)
+    /// Smoothed level used to drive a gentle scale pulse on the whole
+    /// waveform — gives the strip an "alive" / breathing quality
+    /// without per-bar randomness that reads as noise.
+    @State private var envelope: CGFloat = 0.15
 
     var body: some View {
         GeometryReader { geometry in
@@ -500,15 +504,19 @@ struct LiveWaveformBars: View {
                 Canvas { context, size in
                     let totalWidth = CGFloat(barCount) * (barWidth + gap) - gap
                     let startX = (size.width - totalWidth) / 2
-                    let maxHeight = size.height * 0.85
+                    // Taller bars overall — was 0.85, the old cap left
+                    // dead space top + bottom even on loud signals.
+                    let maxHeight = size.height * 0.96
                     let centerY = size.height / 2
 
                     for i in 0..<barCount {
                         let x = startX + CGFloat(i) * (barWidth + gap)
 
-                        // Each bar has slightly different response for natural look
+                        // Each bar has slightly different response for
+                        // natural look — wider variation than before so
+                        // the wave reads as organic instead of uniform.
                         let seed = Double(i) * 1.618
-                        let variation: CGFloat = 0.7 + CGFloat(sin(seed * 3)) * 0.3
+                        let variation: CGFloat = 0.55 + CGFloat(sin(seed * 3)) * 0.45
                         let levelIndex = i % barLevels.count
                         let barLevel = barLevels[levelIndex] * variation
 
@@ -524,8 +532,11 @@ struct LiveWaveformBars: View {
                             height: barHeight
                         )
 
-                        // Opacity based on level
-                        let opacity = isRecording ? (0.5 + Double(barLevel) * 0.5) : 0.25
+                        // Opacity tracks level + envelope so quiet
+                        // bars fade rather than going opaque-flat.
+                        let opacity = isRecording
+                            ? (0.45 + Double(barLevel) * 0.55)
+                            : 0.22
 
                         context.fill(
                             RoundedRectangle(cornerRadius: 1.5).path(in: barRect),
@@ -538,16 +549,26 @@ struct LiveWaveformBars: View {
                 }
             }
         }
+        // Subtle whole-wave breathing — vertical scale ranges roughly
+        // 0.94 → 1.10 with the smoothed envelope. The strip expands
+        // with louder voice and settles when you go quiet.
+        .scaleEffect(x: 1.0, y: 0.94 + envelope * 0.16, anchor: .center)
+        .animation(.easeOut(duration: 0.12), value: envelope)
         .onAppear {
             // Initialize with idle state
             barLevels = Array(repeating: 0.15, count: 80)
+            envelope = 0.15
         }
     }
 
     private func updateBars(count: Int) {
-        // Boost low levels for visibility
+        // Lighter compression than before (was pow(x, 0.5)) so the
+        // bars actually swing with voice volume instead of squashing
+        // toward a single mid-level.
         let rawLevel = CGFloat(audioLevel)
-        let targetLevel: CGFloat = isRecording ? max(0.15, pow(rawLevel, 0.5)) : 0.15
+        let targetLevel: CGFloat = isRecording
+            ? max(0.12, pow(rawLevel, 0.7))
+            : 0.15
 
         // Shift bars and add new value
         var newLevels = barLevels
@@ -560,6 +581,16 @@ struct LiveWaveformBars: View {
         }
 
         barLevels = newLevels
+
+        // Envelope follower for the whole-wave pulse. Asymmetric
+        // attack / release: rises fast on louder input, decays slow
+        // so the strip "breathes" rather than chattering.
+        let target = isRecording ? targetLevel : 0.15
+        if target > envelope {
+            envelope += (target - envelope) * 0.35
+        } else {
+            envelope += (target - envelope) * 0.12
+        }
     }
 }
 

@@ -31,7 +31,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "539C69302ED39ADE00BC034F"
-               BuildableName = "Talkie.app"
+               BuildableName = "Talkie iOS.app"
                BlueprintName = "Talkie"
                ReferencedContainer = "container:Talkie-iOS.xcodeproj">
             </BuildableReference>
@@ -62,7 +62,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "539C69302ED39ADE00BC034F"
-            BuildableName = "Talkie.app"
+            BuildableName = "Talkie iOS.app"
             BlueprintName = "Talkie"
             ReferencedContainer = "container:Talkie-iOS.xcodeproj">
          </BuildableReference>
@@ -81,7 +81,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "539C69302ED39ADE00BC034F"
-            BuildableName = "Talkie.app"
+            BuildableName = "Talkie iOS.app"
             BlueprintName = "Talkie"
             ReferencedContainer = "container:Talkie-iOS.xcodeproj">
          </BuildableReference>

@@ -232,9 +232,9 @@ final class TalkieSettingsConfigurationStore {
             ?? defaults.string(forKey: "selectedTTSVoiceId")
             ?? TTSVoiceCatalog.recommendedSettingsVoiceId(hasOpenAIKey: false)
 
-        if let raw = defaults.string(forKey: "captureChordStyle"),
-           let value = CaptureChordStyle(rawValue: raw) {
-            config.capture.chordStyle = value
+        if let raw = defaults.string(forKey: "captureHUDPosition"),
+           let value = CaptureHUDPosition(rawValue: raw) {
+            config.capture.hudPosition = value
         }
         if let raw = defaults.string(forKey: "preferredScreenshotLauncher"),
            let value = ScreenshotLauncher(rawValue: raw) {

@@ -20,26 +20,48 @@ import TalkieKit
 
 @MainActor
 protocol CaptureChordController {
-    func beginChord(initialMode: CaptureBarMode) async -> CaptureBarResult?
+    func beginChord(initialMode: CaptureBarMode, options: CaptureChordOptions) async -> CaptureBarResult?
 }
 
-// MARK: - Capture Chord Style
+extension CaptureChordController {
+    func beginChord(initialMode: CaptureBarMode) async -> CaptureBarResult? {
+        await beginChord(initialMode: initialMode, options: .captureOnly)
+    }
+}
 
-enum CaptureChordStyle: String, CaseIterable, Codable {
-    case radial
-    case hud
+extension NSEvent {
+    func isOpeningCaptureChordKey(initialMode: CaptureBarMode) -> Bool {
+        let expectedKey = switch initialMode {
+        case .screenshot: "s"
+        case .video: "r"
+        }
+        guard charactersIgnoringModifiers?.lowercased() == expectedKey else { return false }
+
+        let hyperModifiers: NSEvent.ModifierFlags = [.command, .option, .control, .shift]
+        let activeModifiers = modifierFlags.intersection(.deviceIndependentFlagsMask)
+        return activeModifiers.isSuperset(of: hyperModifiers)
+    }
+}
+
+// MARK: - Capture HUD Position
+
+enum CaptureHUDPosition: String, CaseIterable, Codable {
+    /// Anchor the HUD near the mouse cursor (default — smart edge flip).
+    case cursor
+    /// Always pin the HUD to the top-center of the main display, near the notch / tray.
+    case fixed
 
     var label: String {
         switch self {
-        case .radial: return "Radial"
-        case .hud: return "HUD Bar"
+        case .cursor: return "Near cursor"
+        case .fixed:  return "Fixed (notch)"
         }
     }
 
     var icon: String {
         switch self {
-        case .radial: return "circle.grid.cross"
-        case .hud: return "rectangle.grid.2x2"
+        case .cursor: return "cursorarrow.rays"
+        case .fixed:  return "rectangle.tophalf.inset.filled"
         }
     }
 }
@@ -167,6 +189,18 @@ enum CaptureBarMode: String, CaseIterable {
     case video
 }
 
+struct CaptureChordOptions: Equatable {
+    var showCameraOption: Bool = false
+    var showTrayOption: Bool = false
+    var showSelectionOption: Bool = false
+
+    static let captureOnly = CaptureChordOptions()
+    static let captureWithPeripherals = CaptureChordOptions(
+        showTrayOption: true,
+        showSelectionOption: true
+    )
+}
+
 // MARK: - Result Type
 
 enum CaptureBarResult {
@@ -193,6 +227,7 @@ enum CaptureBarResult {
 @Observable
 final class CaptureBarState {
     var mode: CaptureBarMode = .screenshot
+    var showCameraOption: Bool = false
     var showTrayOption: Bool = false
     var showSelectionOption: Bool = false
     var trayCount: Int = 0
@@ -209,10 +244,11 @@ final class CaptureBarPanel {
     private var panel: NSPanel?
     let state = CaptureBarState()
 
-    func show(mode: CaptureBarMode, showTrayOption: Bool, showSelectionOption: Bool, trayCount: Int) {
+    func show(mode: CaptureBarMode, showCameraOption: Bool, showTrayOption: Bool, showSelectionOption: Bool, trayCount: Int) {
         dismiss()
 
         state.mode = mode
+        state.showCameraOption = showCameraOption
         state.showTrayOption = showTrayOption
         state.showSelectionOption = showSelectionOption
         state.trayCount = trayCount
@@ -443,20 +479,22 @@ private struct CaptureBarView: View {
 
     private var extras: some View {
         HStack(spacing: 12) {
-            // Camera toggle
-            HStack(spacing: 3) {
-                Text("C")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .foregroundColor(.orange)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(
-                        RoundedRectangle(cornerRadius: 4)
-                            .strokeBorder(Color.orange.opacity(0.3), lineWidth: 0.5)
-                    )
-                Image(systemName: "video.fill")
-                    .font(.system(size: 9))
-                    .foregroundColor(.orange.opacity(0.6))
+            if state.showCameraOption {
+                // Camera toggle
+                HStack(spacing: 3) {
+                    Text("C")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(.orange)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .strokeBorder(Color.orange.opacity(0.3), lineWidth: 0.5)
+                        )
+                    Image(systemName: "video.fill")
+                        .font(.system(size: 9))
+                        .foregroundColor(.orange.opacity(0.6))
+                }
             }
 
             if state.showSelectionOption {
