@@ -23,6 +23,11 @@ struct RecordingOverlay: View {
 
     // Track if we've already called onMemoCreated for current recording
     @State private var didNotifyMemoCreated = false
+    // Hover state for the card — drives the reveal of secondary
+    // controls (cancel / stop) during recording so the surface is
+    // quiet by default and acts only when the user moves the pointer
+    // toward it.
+    @State private var isHoveringCard = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,22 +48,31 @@ struct RecordingOverlay: View {
             }
             .padding(Spacing.xl)
             .frame(maxWidth: 500)
+            // Glass card: ultra-thin material below, theme tint on top
+            // at low opacity. Surface1 alone reads as a solid panel;
+            // the material layer carries the desktop blur so the card
+            // sits on whatever is behind it instead of obscuring it.
             .background(
                 RoundedRectangle(cornerRadius: CornerRadius.xl)
-                    .fill(Theme.current.surface1)
-                    .shadow(color: .black.opacity(0.3), radius: 40, y: 10)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CornerRadius.xl)
+                            .fill(Theme.current.surface1.opacity(0.55))
+                    )
+                    .shadow(color: .black.opacity(0.32), radius: 40, y: 10)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: CornerRadius.xl)
                     .strokeBorder(
                         LinearGradient(
-                            colors: [Color.white.opacity(0.15), Color.white.opacity(0.02)],
+                            colors: [Color.white.opacity(0.22), Color.white.opacity(0.04)],
                             startPoint: .top,
                             endPoint: .bottom
                         ),
                         lineWidth: 1
                     )
             )
+            .onHover { isHoveringCard = $0 }
 
             Spacer()
         }
@@ -157,6 +171,10 @@ struct RecordingOverlay: View {
                     .foregroundColor(Theme.current.foregroundMuted)
             }
         } else if case .recording = controller.state {
+            // Two-row pattern: a tiny LIVE indicator always sits in
+            // the row so the user knows recording is active even with
+            // controls hidden; the cancel + stop buttons fade in on
+            // card hover so the surface stays quiet between glances.
             HStack(spacing: Spacing.lg) {
                 // Cancel
                 Button(action: {
@@ -192,6 +210,14 @@ struct RecordingOverlay: View {
 
                 Color.clear.frame(width: 44, height: 44)
             }
+            // Hidden by default during recording — only the wave and
+            // timer carry the active state. Hover the card to reveal
+            // cancel + stop. Keyboard (space / esc) still works either
+            // way so this is purely visual quietude.
+            .opacity(isHoveringCard ? 1.0 : 0.0)
+            .scaleEffect(isHoveringCard ? 1.0 : 0.96)
+            .allowsHitTesting(isHoveringCard)
+            .animation(.easeOut(duration: 0.18), value: isHoveringCard)
         }
     }
 
