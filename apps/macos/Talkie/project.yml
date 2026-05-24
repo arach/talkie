@@ -107,6 +107,7 @@ targets:
         TalkieCloudKitContainerIdentifier: $(TALKIE_CLOUDKIT_CONTAINER)
         TalkieMacAppGroupIdentifier: $(TALKIE_MAC_APP_GROUP)
         TalkieSharedSettingsSuite: $(TALKIE_MAC_SHARED_SETTINGS_SUITE)
+        NSCameraUsageDescription: Talkie uses the camera when you capture camera clips or attach camera media during recordings.
         ATSApplicationFontsPath: Resources/Fonts/
     dependencies:
       - package: TalkieKit
@@ -125,6 +126,7 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.productivity"
         INFOPLIST_KEY_NSAppleEventsUsageDescription: "Talkie can create reminders when you ask it to."
+        INFOPLIST_KEY_NSCameraUsageDescription: "Talkie uses the camera when you capture camera clips or attach camera media during recordings."
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "Talkie needs access to your microphone to record voice memos for transcription."
 
 schemes:
