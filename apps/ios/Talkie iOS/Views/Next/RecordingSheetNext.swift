@@ -487,6 +487,14 @@ struct RecordingSheetNext: View {
 
         do {
             try context.save()
+            // Broadcast the new memo so home/library lists pick it up
+            // without a view switch. VoiceMemoStore fires this on
+            // delete/promote but the record-and-save path here was
+            // silent — list views only refreshed via .onAppear, so a
+            // freshly-saved memo only appeared after navigating away
+            // and back.
+            NotificationCenter.default.post(name: .voiceMemosDidChange, object: nil)
+
             if let memoID = memo.id {
                 persistQueuedContext(for: memoID, memoTitle: memo.title ?? defaultTitle)
             }
