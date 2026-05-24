@@ -1,20 +1,12 @@
 /**
- * iOS Settings extraction — types, JSON loader, alias-aware matching.
+ * iOS Settings extraction — schema types + pure helpers.
  *
- * The actual snapshot rows live in
- * `data/ios-settings/snapshot.json`. This file holds the schema +
- * helpers around it (status summary, alias-aware label matching).
+ * Client-safe. Loading the snapshot from disk lives in the
+ * server-only sibling `lib/ios-settings.server.ts` so this file can
+ * be imported from both the server page and the client table.
  *
- * `aliases` lets one snapshot row claim multiple literal labels — the
- * `Sign in with Apple` / `Sign out` pair in `SettingsNext.swift` is
- * conditionally rendered, but reads as one row in the audit. The
- * regex scanner sees two literal `actionRow("…")` calls; the
- * snapshot row's `aliases` field collects them so drift detection
- * doesn't false-flag.
+ * The actual snapshot rows live in `data/ios-settings/snapshot.json`.
  */
-
-import { promises as fs } from "node:fs";
-import path from "node:path";
 
 export type SettingsPanel =
   | "voice"
@@ -89,19 +81,4 @@ export function statusSummary(rows: SettingsRow[]) {
   };
   for (const r of rows) out[r.status]++;
   return out;
-}
-
-/**
- * Read the snapshot JSON at request time. Studio runs from
- * `design/studio`, so the data path is local to that root.
- */
-export async function loadSnapshot(): Promise<SettingsSnapshot> {
-  const filePath = path.resolve(
-    process.cwd(),
-    "data",
-    "ios-settings",
-    "snapshot.json",
-  );
-  const raw = await fs.readFile(filePath, "utf8");
-  return JSON.parse(raw) as SettingsSnapshot;
 }

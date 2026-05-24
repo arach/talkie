@@ -1,5 +1,6 @@
 import { StudioPage } from "@/components/StudioPage";
-import { loadSnapshot, statusSummary } from "@/lib/ios-settings";
+import { statusSummary } from "@/lib/ios-settings";
+import { loadSnapshot } from "@/lib/ios-settings.server";
 import { IOSSettingsTable } from "@/components/studies/IOSSettingsTable";
 import { scanIOSSettings } from "./actions";
 
