@@ -11,7 +11,6 @@
 		AED5E2D3778C4B56A1338855 /* LearnKnowledgeBaseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDA16434575D45AD985DD6D7 /* LearnKnowledgeBaseView.swift */; };
 		BADAAA5B264F41FCA0F1D142 /* LearnArticle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 081AD24B307B4C758F54DB18 /* LearnArticle.swift */; };
 		000B06752659571E4EA8208D /* ClaudeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA2846DC98F2A0A65B237633 /* ClaudeView.swift */; };
-		002E40F62A1545B7D7AE2CD9 /* CaptureRadialPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E46A5885BA07F1A04FDD14B /* CaptureRadialPanel.swift */; };
 		003E46C586EEA89FF2196307 /* NotchRecordingPillView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 559904F06C63DF1AC81FC2B5 /* NotchRecordingPillView.swift */; };
 		0042119489E020046688F029 /* QuickOpenBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8B99BF40592ACAE5392D78 /* QuickOpenBar.swift */; };
 		007579B10DE6CF086C0E3C46 /* DebugToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC1504131B0AED9D1E4824E0 /* DebugToolbar.swift */; };
@@ -116,6 +115,7 @@
 		380273426E3208A796D04EE5 /* HelperAppsSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17D80979423C027F9D893AA3 /* HelperAppsSettings.swift */; };
 		395A6A340188A803847D2B7B /* WhisperService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB3C446E2274B6FF1A3F7F55 /* WhisperService.swift */; };
 		39A93F24B392CD1ADB491A95 /* CaptureHUDPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99150A94FC4F63A734313E33 /* CaptureHUDPanel.swift */; };
+		CFDE59F4B65013D5BF17CD42 /* WallpaperLuminanceSampler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64FEAE0AAF1257B67C754170 /* WallpaperLuminanceSampler.swift */; };
 		3A295348C9E5B3171890C593 /* GeminiService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95F0695BC582E2740F8700BD /* GeminiService.swift */; };
 		3A82694060BF7CD29FC9A051 /* Resources in Resources */ = {isa = PBXBuildFile; fileRef = 48A97AE8636C7CFD039A9631 /* Resources */; };
 		3A84FE35A80A8764AA263AC5 /* TalkieData.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7F37679E41BF9883C8531F3 /* TalkieData.swift */; };
@@ -457,7 +457,6 @@
 		D8DE651AA60D772AF149E3D9 /* EdgeGuidesOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26B34A2CE1214094462A65D2 /* EdgeGuidesOverlay.swift */; };
 		D8E2B2EE4DC4D5B9360D39BB /* ModelsCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E90FA6643E1B5B94A88FED18 /* ModelsCatalog.swift */; };
 		D90DE8DB6A5D482400E28DC1 /* SidebarLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56B351A3A4AF6A3815B5B3E2 /* SidebarLayout.swift */; };
-		D9CF5BDCB32199954403D903 /* CaptureRadialController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86D816A61AA1A96A647BE74E /* CaptureRadialController.swift */; };
 		D9E04F60B2112B4E17F22754 /* VoiceCommandOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ADB1C257A35663704712DBB /* VoiceCommandOverlay.swift */; };
 		DB261EB83F0103F2EFEE74EC /* HomeGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A59EB48A20A7DAB785FDF91 /* HomeGrid.swift */; };
 		DBC0901AB5A612EC81132854 /* ContentSearchOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF09271641E02C38A5C4A3A1 /* ContentSearchOverlay.swift */; };
@@ -679,7 +678,6 @@
 		4AEFB8C01B10664B8677B04C /* SkillFileFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillFileFormat.swift; sourceTree = "<group>"; };
 		4DB876A29F7F55B18465450A /* WorkflowRunModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowRunModel.swift; sourceTree = "<group>"; };
 		4DE6D960ECC5B682EB15EE43 /* TranscriptVersionModel+CloudKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TranscriptVersionModel+CloudKit.swift"; sourceTree = "<group>"; };
-		4E46A5885BA07F1A04FDD14B /* CaptureRadialPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureRadialPanel.swift; sourceTree = "<group>"; };
 		4E669BA8831BCB459CDFFDA7 /* AppManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppManager.swift; sourceTree = "<group>"; };
 		4F4992B45B1A31E2B8AF4B8A /* OverlayStylePreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayStylePreviews.swift; sourceTree = "<group>"; };
 		4F848CB165D409F9DE1643E4 /* SchemeTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchemeTokens.swift; sourceTree = "<group>"; };
@@ -803,7 +801,6 @@
 		8636F1BCFB33B549662C5CC5 /* Recording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recording.swift; sourceTree = "<group>"; };
 		86BF39FB7425B20AC70D6167 /* WebSocketEngineTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketEngineTransport.swift; sourceTree = "<group>"; };
 		86CC47F80A35152E45F428AB /* WorkflowService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowService.swift; sourceTree = "<group>"; };
-		86D816A61AA1A96A647BE74E /* CaptureRadialController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureRadialController.swift; sourceTree = "<group>"; };
 		88789192DAB57C7411354B24 /* ScreenCaptureOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenCaptureOverlay.swift; sourceTree = "<group>"; };
 		888ED1B8358260357AC807D8 /* TranscriptionModelsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionModelsSettingsView.swift; sourceTree = "<group>"; };
 		8893FEE562C5348662D1C9BB /* HomeSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeSettingsView.swift; sourceTree = "<group>"; };
@@ -848,6 +845,7 @@
 		986E82F3E8D9C03EDB440B34 /* TalkiePage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkiePage.swift; sourceTree = "<group>"; };
 		98748A66CC1457CAA5A47ED7 /* ScopeLearnScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeLearnScreen.swift; sourceTree = "<group>"; };
 		99150A94FC4F63A734313E33 /* CaptureHUDPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureHUDPanel.swift; sourceTree = "<group>"; };
+		64FEAE0AAF1257B67C754170 /* WallpaperLuminanceSampler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallpaperLuminanceSampler.swift; sourceTree = "<group>"; };
 		9915792066E4EB1F89210F9A /* WorkflowStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowStore.swift; sourceTree = "<group>"; };
 		9950F30740B9E988D2BEBB6A /* DictionarySettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionarySettings.swift; sourceTree = "<group>"; };
 		9A38CCA838844AFE5ED659DF /* SoundPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundPicker.swift; sourceTree = "<group>"; };
@@ -1315,8 +1313,7 @@
 				31C62A01F65B0CA26A648B00 /* CaptureBarPanel.swift */,
 				E7A29BD3BCBE1132CAB4B2E4 /* CaptureHUDController.swift */,
 				99150A94FC4F63A734313E33 /* CaptureHUDPanel.swift */,
-				86D816A61AA1A96A647BE74E /* CaptureRadialController.swift */,
-				4E46A5885BA07F1A04FDD14B /* CaptureRadialPanel.swift */,
+				64FEAE0AAF1257B67C754170 /* WallpaperLuminanceSampler.swift */,
 			);
 			path = Capture;
 			sourceTree = "<group>";
@@ -2353,8 +2350,7 @@
 				D7CE8FED8D531A478979960D /* CaptureBarPanel.swift in Sources */,
 				6CF02C1D649F67F6667C835D /* CaptureHUDController.swift in Sources */,
 				39A93F24B392CD1ADB491A95 /* CaptureHUDPanel.swift in Sources */,
-				D9CF5BDCB32199954403D903 /* CaptureRadialController.swift in Sources */,
-				002E40F62A1545B7D7AE2CD9 /* CaptureRadialPanel.swift in Sources */,
+				CFDE59F4B65013D5BF17CD42 /* WallpaperLuminanceSampler.swift in Sources */,
 				422E4D19541B60DE20FA7ABE /* CenterGuidesOverlay.swift in Sources */,
 				F81E7E349520F4B062513574 /* ChangeTracker.swift in Sources */,
 				C76E3987CDD5D58283B3C125 /* ChromeBarHeader.swift in Sources */,
@@ -2868,6 +2864,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Talkie can create reminders when you ask it to.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Talkie uses the camera when you capture camera clips or attach camera media during recordings.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talkie needs access to your microphone to record voice memos for transcription.";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -2958,6 +2955,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Talkie;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Talkie can create reminders when you ask it to.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Talkie uses the camera when you capture camera clips or attach camera media during recordings.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talkie needs access to your microphone to record voice memos for transcription.";
 				LD_RUNPATH_SEARCH_PATHS = (

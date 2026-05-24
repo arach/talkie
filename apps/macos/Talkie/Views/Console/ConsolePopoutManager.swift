@@ -257,10 +257,7 @@ final class ConsoleTerminalCaptureController {
         Task {
             defer { isCapturingScreenshot = false }
 
-            let chord: any CaptureChordController =
-                SettingsManager.shared.captureChordStyle == .hud
-                    ? CaptureHUDController()
-                    : CaptureRadialController()
+            let chord: any CaptureChordController = CaptureHUDController()
 
             guard let result = await chord.beginChord(initialMode: .screenshot) else { return }
 
@@ -270,6 +267,7 @@ final class ConsoleTerminalCaptureController {
             case .screenRecord(let mode):
                 await ScreenRecordingController.shared.startRecording(mode: mode)
             case .toggleCamera:
+                guard FeatureFlags.shared.enableCameraBubble else { return }
                 CameraBubbleController.shared.toggle()
             case .saveSelection:
                 await TrayViewer.saveLatestSelectionToNote()

@@ -143,25 +143,48 @@ private struct WaveOnlyContent: View {
     // Transcript captured from `.complete(MemoModel)`.
     @State private var transcript: String = ""
 
+    /// Card hover state. Cancel + Stop only render while the pointer
+    /// is over the recording surface so the canvas stays quiet between
+    /// glances. Space-bar + ⌘. keyboard paths still work either way.
+    @State private var isHoveringCard: Bool = false
+
     var body: some View {
-        VStack(spacing: 0) {
-            Rectangle()
-                .fill(RecordingCompanionTokens.ink.opacity(0.16))
-                .frame(height: 0.5)
-
-            VStack(spacing: 28) {
-                eyebrow
-                waveAndTranscript
-                captionRow
-            }
-            .padding(.horizontal, 80)
-            .padding(.vertical, 36)
-
-            Rectangle()
-                .fill(RecordingCompanionTokens.ink.opacity(0.16))
-                .frame(height: 0.5)
+        VStack(spacing: 28) {
+            eyebrow
+            waveAndTranscript
+            captionRow
         }
+        .padding(.horizontal, 80)
+        .padding(.vertical, 36)
         .frame(maxWidth: 980)
+        // Glass card: ultraThinMaterial blur underneath, paper tint on
+        // top at low opacity so the recording surface sits on the
+        // canvas with depth, instead of floating as a transparent
+        // band between two hairlines.
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(RecordingCompanionTokens.paper.opacity(0.55))
+                )
+                .shadow(color: .black.opacity(0.10), radius: 22, y: 6)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.35),
+                            RecordingCompanionTokens.ink.opacity(0.05),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 1
+                )
+        )
+        .onHover { isHoveringCard = $0 }
         .task { await runSmoothing() }
         .onChange(of: controller.state.signalToken) { _, _ in
             syncPhase()
@@ -289,10 +312,19 @@ private struct WaveOnlyContent: View {
                 .allowsHitTesting(false)
             Spacer()
             if phase == .recording {
-                CancelButton(action: cancelRecording)
-                    .transition(.opacity)
-                StopButton(action: stopRecording)
-                    .transition(.opacity)
+                // Buttons quietly fade in only while the pointer is
+                // over the glass card; eyebrow + caption stay visible
+                // so the recording state never reads as missing.
+                // Keyboard shortcuts (⌘. stop, Esc cancel) still work
+                // regardless of pointer position.
+                HStack(spacing: 14) {
+                    CancelButton(action: cancelRecording)
+                    StopButton(action: stopRecording)
+                }
+                .opacity(isHoveringCard ? 1.0 : 0.0)
+                .allowsHitTesting(isHoveringCard)
+                .animation(.easeOut(duration: 0.18), value: isHoveringCard)
+                .transition(.opacity)
             }
         }
         .animation(.easeOut(duration: 0.24), value: phase == .recording)
@@ -407,18 +439,28 @@ private struct WaveOnlyContent: View {
 
     @MainActor
     private func runSmoothing() async {
-        // Exponential moving average — only writes amplitude during
-        // .recording. In every other phase the explicit transitions own
-        // the value, so the wave can settle / hold cleanly.
+        // Envelope follower — only writes amplitude during .recording.
+        // In every other phase the explicit transitions own the value
+        // so the wave can settle / hold cleanly.
+        //
+        // Asymmetric attack / release:
+        //  - attack 0.28: wave reacts quickly to a loud syllable —
+        //    user sees their voice land in real time
+        //  - release 0.08: tail decays slow so the wave breathes back
+        //    to baseline instead of chattering
+        //
+        // Range widened to 0.22 → 0.95 (was 0.30 → 0.80) so quiet voice
+        // reads as quiet and a strong "hey" punches the wave near the
+        // top of its visual range. Light gamma (0.85) compresses just
+        // enough to keep quiet input visible without flattening peaks.
         while !Task.isCancelled {
             try? await Task.sleep(for: .milliseconds(16))
             guard phase == .recording else { continue }
-            let target = CGFloat(min(max(controller.audioLevel, 0), 1))
-            // 0.30 floor + 0.50 boost = amp range 0.30 → 0.80. The
-            // amplitude state holds the actual rendered value; we smooth
-            // toward the target each tick.
-            let desired = 0.30 + target * 0.50
-            amplitude = amplitude * 0.90 + desired * 0.10
+            let raw = CGFloat(min(max(controller.audioLevel, 0), 1))
+            let shaped = pow(raw, 0.85)
+            let desired = 0.22 + shaped * 0.73
+            let blend: CGFloat = desired > amplitude ? 0.28 : 0.08
+            amplitude = amplitude * (1 - blend) + desired * blend
         }
     }
 }

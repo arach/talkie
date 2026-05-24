@@ -613,7 +613,7 @@ struct SurfaceSettingsView: View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             DetailSectionHeader("SHELF", uppercase: true)
 
-            Text("Slides down from the top to show screenshots and clips. ⌘⇧T to toggle.")
+            Text("Slides down from the top to show screenshots and clips. \(HotkeyRegistry.shared.config(for: .openTrayShelf).displayString) to toggle.")
                 .font(Theme.current.fontXS)
                 .foregroundColor(Theme.current.foregroundMuted)
 
@@ -713,8 +713,8 @@ struct SurfaceSettingsView: View {
 
                 shortcutRow(HotkeyRegistry.shared.config(for: .captureChord).displayString, description: "Capture chord")
                 shortcutRow(HotkeyRegistry.shared.config(for: .openTrayViewer).displayString, description: "Open tray viewer")
+                shortcutRow(HotkeyRegistry.shared.config(for: .openTrayShelf).displayString, description: "Toggle shelf")
                 shortcutRow(HotkeyRegistry.shared.config(for: .pasteLastScreenshot).displayString, description: "Paste last screenshot")
-                shortcutRow("⌘⇧T", description: "Toggle shelf")
             }
 
             Text("Selection action updates in TalkieAgent immediately. In viewer or shelf: arrows navigate, Space toggles, ⌘A select all, ⌘C copy, Delete removes.")

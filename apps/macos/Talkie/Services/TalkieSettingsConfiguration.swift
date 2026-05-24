@@ -518,25 +518,25 @@ struct TalkieSettingsConfiguration: Codable {
     }
 
     struct Capture: Codable {
-        var chordStyle: CaptureChordStyle
+        var hudPosition: CaptureHUDPosition
         var screenshotLauncher: ScreenshotLauncher
         var screenshotCapturePreset: ScreenshotCapturePreset
         var screenRecordingQuality: ScreenRecordingQualityPreset
 
         init(
-            chordStyle: CaptureChordStyle = .radial,
+            hudPosition: CaptureHUDPosition = .cursor,
             screenshotLauncher: ScreenshotLauncher = .builtin,
             screenshotCapturePreset: ScreenshotCapturePreset = .agent,
             screenRecordingQuality: ScreenRecordingQualityPreset = .agent
         ) {
-            self.chordStyle = chordStyle
+            self.hudPosition = hudPosition
             self.screenshotLauncher = screenshotLauncher
             self.screenshotCapturePreset = screenshotCapturePreset
             self.screenRecordingQuality = screenRecordingQuality
         }
 
         enum CodingKeys: String, CodingKey {
-            case chordStyle
+            case hudPosition
             case screenshotLauncher
             case screenshotCapturePreset
             case screenRecordingQuality
@@ -544,7 +544,7 @@ struct TalkieSettingsConfiguration: Codable {
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            chordStyle = try container.decodeIfPresent(CaptureChordStyle.self, forKey: .chordStyle) ?? .radial
+            hudPosition = try container.decodeIfPresent(CaptureHUDPosition.self, forKey: .hudPosition) ?? .cursor
             screenshotLauncher = try container.decodeIfPresent(ScreenshotLauncher.self, forKey: .screenshotLauncher) ?? .builtin
             screenshotCapturePreset = try container.decodeIfPresent(ScreenshotCapturePreset.self, forKey: .screenshotCapturePreset) ?? .agent
             screenRecordingQuality = try container.decodeIfPresent(ScreenRecordingQualityPreset.self, forKey: .screenRecordingQuality) ?? .agent
@@ -552,7 +552,7 @@ struct TalkieSettingsConfiguration: Codable {
 
         func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(chordStyle, forKey: .chordStyle)
+            try container.encode(hudPosition, forKey: .hudPosition)
             try container.encode(screenshotLauncher, forKey: .screenshotLauncher)
             try container.encode(screenshotCapturePreset, forKey: .screenshotCapturePreset)
             try container.encode(screenRecordingQuality, forKey: .screenRecordingQuality)

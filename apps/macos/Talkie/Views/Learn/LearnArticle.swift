@@ -76,8 +76,14 @@ struct LearnArticleMetadata: Hashable {
 struct LearnArticleFallback: Hashable {
     let metadata: [LearnArticleMetadata]
     let lead: String
-    let calloutTitle: String
-    let calloutBody: String
+    /// Optional callout shown between the article body and the action
+    /// rows. Pass both fields when the article has something specific
+    /// to say at that boundary; leave nil to skip the section entirely.
+    /// We deliberately don't default to a generic "Native bridge" /
+    /// "use the action rows" line — that's filler that adds visual
+    /// weight without information.
+    let calloutTitle: String?
+    let calloutBody: String?
     let steps: [String]
 }
 
@@ -132,8 +138,8 @@ enum LearnArticleStore {
                 fallback: LearnArticleFallback(
                     metadata: item.metadata ?? [],
                     lead: item.lead ?? item.summary,
-                    calloutTitle: item.calloutTitle ?? "Native bridge",
-                    calloutBody: item.calloutBody ?? "Use the action rows in this article to jump back into Talkie.",
+                    calloutTitle: item.calloutTitle,
+                    calloutBody: item.calloutBody,
                     steps: item.steps ?? []
                 )
             )
@@ -183,8 +189,8 @@ enum LearnArticleStore {
                         LearnArticleMetadata(label: "Source", value: "Local Markdown")
                     ],
                     lead: parsed.firstParagraph ?? parsed.summary,
-                    calloutTitle: "Native bridge",
-                    calloutBody: "Use the article to understand the flow, then jump back into the actual Talkie surface from the action rows.",
+                    calloutTitle: parsed.calloutTitle,
+                    calloutBody: parsed.calloutBody,
                     steps: []
                 )
             )
@@ -269,6 +275,11 @@ enum LearnArticleStore {
         let surfaces: [Surface]
         let shortcuts: [Shortcut]
         let related: [String]
+        /// Optional per-article callout. Both fields must be set for
+        /// the renderer to show the NOTE block. Use snake_case keys
+        /// in the frontmatter: `callout_title:` + `callout_body:`.
+        let calloutTitle: String?
+        let calloutBody: String?
         let body: String
 
         init?(source: String) {
@@ -300,6 +311,8 @@ enum LearnArticleStore {
             surfaces = fields.objectList("surfaces").compactMap(Surface.init(fields:))
             shortcuts = fields.objectList("shortcuts").compactMap(Shortcut.init(fields:))
             related = fields.inlineList("related")
+            calloutTitle = fields.scalar("callout_title")
+            calloutBody = fields.scalar("callout_body")
         }
 
         var firstParagraph: String? {

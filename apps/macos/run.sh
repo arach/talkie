@@ -111,6 +111,39 @@ get_bundle_id() {
     /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$app_path/Contents/Info.plist" 2>/dev/null || true
 }
 
+# Record the freshly-built .app in .talkie/last-build.json so the
+# `talkie-dev` CLI (which by default only scans DerivedData) can pick
+# up builds produced by this script and launch the newest artifact
+# regardless of which build path produced it.
+record_last_build() {
+    local product=$1
+    local app_path=$2
+    local state_dir="$ROOT_DIR/.talkie"
+    local state_file="$state_dir/last-build.json"
+    local timestamp
+    timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    mkdir -p "$state_dir" || return 0
+
+    /usr/bin/python3 - "$state_file" "$product" "$app_path" "$timestamp" <<'PYEOF' 2>/dev/null || true
+import json, os, sys
+path, product, app_path, ts = sys.argv[1:5]
+state = {}
+if os.path.exists(path):
+    try:
+        with open(path) as f:
+            state = json.load(f)
+        if not isinstance(state, dict):
+            state = {}
+    except Exception:
+        state = {}
+state[product] = {"path": app_path, "builtAt": ts, "source": "run.sh"}
+with open(path, "w") as f:
+    json.dump(state, f, indent=2)
+    f.write("\n")
+PYEOF
+}
+
 get_entitlements() {
     case $1 in
         TalkieAgent|live) echo "$SCRIPT_DIR/TalkieAgent/TalkieAgent/TalkieAgent.entitlements" ;;
@@ -551,6 +584,7 @@ build_app() {
 
         echo -e "  ${GREEN}Build SUCCEEDED${NC}"
         app_path="$build_dir/Build/Products/Debug/$product.app"
+        record_last_build "$product" "$app_path"
     fi
 
     if [ -n "${TALKIE_DEVELOPMENT_TEAM:-${TALKIE_TEAM_ID:-}}" ]; then

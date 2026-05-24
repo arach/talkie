@@ -389,6 +389,15 @@ export const STUDIO_PAGES: StudioPage[] = [
     status: "shipped",
     blurb: "iOS Next ↔ donor parity tracker.",
   },
+  {
+    href: "/ios-settings",
+    label: "iOS Settings",
+    bucket: "lab",
+    platform: "iphone",
+    status: "shipped",
+    swift: ["apps/ios/Talkie iOS/Views/Next/SettingsNext.swift"],
+    blurb: "Flat extraction of every settings row — type, value, key, status.",
+  },
 ];
 
 /** Find the registry entry for a route. */
