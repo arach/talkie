@@ -73,6 +73,7 @@ struct ComposeNextView: View {
                 diff: compose.pendingDiff,
                 cursorParagraphIndex: compose.cursorParagraphIndex,
                 dictationFeedback: compose.dictationFeedback,
+                dictationError: compose.dictationErrorMessage,
                 joystickShown: joystickShown,
                 onMic: { compose.toggleDictation() }
             )
@@ -504,6 +505,11 @@ private struct DocumentBody: View {
     let diff: ComposeStore.Diff?
     let cursorParagraphIndex: Int
     let dictationFeedback: ComposeStore.DictationFeedback
+    /// Transient "no speech" / engine-not-ready message routed up
+    /// from `ComposeStore.dictationErrorMessage`. Rendered as a small
+    /// inline banner near the mic so failed transcripts have a
+    /// visible failure mode instead of silently resetting.
+    let dictationError: String?
     /// When the joystick popover is open, dim every paragraph that
     /// isn't under the cursor so the eye lands on the active row.
     /// Distance-based falloff per `spotlightOpacity(distance:)`.
@@ -562,8 +568,16 @@ private struct DocumentBody: View {
                     action: onMic
                 )
             }
+
+            if let dictationError {
+                DictationErrorBanner(text: dictationError)
+                    .padding(.bottom, 60)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
         }
         .padding(.top, 8)
+        .animation(.easeInOut(duration: 0.18), value: dictationError)
     }
 
     private var cardSurface: some View {
@@ -597,6 +611,42 @@ private struct ParagraphView: View {
                     .padding(.leading, 1)
             }
         }
+    }
+}
+
+/// Transient banner that surfaces a dictation/transcription failure
+/// just above the inline mic. Auto-clears via the store's timer; the
+/// view-side animation is wired by the parent so insertion/removal
+/// crossfade with the document body.
+private struct DictationErrorBanner: View {
+    let text: String
+    @ObservedObject private var theme = ThemeManager.shared
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color.orange.opacity(0.9))
+
+            Text(text)
+                .talkieType(.fieldLabel)
+                .foregroundStyle(theme.colors.textPrimary)
+                .lineLimit(2)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            Capsule()
+                .fill(theme.colors.cardBackground)
+                .overlay(
+                    Capsule().strokeBorder(
+                        Color.orange.opacity(0.5),
+                        lineWidth: theme.currentTheme.chrome.hairlineWidth
+                    )
+                )
+                .shadow(color: Color.black.opacity(0.1), radius: 4, y: 1)
+        )
+        .padding(.horizontal, 18)
     }
 }
 
