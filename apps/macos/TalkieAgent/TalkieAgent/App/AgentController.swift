@@ -443,14 +443,34 @@ final class AgentController: ObservableObject {
     private nonisolated static func renderDictationDeliveryText(
         text: String,
         timedTranscription: TimedTranscription?,
-        localScreenshots: [RecordingScreenshot]
+        localScreenshots: [RecordingScreenshot],
+        trayAssets: TalkieObjectAssets?
     ) -> String {
+        let screenshots = mergeScreenshots(
+            localScreenshots,
+            trayAssets?.screenshots ?? []
+        )
         return ScreenshotInserter.deliveryMarkdown(
             text: text,
             timedTranscription: timedTranscription,
-            screenshots: localScreenshots,
+            screenshots: screenshots,
             screenshotDirectory: ScreenshotStorage.screenshotsDirectory
         )
+    }
+
+    private nonisolated static func mergeScreenshots(
+        _ existing: [RecordingScreenshot],
+        _ incoming: [RecordingScreenshot]
+    ) -> [RecordingScreenshot] {
+        var merged: [RecordingScreenshot] = []
+        var seen = Set<String>()
+
+        for screenshot in existing + incoming
+        where seen.insert(screenshot.filename).inserted {
+            merged.append(screenshot)
+        }
+
+        return merged.sorted { $0.timestampMs < $1.timestampMs }
     }
 
     @discardableResult
@@ -2096,16 +2116,30 @@ final class AgentController: ObservableObject {
                         screenshotsJSON: prepared.screenshotsJSON,
                         captureSessionId: capturedRecordingId,
                         recordingStartedAt: capturedRecordingStartedAt,
-                        recordingEndedAt: capturedRecordingEndedAt
+                        recordingEndedAt: capturedRecordingEndedAt,
+                        attachTrayAssetsInBackground: false
                     )
                     if storedRecordingId != nil {
                         logTiming("Database stored (context rule: auto-refine)")
                     }
 
+                    let trayAssets: TalkieObjectAssets?
+                    if let storedRecordingId {
+                        trayAssets = await Self.attachTrayAssets(
+                            recordingId: storedRecordingId,
+                            captureSessionId: capturedRecordingId,
+                            recordingStartedAt: capturedRecordingStartedAt,
+                            recordingEndedAt: capturedRecordingEndedAt
+                        )
+                    } else {
+                        trayAssets = nil
+                    }
+
                     let deliveryText = Self.renderDictationDeliveryText(
                         text: finalText,
                         timedTranscription: timedTranscription,
-                        localScreenshots: prepared.screenshots
+                        localScreenshots: prepared.screenshots,
+                        trayAssets: trayAssets
                     )
 
                     trace?.begin("paste")
@@ -2297,16 +2331,30 @@ final class AgentController: ObservableObject {
                         screenshotsJSON: prepared.screenshotsJSON,
                         captureSessionId: capturedRecordingId,
                         recordingStartedAt: capturedRecordingStartedAt,
-                        recordingEndedAt: capturedRecordingEndedAt
+                        recordingEndedAt: capturedRecordingEndedAt,
+                        attachTrayAssetsInBackground: false
                     )
                     if storedRecordingId != nil {
                         logTiming("Database stored (context rule: protocol-processor)")
                     }
 
+                    let trayAssets: TalkieObjectAssets?
+                    if let storedRecordingId {
+                        trayAssets = await Self.attachTrayAssets(
+                            recordingId: storedRecordingId,
+                            captureSessionId: capturedRecordingId,
+                            recordingStartedAt: capturedRecordingStartedAt,
+                            recordingEndedAt: capturedRecordingEndedAt
+                        )
+                    } else {
+                        trayAssets = nil
+                    }
+
                     let deliveryText = Self.renderDictationDeliveryText(
                         text: processedText,
                         timedTranscription: timedTranscription,
-                        localScreenshots: prepared.screenshots
+                        localScreenshots: prepared.screenshots,
+                        trayAssets: trayAssets
                     )
 
                     trace?.begin("paste")
@@ -2493,16 +2541,30 @@ final class AgentController: ObservableObject {
                     screenshotsJSON: prepared.screenshotsJSON,
                     captureSessionId: capturedRecordingId,
                     recordingStartedAt: capturedRecordingStartedAt,
-                    recordingEndedAt: capturedRecordingEndedAt
+                    recordingEndedAt: capturedRecordingEndedAt,
+                    attachTrayAssetsInBackground: false
                 )
                 if storedRecordingId != nil {
                     logTiming("Database stored")
                 }
 
+                let trayAssets: TalkieObjectAssets?
+                if let storedRecordingId {
+                    trayAssets = await Self.attachTrayAssets(
+                        recordingId: storedRecordingId,
+                        captureSessionId: capturedRecordingId,
+                        recordingStartedAt: capturedRecordingStartedAt,
+                        recordingEndedAt: capturedRecordingEndedAt
+                    )
+                } else {
+                    trayAssets = nil
+                }
+
                 let deliveryText = Self.renderDictationDeliveryText(
                     text: textToPaste,
                     timedTranscription: timedTranscription,
-                    localScreenshots: prepared.screenshots
+                    localScreenshots: prepared.screenshots,
+                    trayAssets: trayAssets
                 )
 
                 // Trace ONLY the actual paste operation
