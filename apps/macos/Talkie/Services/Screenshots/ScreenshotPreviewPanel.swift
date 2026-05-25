@@ -79,6 +79,10 @@ final class ScreenshotPreviewPanel {
                 pb.clearContents()
                 pb.writeObjects([nsImage])
                 self?.dismiss()
+            },
+            onAnnotate: { [weak self] url in
+                self?.dismiss()
+                CaptureMarkupCoordinator.shared.openSession(imageURL: url)
             }
         )
         view.frame = NSRect(origin: .zero, size: NSSize(width: panelWidth, height: panelHeight))
@@ -113,6 +117,12 @@ final class ScreenshotPreviewPanel {
         }
     }
 
+    /// Attach a saved file URL to the current preview after async storage completes.
+    func attachFileURL(_ fileURL: URL) {
+        guard let view = panel?.contentView as? PreviewView else { return }
+        view.attachFileURL(fileURL)
+    }
+
     /// Pre-create the preview panel so first capture avoids panel allocation on the hot path.
     func prewarmIfNeeded() {
         guard panel == nil else { return }
@@ -140,7 +150,9 @@ final class ScreenshotPreviewPanel {
                 panel.animator().setFrame(endFrame, display: false)
             }
         }, completionHandler: { [weak self] in
-            self?.dismiss()
+            Task { @MainActor in
+                self?.dismiss()
+            }
         })
     }
 
@@ -171,15 +183,18 @@ private final class PreviewView: NSView, NSDraggingSource {
     private let thumbSize: NSSize
     private let imageWidth: Int
     private let imageHeight: Int
-    private let fileURL: URL?
+    private var fileURL: URL?
     private let onDismiss: () -> Void
     private let onCopy: () -> Void
+    private let onAnnotate: (URL) -> Void
     private var isHovered = false
     private var trackingArea: NSTrackingArea?
     private var dragOrigin: NSPoint?
+    private var annotateButton: NSButton?
 
     init(image: NSImage, thumbSize: NSSize, imageWidth: Int, imageHeight: Int,
-         fileURL: URL?, onDismiss: @escaping () -> Void, onCopy: @escaping () -> Void) {
+         fileURL: URL?, onDismiss: @escaping () -> Void, onCopy: @escaping () -> Void,
+         onAnnotate: @escaping (URL) -> Void) {
         self.image = image
         self.thumbSize = thumbSize
         self.imageWidth = imageWidth
@@ -187,13 +202,28 @@ private final class PreviewView: NSView, NSDraggingSource {
         self.fileURL = fileURL
         self.onDismiss = onDismiss
         self.onCopy = onCopy
+        self.onAnnotate = onAnnotate
         super.init(frame: .zero)
+        configureAnnotateButton()
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
     override var isFlipped: Bool { true }
+
+    override func layout() {
+        super.layout()
+
+        let padding: CGFloat = 8
+        let size: CGFloat = 24
+        annotateButton?.frame = NSRect(
+            x: padding + thumbSize.width - size - 6,
+            y: padding + 6,
+            width: size,
+            height: size
+        )
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
@@ -259,14 +289,63 @@ private final class PreviewView: NSView, NSDraggingSource {
 
     override func rightMouseDown(with event: NSEvent) {
         let menu = NSMenu()
-        menu.addItem(withTitle: "Copy to Clipboard", action: #selector(copyAction), keyEquivalent: "c")
+        let copyItem = NSMenuItem(title: "Copy to Clipboard", action: #selector(copyAction), keyEquivalent: "c")
+        copyItem.target = self
+        menu.addItem(copyItem)
+        if fileURL != nil {
+            let annotateItem = NSMenuItem(title: "Annotate…", action: #selector(annotateAction), keyEquivalent: "")
+            annotateItem.target = self
+            menu.addItem(annotateItem)
+        }
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Dismiss", action: #selector(dismissAction), keyEquivalent: "")
+        let dismissItem = NSMenuItem(title: "Dismiss", action: #selector(dismissAction), keyEquivalent: "")
+        dismissItem.target = self
+        menu.addItem(dismissItem)
         NSMenu.popUpContextMenu(menu, with: event, for: self)
     }
 
     @objc private func copyAction() { onCopy() }
     @objc private func dismissAction() { onDismiss() }
+    @objc private func annotateAction() {
+        guard let fileURL else { return }
+        onAnnotate(fileURL)
+    }
+
+    func attachFileURL(_ fileURL: URL) {
+        self.fileURL = fileURL
+        configureAnnotateButton()
+        window?.invalidateCursorRects(for: self)
+        needsDisplay = true
+    }
+
+    private func configureAnnotateButton() {
+        guard fileURL != nil else {
+            annotateButton?.removeFromSuperview()
+            annotateButton = nil
+            return
+        }
+
+        if annotateButton == nil {
+            let button = NSButton()
+            button.image = NSImage(
+                systemSymbolName: "sparkles.rectangle.stack",
+                accessibilityDescription: "Annotate"
+            )
+            button.bezelStyle = .regularSquare
+            button.isBordered = false
+            button.wantsLayer = true
+            button.layer?.cornerRadius = 7
+            button.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.58).cgColor
+            button.contentTintColor = NSColor.white.withAlphaComponent(0.86)
+            button.toolTip = "Annotate"
+            button.target = self
+            button.action = #selector(annotateAction)
+            addSubview(button)
+            annotateButton = button
+        }
+
+        needsLayout = true
+    }
 
     override func resetCursorRects() {
         if fileURL != nil {

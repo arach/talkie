@@ -177,6 +177,7 @@ final class ScreenshotCaptureService {
             return nil
         }
         CapturePerformanceMonitor.shared.mark("storage.save.complete")
+        ScreenshotPreviewPanel.shared.attachFileURL(savedURL)
 
         let filename = savedURL.lastPathComponent
         if captureHotPathLoggingEnabled {

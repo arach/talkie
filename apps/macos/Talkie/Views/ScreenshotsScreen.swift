@@ -193,6 +193,18 @@ struct ScreenshotsScreen: View {
                 }
 
                 Button {
+                    if let item = selectedAnnotatableItem {
+                        annotateItem(item)
+                    }
+                } label: {
+                    Image(systemName: "sparkles.rectangle.stack")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(selectedAnnotatableItem == nil)
+                .help("Annotate selected screenshot")
+
+                Button {
                     NSWorkspace.shared.open(ScreenshotStorage.screenshotsDirectory)
                 } label: {
                     Image(systemName: "folder")
@@ -315,6 +327,8 @@ struct ScreenshotsScreen: View {
         Button("Copy Image") { copyItem(item) }
 
         if case .screenshot(let ts) = trayItem {
+            Button("Annotate…") { annotateItem(item) }
+
             if let ocrText = ts.ocrText, !ocrText.isEmpty {
                 Button("Copy Detected Text") {
                     NSPasteboard.general.clearContents()
@@ -364,6 +378,7 @@ struct ScreenshotsScreen: View {
     @ViewBuilder
     private func libraryContextMenu(_ item: ScreenshotItem) -> some View {
         Button("Copy Image") { copyItem(item) }
+        Button("Annotate…") { annotateItem(item) }
 
         if let parent = item.parent, let text = parent.text, !text.isEmpty {
             Button("Copy Text") {
@@ -392,6 +407,22 @@ struct ScreenshotsScreen: View {
     }
 
     // MARK: - Actions
+
+    private var selectedAnnotatableItem: ScreenshotItem? {
+        guard let selectedItem, canAnnotate(selectedItem) else { return nil }
+        return selectedItem
+    }
+
+    private func canAnnotate(_ item: ScreenshotItem) -> Bool {
+        guard let trayItem = item.trayItem else { return true }
+        if case .screenshot = trayItem { return true }
+        return false
+    }
+
+    private func annotateItem(_ item: ScreenshotItem) {
+        guard canAnnotate(item) else { return }
+        CaptureMarkupCoordinator.shared.openSession(imageURL: item.fileURL)
+    }
 
     private func shareFile(_ url: URL) {
         let picker = NSSharingServicePicker(items: [url])
