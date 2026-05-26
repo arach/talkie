@@ -2670,6 +2670,21 @@ final class SettingsManager {
         }
     }
 
+    func removeDeviceSettingsOverride(for deviceID: String) {
+        let trimmedDeviceID = deviceID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedDeviceID.isEmpty else { return }
+        guard TalkieSettingsConfigurationStore.shared.configuration.devices.overrides[trimmedDeviceID] != nil else {
+            return
+        }
+
+        let publishedAt = ISO8601DateFormatter().string(from: Date())
+        persistDeclarativeSettings { configuration in
+            configuration.devices.overrides.removeValue(forKey: trimmedDeviceID)
+            configuration.devices.publishRevision += 1
+            configuration.devices.lastPublishedAt = publishedAt
+        }
+    }
+
     func resetDefaultDeviceShortcutBoardToStarterKit() {
         setDefaultDeviceShortcutBoardSlots(TalkieSettingsConfiguration.defaultLegacyShortcutSlots)
     }

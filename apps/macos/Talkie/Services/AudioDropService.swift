@@ -333,6 +333,22 @@ actor AudioDropService {
             await MemosViewModel.shared.loadMemos()
             await RecordingsViewModel.shared.loadRecordings()
 
+            // Background augmentation — VAD, re-transcription with a
+            // bigger model, embeddings. The live transcription that
+            // the user is waiting on already happened above; this is
+            // purely additive enrichment.
+            var augContext = TKAugmentationContext()
+            augContext["recording.id"] = memo.id.uuidString
+            augContext["origin"] = "audio-drop"
+            augContext["source.filename"] = file.originalFilename
+            MediaAugmentationService.shared.enqueue(
+                AugmentationTask(
+                    assetURL: storedURL,
+                    assetKind: .audio,
+                    context: augContext
+                )
+            )
+
             await onProgress?(.complete)
             log.info("Created memo from dropped audio: \(memo.id)")
             databaseLog.info("Created unified recording for dropped audio: \(memo.id)")

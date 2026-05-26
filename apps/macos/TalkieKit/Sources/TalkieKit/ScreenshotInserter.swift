@@ -41,16 +41,17 @@ public enum ScreenshotInserter {
     ) -> String {
         guard !screenshots.isEmpty else { return text }
 
-        let timed = TimedTranscription(
-            text: text,
-            words: timedTranscription?.words ?? []
-        )
+        let links = screenshots
+            .sorted { $0.timestampMs < $1.timestampMs }
+            .enumerated()
+            .map { index, screenshot in
+                "[Screenshot \(index + 1)](\(markdownDestination(screenshotRef(screenshot, directory: screenshotDirectory))))"
+            }
+            .joined(separator: "\n")
 
-        return interleave(
-            timedTranscription: timed,
-            screenshots: screenshots,
-            screenshotDirectory: screenshotDirectory
-        ).markdown
+        return [text.trimmingCharacters(in: .whitespacesAndNewlines), links]
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
     }
 
     /// Interleave screenshots into a timed transcription by timestamp.
@@ -254,6 +255,14 @@ public enum ScreenshotInserter {
             return dir.appendingPathComponent(ss.filename).path
         }
         return ss.filename
+    }
+
+    private static func markdownDestination(_ value: String) -> String {
+        let needsAngleBrackets = value.contains { char in
+            char.isWhitespace || char == "(" || char == ")"
+        }
+        guard needsAngleBrackets else { return value }
+        return "<\(value.replacing(">", with: "%3E"))>"
     }
 
     private static func formatTimestamp(_ ms: Int) -> String {

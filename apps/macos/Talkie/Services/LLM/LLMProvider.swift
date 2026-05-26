@@ -67,7 +67,10 @@ extension LLMProvider {
 
     /// Default model ID from config file
     var defaultModelId: String {
-        LLMConfig.shared.defaultModel(for: id) ?? ""
+        if id == "apple-local" {
+            return "apple-on-device"
+        }
+        return LLMConfig.shared.defaultModel(for: id) ?? ""
     }
 
     /// Provider display name from config (falls back to protocol property)
@@ -110,6 +113,7 @@ struct GenerationOptions {
     var maxTokens: Int = 512
     var stopSequences: [String] = []
     var systemPrompt: String?
+    var jsonMode: Bool = false
 
     static let `default` = GenerationOptions()
 }
@@ -217,7 +221,7 @@ class LLMProviderRegistry {
     /// Get the first available provider with its default model
     /// Returns (provider, modelId) tuple or nil if no providers available
     func firstAvailableProvider() async -> (provider: LLMProvider, modelId: String)? {
-        let preferredOrder = LLMConfig.shared.preferredProviderOrder
+        let preferredOrder = orderedProviderIds()
 
         for providerId in preferredOrder {
             if let provider = provider(for: providerId),
@@ -232,12 +236,30 @@ class LLMProviderRegistry {
     func resolveProviderAndModel() async -> (provider: LLMProvider, modelId: String)? {
         // First try user's selection
         if let provider = selectedProvider,
-           let model = selectedModel {
-            return (provider, model.id)
+           await provider.isAvailable {
+            if let model = selectedModel {
+                return (provider, model.id)
+            }
+            let fallbackModelId = provider.defaultModelId
+            if !fallbackModelId.isEmpty {
+                return (provider, fallbackModelId)
+            }
         }
 
         // Fall back to first available
         return await firstAvailableProvider()
+    }
+
+    private func orderedProviderIds() -> [String] {
+        var ids: [String] = []
+        var seen = Set<String>()
+
+        for providerId in LLMConfig.shared.preferredProviderOrder + providers.map(\.id) {
+            guard seen.insert(providerId).inserted else { continue }
+            ids.append(providerId)
+        }
+
+        return ids
     }
 }
 

@@ -311,6 +311,10 @@ struct ScopeCaptureDetailView: View {
                         .stroke(ThemedScopeEdge.faint, lineWidth: 0.5)
                 )
                 .shadow(color: Color(red: 46/255, green: 68/255, blue: 82/255).opacity(0.10), radius: 12, y: 6)
+                // Drag the screenshot file out to other apps (Slack /
+                // Messages / Finder). Pasteboard carries the on-disk URL
+                // so receivers treat it as a real file, not bitmap data.
+                .onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
         } else {
             // Placeholder mat when image isn't available — cool checker
             Rectangle()
@@ -368,7 +372,8 @@ struct ScopeCaptureDetailView: View {
                 .tracking(2.8)
                 .foregroundStyle(ThemedScopeInk.faint)
                 .padding(.bottom, 4)
-            CapRailAction(label: "Copy",  icon: "doc.on.doc",            isPrimary: true, action: {})
+            CapRailAction(label: "Copy",  icon: "doc.on.doc",            isPrimary: true, action: copyCapture)
+            CapRailAction(label: "Annotate", icon: "sparkles.rectangle.stack", action: openMarkup)
             CapRailAction(label: "Open",  icon: "arrow.up.right.square", action: openInDefault)
             CapRailAction(label: "Pin",   icon: "pin",                   action: {})
             CapRailAction(label: "Share", icon: "square.and.arrow.up",   action: {})
@@ -441,6 +446,18 @@ struct ScopeCaptureDetailView: View {
     }
 
     // MARK: - Actions
+
+    private func openMarkup() {
+        guard let url = imageURL else { return }
+        CaptureMarkupCoordinator.shared.openSession(imageURL: url)
+    }
+
+    private func copyCapture() {
+        guard let url = imageURL,
+              let image = NSImage(contentsOf: url) else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.writeObjects([image])
+    }
 
     private func revealInFinder() {
         guard let url = imageURL else { return }

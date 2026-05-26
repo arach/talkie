@@ -110,7 +110,13 @@ private struct PasteBarView: View {
     @State private var appeared = false
     @State private var hoveredIndex: Int?
 
-    private var chromeBaseColor: Color { Theme.current.surface2 }
+    private var borderGradient: LinearGradient {
+        LinearGradient(
+            colors: [Color.white.opacity(0.32), Color.white.opacity(0.09)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -123,67 +129,55 @@ private struct PasteBarView: View {
                     .padding(.bottom, 6)
 
                 Rectangle()
-                    .fill(Theme.current.divider)
-                    .frame(height: 0.5)
-                    .padding(.horizontal, 10)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.16), Color.white.opacity(0.05)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(height: 1)
+                    .padding(.horizontal, 12)
 
                 HStack {
                     formatLegend
 
                     Spacer()
 
-                    Text("W browse")
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(Theme.current.textTertiary)
+                    browseHint
                 }
-                    .padding(.horizontal, 10)
-                    .padding(.top, 6)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 7)
                     .padding(.bottom, 10)
             }
         }
         .background(
             ZStack {
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(chromeBaseColor.opacity(0.96))
+                    .fill(Color.black.opacity(0.78))
+
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(.ultraThinMaterial)
+                    .opacity(0.62)
 
                 RoundedRectangle(cornerRadius: 14)
                     .fill(
                         LinearGradient(
                             colors: [
-                                Theme.current.surface3.opacity(0.6),
-                                chromeBaseColor.opacity(0.25),
-                                Theme.current.background.opacity(0.35)
+                                Color.white.opacity(0.16),
+                                Color.white.opacity(0.05),
+                                Color.black.opacity(0.10)
                             ],
                             startPoint: .top,
                             endPoint: .bottom
                         )
                     )
-
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(
-                        RadialGradient(
-                            colors: [Theme.current.surface3.opacity(0.28), Color.clear],
-                            center: .top,
-                            startRadius: 8,
-                            endRadius: 120
-                        )
-                    )
             }
-            .shadow(color: .black.opacity(0.34), radius: 18, y: 8)
+            .shadow(color: .black.opacity(0.34), radius: 18, y: 7)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            Theme.current.divider.opacity(0.95),
-                            Theme.current.divider.opacity(0.45),
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 0.75
-                )
+                .strokeBorder(borderGradient, lineWidth: 0.5)
         )
         .scaleEffect(appeared ? 1 : 0.9)
         .opacity(appeared ? 1 : 0)
@@ -201,10 +195,10 @@ private struct PasteBarView: View {
         VStack(spacing: 6) {
             Text("No captures yet")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(Theme.current.textSecondary)
+                .foregroundColor(.white.opacity(0.76))
             Text("Hyper+S to start")
                 .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundColor(Theme.current.textTertiary)
+                .foregroundColor(.white.opacity(0.42))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(16)
@@ -228,7 +222,7 @@ private struct PasteBarView: View {
             VStack(spacing: 4) {
                 // Thumbnail
                 ZStack {
-                    Theme.current.surface1
+                    Color.black.opacity(0.28)
 
                     if let nsImage = item.image {
                         Image(nsImage: nsImage)
@@ -238,13 +232,13 @@ private struct PasteBarView: View {
                     } else if let previewText = item.previewText {
                         Text(previewText)
                             .font(.system(size: 7, weight: .medium, design: .monospaced))
-                            .foregroundColor(Theme.current.textSecondary)
+                            .foregroundColor(.white.opacity(0.7))
                             .lineLimit(3)
                             .padding(3)
                     } else {
                         Image(systemName: item.isClip ? "video.fill" : "photo")
                             .font(.system(size: 12, weight: .light))
-                            .foregroundStyle(Theme.current.textMuted)
+                            .foregroundStyle(.white.opacity(0.38))
                     }
                 }
                 .frame(width: 72, height: 48)
@@ -252,22 +246,22 @@ private struct PasteBarView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 5)
                         .strokeBorder(
-                            isHovered ? Color.accentColor.opacity(0.6) : Theme.current.divider,
-                            lineWidth: isHovered ? 1.2 : 0.5
+                            isHovered ? Color.white.opacity(0.48) : Color.white.opacity(0.16),
+                            lineWidth: isHovered ? 1 : 0.5
                         )
                 )
 
                 // Number key
                 Text("\(number)")
                     .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .foregroundColor(Theme.current.textPrimary)
+                    .foregroundColor(.white.opacity(isHovered ? 0.98 : 0.82))
                     .frame(width: 18, height: 18)
                     .background(
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(isHovered ? Color.accentColor.opacity(0.3) : Theme.current.surfaceHover)
+                            .fill(Color.white.opacity(isHovered ? 0.16 : 0.08))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 4)
-                                    .strokeBorder(Theme.current.divider, lineWidth: 0.5)
+                                    .strokeBorder(Color.white.opacity(isHovered ? 0.28 : 0.13), lineWidth: 0.5)
                             )
                     )
             }
@@ -283,29 +277,56 @@ private struct PasteBarView: View {
     // MARK: - Format Legend
 
     private var formatLegend: some View {
-        HStack(spacing: 8) {
-            formatPill("[1-5]", label: "image", active: state.activeFormat == .image, color: Theme.current.textPrimary)
-            formatPill("⇧", label: "path", active: state.activeFormat == .filePath, color: .orange)
-            formatPill("⌥", label: "url", active: state.activeFormat == .url, color: .cyan)
-            formatPill("⌃", label: "base64", active: state.activeFormat == .base64, color: .purple)
-            formatPill("⌘", label: "drag", active: state.activeFormat == .dragFile, color: .green)
+        HStack(spacing: 6) {
+            formatPill("[1-5]", label: "image", active: state.activeFormat == .image)
+            formatPill("⇧", label: "path", active: state.activeFormat == .filePath)
+            formatPill("⌥", label: "url", active: state.activeFormat == .url)
+            formatPill("⌃", label: "base64", active: state.activeFormat == .base64)
+            formatPill("⌘", label: "drag", active: state.activeFormat == .dragFile)
         }
     }
 
-    private func formatPill(_ key: String, label: String, active: Bool, color: Color) -> some View {
-        HStack(spacing: 3) {
-            Text(key)
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                .foregroundColor(active ? color : color.opacity(0.5))
+    private var browseHint: some View {
+        HStack(spacing: 4) {
+            keyBadge("W", active: false)
+            Text("browse")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(.white.opacity(0.42))
+        }
+    }
+
+    private func formatPill(_ key: String, label: String, active: Bool) -> some View {
+        HStack(spacing: 5) {
+            keyBadge(key, active: active)
             Text(label)
                 .font(.system(size: 9, weight: .medium))
-                .foregroundColor(active ? color.opacity(0.8) : color.opacity(0.35))
+                .foregroundColor(active ? .white.opacity(0.84) : .white.opacity(0.42))
         }
-        .padding(.horizontal, 5)
-        .padding(.vertical, 2)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
         .background(
-            RoundedRectangle(cornerRadius: 4)
-                .fill(active ? color.opacity(0.12) : Color.clear)
+            Capsule()
+                .fill(active ? Color.white.opacity(0.10) : Color.clear)
         )
+        .overlay(
+            Capsule()
+                .strokeBorder(active ? Color.white.opacity(0.16) : Color.clear, lineWidth: 0.5)
+        )
+    }
+
+    private func keyBadge(_ key: String, active: Bool) -> some View {
+        Text(key)
+            .font(.system(size: 9, weight: .bold, design: .monospaced))
+            .foregroundColor(active ? .white.opacity(0.95) : .white.opacity(0.56))
+            .frame(minWidth: key.count > 1 ? 34 : 18, minHeight: 18)
+            .padding(.horizontal, key.count > 1 ? 2 : 0)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.white.opacity(active ? 0.13 : 0.06))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .strokeBorder(Color.white.opacity(active ? 0.22 : 0.10), lineWidth: 0.5)
+                    )
+            )
     }
 }

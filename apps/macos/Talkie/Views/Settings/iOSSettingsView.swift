@@ -738,6 +738,8 @@ private struct DeviceSetupCard: View {
     let onOpenTerminalGuide: () -> Void
     let onRemoveDevice: () -> Void
 
+    @State private var showingRemoveConfirmation = false
+
     private var setupState: BridgeManager.PairedDevice.SetupState? { device.setupState }
 
     private var shortcutOptedIn: Bool {
@@ -858,8 +860,8 @@ private struct DeviceSetupCard: View {
             HStack {
                 Spacer()
 
-                Button(action: onRemoveDevice) {
-                    Text("REMOVE DEVICE")
+                Button(action: { showingRemoveConfirmation = true }) {
+                    Text("REMOVE BRIDGE PAIRING")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(.red.opacity(0.85))
                 }
@@ -869,6 +871,14 @@ private struct DeviceSetupCard: View {
         .padding(12)
         .background(Theme.current.surface1)
         .cornerRadius(10)
+        .alert("Remove Bridge Pairing?", isPresented: $showingRemoveConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Remove Pairing", role: .destructive) {
+                onRemoveDevice()
+            }
+        } message: {
+            Text("This revokes Mac Bridge trust for \(device.name). Terminal SSH keys already imported on the iPhone are separate and are not removed by this action.")
+        }
     }
 
     private var shortcutModeState: SetupChecklistRow.State {

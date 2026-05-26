@@ -191,6 +191,34 @@ public struct HotKeyStatusInfo: Codable, Sendable, Identifiable {
     ///   - reply: Callback with success status
     func attachScreenshots(dictationId: String, screenshotsJSON: String, reply: @escaping (_ success: Bool) -> Void)
 
+    /// Record a screenshot captured while a live dictation is actively listening.
+    ///
+    /// Talkie calls this at capture time so Agent can keep a per-recording
+    /// side list. Delivery then uses Agent-local metadata instead of pulling
+    /// from, mutating, or waiting on the tray after transcription.
+    ///
+    /// - Parameters:
+    ///   - imageData: PNG image data for the screenshot.
+    ///   - capturedAt: Unix timestamp for when Talkie captured the screenshot.
+    ///   - captureMode: Capture mode string ("region", "fullscreen", "window").
+    ///   - width: Pixel width.
+    ///   - height: Pixel height.
+    ///   - windowTitle: Optional source window title.
+    ///   - appName: Optional source app name.
+    ///   - displayName: Optional source display name.
+    ///   - reply: Callback with success status.
+    func recordLiveScreenshot(
+        imageData: Data,
+        capturedAt: TimeInterval,
+        captureMode: String,
+        width: Int,
+        height: Int,
+        windowTitle: String?,
+        appName: String?,
+        displayName: String?,
+        reply: @escaping (_ success: Bool) -> Void
+    )
+
     // MARK: - Embedded Engine
 
     /// Ping TalkieAgent's XPC service for transport liveness.
@@ -350,6 +378,7 @@ public struct HotKeyStatusInfo: Codable, Sendable, Identifiable {
         recordingId: String,
         recordingStartedAt: TimeInterval,
         recordingEndedAt: TimeInterval,
+        includeScreenshots: Bool,
         reply: @escaping (_ assetsJSON: String?) -> Void
     )
 

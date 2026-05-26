@@ -10,7 +10,7 @@ import os
 
 private let logger = Logger(subsystem: "to.talkie.app.kit", category: "Gemini")
 
-public final class LLMGeminiProvider: LLMProvider, @unchecked Sendable {
+public final class LLMGeminiProvider: LLMProvider, LLMVisionProvider, @unchecked Sendable {
     public let id = "gemini"
     public let name = "Google Gemini"
 
@@ -133,9 +133,67 @@ public final class LLMGeminiProvider: LLMProvider, @unchecked Sendable {
             }
         }
     }
-}
 
-// MARK: - Response Models
+    public func generateVision(
+        request: LLMVisionRequest,
+        model: String
+    ) async throws -> String {
+        guard let apiKey = LLMAPIKeyStore.shared.get(.gemini) else {
+            throw LLMError.notConfigured
+        }
+
+        var parts: [[String: Any]] = []
+        for part in request.parts {
+            switch part {
+            case .text(let text):
+                parts.append(["text": text])
+            case .imageJPEG(let data):
+                parts.append([
+                    "inline_data": [
+                        "mime_type": "image/jpeg",
+                        "data": data.base64EncodedString(),
+                    ],
+                ])
+            case .imagePNG(let data):
+                parts.append([
+                    "inline_data": [
+                        "mime_type": "image/png",
+                        "data": data.base64EncodedString(),
+                    ],
+                ])
+            }
+        }
+
+        let url = URL(string: "\(baseURL)/\(model):generateContent?key=\(apiKey)")!
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let requestBody: [String: Any] = [
+            "contents": [["parts": parts]],
+            "generationConfig": [
+                "temperature": request.options.temperature,
+                "topK": 40,
+                "topP": request.options.topP,
+                "maxOutputTokens": request.options.maxTokens,
+            ],
+        ]
+        urlRequest.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+
+        let (data, response) = try await URLSession.shared.data(for: urlRequest)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw LLMError.generationFailed("Gemini vision request failed")
+        }
+
+        let geminiResponse = try JSONDecoder().decode(GeminiResponse.self, from: data)
+        guard let firstCandidate = geminiResponse.candidates.first,
+              let text = firstCandidate.content.parts.first?.text else {
+            throw LLMError.generationFailed("No content in Gemini vision response")
+        }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
 
 private struct GeminiResponse: Codable {
     let candidates: [Candidate]

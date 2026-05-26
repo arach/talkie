@@ -101,7 +101,7 @@ final class DeckMirrorStore: ObservableObject {
     }
 
     func apply(companionState: CompanionStateResponse?) {
-        set(board: companionState?.commandDeck)
+        set(board: companionState?.resolvedCommandDeck)
 
         if let runtimeState = companionState?.shortcutStates?.first {
             let message = runtimeState.detail ?? runtimeState.phase.displayName
@@ -183,6 +183,67 @@ final class DeckMirrorStore: ObservableObject {
         }
     }
 
+    func pasteImageToMac(imageData: Data, mimeType: String, autoPaste: Bool = true) {
+        let slotID = "mac-paste-image"
+        guard firingSlotID == nil else { return }
+        firingSlotID = slotID
+        lastErrorMessage = nil
+        setTriggerResult(
+            slotID: slotID,
+            outcome: .pending,
+            message: "Sending image to Mac…",
+            autoResetAfter: nil
+        )
+
+        Task { @MainActor in
+            defer { firingSlotID = nil }
+
+            do {
+                let response = try await BridgeManager.shared.sendCompanionImageToMac(
+                    imageData: imageData,
+                    mimeType: mimeType,
+                    autoPaste: autoPaste
+                )
+                if response.ok == false {
+                    let message = response.error ?? response.message ?? "Mac did not accept the image."
+                    lastErrorMessage = message
+                    setTriggerResult(
+                        slotID: slotID,
+                        outcome: .failed,
+                        message: message,
+                        autoResetAfter: .seconds(6)
+                    )
+                } else {
+                    setTriggerResult(
+                        slotID: slotID,
+                        outcome: .succeeded,
+                        message: response.message ?? "Image sent to Mac.",
+                        autoResetAfter: .seconds(4)
+                    )
+                }
+            } catch {
+                let message = error.localizedDescription
+                lastErrorMessage = message
+                setTriggerResult(
+                    slotID: slotID,
+                    outcome: .failed,
+                    message: message,
+                    autoResetAfter: .seconds(6)
+                )
+            }
+        }
+    }
+
+    func reportLocalTriggerFailure(slotID: String, message: String) {
+        lastErrorMessage = message
+        setTriggerResult(
+            slotID: slotID,
+            outcome: .failed,
+            message: message,
+            autoResetAfter: .seconds(6)
+        )
+    }
+
     private func setTriggerResult(
         slotID: String,
         outcome: TriggerResult.Outcome,
@@ -215,6 +276,87 @@ final class DeckMirrorStore: ObservableObject {
 
     private static func date(from value: String) -> Date {
         ISO8601DateFormatter().date(from: value) ?? .now
+    }
+}
+
+private extension CompanionStateResponse {
+    var resolvedCommandDeck: DeckBoardSnapshot? {
+        if let commandDeck {
+            return commandDeck
+        }
+
+        guard let shortcutPages, !shortcutPages.isEmpty else {
+            return nil
+        }
+
+        let spaces = shortcutPages.enumerated().map { index, page in
+            let trimmedID = page.id.trimmingCharacters(in: .whitespacesAndNewlines)
+            let spaceID = trimmedID.isEmpty ? "space-\(index + 1)" : trimmedID
+            var slots = page.shortcutSlots.prefix(16).map { $0 }
+            while slots.count < 16 {
+                slots.append("")
+            }
+
+            return DeckSpace(
+                id: spaceID,
+                title: page.title,
+                tiles: slots.enumerated().map { tileIndex, slotID in
+                    let slot = slotID.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let display = DeckLegacyDisplayInfo.display(for: slot)
+                    return DeckTile(
+                        id: "\(spaceID):\(tileIndex)",
+                        slotID: slot.isEmpty ? nil : slot,
+                        label: display.label,
+                        icon: display.icon,
+                        hint: display.hint
+                    )
+                }
+            )
+        }
+
+        return DeckBoardSnapshot(
+            spaces: spaces,
+            activeSpaceID: spaces.first(where: { $0.id == "talkie" })?.id ?? spaces.first?.id
+        )
+    }
+}
+
+private enum DeckLegacyDisplayInfo {
+    struct Display {
+        let label: String
+        let icon: String
+        let hint: String?
+    }
+
+    static func display(for slotID: String) -> Display {
+        switch slotID {
+        case "talkie-dictate": return Display(label: "Dictate", icon: "waveform.badge.mic", hint: nil)
+        case "talkie-record": return Display(label: "Memo", icon: "square.and.pencil", hint: nil)
+        case "talkie-settings": return Display(label: "Voice", icon: "waveform.badge.plus", hint: nil)
+        case "talkie-search": return Display(label: "Search", icon: "magnifyingglass", hint: nil)
+        case "mac-claude": return Display(label: "Claude", icon: "sparkles", hint: "Mac")
+        case "talkie-agent": return Display(label: "Pi", icon: "circle.grid.cross", hint: nil)
+        case "talkie-ssh": return Display(label: "Shell", icon: "terminal", hint: nil)
+        case "mac-sessions": return Display(label: "Workflow", icon: "wand.and.stars", hint: "Mac")
+        case "mac-windows": return Display(label: "Desktop", icon: "display", hint: "Mac")
+        case "talkie-keyboard": return Display(label: "Screen", icon: "record.circle", hint: nil)
+        case "talkie-memos": return Display(label: "Memos", icon: "waveform", hint: nil)
+        case "talkie-command": return Display(label: "Command", icon: "command", hint: nil)
+        case "talkie-pending": return Display(label: "Pending", icon: "hourglass", hint: nil)
+        case "talkie-recent": return Display(label: "Recent", icon: "clock.arrow.circlepath", hint: nil)
+        case "talkie-home": return Display(label: "Home", icon: "house", hint: nil)
+        case "talkie-devices": return Display(label: "Devices", icon: "ipad.and.iphone", hint: nil)
+        case "mac-paste-image": return Display(label: "Share", icon: "photo.on.rectangle.angled", hint: "Mac")
+        case "iterm-dictate": return Display(label: "iTerm", icon: "terminal.fill", hint: nil)
+        case "":
+            return Display(label: "-", icon: "square.dashed", hint: nil)
+        default:
+            let label = slotID
+                .split(separator: "-")
+                .last
+                .map { String($0).capitalized } ?? "Command"
+            return Display(label: label, icon: "square.grid.2x2", hint: nil)
+        }
     }
 }
 

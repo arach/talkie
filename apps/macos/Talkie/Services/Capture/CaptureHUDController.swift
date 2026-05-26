@@ -16,6 +16,8 @@ final class CaptureHUDController: CaptureChordController {
     private var globalMonitor: Any?
     private var localMonitor: Any?
     private var paletteTask: Task<Void, Never>?
+    private var armedRegionOverlay: ScreenCaptureOverlay?
+    private var armedRegionTask: Task<Void, Never>?
     private let timeoutSeconds: TimeInterval = 30
 
     func beginChord(initialMode: CaptureBarMode, options: CaptureChordOptions = .captureOnly) async -> CaptureBarResult? {
@@ -74,6 +76,7 @@ final class CaptureHUDController: CaptureChordController {
                     timeout.cancel()
                     resume(result)
                 } else {
+                    self.syncArmedRegionOverlay(resume: resume)
                     resetTimeout()
                 }
             }
@@ -94,7 +97,12 @@ final class CaptureHUDController: CaptureChordController {
                 case "a":
                     timeout.cancel()
                     switch currentMode {
-                    case .screenshot: resume(.screenshot(.region))
+                    case .screenshot:
+                        if self.armedRegionOverlay != nil {
+                            resetTimeout()
+                        } else {
+                            resume(.screenshot(.region))
+                        }
                     case .video:      resume(.screenRecord(.region))
                     }
 
@@ -150,7 +158,25 @@ final class CaptureHUDController: CaptureChordController {
 
                 if event.keyCode == 48 {  // Tab
                     self.panel.toggleMode()
+                    self.syncArmedRegionOverlay(resume: resume)
                     resetTimeout()
+                }
+
+                if event.keyCode == 36 || event.keyCode == 76 {  // Return / Enter (keypad)
+                    // Commit the preselected mode. The HUD highlights
+                    // REGION by default, so ↵ on first open fires a
+                    // region capture without needing the A keystroke.
+                    timeout.cancel()
+                    let selected = self.panel.state.selectedCaptureMode
+                    switch self.panel.state.mode {
+                    case .screenshot:
+                        if selected == .region, self.armedRegionOverlay != nil {
+                            resetTimeout()
+                        } else {
+                            resume(.screenshot(selected))
+                        }
+                    case .video:      resume(.screenRecord(selected))
+                    }
                 }
 
                 if event.keyCode == 53 {  // Escape
@@ -167,6 +193,8 @@ final class CaptureHUDController: CaptureChordController {
                 handleKey(event)
                 return nil
             }
+
+            syncArmedRegionOverlay(resume: resume)
         }
     }
 
@@ -175,6 +203,7 @@ final class CaptureHUDController: CaptureChordController {
     private func tearDown() {
         paletteTask?.cancel()
         paletteTask = nil
+        cancelArmedRegionOverlay()
         panel.dismiss()
         if let monitor = globalMonitor {
             NSEvent.removeMonitor(monitor)
@@ -184,5 +213,41 @@ final class CaptureHUDController: CaptureChordController {
             NSEvent.removeMonitor(monitor)
             localMonitor = nil
         }
+    }
+
+    private func syncArmedRegionOverlay(resume: @escaping (CaptureBarResult?) -> Void) {
+        guard panel.state.mode == .screenshot else {
+            cancelArmedRegionOverlay()
+            return
+        }
+        armRegionOverlayIfNeeded(resume: resume)
+    }
+
+    private func armRegionOverlayIfNeeded(resume: @escaping (CaptureBarResult?) -> Void) {
+        guard armedRegionOverlay == nil else { return }
+
+        let overlay = ScreenCaptureOverlay()
+        armedRegionOverlay = overlay
+        armedRegionTask = Task { @MainActor [weak self] in
+            guard !Task.isCancelled else { return }
+            let rect = await overlay.selectRegion(freezesDesktop: false)
+            guard !Task.isCancelled else { return }
+            if self?.armedRegionOverlay === overlay {
+                self?.armedRegionOverlay = nil
+                self?.armedRegionTask = nil
+            }
+            if let rect {
+                resume(.screenshotRegion(rect))
+            } else {
+                resume(nil)
+            }
+        }
+    }
+
+    private func cancelArmedRegionOverlay() {
+        armedRegionTask?.cancel()
+        armedRegionTask = nil
+        armedRegionOverlay?.cancel()
+        armedRegionOverlay = nil
     }
 }

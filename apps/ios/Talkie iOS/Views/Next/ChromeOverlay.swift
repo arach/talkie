@@ -57,27 +57,19 @@ struct ChromeOverlay: View {
             }
 
             if showCreateTray {
-                // Toggle: tap to open the keyboard surface; tap again
-                // while it's up to dismiss back to home. The glyph
-                // swaps (keyboard → keyboard.chevron.compact.down) so
-                // the second-tap behavior reads visually.
-                let keyboardUp: Bool = {
-                    if case .keyboardActivation = router.surface { return true }
-                    return false
-                }()
+                // Bottom-right keyboard pill: open a fresh Compose
+                // document with the embedded Talkie keyboard already
+                // up. Goes to the typing surface, not the keyboard-
+                // extension status/learning surface.
                 CornerSlot(
                     zone: .bottomTrailing,
                     glyph: AnyView(
-                        Image(systemName: keyboardUp ? "keyboard.chevron.compact.down" : "keyboard")
-                            .font(.system(size: 13, weight: .regular))
+                        Image(systemName: "keyboard")
+                            .font(.system(size: 15, weight: .regular))
                     ),
-                    label: keyboardUp ? "Dismiss keyboard" : "Keyboard"
+                    label: "Keyboard"
                 ) {
-                    if keyboardUp {
-                        AppShellRouter.shared.openHome()
-                    } else {
-                        AppShellRouter.shared.openKeyboardActivation()
-                    }
+                    AppShellRouter.shared.openComposeWithKeyboard()
                 }
 
                 LiquidGlassTray()
@@ -142,76 +134,87 @@ private struct LiquidGlassTray: View {
     @EnvironmentObject private var router: AppShellRouter
 
     var body: some View {
-        HStack(spacing: 14) {
-            TraySlot(
-                glyph: AnyView(
-                    Image("TalkieBowtie")
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 30, height: 30)
-                ),
-                label: "Home"
-            ) {
-                AppShellRouter.shared.openHome()
-                chrome.dismissChrome()
-            }
+        GeometryReader { proxy in
+            // Pro Max-class phones (≥400pt) get a relaxed tray —
+            // more spacing between slots and more capsule h-padding —
+            // so the extra horizontal real estate isn't wasted. Mini
+            // and base iPhones stay tight (no overlap with corner
+            // pills on a 375pt screen).
+            let isWide = proxy.size.width >= 400
+            let slotSpacing: CGFloat = isWide ? 14 : 8
+            let capsulePadH: CGFloat = isWide ? 14 : 10
+            let micGapSize: CGFloat = router.surface == .home ? 56 : 48
 
-            TraySlot(
-                glyph: AnyView(Image(systemName: "plus.viewfinder").font(.system(size: 17, weight: .regular))),
-                label: "Capture"
-            ) {
-                AppShellRouter.shared.openCaptureCompose()
-            }
+            HStack(spacing: slotSpacing) {
+                TraySlot(
+                    glyph: AnyView(
+                        Image("TalkieBowtie")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 26, height: 26)
+                    ),
+                    label: "Home"
+                ) {
+                    AppShellRouter.shared.openHome()
+                    chrome.dismissChrome()
+                }
 
-            // Tray center: on home the standalone MicFAB (rendered by
-            // AppShellNext) is always visible — leave a 48pt × 48pt
-            // gap so it shows through AND the capsule keeps the same
-            // 68pt height (HStack's max-child-height determines the
-            // capsule shape). Without 48pt height here the capsule
-            // would shrink to 56pt and the slot row would sit 6pt
-            // below the standalone FAB's center.
-            // On sub-surfaces the persistent FAB is gone, so the tray
-            // itself carries the FAB inline.
-            if router.surface == .home {
-                Color.clear.frame(width: 48, height: 48)
-            } else {
-                MicFAB()
-            }
+                TraySlot(
+                    glyph: AnyView(Image(systemName: "plus.viewfinder").font(.system(size: 15, weight: .regular))),
+                    label: "Capture"
+                ) {
+                    AppShellRouter.shared.openCaptureCompose()
+                }
 
-            TraySlot(
-                glyph: AnyView(Image(systemName: "sparkles").font(.system(size: 15, weight: .regular))),
-                label: "Ask AI"
-            ) {
-                AppShellRouter.shared.openAskAI()
-            }
+                // Tray center: on home the standalone MicFAB (rendered by
+                // AppShellNext) is always visible — leave a matching
+                // gap so it shows through AND the capsule height is fixed
+                // by the FAB (HStack's max-child-height determines the
+                // capsule shape). Without the gap the capsule would
+                // shrink to the 32pt slot height and the slot row would
+                // sit below the standalone FAB's center.
+                // On sub-surfaces the persistent FAB is gone, so the tray
+                // itself carries the FAB inline.
+                if router.surface == .home {
+                    Color.clear.frame(width: micGapSize, height: micGapSize)
+                } else {
+                    MicFAB()
+                }
 
-            TraySlot(
-                glyph: AnyView(Image(systemName: "terminal").font(.system(size: 15, weight: .regular))),
-                label: "Terminal"
-            ) {
-                AppShellRouter.shared.openTerminal()
+                TraySlot(
+                    glyph: AnyView(Image(systemName: "sparkles").font(.system(size: 13, weight: .regular))),
+                    label: "Ask AI"
+                ) {
+                    AppShellRouter.shared.openAskAI()
+                }
+
+                TraySlot(
+                    glyph: AnyView(Image(systemName: "terminal").font(.system(size: 13, weight: .regular))),
+                    label: "Terminal"
+                ) {
+                    AppShellRouter.shared.openTerminal()
+                }
             }
+            .padding(.horizontal, capsulePadH)
+            .padding(.vertical, 6)
+            .background(
+                ZStack {
+                    Capsule()
+                        .fill(theme.colors.cardBackground.opacity(0.70))
+                        .background(.ultraThinMaterial, in: Capsule())
+                    Capsule()
+                        .strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                }
+            )
+            .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            // 20pt outer padding matches the corner-pill horizontal inset.
+            // Bottom padding keeps the capsule center aligned with the
+            // corner pills and whichever mic size is active on this surface.
+            .padding(.horizontal, 20)
+            .padding(.bottom, router.surface == .home ? 6 : 10)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(
-            ZStack {
-                Capsule()
-                    .fill(theme.colors.cardBackground.opacity(0.70))
-                    .background(.ultraThinMaterial, in: Capsule())
-                Capsule()
-                    .strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: theme.currentTheme.chrome.hairlineWidth)
-            }
-        )
-        .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        // 20pt outer padding so the tray capsule sits clearly inset
-        // from screen edges on smaller iPhones (was 12pt; bumped on
-        // 13 mini feedback). Tray content is ~276pt wide so even at
-        // 20pt outer padding × 2 there's room on a 375pt screen.
-        .padding(.horizontal, 20)
-        .padding(.bottom, 6)
     }
 }
 
@@ -226,7 +229,7 @@ private struct TraySlot: View {
         Button(action: action) {
             glyph
                 .foregroundStyle(theme.colors.textSecondary)
-                .frame(width: 36, height: 36)
+                .frame(width: 32, height: 32)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -239,7 +242,12 @@ private struct TraySlot: View {
 /// FAB sits visually centered in the tray's gap; when chrome is
 /// resting the FAB still anchors the bottom on its own.
 struct MicFAB: View {
+    let size: CGFloat
     @ObservedObject private var theme = ThemeManager.shared
+
+    init(size: CGFloat = 48) {
+        self.size = size
+    }
 
     var body: some View {
         Button(action: {
@@ -248,10 +256,10 @@ struct MicFAB: View {
             ZStack {
                 Circle().fill(theme.currentTheme.chrome.accent)
                 Image(systemName: "mic.fill")
-                    .font(.system(size: 22, weight: .medium))
+                    .font(.system(size: size >= 56 ? 25 : 22, weight: .medium))
                     .foregroundStyle(theme.colors.cardBackground)
             }
-            .frame(width: 48, height: 48)
+            .frame(width: size, height: size)
             .shadow(color: theme.currentTheme.chrome.accentGlow, radius: 4, y: 2)
         }
         .buttonStyle(.plain)

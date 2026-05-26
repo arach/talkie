@@ -39,6 +39,8 @@ import React, { useState } from "react";
 
 export type CaptureHUDMode = "screenshot" | "video";
 
+export type CaptureChord = "A" | "S" | "D";
+
 interface MacCaptureHUDProps {
   /** "screenshot" (default) or "video" — controls REC dot and tint. */
   mode?: CaptureHUDMode;
@@ -48,6 +50,19 @@ interface MacCaptureHUDProps {
   showTray?: boolean;
   /** When false, hide N (Save Selection) extra. */
   showSelection?: boolean;
+  /** Currently active mode (Region/Screen/Window). When provided, the
+   *  matching cell renders in its `active` state — accent-tinted border,
+   *  brighter background, accent key chip — so the HUD reads as a
+   *  picker (REGION preselected) rather than three stateless triggers.
+   *  Default "A" (Region). Pass `null` to opt out and revert to the
+   *  hover-only behaviour the original chord launcher had. */
+  activeChord?: CaptureChord | null;
+  /** Wires up the Screenshot ↔ Video tabs at the top of the HUD. When
+   *  provided, the tabs are clickable; without it they render visually
+   *  but no-op. The default ToggleBar above the HUD remains as a
+   *  fallback when only one HUD is on screen, but each HUD now owns its
+   *  own mode-switch surface so single-shot demos work too. */
+  onModeChange?: (mode: CaptureHUDMode) => void;
 }
 
 const W = 360;
@@ -57,6 +72,8 @@ export function MacCaptureHUD({
   trayCount = 4,
   showTray = true,
   showSelection = true,
+  activeChord = "A",
+  onModeChange,
 }: MacCaptureHUDProps) {
   const isVideo = mode === "video";
   const [hover, setHover] = useState<string | null>(null);
@@ -82,7 +99,11 @@ export function MacCaptureHUD({
       }}
     >
       {/* TOP STRIP — gradient + graticule overlay */}
-      <TopStrip isVideo={isVideo} />
+      <TopStrip
+        isVideo={isVideo}
+        showCommitCue={activeChord !== null}
+        onModeChange={onModeChange}
+      />
 
       {/* PRIMARY ACTIONS — 3 cells */}
       <div
@@ -104,6 +125,7 @@ export function MacCaptureHUD({
           icon={IconCrop}
           label="Region"
           isHover={hover === "A"}
+          isActive={activeChord === "A"}
           onHover={(v) => setHover(v ? "A" : null)}
           isVideo={isVideo}
         />
@@ -112,6 +134,7 @@ export function MacCaptureHUD({
           icon={IconDisplay}
           label="Screen"
           isHover={hover === "S"}
+          isActive={activeChord === "S"}
           onHover={(v) => setHover(v ? "S" : null)}
           isVideo={isVideo}
         />
@@ -120,6 +143,7 @@ export function MacCaptureHUD({
           icon={IconWindow}
           label="Window"
           isHover={hover === "D"}
+          isActive={activeChord === "D"}
           onHover={(v) => setHover(v ? "D" : null)}
           isVideo={isVideo}
         />
@@ -156,58 +180,45 @@ export function MacCaptureHUD({
 // ───────────────────────────────────────────────────────────────────────
 // Top strip — mode badge.
 
-function TopStrip({ isVideo }: { isVideo: boolean }) {
+function TopStrip({
+  isVideo,
+  showCommitCue,
+  onModeChange,
+}: {
+  isVideo: boolean;
+  /** When true (i.e. the HUD has a preselected mode), the right
+   *  caption shows `↵ capture · ⎋ dismiss` so the user knows Enter
+   *  commits the active cell. When false, just the dismiss cue. */
+  showCommitCue: boolean;
+  /** Wires the tab clicks. When omitted the tabs render but no-op. */
+  onModeChange?: (mode: CaptureHUDMode) => void;
+}) {
   return (
     <div
-      className="flex items-center px-3"
+      className="flex items-center px-2.5"
       style={{
         height: 26,
         background: "var(--scheme-strip-top)",
         borderBottom: "0.5px solid var(--scheme-edge)",
       }}
     >
-      <div className="flex items-center gap-1.5">
-        {isVideo ? (
-          <>
-            <span
-              aria-hidden
-              className="inline-block h-[7px] w-[7px] animate-[hudpulse_1.4s_ease-in-out_infinite] rounded-full"
-              style={{
-                background: "var(--scheme-rec)",
-                boxShadow: "0 0 6px var(--scheme-rec-glow)",
-              }}
-            />
-            <span
-              className="text-[9px] font-semibold uppercase tracking-[0.18em]"
-              style={{ color: "var(--scheme-rec)" }}
-            >
-              Video · Record
-            </span>
-          </>
-        ) : (
-          <>
-            <span
-              aria-hidden
-              className="inline-block h-[7px] w-[7px] rounded-full"
-              style={{
-                background: "var(--scheme-accent)",
-                boxShadow: "0 0 6px var(--scheme-accent-glow)",
-              }}
-            />
-            <span
-              className="text-[9px] font-semibold uppercase tracking-[0.18em]"
-              style={{ color: "var(--scheme-accent)" }}
-            >
-              Screenshot
-            </span>
-          </>
-        )}
+      <div className="flex items-center gap-1">
+        <ModeTab
+          kind="screenshot"
+          active={!isVideo}
+          onClick={() => onModeChange?.("screenshot")}
+        />
+        <ModeTab
+          kind="video"
+          active={isVideo}
+          onClick={() => onModeChange?.("video")}
+        />
       </div>
       <span
         className="ml-auto text-[8.5px] uppercase tracking-[0.22em]"
         style={{ color: "var(--scheme-ink-faint)" }}
       >
-        ⎋ dismiss
+        {showCommitCue ? "↵ capture · ⎋ dismiss" : "⎋ dismiss"}
       </span>
       <style jsx>{`
         @keyframes hudpulse {
@@ -219,6 +230,72 @@ function TopStrip({ isVideo }: { isVideo: boolean }) {
   );
 }
 
+/**
+ * One of the two top-strip tabs. Active = lit dot + accent text, sits
+ * on a faint accent-tinted background so the selection reads at a
+ * glance. Inactive = hollow dot + faint text, clickable to switch.
+ * Video's dot pulses when active to echo the live REC feel.
+ */
+function ModeTab({
+  kind,
+  active,
+  onClick,
+}: {
+  kind: CaptureHUDMode;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const isVideo = kind === "video";
+  const accent = isVideo ? "var(--scheme-rec)" : "var(--scheme-accent)";
+  const accentGlow = isVideo
+    ? "var(--scheme-rec-glow)"
+    : "var(--scheme-accent-glow)";
+  const label = isVideo ? "Video · Record" : "Screenshot";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-1.5 rounded transition-colors"
+      style={{
+        padding: "3px 7px",
+        background: active
+          ? `color-mix(in srgb, ${accent} 14%, transparent)`
+          : "transparent",
+        border: active
+          ? `0.5px solid color-mix(in srgb, ${accent} 45%, var(--scheme-edge))`
+          : "0.5px solid transparent",
+        cursor: "pointer",
+      }}
+    >
+      <span
+        aria-hidden
+        className={
+          active && isVideo
+            ? "inline-block h-[6px] w-[6px] animate-[hudpulse_1.4s_ease-in-out_infinite] rounded-full"
+            : "inline-block h-[6px] w-[6px] rounded-full"
+        }
+        style={
+          active
+            ? {
+                background: accent,
+                boxShadow: `0 0 5px ${accentGlow}`,
+              }
+            : {
+                background: "transparent",
+                border: "0.5px solid var(--scheme-ink-faint)",
+              }
+        }
+      />
+      <span
+        className="text-[9px] font-semibold uppercase tracking-[0.18em]"
+        style={{ color: active ? accent : "var(--scheme-ink-faint)" }}
+      >
+        {label}
+      </span>
+    </button>
+  );
+}
+
 // ───────────────────────────────────────────────────────────────────────
 // Primary cell — A / S / D.
 
@@ -227,6 +304,7 @@ function PrimaryCell({
   icon: Icon,
   label,
   isHover,
+  isActive,
   onHover,
   isVideo,
 }: {
@@ -234,9 +312,19 @@ function PrimaryCell({
   icon: (props: { size: number; color: string }) => React.ReactElement;
   label: string;
   isHover: boolean;
+  isActive: boolean;
   onHover: (v: boolean) => void;
   isVideo: boolean;
 }) {
+  // Lit color cascades the same way the HUD's top-strip dot does: video
+  // mode uses the rec/red token, screenshot uses accent (amber/scheme).
+  const lit = isVideo ? "var(--scheme-rec)" : "var(--scheme-accent)";
+  const litGlow = isVideo ? "var(--scheme-rec-glow)" : "var(--scheme-accent-glow)";
+
+  // Active beats hover for icon color, but hover still adds the
+  // glass-lift so the user feels "I can switch to this one too."
+  const iconColor = isActive || isHover ? lit : "var(--scheme-ink)";
+
   return (
     <button
       type="button"
@@ -246,42 +334,51 @@ function PrimaryCell({
       style={{
         padding: "10px 6px 9px 6px",
         borderRadius: 8,
-        background: isHover
-          ? "var(--scheme-details-bg)"
-          : "color-mix(in srgb, var(--scheme-bg) 50%, transparent)",
+        background: isActive
+          ? `color-mix(in srgb, ${lit} 14%, var(--scheme-details-bg))`
+          : isHover
+            ? "var(--scheme-details-bg)"
+            : "color-mix(in srgb, var(--scheme-bg) 50%, transparent)",
         border: `0.5px solid ${
-          isHover ? "var(--scheme-edge-strong)" : "var(--scheme-edge)"
+          isActive
+            ? `color-mix(in srgb, ${lit} 60%, var(--scheme-edge-strong))`
+            : isHover
+              ? "var(--scheme-edge-strong)"
+              : "var(--scheme-edge)"
         }`,
-        boxShadow: isHover
+        boxShadow: isActive
           ? `inset 0 0.5px 0 var(--scheme-bezel-highlight),
-             0 1px 0 var(--scheme-bezel-shadow)`
-          : "none",
-        transition: "background 120ms ease-out, border-color 120ms ease-out",
+             0 1px 0 var(--scheme-bezel-shadow),
+             0 0 0 0.5px ${lit}33,
+             0 0 12px -2px ${litGlow}`
+          : isHover
+            ? `inset 0 0.5px 0 var(--scheme-bezel-highlight),
+               0 1px 0 var(--scheme-bezel-shadow)`
+            : "none",
+        transition: "background 120ms ease-out, border-color 120ms ease-out, box-shadow 160ms ease-out",
         cursor: "pointer",
       }}
     >
       {/* Icon */}
-      <Icon
-        size={18}
-        color={
-          isHover
-            ? isVideo
-              ? "var(--scheme-rec)"
-              : "var(--scheme-accent)"
-            : "var(--scheme-ink)"
-        }
-      />
+      <Icon size={18} color={iconColor} />
 
-      {/* Key chip */}
+      {/* Key chip — when active, the chip itself lights up so the
+          keyboard feedback loop is obvious: "A is what's armed." */}
       <div
         className="mt-2 flex items-center justify-center text-[10.5px] font-bold tabular-nums"
         style={{
           width: 22,
           height: 18,
           borderRadius: 4,
-          background: "var(--scheme-details-bg)",
-          border: "0.5px solid var(--scheme-edge-strong)",
-          color: "var(--scheme-ink)",
+          background: isActive
+            ? `color-mix(in srgb, ${lit} 22%, var(--scheme-details-bg))`
+            : "var(--scheme-details-bg)",
+          border: `0.5px solid ${
+            isActive
+              ? `color-mix(in srgb, ${lit} 70%, var(--scheme-edge-strong))`
+              : "var(--scheme-edge-strong)"
+          }`,
+          color: isActive ? lit : "var(--scheme-ink)",
           boxShadow: `
             inset 0 0.5px 0 var(--scheme-bezel-highlight),
             0 0.5px 0 var(--scheme-bezel-shadow)
@@ -294,7 +391,9 @@ function PrimaryCell({
       {/* Label */}
       <span
         className="mt-1.5 text-[9.5px] font-medium uppercase tracking-[0.14em]"
-        style={{ color: "var(--scheme-ink-faint)" }}
+        style={{
+          color: isActive ? lit : "var(--scheme-ink-faint)",
+        }}
       >
         {label}
       </span>

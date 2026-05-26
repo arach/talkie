@@ -497,14 +497,16 @@ private func writePanelCapture(_ cgImage: CGImage, window: NSWindow, metadataLin
     // Add to tray (not Desktop — we are the screenshot tool)
     if let png = pngData(from: finalImage) {
         Task { @MainActor in
-            await ScreenshotTray.shared.add(
+            if let item = await ScreenshotTray.shared.addReturningItem(
                 data: png,
                 width: cgImage.width,
                 height: cgImage.height,
                 mode: .fullscreen,
                 windowTitle: "Tray",
                 appName: "Talkie"
-            )
+            ) {
+                TrayActionService.shared.persistStandaloneScreenshotToLibrary(item)
+            }
         }
         Log(.system).info("Panel captured → tray + clipboard")
     }

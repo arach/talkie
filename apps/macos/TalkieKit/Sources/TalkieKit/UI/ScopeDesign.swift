@@ -337,6 +337,41 @@ public enum ScopePanel {
     )
 }
 
+// MARK: - Command Palette (PORCELAIN — light, sharp, instrument)
+
+/// Light cool-gray tokens for the macOS command palette. PORCELAIN family
+/// substrate — lifted enough to read as a panel above the (dimmed) app
+/// behind it, with crisp dark hairlines and deep-amber accents that pop
+/// against the light. Additive to the broader Scope token ladder; stays
+/// scoped to the palette so global app theming is untouched.
+public enum ScopePalette {
+    // Substrate ladder — PORCELAIN base, PEARL lift, STEEL sink.
+    public static let bg = Color.hex("EAEEF1")          // base panel
+    public static let bgRaised = Color.hex("F2F5F7")    // search field, footer
+    public static let bgSunk = Color.hex("DFE3E8")      // section header strip
+
+    // Ink ladder — cool dark, matches SCOPE.ink family.
+    public static let ink = Color.hex("232423")
+    public static let inkFaint = Color.hex("232423").opacity(0.62)
+    public static let inkFainter = Color.hex("232423").opacity(0.40)
+    public static let inkSubtle = Color.hex("232423").opacity(0.24)
+
+    // Amber accent — slightly deeper than the dark-mode amber so it
+    // carries against a light substrate without washing out.
+    public static let amber = Color.hex("C47D1C")
+    public static let amberFaint = Color.hex("C47D1C").opacity(0.10)
+    public static let amberSoft = Color.hex("C47D1C").opacity(0.28)
+    public static let amberDeep = Color.hex("7A521A")
+    public static let glyphOnAmber = Color.white
+
+    // Rules + edges — sharper than the dark-glass era. Dark hairlines
+    // on light substrate read as crisp lines, not glow.
+    public static let edge = Color.hex("232423").opacity(0.10)
+    public static let edgeStrong = Color.hex("232423").opacity(0.22)
+    public static let rule = Color.hex("232423").opacity(0.10)
+    public static let ruleStrong = Color.hex("232423").opacity(0.18)
+}
+
 // MARK: - Typography presets
 
 /// Caption / instrument-label typography. Mirrors the homepage's

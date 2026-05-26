@@ -805,6 +805,20 @@ final class MemoRecordingController {
 
         try FileManager.default.copyItem(at: tempURL, to: destinationURL)
 
+        // Background augmentation — VAD, opportunistic re-transcription,
+        // embeddings, diarization (none registered yet, all TODO). Never
+        // blocks the transcription-insertion critical path; this fires
+        // after the user-facing save has already returned.
+        var context = TKAugmentationContext()
+        context["recording.id"] = memoId.uuidString
+        MediaAugmentationService.shared.enqueue(
+            AugmentationTask(
+                assetURL: destinationURL,
+                assetKind: .audio,
+                context: context
+            )
+        )
+
         return fileName
     }
 
@@ -812,7 +826,7 @@ final class MemoRecordingController {
 
     /// Capture a screenshot and attach it to the current recording.
     /// Called by AppDelegate's global Hyper+S handler when a recording is active.
-    func captureScreenshot(mode: CaptureMode) async {
+    func captureScreenshot(mode: CaptureMode, preselectedRegion: CGRect? = nil) async {
         guard case .recording = state,
               let id = recordingId,
               let start = startTime else { return }
@@ -820,7 +834,8 @@ final class MemoRecordingController {
         let screenshot = await ScreenshotCaptureService.shared.capture(
             mode: mode,
             recordingId: id,
-            recordingStartTime: start
+            recordingStartTime: start,
+            preselectedRegion: preselectedRegion
         )
 
         if let screenshot {

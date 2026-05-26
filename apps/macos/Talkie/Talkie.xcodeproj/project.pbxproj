@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C2ECBCFB068D4E75B3D437DB /* CaptureMarkupPanelChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6BAE607F7D849AF8CB5A280 /* CaptureMarkupPanelChrome.swift */; };
+		1D411EE6638E44138DAF20C4 /* CaptureMarkupWebSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CF0553165FE409A88608ADF /* CaptureMarkupWebSession.swift */; };
+		4DBA85B62CD8458B863BE961 /* CaptureMarkupCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17C3EFE303574D3A8A500EB3 /* CaptureMarkupCoordinator.swift */; };
+		0F89AB2EB4EE482E97DDCC11 /* CaptureMarkupAgentService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD8E083FE1DC439CBD20602F /* CaptureMarkupAgentService.swift */; };
 		8916A7F5EAA14144B7648143 /* LearnKnowledgeWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8D1301F1F6B4D728A7A34C6 /* LearnKnowledgeWebView.swift */; };
 		AED5E2D3778C4B56A1338855 /* LearnKnowledgeBaseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDA16434575D45AD985DD6D7 /* LearnKnowledgeBaseView.swift */; };
 		BADAAA5B264F41FCA0F1D142 /* LearnArticle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 081AD24B307B4C758F54DB18 /* LearnArticle.swift */; };
@@ -526,6 +530,10 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		E6BAE607F7D849AF8CB5A280 /* CaptureMarkupPanelChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureMarkupPanelChrome.swift; sourceTree = "<group>"; };
+		4CF0553165FE409A88608ADF /* CaptureMarkupWebSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureMarkupWebSession.swift; sourceTree = "<group>"; };
+		17C3EFE303574D3A8A500EB3 /* CaptureMarkupCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureMarkupCoordinator.swift; sourceTree = "<group>"; };
+		AD8E083FE1DC439CBD20602F /* CaptureMarkupAgentService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureMarkupAgentService.swift; sourceTree = "<group>"; };
 		F8D1301F1F6B4D728A7A34C6 /* LearnKnowledgeWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearnKnowledgeWebView.swift; sourceTree = "<group>"; };
 		BDA16434575D45AD985DD6D7 /* LearnKnowledgeBaseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearnKnowledgeBaseView.swift; sourceTree = "<group>"; };
 		081AD24B307B4C758F54DB18 /* LearnArticle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearnArticle.swift; sourceTree = "<group>"; };
@@ -2047,6 +2055,10 @@
 		EC7331BA9559EDDF7B540251 /* Screenshots */ = {
 			isa = PBXGroup;
 			children = (
+				E6BAE607F7D849AF8CB5A280 /* CaptureMarkupPanelChrome.swift */,
+				4CF0553165FE409A88608ADF /* CaptureMarkupWebSession.swift */,
+				17C3EFE303574D3A8A500EB3 /* CaptureMarkupCoordinator.swift */,
+				AD8E083FE1DC439CBD20602F /* CaptureMarkupAgentService.swift */,
 				02A0D1BCA89C6ED2066F3C9B /* OCRRefinementService.swift */,
 				88789192DAB57C7411354B24 /* ScreenCaptureOverlay.swift */,
 				D8DE7D34B7650E668A4D4A46 /* ScreenshotPreviewPanel.swift */,
@@ -2294,6 +2306,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C2ECBCFB068D4E75B3D437DB /* CaptureMarkupPanelChrome.swift in Sources */,
+				1D411EE6638E44138DAF20C4 /* CaptureMarkupWebSession.swift in Sources */,
+				4DBA85B62CD8458B863BE961 /* CaptureMarkupCoordinator.swift in Sources */,
+				0F89AB2EB4EE482E97DDCC11 /* CaptureMarkupAgentService.swift in Sources */,
 				8916A7F5EAA14144B7648143 /* LearnKnowledgeWebView.swift in Sources */,
 				AED5E2D3778C4B56A1338855 /* LearnKnowledgeBaseView.swift in Sources */,
 				BADAAA5B264F41FCA0F1D142 /* LearnArticle.swift in Sources */,

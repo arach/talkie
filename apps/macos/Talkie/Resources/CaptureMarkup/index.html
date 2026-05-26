@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Talkie Capture Markup</title>
+  <link rel="stylesheet" href="markup.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="tool-toolbar" id="tool-toolbar">
+      <button type="button" class="tool-btn" data-tool="rect" title="Rect (R)"><span class="glyph">▢</span><span class="label">Rect</span></button>
+      <button type="button" class="tool-btn" data-tool="arrow" title="Arrow (A)"><span class="glyph">↗</span><span class="label">Arrow</span></button>
+      <button type="button" class="tool-btn" data-tool="line" title="Line (L)"><span class="glyph">—</span><span class="label">Line</span></button>
+      <button type="button" class="tool-btn" data-tool="text" title="Text (T)"><span class="glyph">T</span><span class="label">Text</span></button>
+      <button type="button" class="tool-btn" data-tool="blur" title="Blur (B) — phase 1 placeholder"><span class="glyph">▒</span><span class="label">Blur</span></button>
+      <span class="toolbar-spacer"></span>
+      <button type="button" class="tool-btn" data-action="zoom-out" title="Zoom out"><span class="glyph">−</span><span class="label">Zoom</span></button>
+      <button type="button" class="tool-btn" data-action="zoom-in" title="Zoom in"><span class="glyph">+</span><span class="label">Zoom</span></button>
+      <button type="button" class="tool-btn" data-action="zoom-fit" title="Fit workspace"><span class="glyph">□</span><span class="label">Fit</span></button>
+      <button type="button" class="tool-btn" data-action="undo" title="Undo (⌘Z)"><span class="glyph">↶</span><span class="label">Undo</span></button>
+      <button type="button" class="tool-btn" data-action="redo" title="Redo (⌘⇧Z)"><span class="glyph">↷</span><span class="label">Redo</span></button>
+      <span class="toolbar-hint">· M TOGGLE · V SELECT · ⌫ DELETE · ESC CANCEL</span>
+    </header>
+    <main class="bay-body">
+      <aside class="layer-rail layer-rail-left" id="layer-rail">
+        <div class="layer-rail-head">
+          <span class="layer-rail-title">· LAYERS</span>
+          <span class="layer-rail-count" id="layer-count">0</span>
+        </div>
+        <div id="layer-list"></div>
+      </aside>
+      <section class="canvas-wrap">
+        <canvas id="canvas"></canvas>
+      </section>
+      <aside class="inspector-rail" id="inspector-rail">
+        <div class="inspector-rail-head">
+          <span class="inspector-rail-title">· INSPECTOR</span>
+        </div>
+        <div id="inspector-body" class="inspector-empty">
+          Select a layer to inspect.
+        </div>
+      </aside>
+    </main>
+    <div id="popover" class="popover hidden">
+      <button type="button" data-action="delete">Delete layer</button>
+      <button type="button" data-action="toggle">Hide / Show</button>
+    </div>
+  </div>
+  <script src="markup.js"></script>
+</body>
+</html>

@@ -634,35 +634,36 @@ final class BridgeManager {
     }
 
     /// Remove a paired device
-    func removeDevice(_ deviceId: String) async {
-        do {
-            let (_, response, _) = try await bridgeRequest(path: "/devices/\(deviceId)", method: "DELETE")
-            guard let httpResponse = response as? HTTPURLResponse,
-                  httpResponse.statusCode == 200 else {
-                throw BridgeError.requestFailed
-            }
-
-            log.info("Removed device: \(deviceId)")
-            await refreshDevices()
-        } catch {
-            log.error("Failed to remove device: \(error)")
+    @discardableResult
+    func removeDevice(_ deviceId: String) async -> Bool {
+        guard removePersistedDeviceFromDisk(deviceId) else {
+            log.error("Failed to remove persisted device: \(deviceId)")
+            return false
         }
+
+        pairedDevices.removeAll { $0.id == deviceId }
+        pendingPairings.removeAll { $0.deviceId == deviceId }
+        SettingsManager.shared.removeDeviceSettingsOverride(for: deviceId)
+        log.info("Removed device: \(deviceId)")
+        return true
     }
 
     /// Remove all paired devices
-    func removeAllDevices() async {
-        do {
-            let (_, response, _) = try await bridgeRequest(path: "/devices", method: "DELETE")
-            guard let httpResponse = response as? HTTPURLResponse,
-                  httpResponse.statusCode == 200 else {
-                throw BridgeError.requestFailed
-            }
-
-            log.info("Removed all devices")
-            await refreshDevices()
-        } catch {
-            log.error("Failed to remove all devices: \(error)")
+    @discardableResult
+    func removeAllDevices() async -> Bool {
+        let removedDeviceIDs = loadPairedDevicesFromDisk().map(\.id)
+        guard removeAllPersistedDevicesFromDisk() else {
+            log.error("Failed to remove all persisted devices")
+            return false
         }
+
+        pairedDevices = []
+        pendingPairings = []
+        for deviceId in removedDeviceIDs {
+            SettingsManager.shared.removeDeviceSettingsOverride(for: deviceId)
+        }
+        log.info("Removed all devices")
+        return true
     }
 
     // MARK: - Private
@@ -1012,6 +1013,77 @@ final class BridgeManager {
         } catch {
             log.error("Failed to decode paired devices from disk: \(error)")
             return []
+        }
+    }
+
+    private func saveRawDeviceRegistry(_ registry: [String: Any]) throws {
+        let url = URL(fileURLWithPath: devicesFile)
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+
+        let data = try JSONSerialization.data(
+            withJSONObject: registry,
+            options: [.prettyPrinted, .sortedKeys]
+        )
+        try data.write(to: url, options: .atomic)
+    }
+
+    private func removePersistedDeviceFromDisk(_ deviceId: String) -> Bool {
+        let url = URL(fileURLWithPath: devicesFile)
+        guard let data = try? Data(contentsOf: url) else {
+            return false
+        }
+
+        let jsonObject: Any
+        do {
+            jsonObject = try JSONSerialization.jsonObject(with: data)
+        } catch {
+            log.error("Failed to decode paired device registry for removal: \(error)")
+            return false
+        }
+
+        guard var registry = jsonObject as? [String: Any],
+              let devices = registry["devices"] as? [[String: Any]] else {
+            log.error("Paired device registry has an unexpected shape")
+            return false
+        }
+
+        let originalCount = devices.count
+        let updatedDevices = devices.filter { device in
+            (device["id"] as? String) != deviceId
+        }
+        guard updatedDevices.count != originalCount else {
+            return false
+        }
+
+        registry["devices"] = updatedDevices
+
+        do {
+            try saveRawDeviceRegistry(registry)
+            return true
+        } catch {
+            log.error("Failed to save paired devices after removal: \(error)")
+            return false
+        }
+    }
+
+    private func removeAllPersistedDevicesFromDisk() -> Bool {
+        var registry: [String: Any] = ["devices": []]
+        let url = URL(fileURLWithPath: devicesFile)
+        if let data = try? Data(contentsOf: url),
+           let existingRegistry = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            registry = existingRegistry
+            registry["devices"] = []
+        }
+
+        do {
+            try saveRawDeviceRegistry(registry)
+            return true
+        } catch {
+            log.error("Failed to clear paired devices from disk: \(error)")
+            return false
         }
     }
 

@@ -72,7 +72,7 @@ extension SemanticFilter {
     )
     static let captures = SemanticFilter(
         id: "captures", label: "Captures", icon: "tray.and.arrow.down",
-        group: .type, sql: "type = 'selection'"
+        group: .type, sql: "type = 'capture'"
     )
 
     // Time (mutually exclusive)

@@ -8,13 +8,17 @@
 //
 
 import SwiftUI
+import TalkieMobileKit
 
 struct TerminalNext: View {
     @ObservedObject private var theme = ThemeManager.shared
+    @ObservedObject private var deepLinkManager = DeepLinkManager.shared
+    @State private var bridgeManager = BridgeManager.shared
     @State private var connectionManager = SSHTerminalConnectionManager.shared
     @State private var savedHosts: [SSHTerminalSavedHost]
-    @State private var presentingHost: SSHTerminalSavedHost?
+    @State private var activeSession: TerminalNextSessionSelection?
     @State private var showingKeyImporter = false
+    @State private var isImportingFromMac = false
     @State private var importMessage: String?
 
     private let savedHostStore = SSHTerminalSavedHostStore()
@@ -28,33 +32,46 @@ struct TerminalNext: View {
         ZStack {
             theme.colors.background.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                header
-
-                Rectangle()
-                    .fill(theme.currentTheme.chrome.edgeFaint)
-                    .frame(height: theme.currentTheme.chrome.hairlineWidth)
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        panelHeader
-
-                        if savedHosts.isEmpty {
-                            emptyState
-                                .padding(.top, 42)
-                        } else {
-                            hostList
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 96)
+            if let activeSession {
+                TerminalNextSessionPane(selection: activeSession) {
+                    self.activeSession = nil
+                    refreshHosts()
                 }
-                .scrollIndicators(.hidden)
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else {
+                VStack(spacing: 0) {
+                    header
+
+                    Rectangle()
+                        .fill(theme.currentTheme.chrome.edgeFaint)
+                        .frame(height: theme.currentTheme.chrome.hairlineWidth)
+
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            panelHeader
+
+                            if savedHosts.isEmpty {
+                                emptyState
+                                    .padding(.top, 42)
+                            } else {
+                                hostList
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 96)
+                    }
+                    .scrollIndicators(.hidden)
+                }
+                .transition(.move(edge: .leading).combined(with: .opacity))
             }
         }
-        .onAppear(perform: refreshHosts)
-        .sheet(item: $presentingHost, onDismiss: refreshHosts) { host in
-            TerminalNextSessionSheet(host: host)
+        .animation(.spring(response: 0.32, dampingFraction: 0.9), value: activeSession?.id)
+        .onAppear {
+            refreshHosts()
+            consumePendingSSHImportIfNeeded()
+        }
+        .onChange(of: deepLinkManager.pendingSSHImport) { _, _ in
+            consumePendingSSHImportIfNeeded()
         }
         .fullScreenCover(isPresented: $showingKeyImporter, onDismiss: refreshHosts) {
             SSHPrivateKeyQRCodeImportView { payload in
@@ -73,6 +90,8 @@ struct TerminalNext: View {
 
             Spacer()
 
+            addHostControl
+
             Button(action: { AppShellRouter.shared.openHome() }) {
                 Image(systemName: "xmark")
                     .foregroundStyle(theme.colors.textTertiary)
@@ -90,6 +109,51 @@ struct TerminalNext: View {
         .padding(.bottom, 12)
     }
 
+    @ViewBuilder
+    private var addHostControl: some View {
+        if bridgeManager.hasPairedMacs {
+            Menu {
+                Button {
+                    importFromPairedMac()
+                } label: {
+                    Label("From Paired Mac", systemImage: "desktopcomputer.and.arrow.down")
+                }
+                .disabled(isImportingFromMac)
+
+                Button {
+                    showingKeyImporter = true
+                } label: {
+                    Label("Scan SSH QR", systemImage: "qrcode.viewfinder")
+                }
+            } label: {
+                addHostIcon
+            }
+            .accessibilityLabel("Add terminal host")
+        } else {
+            Button(action: { showingKeyImporter = true }) {
+                addHostIcon
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Add terminal host")
+        }
+    }
+
+    private var addHostIcon: some View {
+        Image(systemName: "plus")
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(theme.currentTheme.chrome.accent)
+            .frame(width: 28, height: 28)
+            .background(
+                Circle()
+                    .fill(theme.currentTheme.chrome.accent.opacity(0.10))
+                    .overlay(
+                        Circle()
+                            .strokeBorder(theme.currentTheme.chrome.accent.opacity(0.28),
+                                          lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                    )
+            )
+    }
+
     private var panelHeader: some View {
         HStack(spacing: 8) {
             Text("SAVED HOSTS")
@@ -98,10 +162,25 @@ struct TerminalNext: View {
 
             Spacer()
 
+            if bridgeManager.hasPairedMacs {
+                Button(action: importFromPairedMac) {
+                    Text(isImportingFromMac ? "CONNECTING" : "FROM MAC")
+                        .talkieType(.chipLabel)
+                        .foregroundStyle(isImportingFromMac ? theme.colors.textTertiary : theme.currentTheme.chrome.accent)
+                }
+                .buttonStyle(.plain)
+                .disabled(isImportingFromMac)
+            }
+
             Button(action: { showingKeyImporter = true }) {
-                Text("ADD HOST")
-                    .talkieType(.chipLabel)
-                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                HStack(spacing: 5) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .medium))
+                        .accessibilityHidden(true)
+                    Text("ADD HOST")
+                        .talkieType(.chipLabel)
+                }
+                .foregroundStyle(theme.currentTheme.chrome.accent)
             }
             .buttonStyle(.plain)
         }
@@ -134,26 +213,24 @@ struct TerminalNext: View {
             ForEach(savedHosts) { host in
                 hostRow(host)
             }
+
+            addHostRow
         }
     }
 
-    private func hostRow(_ host: SSHTerminalSavedHost) -> some View {
-        Button {
-            presentingHost = host
-        } label: {
+    private var addHostRow: some View {
+        Button(action: { showingKeyImporter = true }) {
             HStack(spacing: 10) {
-                Image(systemName: "terminal")
+                Image(systemName: "plus")
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(theme.currentTheme.chrome.accent)
                     .frame(width: 22, height: 22)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(host.previewTitle)
+                    Text("Add another host")
                         .talkieType(.fieldLabel)
                         .foregroundStyle(theme.colors.textPrimary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-
-                    Text(host.previewSubtitle)
+                    Text(bridgeManager.hasPairedMacs ? "Scan an SSH QR, or use the + menu for paired Mac import" : "Scan an SSH access QR from Talkie for Mac")
                         .talkieType(.hint)
                         .foregroundStyle(theme.colors.textTertiary)
                         .lineLimit(1)
@@ -162,22 +239,11 @@ struct TerminalNext: View {
 
                 Spacer(minLength: 10)
 
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(host.lastUsedAt, format: .dateTime.month(.abbreviated).day().hour().minute())
-                        .talkieType(.timestamp)
-                        .foregroundStyle(theme.colors.textTertiary)
-                        .lineLimit(1)
-
-                    HStack(spacing: 5) {
-                        statusDot(for: host)
-                        Text(host.previewSourceLabel)
-                            .talkieType(.channelLabelTiny)
-                            .foregroundStyle(theme.colors.textTertiary)
-                            .lineLimit(1)
-                    }
-                }
+                Text("ADD")
+                    .talkieType(.chipLabel)
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
             }
-            .frame(height: 44)
+            .frame(height: 50)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -186,6 +252,87 @@ struct TerminalNext: View {
                 .fill(theme.currentTheme.chrome.edgeFaint)
                 .frame(height: theme.currentTheme.chrome.hairlineWidth)
         }
+        .accessibilityLabel("Add another terminal host")
+    }
+
+    private func hostRow(_ host: SSHTerminalSavedHost) -> some View {
+        HStack(spacing: 10) {
+            Button {
+                openHost(host)
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "terminal")
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                        .frame(width: 22, height: 22)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(host.previewTitle)
+                            .talkieType(.fieldLabel)
+                            .foregroundStyle(theme.colors.textPrimary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+
+                        Text(host.previewSubtitle)
+                            .talkieType(.hint)
+                            .foregroundStyle(theme.colors.textTertiary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+
+                        Text("Routes · \(routeCascadeSummary(for: host))")
+                            .talkieType(.hint)
+                            .foregroundStyle(theme.colors.textTertiary.opacity(0.78))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Spacer(minLength: 10)
+
+            HStack(spacing: 5) {
+                statusDot(for: host)
+                Text(host.previewSourceLabel)
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textTertiary)
+                    .lineLimit(1)
+            }
+
+            routeMenu(for: host)
+        }
+        .frame(minHeight: 56)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(theme.currentTheme.chrome.edgeFaint)
+                .frame(height: theme.currentTheme.chrome.hairlineWidth)
+        }
+    }
+
+    private func routeMenu(for host: SSHTerminalSavedHost) -> some View {
+        Menu {
+            Button {
+                openHost(host)
+            } label: {
+                Label("Classic Cascade", systemImage: "arrow.triangle.branch")
+            }
+
+            ForEach(routeOptions(for: host)) { option in
+                Button {
+                    openHost(host, preferredRoute: option.route)
+                } label: {
+                    Label("Prefer \(option.route.displayName)", systemImage: option.systemImage)
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(theme.colors.textTertiary)
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Terminal route options")
     }
 
     private func statusDot(for host: SSHTerminalSavedHost) -> some View {
@@ -209,25 +356,59 @@ struct TerminalNext: View {
                     .talkieType(.headlineSecondary)
                     .foregroundStyle(theme.colors.textPrimary)
 
-                Text("Scan the SSH access QR from Talkie for Mac to add a terminal destination.")
+                Text(emptyStateMessage)
                     .talkieType(.preview)
                     .foregroundStyle(theme.colors.textTertiary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Button(action: { showingKeyImporter = true }) {
-                Text("ADD HOST")
-                    .talkieType(.chipLabel)
-                    .foregroundStyle(theme.colors.cardBackground)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(Capsule().fill(theme.currentTheme.chrome.accent))
+            HStack(spacing: 10) {
+                if bridgeManager.hasPairedMacs {
+                    Button(action: importFromPairedMac) {
+                        Text(isImportingFromMac ? "CONNECTING" : "USE PAIRED MAC")
+                            .talkieType(.chipLabel)
+                            .foregroundStyle(theme.colors.cardBackground)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(theme.currentTheme.chrome.accent))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isImportingFromMac)
+                }
+
+                Button(action: { showingKeyImporter = true }) {
+                    Text(bridgeManager.hasPairedMacs ? "SCAN QR" : "ADD HOST")
+                        .talkieType(.chipLabel)
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .overlay {
+                            Capsule()
+                                .stroke(theme.currentTheme.chrome.accent.opacity(0.55), lineWidth: 1)
+                        }
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+
+            if let importMessage {
+                Text(importMessage)
+                    .talkieType(.hint)
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 28)
+    }
+
+    private var emptyStateMessage: String {
+        if bridgeManager.hasPairedMacs {
+            return "Use your paired Mac on Wi-Fi to prepare terminal access, or scan the SSH access QR as a fallback."
+        }
+
+        return "Scan the SSH access QR from Talkie for Mac to add a terminal destination."
     }
 
     // MARK: - Data
@@ -258,21 +439,169 @@ struct TerminalNext: View {
             alternateHosts: connection.normalizedAlternateHosts
         )
         importMessage = "Added \(payload.label ?? connection.normalizedHost)"
+
+        if connection.shouldAutoConnect,
+           let savedHost = savedHost(matching: connection) {
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(250))
+                openHost(savedHost)
+            }
+        }
+    }
+
+    private func importFromPairedMac() {
+        guard !isImportingFromMac else { return }
+
+        isImportingFromMac = true
+        importMessage = "Preparing terminal access from paired Mac..."
+
+        Task { @MainActor in
+            defer { isImportingFromMac = false }
+
+            do {
+                let payload = try await bridgeManager.terminalAccessPayload()
+                handleImport(payload)
+            } catch {
+                importMessage = terminalAccessImportMessage(for: error)
+            }
+        }
+    }
+
+    private func terminalAccessImportMessage(for error: Error) -> String {
+        if let bridgeError = error as? BridgeError {
+            switch bridgeError {
+            case .notConfigured:
+                return "Pair this iPhone with your Mac first."
+            case .connectionFailed:
+                return "Could not reach your paired Mac on this network."
+            case .httpError(let code):
+                return "Mac returned HTTP \(code) while preparing terminal access."
+            case .invalidResponse:
+                return "Mac returned an invalid terminal access payload."
+            case .pairingRejected:
+                return "This iPhone is not approved by the Mac."
+            case .messageFailed(let reason):
+                return reason
+            }
+        }
+
+        return SSHErrorFormatter.message(for: error)
+    }
+
+    private func consumePendingSSHImportIfNeeded() {
+        guard let pendingImport = deepLinkManager.consumePendingSSHImport() else {
+            return
+        }
+
+        handleImport(pendingImport.payload)
+    }
+
+    private func savedHost(matching connection: SSHPrivateKeyQRCodePayload.Connection) -> SSHTerminalSavedHost? {
+        let host = connection.normalizedHost.lowercased()
+        let username = connection.normalizedUsername.lowercased()
+        return savedHosts.first { savedHost in
+            savedHost.normalizedHost == host &&
+                savedHost.normalizedUsername == username &&
+                savedHost.port == connection.port
+        } ?? savedHosts.first
+    }
+
+    private func openHost(
+        _ host: SSHTerminalSavedHost,
+        preferredRoute: TalkieNetworkRoute? = nil
+    ) {
+        activeSession = TerminalNextSessionSelection(
+            host: host,
+            preferredRoute: preferredRoute
+        )
+    }
+
+    private func routeOptions(for host: SSHTerminalSavedHost) -> [TerminalNextRouteOption] {
+        let routes = routeCandidates(for: host).map(\.route)
+        var seen: [TalkieNetworkRoute] = []
+
+        for route in routes where !seen.contains(route) {
+            seen.append(route)
+        }
+
+        return seen.map { TerminalNextRouteOption(route: $0) }
+    }
+
+    private func routeCascadeSummary(for host: SSHTerminalSavedHost) -> String {
+        let routes = orderedRoutes(for: routeCandidates(for: host))
+        guard !routes.isEmpty else {
+            return "Direct"
+        }
+
+        return routes
+            .map(\.displayName)
+            .joined(separator: " -> ")
+    }
+
+    private func routeCandidates(for host: SSHTerminalSavedHost) -> [(host: String, route: TalkieNetworkRoute)] {
+        let rawHosts = [host.host] + (host.alternateHosts ?? [])
+        var seenHosts: Set<String> = []
+        var candidates: [(host: String, route: TalkieNetworkRoute)] = []
+
+        for rawHost in rawHosts {
+            let trimmedHost = rawHost.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalizedHost = trimmedHost.lowercased()
+            guard !trimmedHost.isEmpty, !seenHosts.contains(normalizedHost) else {
+                continue
+            }
+
+            seenHosts.insert(normalizedHost)
+            candidates.append((
+                host: trimmedHost,
+                route: TalkieNetworkRouteClassifier.route(for: trimmedHost)
+            ))
+        }
+
+        return candidates
+    }
+
+    private func orderedRoutes(for candidates: [(host: String, route: TalkieNetworkRoute)]) -> [TalkieNetworkRoute] {
+        let classicOrder: [TalkieNetworkRoute] = [.localNetwork, .tailscale, .direct]
+        return classicOrder.filter { route in
+            candidates.contains(where: { $0.route == route })
+        }
     }
 }
 
-
-private struct TerminalNextSessionSheet: View {
+private struct TerminalNextSessionSelection: Identifiable, Equatable {
+    let id = UUID()
     let host: SSHTerminalSavedHost
+    let preferredRoute: TalkieNetworkRoute?
+}
 
-    init(host: SSHTerminalSavedHost) {
-        self.host = host
-        SSHTerminalConnectionManager.shared.requestResume(for: host)
+private struct TerminalNextRouteOption: Identifiable {
+    let route: TalkieNetworkRoute
+
+    var id: String {
+        route.displayName
     }
 
-    var body: some View {
-        NavigationStack {
-            SSHTerminalView()
+    var systemImage: String {
+        switch route {
+        case .localNetwork:
+            "wifi"
+        case .tailscale:
+            "point.3.connected.trianglepath.dotted"
+        case .direct:
+            "network"
         }
+    }
+}
+
+private struct TerminalNextSessionPane: View {
+    let selection: TerminalNextSessionSelection
+    let onClose: () -> Void
+
+    var body: some View {
+        SSHTerminalView(
+            initialSavedHost: selection.host,
+            initialRoutePreference: selection.preferredRoute,
+            onClose: onClose
+        )
     }
 }

@@ -232,13 +232,21 @@ struct QRScannerView: View {
                         }
                     }
 
-                case .sshPayload(let rawCode, let payload):
+                case .sshPayload(_, let payload):
                     let host = payload.connection?.normalizedHost ?? "none"
                     await MainActor.run {
                         AppLogger.ui.info("Talkie QR routed to SSH terminal import", detail: "host=\(host)")
-                        if let importURL = TalkieQRCodeRouter.makeSSHImportURL(from: rawCode) {
-                            DeepLinkManager.shared.handle(url: importURL)
+                        let label = payload.label?.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let sourceDescription = if let label, !label.isEmpty {
+                            "Review \(label) from terminal setup before importing."
+                        } else {
+                            "Review the SSH import from terminal setup before saving anything."
                         }
+                        DeepLinkManager.shared.queueSSHImport(
+                            payload: payload,
+                            sourceDescription: sourceDescription
+                        )
+                        DeepLinkManager.shared.pendingAction = .openSSHTerminal
                         dismiss()
                     }
 

@@ -1076,27 +1076,24 @@ private enum HelperControlTone {
         }
     }
 
+    /// All tones share the theme-neutral surface fill — the colored
+    /// tinted backgrounds (`Color.orange.opacity(0.12)` etc.) read as
+    /// candy on light cream paper. Color signal now lives in the icon
+    /// foreground and a thin border, not the fill.
     @MainActor
     var background: Color {
-        switch self {
-        case .neutral: return Theme.current.surface1
-        case .success: return Color.green.opacity(0.12)
-        case .info: return Color.cyan.opacity(0.12)
-        case .warning: return Color.orange.opacity(0.12)
-        case .accent: return Color.blue.opacity(0.12)
-        case .danger: return Color.red.opacity(0.12)
-        }
+        Theme.current.surface1
     }
 
     @MainActor
     var border: Color {
         switch self {
         case .neutral: return Theme.current.divider
-        case .success: return Color.green.opacity(0.25)
-        case .info: return Color.cyan.opacity(0.25)
-        case .warning: return Color.orange.opacity(0.25)
-        case .accent: return Color.blue.opacity(0.25)
-        case .danger: return Color.red.opacity(0.25)
+        case .success: return Color.green.opacity(0.18)
+        case .info:    return Color.cyan.opacity(0.18)
+        case .warning: return Color.orange.opacity(0.20)
+        case .accent:  return Color.blue.opacity(0.20)
+        case .danger:  return Color.red.opacity(0.22)
         }
     }
 }

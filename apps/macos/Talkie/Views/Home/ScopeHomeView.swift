@@ -274,7 +274,8 @@ struct ScopeHomeView: View {
                                 body: nil,
                                 meta: durationLabel(obj.duration),
                                 when: whenLabel(obj.createdAt),
-                                onTap: { NavigationState.shared.navigate(to: .recordings, params: ["recordingId": obj.id.uuidString]) }
+                                onTap: { NavigationState.shared.navigate(to: .recordings, params: ["recordingId": obj.id.uuidString]) },
+                                menuActions: memoMenuActions(for: obj)
                             )
                         },
                         emptyCTA: RecentCTA(
@@ -298,7 +299,8 @@ struct ScopeHomeView: View {
                                 body: nil,
                                 meta: wordCountLabel(obj.text),
                                 when: whenLabel(obj.createdAt),
-                                onTap: { NavigationState.shared.navigate(to: .dictations, params: ["recordingId": obj.id.uuidString]) }
+                                onTap: { NavigationState.shared.navigate(to: .dictations, params: ["recordingId": obj.id.uuidString]) },
+                                menuActions: dictationMenuActions(for: obj)
                             )
                         },
                         emptyCTA: RecentCTA(
@@ -326,7 +328,8 @@ struct ScopeHomeView: View {
                                 body: nil,
                                 meta: item.meta,
                                 when: whenLabel(item.date),
-                                onTap: { openRecentCapture(item) }
+                                onTap: { openRecentCapture(item) },
+                                menuActions: captureMenuActions(for: item)
                             )
                         },
                         emptyCTA: RecentCTA(
@@ -355,7 +358,8 @@ struct ScopeHomeView: View {
                                 // ScopeNoteDetailView) actually fires.
                                 // `.notes` lands on the Sheaf grid and
                                 // ignores recordingId.
-                                onTap: { NavigationState.shared.navigate(to: .recordings, params: ["recordingId": obj.id.uuidString]) }
+                                onTap: { NavigationState.shared.navigate(to: .recordings, params: ["recordingId": obj.id.uuidString]) },
+                                menuActions: noteMenuActions(for: obj)
                             )
                         },
                         emptyCTA: RecentCTA(
@@ -422,6 +426,10 @@ struct ScopeHomeView: View {
         let meta: String
         let date: Date
         let source: Source
+        /// On-disk PNG path — tray.tempURL for in-flight tray items,
+        /// the ScreenshotStorage path for saved captures. Drives the
+        /// preview / annotate / quick-copy actions for both sources.
+        let fileURL: URL?
     }
 
     private var recentCaptures: [RecentCapture] {
@@ -436,7 +444,8 @@ struct ScopeHomeView: View {
                 line: trayLine(for: item),
                 meta: screenshotMeta(width: item.width, height: item.height),
                 date: item.capturedAt,
-                source: .tray
+                source: .tray,
+                fileURL: item.tempURL
             ))
         }
 
@@ -446,12 +455,15 @@ struct ScopeHomeView: View {
         for obj in recordingsVM.recordings where obj.type == .capture && obj.deletedAt == nil && !obj.screenshots.isEmpty {
             for ss in obj.screenshots {
                 let label = ss.windowTitle ?? ss.appName ?? obj.title ?? "Screenshot"
+                let url = ScreenshotStorage.screenshotsDirectory
+                    .appendingPathComponent(ss.filename)
                 out.append(RecentCapture(
                     id: stableUUID(from: "rec-\(ss.filename)"),
                     line: label,
                     meta: screenshotMeta(width: ss.width, height: ss.height),
                     date: obj.createdAt,
-                    source: .savedCapture
+                    source: .savedCapture,
+                    fileURL: url
                 ))
             }
         }
@@ -484,6 +496,113 @@ struct ScopeHomeView: View {
     private func todayCount(_ items: [RecentCapture]) -> Int {
         let cal = Calendar.current
         return items.filter { cal.isDateInToday($0.date) }.count
+    }
+
+    // MARK: Right-click menus
+    //
+    // Each builder returns the actions for a Recent row's context menu.
+    // Kept close to the data-binding call sites so the available actions
+    // stay obvious next to where the row is constructed. Mirrors the
+    // existing context menus in `HomeScreen.swift` (MemoActivityRow /
+    // DictationActivityRow) so behavior is identical when the standard
+    // theme home is showing the same items.
+
+    private func memoMenuActions(for obj: TalkieObject) -> [RecentMenuItem] {
+        [
+            RecentMenuItem(label: "Open", systemImage: "arrow.up.right.square", role: nil) {
+                NavigationState.shared.navigate(to: .recordings, params: ["recordingId": obj.id.uuidString])
+            },
+            RecentMenuItem(label: "Copy Text", systemImage: "doc.on.doc", role: nil) {
+                Self.copyToPasteboard(obj.text)
+            },
+            RecentMenuItem(label: "Share…", systemImage: "square.and.arrow.up", role: nil) {
+                Self.share(string: obj.text)
+            },
+            .divider,
+            RecentMenuItem(label: "Delete", systemImage: "trash", role: .destructive) {
+                Task { await RecordingsViewModel.shared.softDeleteRecording(obj) }
+            },
+        ]
+    }
+
+    private func dictationMenuActions(for obj: TalkieObject) -> [RecentMenuItem] {
+        [
+            RecentMenuItem(label: "Open", systemImage: "arrow.up.right.square", role: nil) {
+                NavigationState.shared.navigate(to: .dictations, params: ["recordingId": obj.id.uuidString])
+            },
+            RecentMenuItem(label: "Copy Text", systemImage: "doc.on.doc", role: nil) {
+                Self.copyToPasteboard(obj.text)
+            },
+            RecentMenuItem(label: "Promote to Memo", systemImage: "arrow.up.doc", role: nil) {
+                Task {
+                    try? await TalkieObjectRepository().promoteToMemo(id: obj.id)
+                    DictationStore.shared.refresh()
+                }
+            },
+            RecentMenuItem(label: "Share…", systemImage: "square.and.arrow.up", role: nil) {
+                Self.share(string: obj.text)
+            },
+            .divider,
+            RecentMenuItem(label: "Delete", systemImage: "trash", role: .destructive) {
+                Task { await RecordingsViewModel.shared.hardDeleteRecording(obj) }
+            },
+        ]
+    }
+
+    private func noteMenuActions(for obj: TalkieObject) -> [RecentMenuItem] {
+        [
+            RecentMenuItem(label: "Open", systemImage: "arrow.up.right.square", role: nil) {
+                NavigationState.shared.navigate(to: .recordings, params: ["recordingId": obj.id.uuidString])
+            },
+            RecentMenuItem(label: "Copy Text", systemImage: "doc.on.doc", role: nil) {
+                Self.copyToPasteboard(obj.text)
+            },
+            .divider,
+            RecentMenuItem(label: "Delete", systemImage: "trash", role: .destructive) {
+                Task { await RecordingsViewModel.shared.softDeleteRecording(obj) }
+            },
+        ]
+    }
+
+    private func captureMenuActions(for item: RecentCapture) -> [RecentMenuItem] {
+        guard let url = item.fileURL else { return [] }
+        return [
+            RecentMenuItem(label: "Open in Screenshots", systemImage: "photo.on.rectangle", role: nil) {
+                NavigationState.shared.navigate(to: .screenshots)
+            },
+            RecentMenuItem(label: "Preview", systemImage: "eye", role: nil) {
+                NSWorkspace.shared.open(url)
+            },
+            RecentMenuItem(label: "Annotate", systemImage: "pencil.tip.crop.circle", role: nil) {
+                CaptureMarkupCoordinator.shared.openSession(imageURL: url)
+            },
+            RecentMenuItem(label: "Quick Copy", systemImage: "doc.on.doc", role: nil) {
+                Self.copyImage(at: url)
+            },
+        ]
+    }
+
+    private static func copyToPasteboard(_ text: String?) {
+        let value = text ?? ""
+        guard !value.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
+    }
+
+    private static func share(string: String?) {
+        let value = string ?? ""
+        guard !value.isEmpty else { return }
+        let picker = NSSharingServicePicker(items: [value])
+        if let window = NSApp.keyWindow, let contentView = window.contentView {
+            picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
+        }
+    }
+
+    private static func copyImage(at url: URL) {
+        guard let data = try? Data(contentsOf: url),
+              let image = NSImage(data: data) else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.writeObjects([image])
     }
 
     // MARK: Recent row helpers
@@ -652,10 +771,16 @@ struct ScopeHomeView: View {
     // real today (HotkeyManager registrations).
 
     // Tips row — compact borderless instrument labels for common actions.
+    //
+    // Same outer shape as the Recent panes and Routines strip
+    // (`scopeCardBorder` + cornerRadius 6) so the column reads as a
+    // coherent stack of card-shaped sections. Interior stays flat — no
+    // gradient, no top rule — to match the "knowledge bay" tone rather
+    // than the active "instrument bay" treatment used above.
     private var discoveryRow: some View {
         VStack(alignment: .leading, spacing: 14) {
             Eyebrow("Tips")
-            HStack(alignment: .top, spacing: 16) {
+            HStack(alignment: .top, spacing: 0) {
                 DidYouKnowCard(
                     glyph: .voiceEdit,
                     marker: "01",
@@ -664,7 +789,7 @@ struct ScopeHomeView: View {
                     action: "Open"
                 )
                 ScopeRule(.section, axis: .vertical)
-                    .padding(.vertical, 2)
+                    .padding(.vertical, 14)
                 DidYouKnowCard(
                     glyph: .smartActions,
                     marker: "02",
@@ -673,7 +798,7 @@ struct ScopeHomeView: View {
                     action: "Compose"
                 )
                 ScopeRule(.section, axis: .vertical)
-                    .padding(.vertical, 2)
+                    .padding(.vertical, 14)
                 DidYouKnowCard(
                     glyph: .tray,
                     marker: "03",
@@ -682,6 +807,11 @@ struct ScopeHomeView: View {
                     action: "Details"
                 )
             }
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.white.opacity(0.30))
+            )
+            .scopeCardBorder(cornerRadius: 6, emphasis: .muted)
         }
     }
 

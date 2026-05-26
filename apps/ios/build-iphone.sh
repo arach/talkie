@@ -13,6 +13,9 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
 # Config
 PROJECT="Talkie-iOS.xcodeproj"
 SCHEME="Talkie"
@@ -20,8 +23,9 @@ CONFIG="Debug"
 BUNDLE_ID="${TALKIE_IOS_APP_BUNDLE_ID:-${TALKIE_IOS_BUNDLE_ID:-}}"
 DEVICE_CACHE_FILE_LOCAL=".iphone-device-id.local"
 DEVICE_CACHE_FILE_LEGACY=".iphone-device-id"
-DERIVED_DATA_PATH="$(pwd)/build/DerivedData-iphone"
-APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIG-iphoneos/Talkie.app"
+APP_NAME="${TALKIE_IOS_APP_NAME:-Talkie iOS}"
+DERIVED_DATA_PATH="$SCRIPT_DIR/build/DerivedData-iphone"
+APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIG-iphoneos/$APP_NAME.app"
 
 # Colors
 RED='\033[0;31m'
@@ -29,8 +33,6 @@ GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
-
-cd "$(dirname "$0")"
 
 # Normalize to uppercase to keep IDs consistent across tools
 normalize_device_id() {

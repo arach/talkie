@@ -1573,6 +1573,43 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
         }
     }
 
+    /// Fire-and-forget side channel for screenshots captured while Agent is actively
+    /// listening. The tray still owns its normal file, but Agent gets an immediate
+    /// recording-scoped copy for post-transcription insertion.
+    public func recordLiveScreenshot(
+        data: Data,
+        capturedAt: Date,
+        captureMode: String,
+        width: Int,
+        height: Int,
+        windowTitle: String?,
+        appName: String?,
+        displayName: String?
+    ) {
+        guard state == .listening else { return }
+        guard let service = xpcManager?.remoteObjectProxy(errorHandler: { error in
+            logger.debug("[Agent] recordLiveScreenshot XPC error: \(error.localizedDescription)")
+        }) else {
+            logger.debug("[Agent] Skipping live screenshot side channel - not connected")
+            return
+        }
+
+        service.recordLiveScreenshot(
+            imageData: data,
+            capturedAt: capturedAt.timeIntervalSince1970,
+            captureMode: captureMode,
+            width: width,
+            height: height,
+            windowTitle: windowTitle,
+            appName: appName,
+            displayName: displayName
+        ) { success in
+            if success {
+                logger.info("[Agent] Recorded live screenshot for active dictation")
+            }
+        }
+    }
+
     /// True when agent is connected but missing critical permissions.
     public var hasCriticalPermissionIssue: Bool {
         guard isXPCConnected else { return false }
@@ -2010,7 +2047,7 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
     /// that Agent can attach to an existing recording.
     nonisolated public func fetchTrayScreenshots(recordingId: String, reply: @escaping (String?) -> Void) {
         Task { @MainActor [weak self] in
-            guard let self else {
+            guard self != nil else {
                 reply(nil)
                 return
             }
@@ -2086,10 +2123,11 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
         recordingId: String,
         recordingStartedAt: TimeInterval,
         recordingEndedAt: TimeInterval,
+        includeScreenshots: Bool,
         reply: @escaping (String?) -> Void
     ) {
         Task { @MainActor [weak self] in
-            guard let self else {
+            guard self != nil else {
                 reply(nil)
                 return
             }
@@ -2117,7 +2155,7 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
                 return max(0, Int(capturedAt.timeIntervalSince(recordingStart) * 1000))
             }
 
-            let allScreenshotItems = ScreenshotTray.shared.unpinnedItems
+            let allScreenshotItems = includeScreenshots ? ScreenshotTray.shared.unpinnedItems : []
             let allClipItems = ClipTray.shared.unpinnedItems
             let screenshotItems = allScreenshotItems.filter {
                 $0.capturedAt >= recordingStart && $0.capturedAt <= recordingEnd
@@ -2127,6 +2165,9 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
             }
             let deferredScreenshotCount = allScreenshotItems.count - screenshotItems.count
             let deferredClipCount = allClipItems.count - clipItems.count
+            if !includeScreenshots {
+                logger.debug("[Tray] Skipping tray screenshot merge; live screenshots already attached")
+            }
 
             guard !screenshotItems.isEmpty || !clipItems.isEmpty else {
                 if deferredScreenshotCount > 0 || deferredClipCount > 0 {

@@ -289,16 +289,22 @@ stop_talkie_app_family() {
     local product=$1
     local app_id=$2
     local bundle_id
+    local xpc_service
     local dev_executable
     local build_executable
+    local derived_executable_pattern
     bundle_id=$(talkie_bundle_id "$app_id" "$RUN_ENV")
+    xpc_service=$(get_xpc_service_name "$bundle_id")
     dev_executable="$DEV_APPS_DIR/$product.app/Contents/MacOS/$product"
     build_executable="$BUILD_BASE/$product/Build/Products/Debug/$product.app/Contents/MacOS/$product"
+    derived_executable_pattern="$HOME/Library/Developer/Xcode/DerivedData/.*/Build/Products/Debug/$product.app/Contents/MacOS/$product"
 
     echo -n "  Stopping $product ($RUN_ENV)... "
     stop_bundle_ids "$bundle_id"
+    bootout_label "$xpc_service"
     pkill -f "$dev_executable" 2>/dev/null || true
     pkill -f "$build_executable" 2>/dev/null || true
+    pkill -f "$derived_executable_pattern" 2>/dev/null || true
     echo -e "${GREEN}done${NC}"
 }
 

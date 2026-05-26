@@ -22,7 +22,6 @@ final class ComposeStore: ObservableObject {
     @Published var lastCommandTranscript: String?
     @Published var generatingETA: String?
     @Published var pendingDiff: Diff?
-    @Published var keyboardFocusRequested: Bool = false
     @Published var revisionPath: RevisionPath
     @Published var appliedRevisions: [ComposeNoteStore.RevisionRecord] = []
     @Published var cursorParagraphIndex: Int = 0 {
@@ -155,54 +154,12 @@ final class ComposeStore: ObservableObject {
         }
     }
 
-    func toggleKeyboard() {
-        keyboardFocusRequested.toggle()
+    var documentBodyText: String {
+        document.paragraphs.joined(separator: "\n\n")
     }
 
-    /// Append a fragment of typed text from the in-app Talkie keyboard
-    /// to the active paragraph. Mirrors `appendDictation` semantics so
-    /// keystrokes land in the same place a transcript would.
-    func applyKeyboardInsert(_ fragment: String) {
-        guard !fragment.isEmpty else { return }
-        var paragraphs = document.paragraphs.isEmpty ? [""] : document.paragraphs
-        var index = clampedCursorIndex(in: paragraphs)
-
-        for component in fragment.components(separatedBy: .newlines).enumerated() {
-            if component.offset > 0 {
-                index += 1
-                paragraphs.insert("", at: index)
-            }
-            if !component.element.isEmpty {
-                paragraphs[index].append(component.element)
-            }
-        }
-
-        cursorParagraphIndex = index
-        document = Document(title: document.title, paragraphs: paragraphs)
-        persistDocument()
-    }
-
-    /// Delete-backward from the in-app Talkie keyboard. Pops the last
-    /// character of the last paragraph; collapses empty trailing
-    /// paragraphs into the previous one so cursor walks back across
-    /// the Enter key.
-    func applyKeyboardDelete() {
-        var paragraphs = document.paragraphs
-        guard !paragraphs.isEmpty else { return }
-        var last = paragraphs.removeLast()
-        if last.isEmpty {
-            if paragraphs.isEmpty {
-                paragraphs.append("")
-            } else {
-                last = paragraphs.removeLast()
-                if !last.isEmpty { last.removeLast() }
-                paragraphs.append(last)
-            }
-        } else {
-            last.removeLast()
-            paragraphs.append(last)
-        }
-        document = Document(title: document.title, paragraphs: paragraphs)
+    func updateDocumentBodyText(_ text: String) {
+        document = Document(title: document.title, paragraphs: Self.paragraphs(from: text))
         persistDocument()
     }
 
@@ -488,15 +445,12 @@ final class ComposeStore: ObservableObject {
             return
         }
 
-        var paragraphs = document.paragraphs.isEmpty ? [""] : document.paragraphs
-        let index = clampedCursorIndex(in: paragraphs)
-        cursorParagraphIndex = index
-        let existing = paragraphs[index].trimmingCharacters(in: .whitespacesAndNewlines)
-        paragraphs[index] = existing.isEmpty ? trimmed : [existing, trimmed].joined(separator: " ")
-        document = Document(title: document.title, paragraphs: paragraphs)
+        var body = documentBodyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        body = body.isEmpty ? trimmed : "\(body) \(trimmed)"
+        updateDocumentBodyText(body)
+        cursorParagraphIndex = max(0, document.paragraphs.count - 1)
         livePartialTranscript = nil
         state = .idle
-        persistDocument()
     }
 
     private func revisedParagraph(original: String, command: String, targetIndex: Int) async -> String {

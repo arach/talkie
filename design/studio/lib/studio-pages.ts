@@ -63,6 +63,19 @@ export const STUDIO_PAGES: StudioPage[] = [
     status: "shipped",
     blurb: "Status pills, lozenges, eyebrows — the chrome primitives.",
   },
+  {
+    href: "/typography",
+    label: "Typography",
+    bucket: "foundations",
+    status: "concept",
+    swift: [
+      "apps/macos/Talkie/Views/CommandPalette/CommandPaletteView.swift",
+      "apps/macos/Talkie/Services/Capture/CaptureBarPanel.swift",
+      "apps/macos/Talkie/Services/Capture/CaptureHUDPanel.swift",
+      "apps/macos/Talkie/Services/Tray/TrayViewer.swift",
+    ],
+    blurb: "macOS chrome type audit — every .font() config in the capture + tray + palette surfaces.",
+  },
 
   // ── Surfaces · Mac ──────────────────────────────────────────────
   {
@@ -168,6 +181,24 @@ export const STUDIO_PAGES: StudioPage[] = [
     family: "capture",
     status: "shipped",
     swift: ["apps/macos/Talkie/Views/Notes/ScopeCaptureDetailView.swift"],
+  },
+  {
+    href: "/mac-capture-markup",
+    label: "Capture Markup",
+    bucket: "surfaces",
+    platform: "mac",
+    family: "capture",
+    status: "concept",
+    blurb: "Voice + image markup · ask then touch up · replaces CleanShot delegate.",
+  },
+  {
+    href: "/mac-command-palette",
+    label: "Command Palette",
+    bucket: "surfaces",
+    platform: "mac",
+    family: "navigation",
+    status: "concept",
+    blurb: "Voice + text palette · one surface · collapses CommandPaletteView + VoiceCommandOverlay.",
   },
   {
     href: "/mac-onboarding",

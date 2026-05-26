@@ -49,6 +49,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
     case tactical = "tactical"
     case ghost = "ghost"
     case lift = "lift"
+    case graphite = "graphite"
 
     var id: String { rawValue }
 
@@ -59,6 +60,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .tactical: return "Tactical"
         case .ghost: return "Ghost"
         case .lift: return "Lift"
+        case .graphite: return "Graphite"
         }
     }
 
@@ -69,6 +71,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .tactical: return "High contrast, sharp edges"
         case .ghost: return "Soft, muted elegance"
         case .lift: return "Pure white surfaces with indigo lift"
+        case .graphite: return "Sober black-family · muted slate accent"
         }
     }
 }
@@ -189,6 +192,24 @@ private let cachedScopeColors = ThemeColors(
     success: Color(hex: "6F7D3E", darkHex: "9CB35A")
 )
 
+// Graphite: sober black-family. Cool near-black canvas with a hint of
+// blue (0E1013 vs Midnight's 0A0A0A), restrained slate accent. No
+// phosphor, no graticule — layout + type do the work.
+private let cachedGraphiteColors = ThemeColors(
+    tableHeaderBackground: Color(hex: "18181A"),
+    tableCellBackground: Color(hex: "0B0B0C"),
+    tableDivider: Color(hex: "EDEDEE").opacity(0.07),
+    tableBorder: Color(hex: "EDEDEE").opacity(0.14),
+    background: Color(hex: "0B0B0C"),
+    cardBackground: Color(hex: "18181A"),
+    searchBackground: Color(hex: "1C1C1E"),
+    textPrimary: Color(hex: "EDEDEE"),
+    textSecondary: Color(hex: "B8B8BA"),
+    textTertiary: Color(hex: "7E7E80"),
+    accent: Color(hex: "7B8E9E"),
+    success: Color(hex: "6FA88A")
+)
+
 // MARK: - Theme Color Access (O(1) lookup, no parsing)
 
 extension AppTheme {
@@ -199,6 +220,7 @@ extension AppTheme {
         case .tactical: return cachedTacticalColors
         case .ghost: return cachedGhostColors
         case .lift: return cachedLiftColors
+        case .graphite: return cachedGraphiteColors
         }
     }
 

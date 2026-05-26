@@ -294,10 +294,28 @@ final class TrayActionService {
 
     // MARK: - Promote Tray Screenshot to Capture
 
+    /// Standalone captures (Hyper+S, HUD, agent bay) auto-save to the library
+    /// while staying available in the tray for drag/drop and island affordances.
+    ///
+    /// This is intentionally copy semantics, not promotion semantics: the tray item
+    /// remains a live handoff surface after the capture is saved to the library.
+    func persistStandaloneScreenshotToLibrary(_ ts: TrayScreenshot, runOCR: Bool = false) {
+        promoteTrayToCapture(ts, runOCR: runOCR, removeFromTrayOnSuccess: false)
+    }
+
     /// Move a tray screenshot into the library as a .capture TalkieObject.
     /// If `runOCR` is true, attach OCR text as a ProvenanceSegment.
     /// Uses pre-computed background OCR when available; falls back to on-demand accurate scan.
     func promoteTrayToCapture(_ ts: TrayScreenshot, runOCR: Bool, completion: (() -> Void)? = nil) {
+        promoteTrayToCapture(ts, runOCR: runOCR, removeFromTrayOnSuccess: true, completion: completion)
+    }
+
+    private func promoteTrayToCapture(
+        _ ts: TrayScreenshot,
+        runOCR: Bool,
+        removeFromTrayOnSuccess: Bool,
+        completion: (() -> Void)? = nil
+    ) {
         Task { @MainActor in
             let captureId = UUID()
             guard let data = ts.loadData() else {
@@ -366,8 +384,11 @@ final class TrayActionService {
                 let repository = TalkieObjectRepository()
                 try await repository.saveRecording(capture)
                 await RecordingsViewModel.shared.loadRecordings()
-                ScreenshotTray.shared.remove(id: ts.id)
-                Log(.ui).info("Promoted tray screenshot to capture: \(captureId.uuidString.prefix(8))")
+                if removeFromTrayOnSuccess {
+                    ScreenshotTray.shared.remove(id: ts.id)
+                }
+                let action = removeFromTrayOnSuccess ? "Promoted" : "Saved"
+                Log(.ui).info("\(action) tray screenshot to capture: \(captureId.uuidString.prefix(8))")
                 completion?()
             } catch {
                 Log(.ui).error("Failed to promote tray to capture: \(error.localizedDescription)")

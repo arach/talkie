@@ -222,7 +222,9 @@ private extension ConnectionCenterStore.Row.Kind {
 
 struct ConnectionCenterNext: View {
     @ObservedObject private var theme = ThemeManager.shared
+    @ObservedObject private var deck = DeckMirrorStore.shared
     @ObservedObject private var reachability = NetworkReachability.shared
+    @State private var bridgeManager = BridgeManager.shared
     @StateObject private var store = ConnectionCenterStore()
 
     var body: some View {
@@ -245,6 +247,9 @@ struct ConnectionCenterNext: View {
                         }
                     }
                     .padding(.horizontal, 12)
+
+                    deckRemoteCard
+                        .padding(.horizontal, 12)
 
                     footerSection
 
@@ -272,6 +277,114 @@ struct ConnectionCenterNext: View {
 
     private func openBridgeDetail() {
         AppShellRouter.shared.openBridgeDetail()
+    }
+
+    private var deckRemoteCard: some View {
+        Button(action: openDeckRemote) {
+            HStack(spacing: 12) {
+                ZStack(alignment: .bottomTrailing) {
+                    Image(systemName: "square.grid.3x3")
+                        .font(.system(size: 21, weight: .regular))
+                        .foregroundStyle(deckRemoteColor)
+                        .frame(width: 32, height: 32)
+
+                    Circle()
+                        .fill(deckRemoteColor)
+                        .frame(width: 8, height: 8)
+                        .overlay(
+                            Circle().strokeBorder(theme.colors.cardBackground, lineWidth: 1.5)
+                        )
+                        .offset(x: 2, y: 2)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Command Deck")
+                        .talkieType(.listTitle)
+                        .foregroundStyle(theme.colors.textPrimary)
+                    Text(deckRemoteStatus)
+                        .talkieType(.fieldLabel)
+                        .foregroundStyle(theme.colors.textSecondary)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 8)
+
+                HStack(spacing: 4) {
+                    Text(bridgeManager.isPaired ? "Open" : "Pair Mac")
+                        .talkieType(.fieldLabel)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .accessibilityHidden(true)
+                }
+                .foregroundStyle(theme.currentTheme.chrome.accent)
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(theme.colors.cardBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .strokeBorder(
+                                bridgeManager.isPaired
+                                    ? deckRemoteColor.opacity(0.3)
+                                    : theme.currentTheme.chrome.edgeFaint,
+                                lineWidth: theme.currentTheme.chrome.hairlineWidth
+                            )
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Command Deck")
+        .accessibilityHint(bridgeManager.isPaired ? "Opens the Mac remote" : "Opens Mac pairing")
+    }
+
+    private func openDeckRemote() {
+        if bridgeManager.isPaired {
+            AppShellRouter.shared.openDeck()
+        } else {
+            openBridgeDetail()
+        }
+    }
+
+    private var deckRemoteStatus: String {
+        if !bridgeManager.isPaired {
+            return "Pair a Mac to use it as a remote"
+        }
+
+        let mac = bridgeManager.pairedMacDisplayName ?? bridgeManager.pairedHostname ?? "paired Mac"
+        if let board = deck.board, !board.spaces.isEmpty {
+            return "\(mac) · \(board.spaces.count) deck \(board.spaces.count == 1 ? "space" : "spaces")"
+        }
+
+        switch bridgeManager.status {
+        case .connected:
+            return "\(mac) connected · waiting for deck"
+        case .connecting:
+            return "\(mac) connecting"
+        case .disconnected:
+            return "\(mac) offline"
+        case .error:
+            return bridgeManager.errorMessage ?? "\(mac) unavailable"
+        }
+    }
+
+    private var deckRemoteColor: Color {
+        if !bridgeManager.isPaired {
+            return theme.colors.textTertiary
+        }
+        if let board = deck.board, !board.spaces.isEmpty {
+            return theme.currentTheme.chrome.accent
+        }
+        switch bridgeManager.status {
+        case .connected:
+            return Color(red: 0.36, green: 0.74, blue: 0.50)
+        case .connecting:
+            return theme.currentTheme.chrome.accent
+        case .disconnected:
+            return .orange.opacity(0.9)
+        case .error:
+            return .red.opacity(0.85)
+        }
     }
 
     // MARK: - Header

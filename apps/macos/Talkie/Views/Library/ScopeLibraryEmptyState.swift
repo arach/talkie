@@ -263,12 +263,18 @@ private struct TodayRow: View {
         }
         .buttonStyle(.plain)
         .onHover { hovered = $0 }
+        .modifier(CaptureRowDragModifier(fileURL: primaryScreenshotURL))
     }
 
     private var rowTitle: String {
         if let title = memo.title, !title.isEmpty { return title }
         if let preview = memo.transcriptPreview, !preview.isEmpty { return preview }
         return "Untitled \(memo.type.displayName)"
+    }
+
+    private var primaryScreenshotURL: URL? {
+        guard let filename = memo.screenshots.first?.filename else { return nil }
+        return ScreenshotStorage.screenshotsDirectory.appendingPathComponent(filename)
     }
 
     private func timeOfDay(_ date: Date) -> String {
@@ -371,12 +377,18 @@ private struct WeekRow: View {
         }
         .buttonStyle(.plain)
         .onHover { hovered = $0 }
+        .modifier(CaptureRowDragModifier(fileURL: primaryScreenshotURL))
     }
 
     private var rowTitle: String {
         if let title = memo.title, !title.isEmpty { return title }
         if let preview = memo.transcriptPreview, !preview.isEmpty { return preview }
         return "Untitled \(memo.type.displayName)"
+    }
+
+    private var primaryScreenshotURL: URL? {
+        guard let filename = memo.screenshots.first?.filename else { return nil }
+        return ScreenshotStorage.screenshotsDirectory.appendingPathComponent(filename)
     }
 
     private var typeColor: Color {

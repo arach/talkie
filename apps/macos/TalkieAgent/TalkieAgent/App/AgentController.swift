@@ -305,6 +305,67 @@ final class AgentController: ObservableObject {
         await LiveSidecarSessionStore.shared.clear(captureSessionId: captureSessionId)
     }
 
+    /// Capture-time side channel for screenshots taken while this dictation is
+    /// listening. This keeps delivery independent from the tray: Talkie sends
+    /// the PNG once, Agent saves it under the active recording session, and
+    /// post-transcription paste reads only this local array.
+    func recordLiveScreenshot(
+        imageData: Data,
+        capturedAt: Date,
+        captureMode: String,
+        width: Int,
+        height: Int,
+        windowTitle: String?,
+        appName: String?,
+        displayName: String?
+    ) -> Bool {
+        guard let recordingId,
+              let recordingStartTime,
+              capturedAt >= recordingStartTime else {
+            return false
+        }
+
+        if let recordingEndTime, capturedAt > recordingEndTime {
+            return false
+        }
+
+        guard state == .listening || state == .transcribing else {
+            return false
+        }
+
+        let timestampMs = max(0, Int(capturedAt.timeIntervalSince(recordingStartTime) * 1000))
+        let index = capturedScreenshots.count
+        guard let savedURL = ScreenshotStorage.save(
+            imageData,
+            recordingId: recordingId,
+            timestampMs: timestampMs,
+            index: index,
+            capturedAt: capturedAt,
+            captureMode: captureMode,
+            width: width,
+            height: height,
+            windowTitle: windowTitle,
+            appName: appName,
+            displayName: displayName
+        ) else {
+            return false
+        }
+
+        let screenshot = RecordingScreenshot(
+            filename: savedURL.lastPathComponent,
+            timestampMs: timestampMs,
+            captureMode: captureMode,
+            width: width,
+            height: height,
+            windowTitle: windowTitle,
+            appName: appName,
+            displayName: displayName
+        )
+        capturedScreenshots.append(screenshot)
+        log.info("Recorded live screenshot \(capturedScreenshots.count) at \(timestampMs)ms")
+        return true
+    }
+
     private nonisolated static func currentLiveSidecarProvenance(
         for captureSessionId: UUID?
     ) async -> [ProvenanceSegment]? {
@@ -393,7 +454,8 @@ final class AgentController: ObservableObject {
                 recordingId: id,
                 captureSessionId: captureSessionId,
                 recordingStartedAt: recordingStartedAt,
-                recordingEndedAt: recordingEndedAt
+                recordingEndedAt: recordingEndedAt,
+                includeScreenshots: RecordingScreenshot.fromArray(json: screenshotsJSON).isEmpty
             )
         }
         return id
@@ -403,7 +465,8 @@ final class AgentController: ObservableObject {
         recordingId: UUID,
         captureSessionId: UUID?,
         recordingStartedAt: Date?,
-        recordingEndedAt: Date?
+        recordingEndedAt: Date?,
+        includeScreenshots: Bool
     ) {
         guard let captureSessionId else { return }
 
@@ -412,7 +475,8 @@ final class AgentController: ObservableObject {
                 recordingId: recordingId,
                 captureSessionId: captureSessionId,
                 recordingStartedAt: recordingStartedAt,
-                recordingEndedAt: recordingEndedAt
+                recordingEndedAt: recordingEndedAt,
+                includeScreenshots: includeScreenshots
             )
         }
     }
@@ -421,12 +485,15 @@ final class AgentController: ObservableObject {
         recordingId: UUID,
         captureSessionId: UUID?,
         recordingStartedAt: Date?,
-        recordingEndedAt: Date?
+        recordingEndedAt: Date?,
+        includeScreenshots: Bool
     ) async -> TalkieObjectAssets? {
         guard let payload = await fetchTrayAssetPayload(
+            recordingId: recordingId,
             captureSessionId: captureSessionId,
             recordingStartedAt: recordingStartedAt,
-            recordingEndedAt: recordingEndedAt
+            recordingEndedAt: recordingEndedAt,
+            includeScreenshots: includeScreenshots
         ) else {
             return nil
         }
@@ -435,15 +502,18 @@ final class AgentController: ObservableObject {
     }
 
     private nonisolated static func fetchTrayAssetPayload(
+        recordingId: UUID,
         captureSessionId: UUID?,
         recordingStartedAt: Date?,
-        recordingEndedAt: Date?
+        recordingEndedAt: Date?,
+        includeScreenshots: Bool
     ) async -> TrayAssetPayload? {
-        guard let captureSessionId,
+        guard captureSessionId != nil,
               let json = await TalkieAgentXPCService.shared.fetchTrayAssets(
-                recordingId: captureSessionId,
+                recordingId: recordingId,
                 recordingStartedAt: recordingStartedAt,
-                recordingEndedAt: recordingEndedAt
+                recordingEndedAt: recordingEndedAt,
+                includeScreenshots: includeScreenshots
               ),
               let assets = TalkieObjectAssets.from(json: json),
               !assets.isEmpty else {
@@ -2147,17 +2217,12 @@ final class AgentController: ObservableObject {
                         recordingEndedAt: capturedRecordingEndedAt,
                         attachTrayAssetsInBackground: false
                     )
-                    let trayAssetPayload = await Self.fetchTrayAssetPayload(
-                        captureSessionId: capturedRecordingId,
-                        recordingStartedAt: capturedRecordingStartedAt,
-                        recordingEndedAt: capturedRecordingEndedAt
-                    )
 
                     let deliveryText = Self.renderDictationDeliveryText(
                         text: finalText,
                         timedTranscription: timedTranscription,
                         localScreenshots: prepared.screenshots,
-                        trayAssets: trayAssetPayload?.assets
+                        trayAssets: nil
                     )
 
                     trace?.begin("paste")
@@ -2179,9 +2244,13 @@ final class AgentController: ObservableObject {
                     let storedRecordingId = await storedRecordingIdTask
                     if let storedRecordingId {
                         logTiming("Database stored (context rule: auto-refine)")
-                        if let trayAssetPayload {
-                            _ = await Self.mergeTrayAssetPayload(trayAssetPayload, into: storedRecordingId)
-                        }
+                        Self.scheduleTrayAssetAttachment(
+                            recordingId: storedRecordingId,
+                            captureSessionId: capturedRecordingId,
+                            recordingStartedAt: capturedRecordingStartedAt,
+                            recordingEndedAt: capturedRecordingEndedAt,
+                            includeScreenshots: prepared.screenshots.isEmpty
+                        )
                     }
 
                     let capturedMetadata = metadata
@@ -2360,17 +2429,12 @@ final class AgentController: ObservableObject {
                         recordingEndedAt: capturedRecordingEndedAt,
                         attachTrayAssetsInBackground: false
                     )
-                    let trayAssetPayload = await Self.fetchTrayAssetPayload(
-                        captureSessionId: capturedRecordingId,
-                        recordingStartedAt: capturedRecordingStartedAt,
-                        recordingEndedAt: capturedRecordingEndedAt
-                    )
 
                     let deliveryText = Self.renderDictationDeliveryText(
                         text: processedText,
                         timedTranscription: timedTranscription,
                         localScreenshots: prepared.screenshots,
-                        trayAssets: trayAssetPayload?.assets
+                        trayAssets: nil
                     )
 
                     trace?.begin("paste")
@@ -2392,9 +2456,13 @@ final class AgentController: ObservableObject {
                     let storedRecordingId = await storedRecordingIdTask
                     if let storedRecordingId {
                         logTiming("Database stored (context rule: protocol-processor)")
-                        if let trayAssetPayload {
-                            _ = await Self.mergeTrayAssetPayload(trayAssetPayload, into: storedRecordingId)
-                        }
+                        Self.scheduleTrayAssetAttachment(
+                            recordingId: storedRecordingId,
+                            captureSessionId: capturedRecordingId,
+                            recordingStartedAt: capturedRecordingStartedAt,
+                            recordingEndedAt: capturedRecordingEndedAt,
+                            includeScreenshots: prepared.screenshots.isEmpty
+                        )
                     }
 
                     let capturedMetadata = metadata
@@ -2568,17 +2636,12 @@ final class AgentController: ObservableObject {
                     recordingEndedAt: capturedRecordingEndedAt,
                     attachTrayAssetsInBackground: false
                 )
-                let trayAssetPayload = await Self.fetchTrayAssetPayload(
-                    captureSessionId: capturedRecordingId,
-                    recordingStartedAt: capturedRecordingStartedAt,
-                    recordingEndedAt: capturedRecordingEndedAt
-                )
 
                 let deliveryText = Self.renderDictationDeliveryText(
                     text: textToPaste,
                     timedTranscription: timedTranscription,
                     localScreenshots: prepared.screenshots,
-                    trayAssets: trayAssetPayload?.assets
+                    trayAssets: nil
                 )
 
                 // Trace ONLY the actual paste operation
@@ -2602,9 +2665,13 @@ final class AgentController: ObservableObject {
                 let storedRecordingId = await storedRecordingIdTask
                 if let storedRecordingId {
                     logTiming("Database stored")
-                    if let trayAssetPayload {
-                        _ = await Self.mergeTrayAssetPayload(trayAssetPayload, into: storedRecordingId)
-                    }
+                    Self.scheduleTrayAssetAttachment(
+                        recordingId: storedRecordingId,
+                        captureSessionId: capturedRecordingId,
+                        recordingStartedAt: capturedRecordingStartedAt,
+                        recordingEndedAt: capturedRecordingEndedAt,
+                        includeScreenshots: prepared.screenshots.isEmpty
+                    )
                 }
 
                 let capturedMetadata = metadata

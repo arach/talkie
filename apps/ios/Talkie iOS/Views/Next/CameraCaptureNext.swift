@@ -8,6 +8,7 @@
 //
 
 import AVFoundation
+import AudioToolbox
 import PhotosUI
 import SwiftUI
 import TalkieMobileKit
@@ -87,6 +88,9 @@ struct CameraCaptureNext: View {
         }
         .animation(.easeOut(duration: 0.22), value: camera.scanPreview != nil)
         .task {
+            camera.onQRCodeDetected = { code in
+                Task { await handleScannedQRCode(code) }
+            }
             await camera.prepare()
         }
         .onDisappear {
@@ -136,6 +140,19 @@ struct CameraCaptureNext: View {
 
             VStack(spacing: 14) {
                 Spacer()
+
+                if camera.isListeningForQR {
+                    Text("Talkie QR codes are detected automatically")
+                        .talkieType(.channelLabelTiny)
+                        .foregroundStyle(theme.colors.textPrimary.opacity(0.82))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(theme.colors.cardBackground.opacity(0.72))
+                                .background(.ultraThinMaterial, in: Capsule())
+                        )
+                }
 
                 if let message = camera.statusMessage {
                     Text(message)
@@ -312,6 +329,26 @@ struct CameraCaptureNext: View {
         }
         .padding(24)
     }
+
+    private func handleScannedQRCode(_ code: String) async {
+        guard camera.scanPreview == nil else { return }
+        camera.pauseQRDetection()
+
+        let outcome = await TalkieQRCodeNavigator.handle(scannedCode: code)
+        if let message = outcome.userMessage {
+            camera.statusMessage = message
+        }
+
+        if outcome.leavesCaptureSurface {
+            AppShellRouter.shared.openHome()
+        } else {
+            try? await Task.sleep(for: .seconds(2.5))
+            if camera.scanPreview == nil {
+                camera.statusMessage = nil
+            }
+            camera.resumeQRDetection()
+        }
+    }
 }
 
 /// One OCR-recognized segment with its Vision confidence score.
@@ -372,7 +409,7 @@ struct ScanPreview: Equatable {
 }
 
 @MainActor
-private final class CameraCaptureNextModel: NSObject, ObservableObject {
+private final class CameraCaptureNextModel: NSObject, ObservableObject, AVCaptureMetadataOutputObjectsDelegate {
     enum PermissionState {
         case unknown
         case authorized
@@ -388,15 +425,22 @@ private final class CameraCaptureNextModel: NSObject, ObservableObject {
     /// Set after a photo is captured and OCR'd. Non-nil = the
     /// ScanPreviewOverlay is showing; user must confirm or reshoot.
     @Published var scanPreview: ScanPreview?
+    @Published private(set) var isListeningForQR = false
 
     let session = AVCaptureSession()
+
+    var onQRCodeDetected: ((String) -> Void)?
 
     private let sessionQueue = DispatchQueue(label: "to.talkie.camera-capture.session")
     private var currentInput: AVCaptureDeviceInput?
     private let photoOutput = AVCapturePhotoOutput()
+    private let metadataOutput = AVCaptureMetadataOutput()
     private var photoDelegate: CameraPhotoCaptureDelegate?
     private var isConfigured = false
     private var currentPosition: AVCaptureDevice.Position = .back
+    private var isQRDetectionPaused = false
+    private var lastDetectedQRCode: String?
+    private var lastDetectedQRTime = Date.distantPast
 
     var canCapture: Bool {
         permissionState == .authorized && isConfigured && !isProcessing
@@ -421,10 +465,54 @@ private final class CameraCaptureNextModel: NSObject, ObservableObject {
     }
 
     func stop() {
+        isListeningForQR = false
         guard session.isRunning else { return }
         sessionQueue.async { [session] in
             session.stopRunning()
         }
+    }
+
+    func pauseQRDetection() {
+        isQRDetectionPaused = true
+    }
+
+    func resumeQRDetection() {
+        isQRDetectionPaused = false
+        lastDetectedQRCode = nil
+    }
+
+    nonisolated func metadataOutput(
+        _ output: AVCaptureMetadataOutput,
+        didOutput metadataObjects: [AVMetadataObject],
+        from connection: AVCaptureConnection
+    ) {
+        guard let metadataObject = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
+              let code = metadataObject.stringValue else {
+            return
+        }
+
+        Task { @MainActor in
+            handleDetectedQRCode(code)
+        }
+    }
+
+    private func handleDetectedQRCode(_ code: String) {
+        guard !isQRDetectionPaused,
+              scanPreview == nil,
+              !isProcessing,
+              permissionState == .authorized else {
+            return
+        }
+
+        let now = Date()
+        if code == lastDetectedQRCode, now.timeIntervalSince(lastDetectedQRTime) < 2.5 {
+            return
+        }
+        lastDetectedQRCode = code
+        lastDetectedQRTime = now
+
+        AudioServicesPlaySystemSound(SystemSoundID(kSystemSoundID_Vibrate))
+        onQRCodeDetected?(code)
     }
 
     func toggleCamera() {
@@ -535,6 +623,12 @@ private final class CameraCaptureNextModel: NSObject, ObservableObject {
                 session.addOutput(photoOutput)
             }
 
+            if !session.outputs.contains(metadataOutput), session.canAddOutput(metadataOutput) {
+                session.addOutput(metadataOutput)
+                metadataOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
+                metadataOutput.metadataObjectTypes = [.qr]
+            }
+
             if let connection = photoOutput.connection(with: .video), connection.isVideoMirroringSupported {
                 connection.isVideoMirrored = position == .front
             }
@@ -546,6 +640,7 @@ private final class CameraCaptureNextModel: NSObject, ObservableObject {
                 self.currentPosition = position
                 self.isConfigured = true
                 self.statusMessage = nil
+                self.isListeningForQR = true
             }
 
             if startAfterConfig, !session.isRunning {

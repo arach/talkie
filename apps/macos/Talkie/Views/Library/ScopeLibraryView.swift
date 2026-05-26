@@ -842,10 +842,35 @@ private struct ScopeLibraryRow: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .contentShape(Rectangle())
+        .modifier(CaptureRowDragModifier(fileURL: primaryScreenshotURL))
     }
 
     private var timeAgo: String {
         RelativeTimeFormatter.format(recording.createdAt).uppercased()
+    }
+
+    /// First screenshot file on disk, if any. Captures (and notes / memos
+    /// with an image attached) drag as the file URL so the receiver sees
+    /// a real image, not bitmap data. nil for audio-only rows.
+    private var primaryScreenshotURL: URL? {
+        guard let filename = recording.screenshots.first?.filename else { return nil }
+        return ScreenshotStorage.screenshotsDirectory.appendingPathComponent(filename)
+    }
+}
+
+/// Conditionally adds `.onDrag` to a row when a file URL is available.
+/// Avoids starting a drag gesture on rows that have no payload (audio-
+/// only memos, dictations) — those drag visually but drop nothing,
+/// which feels broken.
+struct CaptureRowDragModifier: ViewModifier {
+    let fileURL: URL?
+
+    func body(content: Content) -> some View {
+        if let url = fileURL {
+            content.onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
+        } else {
+            content
+        }
     }
 }
 

@@ -1104,6 +1104,16 @@ private struct TrayViewerView: View {
                 }
 
                 Button(action: {
+                    CaptureMarkupCoordinator.shared.openSession(imageURL: item.tempURL)
+                }) {
+                    Image(systemName: "sparkles.rectangle.stack")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Mark up with agent…")
+
+                Button(action: {
                     TrayActionService.shared.promoteTrayToCapture(item, runOCR: false)
                     closeDetailPreview()
                 }) {

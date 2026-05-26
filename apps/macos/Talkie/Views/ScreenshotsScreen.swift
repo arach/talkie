@@ -671,15 +671,7 @@ private struct LibraryCardView: View {
     private func loadThumbnail() async -> NSImage? {
         let url = item.fileURL
         return await Task.detached {
-            guard let image = NSImage(contentsOf: url) else { return nil as NSImage? }
-            let targetWidth: CGFloat = 280
-            let scale = targetWidth / image.size.width
-            let targetSize = NSSize(width: targetWidth, height: image.size.height * scale)
-            let resized = NSImage(size: targetSize)
-            resized.lockFocus()
-            image.draw(in: NSRect(origin: .zero, size: targetSize), from: NSRect(origin: .zero, size: image.size), operation: .copy, fraction: 1.0)
-            resized.unlockFocus()
-            return resized
+            ScreenshotTray.generateThumbnail(for: url, maxSize: 280)
         }.value
     }
 

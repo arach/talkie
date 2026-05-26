@@ -25,6 +25,7 @@ import { StudioPage } from "@/components/StudioPage";
 import { SchemeCard } from "@/components/SchemeCard";
 import { ToggleBar, type Toggle } from "@/components/ToggleBar";
 import { MacCaptureHUD, type CaptureHUDMode } from "@/components/studies/MacCaptureHUD";
+import { MacCaptureFreeze } from "@/components/studies/MacCaptureFreeze";
 import { SCHEMES } from "@/lib/schemes";
 
 const TRIO = ["pearl", "slate", "amber"] as const;
@@ -89,6 +90,53 @@ export default function MacCaptureHUDStudy() {
       help="three siblings, one ladder · pick by wallpaper luminance"
     >
       <ToggleBar label="· Mode" toggles={modeToggles} variant="dark" className="mb-5" />
+
+      {/* ── 00a · NEW · Mode picker + tab toggle ───────────────────── */}
+      <section className="mb-12">
+        <SectionEyebrow
+          label="00a · NEW · Mode picker + tab toggle"
+          help="REGION preselected · A/S/D switch · ↵ commits · top tabs swap Screenshot ↔ Video in place"
+        />
+        <div className="grid grid-cols-3 gap-6">
+          <Tile label="Region preselected · click tabs to switch" wallpaper="busy">
+            <SchemeWrap schemeKey="slate">
+              <MacCaptureHUD mode={mode} activeChord="A" onModeChange={setMode} />
+            </SchemeWrap>
+          </Tile>
+          <Tile label="Switched to Screen (S pressed)" wallpaper="busy">
+            <SchemeWrap schemeKey="slate">
+              <MacCaptureHUD mode={mode} activeChord="S" onModeChange={setMode} />
+            </SchemeWrap>
+          </Tile>
+          <Tile label="Switched to Window (D pressed)" wallpaper="busy">
+            <SchemeWrap schemeKey="slate">
+              <MacCaptureHUD mode={mode} activeChord="D" onModeChange={setMode} />
+            </SchemeWrap>
+          </Tile>
+        </div>
+      </section>
+
+      {/* ── 00b · NEW · Freeze overlay ──────────────────────────────── */}
+      <section className="mb-12">
+        <SectionEyebrow
+          label="00b · NEW · Freeze overlay"
+          help="desktop snapshots at overlay-mount · user crops the frozen image · today drag runs against the live desktop"
+        />
+        <div className="grid grid-cols-2 gap-6">
+          <div className="flex flex-col gap-2">
+            <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-studio-ink-faint">
+              · Armed · before crop · frozen-snapshot semantic visible
+            </div>
+            <MacCaptureFreeze state="armed-ready" />
+          </div>
+          <div className="flex flex-col gap-2">
+            <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-studio-ink-faint">
+              · Drag in progress · 460 × 260 crop · ↵ commits
+            </div>
+            <MacCaptureFreeze state="drag-in-progress" />
+          </div>
+        </div>
+      </section>
 
       {/* ── 1. The trio ────────────────────────────────────────────── */}
       <section className="mb-12">

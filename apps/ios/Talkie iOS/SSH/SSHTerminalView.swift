@@ -13,6 +13,10 @@ struct SSHTerminalView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
+    private let initialSavedHost: SSHTerminalSavedHost?
+    private let initialRoutePreference: TalkieNetworkRoute?
+    private let onClose: (() -> Void)?
+
     private static let startupCommandResetVersion = 8
     private static let legacyStartupCommand = "tmux new-session -A -s talkie"
     private static let pathAwareStartupCommand = #"export PATH="$HOME/bin:$HOME/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin"; /opt/homebrew/bin/tmux new-session -A -s talkie"#
@@ -65,6 +69,8 @@ struct SSHTerminalView: View {
     @State private var pendingImportReview: PendingSSHImportReview?
     @State private var showingTroubleshootingLog = true
     @State private var copiedTroubleshootingReport = false
+    @State private var didConsumeInitialSavedHost = false
+    @State private var pendingRoutePreference: TalkieNetworkRoute?
     @State private var suppressPrimaryActionTap = false
     @State private var suppressSlashTap = false
     @State private var suppressDashTap = false
@@ -89,6 +95,36 @@ struct SSHTerminalView: View {
     private enum SSHAccessoryRowMode {
         case modifiers
         case symbols
+    }
+
+    private struct SSHRouteCandidate: Equatable {
+        let host: String
+        let route: TalkieNetworkRoute
+
+        var id: String {
+            "\(route.displayName):\(host)"
+        }
+
+        var connectTimeoutSeconds: Int {
+            switch route {
+            case .localNetwork:
+                return 2
+            case .tailscale:
+                return 6
+            case .direct:
+                return 8
+            }
+        }
+    }
+
+    init(
+        initialSavedHost: SSHTerminalSavedHost? = nil,
+        initialRoutePreference: TalkieNetworkRoute? = nil,
+        onClose: (() -> Void)? = nil
+    ) {
+        self.initialSavedHost = initialSavedHost
+        self.initialRoutePreference = initialRoutePreference
+        self.onClose = onClose
     }
 
     var body: some View {
@@ -174,9 +210,10 @@ struct SSHTerminalView: View {
             migrateStartupCommandIfNeeded()
             connectionManager.reload()
             refreshSavedHostsFromManager()
+            refreshPrivateKeyFromStoreIfNeeded()
             configureDockDictationController()
             consumePendingSSHImportIfNeeded()
-            consumePendingResumeIfNeeded()
+            consumeInitialSavedHostIfNeeded()
             if !privateKeyPEM.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 showingPrivateKey = true
             }
@@ -276,7 +313,7 @@ struct SSHTerminalView: View {
 
     private var terminalScreenHeader: some View {
         HStack(spacing: Spacing.sm) {
-            Button(action: { dismiss() }) {
+            Button(action: closeTerminal) {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Color.textPrimary)
@@ -945,6 +982,8 @@ struct SSHTerminalView: View {
                 Group {
                     if terminalRouter.isSafeMode {
                         terminalSafeModeBoard
+                    } else if let initialSavedHost, didConsumeInitialSavedHost || session.status == .connecting {
+                        terminalFocusedLaunchBoard(initialSavedHost)
                     } else if savedHosts.isEmpty {
                         terminalPlaceholder
                     } else {
@@ -1000,6 +1039,90 @@ struct SSHTerminalView: View {
             configuredTerminalDeck
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func terminalFocusedLaunchBoard(_ savedHost: SSHTerminalSavedHost) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(statusColor)
+                        .frame(width: 8, height: 8)
+
+                    Text(terminalFocusedLaunchTitle(for: savedHost))
+                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color.white.opacity(0.96))
+                        .lineLimit(1)
+                }
+
+                Text(savedHost.title)
+                    .font(.system(size: 12, weight: .regular, design: .monospaced))
+                    .foregroundStyle(Color.white.opacity(0.58))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                Text("Routes · \(routeCascadeSummary(for: savedHost))")
+                    .font(.system(size: 12, weight: .regular, design: .monospaced))
+                    .foregroundStyle(Color.white.opacity(0.66))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            routePillRow(for: savedHost)
+
+            if case .failed = session.status {
+                HStack(spacing: Spacing.sm) {
+                    terminalPrimaryActionButton("Retry", systemImage: "arrow.clockwise") {
+                        connect(to: savedHost)
+                    }
+
+                    if routeCandidates(for: savedHost).contains(where: { $0.route == .tailscale }) {
+                        terminalSecondaryActionButton("Tailscale", systemImage: "point.3.connected.trianglepath.dotted") {
+                            connect(to: savedHost, preferredRoute: .tailscale)
+                        }
+                    }
+
+                    terminalSecondaryActionButton("Config", systemImage: "slider.horizontal.3") {
+                        apply(savedHost)
+                    }
+                }
+            } else {
+                Text("Talkie tries local network first, then Tailscale when available.")
+                    .font(.system(size: 12, weight: .regular, design: .rounded))
+                    .foregroundStyle(Color.white.opacity(0.5))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func terminalFocusedLaunchTitle(for savedHost: SSHTerminalSavedHost) -> String {
+        switch session.status {
+        case .connecting:
+            "Opening \(savedHost.resolvedDeviceTitle)"
+        case .failed:
+            "Could not open \(savedHost.resolvedDeviceTitle)"
+        case .disconnected:
+            "Ready for \(savedHost.resolvedDeviceTitle)"
+        case .connected:
+            savedHost.resolvedDeviceTitle
+        }
+    }
+
+    private func routePillRow(for savedHost: SSHTerminalSavedHost) -> some View {
+        HStack(spacing: 7) {
+            ForEach(routeCandidates(for: savedHost), id: \.id) { candidate in
+                Text(routePillTitle(for: candidate))
+                    .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                    .foregroundStyle(Color.white.opacity(0.68))
+                    .lineLimit(1)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(Color.white.opacity(0.055))
+                    .clipShape(.rect(cornerRadius: 8, style: .continuous))
+            }
+        }
     }
 
     private var terminalSafeModeBoard: some View {
@@ -2281,9 +2404,17 @@ struct SSHTerminalView: View {
     }
 
     private var resolvedStartupCommand: String? {
-        let command = startupCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? selectedStartupProfile.startupCommand
-            : startupCommand
+        let command: String
+        if let currentSavedHost {
+            command = currentSavedHost.resolvedStartupCommand(
+                for: selectedStartupProfile,
+                startupCommandOverride: startupCommand
+            )
+        } else {
+            command = startupCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? selectedStartupProfile.startupCommand
+                : startupCommand
+        }
         let trimmedCommand = command
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmedCommand.isEmpty ? nil : trimmedCommand
@@ -2466,15 +2597,18 @@ struct SSHTerminalView: View {
         let startupCommandForConnection = pendingOneShotStartupCommand ?? resolvedStartupCommand
         let startupCommandOverride = currentStartupCommandOverride
         let savedHost = currentSavedHost
+        let routePreference = pendingRoutePreference
+        pendingRoutePreference = nil
         focusedField = nil
 
         Task { @MainActor in
-            let connectionHost = await resolvedConnectionHost(
+            let routeCandidates = await resolvedConnectionRoutes(
                 requestedHost: requestedHost,
-                savedHost: savedHost
+                savedHost: savedHost,
+                preferredRoute: routePreference
             )
-            startConnection(
-                host: connectionHost,
+            await startConnectionCascade(
+                routes: routeCandidates,
                 portValue: portValue,
                 username: requestedUsername,
                 password: requestedPassword,
@@ -2487,8 +2621,8 @@ struct SSHTerminalView: View {
         }
     }
 
-    private func startConnection(
-        host connectionHost: String,
+    private func startConnectionCascade(
+        routes: [SSHRouteCandidate],
         portValue: Int,
         username: String,
         password: String,
@@ -2497,10 +2631,53 @@ struct SSHTerminalView: View {
         startupCommand: String?,
         startupCommandOverride: String?,
         savedHost: SSHTerminalSavedHost?
-    ) {
+    ) async {
+        guard !routes.isEmpty else {
+            session.status = .failed("Enter a host and username.")
+            return
+        }
+
+        for routeIndex in routes.indices {
+            let route = routes[routeIndex]
+            let isLastRoute = routeIndex == routes.index(before: routes.endIndex)
+            let shouldStop = await attemptConnection(
+                route: route,
+                portValue: portValue,
+                username: username,
+                password: password,
+                privateKeyPEM: privateKeyPEM,
+                startupProfile: startupProfile,
+                startupCommand: startupCommand,
+                startupCommandOverride: startupCommandOverride,
+                savedHost: savedHost
+            )
+
+            guard !shouldStop, !isLastRoute else {
+                return
+            }
+
+            AppLogger.ui.info(
+                "SSH route failed; trying next route",
+                detail: "failed=\(route.host) next=\(routes[routeIndex + 1].host)"
+            )
+        }
+    }
+
+    private func attemptConnection(
+        route: SSHRouteCandidate,
+        portValue: Int,
+        username: String,
+        password: String,
+        privateKeyPEM: String,
+        startupProfile: SSHTerminalStartupProfile,
+        startupCommand: String?,
+        startupCommandOverride: String?,
+        savedHost: SSHTerminalSavedHost?
+    ) async -> Bool {
+        let connectionHost = route.host
         AppLogger.ui.info(
             "SSH connect requested",
-            detail: "host=\(connectionHost) username=\(username) port=\(portValue) profile=\(startupProfile.rawValue)"
+            detail: "host=\(connectionHost) route=\(route.route.displayName) username=\(username) port=\(portValue) profile=\(startupProfile.rawValue)"
         )
 
         if let savedHost,
@@ -2517,7 +2694,8 @@ struct SSHTerminalView: View {
             password: password,
             privateKeyPEM: privateKeyPEM.isEmpty ? nil : privateKeyPEM,
             startupProfile: startupProfile,
-            startupCommand: startupCommand
+            startupCommand: startupCommand,
+            connectTimeoutSeconds: route.connectTimeoutSeconds
         )
 
         persistPrivateKey()
@@ -2530,18 +2708,22 @@ struct SSHTerminalView: View {
             startupCommandOverride: startupCommandOverride
         )
 
-        Task {
-            await session.connect(configuration: configuration)
+        let result = await session.connect(configuration: configuration)
+        if case .failed(let message) = result {
+            return !shouldTryNextRoute(after: message)
         }
+
+        return true
     }
 
-    private func resolvedConnectionHost(
+    private func resolvedConnectionRoutes(
         requestedHost: String,
-        savedHost: SSHTerminalSavedHost?
-    ) async -> String {
+        savedHost: SSHTerminalSavedHost?,
+        preferredRoute: TalkieNetworkRoute? = nil
+    ) async -> [SSHRouteCandidate] {
         let trimmedRequestedHost = requestedHost.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let savedHost else {
-            return trimmedRequestedHost
+            return routeCandidates(from: [trimmedRequestedHost])
         }
 
         nearbyMacBrowser.start()
@@ -2552,23 +2734,127 @@ struct SSHTerminalView: View {
             try? await Task.sleep(for: .milliseconds(650))
         }
 
-        if let nearbyMac = matchingNearbyMac(for: savedHost) {
+        var candidates: [SSHRouteCandidate] = []
+        var seenHosts: Set<String> = []
+        func appendCandidate(_ host: String?, route explicitRoute: TalkieNetworkRoute? = nil) {
+            let trimmedHost = host?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let normalizedHost = normalized(trimmedHost)
+            guard !trimmedHost.isEmpty, !seenHosts.contains(normalizedHost) else {
+                return
+            }
+
+            seenHosts.insert(normalizedHost)
+            candidates.append(
+                SSHRouteCandidate(
+                    host: trimmedHost,
+                    route: explicitRoute ?? TalkieNetworkRouteClassifier.route(for: trimmedHost)
+                )
+            )
+        }
+
+        let nearbyMac = matchingNearbyMac(for: savedHost)
+        if let nearbyMac {
             AppLogger.ui.info(
                 "SSH route resolved over local network",
                 detail: "device=\(savedHost.resolvedDeviceTitle) host=\(nearbyMac.connectionHost)"
             )
-            return nearbyMac.connectionHost
         }
 
-        if let tailscaleHost = tailscaleHostCandidate(for: savedHost) {
-            AppLogger.ui.info(
-                "SSH route resolved over Tailscale",
-                detail: "device=\(savedHost.resolvedDeviceTitle) host=\(tailscaleHost)"
+        let storedHosts = [savedHost.host] + (savedHost.alternateHosts ?? [])
+        for route in connectionRouteOrder(preferredRoute: preferredRoute) {
+            if route == .localNetwork {
+                appendCandidate(nearbyMac?.connectionHost, route: .localNetwork)
+            }
+
+            for host in storedHosts where TalkieNetworkRouteClassifier.route(for: host) == route {
+                appendCandidate(host, route: route)
+            }
+        }
+        appendCandidate(trimmedRequestedHost)
+
+        AppLogger.ui.info(
+            "SSH route cascade prepared",
+            detail: "device=\(savedHost.resolvedDeviceTitle) routes=\(candidates.map { "\($0.route.displayName):\($0.host)" }.joined(separator: " -> "))"
+        )
+        return candidates
+    }
+
+    private func routeCandidates(from hosts: [String]) -> [SSHRouteCandidate] {
+        var seenHosts: Set<String> = []
+        var candidates: [SSHRouteCandidate] = []
+
+        for host in hosts {
+            let trimmedHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalizedHost = normalized(trimmedHost)
+            guard !trimmedHost.isEmpty, !seenHosts.contains(normalizedHost) else {
+                continue
+            }
+
+            seenHosts.insert(normalizedHost)
+            candidates.append(
+                SSHRouteCandidate(
+                    host: trimmedHost,
+                    route: TalkieNetworkRouteClassifier.route(for: trimmedHost)
+                )
             )
-            return tailscaleHost
         }
 
-        return trimmedRequestedHost
+        return candidates
+    }
+
+    private func routeCandidates(for savedHost: SSHTerminalSavedHost) -> [SSHRouteCandidate] {
+        routeCandidates(from: [savedHost.host] + (savedHost.alternateHosts ?? []))
+    }
+
+    private func routeCascadeSummary(for savedHost: SSHTerminalSavedHost) -> String {
+        let routes = orderedRoutes(for: routeCandidates(for: savedHost))
+        guard !routes.isEmpty else {
+            return "Direct"
+        }
+
+        return routes
+            .map(\.displayName)
+            .joined(separator: " -> ")
+    }
+
+    private func routePillTitle(for candidate: SSHRouteCandidate) -> String {
+        let routeLabel: String
+        switch candidate.route {
+        case .localNetwork:
+            routeLabel = "local"
+        case .tailscale:
+            routeLabel = "tailscale"
+        case .direct:
+            routeLabel = "direct"
+        }
+
+        return "\(routeLabel): \(candidate.host)"
+    }
+
+    private func orderedRoutes(for candidates: [SSHRouteCandidate]) -> [TalkieNetworkRoute] {
+        let classicOrder: [TalkieNetworkRoute] = [.localNetwork, .tailscale, .direct]
+        return classicOrder.filter { route in
+            candidates.contains(where: { $0.route == route })
+        }
+    }
+
+    private func connectionRouteOrder(preferredRoute: TalkieNetworkRoute?) -> [TalkieNetworkRoute] {
+        let classicOrder: [TalkieNetworkRoute] = [.localNetwork, .tailscale, .direct]
+        guard let preferredRoute else {
+            return classicOrder
+        }
+
+        return [preferredRoute] + classicOrder.filter { $0 != preferredRoute }
+    }
+
+    private func shouldTryNextRoute(after message: String) -> Bool {
+        let lowercasedMessage = message.lowercased()
+        return lowercasedMessage.contains("timed out") ||
+            lowercasedMessage.contains("unreachable") ||
+            lowercasedMessage.contains("refused") ||
+            lowercasedMessage.contains("network") ||
+            lowercasedMessage.contains("host") ||
+            lowercasedMessage.contains("dns")
     }
 
     private func matchingNearbyMac(for savedHost: SSHTerminalSavedHost) -> NearbyMacBrowser.NearbyMac? {
@@ -2597,12 +2883,6 @@ struct SSHTerminalView: View {
             ].compactMap { normalizedNetworkIdentity($0) }
             return macIdentities.contains(where: deviceCandidates.contains)
         }
-    }
-
-    private func tailscaleHostCandidate(for savedHost: SSHTerminalSavedHost) -> String? {
-        ([savedHost.host] + (savedHost.alternateHosts ?? [])).first { host in
-            TalkieNetworkRouteClassifier.isTailscaleHost(host)
-        }?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func normalizedNetworkIdentity(_ value: String?) -> String? {
@@ -2882,8 +3162,12 @@ struct SSHTerminalView: View {
         host = savedHost.host
         port = String(savedHost.port)
         username = savedHost.username
-        startupProfileStorage = savedHost.startupProfile.rawValue
-        startupCommand = savedHost.resolvedStartupCommand
+        let connectionStartupProfile = savedHost.connectionStartupProfile
+        startupProfileStorage = connectionStartupProfile.rawValue
+        startupCommand = savedHost.resolvedStartupCommand(
+            for: connectionStartupProfile,
+            startupCommandOverride: savedHost.startupCommandOverride
+        )
         pendingOneShotStartupCommand = nil
         password = ""
         showingHostEditor = true
@@ -2895,17 +3179,26 @@ struct SSHTerminalView: View {
         }
     }
 
-    private func connect(to savedHost: SSHTerminalSavedHost) {
+    private func connect(
+        to savedHost: SSHTerminalSavedHost,
+        preferredRoute: TalkieNetworkRoute? = nil
+    ) {
         AppLogger.ui.info(
             "Connecting to saved SSH host",
-            detail: "host=\(savedHost.host) username=\(savedHost.username) profile=\(savedHost.startupProfile.rawValue)"
+            detail: "host=\(savedHost.host) username=\(savedHost.username) profile=\(savedHost.startupProfile.rawValue) preferredRoute=\(preferredRoute?.displayName ?? "classic")"
         )
+        refreshPrivateKeyFromStoreIfNeeded()
         host = savedHost.host
         port = String(savedHost.port)
         username = savedHost.username
-        startupProfileStorage = savedHost.startupProfile.rawValue
-        startupCommand = savedHost.resolvedStartupCommand
+        let connectionStartupProfile = savedHost.connectionStartupProfile
+        startupProfileStorage = connectionStartupProfile.rawValue
+        startupCommand = savedHost.resolvedStartupCommand(
+            for: connectionStartupProfile,
+            startupCommandOverride: savedHost.startupCommandOverride
+        )
         pendingOneShotStartupCommand = nil
+        pendingRoutePreference = preferredRoute
 
         guard hasReusableCredential else {
             showingHostEditor = true
@@ -2962,6 +3255,16 @@ struct SSHTerminalView: View {
 
     private func persistPrivateKey() {
         privateKeyStore.save(privateKeyPEM)
+    }
+
+    private func refreshPrivateKeyFromStoreIfNeeded() {
+        guard privateKeyPEM.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let storedPrivateKey = privateKeyStore.load()?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !storedPrivateKey.isEmpty else {
+            return
+        }
+
+        privateKeyPEM = storedPrivateKey
     }
 
     private var currentStartupCommandOverride: String? {
@@ -3087,8 +3390,31 @@ struct SSHTerminalView: View {
         scheduleTerminalRefit(after: .milliseconds(160))
     }
 
+    private func closeTerminal() {
+        if let onClose {
+            onClose()
+        } else {
+            dismiss()
+        }
+    }
+
     private func refreshSavedHostsFromManager() {
         savedHosts = connectionManager.savedHosts
+    }
+
+    private func consumeInitialSavedHostIfNeeded() {
+        guard session.status == .disconnected else { return }
+        if !didConsumeInitialSavedHost, let initialSavedHost {
+            didConsumeInitialSavedHost = true
+            AppLogger.ui.info(
+                "Consuming initial SSH saved host",
+                detail: "host=\(initialSavedHost.host) username=\(initialSavedHost.username) profile=\(initialSavedHost.startupProfile.rawValue) preferredRoute=\(initialRoutePreference?.displayName ?? "classic")"
+            )
+            connect(to: initialSavedHost, preferredRoute: initialRoutePreference)
+            return
+        }
+
+        consumePendingResumeIfNeeded()
     }
 
     private func consumePendingResumeIfNeeded() {
@@ -3405,6 +3731,11 @@ private struct SSHImportReviewSheet: View {
 
         if trimmedCommand.contains(".talkie-shell/bin/talkie-enter") {
             return "talkie-enter helper"
+        }
+
+        if trimmedCommand.contains("TALKIE_NATIVE_SESSION")
+            || trimmedCommand.contains("talkie-native-${TALKIE_SURFACE:-phone}") {
+            return "native reusable shell"
         }
 
         let preview = trimmedCommand.prefix(96)

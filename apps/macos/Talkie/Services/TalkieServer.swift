@@ -175,12 +175,23 @@ private struct CompanionActivateAppRequest: Codable {
     let bundleIdentifier: String?
 }
 
+private struct TerminalAccessResponse: Codable {
+    let ok: Bool
+    let payload: String?
+    let label: String?
+    let host: String?
+    let alternateHosts: [String]
+    let fingerprint: String?
+    let error: String?
+}
+
 private enum LocalBridgeCapability {
     static let companionRuntimeState = "companion.runtimeState"
     static let companionTrigger = "companion.trigger"
     static let companionActivateApp = "companion.activateApp"
     static let companionTrackpad = "companion.trackpad"
     static let companionPasteImage = "companion.pasteImage"
+    static let terminalAccess = "terminal.access"
     static let desktopWindowsRead = "desktop.windows.read"
     static let desktopScreenshotRead = "desktop.screenshot.read"
     static let messageInject = "message.inject"
@@ -192,6 +203,7 @@ private enum LocalBridgeCapability {
         companionActivateApp,
         companionTrackpad,
         companionPasteImage,
+        terminalAccess,
         desktopWindowsRead,
         desktopScreenshotRead,
         messageInject,
@@ -607,6 +619,8 @@ final class TalkieServer {
             return LocalBridgeCapability.companionTrackpad
         case ("POST", "/companion/paste-image"):
             return LocalBridgeCapability.companionPasteImage
+        case ("POST", "/terminal/access"):
+            return LocalBridgeCapability.terminalAccess
         case ("GET", "/windows/claude"):
             return LocalBridgeCapability.desktopWindowsRead
         case ("GET", "/screenshot/terminals"), ("GET", "/screenshot/display"):
@@ -810,6 +824,16 @@ final class TalkieServer {
                 body: bodyData
             ) else { return }
             await handleCompanionPasteImage(connection, body: body)
+        } else if path == "/terminal/access" && method == "POST" {
+            guard authorizeLocalClientIfNeeded(
+                connection: connection,
+                method: method,
+                rawPath: rawPath,
+                path: path,
+                headers: headers,
+                body: bodyData
+            ) else { return }
+            await handleTerminalAccess(connection)
         } else if path == "/windows/claude" && method == "GET" {
             guard authorizeLocalClientIfNeeded(
                 connection: connection,
@@ -2319,6 +2343,87 @@ final class TalkieServer {
             return false
         }
         return true
+    }
+
+    private func handleTerminalAccess(_ connection: NWConnection) async {
+        do {
+            let connectionDetails = preferredTerminalAccessConnection()
+            let prepared = try await SSHKeyQRCodeProvisioner.prepare(connection: connectionDetails)
+            let response = TerminalAccessResponse(
+                ok: true,
+                payload: prepared.payload,
+                label: prepared.status.label,
+                host: connectionDetails?.host,
+                alternateHosts: connectionDetails?.alternateHosts ?? [],
+                fingerprint: prepared.status.fingerprint,
+                error: nil
+            )
+            sendJSONResponse(connection, statusCode: 200, body: response)
+        } catch {
+            log.error("Failed to prepare terminal access payload", detail: error.localizedDescription)
+            sendJSONResponse(
+                connection,
+                statusCode: 500,
+                body: TerminalAccessResponse(
+                    ok: false,
+                    payload: nil,
+                    label: nil,
+                    host: nil,
+                    alternateHosts: [],
+                    fingerprint: nil,
+                    error: error.localizedDescription
+                )
+            )
+        }
+    }
+
+    private func preferredTerminalAccessConnection() -> SSHKeyQRCodeProvisioner.ConnectionDetails? {
+        let hosts = preferredTerminalAccessHosts
+        guard let host = hosts.first else {
+            return nil
+        }
+
+        return SSHKeyQRCodeProvisioner.ConnectionDetails(
+            host: host,
+            port: 22,
+            username: NSUserName(),
+            startupProfileRawValue: "standardShell",
+            launcherModeRawValue: "native",
+            autoConnect: true,
+            alternateHosts: Array(hosts.dropFirst())
+        )
+    }
+
+    private var preferredTerminalAccessHosts: [String] {
+        let bridgeManager = BridgeManager.shared
+        var candidates: [String?] = []
+
+        if bridgeManager.qrData?.isPairingReady == true {
+            candidates.append(bridgeManager.qrData?.hostname)
+            candidates.append(contentsOf: bridgeManager.qrData?.alternateHosts ?? [])
+        }
+
+        candidates.append(TalkieNetworkRouteClassifier.localBonjourHostname(from: Host.current().name))
+        candidates.append(bridgeManager.tailscaleStatus.hostname)
+
+        var seen: Set<String> = []
+        var hosts: [String] = []
+        for candidate in candidates {
+            let host = candidate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let normalized = host.lowercased()
+            guard !host.isEmpty,
+                  normalized != "localhost",
+                  normalized != "127.0.0.1",
+                  normalized != "::1",
+                  !seen.contains(normalized) else {
+                continue
+            }
+
+            seen.insert(normalized)
+            hosts.append(host)
+        }
+
+        return hosts
     }
 
     private struct CompanionPasteImageRequest: Codable {
