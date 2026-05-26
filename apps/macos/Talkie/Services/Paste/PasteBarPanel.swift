@@ -41,7 +41,7 @@ final class PasteBarPanel {
         hostingView.layer?.isOpaque = false
 
         let isEmpty = items.isEmpty
-        let width: CGFloat = isEmpty ? 260 : CGFloat(min(items.count, 5)) * 100 + 40
+        let width: CGFloat = isEmpty ? 260 : max(390, CGFloat(min(items.count, 5)) * 100 + 40)
         let height: CGFloat = isEmpty ? 80 : 140
 
         let p = NSPanel(
@@ -282,6 +282,7 @@ private struct PasteBarView: View {
             formatPill("⇧", label: "path", active: state.activeFormat == .filePath)
             formatPill("⌥", label: "url", active: state.activeFormat == .url)
             formatPill("⌃", label: "base64", active: state.activeFormat == .base64)
+            formatPill("⇧⌥", label: "describe", active: state.activeFormat == .visionDescription)
             formatPill("⌘", label: "drag", active: state.activeFormat == .dragFile)
         }
     }

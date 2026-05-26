@@ -138,6 +138,7 @@ Payload data is a JSON value — encoded via `TKAugmentationData` which round-tr
 | `ocr` | image | `[{ text, bounds, confidence }]` |
 | `ax-tree` | image | `{ role, label, frame, identifier, children[...] }` recursive |
 | `window-meta` | image | `{ title, bundleID, screenFrame, backingScale }` |
+| `vision-description` | image | `{ promptVersion, variants[{ target, providerId, modelId, description, contextString }] }` |
 | `vad` | audio | `[{ start, end }]` (seconds) |
 | `transcript` | audio | `{ text, segments[...], words[...] }` — opportunistic re-transcription |
 | `diarization` | audio | `[{ speaker, start, end }]` |

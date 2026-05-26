@@ -53,3 +53,29 @@ func captureMarkupLayerDecodeDefaults() throws {
     #expect(layer.visible)
     #expect(layer.author == .agent)
 }
+
+@Test("Screenshot vision description payload caches target variants")
+func screenshotVisionDescriptionPayloadCachesTargetVariants() throws {
+    let generic = ScreenshotVisionDescriptionVariant(
+        target: "generic-ai",
+        providerId: "gemini",
+        modelId: "gemini-2.0-flash",
+        description: ScreenshotDescription(primaryFocus: "Settings window is open.")
+    )
+    let terminal = ScreenshotVisionDescriptionVariant(
+        target: "terminal-cli",
+        providerId: "openai",
+        modelId: "gpt-4.1-mini",
+        description: ScreenshotDescription(primaryFocus: "Terminal shows a failed SSH login.")
+    )
+
+    var payload = ScreenshotVisionDescriptionPayload()
+    payload.upsert(generic)
+    payload.upsert(terminal)
+
+    let data = try JSONEncoder().encode(payload)
+    let decoded = try JSONDecoder().decode(ScreenshotVisionDescriptionPayload.self, from: data)
+
+    #expect(decoded.variant(target: "generic-ai")?.contextString == "Primary focus: Settings window is open.")
+    #expect(decoded.variant(target: "terminal-cli")?.providerId == "openai")
+}

@@ -2146,7 +2146,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             prev.activate()
         }
 
-        executePaste(item: result.item, format: result.format)
+        let shouldPaste = await executePaste(
+            item: result.item,
+            format: result.format,
+            targetApp: previousApp
+        )
+        guard shouldPaste else { return }
 
         // Brief delay for app activation to settle, then simulate Cmd+V
         try? await Task.sleep(for: .milliseconds(80))
@@ -2154,7 +2159,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     }
 
     @MainActor
-    private func executePaste(item: TrayItem, format: PasteFormat) {
+    private func executePaste(
+        item: TrayItem,
+        format: PasteFormat,
+        targetApp: NSRunningApplication?
+    ) async -> Bool {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
 
@@ -2165,31 +2174,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                let durableURL = durablePasteURL(for: screenshot, data: data) {
                 writeScreenshotPasteboard(data: data, fileURL: durableURL, imageMarkdown: true)
                 Log(.system).info("Quick Paste: screenshot image + markdown → clipboard")
-                return
+                return true
             }
 
-            guard let data = loadTrayItemData(item) else { return }
+            guard let data = loadTrayItemData(item) else { return false }
             pasteboard.setData(data, forType: .png)
             Log(.system).info("Quick Paste: image → clipboard")
+            return true
 
         case .filePath:
             let path = item.tempURL.path
             pasteboard.setString(path, forType: .string)
             Log(.system).info("Quick Paste: file path → clipboard")
+            return true
 
         case .url:
             let urlString = "http://localhost:8766/tray/\(item.id.uuidString).png"
             pasteboard.setString(urlString, forType: .string)
             Log(.system).info("Quick Paste: URL → clipboard")
+            return true
 
         case .base64:
-            guard let data = loadTrayItemData(item) else { return }
+            guard let data = loadTrayItemData(item) else { return false }
             let b64 = "data:image/png;base64," + data.base64EncodedString()
             pasteboard.setString(b64, forType: .string)
             Log(.system).info("Quick Paste: base64 → clipboard")
+            return true
+
+        case .visionDescription:
+            guard case .screenshot(let screenshot) = item else {
+                if let text = item.previewText {
+                    pasteboard.setString(text, forType: .string)
+                    Log(.system).info("Quick Paste: selection text → clipboard")
+                    return true
+                }
+                return false
+            }
+            do {
+                let description = try await ScreenshotVisionPasteService.shared.descriptionText(
+                    for: screenshot,
+                    targetAppName: targetApp?.localizedName,
+                    targetBundleID: targetApp?.bundleIdentifier
+                )
+                pasteboard.setString(description, forType: .string)
+                Log(.system).info("Quick Paste: VLM screenshot description → clipboard")
+                return true
+            } catch {
+                let fallback = await ScreenshotVisionPasteService.shared.fallbackDescriptionText(
+                    for: screenshot,
+                    targetAppName: targetApp?.localizedName
+                )
+                pasteboard.setString(fallback, forType: .string)
+                Log(.system).error("Quick Paste VLM description failed: \(error.localizedDescription)")
+                return true
+            }
 
         case .dragFile:
-            break // Handled separately via beginFileDrag
+            return false // Handled separately via beginFileDrag
         }
     }
 

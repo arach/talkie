@@ -136,6 +136,67 @@ public struct ScreenshotDescription: Codable, Sendable, Equatable {
     }
 }
 
+public struct LLMVisionDescriptionResult: Sendable {
+    public var providerId: String
+    public var modelId: String
+    public var description: ScreenshotDescription
+
+    public init(providerId: String, modelId: String, description: ScreenshotDescription) {
+        self.providerId = providerId
+        self.modelId = modelId
+        self.description = description
+    }
+}
+
+public struct ScreenshotVisionDescriptionVariant: Codable, Sendable, Equatable {
+    public var target: String
+    public var providerId: String?
+    public var modelId: String?
+    public var generatedAt: Date
+    public var description: ScreenshotDescription
+    public var contextString: String
+
+    public init(
+        target: String,
+        providerId: String? = nil,
+        modelId: String? = nil,
+        generatedAt: Date = Date(),
+        description: ScreenshotDescription,
+        contextString: String? = nil
+    ) {
+        self.target = target
+        self.providerId = providerId
+        self.modelId = modelId
+        self.generatedAt = generatedAt
+        self.description = description
+        self.contextString = contextString ?? description.contextString
+    }
+}
+
+public struct ScreenshotVisionDescriptionPayload: Codable, Sendable, Equatable {
+    public static let currentPromptVersion = "vlm-paste-v1"
+
+    public var promptVersion: String
+    public var variants: [ScreenshotVisionDescriptionVariant]
+
+    public init(
+        promptVersion: String = Self.currentPromptVersion,
+        variants: [ScreenshotVisionDescriptionVariant] = []
+    ) {
+        self.promptVersion = promptVersion
+        self.variants = variants
+    }
+
+    public func variant(target: String) -> ScreenshotVisionDescriptionVariant? {
+        variants.last { $0.target == target }
+    }
+
+    public mutating func upsert(_ variant: ScreenshotVisionDescriptionVariant) {
+        variants.removeAll { $0.target == variant.target }
+        variants.append(variant)
+    }
+}
+
 @MainActor
 public enum LLMVisionService {
     public static func describeScreenshot(
@@ -165,16 +226,8 @@ public enum LLMVisionService {
             options: LLMGenerationOptions(temperature: 0.2, maxTokens: 1536)
         )
 
-        let providerOrder = ["gemini", "openai"]
-        for providerId in providerOrder {
-            guard let provider = LLMProviderRegistry.shared.provider(for: providerId),
-                  await provider.isAvailable,
-                  provider.supportsVision else { continue }
-            let modelId = model ?? LLMProviderRegistry.shared.defaultModelId(for: providerId)
-            let raw = try await provider.generateVisionIfAvailable(request: request, model: modelId)
-            return decodeStructuredDescription(raw)
-        }
-        throw LLMError.providerNotAvailable("vision")
+        let result = try await generateStructuredDescription(request: request, model: model)
+        return result.description
     }
 
     public static func describeScreenshotStructured(
@@ -188,6 +241,46 @@ public enum LLMVisionService {
             ocrAnchors: ocrGeometry.anchors,
             model: model
         )
+    }
+
+    public static func describeScreenshotForPaste(
+        jpegData: Data,
+        ocrGeometry: OCRGeometryResult,
+        target: String,
+        sourceContext: String?,
+        model: String? = nil
+    ) async throws -> LLMVisionDescriptionResult {
+        let request = LLMVisionRequest.describeImage(
+            jpegData: jpegData,
+            prompt: pastePrompt(
+                ocrSummary: ocrGeometry.fullText,
+                ocrAnchors: ocrGeometry.anchors,
+                target: target,
+                sourceContext: sourceContext
+            ),
+            options: LLMGenerationOptions(temperature: 0.1, maxTokens: 1800)
+        )
+        return try await generateStructuredDescription(request: request, model: model)
+    }
+
+    private static func generateStructuredDescription(
+        request: LLMVisionRequest,
+        model: String?
+    ) async throws -> LLMVisionDescriptionResult {
+        let providerOrder = ["gemini", "openai"]
+        for providerId in providerOrder {
+            guard let provider = LLMProviderRegistry.shared.provider(for: providerId),
+                  await provider.isAvailable,
+                  provider.supportsVision else { continue }
+            let modelId = model ?? LLMProviderRegistry.shared.defaultModelId(for: providerId)
+            let raw = try await provider.generateVisionIfAvailable(request: request, model: modelId)
+            return LLMVisionDescriptionResult(
+                providerId: providerId,
+                modelId: modelId,
+                description: decodeStructuredDescription(raw)
+            )
+        }
+        throw LLMError.providerNotAvailable("vision")
     }
 
     private static func structuredPrompt(
@@ -213,6 +306,51 @@ public enum LLMVisionService {
 
         Coordinates are normalized 0..1 with origin top-left. Prefer approximate bboxes over omitting them.
         Only cite anchorTokens that appear in the OCR anchor map below. Do not invent labels or anchors.
+
+        OCR excerpt:
+        \(ocrSummary ?? "(none)")
+
+        OCR anchor map (token -> normalized top-left bbox):
+        \(anchorsJSON)
+        """
+    }
+
+    private static func pastePrompt(
+        ocrSummary: String?,
+        ocrAnchors: [String: CaptureMarkupRect]?,
+        target: String,
+        sourceContext: String?
+    ) -> String {
+        let anchorsJSON = encodedAnchors(ocrAnchors)
+        return """
+        Describe this screenshot for a downstream AI assistant that may receive only pasted text.
+        Return ONLY valid JSON, no markdown fences.
+
+        Target assistant/surface: \(target)
+        Source context: \(sourceContext ?? "(unknown)")
+
+        Schema:
+        {
+          "primaryFocus": "<one sentence describing the exact UI state and what matters now>",
+          "regions": [
+            {
+              "role": "header|body|sidebar|toolbar|dialog|form|table|list|media|footer|other",
+              "bbox": {"x": 0.0, "y": 0.0, "width": 0.0, "height": 0.0},
+              "text_summary": "<concise UI summary with exact labels, values, selected state, errors, and affordances>",
+              "anchorTokens": ["<OCR TOKEN FROM MAP>"]
+            }
+          ]
+        }
+
+        Optimize the description for an AI coding/agent workflow:
+        - Prefer concrete UI state over visual prose.
+        - Include visible error messages, selected controls, disabled buttons, active fields, filenames, paths, and host/app names.
+        - Preserve exact visible text when it is likely actionable.
+        - If the target looks terminal-like, make the output especially useful to a CLI model.
+        - Do not invent text, hidden state, or user intent.
+
+        Coordinates are normalized 0..1 with origin top-left. Prefer approximate bboxes over omitting them.
+        Only cite anchorTokens that appear in the OCR anchor map below.
 
         OCR excerpt:
         \(ocrSummary ?? "(none)")

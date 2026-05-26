@@ -32,6 +32,10 @@ public enum TKAugmenterKind: String, Codable, Sendable {
     /// screen coords, backing scale.
     case windowMeta = "window-meta"
 
+    /// VLM-generated textual descriptions of image UI state, keyed by
+    /// the downstream target surface they were prepared for.
+    case visionDescription = "vision-description"
+
     /// Voice-activity detection regions — `[start, end]` pairs.
     case vad
 

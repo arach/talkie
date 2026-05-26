@@ -12,6 +12,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import ImageIO
 import Vision
 import TalkieKit
 
@@ -411,5 +412,241 @@ final class WindowMetaAugmenter: Augmenter {
 
         let data = try TKAugmentationData(encoding: payload)
         return TKAugmentation(kind: kind, version: version, data: data)
+    }
+}
+
+enum ScreenshotVisionPasteError: Error {
+    case imageLoadFailed
+}
+
+/// On-demand VLM pass for Quick Paste. This intentionally runs only
+/// when the user chooses the describe paste format; automatic capture
+/// augmentation should not create surprise model spend for every
+/// screenshot.
+@MainActor
+final class ScreenshotVisionPasteService {
+    static let shared = ScreenshotVisionPasteService()
+    private init() {}
+
+    func descriptionText(
+        for screenshot: TrayScreenshot,
+        targetAppName: String?,
+        targetBundleID: String?
+    ) async throws -> String {
+        let target = Self.targetKey(appName: targetAppName, bundleID: targetBundleID)
+        let sourceContext = Self.sourceContext(for: screenshot)
+
+        if let cached = Self.cachedVariant(for: screenshot.tempURL, target: target) {
+            return Self.renderPasteText(
+                variant: cached,
+                screenshot: screenshot,
+                targetDisplayName: targetAppName ?? target,
+                sourceContext: sourceContext,
+                ocrText: nil
+            )
+        }
+
+        let geometry = await Self.ocrGeometry(for: screenshot.tempURL)
+        let jpeg = try Self.jpegData(for: screenshot.tempURL)
+        let result = try await TalkieKit.LLMVisionService.describeScreenshotForPaste(
+            jpegData: jpeg,
+            ocrGeometry: geometry,
+            target: target,
+            sourceContext: sourceContext
+        )
+
+        let variant = ScreenshotVisionDescriptionVariant(
+            target: target,
+            providerId: result.providerId,
+            modelId: result.modelId,
+            description: result.description
+        )
+        try Self.saveVariant(variant, for: screenshot.tempURL)
+
+        return Self.renderPasteText(
+            variant: variant,
+            screenshot: screenshot,
+            targetDisplayName: targetAppName ?? target,
+            sourceContext: sourceContext,
+            ocrText: geometry.fullText
+        )
+    }
+
+    func fallbackDescriptionText(for screenshot: TrayScreenshot, targetAppName: String?) async -> String {
+        let geometry = await Self.ocrGeometry(for: screenshot.tempURL)
+        return Self.renderFallbackText(
+            screenshot: screenshot,
+            targetDisplayName: targetAppName ?? "AI assistant",
+            sourceContext: Self.sourceContext(for: screenshot),
+            ocrText: geometry.fullText
+        )
+    }
+
+    private static func cachedVariant(
+        for assetURL: URL,
+        target: String
+    ) -> ScreenshotVisionDescriptionVariant? {
+        guard let sidecar = try? TKSidecarStore.read(forAsset: assetURL),
+              let entry = sidecar.entry(of: .visionDescription),
+              let payload = try? entry.data.decode(ScreenshotVisionDescriptionPayload.self) else {
+            return nil
+        }
+        return payload.variant(target: target) ?? payload.variant(target: "generic-ai")
+    }
+
+    private static func saveVariant(
+        _ variant: ScreenshotVisionDescriptionVariant,
+        for assetURL: URL
+    ) throws {
+        var payload: ScreenshotVisionDescriptionPayload
+        if let sidecar = try? TKSidecarStore.read(forAsset: assetURL),
+           let entry = sidecar.entry(of: .visionDescription),
+           let decoded = try? entry.data.decode(ScreenshotVisionDescriptionPayload.self) {
+            payload = decoded
+        } else {
+            payload = ScreenshotVisionDescriptionPayload()
+        }
+        payload.promptVersion = ScreenshotVisionDescriptionPayload.currentPromptVersion
+        payload.upsert(variant)
+
+        let data = try TKAugmentationData(encoding: payload)
+        let augmentation = TKAugmentation(
+            kind: .visionDescription,
+            version: ScreenshotVisionDescriptionPayload.currentPromptVersion,
+            data: data
+        )
+        try TKSidecarStore.upsertAugmentation(
+            augmentation,
+            forAsset: assetURL,
+            assetKind: .image
+        )
+    }
+
+    private static func ocrGeometry(for assetURL: URL) async -> OCRGeometryResult {
+        if let sidecar = try? TKSidecarStore.read(forAsset: assetURL),
+           let entry = sidecar.entry(of: .ocr),
+           let geometry = try? entry.data.decode(OCRGeometryResult.self) {
+            return geometry
+        }
+
+        do {
+            return try await VisionOCRService.shared.recognizeTextWithGeometry(atURL: assetURL)
+        } catch {
+            return emptyGeometry(for: assetURL)
+        }
+    }
+
+    private static func emptyGeometry(for assetURL: URL) -> OCRGeometryResult {
+        guard let source = CGImageSourceCreateWithURL(assetURL as CFURL, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            return OCRGeometryResult(imageWidth: 0, imageHeight: 0, observations: [], fullText: "", lines: [], anchors: [:])
+        }
+        return OCRGeometryResult(
+            imageWidth: Double(image.width),
+            imageHeight: Double(image.height),
+            observations: [],
+            fullText: "",
+            lines: [],
+            anchors: [:]
+        )
+    }
+
+    private static func jpegData(for assetURL: URL) throws -> Data {
+        guard let source = CGImageSourceCreateWithURL(assetURL as CFURL, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            throw ScreenshotVisionPasteError.imageLoadFailed
+        }
+
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            data as CFMutableData,
+            "public.jpeg" as CFString,
+            1,
+            nil
+        ) else {
+            throw ScreenshotVisionPasteError.imageLoadFailed
+        }
+        let properties = [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary
+        CGImageDestinationAddImage(destination, image, properties)
+        guard CGImageDestinationFinalize(destination) else {
+            throw ScreenshotVisionPasteError.imageLoadFailed
+        }
+        return data as Data
+    }
+
+    private static func renderPasteText(
+        variant: ScreenshotVisionDescriptionVariant,
+        screenshot: TrayScreenshot,
+        targetDisplayName: String,
+        sourceContext: String,
+        ocrText: String?
+    ) -> String {
+        var sections = [
+            "UI screenshot context for \(targetDisplayName)",
+            "Source: \(sourceContext)",
+            "Image path: \(screenshot.tempURL.path)",
+            "",
+            variant.contextString,
+        ]
+        if let ocrText, !ocrText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            sections.append("")
+            sections.append("Visible text (OCR):")
+            sections.append(clipped(ocrText))
+        }
+        return sections.joined(separator: "\n")
+    }
+
+    private static func renderFallbackText(
+        screenshot: TrayScreenshot,
+        targetDisplayName: String,
+        sourceContext: String,
+        ocrText: String
+    ) -> String {
+        var sections = [
+            "UI screenshot context for \(targetDisplayName)",
+            "Source: \(sourceContext)",
+            "Image path: \(screenshot.tempURL.path)",
+        ]
+        if !ocrText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            sections.append("")
+            sections.append("Visible text (OCR):")
+            sections.append(clipped(ocrText))
+        }
+        return sections.joined(separator: "\n")
+    }
+
+    private static func sourceContext(for screenshot: TrayScreenshot) -> String {
+        [
+            screenshot.appName,
+            screenshot.windowTitle,
+            screenshot.displayName,
+            "\(screenshot.mode.rawValue) capture",
+            "\(screenshot.width)x\(screenshot.height)",
+        ]
+        .compactMap { $0 }
+        .joined(separator: " · ")
+    }
+
+    private static func targetKey(appName: String?, bundleID: String?) -> String {
+        let source = [appName, bundleID]
+            .compactMap { $0?.lowercased() }
+            .joined(separator: " ")
+
+        if source.contains("claude") { return "claude" }
+        if source.contains("cursor") { return "cursor" }
+        if source.contains("codex") { return "codex" }
+        if source.contains("chatgpt") || source.contains("openai") { return "chatgpt" }
+        if source.contains("terminal")
+            || source.contains("iterm")
+            || source.contains("ghostty")
+            || source.contains("warp") {
+            return "terminal-cli"
+        }
+        return "generic-ai"
+    }
+
+    private static func clipped(_ text: String, maxCharacters: Int = 4000) -> String {
+        guard text.count > maxCharacters else { return text }
+        return String(text.prefix(maxCharacters)) + "\n[truncated]"
     }
 }
