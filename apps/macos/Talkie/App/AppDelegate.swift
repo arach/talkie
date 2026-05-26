@@ -2297,7 +2297,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             CapturePerformanceMonitor.shared.mark("capture.service.failed")
             return false
         }
-        let capturedAt = Date()
         CapturePerformanceMonitor.shared.mark("capture.service.complete")
 
         // Show preview immediately; file-backed drag/copy attaches after the tray write.
@@ -2308,7 +2307,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             sourceHeight: result.height
         )
         CapturePerformanceMonitor.shared.mark("preview.show.complete")
-        recordLiveScreenshotForActiveDictationIfNeeded(result, mode: mode, capturedAt: capturedAt)
+        recordLiveScreenshotForActiveDictationIfNeeded(result, mode: mode)
 
         CapturePerformanceMonitor.shared.mark("tray.add.begin")
         guard let latestItem = await ScreenshotTray.shared.addReturningItem(
@@ -2333,14 +2332,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     @MainActor
     private func recordLiveScreenshotForActiveDictationIfNeeded(
         _ result: CaptureResult,
-        mode: CaptureMode,
-        capturedAt: Date
+        mode: CaptureMode
     ) {
         let live = ServiceManager.shared.live
-        guard live.state == .listening else { return }
+        guard live.isRecording else { return }
         live.recordLiveScreenshot(
             data: result.data,
-            capturedAt: capturedAt,
+            capturedAt: result.capturedAt,
             captureMode: mode.rawValue,
             width: result.width,
             height: result.height,

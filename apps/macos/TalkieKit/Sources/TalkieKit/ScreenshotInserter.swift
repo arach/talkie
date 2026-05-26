@@ -41,6 +41,19 @@ public enum ScreenshotInserter {
     ) -> String {
         guard !screenshots.isEmpty else { return text }
 
+        if let timedTranscription,
+           !timedTranscription.words.isEmpty,
+           deliveryTextMatchesTimedTranscript(text, timedTranscription.text) {
+            return interleave(
+                timedTranscription: TimedTranscription(
+                    text: text,
+                    words: timedTranscription.words
+                ),
+                screenshots: screenshots,
+                screenshotDirectory: screenshotDirectory
+            ).markdown
+        }
+
         let links = screenshots
             .sorted { $0.timestampMs < $1.timestampMs }
             .enumerated()
@@ -127,7 +140,7 @@ public enum ScreenshotInserter {
             markdownParts.append("[\(refNum)]")
 
             let ref = screenshotRef(ss, directory: screenshotDirectory)
-            references.append("[\(refNum)](\(ref))")
+            references.append("[\(refNum)](\(markdownDestination(ref)))")
 
             lastPos = clampedPos
         }
@@ -255,6 +268,10 @@ public enum ScreenshotInserter {
             return dir.appendingPathComponent(ss.filename).path
         }
         return ss.filename
+    }
+
+    private static func deliveryTextMatchesTimedTranscript(_ deliveryText: String, _ timedText: String) -> Bool {
+        deliveryText.trimmingCharacters(in: .whitespacesAndNewlines) == timedText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func markdownDestination(_ value: String) -> String {

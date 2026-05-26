@@ -1586,7 +1586,7 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
         appName: String?,
         displayName: String?
     ) {
-        guard state == .listening else { return }
+        guard isRecording else { return }
         guard let service = xpcManager?.remoteObjectProxy(errorHandler: { error in
             logger.debug("[Agent] recordLiveScreenshot XPC error: \(error.localizedDescription)")
         }) else {

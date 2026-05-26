@@ -392,8 +392,8 @@ final class AgentController: ObservableObject {
     }
 
     /// Critical-path output for dictation delivery.
-    /// Captures stay out of the dictated text; media is attached after the
-    /// canonical recording row is stored.
+    /// Captures stay out of the canonical transcript; delivery can add
+    /// timestamped references without waiting for tray/DB work.
     struct PreparedDictation: Sendable {
         let text: String
         let screenshots: [RecordingScreenshot]

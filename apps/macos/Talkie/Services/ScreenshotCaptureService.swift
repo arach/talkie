@@ -62,6 +62,7 @@ struct CaptureResult {
     let data: Data
     let image: CGImage
     let previewImage: CGImage
+    let capturedAt: Date
     let width: Int
     let height: Int
     let windowTitle: String?
@@ -96,8 +97,6 @@ final class ScreenshotCaptureService {
         recordingStartTime: Date,
         preselectedRegion: CGRect? = nil
     ) async -> RecordingScreenshot? {
-        let timestampMs = Int(Date().timeIntervalSince(recordingStartTime) * 1000)
-
         // Check permission first
         CapturePerformanceMonitor.shared.mark("permission.check.begin")
         guard await hasScreenRecordingPermission() else {
@@ -144,6 +143,8 @@ final class ScreenshotCaptureService {
             windowTitle = result.windowTitle
             appName = result.appName
         }
+        let capturedAt = Date()
+        let timestampMs = Int(capturedAt.timeIntervalSince(recordingStartTime) * 1000)
         CapturePerformanceMonitor.shared.mark("capture.image.complete")
 
         async let storedImageTask = processedImageForStorage(image)
@@ -253,6 +254,7 @@ final class ScreenshotCaptureService {
             windowTitle = result.windowTitle
             appName = result.appName
         }
+        let capturedAt = Date()
         CapturePerformanceMonitor.shared.mark("capture.image.complete")
 
         let storedImage = await processedImageForStorage(image)
@@ -276,6 +278,7 @@ final class ScreenshotCaptureService {
             data: data,
             image: image,
             previewImage: thumbnail,
+            capturedAt: capturedAt,
             width: storedImage.width,
             height: storedImage.height,
             windowTitle: windowTitle,
