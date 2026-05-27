@@ -8,7 +8,8 @@
 //  Visual identity comes from the studio Shape A prototype:
 //    `design/studio/components/studies/MacTalkieButton.tsx` →
 //    HoverRevealStrip + InteractiveChrome + InteractiveStrip.
-//  Tonally: cream paper, amber accent (Scope palette), not gunmetal.
+//  Tonally: follows the active Talkie theme, with a small retained
+//  Talkie mark/accent so the center control still feels branded.
 //
 //  Interaction model:
 //    - Default       : horizontal pill — [amber mark][TALKIE][⌘K]
@@ -72,15 +73,67 @@ private enum ChromeMetrics {
     static let inlineClusterWidth: CGFloat = 3 * inlineChipWidth + 2 * inlineChipSpacing  // 284
 }
 
+@MainActor
 private enum ChromeTone {
-    // Warm cream/paper/ink palette — matches studio Shape A.
-    static let paper      = Color(red: 0.957, green: 0.945, blue: 0.918)  // #F4F1EA
-    static let paperHover = Color(red: 0.949, green: 0.937, blue: 0.902)  // #F2EFE6
-    static let ink        = Color(red: 0.165, green: 0.149, blue: 0.125)  // #2A2620
-    static let cream      = Color(red: 0.984, green: 0.984, blue: 0.980)  // #FBFBFA
-    static let edge       = Color(red: 0.878, green: 0.863, blue: 0.827)  // #E0DCD3
-    static let mutedInk   = Color(red: 0.353, green: 0.333, blue: 0.298)  // #5A554C
-    static let subtleInk  = Color(red: 0.659, green: 0.635, blue: 0.592)  // #A8A29E
+    private static var settings: SettingsManager { SettingsManager.shared }
+    private static var theme: Theme { Theme.current }
+
+    private static var isScope: Bool { settings.isScopeTheme }
+    private static var isDark: Bool { settings.isDarkMode }
+
+    static var stripFill: Color {
+        if isScope { return ScopeCanvas.surface }
+        return isDark ? theme.surface1.opacity(0.96) : theme.surface1
+    }
+
+    static var stripBorder: Color {
+        if isScope { return ScopeEdge.faint }
+        return theme.divider.opacity(isDark ? 0.70 : 0.90)
+    }
+
+    static var stripShadow: Color {
+        Color.black.opacity(isDark ? 0.18 : 0.10)
+    }
+
+    static var chipHoverFill: Color {
+        if isScope { return ScopeCanvas.canvasAlt }
+        return theme.surfaceHover
+    }
+
+    static var accent: Color {
+        if isScope { return ScopeAmber.solid }
+        return theme.accent
+    }
+
+    static var label: Color {
+        if isScope { return ScopeInk.primary }
+        return theme.foreground
+    }
+
+    static var labelMuted: Color {
+        if isScope { return ScopeInk.muted }
+        return theme.foregroundSecondary
+    }
+
+    static var iconMuted: Color {
+        if isScope { return ScopeInk.faint }
+        return theme.foregroundMuted
+    }
+
+    static var pillFill: Color {
+        if isScope { return ScopeInk.primary }
+        return isDark ? theme.surface3 : theme.foreground
+    }
+
+    static var pillForeground: Color {
+        if isScope { return ScopeCanvas.canvas }
+        return isDark ? theme.foreground : theme.background
+    }
+
+    static var markGlow: Color {
+        if isScope { return ScopeAmber.glowStrong }
+        return accent.opacity(0.42)
+    }
 }
 
 // MARK: - Chrome bar
@@ -147,16 +200,16 @@ struct TalkieChromeBar: View {
             // strip is revealed. At rest the pill stands alone — no
             // surrounding container competing for attention.
             RoundedRectangle(cornerRadius: ChromeMetrics.barRadius)
-                .fill(ChromeTone.paper)
+                .fill(ChromeTone.stripFill)
                 .opacity(header.hovered ? 1 : 0)
         )
         .overlay(
             RoundedRectangle(cornerRadius: ChromeMetrics.barRadius)
-                .strokeBorder(ChromeTone.edge, lineWidth: 0.5)
+                .strokeBorder(ChromeTone.stripBorder, lineWidth: 0.5)
                 .opacity(header.hovered ? 1 : 0)
         )
-        .shadow(color: Color.black.opacity(header.hovered ? 0.08 : 0), radius: 10, y: 4)
-        .shadow(color: Color.black.opacity(header.hovered ? 0.04 : 0), radius: 3, y: 1)
+        .shadow(color: ChromeTone.stripShadow.opacity(header.hovered ? 1 : 0), radius: 10, y: 4)
+        .shadow(color: ChromeTone.stripShadow.opacity(header.hovered ? 0.45 : 0), radius: 3, y: 1)
         .onHover { hovering in
             withAnimation(.spring(response: ChromeMetrics.popResponse,
                                   dampingFraction: ChromeMetrics.popDamping)) {
@@ -199,20 +252,20 @@ private struct TalkieChromePill: View {
                     Text(formatElapsed(elapsedTime))
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .tracking(0.4)
-                        .foregroundStyle(ChromeTone.cream)
+                        .foregroundStyle(ChromeTone.pillForeground)
                         .monospacedDigit()
 
                     LiveWaveformBars(
                         audioLevel: audioLevel,
                         isRecording: true,
-                        color: ChromeTone.cream
+                        color: ChromeTone.pillForeground
                     )
                     .frame(width: 70, height: 16)
                 } else {
                     Text("TALKIE")
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .tracking(2.0)
-                        .foregroundStyle(ChromeTone.cream)
+                        .foregroundStyle(ChromeTone.pillForeground)
                     // No shortcut hint in the idle label — the brand
                     // word IS the affordance. If we later want a hint,
                     // ⌘T (record) is more honest than ⌘K (search).
@@ -222,14 +275,14 @@ private struct TalkieChromePill: View {
             .frame(height: ChromeMetrics.pillHeight)
             .background(
                 Capsule()
-                    .fill(ChromeTone.ink)
+                    .fill(ChromeTone.pillFill)
             )
             .overlay(
                 // Stroke only appears on hover — recording state is
                 // already conveyed by REC text + live waveform inside
                 // the pill; an outer ring just adds chrome on chrome.
                 Capsule()
-                    .strokeBorder(ScopeAmber.solid, lineWidth: hovered ? 1.5 : 0)
+                    .strokeBorder(ChromeTone.accent, lineWidth: hovered ? 1.5 : 0)
                     .opacity(0.30)
             )
             .shadow(color: Color.black.opacity(0.14), radius: 4, y: 2)
@@ -244,7 +297,7 @@ private struct TalkieChromePill: View {
 
     private var ringColor: Color {
         if isRecording { return Color.red }
-        return ScopeAmber.solid
+        return ChromeTone.accent
     }
 
     private var helpText: String {
@@ -269,18 +322,18 @@ private struct TalkieMark: View {
     var body: some View {
         ZStack {
             Circle()
-                .strokeBorder(ScopeAmber.solid.opacity(0.45), lineWidth: 1)
+                .strokeBorder(ChromeTone.accent.opacity(0.45), lineWidth: 1)
                 .frame(width: 11, height: 11)
 
             Circle()
-                .fill(ScopeAmber.solid)
+                .fill(ChromeTone.accent)
                 .frame(width: 6, height: 6)
                 .shadow(
                     // Amber glow only on hover. During recording, the
                     // REC label + waveform carry the signal — adding
                     // an amber light reads as noise alongside the red
                     // recording cue.
-                    color: glow ? ScopeAmber.glowStrong : .clear,
+                    color: glow ? ChromeTone.markGlow : .clear,
                     radius: glow ? 4 : 0
                 )
         }
@@ -303,13 +356,13 @@ private struct ChromeNavInlineChip: View {
             HStack(spacing: 5) {
                 Image(systemName: slot.icon)
                     .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(isActive ? ScopeAmber.solid : ChromeTone.subtleInk)
+                    .foregroundStyle(isActive ? ChromeTone.accent : ChromeTone.iconMuted)
                     .frame(width: 12)
 
                 Text(slot.label.uppercased())
                     .font(.system(size: 8.5, weight: .semibold, design: .monospaced))
                     .tracking(1.4)
-                    .foregroundStyle(isActive ? ChromeTone.ink : ChromeTone.mutedInk)
+                    .foregroundStyle(isActive ? ChromeTone.label : ChromeTone.labelMuted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
             }
@@ -317,12 +370,12 @@ private struct ChromeNavInlineChip: View {
             .frame(width: ChromeMetrics.inlineChipWidth, height: ChromeMetrics.pillHeight)
             .background(
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(hovered ? ChromeTone.paperHover : Color.clear)
+                    .fill(hovered ? ChromeTone.chipHoverFill : Color.clear)
             )
             .overlay(alignment: .bottom) {
                 if isSelected {
                     Rectangle()
-                        .fill(ScopeAmber.solid)
+                        .fill(ChromeTone.accent)
                         .frame(height: 1.5)
                         .padding(.horizontal, 4)
                 }
