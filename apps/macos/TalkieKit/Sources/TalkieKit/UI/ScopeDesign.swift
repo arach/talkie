@@ -381,20 +381,82 @@ public enum ScopePalette {
 /// at the typical 10pt size. Tracking scales with font size in
 /// SwiftUI, which is fine — the visual ratio stays close.
 public enum ScopeType {
-    /// Studio's `font-mono` is JetBrains Mono. We mirror that here
-    /// so the SwiftUI surfaces don't drop to SF Mono (which reads
-    /// noticeably differently — wider, rounder digits). Falls back
-    /// to system monospaced if the font isn't loaded.
-    private static func mono(size: CGFloat) -> Font {
+    // MARK: Display (Cormorant Garamond)
+    //
+    // Cormorant Garamond is the homepage's `--font-display-modern`.
+    // Ships with slight PostScript naming differences across builds,
+    // so we try several candidates before falling back to system serif.
+    // Single source of truth: don't redefine in view files.
+
+    private static let cormorantRegularCandidates = [
+        "CormorantGaramond-Regular",
+        "Cormorant Garamond",
+        "CormorantGaramond",
+    ]
+    private static let cormorantMediumCandidates = [
+        "CormorantGaramond-Medium",
+        "Cormorant Garamond Medium",
+    ]
+    private static let cormorantItalicCandidates = [
+        "CormorantGaramond-Italic",
+        "Cormorant Garamond Italic",
+    ]
+
+    /// Cormorant Garamond at any size + weight. Falls back to system
+    /// serif when the family is missing.
+    public static func display(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        let candidates = (weight == .medium || weight == .semibold || weight == .bold)
+            ? cormorantMediumCandidates
+            : cormorantRegularCandidates
         #if canImport(AppKit)
-        for name in ["JetBrainsMono-SemiBold", "JetBrainsMono-Medium"] {
+        for name in candidates {
             if NSFont(name: name, size: size) != nil {
                 return .custom(name, size: size)
             }
         }
         #endif
-        return .system(size: size, weight: .semibold, design: .monospaced)
+        return .system(size: size, weight: weight, design: .serif)
     }
+
+    /// Italic display. Cormorant Italic when present, else system serif italic.
+    public static func displayItalic(size: CGFloat) -> Font {
+        #if canImport(AppKit)
+        for name in cormorantItalicCandidates {
+            if NSFont(name: name, size: size) != nil {
+                return .custom(name, size: size)
+            }
+        }
+        #endif
+        return .system(size: size, weight: .regular, design: .serif).italic()
+    }
+
+    // MARK: Mono (JetBrains Mono)
+
+    /// Studio's `font-mono` is JetBrains Mono. We mirror that here
+    /// so the SwiftUI surfaces don't drop to SF Mono (which reads
+    /// noticeably differently — wider, rounder digits). Falls back
+    /// to system monospaced if the font isn't loaded.
+    public static func mono(size: CGFloat, weight: Font.Weight = .semibold) -> Font {
+        let candidates: [String]
+        switch weight {
+        case .semibold, .bold:
+            candidates = ["JetBrainsMono-SemiBold", "JetBrainsMono-Medium"]
+        default:
+            candidates = ["JetBrainsMono-Medium", "JetBrainsMono-Regular"]
+        }
+        #if canImport(AppKit)
+        for name in candidates {
+            if NSFont(name: name, size: size) != nil {
+                return .custom(name, size: size)
+            }
+        }
+        #endif
+        return .system(size: size, weight: weight, design: .monospaced)
+    }
+
+    /// Backwards-compatible mono(size:) — calls the weighted variant
+    /// with the historical `.semibold` default.
+    private static func mono(size: CGFloat) -> Font { mono(size: size, weight: .semibold) }
 
     /// 10pt monospaced bold caps, wide tracking — eyebrow / section label.
     public static var eyebrow: Font { mono(size: 10) }

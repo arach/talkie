@@ -18,29 +18,10 @@ import TalkieKit
 
 // MARK: - Scope display fonts
 
-/// Cormorant Garamond is the homepage's `--font-display-modern`.
-/// Tries a few PostScript name variants because the font ships with
-/// slight naming differences across builds; falls back to system serif.
-private enum ScopeFont {
-    private static let regularCandidates = [
-        "CormorantGaramond-Regular",
-        "Cormorant Garamond",
-        "CormorantGaramond",
-    ]
-    private static let mediumCandidates = [
-        "CormorantGaramond-Medium",
-        "Cormorant Garamond Medium",
-    ]
-
-    static func display(size: CGFloat, medium: Bool = false) -> Font {
-        for name in (medium ? mediumCandidates : regularCandidates) {
-            if NSFont(name: name, size: size) != nil {
-                return .custom(name, size: size)
-            }
-        }
-        return .system(size: size, weight: medium ? .medium : .regular, design: .serif)
-    }
-}
+// (Removed local `ScopeFont` enum — unused, and Cormorant lookup is
+// now centralized in `ScopeType.display(size:weight:)` (TalkieKit).
+// Other Scope surfaces that still defined their own copies have been
+// migrated to the same single source so resolution doesn't drift.)
 
 // MARK: - Date bucket
 

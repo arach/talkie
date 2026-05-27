@@ -22,19 +22,7 @@ import SwiftUI
 import TalkieKit
 import WFKit
 
-// MARK: - Typography helpers (local — matches other Scope views)
-
-private enum ScopeFont {
-    static func display(size: CGFloat, weight: Font.Weight = .medium) -> Font {
-        Font.system(size: size, weight: weight, design: .serif)
-    }
-    static func displayItalic(size: CGFloat) -> Font {
-        Font.system(size: size, weight: .regular, design: .serif).italic()
-    }
-    static func mono(size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        Font.system(size: size, weight: weight, design: .monospaced)
-    }
-}
+// Typography routed through ScopeType — see TalkieKit/UI/ScopeDesign.swift.
 
 private enum SkillsSpacing {
     static let sectionGap: CGFloat = 32
@@ -329,17 +317,17 @@ struct ScopeSkillsLandingView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text("· SKILLS")
-                    .font(ScopeFont.mono(size: 9, weight: .semibold))
+                    .font(ScopeType.mono(size: 9, weight: .semibold))
                     .tracking(2.6)
                     .foregroundStyle(ScopeInk.faint)
                 Text("one surface · pick a starter, iterate, save")
-                    .font(ScopeFont.displayItalic(size: 13))
+                    .font(ScopeType.displayItalic(size: 13))
                     .foregroundStyle(ScopeInk.faint)
                 Spacer()
                 chip(label: editorStatusChipLabel, tone: .amber)
             }
             Text("Skills")
-                .font(ScopeFont.display(size: 30))
+                .font(ScopeType.display(size: 30, weight: .medium))
                 .tracking(-0.5)
                 .foregroundStyle(ScopeInk.primary)
         }
@@ -395,7 +383,7 @@ struct ScopeSkillsLandingView: View {
                     inlineMic
                     TextField("describe what to make · or tap the mic", text: $draftMessage)
                         .textFieldStyle(.plain)
-                        .font(ScopeFont.displayItalic(size: 12.5))
+                        .font(ScopeType.displayItalic(size: 12.5))
                         .foregroundStyle(ScopeInk.primary)
                         .onSubmit { submitDraftMessage() }
                     submitButton
@@ -419,11 +407,11 @@ struct ScopeSkillsLandingView: View {
     private func agentMessageRow(text: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("· AGENT")
-                .font(ScopeFont.mono(size: 9, weight: .semibold))
+                .font(ScopeType.mono(size: 9, weight: .semibold))
                 .tracking(2.2)
                 .foregroundStyle(ScopeInk.muted)
             Text(text)
-                .font(ScopeFont.displayItalic(size: 12.5))
+                .font(ScopeType.displayItalic(size: 12.5))
                 .foregroundStyle(ScopeInk.primary)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -434,7 +422,7 @@ struct ScopeSkillsLandingView: View {
     private var chatHeader: some View {
         HStack(alignment: .firstTextBaseline) {
             Text("· AGENT")
-                .font(ScopeFont.mono(size: 9, weight: .semibold))
+                .font(ScopeType.mono(size: 9, weight: .semibold))
                 .tracking(2.0)
                 .foregroundStyle(ScopeInk.faint)
             Spacer()
@@ -469,7 +457,7 @@ struct ScopeSkillsLandingView: View {
             } label: {
                 HStack(spacing: 4) {
                     Text(selectedAgent.label.uppercased())
-                        .font(ScopeFont.mono(size: 9))
+                        .font(ScopeType.mono(size: 9, weight: .regular))
                         .tracking(1.6)
                         .foregroundStyle(ScopeInk.subtle)
                     Image(systemName: "chevron.down")
@@ -639,7 +627,7 @@ struct ScopeSkillsLandingView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text("· MARKUP · \(markupFilename)")
-                    .font(ScopeFont.mono(size: 9, weight: .semibold))
+                    .font(ScopeType.mono(size: 9, weight: .semibold))
                     .tracking(2.2)
                     .foregroundStyle(ScopeInk.faint)
                     .lineLimit(1)
@@ -756,7 +744,7 @@ struct ScopeSkillsLandingView: View {
                     VStack(alignment: .trailing, spacing: 0) {
                         ForEach(Array(lines.enumerated()), id: \.offset) { idx, _ in
                             Text("\(idx + 1)")
-                                .font(ScopeFont.mono(size: 10))
+                                .font(ScopeType.mono(size: 10, weight: .regular))
                                 .foregroundStyle(ScopeInk.subtle)
                                 .frame(height: 20)
                                 .padding(.trailing, 8)
@@ -791,11 +779,11 @@ struct ScopeSkillsLandingView: View {
     private func descriptionHeader(name: String, description: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(name)
-                .font(ScopeFont.display(size: 17))
+                .font(ScopeType.display(size: 17, weight: .medium))
                 .tracking(-0.2)
                 .foregroundStyle(ScopeInk.primary)
             Text(description)
-                .font(ScopeFont.displayItalic(size: 11.5))
+                .font(ScopeType.displayItalic(size: 11.5))
                 .foregroundStyle(ScopeInk.faint)
                 .lineSpacing(1.5)
                 .fixedSize(horizontal: false, vertical: true)
@@ -818,20 +806,20 @@ struct ScopeSkillsLandingView: View {
         case .keyword(let kw, let rest):
             HStack(spacing: 0) {
                 Text(kw.padding(toLength: 5, withPad: " ", startingAt: 0))
-                    .font(ScopeFont.mono(size: 12, weight: .semibold))
+                    .font(ScopeType.mono(size: 12, weight: .semibold))
                     .foregroundStyle(ScopeAmber.solid)
                 Text(rest)
-                    .font(ScopeFont.mono(size: 12))
+                    .font(ScopeType.mono(size: 12, weight: .regular))
                     .foregroundStyle(ScopeInk.primary)
             }
             .frame(height: 20, alignment: .leading)
         case .sub(let text):
             HStack(spacing: 0) {
                 Text("      \u{21B3} ")
-                    .font(ScopeFont.mono(size: 12))
+                    .font(ScopeType.mono(size: 12, weight: .regular))
                     .foregroundStyle(ScopeInk.subtle)
                 Text(text)
-                    .font(ScopeFont.mono(size: 12))
+                    .font(ScopeType.mono(size: 12, weight: .regular))
                     .foregroundStyle(ScopeInk.primary)
             }
             .frame(height: 20, alignment: .leading)
@@ -985,7 +973,7 @@ struct ScopeSkillsLandingView: View {
                 VStack(alignment: .trailing, spacing: 0) {
                     ForEach(1...10, id: \.self) { i in
                         Text("\(i)")
-                            .font(ScopeFont.mono(size: 10))
+                            .font(ScopeType.mono(size: 10, weight: .regular))
                             .foregroundStyle(ScopeInk.subtle)
                             .frame(height: 20)
                             .padding(.trailing, 8)
@@ -1022,10 +1010,10 @@ struct ScopeSkillsLandingView: View {
     private func markupLine(kw: String, rest: String) -> some View {
         HStack(spacing: 0) {
             Text(kw.padding(toLength: 5, withPad: " ", startingAt: 0))
-                .font(ScopeFont.mono(size: 12, weight: .semibold))
+                .font(ScopeType.mono(size: 12, weight: .semibold))
                 .foregroundStyle(ScopeAmber.solid)
             Text(rest)
-                .font(ScopeFont.mono(size: 12))
+                .font(ScopeType.mono(size: 12, weight: .regular))
                 .foregroundStyle(ScopeInk.primary)
         }
         .frame(height: 20, alignment: .leading)
@@ -1038,12 +1026,12 @@ struct ScopeSkillsLandingView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 Text("· CONSOLE · \(consoleHeaderLabel)")
-                    .font(ScopeFont.mono(size: 9, weight: .semibold))
+                    .font(ScopeType.mono(size: 9, weight: .semibold))
                     .tracking(2.2)
                     .foregroundStyle(ScopeInk.faint)
                 Spacer()
                 Text(consoleHeaderRight)
-                    .font(ScopeFont.mono(size: 9))
+                    .font(ScopeType.mono(size: 9, weight: .regular))
                     .tracking(1.6)
                     .foregroundStyle(ScopeInk.subtle)
             }
@@ -1093,12 +1081,12 @@ struct ScopeSkillsLandingView: View {
         case .idle:
             HStack(spacing: 8) {
                 Text("›")
-                    .font(ScopeFont.mono(size: 11.5))
+                    .font(ScopeType.mono(size: 11.5, weight: .regular))
                     .foregroundStyle(ScopeInk.muted)
                 Text(selectedStarter == nil
                      ? "pick a starter below to load it into the editor"
                      : "press ⌘S to save \"\(selectedStarter!.name)\" as a skill")
-                    .font(ScopeFont.mono(size: 11.5))
+                    .font(ScopeType.mono(size: 11.5, weight: .regular))
                     .foregroundStyle(ScopeInk.faint)
                 Spacer()
             }
@@ -1106,19 +1094,19 @@ struct ScopeSkillsLandingView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
                     Text("›")
-                        .font(ScopeFont.mono(size: 11.5))
+                        .font(ScopeType.mono(size: 11.5, weight: .regular))
                         .foregroundStyle(ScopeInk.muted)
                     Text("save skill \"\(name.lowercased())\"")
-                        .font(ScopeFont.mono(size: 11.5))
+                        .font(ScopeType.mono(size: 11.5, weight: .regular))
                         .foregroundStyle(ScopeBrass.solid)
                     Spacer()
                 }
                 HStack(spacing: 8) {
                     Text("✓")
-                        .font(ScopeFont.mono(size: 11.5))
+                        .font(ScopeType.mono(size: 11.5, weight: .regular))
                         .foregroundStyle(ScopeBrass.solid)
                     Text("\(name) saved to your skills · scroll down to see the card")
-                        .font(ScopeFont.mono(size: 11.5))
+                        .font(ScopeType.mono(size: 11.5, weight: .regular))
                         .foregroundStyle(ScopeInk.primary)
                     Spacer()
                 }
@@ -1126,10 +1114,10 @@ struct ScopeSkillsLandingView: View {
         case .saveError(let message):
             HStack(spacing: 8) {
                 Text("✗")
-                    .font(ScopeFont.mono(size: 11.5))
+                    .font(ScopeType.mono(size: 11.5, weight: .regular))
                     .foregroundStyle(Color.red.opacity(0.7))
                 Text(message)
-                    .font(ScopeFont.mono(size: 11.5))
+                    .font(ScopeType.mono(size: 11.5, weight: .regular))
                     .foregroundStyle(ScopeInk.primary)
                 Spacer()
             }
@@ -1137,19 +1125,19 @@ struct ScopeSkillsLandingView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
                     Text("›")
-                        .font(ScopeFont.mono(size: 11.5))
+                        .font(ScopeType.mono(size: 11.5, weight: .regular))
                         .foregroundStyle(ScopeInk.muted)
                     Text("run \(name.lowercased())")
-                        .font(ScopeFont.mono(size: 11.5))
+                        .font(ScopeType.mono(size: 11.5, weight: .regular))
                         .foregroundStyle(ScopeBrass.solid)
                     Spacer()
                 }
                 HStack(spacing: 8) {
                     Text("·")
-                        .font(ScopeFont.mono(size: 11.5))
+                        .font(ScopeType.mono(size: 11.5, weight: .regular))
                         .foregroundStyle(ScopeBrass.solid)
                     Text(line)
-                        .font(ScopeFont.mono(size: 11.5))
+                        .font(ScopeType.mono(size: 11.5, weight: .regular))
                         .foregroundStyle(ScopeInk.primary)
                     Spacer()
                 }
@@ -1158,19 +1146,19 @@ struct ScopeSkillsLandingView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
                     Text("›")
-                        .font(ScopeFont.mono(size: 11.5))
+                        .font(ScopeType.mono(size: 11.5, weight: .regular))
                         .foregroundStyle(ScopeInk.muted)
                     Text("run \(name.lowercased())")
-                        .font(ScopeFont.mono(size: 11.5))
+                        .font(ScopeType.mono(size: 11.5, weight: .regular))
                         .foregroundStyle(ScopeBrass.solid)
                     Spacer()
                 }
                 HStack(spacing: 8) {
                     Text("✓")
-                        .font(ScopeFont.mono(size: 11.5))
+                        .font(ScopeType.mono(size: 11.5, weight: .regular))
                         .foregroundStyle(ScopeBrass.solid)
                     Text(summary)
-                        .font(ScopeFont.mono(size: 11.5))
+                        .font(ScopeType.mono(size: 11.5, weight: .regular))
                         .foregroundStyle(ScopeInk.primary)
                     Spacer()
                 }
@@ -1179,19 +1167,19 @@ struct ScopeSkillsLandingView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
                     Text("›")
-                        .font(ScopeFont.mono(size: 11.5))
+                        .font(ScopeType.mono(size: 11.5, weight: .regular))
                         .foregroundStyle(ScopeInk.muted)
                     Text("run \(name.lowercased())")
-                        .font(ScopeFont.mono(size: 11.5))
+                        .font(ScopeType.mono(size: 11.5, weight: .regular))
                         .foregroundStyle(ScopeBrass.solid)
                     Spacer()
                 }
                 HStack(spacing: 8) {
                     Text("✗")
-                        .font(ScopeFont.mono(size: 11.5))
+                        .font(ScopeType.mono(size: 11.5, weight: .regular))
                         .foregroundStyle(Color.red.opacity(0.7))
                     Text(message)
-                        .font(ScopeFont.mono(size: 11.5))
+                        .font(ScopeType.mono(size: 11.5, weight: .regular))
                         .foregroundStyle(ScopeInk.primary)
                     Spacer()
                 }
@@ -1205,11 +1193,11 @@ struct ScopeSkillsLandingView: View {
     private func sectionLine(label: String, hint: String) -> some View {
         HStack(spacing: 12) {
             Text("· \(label.uppercased())")
-                .font(ScopeFont.mono(size: 9, weight: .semibold))
+                .font(ScopeType.mono(size: 9, weight: .semibold))
                 .tracking(2.4)
                 .foregroundStyle(ScopeInk.faint)
             Text(hint)
-                .font(ScopeFont.displayItalic(size: 12))
+                .font(ScopeType.displayItalic(size: 12))
                 .foregroundStyle(ScopeInk.faint)
             ScopeRule(.subtle)
         }
@@ -1226,17 +1214,17 @@ struct ScopeSkillsLandingView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text("· \(label.uppercased())")
-                    .font(ScopeFont.mono(size: 9, weight: .semibold))
+                    .font(ScopeType.mono(size: 9, weight: .semibold))
                     .tracking(2.4)
                     .foregroundStyle(ScopeInk.faint)
                 Text(meta)
-                    .font(ScopeFont.mono(size: 9))
+                    .font(ScopeType.mono(size: 9, weight: .regular))
                     .tracking(1.6)
                     .foregroundStyle(ScopeInk.subtle)
                 ScopeRule(.subtle)
             }
             Text(intro)
-                .font(ScopeFont.displayItalic(size: 13))
+                .font(ScopeType.displayItalic(size: 13))
                 .foregroundStyle(ScopeInk.faint)
                 .lineSpacing(2.5)
                 .padding(.leading, 4)
@@ -1301,11 +1289,11 @@ struct ScopeSkillsLandingView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Text("· \(starter.category.uppercased())")
-                    .font(ScopeFont.mono(size: 9, weight: .semibold))
+                    .font(ScopeType.mono(size: 9, weight: .semibold))
                     .tracking(2.0)
                     .foregroundStyle(isActive ? ScopeAmber.solid : (isWorkflow ? ScopeBrass.solid : ScopeInk.faint))
                 Text(starter.code)
-                    .font(ScopeFont.mono(size: 9))
+                    .font(ScopeType.mono(size: 9, weight: .regular))
                     .tracking(1.4)
                     .foregroundStyle(ScopeInk.subtle)
                 Spacer()
@@ -1313,13 +1301,13 @@ struct ScopeSkillsLandingView: View {
             .padding(.bottom, 4)
 
             Text(starter.name)
-                .font(ScopeFont.display(size: 19))
+                .font(ScopeType.display(size: 19, weight: .medium))
                 .tracking(-0.2)
                 .foregroundStyle(ScopeInk.primary)
                 .padding(.bottom, 4)
 
             Text(starter.byline)
-                .font(ScopeFont.displayItalic(size: 11.5))
+                .font(ScopeType.displayItalic(size: 11.5))
                 .foregroundStyle(ScopeInk.faint)
                 .lineSpacing(1.5)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1335,7 +1323,7 @@ struct ScopeSkillsLandingView: View {
                 chip(label: resolvedStatus, tone: chipTone)
                 Spacer()
                 Text(ctaLabel)
-                    .font(ScopeFont.mono(size: 9, weight: .semibold))
+                    .font(ScopeType.mono(size: 9, weight: .semibold))
                     .tracking(2.0)
                     .foregroundStyle(ctaColor)
                     .padding(.bottom, 1)
@@ -1364,15 +1352,15 @@ struct ScopeSkillsLandingView: View {
             ForEach(pipeline.indices, id: \.self) { i in
                 HStack(spacing: 4) {
                     Text(pipeline[i].kw)
-                        .font(ScopeFont.mono(size: 10, weight: .semibold))
+                        .font(ScopeType.mono(size: 10, weight: .semibold))
                         .foregroundStyle(kwColor)
                     Text(pipeline[i].tag)
-                        .font(ScopeFont.mono(size: 10))
+                        .font(ScopeType.mono(size: 10, weight: .regular))
                         .foregroundStyle(ScopeInk.primary)
                 }
                 if i < pipeline.count - 1 {
                     Text("·")
-                        .font(ScopeFont.mono(size: 10))
+                        .font(ScopeType.mono(size: 10, weight: .regular))
                         .foregroundStyle(ScopeInk.subtle)
                 }
             }
@@ -1438,11 +1426,11 @@ struct ScopeSkillsLandingView: View {
     private var placeholderCard: some View {
         VStack(spacing: 6) {
             Text("+ NEW SKILL")
-                .font(ScopeFont.mono(size: 10, weight: .semibold))
+                .font(ScopeType.mono(size: 10, weight: .semibold))
                 .tracking(2.2)
                 .foregroundStyle(ScopeInk.faint)
             Text("⌘N")
-                .font(ScopeFont.mono(size: 9))
+                .font(ScopeType.mono(size: 9, weight: .regular))
                 .tracking(1.6)
                 .foregroundStyle(ScopeInk.subtle)
         }
@@ -1522,13 +1510,13 @@ struct ScopeSkillsLandingView: View {
     private func previewShell<Content: View>(surface: String, caption: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("· \(surface.uppercased())")
-                .font(ScopeFont.mono(size: 9, weight: .semibold))
+                .font(ScopeType.mono(size: 9, weight: .semibold))
                 .tracking(2.2)
                 .foregroundStyle(ScopeInk.faint)
             content()
                 .frame(maxWidth: .infinity)
             Text(caption)
-                .font(ScopeFont.displayItalic(size: 11.5))
+                .font(ScopeType.displayItalic(size: 11.5))
                 .foregroundStyle(ScopeInk.faint)
                 .lineSpacing(1.4)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1548,7 +1536,7 @@ struct ScopeSkillsLandingView: View {
     private var composePreview: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("\u{201C}We made real progress on the worker layer today. The pool contention is gone — switching to a single-writer model cleared the last batch of stalls…\u{201D}")
-                .font(ScopeFont.displayItalic(size: 11))
+                .font(ScopeType.displayItalic(size: 11))
                 .foregroundStyle(ScopeInk.primary)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1570,7 +1558,7 @@ struct ScopeSkillsLandingView: View {
     @ViewBuilder
     private func miniChip(label: String, active: Bool, muted: Bool = false) -> some View {
         Text(label)
-            .font(ScopeFont.mono(size: 9, weight: active ? .semibold : .medium))
+            .font(ScopeType.mono(size: 9, weight: active ? .semibold : .medium))
             .tracking(1.6)
             .foregroundStyle(active ? ScopeBrass.solid : (muted ? ScopeInk.subtle : ScopeInk.faint))
             .padding(.horizontal, 7)
@@ -1594,7 +1582,7 @@ struct ScopeSkillsLandingView: View {
                     .frame(width: 6, height: 6)
                     .shadow(color: ScopePanel.trace, radius: 4)
                 Text("· LISTENING")
-                    .font(ScopeFont.mono(size: 9, weight: .semibold))
+                    .font(ScopeType.mono(size: 9, weight: .semibold))
                     .tracking(2.4)
                     .foregroundStyle(ScopePanel.inkMuted)
             }
@@ -1607,7 +1595,7 @@ struct ScopeSkillsLandingView: View {
                     .foregroundStyle(ScopePanel.trace)
             }
             Text("then dictate · 3 bullets · auto-stops")
-                .font(ScopeFont.mono(size: 9))
+                .font(ScopeType.mono(size: 9, weight: .regular))
                 .tracking(1.4)
                 .foregroundStyle(ScopePanel.inkSubtle)
             Spacer().frame(height: 4)
@@ -1630,7 +1618,7 @@ struct ScopeSkillsLandingView: View {
         VStack(spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text("08:42")
-                    .font(ScopeFont.mono(size: 9))
+                    .font(ScopeType.mono(size: 9, weight: .regular))
                     .tracking(1.4)
                     .foregroundStyle(ScopeInk.subtle)
                 VStack(alignment: .leading, spacing: 1) {
@@ -1638,12 +1626,12 @@ struct ScopeSkillsLandingView: View {
                         .font(.system(size: 12.5, design: .serif))
                         .foregroundStyle(ScopeInk.primary)
                     Text("4:12 · today")
-                        .font(ScopeFont.displayItalic(size: 10.5))
+                        .font(ScopeType.displayItalic(size: 10.5))
                         .foregroundStyle(ScopeInk.faint)
                 }
                 Spacer()
                 Text("▷ apply ↓")
-                    .font(ScopeFont.mono(size: 9, weight: .semibold))
+                    .font(ScopeType.mono(size: 9, weight: .semibold))
                     .tracking(2.0)
                     .foregroundStyle(ScopeInk.subtle)
             }
@@ -1652,7 +1640,7 @@ struct ScopeSkillsLandingView: View {
             ScopeRule(.subtle)
             VStack(alignment: .leading, spacing: 6) {
                 Text("· YOUR SKILLS")
-                    .font(ScopeFont.mono(size: 9, weight: .semibold))
+                    .font(ScopeType.mono(size: 9, weight: .semibold))
                     .tracking(2.2)
                     .foregroundStyle(ScopeInk.faint)
                 HStack {
@@ -1661,7 +1649,7 @@ struct ScopeSkillsLandingView: View {
                         .foregroundStyle(ScopeInk.primary)
                     Spacer()
                     Text("APPLY →")
-                        .font(ScopeFont.mono(size: 9, weight: .semibold))
+                        .font(ScopeType.mono(size: 9, weight: .semibold))
                         .tracking(2.2)
                         .foregroundStyle(ScopeAmber.solid)
                 }
@@ -1677,7 +1665,7 @@ struct ScopeSkillsLandingView: View {
                         .foregroundStyle(ScopeInk.faint)
                     Spacer()
                     Text("READY")
-                        .font(ScopeFont.mono(size: 9))
+                        .font(ScopeType.mono(size: 9, weight: .regular))
                         .tracking(2.2)
                         .foregroundStyle(ScopeInk.subtle)
                 }
@@ -1711,13 +1699,13 @@ struct ScopeSkillsLandingView: View {
     private func paneHeader(title: String, sub: String? = nil) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text("· \(title.uppercased())")
-                .font(ScopeFont.mono(size: 9, weight: .semibold))
+                .font(ScopeType.mono(size: 9, weight: .semibold))
                 .tracking(2.0)
                 .foregroundStyle(ScopeInk.faint)
             Spacer()
             if let sub {
                 Text(sub.uppercased())
-                    .font(ScopeFont.mono(size: 9))
+                    .font(ScopeType.mono(size: 9, weight: .regular))
                     .tracking(1.6)
                     .foregroundStyle(ScopeInk.subtle)
             }
@@ -1744,7 +1732,7 @@ struct ScopeSkillsLandingView: View {
                           case .ink:   return Color.clear }
         }()
         Text(label)
-            .font(ScopeFont.mono(size: 9, weight: .semibold))
+            .font(ScopeType.mono(size: 9, weight: .semibold))
             .tracking(2.2)
             .foregroundStyle(color)
             .padding(.horizontal, 8)

@@ -21,17 +21,7 @@ import AppKit
 import SwiftUI
 import TalkieKit
 
-private enum CapFont {
-    static func display(size: CGFloat, weight: Font.Weight = .medium) -> Font {
-        Font.system(size: size, weight: weight, design: .serif)
-    }
-    static func displayItalic(size: CGFloat) -> Font {
-        Font.system(size: size, weight: .regular, design: .serif).italic()
-    }
-    static func mono(size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        Font.system(size: size, weight: weight, design: .monospaced)
-    }
-}
+// Capture typography routed through ScopeType — see TalkieKit/UI/ScopeDesign.swift.
 
 // MARK: - View
 
@@ -153,12 +143,12 @@ struct ScopeCaptureDetailView: View {
             // ID exists.
             HStack(spacing: 10) {
                 Text("· \(channelLabel)")
-                    .font(CapFont.mono(size: 9, weight: .semibold))
+                    .font(ScopeType.mono(size: 9, weight: .semibold))
                     .tracking(2.2)
                     .foregroundStyle(ThemedScopeAccent.capture)
                 ThemedScopeRule(.subtle)
                 Text("\(dateLabel) · \(timeLabel)")
-                    .font(CapFont.mono(size: 9))
+                    .font(ScopeType.mono(size: 9, weight: .regular))
                     .tracking(1.8)
                     .foregroundStyle(ThemedScopeInk.faint)
             }
@@ -167,7 +157,7 @@ struct ScopeCaptureDetailView: View {
             // provenance metadata below the headline for image captures.
             if isTextCapture {
                 Text(capture.displayTitle)
-                    .font(CapFont.display(size: 22, weight: .medium))
+                    .font(ScopeType.display(size: 22, weight: .medium))
                     .tracking(-0.3)
                     .foregroundStyle(ThemedScopeInk.primary)
                     .lineLimit(2)
@@ -175,13 +165,13 @@ struct ScopeCaptureDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 12)
                 Text(bylineTextCapture)
-                    .font(CapFont.mono(size: 10))
+                    .font(ScopeType.mono(size: 10, weight: .regular))
                     .tracking(1.6)
                     .foregroundStyle(ThemedScopeInk.faint)
                     .padding(.top, 6)
             } else {
                 Text(imageHeadline)
-                    .font(CapFont.display(size: 22, weight: .medium))
+                    .font(ScopeType.display(size: 22, weight: .medium))
                     .tracking(-0.3)
                     .foregroundStyle(ThemedScopeInk.primary)
                     .lineLimit(2)
@@ -189,7 +179,7 @@ struct ScopeCaptureDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 12)
                 Text(imageByline)
-                    .font(CapFont.mono(size: 10))
+                    .font(ScopeType.mono(size: 10, weight: .regular))
                     .tracking(1.6)
                     .foregroundStyle(ThemedScopeInk.faint)
                     .lineLimit(1)
@@ -214,7 +204,7 @@ struct ScopeCaptureDetailView: View {
                 Button(action: {}) {
                     HStack(spacing: 8) {
                         Text("＋ ADD CAPTION")
-                            .font(CapFont.mono(size: 10, weight: .semibold))
+                            .font(ScopeType.mono(size: 10, weight: .semibold))
                             .tracking(2.2)
                             .foregroundStyle(ThemedScopeAccent.brass)
                     }
@@ -231,7 +221,7 @@ struct ScopeCaptureDetailView: View {
                 }
                 .buttonStyle(.plain)
                 Text("⌘N")
-                    .font(CapFont.mono(size: 9))
+                    .font(ScopeType.mono(size: 9, weight: .regular))
                     .tracking(1.8)
                     .foregroundStyle(ThemedScopeInk.faint)
             }
@@ -327,7 +317,7 @@ struct ScopeCaptureDetailView: View {
                 .frame(maxWidth: .infinity)
                 .overlay(
                     Text("(image unavailable)")
-                        .font(CapFont.displayItalic(size: 12))
+                        .font(ScopeType.displayItalic(size: 12))
                         .foregroundStyle(ThemedScopeInk.subtle)
                 )
                 .overlay(
@@ -372,7 +362,7 @@ struct ScopeCaptureDetailView: View {
     private var actionsBlock: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("· ACTIONS")
-                .font(CapFont.mono(size: 8.5, weight: .semibold))
+                .font(ScopeType.mono(size: 8.5, weight: .semibold))
                 .tracking(2.8)
                 .foregroundStyle(ThemedScopeInk.faint)
                 .padding(.bottom, 4)
@@ -418,19 +408,19 @@ struct ScopeCaptureDetailView: View {
     private func metaBlock(title: String, rows: [(String, String, Bool)]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("· \(title.uppercased())")
-                .font(CapFont.mono(size: 8.5, weight: .semibold))
+                .font(ScopeType.mono(size: 8.5, weight: .semibold))
                 .tracking(2.8)
                 .foregroundStyle(ThemedScopeInk.faint)
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                     HStack(alignment: .firstTextBaseline) {
                         Text(row.0)
-                            .font(CapFont.mono(size: 9))
+                            .font(ScopeType.mono(size: 9, weight: .regular))
                             .tracking(1.4)
                             .foregroundStyle(ThemedScopeInk.faint)
                         Spacer()
                         Text(row.1)
-                            .font(CapFont.mono(size: 10))
+                            .font(ScopeType.mono(size: 10, weight: .regular))
                             .tracking(0.6)
                             .foregroundStyle(row.2 ? ThemedScopeAccent.capture : ThemedScopeInk.primary)
                     }
@@ -443,7 +433,7 @@ struct ScopeCaptureDetailView: View {
     private func footRail(bodyPad: CGFloat) -> some View {
         HStack(spacing: 16) {
             Text("· \(dimensions) · \(fileSize) · \(sourceLabel)")
-                .font(CapFont.mono(size: 9))
+                .font(ScopeType.mono(size: 9, weight: .regular))
                 .tracking(2.2)
                 .foregroundStyle(ThemedScopeInk.faint)
             Spacer()
@@ -467,7 +457,7 @@ struct ScopeCaptureDetailView: View {
     private func footAction(label: String, tone: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label.uppercased())
-                .font(CapFont.mono(size: 9, weight: .semibold))
+                .font(ScopeType.mono(size: 9, weight: .semibold))
                 .tracking(2.2)
                 .foregroundStyle(tone)
                 .padding(.horizontal, 6)

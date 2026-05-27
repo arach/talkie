@@ -23,18 +23,12 @@ import SwiftUI
 import TalkieKit
 
 // MARK: - Typography helpers
-
-private enum NoteFont {
-    static func display(size: CGFloat, weight: Font.Weight = .medium) -> Font {
-        Font.system(size: size, weight: weight, design: .serif)
-    }
-    static func displayItalic(size: CGFloat) -> Font {
-        Font.system(size: size, weight: .regular, design: .serif).italic()
-    }
-    static func mono(size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        Font.system(size: size, weight: weight, design: .monospaced)
-    }
-}
+//
+// Note + Capture detail typography used to live here as a private
+// `NoteFont` (and a parallel `CapFont` next door), both with system
+// serif/mono — bypassing the Cormorant Garamond + JetBrains Mono
+// lookup the rest of Scope uses. That's the resolution drift the
+// design-system audit flagged. Both now route through `ScopeType`.
 
 // MARK: - View
 
@@ -130,20 +124,20 @@ struct ScopeNoteDetailView: View {
             HStack(spacing: 10) {
                 if let sourceEyebrow {
                     Text(sourceEyebrow)
-                        .font(NoteFont.mono(size: 9, weight: .semibold))
+                        .font(ScopeType.mono(size: 9, weight: .semibold))
                         .tracking(2.2)
                         .foregroundStyle(ThemedScopeInk.faint)
                 }
                 ThemedScopeRule(.subtle)
                 Text("\(dateLabel) · \(timeLabel)")
-                    .font(NoteFont.mono(size: 9))
+                    .font(ScopeType.mono(size: 9, weight: .regular))
                     .tracking(1.8)
                     .foregroundStyle(ThemedScopeInk.faint)
             }
 
             // Title
             Text(note.displayTitle)
-                .font(NoteFont.display(size: 26, weight: .medium))
+                .font(ScopeType.display(size: 26, weight: .medium))
                 .tracking(-0.3)
                 .foregroundStyle(ThemedScopeInk.primary)
                 .lineLimit(3)
@@ -153,7 +147,7 @@ struct ScopeNoteDetailView: View {
 
             // Byline
             Text(bylineText)
-                .font(NoteFont.mono(size: 10))
+                .font(ScopeType.mono(size: 10, weight: .regular))
                 .tracking(1.6)
                 .foregroundStyle(ThemedScopeInk.faint)
                 .padding(.top, 6)
@@ -241,7 +235,7 @@ struct ScopeNoteDetailView: View {
     private var actionsBlock: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("· ACTIONS")
-                .font(NoteFont.mono(size: 8.5, weight: .semibold))
+                .font(ScopeType.mono(size: 8.5, weight: .semibold))
                 .tracking(2.8)
                 .foregroundStyle(ThemedScopeInk.faint)
                 .padding(.bottom, 4)
@@ -365,19 +359,19 @@ struct ScopeNoteDetailView: View {
     private func metaBlock(title: String, rows: [(String, String, Bool)]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("· \(title.uppercased())")
-                .font(NoteFont.mono(size: 8.5, weight: .semibold))
+                .font(ScopeType.mono(size: 8.5, weight: .semibold))
                 .tracking(2.8)
                 .foregroundStyle(ThemedScopeInk.faint)
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                     HStack(alignment: .firstTextBaseline) {
                         Text(row.0)
-                            .font(NoteFont.mono(size: 9))
+                            .font(ScopeType.mono(size: 9, weight: .regular))
                             .tracking(1.4)
                             .foregroundStyle(ThemedScopeInk.faint)
                         Spacer()
                         Text(row.1)
-                            .font(NoteFont.mono(size: 10))
+                            .font(ScopeType.mono(size: 10, weight: .regular))
                             .tracking(0.6)
                             .foregroundStyle(row.2 ? ThemedScopeAccent.brass : ThemedScopeInk.primary)
                     }
@@ -391,16 +385,16 @@ struct ScopeNoteDetailView: View {
         HStack(alignment: .center, spacing: 12) {
             HStack(spacing: 8) {
                 Text("· ATTACHMENTS")
-                    .font(NoteFont.mono(size: 9, weight: .semibold))
+                    .font(ScopeType.mono(size: 9, weight: .semibold))
                     .tracking(2.8)
                     .foregroundStyle(ThemedScopeInk.faint)
                 Text("\(note.screenshots.count)")
-                    .font(NoteFont.mono(size: 9))
+                    .font(ScopeType.mono(size: 9, weight: .regular))
                     .foregroundStyle(ThemedScopeInk.faint)
             }
             if note.screenshots.isEmpty {
                 Text("none yet")
-                    .font(NoteFont.mono(size: 9))
+                    .font(ScopeType.mono(size: 9, weight: .regular))
                     .tracking(1.6)
                     .foregroundStyle(ThemedScopeInk.faint)
             } else {
@@ -411,7 +405,7 @@ struct ScopeNoteDetailView: View {
             Spacer()
             Button(action: pickAttachment) {
                 Text("+ ADD")
-                    .font(NoteFont.mono(size: 9, weight: .semibold))
+                    .font(ScopeType.mono(size: 9, weight: .semibold))
                     .tracking(2.2)
                     .foregroundStyle(ThemedScopeAccent.note)
                     .padding(.horizontal, 8)
@@ -491,7 +485,7 @@ struct ScopeNoteDetailView: View {
     private func attachmentChip(filename: String, meta: String) -> some View {
         HStack(spacing: 8) {
             Text("▢")
-                .font(NoteFont.mono(size: 11))
+                .font(ScopeType.mono(size: 11, weight: .regular))
                 .foregroundStyle(ThemedScopeAccent.capture)
             VStack(alignment: .leading, spacing: 1) {
                 Text(filename)
@@ -500,7 +494,7 @@ struct ScopeNoteDetailView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Text(meta.uppercased())
-                    .font(NoteFont.mono(size: 8.5))
+                    .font(ScopeType.mono(size: 8.5, weight: .regular))
                     .tracking(1.4)
                     .foregroundStyle(ThemedScopeInk.faint)
             }

@@ -15,50 +15,7 @@
 import SwiftUI
 import TalkieKit
 
-// MARK: - Scope display fonts
-// Cormorant Garamond is the homepage's `--font-display-modern`. We mirror
-// the same weights/sizes here. Tries a few PostScript name variants
-// because Catharsis fonts ship slight naming differences across builds;
-// falls back to system serif if none resolve.
-private enum ScopeFont {
-    private static let regularCandidates = [
-        "CormorantGaramond-Regular",
-        "Cormorant Garamond",
-        "CormorantGaramond",
-    ]
-    private static let mediumCandidates = [
-        "CormorantGaramond-Medium",
-        "Cormorant Garamond Medium",
-    ]
-
-    static func display(size: CGFloat, medium: Bool = false) -> Font {
-        for name in (medium ? mediumCandidates : regularCandidates) {
-            if NSFont(name: name, size: size) != nil {
-                return .custom(name, size: size)
-            }
-        }
-        return .system(size: size, weight: medium ? .medium : .regular, design: .serif)
-    }
-
-    /// JetBrains Mono with system fallback. Studio's `font-mono`
-    /// renders as JetBrains Mono; matching it here so SwiftUI surfaces
-    /// don't drop to SF Mono.
-    static func mono(size: CGFloat, weight: Font.Weight = .semibold) -> Font {
-        let candidates: [String]
-        switch weight {
-        case .semibold, .bold:
-            candidates = ["JetBrainsMono-SemiBold", "JetBrainsMono-Medium"]
-        default:
-            candidates = ["JetBrainsMono-Medium", "JetBrainsMono-Regular"]
-        }
-        for name in candidates {
-            if NSFont(name: name, size: size) != nil {
-                return .custom(name, size: size)
-            }
-        }
-        return .system(size: size, weight: weight, design: .monospaced)
-    }
-}
+// Display + mono font lookups centralized in `ScopeType` (TalkieKit/UI/ScopeDesign.swift).
 
 struct ScopeHomeView: View {
     let unifiedActivity: [UnifiedActivityItem]
@@ -1056,7 +1013,7 @@ struct ScopeHomeView: View {
     private func statTile(scheme: BayScheme, seed: Int, value: String, label: String, extra: AnyView? = nil) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(value)
-                .font(ScopeFont.display(size: bayCompact ? 26 : 34))
+                .font(ScopeType.display(size: bayCompact ? 26 : 34))
                 .foregroundStyle(scheme.statInk)
                 .tracking(-0.5)
                 .shadow(color: scheme.traceGlow, radius: 4)
@@ -2072,7 +2029,7 @@ private struct RoutinesPanel: View {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         PhosphorDot(color: accent.opacity(0.72), size: 4)
                         Text(title)
-                            .font(ScopeFont.display(size: 15, medium: true))
+                            .font(ScopeType.display(size: 15, weight: .medium))
                             .foregroundStyle(titleHovered ? accent : ScopeInk.primary)
                     }
                     Spacer()
@@ -2207,7 +2164,7 @@ private struct DidYouKnowCard: View {
 
                 VStack(alignment: .leading, spacing: 7) {
                     Text(hook)
-                        .font(ScopeFont.display(size: 17, medium: true))
+                        .font(ScopeType.display(size: 17, weight: .medium))
                         .foregroundStyle(ScopeInk.primary)
                         .lineLimit(1)
                     Text(detail)
@@ -2454,7 +2411,7 @@ private struct DiscoveryWidgetCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 Text(title)
-                    .font(ScopeFont.display(size: 13, medium: true))
+                    .font(ScopeType.display(size: 13, weight: .medium))
                     .foregroundStyle(ScopeInk.primary)
                 Spacer()
                 Text(eyebrow.uppercased())

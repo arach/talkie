@@ -73,14 +73,14 @@ struct ScopeLibraryEmptyState: View {
             // already anchor the section. Day-of-week lives in the byline.
             HStack(alignment: .firstTextBaseline, spacing: 24) {
                 Text(headlineDate(Date()))
-                    .font(ScopeFont.display(size: 56))
+                    .font(ScopeType.display(size: 56))
                     .tracking(-1.0)
                     .foregroundStyle(Color.primary)
 
                 Text(memos.isEmpty
                     ? "\(dayOfWeek(Date())) · awaiting the day's first memo"
                     : "\(dayOfWeek(Date())) · \(memos.count) memo\(memos.count == 1 ? "" : "s") · \(formatDuration(runtime)) elapsed · \(words) word\(words == 1 ? "" : "s")")
-                    .font(ScopeFont.display(size: 17).italic())
+                    .font(ScopeType.display(size: 17).italic())
                     .foregroundStyle(ScopeInk.faint)
             }
 
@@ -125,7 +125,7 @@ struct ScopeLibraryEmptyState: View {
 
                 if !memos.isEmpty {
                     Text("\(memos.count) memo\(memos.count == 1 ? "" : "s") · \(words) word\(words == 1 ? "" : "s") · \(formatDuration(runtime))")
-                        .font(ScopeFont.display(size: 14).italic())
+                        .font(ScopeType.display(size: 14).italic())
                         .foregroundStyle(ScopeInk.faint)
                 }
             }
@@ -235,7 +235,7 @@ private struct TodayRow: View {
                     .monospacedDigit()
 
                 Text(rowTitle)
-                    .font(ScopeFont.display(size: 17))
+                    .font(ScopeType.display(size: 17))
                     .foregroundStyle(Color.primary)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -327,7 +327,7 @@ private struct WeekRow: View {
                 // attachments). Title is the row's emphasis.
                 HStack(spacing: 6) {
                     Text(rowTitle)
-                        .font(ScopeFont.display(size: 18))
+                        .font(ScopeType.display(size: 18))
                         .foregroundStyle(Color.primary)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -421,18 +421,4 @@ private struct WeekRow: View {
     }
 }
 
-// Local font helper — Library's existing `ScopeFont` is fileprivate
-// in ScopeLibraryView.swift. Duplicating the resolution here so this
-// file is self-contained.
-private enum ScopeFont {
-    static func display(size: CGFloat) -> Font {
-        for name in ["CormorantGaramond-Regular", "Cormorant Garamond", "CormorantGaramond"] {
-            #if os(macOS)
-            if NSFont(name: name, size: size) != nil {
-                return .custom(name, size: size)
-            }
-            #endif
-        }
-        return .system(size: size, weight: .regular, design: .serif)
-    }
-}
+// Display font lookup centralized in ScopeType.display(size:weight:) — see TalkieKit/UI/ScopeDesign.swift.

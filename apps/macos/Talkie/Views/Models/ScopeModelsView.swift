@@ -27,26 +27,7 @@ private let log = Logger(subsystem: "to.talkie.app.mac", category: "ScopeModels"
 // MARK: - Scope display fonts
 // Cormorant Garamond is the homepage's `--font-display-modern`. Falls
 // back to system serif if the font isn't installed.
-private enum ScopeFont {
-    private static let regularCandidates = [
-        "CormorantGaramond-Regular",
-        "Cormorant Garamond",
-        "CormorantGaramond",
-    ]
-    private static let mediumCandidates = [
-        "CormorantGaramond-Medium",
-        "Cormorant Garamond Medium",
-    ]
-
-    static func display(size: CGFloat, medium: Bool = false) -> Font {
-        for name in (medium ? mediumCandidates : regularCandidates) {
-            if NSFont(name: name, size: size) != nil {
-                return .custom(name, size: size)
-            }
-        }
-        return .system(size: size, weight: medium ? .medium : .regular, design: .serif)
-    }
-}
+// Display font lookup centralized in ScopeType.display(size:weight:) — see TalkieKit/UI/ScopeDesign.swift.
 
 // MARK: - State enum
 
@@ -689,7 +670,7 @@ struct ScopeModelsView: View {
         HStack(spacing: 8) {
             PhosphorDot(color: ScopeInk.faint, size: 4)
             Text(message)
-                .font(ScopeFont.display(size: 13))
+                .font(ScopeType.display(size: 13))
                 .italic()
                 .foregroundStyle(ScopeInk.muted)
             Spacer(minLength: 0)
@@ -964,7 +945,7 @@ private struct ProviderRowCell: View {
     private var titleLine: some View {
         HStack(spacing: 8) {
             Text(name)
-                .font(ScopeFont.display(size: 15))
+                .font(ScopeType.display(size: 15))
                 .foregroundStyle(state == .unconfigured ? ScopeInk.muted : ScopeInk.primary)
                 .tracking(-0.2)
                 .lineLimit(1)

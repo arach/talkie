@@ -21,26 +21,7 @@ private let log = Log(.ui)
 // Mirrors the helper in ScopeHomeView. Cormorant Garamond is the
 // homepage's `--font-display-modern`. Falls back to system serif if
 // the font isn't installed.
-private enum ScopeFont {
-    private static let regularCandidates = [
-        "CormorantGaramond-Regular",
-        "Cormorant Garamond",
-        "CormorantGaramond",
-    ]
-    private static let mediumCandidates = [
-        "CormorantGaramond-Medium",
-        "Cormorant Garamond Medium",
-    ]
-
-    static func display(size: CGFloat, medium: Bool = false) -> Font {
-        for name in (medium ? mediumCandidates : regularCandidates) {
-            if NSFont(name: name, size: size) != nil {
-                return .custom(name, size: size)
-            }
-        }
-        return .system(size: size, weight: medium ? .medium : .regular, design: .serif)
-    }
-}
+// Display font lookup centralized in ScopeType.display(size:weight:) — see TalkieKit/UI/ScopeDesign.swift.
 
 // MARK: - Stage disc (V2 typeset pipeline marker)
 
@@ -285,7 +266,7 @@ struct ScopeDraftsScreen: View {
                 .foregroundStyle(ScopeInk.faint)
 
             Text(monitorByline)
-                .font(ScopeFont.display(size: 13).italic())
+                .font(ScopeType.display(size: 13).italic())
                 .foregroundStyle(ScopeInk.faint)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -939,7 +920,7 @@ struct ScopeDraftsScreen: View {
                     .frame(height: 0.5)
 
                 Text("\(count) operations · pick one to apply")
-                    .font(ScopeFont.display(size: 13).italic())
+                    .font(ScopeType.display(size: 13).italic())
                     .foregroundStyle(ScopeInk.faint)
             }
 
@@ -992,8 +973,8 @@ struct ScopeDraftsScreen: View {
         let providerName = resolvedProviderName ?? "local"
         let modelName = resolvedModelName ?? "no model selected"
 
-        let italicFont = ScopeFont.display(size: 14).italic()
-        let mediumFont = ScopeFont.display(size: 14, medium: true)
+        let italicFont = ScopeType.display(size: 14).italic()
+        let mediumFont = ScopeType.display(size: 14, weight: .medium)
 
         // Build the line in a single AttributedString so the typography
         // flows as one editorial colophon — italic faint for connective
@@ -1342,7 +1323,7 @@ private struct ActionCell: View {
                     }
 
                     Text(action.name)
-                        .font(ScopeFont.display(size: 15))
+                        .font(ScopeType.display(size: 15))
                         .foregroundStyle(disabled ? ScopeInk.muted : ScopeInk.primary)
                         .lineLimit(1)
                         .tracking(-0.2)
@@ -1417,7 +1398,7 @@ private struct ActionListRow: View {
         Button(action: onTap) {
             HStack(alignment: .firstTextBaseline, spacing: 14) {
                 Text(action.name)
-                    .font(ScopeFont.display(size: 15))
+                    .font(ScopeType.display(size: 15))
                     .foregroundStyle(disabled ? ScopeInk.muted : ScopeInk.primary)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
