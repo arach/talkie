@@ -17,6 +17,13 @@ enum WalkieJobState: String, Codable, Sendable {
     case failed
 }
 
+enum WalkieExecutorBranchState: Equatable, Sendable {
+    case idle
+    case working
+    case done
+    case failed
+}
+
 struct WalkieChannel: Identifiable, Codable, Sendable {
     let id: UUID
     var code: String
@@ -93,7 +100,7 @@ struct WalkieTransmissionDraft: Sendable {
     }
 }
 
-struct WalkieModelUse: Sendable {
+struct WalkieModelUse: Codable, Sendable {
     let providerId: String
     let providerName: String
     let modelId: String

@@ -69,6 +69,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         return false
     }
 
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        AgentHomeController.shared.show()
+        return true
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Single-instance guard: prevent duplicate TalkieAgent processes
         let myPID = ProcessInfo.processInfo.processIdentifier
@@ -217,6 +222,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         NSLog("[TalkieAgent] Received URL: \(url.absoluteString)")
 
         switch url.host {
+        case "home", "agent":
+            AgentHomeController.shared.show()
         case "settings":
             showSettings(tab: .shortcuts)
         case "performance":
@@ -383,6 +390,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         let menu = NSMenu()
         menu.delegate = self
 
+        let homeItem = NSMenuItem(title: "Open Agent Home", action: #selector(showAgentHome), keyEquivalent: "0")
+        homeItem.keyEquivalentModifierMask = [.option, .command]
+        homeItem.target = self
+        menu.addItem(homeItem)
+
+        menu.addItem(NSMenuItem.separator())
+
         let recordItem = NSMenuItem(title: "Start Recording", action: #selector(toggleListeningFromMenu), keyEquivalent: "")
         recordItem.target = self
         menu.addItem(recordItem)
@@ -493,9 +507,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         // Wire up overlay controls
         overlayController.onStop = { [weak self] in
-            Task {
-                await self?.agentController.toggleListening()
-            }
+            self?.agentController.stopListening()
         }
         overlayController.onCancel = { [weak self] in
             self?.agentController.cancelListening()
@@ -504,8 +516,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         // Wire up notch overlay controls
         notchOverlay.onStop = { [weak self] in
-            Task {
-                await self?.agentController.toggleListening()
+            guard let self else { return }
+            if self.agentController.state == .idle {
+                Task { @MainActor in
+                    await self.agentController.toggleListening()
+                }
+            } else {
+                self.agentController.stopListening()
             }
         }
         notchOverlay.onCancel = { [weak self] in
@@ -565,9 +582,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             }
         }
         sidecarController.onStop = { [weak self] in
-            Task {
-                await self?.agentController.toggleListening()
-            }
+            self?.agentController.stopListening()
         }
         sidecarController.onCancel = { [weak self] in
             self?.agentController.cancelListening()
@@ -1704,6 +1719,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         HistoryPanelController.shared.show()
     }
 
+    @objc private func showAgentHome() {
+        AgentHomeController.shared.show()
+    }
+
     // MARK: - Recent Dictations
 
     @objc private func copyRecentDictation(_ sender: NSMenuItem) {
@@ -2027,8 +2046,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         // Store reference
         settingsWindow = window
 
-        // Show in Dock/Cmd+Tab while window is open
-        NSApp.setActivationPolicy(.regular)
+        AgentAppPresentationController.shared.retainRegularPresentation(for: "settings")
 
         // Show window
         window.makeKeyAndOrderFront(nil)
@@ -2071,8 +2089,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         // Store in settings window (consolidate into one window)
         settingsWindow = window
 
-        // Show in Dock/Cmd+Tab while window is open
-        NSApp.setActivationPolicy(.regular)
+        AgentAppPresentationController.shared.retainRegularPresentation(for: "settings")
 
         // Show window
         window.makeKeyAndOrderFront(nil)
@@ -2085,9 +2102,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         guard let window = notification.object as? NSWindow,
               window === settingsWindow else { return }
 
-        // Return to menu bar app mode (no Dock icon)
         settingsWindow = nil
-        NSApp.setActivationPolicy(.accessory)
+        AgentAppPresentationController.shared.releaseRegularPresentation(for: "settings")
     }
 
     private func updateIcon(for state: LiveState) {

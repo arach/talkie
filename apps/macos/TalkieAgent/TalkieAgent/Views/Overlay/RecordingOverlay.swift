@@ -396,7 +396,7 @@ struct RecordingOverlayView: View {
                 backgroundFill: backgroundFill,
                 borderColor: borderColor,
                 audioLevel: nil,
-                controlVisibility: .onHover,
+                controlVisibility: .always,
                 content: audioMonitor.isSilent ? AnyView(
                     silentMicWarning
                         .transition(.opacity.combined(with: .scale(scale: 0.9)))
@@ -774,7 +774,7 @@ struct OverlayButton<Content: View>: View {
         Button(action: action) {
             content()
                 .foregroundColor(TalkieTheme.textSecondary.opacity(isHovered ? 0.9 : 0.4))
-                .padding(6)
+                .frame(width: 26, height: 26)
                 .background(
                     Circle()
                         .fill(TalkieTheme.textSecondary.opacity(isHovered ? 0.15 : 0))
@@ -782,6 +782,7 @@ struct OverlayButton<Content: View>: View {
                 .scaleEffect(isHovered ? 1.1 : 1.0)
         }
         .buttonStyle(.plain)
+        .contentShape(Circle())
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovered = hovering

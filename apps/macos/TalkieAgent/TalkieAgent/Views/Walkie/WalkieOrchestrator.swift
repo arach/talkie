@@ -50,15 +50,18 @@ actor WalkieOrchestrator {
                 ?? TalkieSharedSettings.string(forKey: AgentSettingsKey.walkieExecutorRuntimeId)
 
             if let runtime = await WalkieRuntimeRegistry.shared.resolve(preferredId: runtimeId) {
-                let job = WalkieAgentJob(
+                let invocation = WalkieAgentInvocation(
                     id: draft.id,
                     channel: draft.channel,
                     transcript: draft.userBody,
                     instruction: route.executorInstruction ?? draft.userBody,
                     topLevelModel: topLevel,
-                    requestedAt: Date()
+                    requestedAt: Date(),
+                    conversationId: "channel-\(draft.channel.code.lowercased())",
+                    parentSessionId: nil,
+                    source: "voice"
                 )
-                let runtimeResult = try await runtime.start(job: job)
+                let runtimeResult = try await runtime.invoke(invocation)
                 transmission.talkieBody = runtimeResult.ack
                 transmission.executorRuntimeId = runtime.id
                 transmission.executorRuntimeName = runtime.name

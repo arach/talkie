@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		53GRDB0012EE70000004EEAF4 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 53GRDB0022EE70000004EEAF4 /* GRDB */; };
+		B4C2F59B3E6D4A1190C7E202 /* TalkieAgent/Runtime in Resources */ = {isa = PBXBuildFile; fileRef = B4C2F59A3E6D4A1190C7E201 /* TalkieAgent/Runtime */; };
 		E3D8B2A1F7C5409B6A1E8D23 /* DebugKit in Frameworks */ = {isa = PBXBuildFile; productRef = A1F7C5E3D8B2409B6A1E8D24 /* DebugKit */; };
 		E4A9C672D1B24D7AA9F25C11 /* TalkieEngineCore in Frameworks */ = {isa = PBXBuildFile; productRef = E4A9C672D1B24D7AA9F25C12 /* TalkieEngineCore */; };
 		F8D3B2A1E7C5409B6A2E9D31 /* TalkieKit in Frameworks */ = {isa = PBXBuildFile; productRef = D9F3A5E1C8B74026A2D8E9F2 /* TalkieKit */; };
@@ -35,6 +36,7 @@
 		539FB5B92EE6785C004EEAF4 /* TalkieAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TalkieAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		539FB5CC2EE6785D004EEAF4 /* TalkieAgentTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TalkieAgentTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		539FB5D62EE6785D004EEAF4 /* TalkieAgentUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TalkieAgentUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B4C2F59A3E6D4A1190C7E201 /* TalkieAgent/Runtime */ = {isa = PBXFileReference; lastKnownFileType = folder; path = TalkieAgent/Runtime; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -83,12 +85,21 @@
 			path = ../../../Config;
 			sourceTree = "<group>";
 		};
+		530D797A2FC5173200A3F3FC /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				B4C2F59A3E6D4A1190C7E201 /* TalkieAgent/Runtime */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
 		539FB5B02EE6785C004EEAF4 = {
 			isa = PBXGroup;
 			children = (
 				539FB5BB2EE6785C004EEAF4 /* TalkieAgent */,
 				539FB5BA2EE6785C004EEAF4 /* Products */,
 				36203AE2C9E864F13282C30F /* Config */,
+				530D797A2FC5173200A3F3FC /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -222,6 +233,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B4C2F59B3E6D4A1190C7E202 /* TalkieAgent/Runtime in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

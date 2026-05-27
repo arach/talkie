@@ -237,6 +237,16 @@ export const STUDIO_PAGES: StudioPage[] = [
     status: "wip",
   },
   {
+    href: "/mac-agent-home",
+    label: "Agent Home",
+    bucket: "surfaces",
+    platform: "mac",
+    family: "agent",
+    status: "concept",
+    swift: ["apps/macos/TalkieAgent/TalkieAgent/Views/Home/AgentHomeView.swift"],
+    blurb: "One conversation surface: topics, parent turns, branch threads, and agent work folding back in-line.",
+  },
+  {
     href: "/mac-walkie",
     label: "Walkie",
     bucket: "surfaces",

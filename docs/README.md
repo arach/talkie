@@ -17,7 +17,7 @@ This directory contains a mix of public-facing references, active engineering no
 | Area | Path | Notes |
 |------|------|-------|
 | Engineering | `engineering/` | Architecture, performance, onboarding, testing, and proposals |
-| Numbered specs | `specs/tlk-*.md` | TLK-NNN eng-doc series. Each is a discrete decision/proposal with Status, Summary, and Open Questions. TLK-001 through TLK-019 currently. |
+| Numbered specs | `specs/tlk-*.md` | TLK-NNN eng-doc series. Each is a discrete decision/proposal with Status, Summary, and Open Questions. TLK-001 through TLK-021 currently. Studio can review them at `/eng/tlk-NNN` when the doc declares a `**Studio**` route. |
 | Reference specs | `specs/*.md` (non-numbered) | Protocol references, inventories, and supporting specs that don't carry a TLK decision. |
 | Product | `product/` | Positioning and product direction |
 | Legal | `legal/` | App EULA and non-source-license legal references |

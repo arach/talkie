@@ -584,23 +584,44 @@ struct NotchOverlayView: View {
         .brightness(isHovered ? 0.05 : 0)  // Subtle brightening on hover
         // Overlay a hit-testing layer - narrow at rest, expands when active
         .overlay(alignment: .top) {
-            Rectangle()
-                .fill(Color.clear)
+            notchHitLayer
                 .frame(width: clickableWidth, height: overlayHeight + clickZoneBelow)
-                .contentShape(Rectangle())
                 .onHover { hovering in
                     withAnimation(.easeOut(duration: 0.15)) {
                         isHovered = hovering
                     }
                 }
-                .onTapGesture {
-                    if controller.state == .idle {
-                        controller.requestStop()
-                    } else if controller.state == .listening {
-                        controller.requestStop()
-                    }
-                }
         }
+    }
+
+    @ViewBuilder
+    private var notchHitLayer: some View {
+        switch controller.state {
+        case .listening:
+            HStack(spacing: 0) {
+                notchHitButton(action: { controller.requestCancel() })
+                    .help("Cancel recording")
+                notchHitButton(action: { controller.requestStop() })
+                    .help("Stop and send")
+            }
+        case .idle:
+            notchHitButton(action: { controller.requestStop() })
+                .help("Start recording")
+        case .transcribing, .routing, .refining:
+            Color.clear
+                .contentShape(Rectangle())
+        }
+    }
+
+    private func notchHitButton(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Rectangle()
+                .fill(Color.clear)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Asymmetric Layout (particles left, timer right)

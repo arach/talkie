@@ -16,6 +16,11 @@ import TalkieMobileKit
 
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
 
+    private static let reportNotificationZoneName = "TalkieNotifications"
+    private static let reportNotificationRecordType = "TalkieReportNotification"
+    private static let reportNotificationSubscriptionID = "talkie-ios-report-notification"
+    private static let legacyPushNotificationSubscriptionID = "talkie-ios-push-notification"
+
     private var cloudKitSubscriptionSetUp = false
     private var cancellables = Set<AnyCancellable>()
 
@@ -392,8 +397,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             AppLogger.app.info("[Push] Subscription ID: \(subscriptionID)")
         }
 
-        // If this is a query notification (from PushNotification subscription), fetch the record
-        if notification.subscriptionID == "talkie-ios-push-notification",
+        // If this is a query notification from macOS, fetch the record payload.
+        if notification.subscriptionID == Self.reportNotificationSubscriptionID,
+           let queryNotification = notification as? CKQueryNotification,
+           let recordID = queryNotification.recordID {
+            fetchPushNotificationRecord(recordID: recordID)
+        } else if notification.subscriptionID == Self.legacyPushNotificationSubscriptionID,
            let queryNotification = notification as? CKQueryNotification,
            let recordID = queryNotification.recordID {
             fetchPushNotificationRecord(recordID: recordID)
@@ -402,7 +411,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         AppLogger.persistence.info("[Push] CloudKit sync triggered")
     }
 
-    /// Fetch the PushNotification record to get memoId for deep linking
+    /// Fetch the notification record for report metadata or legacy memo deep linking.
     private func fetchPushNotificationRecord(recordID: CKRecord.ID) {
         guard let container = CloudKitContainerProvider.container() else {
             let reason = CloudKitContainerProvider.unavailableReason ?? "CloudKit unavailable"
@@ -420,7 +429,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
             guard let record = record else { return }
 
-            // Extract memoId from the record
+            if record.recordType == Self.reportNotificationRecordType {
+                let sessionId = record["sessionId"] as? String ?? "unknown"
+                AppLogger.app.info("[Push] Report notification for session: \(sessionId)")
+                return
+            }
+
             if let memoIdString = record["CD_memoId"] as? String,
                let memoId = UUID(uuidString: memoIdString) {
                 AppLogger.app.info("[Push] Notification for memo: \(memoId)")
@@ -452,13 +466,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         // NSPersistentCloudKitContainer uses "com.apple.coredata.cloudkit.zone"
         let zoneID = CKRecordZone.ID(zoneName: "com.apple.coredata.cloudkit.zone", ownerName: CKCurrentUserDefaultName)
 
-        // Set up zone subscription for general sync (silent push)
+        // Set up zone subscription for general memo sync (silent push).
         let zoneSubscriptionID = "talkie-ios-private-db-subscription"
         setupZoneSubscription(database: privateDB, subscriptionID: zoneSubscriptionID, zoneID: zoneID)
 
-        // Set up query subscription for PushNotification records (visible push notification from macOS)
-        let pushNotificationSubscriptionID = "talkie-ios-push-notification"
-        setupPushNotificationSubscription(database: privateDB, subscriptionID: pushNotificationSubscriptionID, zoneID: zoneID)
+        deleteLegacyPushNotificationSubscription(database: privateDB)
+        setupReportNotificationZoneAndSubscription(database: privateDB)
     }
 
     private func setupZoneSubscription(database: CKDatabase, subscriptionID: String, zoneID: CKRecordZone.ID) {
@@ -493,11 +506,71 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         }
     }
 
+    private func deleteLegacyPushNotificationSubscription(database: CKDatabase) {
+        database.delete(withSubscriptionID: Self.legacyPushNotificationSubscriptionID) { _, error in
+            if let error = error as? CKError, error.code != .unknownItem {
+                AppLogger.app.warning("[Push] Failed to delete legacy Core Data push subscription: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func setupReportNotificationZoneAndSubscription(database: CKDatabase) {
+        let zoneID = CKRecordZone.ID(zoneName: Self.reportNotificationZoneName, ownerName: CKCurrentUserDefaultName)
+        database.fetch(withRecordZoneID: zoneID) { [weak self] existingZone, error in
+            if existingZone != nil {
+                self?.setupPushNotificationSubscription(
+                    database: database,
+                    subscriptionID: Self.reportNotificationSubscriptionID,
+                    zoneID: zoneID
+                )
+                return
+            }
+
+            if let error, !Self.isMissingCloudKitZone(error, zoneID: zoneID) {
+                AppLogger.app.error("[Push] Failed to check report notification zone: \(error.localizedDescription)")
+                return
+            }
+
+            database.save(CKRecordZone(zoneID: zoneID)) { _, saveError in
+                if let saveError {
+                    AppLogger.app.error("[Push] Failed to create report notification zone: \(saveError.localizedDescription)")
+                    return
+                }
+
+                self?.setupPushNotificationSubscription(
+                    database: database,
+                    subscriptionID: Self.reportNotificationSubscriptionID,
+                    zoneID: zoneID
+                )
+            }
+        }
+    }
+
+    private static func isMissingCloudKitZone(_ error: Error, zoneID: CKRecordZone.ID) -> Bool {
+        guard let ckError = error as? CKError else { return false }
+
+        switch ckError.code {
+        case .unknownItem, .zoneNotFound:
+            return true
+        case .partialFailure:
+            guard let partialErrors = ckError.partialErrorsByItemID else { return false }
+            return partialErrors.contains { itemID, partialError in
+                guard let partialZoneID = itemID as? CKRecordZone.ID,
+                      partialZoneID == zoneID else {
+                    return false
+                }
+                return isMissingCloudKitZone(partialError, zoneID: zoneID)
+            }
+        default:
+            return false
+        }
+    }
+
     // Bump this version when changing subscription configuration to force recreation
-    private static let pushSubscriptionVersion = 2
+    private static let pushSubscriptionVersion = 3
 
     private func setupPushNotificationSubscription(database: CKDatabase, subscriptionID: String, zoneID: CKRecordZone.ID) {
-        let versionKey = "pushSubscriptionVersion"
+        let versionKey = "reportPushSubscriptionVersion"
         let savedVersion = UserDefaults.standard.integer(forKey: versionKey)
 
         // Check if subscription already exists
@@ -525,38 +598,36 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                 return
             }
 
-            // Create new query subscription for PushNotification records
+            // Create new query subscription for report notification records.
             self?.createPushNotificationSubscription(database: database, subscriptionID: subscriptionID, zoneID: zoneID)
             UserDefaults.standard.set(Self.pushSubscriptionVersion, forKey: versionKey)
         }
     }
 
     private func createPushNotificationSubscription(database: CKDatabase, subscriptionID: String, zoneID: CKRecordZone.ID) {
-        // Core Data prefixes record types with "CD_"
-        // Subscribe to new PushNotification records created by macOS
-        let predicate = NSPredicate(value: true) // All PushNotification records
+        // Subscribe to new report notification records created by macOS.
+        let predicate = NSPredicate(value: true)
 
         let subscription = CKQuerySubscription(
-            recordType: "CD_PushNotification",
+            recordType: Self.reportNotificationRecordType,
             predicate: predicate,
             subscriptionID: subscriptionID,
             options: [.firesOnRecordCreation] // Only notify on new records
         )
 
-        // Configure visible push notification using record fields
+        // Configure visible push notification using record fields.
         let notificationInfo = CKSubscription.NotificationInfo()
         // Use localization keys that map to Localizable.strings
-        // PUSH_NOTIFICATION_TITLE = "%1$@" will substitute CD_title
-        // PUSH_NOTIFICATION_BODY = "%1$@" will substitute CD_body
+        // PUSH_NOTIFICATION_TITLE = "%1$@" will substitute title
+        // PUSH_NOTIFICATION_BODY = "%1$@" will substitute body
         notificationInfo.titleLocalizationKey = "PUSH_NOTIFICATION_TITLE"
-        notificationInfo.titleLocalizationArgs = ["CD_title"]
+        notificationInfo.titleLocalizationArgs = ["title"]
         notificationInfo.alertLocalizationKey = "PUSH_NOTIFICATION_BODY"
-        notificationInfo.alertLocalizationArgs = ["CD_body"]
+        notificationInfo.alertLocalizationArgs = ["body"]
         notificationInfo.soundName = "default"
         notificationInfo.shouldSendContentAvailable = true // Also trigger background fetch
         notificationInfo.shouldBadge = false
-        // Include desired keys so we can fetch memoId for deep linking
-        notificationInfo.desiredKeys = ["CD_memoId", "CD_title", "CD_body"]
+        notificationInfo.desiredKeys = ["title", "body", "sessionId", "source", "kind"]
 
         subscription.notificationInfo = notificationInfo
         subscription.zoneID = zoneID
@@ -592,18 +663,18 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
         let userInfo = response.notification.request.content.userInfo
 
-        // Try to extract memoId from CloudKit notification
+        // Try to extract payload details from the CloudKit notification.
         if let ckDict = userInfo as? [String: NSObject],
            let ckNotification = CKQueryNotification(fromRemoteNotificationDictionary: ckDict),
            let recordID = ckNotification.recordID {
-            AppLogger.app.info("[Push] CloudKit notification tapped, fetching memoId...")
+            AppLogger.app.info("[Push] CloudKit notification tapped, fetching record...")
 
             #if targetEnvironment(simulator)
             AppLogger.app.info("[Push] Skipping CloudKit notification tap fetch on simulator")
             completionHandler()
             return
             #else
-            // Fetch the record to get memoId
+            // Fetch the record to get the report payload or legacy memo id.
             guard let container = CloudKitContainerProvider.container() else {
                 let reason = CloudKitContainerProvider.unavailableReason ?? "CloudKit unavailable"
                 AppLogger.app.warning("[Push] Skipping tapped notification fetch: \(reason)")
@@ -616,8 +687,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             privateDB.fetch(withRecordID: recordID) { [weak self] record, error in
                 DispatchQueue.main.async {
                     if let record = record,
-                       let memoIdData = record["CD_memoId"],
-                       let memoId = self?.extractUUID(from: memoIdData) {
+                       record.recordType == Self.reportNotificationRecordType {
+                        let sessionId = record["sessionId"] as? String ?? "unknown"
+                        AppLogger.app.info("[Push] Opened report notification for session: \(sessionId)")
+                    } else if let record = record,
+                              let memoIdData = record["CD_memoId"],
+                              let memoId = self?.extractUUID(from: memoIdData) {
                         AppLogger.app.info("[Push] Deep linking to memo: \(memoId)")
                         DeepLinkManager.shared.pendingAction = .openMemoActivity(id: memoId)
                     } else if let error = error {
@@ -647,4 +722,5 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         }
         return nil
     }
+
 }
