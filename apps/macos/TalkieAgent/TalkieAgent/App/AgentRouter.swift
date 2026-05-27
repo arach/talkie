@@ -32,6 +32,8 @@ enum RoutingMode: String, CaseIterable {
 }
 
 struct TranscriptRouter: AgentRouter {
+    private static let postPasteSubmitDelay: Duration = .milliseconds(180)
+
     var mode: RoutingMode = .paste
 
     func handle(transcript: String) async {
@@ -64,11 +66,12 @@ struct TranscriptRouter: AgentRouter {
             let shouldPressEnter = await MainActor.run { LiveSettings.shared.pressEnterAfterPaste }
 
             // Paste: clipboard + simulated Cmd+V
-            simulatePaste()
+            let pasted = simulatePaste()
+            guard pasted else { return }
 
             // Optionally press Enter after paste (for chat apps, terminals)
             if shouldPressEnter {
-                simulateEnter()
+                await submitAfterPaste()
             }
         }
     }
@@ -85,7 +88,7 @@ struct TranscriptRouter: AgentRouter {
         return true
     }
 
-    private func simulatePaste() {
+    private func simulatePaste() -> Bool {
         // Use cached accessibility check (pre-warmed on boot) for fast path.
         // If permission is missing, report failure to invalidate cache and force re-check.
         guard PermissionManager.shared.hasAccessibilityPermission else {
@@ -97,14 +100,14 @@ struct TranscriptRouter: AgentRouter {
                 SoundManager.shared.playPasteBlocked()
                 NotificationCenter.default.post(name: .pasteBlockedByPermission, object: nil)
             }
-            return
+            return false
         }
 
         guard let src = CGEventSource(stateID: .combinedSessionState) else {
             log.error("Failed to create CGEventSource - cannot paste")
             // This could indicate an accessibility issue - report it
             PermissionManager.shared.reportAccessibilityFailure()
-            return
+            return false
         }
 
         let events: [(UInt16, Bool)] = [
@@ -127,30 +130,46 @@ struct TranscriptRouter: AgentRouter {
         if eventsPosted < 4 {
             log.warning("Paste incomplete (\(eventsPosted)/4 events) - possible accessibility issue")
             PermissionManager.shared.reportAccessibilityFailure()
+            return false
         } else {
             log.info("Pasted (\(eventsPosted)/4 events posted)")
+            return true
         }
     }
 
-    private func simulateEnter() {
+    private func submitAfterPaste() async {
+        try? await Task.sleep(for: Self.postPasteSubmitDelay)
+        if simulateEnter() {
+            log.info("Submitted pasted transcript with Enter")
+        }
+    }
+
+    private func simulateEnter() -> Bool {
         guard let src = CGEventSource(stateID: .combinedSessionState) else {
             log.error("Failed to create CGEventSource - cannot send Enter")
-            return
+            return false
         }
 
-        // CGEvent paste is synchronous - Enter can follow immediately
         // Return/Enter key = 0x24
         let events: [(UInt16, Bool)] = [
             (0x24, true),   // Return down
             (0x24, false)   // Return up
         ]
 
+        var eventsPosted = 0
         for (key, down) in events {
             if let evt = CGEvent(keyboardEventSource: src, virtualKey: key, keyDown: down) {
                 evt.post(tap: .cghidEventTap)
+                eventsPosted += 1
             }
         }
 
-        log.info("Sent Enter key")
+        if eventsPosted == events.count {
+            log.info("Sent Enter key")
+            return true
+        } else {
+            log.warning("Enter incomplete (\(eventsPosted)/\(events.count) events)")
+            return false
+        }
     }
 }
