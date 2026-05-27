@@ -27,7 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private let speakSelectionHotKeyManager = HotKeyManager(signature: "\(sig)SP", hotkeyID: 14)  // Speak selected text
     private let screenshotHotKeyManager = HotKeyManager(signature: "\(sig)SS", hotkeyID: 8)  // Screenshot during recording
 
-    // Direct screenshot shortcuts (CleanShot-style: Cmd+Shift+3/4/5/6)
+    // Direct screenshot shortcuts. Defaults intentionally avoid macOS screenshot shortcuts.
     private let ssFullscreenHotKey = HotKeyManager(signature: "\(sig)S3", hotkeyID: 9)
     private let ssRegionHotKey     = HotKeyManager(signature: "\(sig)S4", hotkeyID: 10)
     private let ssBufferHotKey     = HotKeyManager(signature: "\(sig)S5", hotkeyID: 11)
@@ -640,10 +640,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     /// Load a HotkeyConfig from shared settings, falling back to hardcoded defaults.
     private static func loadHotkeyConfig(key: String, fallbackKeyCode: UInt32, fallbackModifiers: UInt32) -> (keyCode: UInt32, modifiers: UInt32) {
         if let data = TalkieSharedSettings.data(forKey: key) {
-            struct HotkeyConfigDTO: Decodable {
-                var keyCode: UInt32
-                var modifiers: UInt32
-            }
             if let config = try? JSONDecoder().decode(HotkeyConfigDTO.self, from: data) {
                 return (config.keyCode, config.modifiers)
             }
@@ -651,7 +647,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         return (fallbackKeyCode, fallbackModifiers)
     }
 
+    private struct HotkeyConfigDTO: Codable, Equatable {
+        var keyCode: UInt32
+        var modifiers: UInt32
+    }
+
+    private static var hyperModifiers: UInt32 {
+        UInt32(cmdKey | optionKey | controlKey | shiftKey)
+    }
+
+    private static func migrateReservedCaptureDefaultsIfNeeded() {
+        let migrationKey = "hotkeyCapture.safeDefaultsMigration.v1"
+        guard !TalkieSharedSettings.bool(forKey: migrationKey) else { return }
+
+        let oldCmdShift = UInt32(cmdKey | shiftKey)
+        let migrations: [(key: String, old: HotkeyConfigDTO, new: HotkeyConfigDTO)] = [
+            ("hotkeyCapture.fullscreen", .init(keyCode: 20, modifiers: oldCmdShift), .init(keyCode: 20, modifiers: hyperModifiers)),
+            ("hotkeyCapture.region", .init(keyCode: 21, modifiers: oldCmdShift), .init(keyCode: 21, modifiers: hyperModifiers)),
+            ("hotkeyCapture.trayViewer", .init(keyCode: 23, modifiers: oldCmdShift), .init(keyCode: 23, modifiers: hyperModifiers)),
+            ("hotkeyCapture.window", .init(keyCode: 22, modifiers: oldCmdShift), .init(keyCode: 22, modifiers: hyperModifiers)),
+            (AgentSettingsKey.pasteLastScreenshotHotkey, .init(keyCode: 9, modifiers: oldCmdShift), .init(keyCode: 35, modifiers: hyperModifiers)),
+        ]
+
+        let decoder = JSONDecoder()
+        let encoder = JSONEncoder()
+        var migrated: [String] = []
+
+        for migration in migrations {
+            guard let data = TalkieSharedSettings.data(forKey: migration.key),
+                  let current = try? decoder.decode(HotkeyConfigDTO.self, from: data),
+                  current == migration.old,
+                  let newData = try? encoder.encode(migration.new) else {
+                continue
+            }
+
+            TalkieSharedSettings.set(newData, forKey: migration.key)
+            migrated.append(migration.key)
+        }
+
+        TalkieSharedSettings.set(true, forKey: migrationKey)
+
+        if !migrated.isEmpty {
+            log.info("Migrated reserved screenshot hotkeys", detail: "keys=\(migrated.joined(separator: ","))")
+        }
+    }
+
     private func setupHotkeys() {
+        Self.migrateReservedCaptureDefaultsIfNeeded()
+
         let settings = LiveSettings.shared
 
         // Register all hotkeys once at the end of boot
@@ -846,14 +889,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }
         log.info("Paste chord hotkey registered: keyCode=\(pasteChord.keyCode) modifiers=\(pasteChord.modifiers)")
 
-        let cmdShift = UInt32(cmdKey | shiftKey)
-        let hyper = UInt32(cmdKey | optionKey | controlKey | shiftKey)
         let directShortcuts: [(HotKeyManager, String, UInt32, UInt32, String)] = [
-            (ssFullscreenHotKey, "hotkeyCapture.fullscreen", 20, cmdShift, "fullscreen"),
-            (ssRegionHotKey,     "hotkeyCapture.region",     21, cmdShift, "region"),
-            (ssBufferHotKey,     "hotkeyCapture.trayViewer", 23, cmdShift, "viewTray"),
-            (ssWindowHotKey,     "hotkeyCapture.window",     22, cmdShift, "window"),
-            (ssShelfHotKey,      "hotkeyCapture.trayShelf",  17, hyper,    "viewShelf"),
+            (ssFullscreenHotKey, "hotkeyCapture.fullscreen", 20, Self.hyperModifiers, "fullscreen"),
+            (ssRegionHotKey,     "hotkeyCapture.region",     21, Self.hyperModifiers, "region"),
+            (ssBufferHotKey,     "hotkeyCapture.trayViewer", 23, Self.hyperModifiers, "viewTray"),
+            (ssWindowHotKey,     "hotkeyCapture.window",     22, Self.hyperModifiers, "window"),
+            (ssShelfHotKey,      "hotkeyCapture.trayShelf",  17, Self.hyperModifiers, "viewShelf"),
         ]
 
         for (manager, settingsKey, defaultKeyCode, defaultModifiers, mode) in directShortcuts {
@@ -880,12 +921,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             }
         }
 
-        log.info("Direct screenshot hotkeys registered from shared settings (defaults: ⌘⇧3/4/5/6, Hyper+T shelf)")
+        log.info("Direct screenshot hotkeys registered from shared settings (defaults: Hyper+3/4/5/6, Hyper+T shelf)")
 
         let pasteLastScreenshot = Self.loadHotkeyConfig(
             key: AgentSettingsKey.pasteLastScreenshotHotkey,
-            fallbackKeyCode: 9,
-            fallbackModifiers: UInt32(cmdKey | shiftKey)
+            fallbackKeyCode: 35,
+            fallbackModifiers: Self.hyperModifiers
         )
         pasteLastScreenshotHotKey.registerHotKey(
             modifiers: pasteLastScreenshot.modifiers,
@@ -940,12 +981,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             managers.append(("Screenshot Chord", screenshotHotKeyManager))
             managers.append(("Screen Record", screenRecordHotKeyManager))
             managers.append(("Paste Chord", pasteChordHotKeyManager))
-            managers.append(("⌘⇧3 Fullscreen", ssFullscreenHotKey))
-            managers.append(("⌘⇧4 Region", ssRegionHotKey))
-            managers.append(("⌘⇧5 Tray", ssBufferHotKey))
-            managers.append(("⌘⇧6 Window", ssWindowHotKey))
+            managers.append(("Hyper+3 Fullscreen", ssFullscreenHotKey))
+            managers.append(("Hyper+4 Region", ssRegionHotKey))
+            managers.append(("Hyper+5 Tray", ssBufferHotKey))
+            managers.append(("Hyper+6 Window", ssWindowHotKey))
             managers.append(("Hyper+T Shelf", ssShelfHotKey))
-            managers.append(("⌘⇧V Paste Last Screenshot", pasteLastScreenshotHotKey))
+            managers.append(("Hyper+P Paste Last Screenshot", pasteLastScreenshotHotKey))
         }
 
         if pttEnabled {

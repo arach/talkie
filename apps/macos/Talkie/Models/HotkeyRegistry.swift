@@ -28,12 +28,12 @@ enum HotkeyAction: String, CaseIterable, Identifiable {
     case screenRecordChord      // Hyper+R
 
     // Capture — direct actions
-    case captureFullscreen      // ⌘⇧3
-    case captureRegion          // ⌘⇧4
-    case captureWindow          // ⌘⇧6
-    case openTrayViewer         // ⌘⇧5
+    case captureFullscreen      // Hyper+3
+    case captureRegion          // Hyper+4
+    case captureWindow          // Hyper+6
+    case openTrayViewer         // Hyper+5
     case openTrayShelf          // Hyper+T
-    case pasteLastScreenshot    // ⌘⇧V
+    case pasteLastScreenshot    // Hyper+P
 
     // Paste
     case pasteChord             // Hyper+V
@@ -88,17 +88,17 @@ enum HotkeyAction: String, CaseIterable, Identifiable {
         case .pasteChord:
             return .defaultPasteChord                                                              // Hyper+V
         case .captureFullscreen:
-            return HotkeyConfig(keyCode: 20, modifiers: UInt32(cmdKey | shiftKey))                // ⌘⇧3
+            return .defaultCaptureFullscreen                                                        // Hyper+3
         case .captureRegion:
-            return HotkeyConfig(keyCode: 21, modifiers: UInt32(cmdKey | shiftKey))                // ⌘⇧4
+            return .defaultCaptureRegion                                                            // Hyper+4
         case .captureWindow:
-            return HotkeyConfig(keyCode: 22, modifiers: UInt32(cmdKey | shiftKey))                // ⌘⇧6
+            return .defaultCaptureWindow                                                            // Hyper+6
         case .openTrayViewer:
-            return HotkeyConfig(keyCode: 23, modifiers: UInt32(cmdKey | shiftKey))                // ⌘⇧5
+            return .defaultOpenTrayViewer                                                           // Hyper+5
         case .openTrayShelf:
             return HotkeyConfig(keyCode: 17, modifiers: UInt32(cmdKey | optionKey | controlKey | shiftKey)) // Hyper+T
         case .pasteLastScreenshot:
-            return HotkeyConfig(keyCode: 9, modifiers: UInt32(cmdKey | shiftKey))                 // ⌘⇧V
+            return .defaultPasteLastScreenshot                                                      // Hyper+P
         case .selectionQuickAction:
             return .defaultSelectionQuick                                                           // ⌥⌘Y
         }
@@ -159,6 +159,8 @@ final class HotkeyRegistry {
     private let storage = TalkieSharedSettings
 
     private init() {
+        migrateReservedCaptureDefaultsIfNeeded()
+
         // Load all configs from storage, falling back to defaults
         for action in HotkeyAction.allCases {
             if let data = storage.data(forKey: action.storageKey),
@@ -233,6 +235,45 @@ final class HotkeyRegistry {
     }
 
     // MARK: - Private
+
+    private func migrateReservedCaptureDefaultsIfNeeded() {
+        let migrationKey = "hotkeyCapture.safeDefaultsMigration.v1"
+        guard !storage.bool(forKey: migrationKey) else { return }
+
+        let oldCmdShift = UInt32(cmdKey | shiftKey)
+        let migrations: [(action: HotkeyAction, old: HotkeyConfig, new: HotkeyConfig)] = [
+            (.captureFullscreen, HotkeyConfig(keyCode: 20, modifiers: oldCmdShift), .defaultCaptureFullscreen),
+            (.captureRegion, HotkeyConfig(keyCode: 21, modifiers: oldCmdShift), .defaultCaptureRegion),
+            (.openTrayViewer, HotkeyConfig(keyCode: 23, modifiers: oldCmdShift), .defaultOpenTrayViewer),
+            (.captureWindow, HotkeyConfig(keyCode: 22, modifiers: oldCmdShift), .defaultCaptureWindow),
+            (.pasteLastScreenshot, HotkeyConfig(keyCode: 9, modifiers: oldCmdShift), .defaultPasteLastScreenshot),
+        ]
+
+        let decoder = JSONDecoder()
+        let encoder = JSONEncoder()
+        var migrated: [String] = []
+
+        for migration in migrations {
+            guard let data = storage.data(forKey: migration.action.storageKey),
+                  let current = try? decoder.decode(HotkeyConfig.self, from: data),
+                  current == migration.old,
+                  let newData = try? encoder.encode(migration.new) else {
+                continue
+            }
+
+            storage.set(newData, forKey: migration.action.storageKey)
+            migrated.append(migration.action.rawValue)
+        }
+
+        storage.set(true, forKey: migrationKey)
+
+        if !migrated.isEmpty {
+            Log(.system).info(
+                "Migrated reserved screenshot hotkeys",
+                detail: "actions=\(migrated.joined(separator: ","))"
+            )
+        }
+    }
 
     private func syncToAgentSettings(_ action: HotkeyAction, _ config: HotkeyConfig) {
         let settings = AgentSettings.shared
