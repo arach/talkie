@@ -268,19 +268,55 @@ public enum LLMVisionService {
         model: String?
     ) async throws -> LLMVisionDescriptionResult {
         let providerOrder = ["gemini", "openai"]
+        var lastError: Error?
+
         for providerId in providerOrder {
             guard let provider = LLMProviderRegistry.shared.provider(for: providerId),
                   await provider.isAvailable,
                   provider.supportsVision else { continue }
-            let modelId = model ?? LLMProviderRegistry.shared.defaultModelId(for: providerId)
-            let raw = try await provider.generateVisionIfAvailable(request: request, model: modelId)
-            return LLMVisionDescriptionResult(
-                providerId: providerId,
-                modelId: modelId,
-                description: decodeStructuredDescription(raw)
-            )
+
+            for modelId in visionModelCandidates(providerId: providerId, requestedModel: model) {
+                do {
+                    let raw = try await provider.generateVisionIfAvailable(request: request, model: modelId)
+                    return LLMVisionDescriptionResult(
+                        providerId: providerId,
+                        modelId: modelId,
+                        description: decodeStructuredDescription(raw)
+                    )
+                } catch {
+                    lastError = error
+                }
+            }
+        }
+
+        if let lastError {
+            throw lastError
         }
         throw LLMError.providerNotAvailable("vision")
+    }
+
+    private static func visionModelCandidates(providerId: String, requestedModel: String?) -> [String] {
+        if let requestedModel, !requestedModel.isEmpty {
+            return [requestedModel]
+        }
+
+        let defaultModel = LLMProviderRegistry.shared.defaultModelId(for: providerId)
+        let candidates: [String]
+        switch providerId {
+        case "openai":
+            candidates = [defaultModel, "gpt-4.1-mini", "gpt-4o-mini", "gpt-4o"]
+        case "gemini":
+            candidates = [defaultModel, "gemini-2.0-flash", "gemini-1.5-flash-latest"]
+        default:
+            candidates = [defaultModel]
+        }
+
+        var seen = Set<String>()
+        return candidates.filter { candidate in
+            guard !candidate.isEmpty, !seen.contains(candidate) else { return false }
+            seen.insert(candidate)
+            return true
+        }
     }
 
     private static func structuredPrompt(

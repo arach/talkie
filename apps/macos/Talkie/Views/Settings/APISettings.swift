@@ -15,58 +15,71 @@ private let logger = Logger(subsystem: "to.talkie.app.mac", category: "Views")
 struct APISettingsView: View {
     @Environment(SettingsManager.self) private var settingsManager: SettingsManager
     @State private var editingProvider: String?
-    @State private var editingKeyInput: String = ""
+    @State private var editingProviderIdInput = ""
+    @State private var editingKeyInput = ""
     @State private var revealedKeys: Set<String> = []
-    @State private var fetchedKeys: [String: String] = [:]  // Cache fetched keys
+    @State private var fetchedKeys: [String: String] = [:]
+    @State private var additionalProviderIDs: [String] = []
     @State private var isRefreshingModels = false
-    @State private var modelCounts: [String: Int] = [:]  // Provider -> model count
+    @State private var modelCounts: [String: Int] = [:]
+
+    private var slots: [APIKeyStore.ProviderSlot] {
+        settingsManager.apiKeySlots(additionalProviderIDs: additionalProviderIDs)
+    }
+
+    private var configuredCount: Int {
+        slots.filter { settingsManager.hasAPIKey(forProviderId: $0.id) }.count
+    }
 
     var body: some View {
-        @Bindable var settings = settingsManager
-
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "key",
                 title: "API KEYS",
-                subtitle: "Manage API keys for cloud AI providers"
+                subtitle: "Manage reusable provider key slots"
             )
         } content: {
-            // MARK: - Provider API Keys
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 HStack(spacing: Spacing.sm) {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(Color.blue)
                         .frame(width: 3, height: 14)
 
-                    Text("CLOUD PROVIDERS")
+                    Text("PROVIDER KEY SLOTS")
                         .font(Theme.current.fontXSBold)
                         .foregroundColor(Theme.current.foregroundSecondary)
 
                     Spacer()
 
-                    // Count configured keys
-                    let configuredCount = [
-                        settingsManager.hasOpenAIKey(),
-                        settingsManager.hasAnthropicKey(),
-                        settingsManager.hasValidApiKey,
-                        settingsManager.hasGroqKey(),
-                        settingsManager.hasElevenLabsKey()
-                    ].filter { $0 }.count
-
                     HStack(spacing: Spacing.xxs) {
                         Circle()
                             .fill(configuredCount > 0 ? Color.green : Color.orange)
                             .frame(width: 6, height: 6)
-                        Text("\(configuredCount)/5 CONFIGURED")
+                        Text("\(configuredCount) CONFIGURED")
                             .font(.techLabelSmall)
                             .foregroundColor(configuredCount > 0 ? .green : .orange)
                     }
 
-                    // Refresh models button
-                    Button {
-                        Task {
-                            await refreshAllModels()
+                    Menu {
+                        ForEach(APIKeyStore.Provider.allCases, id: \.rawValue) { provider in
+                            Button(provider.displayName, systemImage: provider.icon) {
+                                startEditing(provider.slot)
+                            }
                         }
+
+                        Divider()
+
+                        Button("Custom Provider", systemImage: "plus") {
+                            addCustomSlot()
+                        }
+                    } label: {
+                        Label("Add Slot", systemImage: "plus")
+                            .font(.techLabelSmall)
+                    }
+                    .menuStyle(.button)
+
+                    Button {
+                        Task { await refreshAllModels() }
                     } label: {
                         HStack(spacing: Spacing.xxs) {
                             if isRefreshingModels {
@@ -84,239 +97,44 @@ struct APISettingsView: View {
                     .help("Fetch latest models from all configured providers")
                 }
 
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Spacing.xs) {
+                        ForEach(APIKeyStore.Provider.allCases, id: \.rawValue) { provider in
+                            APIKeyPresetButton(provider: provider) {
+                                startEditing(provider.slot)
+                            }
+                        }
+                    }
+                    .padding(.vertical, Spacing.xxs)
+                }
+
                 VStack(spacing: Spacing.sm) {
-                    APIKeyRow(
-                        provider: "OpenAI",
-                        icon: "brain.head.profile",
-                        placeholder: "sk-...",
-                        helpURL: "https://platform.openai.com/api-keys",
-                        isConfigured: settingsManager.hasOpenAIKey(),
-                        currentKey: fetchedKeys["openai"],
-                        isEditing: editingProvider == "openai",
-                        isRevealed: revealedKeys.contains("openai"),
-                        editingKey: $editingKeyInput,
-                        onEdit: {
-                            // Fetch key only when editing
-                            if let key = settingsManager.fetchOpenAIKey() {
-                                fetchedKeys["openai"] = key
-                                editingKeyInput = key
-                            }
-                            editingProvider = "openai"
-                        },
-                        onSave: {
-                            settingsManager.openaiApiKey = editingKeyInput.isEmpty ? nil : editingKeyInput
-                                                        fetchedKeys["openai"] = editingKeyInput.isEmpty ? nil : editingKeyInput
-                            editingProvider = nil
-                            editingKeyInput = ""
-                            // Refresh models after saving key
-                            Task { await refreshAllModels() }
-                        },
-                        onCancel: {
-                            editingProvider = nil
-                            editingKeyInput = ""
-                        },
-                        onReveal: {
-                            if revealedKeys.contains("openai") {
-                                revealedKeys.remove("openai")
-                                fetchedKeys["openai"] = nil
-                            } else {
-                                // Fetch key only when revealing
-                                if let key = settingsManager.fetchOpenAIKey() {
-                                    fetchedKeys["openai"] = key
-                                }
-                                revealedKeys.insert("openai")
-                            }
-                        },
-                        onDelete: {
-                            settingsManager.openaiApiKey = nil
-                                                        fetchedKeys["openai"] = nil
-                        }
-                    )
-
-                    APIKeyRow(
-                        provider: "Anthropic",
-                        icon: "sparkles",
-                        placeholder: "sk-ant-...",
-                        helpURL: "https://console.anthropic.com/settings/keys",
-                        isConfigured: settingsManager.hasAnthropicKey(),
-                        currentKey: fetchedKeys["anthropic"],
-                        isEditing: editingProvider == "anthropic",
-                        isRevealed: revealedKeys.contains("anthropic"),
-                        editingKey: $editingKeyInput,
-                        onEdit: {
-                            // Fetch key only when editing
-                            if let key = settingsManager.fetchAnthropicKey() {
-                                fetchedKeys["anthropic"] = key
-                                editingKeyInput = key
-                            }
-                            editingProvider = "anthropic"
-                        },
-                        onSave: {
-                            settingsManager.anthropicApiKey = editingKeyInput.isEmpty ? nil : editingKeyInput
-                                                        fetchedKeys["anthropic"] = editingKeyInput.isEmpty ? nil : editingKeyInput
-                            editingProvider = nil
-                            editingKeyInput = ""
-                            Task { await refreshAllModels() }
-                        },
-                        onCancel: {
-                            editingProvider = nil
-                            editingKeyInput = ""
-                        },
-                        onReveal: {
-                            if revealedKeys.contains("anthropic") {
-                                revealedKeys.remove("anthropic")
-                                fetchedKeys["anthropic"] = nil
-                            } else {
-                                // Fetch key only when revealing
-                                if let key = settingsManager.fetchAnthropicKey() {
-                                    fetchedKeys["anthropic"] = key
-                                }
-                                revealedKeys.insert("anthropic")
-                            }
-                        },
-                        onDelete: {
-                            settingsManager.anthropicApiKey = nil
-                                                        fetchedKeys["anthropic"] = nil
-                        }
-                    )
-
-                    APIKeyRow(
-                        provider: "Gemini",
-                        icon: "cloud.fill",
-                        placeholder: "AIzaSy...",
-                        helpURL: "https://makersuite.google.com/app/apikey",
-                        isConfigured: settingsManager.hasValidApiKey,
-                        currentKey: settingsManager.geminiApiKey.isEmpty ? nil : settingsManager.geminiApiKey,
-                        isEditing: editingProvider == "gemini",
-                        isRevealed: revealedKeys.contains("gemini"),
-                        editingKey: $editingKeyInput,
-                        onEdit: {
-                            editingProvider = "gemini"
-                            editingKeyInput = settingsManager.geminiApiKey
-                        },
-                        onSave: {
-                            settingsManager.geminiApiKey = editingKeyInput
-                                                        editingProvider = nil
-                            editingKeyInput = ""
-                            Task { await refreshAllModels() }
-                        },
-                        onCancel: {
-                            editingProvider = nil
-                            editingKeyInput = ""
-                        },
-                        onReveal: {
-                            if revealedKeys.contains("gemini") {
-                                revealedKeys.remove("gemini")
-                            } else {
-                                revealedKeys.insert("gemini")
-                            }
-                        },
-                        onDelete: {
-                            settingsManager.geminiApiKey = ""
-                                                    }
-                    )
-
-                    APIKeyRow(
-                        provider: "Groq",
-                        icon: "bolt.fill",
-                        placeholder: "gsk_...",
-                        helpURL: "https://console.groq.com/keys",
-                        isConfigured: settingsManager.hasGroqKey(),
-                        currentKey: fetchedKeys["groq"],
-                        isEditing: editingProvider == "groq",
-                        isRevealed: revealedKeys.contains("groq"),
-                        editingKey: $editingKeyInput,
-                        onEdit: {
-                            // Fetch key only when editing
-                            if let key = settingsManager.fetchGroqKey() {
-                                fetchedKeys["groq"] = key
-                                editingKeyInput = key
-                            }
-                            editingProvider = "groq"
-                        },
-                        onSave: {
-                            settingsManager.groqApiKey = editingKeyInput.isEmpty ? nil : editingKeyInput
-                                                        fetchedKeys["groq"] = editingKeyInput.isEmpty ? nil : editingKeyInput
-                            editingProvider = nil
-                            editingKeyInput = ""
-                            Task { await refreshAllModels() }
-                        },
-                        onCancel: {
-                            editingProvider = nil
-                            editingKeyInput = ""
-                        },
-                        onReveal: {
-                            if revealedKeys.contains("groq") {
-                                revealedKeys.remove("groq")
-                                fetchedKeys["groq"] = nil
-                            } else {
-                                // Fetch key only when revealing
-                                if let key = settingsManager.fetchGroqKey() {
-                                    fetchedKeys["groq"] = key
-                                }
-                                revealedKeys.insert("groq")
-                            }
-                        },
-                        onDelete: {
-                            settingsManager.groqApiKey = nil
-                                                        fetchedKeys["groq"] = nil
-                        }
-                    )
-
-                    APIKeyRow(
-                        provider: "ElevenLabs",
-                        icon: "speaker.wave.3",
-                        placeholder: "sk_...",
-                        helpURL: "https://elevenlabs.io/app/settings/api-keys",
-                        isConfigured: settingsManager.hasElevenLabsKey(),
-                        currentKey: fetchedKeys["elevenlabs"],
-                        isEditing: editingProvider == "elevenlabs",
-                        isRevealed: revealedKeys.contains("elevenlabs"),
-                        editingKey: $editingKeyInput,
-                        onEdit: {
-                            if let key = settingsManager.fetchElevenLabsKey() {
-                                fetchedKeys["elevenlabs"] = key
-                                editingKeyInput = key
-                            }
-                            editingProvider = "elevenlabs"
-                        },
-                        onSave: {
-                            settingsManager.elevenLabsApiKey = editingKeyInput.isEmpty ? nil : editingKeyInput
-                                                        fetchedKeys["elevenlabs"] = editingKeyInput.isEmpty ? nil : editingKeyInput
-                            editingProvider = nil
-                            editingKeyInput = ""
-                        },
-                        onCancel: {
-                            editingProvider = nil
-                            editingKeyInput = ""
-                        },
-                        onReveal: {
-                            if revealedKeys.contains("elevenlabs") {
-                                revealedKeys.remove("elevenlabs")
-                                fetchedKeys["elevenlabs"] = nil
-                            } else {
-                                if let key = settingsManager.fetchElevenLabsKey() {
-                                    fetchedKeys["elevenlabs"] = key
-                                }
-                                revealedKeys.insert("elevenlabs")
-                            }
-                        },
-                        onDelete: {
-                            settingsManager.elevenLabsApiKey = nil
-                                                        fetchedKeys["elevenlabs"] = nil
-                        }
-                    )
+                    ForEach(slots) { slot in
+                        APIKeyRow(
+                            slot: slot,
+                            isConfigured: settingsManager.hasAPIKey(forProviderId: slot.id),
+                            currentKey: fetchedKeys[slot.id] ?? settingsManager.fetchAPIKey(forProviderId: slot.id),
+                            isEditing: editingProvider == slot.id,
+                            isRevealed: revealedKeys.contains(slot.id),
+                            editingProviderId: $editingProviderIdInput,
+                            editingKey: $editingKeyInput,
+                            onEdit: { startEditing(slot) },
+                            onSave: { saveSlot(previousProviderId: slot.id) },
+                            onCancel: { stopEditing() },
+                            onReveal: { toggleReveal(slot.id) },
+                            onDelete: { deleteSlot(slot.id) }
+                        )
+                    }
                 }
             }
             .settingsSectionCard(padding: Spacing.md)
 
-            // MARK: - Security Info
             HStack(spacing: Spacing.sm) {
                 Image(systemName: "lock.shield")
                     .font(Theme.current.fontXS)
                     .foregroundColor(.green)
 
-                Text("API keys are encrypted using AES-GCM and stored locally on this device.")
+                Text("API keys are encrypted using AES-GCM and mirrored into shared local settings for server-side workflows.")
                     .font(Theme.current.fontXS)
                     .foregroundColor(Theme.current.foregroundSecondary)
             }
@@ -329,22 +147,79 @@ struct APISettingsView: View {
         }
     }
 
-    /// Pre-fetch keys for configured providers so UI shows them immediately
+    private func startEditing(_ slot: APIKeyStore.ProviderSlot) {
+        let providerId = APIKeyStore.normalizeProviderId(slot.id)
+        editingProvider = providerId
+        editingProviderIdInput = providerId
+        editingKeyInput = settingsManager.fetchAPIKey(forProviderId: providerId) ?? ""
+        fetchedKeys[providerId] = editingKeyInput.isEmpty ? nil : editingKeyInput
+
+        if !additionalProviderIDs.contains(providerId), !slots.contains(where: { $0.id == providerId }) {
+            additionalProviderIDs.append(providerId)
+        }
+    }
+
+    private func addCustomSlot() {
+        let base = "custom_provider"
+        var candidate = base
+        var index = 2
+        let existingIDs = Set(slots.map(\.id) + additionalProviderIDs)
+
+        while existingIDs.contains(candidate) {
+            candidate = "\(base)_\(index)"
+            index += 1
+        }
+
+        additionalProviderIDs.append(candidate)
+        startEditing(APIKeyStore.providerSlot(forProviderId: candidate))
+    }
+
+    private func saveSlot(previousProviderId: String) {
+        let providerId = APIKeyStore.normalizeProviderId(editingProviderIdInput)
+        guard !providerId.isEmpty else { return }
+
+        settingsManager.setAPIKey(editingKeyInput, forProviderId: providerId)
+        fetchedKeys[providerId] = editingKeyInput.isEmpty ? nil : editingKeyInput
+
+        if previousProviderId != providerId {
+            settingsManager.setAPIKey(nil, forProviderId: previousProviderId)
+            fetchedKeys[previousProviderId] = nil
+            revealedKeys.remove(previousProviderId)
+        }
+
+        if !additionalProviderIDs.contains(providerId), !slots.contains(where: { $0.id == providerId }) {
+            additionalProviderIDs.append(providerId)
+        }
+
+        stopEditing()
+        Task { await refreshAllModels() }
+    }
+
+    private func stopEditing() {
+        editingProvider = nil
+        editingProviderIdInput = ""
+        editingKeyInput = ""
+    }
+
+    private func toggleReveal(_ providerId: String) {
+        if revealedKeys.contains(providerId) {
+            revealedKeys.remove(providerId)
+        } else {
+            fetchedKeys[providerId] = settingsManager.fetchAPIKey(forProviderId: providerId)
+            revealedKeys.insert(providerId)
+        }
+    }
+
+    private func deleteSlot(_ providerId: String) {
+        settingsManager.setAPIKey(nil, forProviderId: providerId)
+        fetchedKeys[providerId] = nil
+        revealedKeys.remove(providerId)
+        additionalProviderIDs.removeAll { $0 == providerId }
+    }
+
     private func prefetchConfiguredKeys() {
-        if settingsManager.hasOpenAIKey(), fetchedKeys["openai"] == nil {
-            fetchedKeys["openai"] = settingsManager.fetchOpenAIKey()
-        }
-        if settingsManager.hasAnthropicKey(), fetchedKeys["anthropic"] == nil {
-            fetchedKeys["anthropic"] = settingsManager.fetchAnthropicKey()
-        }
-        if settingsManager.hasValidApiKey, fetchedKeys["gemini"] == nil {
-            fetchedKeys["gemini"] = settingsManager.geminiApiKey.isEmpty ? nil : settingsManager.geminiApiKey
-        }
-        if settingsManager.hasGroqKey(), fetchedKeys["groq"] == nil {
-            fetchedKeys["groq"] = settingsManager.fetchGroqKey()
-        }
-        if settingsManager.hasElevenLabsKey(), fetchedKeys["elevenlabs"] == nil {
-            fetchedKeys["elevenlabs"] = settingsManager.fetchElevenLabsKey()
+        for slot in slots where settingsManager.hasAPIKey(forProviderId: slot.id) {
+            fetchedKeys[slot.id] = settingsManager.fetchAPIKey(forProviderId: slot.id)
         }
     }
 
@@ -356,25 +231,37 @@ struct APISettingsView: View {
 
         await LLMProviderRegistry.shared.refreshModels(force: true)
 
-        // Update model counts for display
         let models = LLMProviderRegistry.shared.allModels
-        modelCounts = Dictionary(grouping: models, by: { $0.provider ?? "unknown" })
+        modelCounts = Dictionary(grouping: models, by: { $0.provider })
             .mapValues { $0.count }
 
         logger.info("Refreshed models: \(models.count) total")
     }
 }
 
+// MARK: - API Key Preset Button
+private struct APIKeyPresetButton: View {
+    let provider: APIKeyStore.Provider
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            Label(provider.displayName, systemImage: provider.icon)
+                .font(Theme.current.fontXSMedium)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+    }
+}
+
 // MARK: - API Key Row Component
-struct APIKeyRow: View {
-    let provider: String
-    let icon: String
-    let placeholder: String
-    let helpURL: String
+private struct APIKeyRow: View {
+    let slot: APIKeyStore.ProviderSlot
     let isConfigured: Bool
     let currentKey: String?
     let isEditing: Bool
     let isRevealed: Bool
+    @Binding var editingProviderId: String
     @Binding var editingKey: String
     let onEdit: () -> Void
     let onSave: () -> Void
@@ -391,45 +278,44 @@ struct APIKeyRow: View {
         return "\(prefix)••••••••\(suffix)"
     }
 
-    /// Unconfigured providers show collapsed by default
     private var shouldShowCollapsed: Bool {
         !isConfigured && !isEditing
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            // Header row
             HStack(spacing: Spacing.sm) {
-                Image(systemName: icon)
+                Image(systemName: slot.icon)
                     .font(Theme.current.fontTitle)
                     .foregroundColor(isConfigured ? settings.resolvedAccentColor : Theme.current.foregroundSecondary)
                     .frame(width: 20)
 
-                Text(provider.uppercased())
-                    .font(Theme.current.fontSMBold)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(slot.displayName.uppercased())
+                        .font(Theme.current.fontSMBold)
+                    Text(slot.id)
+                        .font(.techLabelSmall)
+                        .foregroundColor(Theme.current.foregroundMuted)
+                }
 
                 Spacer()
 
-                // Collapsed: show Add button inline with header
                 if shouldShowCollapsed {
                     Button(action: onEdit) {
-                        HStack(spacing: Spacing.xs) {
-                            Image(systemName: "plus.circle.fill")
-                                .font(Theme.current.fontXS)
-                            Text("Add Key")
-                                .font(Theme.current.fontXSMedium)
-                        }
+                        Label("Add Key", systemImage: "plus.circle.fill")
+                            .font(Theme.current.fontXSMedium)
                     }
                     .buttonStyle(.bordered)
 
-                    Link(destination: URL(string: helpURL)!) {
-                        Image(systemName: "arrow.up.right.square")
-                            .font(Theme.current.fontXS)
-                            .foregroundColor(.blue)
+                    if let helpURL = slot.helpURL {
+                        Link(destination: helpURL) {
+                            Image(systemName: "arrow.up.right.square")
+                                .font(Theme.current.fontXS)
+                                .foregroundColor(.blue)
+                        }
+                        .help("Get API key")
                     }
-                    .help("Get API key")
                 } else {
-                    // Status indicator (only when expanded/configured)
                     HStack(spacing: Spacing.xs) {
                         Circle()
                             .fill(isConfigured ? Color.green : Color.orange)
@@ -441,84 +327,97 @@ struct APIKeyRow: View {
                 }
             }
 
-            // Only show content when not collapsed
             if !shouldShowCollapsed {
                 if isEditing {
-                // Edit mode
-                HStack(spacing: Spacing.sm) {
-                    SecureField(placeholder, text: $editingKey)
-                        .font(Theme.current.fontSM)
-                        .textFieldStyle(.plain)
-                        .padding(Spacing.sm)
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        HStack(spacing: Spacing.sm) {
+                            TextField("provider_id", text: $editingProviderId)
+                                .font(Theme.current.fontSM)
+                                .textFieldStyle(.plain)
+                                .padding(Spacing.sm)
+                                .background(Theme.current.surface1)
+                                .cornerRadius(CornerRadius.xs)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: CornerRadius.xs)
+                                        .stroke(Theme.current.divider, lineWidth: 1)
+                                )
+
+                            SecureField(slot.placeholder, text: $editingKey)
+                                .font(Theme.current.fontSM)
+                                .textFieldStyle(.plain)
+                                .padding(Spacing.sm)
+                                .background(Theme.current.surface1)
+                                .cornerRadius(CornerRadius.xs)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: CornerRadius.xs)
+                                        .stroke(settings.resolvedAccentColor.opacity(Opacity.half), lineWidth: 1)
+                                )
+                        }
+
+                        HStack(spacing: Spacing.sm) {
+                            Spacer()
+
+                            Button(action: onCancel) {
+                                Text("Cancel")
+                                    .font(Theme.current.fontXSMedium)
+                            }
+                            .buttonStyle(.bordered)
+
+                            Button {
+                                onSave()
+                            } label: {
+                                Text("Save")
+                                    .font(Theme.current.fontXSMedium)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(APIKeyStore.normalizeProviderId(editingProviderId).isEmpty)
+                        }
+                    }
+                } else if isConfigured {
+                    HStack(spacing: Spacing.sm) {
+                        HStack(spacing: Spacing.sm) {
+                            Text(isRevealed ? (currentKey ?? "") : maskedKey)
+                                .font(Theme.current.fontSM)
+                                .foregroundColor(Theme.current.foregroundMuted)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+
+                            Spacer()
+
+                            Button(action: onReveal) {
+                                Image(systemName: isRevealed ? "eye.slash" : "eye")
+                                    .font(Theme.current.fontXS)
+                                    .foregroundColor(Theme.current.foregroundMuted)
+                            }
+                            .buttonStyle(.plain)
+                            .help(isRevealed ? "Hide API key" : "Reveal API key")
+                        }
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, Spacing.sm)
                         .background(Theme.current.surface1)
                         .cornerRadius(CornerRadius.xs)
                         .overlay(
                             RoundedRectangle(cornerRadius: CornerRadius.xs)
-                                .stroke(settings.resolvedAccentColor.opacity(Opacity.half), lineWidth: 1)
+                                .stroke(Theme.current.divider, lineWidth: 1)
                         )
 
-                    Button(action: onCancel) {
-                        Text("Cancel")
-                            .font(Theme.current.fontXSMedium)
-                    }
-                    .buttonStyle(.bordered)
-
-                    TalkieButtonSync("SaveAPIKey", section: "Settings") {
-                        onSave()
-                    } label: {
-                        Text("Save")
-                            .font(Theme.current.fontXSMedium)
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-            } else if isConfigured {
-                // Display mode with key - passive text field style
-                HStack(spacing: Spacing.sm) {
-                    // Key display styled as disabled text field
-                    HStack(spacing: Spacing.sm) {
-                        Text(isRevealed ? (currentKey ?? "") : maskedKey)
-                            .font(Theme.current.fontSM)
-                            .foregroundColor(Theme.current.foregroundMuted)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-
-                        Spacer()
-
-                        // Reveal button
-                        Button(action: onReveal) {
-                            Image(systemName: isRevealed ? "eye.slash" : "eye")
-                                .font(Theme.current.fontXS)
-                                .foregroundColor(Theme.current.foregroundMuted)
+                        Button(action: onEdit) {
+                            Text("Edit")
+                                .font(Theme.current.fontXSMedium)
                         }
-                        .buttonStyle(.plain)
-                        .help(isRevealed ? "Hide API key" : "Reveal API key")
-                    }
-                    .padding(.horizontal, Spacing.sm)
-                    .padding(.vertical, Spacing.sm)
-                    .background(Theme.current.surface1)
-                    .cornerRadius(CornerRadius.xs)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CornerRadius.xs)
-                            .stroke(Theme.current.divider, lineWidth: 1)
-                    )
+                        .buttonStyle(.bordered)
 
-                    Button(action: onEdit) {
-                        Text("Edit")
-                            .font(Theme.current.fontXSMedium)
+                        Button {
+                            onDelete()
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(Theme.current.fontXS)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.red)
                     }
-                    .buttonStyle(.bordered)
-
-                    TalkieButtonSync("DeleteAPIKey", section: "Settings") {
-                        onDelete()
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(Theme.current.fontXS)
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(.red)
                 }
-                } // end if isEditing / isConfigured
-            } // end if !shouldShowCollapsed
+            }
         }
         .settingsSectionCard(padding: shouldShowCollapsed ? Spacing.sm : Spacing.md)
         .overlay(

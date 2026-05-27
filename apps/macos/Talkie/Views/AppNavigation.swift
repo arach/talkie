@@ -614,7 +614,16 @@ struct AppNavigation: View {
         }
 
         dropTask?.cancel()
-        dropTask = Task {
+        dropTask = Task { @MainActor in
+            // Defensive cleanup: regardless of how the task ends, the
+            // drop-target flag should not survive past the work. Without
+            // this, performDrop's `isDropTargeted = false` could be
+            // overridden by a late dropUpdated event during navigation,
+            // leaving the overlay stuck on the "Drop to import" empty
+            // state after a successful import.
+            defer {
+                isDropTargeted = false
+            }
             do {
                 let result = try await AudioDropService.shared.processDroppedItems(
                     providers: providers,

@@ -1381,7 +1381,16 @@ final class TalkieServer {
 
         do {
             let repository = LocalRepository()
-            guard let memoData = try await repository.fetchMemo(id: request.memoId) else {
+            let memo: MemoModel?
+            if let memoData = try await repository.fetchMemo(id: request.memoId) {
+                memo = memoData.memo
+            } else if let recording = try await TalkieObjectRepository().fetchRecording(id: request.memoId) {
+                memo = recording.toMemoModel()
+            } else {
+                memo = nil
+            }
+
+            guard let memo else {
                 sendJSONResponse(connection, statusCode: 404, body: WorkflowHostStepResponse(ok: false, error: "Memo not found"))
                 return
             }
@@ -1390,7 +1399,7 @@ final class TalkieServer {
                 transcript: request.context.transcript,
                 title: request.context.title,
                 date: date,
-                memo: memoData.memo
+                memo: memo
             )
             workflowContext.outputs = request.context.outputs
             workflowContext.outputOrder = request.context.outputOrder

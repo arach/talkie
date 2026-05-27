@@ -178,7 +178,13 @@ struct TOHeaderSection: View {
     /// body and into the masthead area, so the page has a magazine deck
     /// reading between headline and byline. Studio mock's body lead
     /// becomes the masthead's standfirst here.
+    ///
+    /// For long memos (>400 words) the standfirst is skipped entirely:
+    /// the body will chunk and render the full transcript with proper
+    /// paragraph breaks, and we don't want the masthead to swallow the
+    /// whole wall of text via the "no-newline → whole-blob" fallback.
     private var leadParagraph: String? {
+        guard recording.wordCount <= 400 else { return nil }
         guard let text = recording.text else { return nil }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }

@@ -72,6 +72,17 @@ struct DeckMirrorNext: View {
     private var liveTranscript: String {
         hasDictationResult ? (deck.lastTriggerResult?.message ?? "") : ""
     }
+
+    /// Mac-side runtime detail for the dictation slot. Exposes the
+    /// phase (preparing/recording/processing), elapsed seconds, and
+    /// signal level. Nil when the Mac isn't actively running the
+    /// dictation shortcut.
+    private var dictationRuntime: CompanionShortcutRuntimeState? {
+        guard let state = deck.lastRuntimeState,
+              state.shortcutId == dictationSlotID else { return nil }
+        return state
+    }
+
     @State private var imageSharePickerItem: PhotosPickerItem?
 
     var body: some View {
@@ -173,12 +184,17 @@ struct DeckMirrorNext: View {
                 // cockpit's elevated transcript card handles overflow
                 // via its own line-clamp.
                 VStack(spacing: 12) {
+                    // Cockpit goes full-bleed horizontally — the trackpad
+                    // chassis IS the instrument and the recording tape
+                    // wants the whole width. Tiles below keep the 16pt
+                    // gutter so they read as a grid, not as edge-glued
+                    // panels.
                     cockpitSurface(space)
                         .layoutPriority(40)
                     tileGrid(space.tiles)
                         .layoutPriority(60)
+                        .padding(.horizontal, 16)
                 }
-                .padding(.horizontal, 16)
                 // 40pt lets the summon button (occupies y=16..64
                 // above safe-area) barely encroach on the bottom-
                 // left tile — ~24pt overlap at the tile's lower
@@ -341,6 +357,7 @@ struct DeckMirrorNext: View {
             firingSlotID: deck.firingSlotID,
             isDictating: isDictating,
             hasDictationResult: hasDictationResult,
+            dictationPhase: dictationRuntime?.phase,
             liveTranscript: transcriptForCard,
             lastTriggerResult: echoSuppress ? nil : deck.lastTriggerResult,
             onIdentityTap: openAppSwitcher,
@@ -351,12 +368,32 @@ struct DeckMirrorNext: View {
     }
 
     private var cockpitStatusTitle: String {
+        // Phase-aware while a dictation runtime is live: distinguish
+        // the recording window (with mm:ss timer for context) from
+        // the processing tail. Falls back to a plain "DICTATING"
+        // when only the trigger result is in flight.
+        if let runtime = dictationRuntime {
+            switch runtime.phase {
+            case .preparing:
+                return "PREPARING"
+            case .recording:
+                let elapsed = formatElapsed(runtime.elapsedSeconds ?? 0)
+                return "REC · \(elapsed)"
+            case .processing:
+                return "TRANSCRIBING…"
+            }
+        }
         if isDictating { return "DICTATING" }
         if deck.firingSlotID != nil { return "SENDING" }
         if bridgeManager.status == .connected { return "LIVE" }
         if bridgeManager.status == .connecting { return "LINKING" }
         if bridgeManager.status == .error { return "ERROR" }
         return "IDLE"
+    }
+
+    private func formatElapsed(_ seconds: Double) -> String {
+        let total = Int(seconds)
+        return String(format: "%d:%02d", total / 60, total % 60)
     }
 
     private var cockpitStatusColor: Color {
@@ -460,7 +497,7 @@ struct DeckMirrorNext: View {
         } label: {
             VStack(spacing: 6) {
                 Spacer(minLength: 0)
-                Image(systemName: isDictating ? "return" : "mic")
+                Image(systemName: isDictating ? "stop.fill" : "mic")
                     .font(.system(size: 20, weight: .regular))
                     .foregroundStyle(
                         isDictating
@@ -469,7 +506,7 @@ struct DeckMirrorNext: View {
                     )
                     .frame(height: 24)
 
-                Text(isDictating ? "Finish" : "Dictate")
+                Text(isDictating ? "Stop" : "Dictate")
                     .talkieType(.fieldValue)
                     .foregroundStyle(
                         isDictating
@@ -505,7 +542,7 @@ struct DeckMirrorNext: View {
             .animation(.easeOut(duration: 0.18), value: isDictating)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(isDictating ? "Finish dictation" : "Start dictation")
+        .accessibilityLabel(isDictating ? "Stop dictation" : "Start dictation")
     }
 
     /// Fires the Mac `talkie-dictate` shortcut. Mac side toggles
@@ -755,6 +792,10 @@ private struct DeckCockpitSurface: View {
     /// post-`.succeeded` window where the final transcript should
     /// stay visible in the elevated card.
     let hasDictationResult: Bool
+    /// Live phase from the Mac. Drives the waveform variant — real
+    /// audio bars during `.recording`, frozen + processing shimmer
+    /// during `.processing`. Nil means no runtime is in flight.
+    let dictationPhase: CompanionShortcutRuntimeState.Phase?
     let liveTranscript: String?
     let lastTriggerResult: DeckMirrorStore.TriggerResult?
     let onIdentityTap: () -> Void
@@ -784,17 +825,23 @@ private struct DeckCockpitSurface: View {
         .overlay(alignment: .top) {
             header.padding(.horizontal, 10).padding(.top, 8)
         }
+        .overlay(alignment: .center) {
+            // Waveform sits in the cockpit's centerline — the
+            // dictation centerpiece. Transcript card overlays it
+            // on top when partials arrive (next .overlay below).
+            if isDictating {
+                DictationWaveform(
+                    color: accent,
+                    phase: dictationPhase ?? .recording
+                )
+                .allowsHitTesting(false)
+            }
+        }
         .overlay(alignment: .center) { transcriptOverlay }
         .overlay(alignment: .bottom) {
-            VStack(spacing: 8) {
-                if isDictating {
-                    DictationWaveform(color: accent, isActive: true)
-                        .padding(.horizontal, 14)
-                        .allowsHitTesting(false)
-                }
-                keyRow.padding(.horizontal, 10)
-            }
-            .padding(.bottom, 8)
+            keyRow
+                .padding(.horizontal, 10)
+                .padding(.bottom, 8)
         }
         .overlay(alignment: .bottom) {
             // Last trigger echo sits between the waveform band and
@@ -802,6 +849,10 @@ private struct DeckCockpitSurface: View {
             lastTriggerEcho.padding(.bottom, 44)
         }
         .frame(maxHeight: .infinity)
+        // Contain the waveform (and any other overlay) within the
+        // trackpad's rounded shape — without this the 96pt band
+        // bleeds out the top/bottom of the chassis on smaller phones.
+        .clipShape(RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous))
     }
 
     // Identity + status, floating inside the dark trackpad. Colors
@@ -859,19 +910,17 @@ private struct DeckCockpitSurface: View {
     }
 
     // Elevated transcript card — sticky-note feel sitting on the
-    // dark trackpad. Visible during dictation AND after, so the
-    // final result reads in the same treatment as the live partials
-    // (not as a one-line bottom echo).
+    // dark trackpad. Suppressed while dictating: the centered mag-
+    // tape waveform is the recording indicator and overlaying the
+    // "TRANSCRIBING…" caption on it reads as clutter. Card returns
+    // when the result lands so the final transcript still gets the
+    // sticky-note treatment.
     @ViewBuilder
     private var transcriptOverlay: some View {
-        if let liveTranscript, !liveTranscript.isEmpty {
+        if let liveTranscript, !liveTranscript.isEmpty, !isDictating {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    if isDictating {
-                        Text("TRANSCRIBING…")
-                            .talkieType(.channelLabelTiny)
-                            .foregroundStyle(accent.opacity(0.85))
-                    } else if hasDictationResult {
+                    if hasDictationResult {
                         Text("TRANSCRIPT")
                             .talkieType(.channelLabelTiny)
                             .foregroundStyle(theme.chrome.panelInkFaint)
@@ -1065,86 +1114,204 @@ private struct DeckInstrumentTrackpad: View {
     }
 }
 
-/// VU-style waveform — ported from the pre-rebuild donor at
-/// `docs/donors/command-deck-pre-ios-shell-rebuild/source/.../
-/// CompanionShortcutModeView.swift` (`DeckWaveformView`). Bars are
-/// bottom-anchored with a top-fade gradient mask so they read as
-/// audio levels, not as a centered decoration.
+/// Magnetic-tape waveform — sprocket-railed amber tape with bars
+/// drawn from the iPhone mic's rolling envelope buffer. Each bar is
+/// a real moment of audio that just happened; new samples push in
+/// at the right edge (the playhead position) and the oldest fall
+/// off the left. No synthetic seed pattern.
 ///
-/// Three states drive motion + opacity:
-///   • `isActive=false` → small idle pulses, very low opacity
-///   • `isActive=true,  isProcessing=false` → signal-driven (real mic
-///       level if available; falls back to multi-frequency sin mix)
-///   • `isProcessing=true` → "cooking" wave, slightly dimmer
-///
-/// `signalLevel` is the mic envelope (0…1). Codex wires it through
-/// when the runtime-state pipeline exposes it; until then the view
-/// falls back to a richer multi-frequency sine.
+/// Anatomy:
+///   • Brass sprocket rails (1pt dashed) top + bottom
+///   • Warm-tan substrate (brass tint, vertical sheen)
+///   • Bars from `DictationMicMonitor.samples` — newest on the right
+///   • During `.processing` the bars dim and an amber shimmer sweeps
+///     across the strip to read as "Mac is transcribing", distinct
+///     from the live recording state
 private struct DictationWaveform: View {
     let color: Color
-    var signalLevel: Double? = nil
-    var isProcessing: Bool = false
-    var isActive: Bool = true
+    var phase: CompanionShortcutRuntimeState.Phase = .recording
 
-    private let barCount = 22
-    private let maxBarHeight: CGFloat = 28
+    @ObservedObject private var mic = DictationMicMonitor.shared
+
+    // Mag-tape palette — brand DNA, not theme-tinted. Bars pick up
+    // the deck accent so the recording reads as the deck's voice;
+    // the substrate, sprockets, and shimmer stay brass/amber so the
+    // tape identity holds across themes.
+    private static let brass = Color(red: 0.604, green: 0.416, blue: 0.133) // #9A6A22
+    private static let amber = Color(red: 0.910, green: 0.604, blue: 0.235) // #E89A3C
+
+    private let bandHeight: CGFloat = 96
+    private let railInset: CGFloat = 3   // sprocket row + 2pt breathing room
+
+    private var isRecording: Bool {
+        phase == .recording || phase == .preparing
+    }
+    private var isProcessing: Bool { phase == .processing }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.066, paused: !isActive)) { context in
-            GeometryReader { geo in
-                let spacing: CGFloat = 3
-                let barWidth = max(2, (geo.size.width - spacing * CGFloat(barCount - 1)) / CGFloat(barCount))
-                HStack(alignment: .bottom, spacing: spacing) {
-                    ForEach(0..<barCount, id: \.self) { index in
-                        let h = barHeight(index: index, date: context.date)
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(color.opacity(barOpacity(height: h)))
-                            .frame(width: barWidth, height: h)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                .mask(
-                    LinearGradient(
-                        colors: [.black.opacity(0.30), .black],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
+        ZStack {
+            // Tape substrate — warm-tan, soft vertical sheen.
+            LinearGradient(
+                colors: [
+                    Self.brass.opacity(0.06),
+                    Self.brass.opacity(0.14),
+                    Self.brass.opacity(0.06)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
+            .padding(.vertical, railInset)
+
+            // Real-audio bars. mic.samples is a rolling buffer that
+            // updates at 30Hz while the monitor is retained; during
+            // .processing the mic keeps running (so ambient noise
+            // still trickles in) but the bars dim to signal that
+            // the user's voice is no longer the protagonist.
+            RealtimeBars(
+                fill: color.opacity(isProcessing ? 0.42 : 0.85),
+                railInset: railInset
+            )
+
+            // Processing shimmer — a soft amber gradient sweeps
+            // across the band to mark "Mac is transcribing". Lives
+            // on its own TimelineView so the recording path stays
+            // free of unrelated animation work.
+            if isProcessing {
+                ProcessingShimmer(accent: Self.amber)
+                    .padding(.vertical, railInset + 1)
+                    .allowsHitTesting(false)
+            }
+
+            // Sprocket rails — dashed brass, top + bottom.
+            VStack(spacing: 0) {
+                SprocketRail()
+                Spacer(minLength: 0)
+                SprocketRail()
+            }
+        }
+        .frame(height: bandHeight)
+        .onAppear {
+            if isRecording || isProcessing { mic.retain() }
+        }
+        .onDisappear {
+            if isRecording || isProcessing { mic.release() }
+        }
+        .onChange(of: phase) { _, _ in
+            // The view stays mounted across phase changes inside
+            // a dictation session; mic stays retained the whole
+            // time. Released only when the view disappears (i.e.
+            // dictation truly ends).
+        }
+    }
+}
+
+/// Canvas-drawn bars sourced from `DictationMicMonitor.samples`. One
+/// bar per sample, left-to-right, with the newest sample at the right
+/// edge — that IS the playhead, so no separate write-head line is
+/// needed. Bar widths stretch to fill whatever width the band has.
+private struct RealtimeBars: View {
+    let fill: Color
+    let railInset: CGFloat
+
+    @ObservedObject private var mic = DictationMicMonitor.shared
+
+    var body: some View {
+        Canvas { ctx, size in
+            let samples = mic.samples
+            let n = samples.count
+            guard n > 0 else { return }
+
+            // Outer padding inside the trackpad edges — small breathing
+            // room so the leftmost / rightmost bars don't kiss the
+            // chassis corner radius.
+            let padding: CGFloat = 8
+            // 3pt gap between bars gives the strip visible "comb"
+            // character rather than reading as a solid block. Each
+            // bar is a pill (corner radius 1.5pt) so the silhouette
+            // is softer and the tape feels less mechanical.
+            let gap: CGFloat = 3
+            let innerWidth = max(0, size.width - padding * 2)
+            let barWidth = max(2, (innerWidth - CGFloat(n - 1) * gap) / CGFloat(n))
+            let bodyHeight = size.height - railInset * 2 - 4
+            let centerY = size.height / 2
+
+            for i in 0..<n {
+                let s = CGFloat(samples[i])
+                // Power curve (^0.65) lifts mid-levels so ordinary
+                // speech reads as visibly bouncy — without it, bars
+                // sit flatter than the actual envelope feels. 0.05
+                // floor keeps a faint ridge through silence; the
+                // minimum rendered height of 3pt keeps the silent
+                // strip readable as "tape" rather than "blank line".
+                let shaped = pow(max(0.05, s), 0.65)
+                let h = max(3, bodyHeight * shaped)
+                let x = padding + CGFloat(i) * (barWidth + gap)
+                let rect = CGRect(
+                    x: x,
+                    y: centerY - h / 2,
+                    width: barWidth,
+                    height: h
+                )
+                ctx.fill(
+                    Path(roundedRect: rect, cornerRadius: 1.5),
+                    with: .color(fill)
                 )
             }
-            .frame(height: maxBarHeight)
         }
     }
+}
 
-    private func barOpacity(height: CGFloat) -> Double {
-        guard isActive else { return 0.16 }
-        let fraction = Double(height / maxBarHeight)
-        let base: Double = isProcessing ? 0.55 : 0.88
-        return base * (0.45 + fraction * 0.55)
+/// Soft amber gradient that sweeps left→right on a 2.4s loop. Marks
+/// the "Mac is transcribing" phase visually — distinct from the
+/// active-recording look so the user knows they don't have to hold
+/// their breath, the recording window has closed.
+private struct ProcessingShimmer: View {
+    let accent: Color
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+            GeometryReader { geo in
+                let period: TimeInterval = 2.4
+                let t = context.date.timeIntervalSinceReferenceDate
+                let phase = (t.truncatingRemainder(dividingBy: period)) / period
+                // Sweep one strip-width past either edge so the
+                // band has a clean off-frame entry and exit.
+                let bandWidth: CGFloat = geo.size.width * 0.35
+                let xOffset = -bandWidth + CGFloat(phase) * (geo.size.width + bandWidth * 2)
+
+                LinearGradient(
+                    gradient: Gradient(stops: [
+                        .init(color: accent.opacity(0), location: 0),
+                        .init(color: accent.opacity(0.40), location: 0.5),
+                        .init(color: accent.opacity(0), location: 1)
+                    ]),
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: bandWidth)
+                .offset(x: xOffset)
+                .blendMode(.plusLighter)
+            }
+        }
     }
+}
 
-    private func barHeight(index: Int, date: Date) -> CGFloat {
-        let t = date.timeIntervalSinceReferenceDate
-        let i = Double(index)
-        let n = Double(barCount)
-
-        if !isActive {
-            let phase = t * 0.7 + i * 0.55
-            return CGFloat(2 + (sin(phase) + 1) * 0.9)
+/// 1pt-tall dashed brass rail — matches the studio's
+/// `repeating-linear-gradient(90deg, brass 0 2px, transparent 2px 6px)`.
+private struct SprocketRail: View {
+    var body: some View {
+        Canvas { ctx, size in
+            var path = Path()
+            path.move(to: CGPoint(x: 0, y: size.height / 2))
+            path.addLine(to: CGPoint(x: size.width, y: size.height / 2))
+            ctx.stroke(
+                path,
+                with: .color(Color(red: 0.604, green: 0.416, blue: 0.133).opacity(0.50)),
+                style: StrokeStyle(lineWidth: 1, dash: [2, 4])
+            )
         }
-
-        if isProcessing {
-            let w1 = sin(t * 1.7 + i / n * .pi * 3.2)
-            let w2 = sin(t * 0.55 + i / n * .pi * 1.1) * 0.35
-            let norm = (w1 + w2 + 1.35) / 2.7
-            return CGFloat(4 + norm * 20)
-        }
-
-        let base = max(0.2, min(signalLevel ?? 0.55, 1.0))
-        let f1 = sin(t * 10.5 + i * 0.65) * 0.32
-        let f2 = sin(t * 4.2 + i * 1.05) * 0.24
-        let f3 = sin(t * 1.7 + i * 0.25) * 0.44
-        let raw = base * 0.42 + (f1 + f2 + f3 + 1.0) * 0.29
-        return CGFloat(3 + raw * 25)
+        .frame(height: 1)
     }
 }
 

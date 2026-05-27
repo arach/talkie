@@ -8,6 +8,7 @@
 import Foundation
 import CoreData
 import AppKit
+import ImageIO
 import UserNotifications
 import os
 import Observation
@@ -157,6 +158,289 @@ class WorkflowExecutor {
         }
     }
 
+    private struct WorkflowScreenshotContextItem {
+        let screenshot: RecordingScreenshot
+        let assetURL: URL
+    }
+
+    private func workflowMediaContextOutputs(
+        for recording: TalkieObject,
+        ensureVision: Bool
+    ) async -> [String: String] {
+        let items = recording.screenshots.map { screenshot in
+            WorkflowScreenshotContextItem(
+                screenshot: screenshot,
+                assetURL: screenshotURL(for: screenshot)
+            )
+        }
+        return await workflowMediaContextOutputs(for: items, ensureVision: ensureVision)
+    }
+
+    private func workflowMediaContextOutputs(
+        forMemoId memoId: UUID,
+        ensureVision: Bool
+    ) async -> [String: String] {
+        let items = ScreenshotStorage.screenshots(for: memoId).map { item in
+            WorkflowScreenshotContextItem(
+                screenshot: RecordingScreenshot(
+                    filename: item.url.lastPathComponent,
+                    timestampMs: item.timestampMs,
+                    captureMode: "screenshot"
+                ),
+                assetURL: item.url
+            )
+        }
+        return await workflowMediaContextOutputs(for: items, ensureVision: ensureVision)
+    }
+
+    private func workflowMediaContextOutputs(
+        for items: [WorkflowScreenshotContextItem],
+        ensureVision: Bool
+    ) async -> [String: String] {
+        guard !items.isEmpty else {
+            return [
+                "SCREENSHOT_COUNT": "0",
+                "SCREENSHOT_CONTEXT": "No screenshots are attached to this memo or capture.",
+                "SCREENSHOT_VISION": "",
+                "SCREENSHOT_OCR": "",
+            ]
+        }
+
+        let cappedItems = Array(items.prefix(6))
+        if ensureVision {
+            await ensureScreenshotVisionDescriptions(for: cappedItems)
+        }
+
+        let contextBlocks = cappedItems.enumerated().map { index, item in
+            screenshotContextBlock(index: index + 1, item: item)
+        }
+        let visionBlocks = cappedItems.compactMap { item in
+            screenshotVisionDescription(for: item.assetURL)
+        }
+        let ocrBlocks = cappedItems.compactMap { item in
+            screenshotOCRText(for: item.assetURL)
+        }
+
+        return [
+            "SCREENSHOT_COUNT": "\(items.count)",
+            "SCREENSHOT_CONTEXT": contextBlocks.joined(separator: "\n\n"),
+            "SCREENSHOT_VISION": visionBlocks.joined(separator: "\n\n"),
+            "SCREENSHOT_OCR": ocrBlocks.joined(separator: "\n\n"),
+        ]
+    }
+
+    private func screenshotURL(for screenshot: RecordingScreenshot) -> URL {
+        if screenshot.filename.hasPrefix("/") {
+            return URL(fileURLWithPath: screenshot.filename)
+        }
+
+        return ScreenshotStorage.screenshotsDirectory.appending(
+            path: screenshot.filename,
+            directoryHint: .notDirectory
+        )
+    }
+
+    private func ensureScreenshotVisionDescriptions(for items: [WorkflowScreenshotContextItem]) async {
+        for item in items where screenshotVisionDescription(for: item.assetURL) == nil {
+            do {
+                _ = try await generateScreenshotVisionDescription(for: item)
+            } catch {
+                workflowUILog.warning(
+                    "Screenshot VLM description failed",
+                    detail: "\(item.assetURL.lastPathComponent): \(error.localizedDescription)"
+                )
+            }
+        }
+    }
+
+    @discardableResult
+    private func generateScreenshotVisionDescription(for item: WorkflowScreenshotContextItem) async throws -> String? {
+        guard FileManager.default.fileExists(atPath: item.assetURL.path) else {
+            return nil
+        }
+
+        let geometry = await screenshotOCRGeometry(for: item.assetURL)
+        let jpeg = try screenshotJPEGData(for: item.assetURL)
+        let result = try await TalkieKit.LLMVisionService.describeScreenshotForPaste(
+            jpegData: jpeg,
+            ocrGeometry: geometry,
+            target: "generic-ai",
+            sourceContext: screenshotVisionSourceContext(for: item)
+        )
+
+        let variant = ScreenshotVisionDescriptionVariant(
+            target: "generic-ai",
+            providerId: result.providerId,
+            modelId: result.modelId,
+            description: result.description
+        )
+        try saveScreenshotVisionVariant(variant, for: item.assetURL)
+        return variant.contextString.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+    }
+
+    private func screenshotOCRGeometry(for assetURL: URL) async -> OCRGeometryResult {
+        if let sidecar = try? TKSidecarStore.read(forAsset: assetURL),
+           let entry = sidecar.entry(of: .ocr),
+           let geometry = try? entry.data.decode(OCRGeometryResult.self) {
+            return geometry
+        }
+
+        do {
+            return try await VisionOCRService.shared.recognizeTextWithGeometry(atURL: assetURL)
+        } catch {
+            return emptyScreenshotOCRGeometry(for: assetURL)
+        }
+    }
+
+    private func emptyScreenshotOCRGeometry(for assetURL: URL) -> OCRGeometryResult {
+        guard let source = CGImageSourceCreateWithURL(assetURL as CFURL, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            return OCRGeometryResult(
+                imageWidth: 0,
+                imageHeight: 0,
+                observations: [],
+                fullText: "",
+                lines: [],
+                anchors: [:]
+            )
+        }
+
+        return OCRGeometryResult(
+            imageWidth: Double(image.width),
+            imageHeight: Double(image.height),
+            observations: [],
+            fullText: "",
+            lines: [],
+            anchors: [:]
+        )
+    }
+
+    private func screenshotJPEGData(for assetURL: URL) throws -> Data {
+        guard let source = CGImageSourceCreateWithURL(assetURL as CFURL, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            throw WorkflowError.executionFailed("Could not load screenshot image for VLM description.")
+        }
+
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            data as CFMutableData,
+            "public.jpeg" as CFString,
+            1,
+            nil
+        ) else {
+            throw WorkflowError.executionFailed("Could not prepare screenshot image for VLM description.")
+        }
+
+        let properties = [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary
+        CGImageDestinationAddImage(destination, image, properties)
+        guard CGImageDestinationFinalize(destination) else {
+            throw WorkflowError.executionFailed("Could not encode screenshot image for VLM description.")
+        }
+        return data as Data
+    }
+
+    private func saveScreenshotVisionVariant(
+        _ variant: ScreenshotVisionDescriptionVariant,
+        for assetURL: URL
+    ) throws {
+        var payload: ScreenshotVisionDescriptionPayload
+        if let sidecar = try? TKSidecarStore.read(forAsset: assetURL),
+           let entry = sidecar.entry(of: .visionDescription),
+           let decoded = try? entry.data.decode(ScreenshotVisionDescriptionPayload.self) {
+            payload = decoded
+        } else {
+            payload = ScreenshotVisionDescriptionPayload()
+        }
+
+        payload.promptVersion = ScreenshotVisionDescriptionPayload.currentPromptVersion
+        payload.upsert(variant)
+
+        let data = try TKAugmentationData(encoding: payload)
+        let augmentation = TKAugmentation(
+            kind: .visionDescription,
+            version: ScreenshotVisionDescriptionPayload.currentPromptVersion,
+            data: data
+        )
+        try TKSidecarStore.upsertAugmentation(
+            augmentation,
+            forAsset: assetURL,
+            assetKind: .image
+        )
+    }
+
+    private func screenshotVisionSourceContext(for item: WorkflowScreenshotContextItem) -> String {
+        let screenshot = item.screenshot
+        return [
+            screenshot.appName,
+            screenshot.windowTitle,
+            screenshot.displayName,
+            "\(screenshot.captureMode) capture",
+            screenshot.width.flatMap { width in
+                screenshot.height.map { "\(width)x\($0)" }
+            },
+            "Workflow screenshot input",
+        ]
+        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty }
+        .joined(separator: " · ")
+    }
+
+    private func screenshotContextBlock(index: Int, item: WorkflowScreenshotContextItem) -> String {
+        let screenshot = item.screenshot
+        var lines = [
+            "Screenshot \(index)",
+            "Timestamp: \(screenshot.timestampMs)ms",
+            "Capture mode: \(screenshot.captureMode)",
+            "File: \(item.assetURL.path)",
+        ]
+
+        if let appName = screenshot.appName, !appName.isEmpty {
+            lines.append("App: \(appName)")
+        }
+        if let windowTitle = screenshot.windowTitle, !windowTitle.isEmpty {
+            lines.append("Window: \(windowTitle)")
+        }
+        if let displayName = screenshot.displayName, !displayName.isEmpty {
+            lines.append("Display: \(displayName)")
+        }
+        if let width = screenshot.width, let height = screenshot.height {
+            lines.append("Image size: \(width)x\(height)")
+        }
+        if let vision = screenshotVisionDescription(for: item.assetURL) {
+            lines.append("VLM description:\n\(clipped(vision, limit: 4_000))")
+        }
+        if let ocr = screenshotOCRText(for: item.assetURL) {
+            lines.append("OCR text:\n\(clipped(ocr, limit: 2_000))")
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    private func screenshotVisionDescription(for assetURL: URL) -> String? {
+        guard let sidecar = try? TKSidecarStore.read(forAsset: assetURL),
+              let entry = sidecar.entry(of: .visionDescription),
+              let payload = try? entry.data.decode(ScreenshotVisionDescriptionPayload.self) else {
+            return nil
+        }
+
+        let variant = payload.variant(target: "generic-ai") ?? payload.variants.last
+        return variant?.contextString.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+    }
+
+    private func screenshotOCRText(for assetURL: URL) -> String? {
+        guard let sidecar = try? TKSidecarStore.read(forAsset: assetURL),
+              let entry = sidecar.entry(of: .ocr),
+              let result = try? entry.data.decode(OCRGeometryResult.self) else {
+            return nil
+        }
+
+        return result.fullText.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+    }
+
+    private func clipped(_ text: String, limit: Int) -> String {
+        guard text.count > limit else { return text }
+        return "\(text.prefix(limit))\n[truncated]"
+    }
+
     private struct SidecarWorkflowContextPayload: Codable {
         let transcript: String
         let title: String
@@ -294,7 +578,15 @@ class WorkflowExecutor {
     ) async throws -> [String: String] {
         // Convert Recording to MemoModel for workflow execution
         let memo = recording.toMemoModel()
-        return try await executeWorkflow(workflow, for: memo)
+        let initialOutputs = await workflowMediaContextOutputs(
+            for: recording,
+            ensureVision: workflow.inputs.requiredAssets.contains(.screenshot)
+        )
+        return try await executeWorkflow(
+            workflow,
+            for: memo,
+            initialOutputs: initialOutputs
+        )
     }
 
     func retryWorkflowRun(_ run: WorkflowRunModel) async throws -> [String: String] {
@@ -333,10 +625,26 @@ class WorkflowExecutor {
         _ workflow: WorkflowDefinition,
         for memo: MemoModel
     ) async throws -> [String: String] {
+        let initialOutputs = await workflowMediaContextOutputs(
+            forMemoId: memo.id,
+            ensureVision: workflow.inputs.requiredAssets.contains(.screenshot)
+        )
+        return try await executeWorkflow(
+            workflow,
+            for: memo,
+            initialOutputs: initialOutputs
+        )
+    }
+
+    private func executeWorkflow(
+        _ workflow: WorkflowDefinition,
+        for memo: MemoModel,
+        initialOutputs: [String: String]
+    ) async throws -> [String: String] {
         let startsWithTranscribe = workflow.steps.first?.type == .transcribe
 
         let transcript = memo.transcription ?? ""
-        if !startsWithTranscribe && transcript.isEmpty {
+        if !startsWithTranscribe && workflow.inputs.requiresTranscript && transcript.isEmpty {
             throw WorkflowError.noTranscript
         }
 
@@ -357,6 +665,10 @@ class WorkflowExecutor {
             date: memo.createdAt,
             memo: memo
         )
+
+        for (key, value) in initialOutputs {
+            workflowContext.outputs[key] = value
+        }
 
         workflowContext.outputs["WORKFLOW_NAME"] = workflow.name
         workflowContext.outputOrder.append("WORKFLOW_NAME")
@@ -2483,5 +2795,11 @@ enum WorkflowError: LocalizedError {
         case .stepFailed(let step, let error):
             return "Step '\(step)' failed: \(error.localizedDescription)"
         }
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
     }
 }

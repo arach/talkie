@@ -10,6 +10,7 @@ import { OpenAIProvider } from "./openai";
 import { AnthropicProvider } from "./anthropic";
 import { GoogleProvider } from "./google";
 import { GroqProvider } from "./groq";
+import { MiniMaxProvider } from "./minimax";
 import type { Provider, ProviderName, InferenceRequest, InferenceResponse } from "./types";
 
 // Re-export types
@@ -24,6 +25,7 @@ function initProviders(): void {
   providers.set("anthropic", new AnthropicProvider());
   providers.set("google", new GoogleProvider());
   providers.set("groq", new GroqProvider());
+  providers.set("minimax", new MiniMaxProvider());
   log.info(`Gateway initialized: ${providers.size} providers`);
 }
 

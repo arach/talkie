@@ -9,6 +9,7 @@
 import AppKit
 import SwiftUI
 import TalkieKit
+import UserNotifications
 
 // MARK: - Unified Screenshot Item
 
@@ -30,6 +31,8 @@ private struct ScreenshotItem: Identifiable {
 
 struct ScreenshotsScreen: View {
     private let repository = TalkieObjectRepository()
+    private let actionRepository = LocalRepository()
+    private let workflowService = WorkflowService.shared
     @Bindable private var screenshotTray = ScreenshotTray.shared
     @Bindable private var clipTray = ClipTray.shared
     @Bindable private var selectionTray = SelectionTray.shared
@@ -329,6 +332,8 @@ struct ScreenshotsScreen: View {
         if case .screenshot(let ts) = trayItem {
             Button("Annotate…") { annotateItem(item) }
 
+            workflowContextMenuItems(for: item)
+
             if let ocrText = ts.ocrText, !ocrText.isEmpty {
                 Button("Copy Detected Text") {
                     NSPasteboard.general.clearContents()
@@ -380,6 +385,8 @@ struct ScreenshotsScreen: View {
         Button("Copy Image") { copyItem(item) }
         Button("Annotate…") { annotateItem(item) }
 
+        workflowContextMenuItems(for: item)
+
         if let parent = item.parent, let text = parent.text, !text.isEmpty {
             Button("Copy Text") {
                 NSPasteboard.general.clearContents()
@@ -407,6 +414,28 @@ struct ScreenshotsScreen: View {
     }
 
     // MARK: - Actions
+
+    @ViewBuilder
+    private func workflowContextMenuItems(for item: ScreenshotItem) -> some View {
+        let workflows = imageWorkflows(for: item)
+        if !workflows.isEmpty {
+            Divider()
+            ForEach(workflows) { workflow in
+                Button(workflow.name) {
+                    runWorkflow(workflow, on: item)
+                }
+            }
+        }
+    }
+
+    private func imageWorkflows(for item: ScreenshotItem) -> [Workflow] {
+        let objectType = item.parent?.type ?? TalkieObjectType.capture
+        return workflowService.workflowsAccepting(
+            objectType,
+            assetKind: .screenshot,
+            surface: .captureContextMenu
+        )
+    }
 
     private var selectedAnnotatableItem: ScreenshotItem? {
         guard let selectedItem, canAnnotate(selectedItem) else { return nil }
@@ -458,6 +487,298 @@ struct ScreenshotsScreen: View {
                 Task { await loadLibrary() }
             }
         }
+    }
+
+    private func runWorkflow(_ workflow: Workflow, on item: ScreenshotItem) {
+        Task { @MainActor in
+            let actionRunId = UUID()
+            let inputPackageId = UUID()
+
+            do {
+                try await startScreenshotActionRun(
+                    id: actionRunId,
+                    inputPackageId: inputPackageId,
+                    workflow: workflow,
+                    item: item
+                )
+
+                try await actionRepository.appendActionEvent(
+                    actionRunId: actionRunId,
+                    kind: .stepStarted,
+                    message: "Resolving screenshot input"
+                )
+                let target = try await workflowTargetObject(for: item)
+                try await actionRepository.appendActionEvent(
+                    actionRunId: actionRunId,
+                    kind: .inputResolved,
+                    message: "Input resolved",
+                    payloadJSON: actionJSON([
+                        "recordId": target.id.uuidString,
+                        "recordType": target.type.rawValue,
+                        "screenshotCount": target.screenshots.count
+                    ])
+                )
+                try await actionRepository.appendActionEvent(
+                    actionRunId: actionRunId,
+                    kind: .stepStarted,
+                    message: "Running \(workflow.name)"
+                )
+
+                let outputs = try await WorkflowExecutor.shared.executeWorkflow(workflow.definition, for: target)
+                let result = primaryOutput(from: outputs, workflow: workflow.definition)
+                let summary = actionSummary(from: result, fallback: "\(workflow.name) completed")
+
+                try await actionRepository.appendActionEvent(
+                    actionRunId: actionRunId,
+                    kind: .artifactCreated,
+                    message: "Result captured",
+                    payloadJSON: actionJSON([
+                        "kind": "text",
+                        "preview": summary
+                    ])
+                )
+                try await actionRepository.appendActionEvent(
+                    actionRunId: actionRunId,
+                    kind: .runCompleted,
+                    message: "\(workflow.name) completed"
+                )
+                try await actionRepository.updateActionRun(
+                    id: actionRunId,
+                    status: .completed,
+                    summary: summary,
+                    primaryResult: result,
+                    completedAt: Date()
+                )
+
+                await loadLibrary()
+                if item.trayItem != nil {
+                    selectedID = target.screenshots.first.map { "lib-\($0.filename)" }
+                }
+                await notifyScreenshotActionReady(
+                    workflowName: workflow.name,
+                    actionRunId: actionRunId,
+                    status: .completed,
+                    message: summary
+                )
+            } catch {
+                Log(.workflow).error("Failed to run workflow from screenshot: \(error.localizedDescription)")
+                try? await actionRepository.appendActionEvent(
+                    actionRunId: actionRunId,
+                    kind: .runFailed,
+                    level: .error,
+                    message: error.localizedDescription,
+                    payloadJSON: actionJSON([
+                        "error": error.localizedDescription,
+                        "type": String(describing: type(of: error))
+                    ])
+                )
+                try? await actionRepository.updateActionRun(
+                    id: actionRunId,
+                    status: .failed,
+                    summary: error.localizedDescription,
+                    errorMessage: error.localizedDescription,
+                    errorDetails: String(describing: error),
+                    completedAt: Date()
+                )
+                await notifyScreenshotActionReady(
+                    workflowName: workflow.name,
+                    actionRunId: actionRunId,
+                    status: .failed,
+                    message: error.localizedDescription
+                )
+                await SystemEventManager.shared.log(
+                    .error,
+                    "Workflow failed: \(workflow.name)",
+                    detail: error.localizedDescription
+                )
+            }
+        }
+    }
+
+    private func notifyScreenshotActionReady(
+        workflowName: String,
+        actionRunId: UUID,
+        status: ActionRunModel.Status,
+        message: String
+    ) async {
+        let content = UNMutableNotificationContent()
+        switch status {
+        case .completed:
+            content.title = "\(workflowName) is ready"
+            content.body = clippedNotificationBody(message, fallback: "Open Actions to review the result.")
+            content.sound = .default
+        case .failed:
+            content.title = "\(workflowName) failed"
+            content.body = clippedNotificationBody(message, fallback: "Open Actions to inspect the error.")
+            content.sound = .default
+        case .queued, .running, .cancelled:
+            return
+        }
+
+        content.userInfo = [
+            "talkieRoute": "aiResults",
+            "actionRunId": actionRunId.uuidString
+        ]
+
+        let request = UNNotificationRequest(
+            identifier: "talkie-action-\(actionRunId.uuidString)",
+            content: content,
+            trigger: nil
+        )
+
+        do {
+            try await UNUserNotificationCenter.current().add(request)
+        } catch {
+            Log(.workflow).warning("Failed to show action notification: \(error.localizedDescription)")
+        }
+    }
+
+    private func clippedNotificationBody(_ message: String, fallback: String) -> String {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return fallback }
+        if trimmed.count <= 180 {
+            return trimmed
+        }
+        return "\(trimmed.prefix(180))..."
+    }
+
+    private func workflowTargetObject(for item: ScreenshotItem) async throws -> TalkieObject {
+        if let parent = item.parent {
+            return parent
+        }
+
+        if let trayItem = item.trayItem,
+           case .screenshot(let screenshot) = trayItem,
+           let capture = await TrayActionService.shared.saveTrayScreenshotAsCapture(
+            screenshot,
+            runOCR: false,
+            removeFromTrayOnSuccess: false
+           ) {
+            return capture
+        }
+
+        throw WorkflowError.executionFailed("This item cannot be used as workflow input.")
+    }
+
+    private func startScreenshotActionRun(
+        id actionRunId: UUID,
+        inputPackageId: UUID,
+        workflow: Workflow,
+        item: ScreenshotItem
+    ) async throws {
+        let now = Date()
+        let run = ActionRunModel(
+            id: actionRunId,
+            actionId: workflow.id.uuidString,
+            actionKind: .workflow,
+            title: workflow.name,
+            inputPackageId: inputPackageId,
+            status: .running,
+            createdAt: now,
+            updatedAt: now,
+            startedAt: now,
+            summary: "Running \(workflow.name)"
+        )
+
+        let inputPackage = ActionInputPackage(
+            id: inputPackageId,
+            actionRunId: actionRunId,
+            parametersJSON: actionJSON([
+                "workflowId": workflow.id.uuidString,
+                "workflowName": workflow.name,
+                "surface": "captureContextMenu"
+            ]),
+            derivedContextRefsJSON: actionJSON([
+                "assetURL": item.fileURL.path
+            ]),
+            renderedSnapshot: item.label ?? item.fileURL.lastPathComponent,
+            createdAt: now
+        )
+
+        let subject = ActionSubjectRef(
+            actionRunId: actionRunId,
+            kind: .screenshot,
+            recordId: item.parent?.id,
+            assetURLString: item.fileURL.path,
+            titleSnapshot: actionSubjectTitle(for: item),
+            createdAt: now
+        )
+
+        let events = [
+            ActionEventModel(
+                actionRunId: actionRunId,
+                kind: .runQueued,
+                message: "\(workflow.name) queued"
+            ),
+            ActionEventModel(
+                actionRunId: actionRunId,
+                kind: .runStarted,
+                message: "\(workflow.name) started"
+            )
+        ]
+
+        try await actionRepository.createActionRun(
+            run,
+            inputPackage: inputPackage,
+            subjectRefs: [subject],
+            events: events
+        )
+    }
+
+    private func actionSubjectTitle(for item: ScreenshotItem) -> String {
+        if let label = item.label?.trimmingCharacters(in: .whitespacesAndNewlines), !label.isEmpty {
+            return label
+        }
+        if let parent = item.parent {
+            if let title = parent.displayTitle.trimmingCharacters(in: .whitespacesAndNewlines).screenshotActionNilIfEmpty {
+                return title
+            }
+        }
+        if let screenshot = item.screenshot {
+            if let windowTitle = screenshot.windowTitle?.trimmingCharacters(in: .whitespacesAndNewlines).screenshotActionNilIfEmpty {
+                return windowTitle
+            }
+            if let appName = screenshot.appName?.trimmingCharacters(in: .whitespacesAndNewlines).screenshotActionNilIfEmpty {
+                return appName
+            }
+        }
+        return item.fileURL.lastPathComponent
+    }
+
+    private func primaryOutput(from outputs: [String: String], workflow: WorkflowDefinition) -> String {
+        if let outputKey = workflow.steps.last?.outputKey,
+           let output = outputs[outputKey]?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !output.isEmpty {
+            return output
+        }
+
+        let preferredKeys = ["RESULT", "OUTPUT", "SUMMARY", "SCREENSHOT_DESCRIPTION", "uiDescription"]
+        for key in preferredKeys {
+            if let output = outputs[key]?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !output.isEmpty {
+                return output
+            }
+        }
+
+        return outputs.values
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty } ?? ""
+    }
+
+    private func actionSummary(from output: String, fallback: String) -> String {
+        let cleaned = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return fallback }
+        if cleaned.count <= 220 { return cleaned }
+        return "\(cleaned.prefix(220))..."
+    }
+
+    private func actionJSON(_ dictionary: [String: Any]) -> String {
+        guard JSONSerialization.isValidJSONObject(dictionary),
+              let data = try? JSONSerialization.data(withJSONObject: dictionary, options: [.sortedKeys]),
+              let text = String(data: data, encoding: .utf8) else {
+            return "{}"
+        }
+        return text
     }
 
     // MARK: - Selection
@@ -899,6 +1220,12 @@ private final class ScreenshotGridDragSourceView: NSView, NSDraggingSource {
             ),
             withAttributes: attrs
         )
+    }
+}
+
+private extension String {
+    var screenshotActionNilIfEmpty: String? {
+        isEmpty ? nil : self
     }
 }
 

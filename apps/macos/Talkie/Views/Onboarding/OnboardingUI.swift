@@ -22,6 +22,11 @@ struct OnboardingColors {
     let gridLine: Color
 
     static func forScheme(_ colorScheme: ColorScheme) -> OnboardingColors {
+        // Accent is Scope brass (#9A6A22) regardless of scheme — the
+        // brand chrome should read as instrument-panel, not Tailwind
+        // emerald. Onboarding inherits the same vocabulary as the
+        // Scope surfaces it leads into.
+        let scopeBrass = Color(hex: "9A6A22")
         if colorScheme == .dark {
             return OnboardingColors(
                 background: Color(hex: "0A0A0A"),
@@ -29,19 +34,19 @@ struct OnboardingColors {
                 textPrimary: .white,
                 textSecondary: Color(hex: "9A9A9A"),
                 textTertiary: Color(hex: "6A6A6A"),
-                accent: Color(hex: "22C55E"),
+                accent: scopeBrass,
                 border: Color(hex: "3A3A3A"),
                 gridLine: Color(hex: "1A1A1A")
             )
         } else {
             return OnboardingColors(
-                background: Color(hex: "FAFAFA"),
+                background: Color(hex: "F8F8F7"),    // ScopeCanvas.canvas
                 surfaceCard: .white,
-                textPrimary: Color(hex: "0A0A0A"),
+                textPrimary: Color(hex: "1F2123"),   // ScopeInk.primary
                 textSecondary: Color(hex: "6A6A6A"),
                 textTertiary: Color(hex: "9A9A9A"),
-                accent: Color(hex: "22C55E"),
-                border: Color(hex: "D0D0D0"),
+                accent: scopeBrass,
+                border: Color(hex: "DEDEDD"),         // ScopeEdge solid neighbour
                 gridLine: Color(hex: "F0F0F0")
             )
         }

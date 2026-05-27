@@ -319,9 +319,9 @@ struct ScopeLibraryView: View {
     }
 
     /// Library list header — title row + filter pills + search row.
-    /// Sits below the chrome-bar zone: the centered Talkie pill occupies
-    /// the top ~38pt of the window, so we offset the list header further
-    /// down to keep the two from competing for the same vertical slot.
+    /// Sits below the chrome-bar zone: a small offset keeps the title
+    /// clear of the centered Talkie pill without burning a full band
+    /// of whitespace below the toolbar.
     @ViewBuilder
     private var topComponent: some View {
         VStack(spacing: 8) {
@@ -330,7 +330,7 @@ struct ScopeLibraryView: View {
             searchRow
         }
         .padding(.horizontal, 16)
-        .padding(.top, 36)
+        .padding(.top, 16)
         .padding(.bottom, 10)
         .overlay(alignment: .bottom) {
             ScopeRule(.section)
@@ -723,8 +723,68 @@ private struct ScopeLibraryRow: View {
 
     private var rowTitle: String {
         if let title = recording.title, !title.isEmpty { return title }
-        if let preview = recording.transcriptPreview { return preview }
+
+        // Captures: name the source app or capture mode rather than
+        // falling through to a generic "(untitled)".
+        if recording.type == .capture {
+            if let app = recording.appContext?.name, !app.isEmpty {
+                return "\(app) capture"
+            }
+            if let shot = recording.screenshots.first {
+                let mode = shot.captureMode.capitalized
+                return "\(mode) capture"
+            }
+        }
+
+        // Text-bearing items: first sentence reads better than the dumb
+        // 80-char prefix from `transcriptPreview`.
+        if let text = recording.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !text.isEmpty {
+            return Self.firstSentence(of: text, limit: 80)
+        }
+
+        // Recording without a transcript yet — type + duration is more
+        // informative than the literal "(untitled)".
+        if recording.duration > 0 {
+            let kind = recording.type.rawValue.capitalized
+            return "\(kind) · \(formatDuration(recording.duration))"
+        }
+
         return "(untitled)"
+    }
+
+    /// Returns the first sentence of `text`, or a soft-truncated prefix
+    /// when no sentence boundary lands within `limit` characters. A
+    /// sentence ends at `.`, `!`, or `?` followed by whitespace.
+    private static func firstSentence(of text: String, limit: Int) -> String {
+        let cleaned = text
+            .components(separatedBy: .newlines)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let enders: Set<Character> = [".", "!", "?"]
+        var end: String.Index? = nil
+        for i in cleaned.indices {
+            if enders.contains(cleaned[i]) {
+                let next = cleaned.index(after: i)
+                if next == cleaned.endIndex || cleaned[next].isWhitespace {
+                    end = next
+                    break
+                }
+            }
+        }
+
+        if let e = end {
+            let s = String(cleaned[..<e]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !s.isEmpty && s.count <= limit { return s }
+        }
+
+        if cleaned.count <= limit { return cleaned }
+        let truncated = String(cleaned.prefix(limit))
+        if let lastSpace = truncated.lastIndex(of: " ") {
+            return String(truncated[..<lastSpace]) + "…"
+        }
+        return truncated + "…"
     }
 
     /// Chrome metadata — date · source · duration · word count.

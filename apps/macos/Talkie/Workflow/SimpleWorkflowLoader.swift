@@ -15,11 +15,13 @@ private let log = Log(.workflow)
 
 /// Root structure of a simplified workflow JSON file
 struct SimpleWorkflowFile: Codable {
+    let id: UUID?
     let name: String
     let description: String
     let icon: String?
     let color: String?
     let maintainer: String?  // e.g., "talkie" for official starter pack
+    let inputs: WorkflowInputContract?
     let steps: [SimpleStep]
 }
 
@@ -190,12 +192,13 @@ struct SimpleWorkflowLoader {
         let color = WorkflowColor(rawValue: file.color ?? "blue") ?? .blue
 
         return WorkflowDefinition(
-            id: UUID(),  // Fresh UUID each time
+            id: file.id ?? UUID(),  // Templates omit ids; installed user workflows should keep stable ids.
             name: file.name,
             description: file.description,
             icon: file.icon ?? "wand.and.stars",
             color: color,
             maintainer: file.maintainer,
+            inputs: file.inputs ?? .memoTranscript,
             steps: steps,
             isEnabled: true,
             isPinned: false,

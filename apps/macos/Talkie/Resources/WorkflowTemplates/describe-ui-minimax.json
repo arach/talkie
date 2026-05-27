@@ -1,0 +1,36 @@
+{
+  "id": "00000000-7A1C-1E00-0000-0000000000A1",
+  "name": "Describe UI",
+  "description": "Turn captured screenshots into an agent-ready UI brief using MiniMax",
+  "icon": "rectangle.3.group.bubble.left",
+  "color": "indigo",
+  "maintainer": "talkie",
+  "inputs": {
+    "acceptedRecordTypes": ["capture", "memo", "note"],
+    "requiredAssets": ["screenshot"],
+    "surfaces": ["captureContextMenu", "library", "memoDetail", "manual", "automation"],
+    "parameters": [
+      {
+        "key": "screenshots",
+        "label": "Screenshots",
+        "valueType": "imageSet",
+        "required": true,
+        "templateKey": "SCREENSHOT_CONTEXT",
+        "help": "Screenshots and capture metadata supplied by the selected memo, note, or capture."
+      }
+    ]
+  },
+  "steps": [
+    {
+      "type": "llm",
+      "outputKey": "uiDescription",
+      "provider": "minimax",
+      "modelId": "server:minimax:MiniMax-M2.7",
+      "systemPrompt": "You describe UI screenshots for downstream coding and automation agents. Be literal, compact, and careful. Do not invent hidden state or unavailable data.",
+      "prompt": "Create an agent-ready UI description from this capture context.\n\nMemo title: {{TITLE}}\nMemo transcript or note:\n{{TRANSCRIPT}}\n\nScreenshot count: {{SCREENSHOT_COUNT}}\nScreenshot context:\n{{SCREENSHOT_CONTEXT}}\n\nVLM screenshot description:\n{{SCREENSHOT_VISION}}\n\nVisible OCR text:\n{{SCREENSHOT_OCR}}\n\nReturn exactly these sections:\n\nCurrent UI\n- Identify the app, screen, visible task, and dominant content.\n\nInteractive Controls\n- List visible controls, labels, selected states, disabled states, and where they are on screen.\n\nState And Constraints\n- Note errors, loading states, missing data, modal sheets, scroll position, and anything that limits the next action.\n\nSuggested Agent Context\n- Write a concise paragraph that can be pasted into another AI agent so it understands this UI and what the user likely needs next.",
+      "temperature": 0.2,
+      "topP": 0.95,
+      "maxTokens": 1800
+    }
+  ]
+}

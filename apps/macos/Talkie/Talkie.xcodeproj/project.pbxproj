@@ -69,6 +69,11 @@
 		1CE0C38EF6DD14564DB091E2 /* ConsoleTabEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF527A524858B4E6AA7F5E26 /* ConsoleTabEditor.swift */; };
 		1D45D046F5EC5243A4C05730 /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C20E7CBF42C96E1EB867FD2 /* FeatureFlags.swift */; };
 		1E5C878B3A84632DC742D49B /* ActivityLogViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ADA116B700BED47718C7D9E /* ActivityLogViews.swift */; };
+		00FF17F31A7D4CD6B3C7D47C /* ActionRunModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F7701F5C3FE4FC38E43CD11 /* ActionRunModel.swift */; };
+		0351F4B53FB04A3C83A30104 /* ActionSubjectRef.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB310A30FF4084AE2940B2 /* ActionSubjectRef.swift */; };
+		5379F9BC138D402989775258 /* ActionEventModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71E2909F24334F33B9B89C75 /* ActionEventModel.swift */; };
+		9C78368AA6F44B3E8C959C80 /* ActionInputPackage.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC1FF5EA84BF424B80A3C2F7 /* ActionInputPackage.swift */; };
+		53EE5F64DB7F421A9C57AE4B /* ActionWorkbenchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85746665BACA49E69D623DC7 /* ActionWorkbenchView.swift */; };
 		1EB339080DB651B76F45E652 /* DebugSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C96A04FEABC5B772E63AD67 /* DebugSettings.swift */; };
 		1EC0957F58331301CC08CCD6 /* SettingsColumns.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AACC22A4D152DCBFB30FE56 /* SettingsColumns.swift */; };
 		1EC0A7367E811083A97AB6BB /* MarkdownFileWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F67BF58575EB26A870EC7E8A /* MarkdownFileWriter.swift */; };
@@ -1049,6 +1054,11 @@
 		FE8763583C38788C862FE91A /* SQLiteViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLiteViewer.swift; sourceTree = "<group>"; };
 		FEE68488C46C5431620F90C5 /* SoundManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundManager.swift; sourceTree = "<group>"; };
 		FEFA9D9485C8EBE6644BF4EB /* ScopeLibraryEmptyState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeLibraryEmptyState.swift; sourceTree = "<group>"; };
+		7F7701F5C3FE4FC38E43CD11 /* ActionRunModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionRunModel.swift; sourceTree = "<group>"; };
+		E2DB310A30FF4084AE2940B2 /* ActionSubjectRef.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionSubjectRef.swift; sourceTree = "<group>"; };
+		71E2909F24334F33B9B89C75 /* ActionEventModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionEventModel.swift; sourceTree = "<group>"; };
+		EC1FF5EA84BF424B80A3C2F7 /* ActionInputPackage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionInputPackage.swift; sourceTree = "<group>"; };
+		85746665BACA49E69D623DC7 /* ActionWorkbenchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionWorkbenchView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1385,6 +1395,7 @@
 				5A59AD426371D19B88A65EA9 /* SyncPanel.swift */,
 				720EC90439850FC3D809A9BC /* TalkieServiceMonitorView.swift */,
 				684E68244668F49BFE901621 /* Activity */,
+				11CDB351E7C047F5A7A2C1B2 /* Actions */,
 				DA139020BF07C1F2E23AAAEE /* AIResults */,
 				630BC80E51175241B4AFE6CC /* Claude */,
 				F4C35C4E8D90F460F9906E80 /* CommandPalette */,
@@ -1436,6 +1447,14 @@
 				7ADA116B700BED47718C7D9E /* ActivityLogViews.swift */,
 			);
 			path = Activity;
+			sourceTree = "<group>";
+		};
+		11CDB351E7C047F5A7A2C1B2 /* Actions */ = {
+			isa = PBXGroup;
+			children = (
+				85746665BACA49E69D623DC7 /* ActionWorkbenchView.swift */,
+			);
+			path = Actions;
 			sourceTree = "<group>";
 		};
 		6D67F82EC91560F5D7130E4C /* Tools */ = {
@@ -1539,6 +1558,10 @@
 				1920240BF52BCC6F392D7CBF /* SyncMetadata.swift */,
 				A0DB12E53E73DFD4E74AA50B /* TranscriptVersionModel.swift */,
 				4DE6D960ECC5B682EB15EE43 /* TranscriptVersionModel+CloudKit.swift */,
+				71E2909F24334F33B9B89C75 /* ActionEventModel.swift */,
+				EC1FF5EA84BF424B80A3C2F7 /* ActionInputPackage.swift */,
+				7F7701F5C3FE4FC38E43CD11 /* ActionRunModel.swift */,
+				E2DB310A30FF4084AE2940B2 /* ActionSubjectRef.swift */,
 				BD4E06B48CDFCD50E92F9976 /* WorkflowEventModel.swift */,
 				4DB876A29F7F55B18465450A /* WorkflowRunModel.swift */,
 				7158B69D2A9D27048E03A6F3 /* WorkflowRunModel+CloudKit.swift */,
@@ -2322,6 +2345,11 @@
 				845E5E0FB49B0F66868A6590 /* ActionEditorSheet.swift in Sources */,
 				F506EC52C5E330885E271797 /* ActionsSettingsView.swift in Sources */,
 				1E5C878B3A84632DC742D49B /* ActivityLogViews.swift in Sources */,
+				5379F9BC138D402989775258 /* ActionEventModel.swift in Sources */,
+				9C78368AA6F44B3E8C959C80 /* ActionInputPackage.swift in Sources */,
+				00FF17F31A7D4CD6B3C7D47C /* ActionRunModel.swift in Sources */,
+				0351F4B53FB04A3C83A30104 /* ActionSubjectRef.swift in Sources */,
+				53EE5F64DB7F421A9C57AE4B /* ActionWorkbenchView.swift in Sources */,
 				9AAD4EFEBDD418CBC1EE867C /* AgentHarnessProfile.swift in Sources */,
 				78F1D709FD2F5774BCF679C0 /* AgentHealthBanner.swift in Sources */,
 				606E43ED2836A954C361C3D7 /* AnthropicProvider.swift in Sources */,

@@ -89,6 +89,12 @@ final class DeckMirrorStore: ObservableObject {
     /// as transient feedback and highlights the matching tile.
     @Published private(set) var lastTriggerResult: TriggerResult?
 
+    /// Most recent runtime state for an in-flight shortcut on the Mac
+    /// — exposes `phase` (preparing/recording/processing), `elapsedSeconds`,
+    /// and `signalLevel` so the cockpit can distinguish the recording
+    /// window from the "Mac is transcribing" tail and show a timer.
+    @Published private(set) var lastRuntimeState: CompanionShortcutRuntimeState?
+
     private var triggerResultResetTask: Task<Void, Never>?
     private var lastRecentResultKey: String?
 
@@ -104,6 +110,7 @@ final class DeckMirrorStore: ObservableObject {
         set(board: companionState?.resolvedCommandDeck)
 
         if let runtimeState = companionState?.shortcutStates?.first {
+            lastRuntimeState = runtimeState
             let message = runtimeState.detail ?? runtimeState.phase.displayName
             setTriggerResult(
                 slotID: runtimeState.shortcutId,
@@ -113,6 +120,9 @@ final class DeckMirrorStore: ObservableObject {
             )
             return
         }
+        // No active runtime: clear so the cockpit can exit "in-flight"
+        // visuals (timer, phase-specific waveform state) cleanly.
+        lastRuntimeState = nil
 
         guard let recentResult = companionState?.recentResults?.first else { return }
         let key = "\(recentResult.shortcutId)-\(recentResult.completedAt)"

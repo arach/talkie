@@ -165,6 +165,7 @@ private struct LiquidGlassTray: View {
                     label: "Capture"
                 ) {
                     AppShellRouter.shared.openCaptureCompose()
+                    chrome.dismissChrome()
                 }
 
                 // Tray center: on home the standalone MicFAB (rendered by
@@ -187,6 +188,7 @@ private struct LiquidGlassTray: View {
                     label: "Ask AI"
                 ) {
                     AppShellRouter.shared.openAskAI()
+                    chrome.dismissChrome()
                 }
 
                 TraySlot(
@@ -194,6 +196,7 @@ private struct LiquidGlassTray: View {
                     label: "Terminal"
                 ) {
                     AppShellRouter.shared.openTerminal()
+                    chrome.dismissChrome()
                 }
             }
             .padding(.horizontal, capsulePadH)

@@ -1500,6 +1500,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         logger.info("📬 User tapped notification: \(response.notification.request.identifier)")
+        let userInfo = response.notification.request.content.userInfo
+        if userInfo["talkieRoute"] as? String == "aiResults" {
+            Task { @MainActor in
+                var params: [String: AnyHashable] = [:]
+                if let actionRunId = userInfo["actionRunId"] as? String {
+                    params["actionRunId"] = actionRunId
+                }
+                NavigationState.shared.navigate(to: .aiResults, params: params)
+                completionHandler()
+            }
+            return
+        }
         completionHandler()
     }
 

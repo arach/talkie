@@ -964,7 +964,7 @@ private struct ProviderRowCell: View {
     private var titleLine: some View {
         HStack(spacing: 8) {
             Text(name)
-                .font(ScopeFont.display(size: 18))
+                .font(ScopeFont.display(size: 15))
                 .foregroundStyle(state == .unconfigured ? ScopeInk.muted : ScopeInk.primary)
                 .tracking(-0.2)
                 .lineLimit(1)

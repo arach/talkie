@@ -991,7 +991,11 @@ private struct ActivityWidgetCardView: View {
     var body: some View {
         HomeActivityWidget(data: activityData, streak: streak, totalCount: totalCount)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .task {
+            // Keyed on `heatmapData` so the streak recomputes whenever
+            // MemosViewModel finishes its async load — otherwise the
+            // widget snapshots an empty `[:]` on first appear and shows
+            // 0 days even with weeks of activity behind it.
+            .task(id: memosVM.heatmapData) {
                 guard DatabaseManager.shared.isInitialized else { return }
                 let (data, dayMap) = await buildActivityData()
                 activityData = data
@@ -1048,7 +1052,24 @@ private struct ActivityWidgetCardView: View {
 
     private func computeStreak(dayMap: [Date: Int]) -> Int {
         let calendar = Calendar.current
-        var date = calendar.startOfDay(for: Date())
+        let today = calendar.startOfDay(for: Date())
+
+        // Anchor on today if there's activity, otherwise fall back to
+        // yesterday. Keeps the streak alive while the user still has
+        // "today" left to log — same grace pattern Duolingo uses. The
+        // prior implementation reset to 0 the instant a new day began
+        // with no entry yet, which read as a bug to users who had been
+        // active every day for weeks.
+        var date: Date
+        if dayMap[today, default: 0] > 0 {
+            date = today
+        } else if let yesterday = calendar.date(byAdding: .day, value: -1, to: today),
+                  dayMap[yesterday, default: 0] > 0 {
+            date = yesterday
+        } else {
+            return 0
+        }
+
         var count = 0
         while dayMap[date, default: 0] > 0 {
             count += 1

@@ -244,6 +244,7 @@ private let SHIPPED_STARTERS: [Starter] = [
 
 struct ScopeSkillsLandingView: View {
     private let workflowService = WorkflowService.shared
+    private let onUseWorkflow: (Workflow) -> Void
 
     // Editor bay state
     @State private var selectedStarterID: UUID? = nil
@@ -263,6 +264,10 @@ struct ScopeSkillsLandingView: View {
     // inline savePrompt stub is used.
     @State private var bundledStarters: [String: BundledStarter] = [:]
     @State private var isRunning: Bool = false
+
+    init(onUseWorkflow: @escaping (Workflow) -> Void) {
+        self.onUseWorkflow = onUseWorkflow
+    }
 
     private enum ConsoleState: Equatable {
         case idle
@@ -934,6 +939,7 @@ struct ScopeSkillsLandingView: View {
                 icon: bundled.definition.icon,
                 color: bundled.definition.color,
                 maintainer: bundled.definition.maintainer,
+                inputs: bundled.definition.inputs,
                 steps: bundled.definition.steps,
                 isEnabled: bundled.definition.isEnabled,
                 isPinned: bundled.definition.isPinned,
@@ -1407,19 +1413,25 @@ struct ScopeSkillsLandingView: View {
         let pipeline = derivedPipeline(for: workflow)
         let status = isWorkflow ? "WORKFLOW" : "READY"
 
-        starterCard(starter: Starter(
-            code: String(workflow.slug.prefix(8)).uppercased(),
-            category: category,
-            name: workflow.name,
-            byline: workflow.description.isEmpty ? "(no description)" : workflow.description,
-            pipeline: pipeline,
-            mode: mode,
-            status: status,
-            markupBody: [],
-            savePrompt: "",
-            icon: workflow.icon,
-            color: workflow.color
-        ))
+        Button {
+            onUseWorkflow(workflow)
+        } label: {
+            starterCard(starter: Starter(
+                code: String(workflow.slug.prefix(8)).uppercased(),
+                category: category,
+                name: workflow.name,
+                byline: workflow.description.isEmpty ? "(no description)" : workflow.description,
+                pipeline: pipeline,
+                mode: mode,
+                status: status,
+                markupBody: [],
+                savePrompt: "",
+                icon: workflow.icon,
+                color: workflow.color
+            ))
+        }
+        .buttonStyle(.plain)
+        .help("Open \(workflow.name)")
     }
 
     @ViewBuilder

@@ -432,6 +432,160 @@ actor LocalRepository: MemoRepository {
         }
     }
 
+    // MARK: - Action Workbench
+
+    func createActionRun(
+        _ run: ActionRunModel,
+        inputPackage: ActionInputPackage? = nil,
+        subjectRefs: [ActionSubjectRef] = [],
+        events: [ActionEventModel] = []
+    ) async throws {
+        try await instrumentRepositoryWrite("createActionRun") {
+            let db = try await dbManager.databaseWhenReady()
+
+            try await db.write { db in
+                try run.save(db)
+
+                if let inputPackage {
+                    try inputPackage.save(db)
+                }
+
+                for subjectRef in subjectRefs {
+                    try subjectRef.save(db)
+                }
+
+                for (offset, event) in events.enumerated() {
+                    var mutableEvent = event
+                    mutableEvent.sequence = offset
+                    try mutableEvent.save(db)
+                }
+            }
+        }
+    }
+
+    func allActionRuns(limit: Int = 100) async throws -> [ActionRunModel] {
+        try await instrumentRepositoryRead("allActionRuns") {
+            let db = try await dbManager.databaseWhenReady()
+
+            return try await db.read { db in
+                try ActionRunModel
+                    .order(ActionRunModel.Columns.createdAt.desc)
+                    .limit(limit)
+                    .fetchAll(db)
+            }
+        }
+    }
+
+    func fetchActionRun(id: UUID) async throws -> ActionRunModel? {
+        try await instrumentRepositoryRead("fetchActionRun") {
+            let db = try await dbManager.databaseWhenReady()
+
+            return try await db.read { db in
+                try ActionRunModel.fetchOne(db, key: id)
+            }
+        }
+    }
+
+    func fetchActionEvents(for actionRunId: UUID) async throws -> [ActionEventModel] {
+        try await instrumentRepositoryRead("fetchActionEvents") {
+            let db = try await dbManager.databaseWhenReady()
+
+            return try await db.read { db in
+                try ActionEventModel
+                    .filter(ActionEventModel.Columns.actionRunId == actionRunId)
+                    .order(ActionEventModel.Columns.sequence.asc)
+                    .fetchAll(db)
+            }
+        }
+    }
+
+    func fetchActionSubjectRefs(for actionRunId: UUID) async throws -> [ActionSubjectRef] {
+        try await instrumentRepositoryRead("fetchActionSubjectRefs") {
+            let db = try await dbManager.databaseWhenReady()
+
+            return try await db.read { db in
+                try ActionSubjectRef
+                    .filter(ActionSubjectRef.Columns.actionRunId == actionRunId)
+                    .order(ActionSubjectRef.Columns.createdAt.asc)
+                    .fetchAll(db)
+            }
+        }
+    }
+
+    func fetchActionInputPackage(for actionRunId: UUID) async throws -> ActionInputPackage? {
+        try await instrumentRepositoryRead("fetchActionInputPackage") {
+            let db = try await dbManager.databaseWhenReady()
+
+            return try await db.read { db in
+                try ActionInputPackage
+                    .filter(ActionInputPackage.Columns.actionRunId == actionRunId)
+                    .fetchOne(db)
+            }
+        }
+    }
+
+    @discardableResult
+    func appendActionEvent(
+        actionRunId: UUID,
+        kind: ActionEventModel.Kind,
+        level: ActionEventModel.Level = .info,
+        message: String,
+        payloadJSON: String = "{}"
+    ) async throws -> ActionEventModel {
+        try await instrumentRepositoryWrite("appendActionEvent") {
+            let db = try await dbManager.databaseWhenReady()
+
+            return try await db.write { db in
+                let nextSequence = try (Int.fetchOne(
+                    db,
+                    sql: "SELECT COALESCE(MAX(sequence), -1) + 1 FROM action_events WHERE actionRunId = ?",
+                    arguments: [actionRunId]
+                ) ?? 0)
+
+                let event = ActionEventModel(
+                    actionRunId: actionRunId,
+                    sequence: nextSequence,
+                    kind: kind,
+                    level: level,
+                    message: message,
+                    payloadJSON: payloadJSON
+                )
+                try event.save(db)
+                return event
+            }
+        }
+    }
+
+    func updateActionRun(
+        id: UUID,
+        status: ActionRunModel.Status,
+        summary: String? = nil,
+        primaryResult: String? = nil,
+        errorMessage: String? = nil,
+        errorDetails: String? = nil,
+        completedAt: Date? = nil
+    ) async throws {
+        try await instrumentRepositoryWrite("updateActionRun") {
+            let db = try await dbManager.databaseWhenReady()
+
+            try await db.write { db in
+                guard var run = try ActionRunModel.fetchOne(db, key: id) else { return }
+                run.status = status
+                run.updatedAt = Date()
+                if let summary { run.summary = summary }
+                if let primaryResult { run.primaryResult = primaryResult }
+                if let errorMessage { run.errorMessage = errorMessage }
+                if let errorDetails { run.errorDetails = errorDetails }
+                if let completedAt {
+                    run.completedAt = completedAt
+                } else if status == .completed || status == .failed || status == .cancelled {
+                    run.completedAt = Date()
+                }
+                try run.update(db)
+            }
+        }
+    }
+
     // MARK: - Helper: Fetch Workflow Counts
 
     nonisolated private func fetchWorkflowCounts(for memoIds: [UUID], in db: Database) throws -> [UUID: Int] {

@@ -76,7 +76,7 @@ struct TalkieSettingsConfiguration: Codable {
         init(
             mode: AppearanceMode = .system,
             accentColor: AccentColorOption = .system,
-            currentTheme: ThemePreset = .technical,
+            currentTheme: ThemePreset = .scope,
             enableGlassEffects: Bool = false,
             uiFontStyle: FontStyleOption = .system,
             contentFontStyle: FontStyleOption = .system,

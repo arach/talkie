@@ -23,6 +23,9 @@ struct TOTranscriptSection: View {
     var onRetranscribe: (String) -> Void = { _ in }
     var onCopy: () -> Void = {}
     var onContinueMemo: (() -> Void)? = nil
+    /// Optional audio-seek hook propagated to RecordingTranscriptCard's
+    /// paragraph timestamps. Takes absolute seconds.
+    var onTimestampSeek: ((Double) -> Void)? = nil
 
     private var needsTranscription: Bool {
         (recording.transcriptionStatus == .failed || recording.transcriptionStatus == .pending)
@@ -49,7 +52,8 @@ struct TOTranscriptSection: View {
                 editedTranscript: $editedTranscript,
                 isRetranscribing: isRetranscribing,
                 onTranscriptChange: { onTranscriptChange() },
-                onRetranscribe: { modelId in onRetranscribe(modelId) }
+                onRetranscribe: { modelId in onRetranscribe(modelId) },
+                onTimestampSeek: onTimestampSeek
             )
             // Continue-memo affordance moved into TOHeaderSection's
             // inlineActionRow as a real labeled chip. The previous

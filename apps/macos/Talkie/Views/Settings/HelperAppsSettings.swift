@@ -39,12 +39,14 @@ enum HelperAppsTab: String, CaseIterable {
     case services = "SERVICES"
     case settings = "SETTINGS"
     case performance = "PERFORMANCE"
+    case apps = "APPS"          // Folded in from the retired top-level Apps page
 
     var icon: String {
         switch self {
         case .services: return "app.connected.to.app.below.fill"
         case .settings: return "gearshape"
         case .performance: return "gauge.with.dots.needle.bottom.50percent"
+        case .apps: return "square.stack.3d.up"
         }
     }
 
@@ -53,6 +55,7 @@ enum HelperAppsTab: String, CaseIterable {
         case .services: return .green
         case .settings: return .blue
         case .performance: return .purple
+        case .apps: return .orange
         }
     }
 }
@@ -137,6 +140,9 @@ struct HelperAppsSettingsView: View {
                     settingsContent
                 case .performance:
                     PerformanceSettingsView()
+                case .apps:
+                    AppsSettingsContent()
+                        .padding(.top, Spacing.md)
                 }
             }
             .id(selectedTab)

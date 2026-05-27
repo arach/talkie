@@ -24,6 +24,8 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
     private var onComplete: ((Result<CaptureMarkupDocument?, Error>) -> Void)?
     private var layerCount = 0
     private var currentSelection: CaptureMarkupLayerSelection?
+    private var currentDocument: CaptureMarkupDocument?
+    private var dragExportURLs: [URL] = []
 
     private override init() {
         super.init()
@@ -42,12 +44,16 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
 
         let doc = document ?? CaptureMarkupStorage.load(forImageURL: imageURL)
             ?? emptyDocument(for: imageURL)
+        currentDocument = doc
 
         let panel = makePanel()
         let root = CaptureMarkupPanelRootView(frame: panel.contentView!.bounds)
         root.autoresizingMask = [.width, .height]
         panel.contentView?.addSubview(root)
         rootView = root
+        root.setDragPayloadProvider { [weak self] in
+            self?.makeDragPayload()
+        }
 
         root.inputBar.delegate = self
         if let instruction, !instruction.isEmpty {
@@ -129,6 +135,7 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
                     existing: existing,
                     openWebBay: false
                 )
+                currentDocument = doc
                 webSession?.push(document: doc)
                 syncChrome(layerCount: doc.layers.count, selection: nil)
                 rootView?.inputBar.clearPrompt()
@@ -190,6 +197,7 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
             }
         case "markup.update":
             if let doc = message.document, let imageURL {
+                currentDocument = doc
                 try? CaptureMarkupStorage.save(doc, forImageURL: imageURL)
             }
             syncChrome(
@@ -227,6 +235,7 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
         self.layerCount = layerCount
         currentSelection = selection
         let touchUp = layerCount > 0
+        rootView?.setDragOutAvailable(touchUp)
         rootView?.inputBar.setTouchUpMode(touchUp)
         // Selection no longer auto-attaches — the attachments row only
         // populates from an explicit user gesture (drag from the
@@ -255,6 +264,45 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
         onComplete = nil
         layerCount = 0
         currentSelection = nil
+        currentDocument = nil
+        cleanupDragExports()
+    }
+
+    private func makeDragPayload() -> (fileURL: URL, dragImage: NSImage)? {
+        guard let imageURL else { return nil }
+        let document = currentDocument
+            ?? CaptureMarkupStorage.load(forImageURL: imageURL)
+            ?? emptyDocument(for: imageURL)
+
+        do {
+            let data = try CaptureMarkupAgentService.shared.renderPNG(
+                imageURL: imageURL,
+                document: document
+            )
+            let fileURL = FileManager.default.temporaryDirectory
+                .appending(path: "talkie-markup-drag-\(UUID().uuidString).png")
+            try data.write(to: fileURL, options: .atomic)
+            dragExportURLs.append(fileURL)
+
+            let image = NSImage(data: data) ?? NSWorkspace.shared.icon(forFile: fileURL.path)
+            return (fileURL: fileURL, dragImage: image)
+        } catch {
+            log.error("Capture markup drag export failed", detail: error.localizedDescription)
+            presentUserMessage(
+                "Could not prepare the annotated screenshot for dragging.",
+                preferAlert: false,
+                opensAISettings: false
+            )
+            return nil
+        }
+    }
+
+    private func cleanupDragExports() {
+        let urls = dragExportURLs
+        dragExportURLs = []
+        for url in urls {
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 
     private func makePanel() -> NSPanel {

@@ -92,13 +92,23 @@ struct TalkieView: View {
     @State private var isDropTargeted = false
     @State private var localAttachments: [RecordingAttachment] = []
 
+    // Width of the scroll content area — drives the marginalia-rail
+    // gate. Measured via a background GeometryReader so the VStack
+    // itself stays intrinsic-height (essential for ScrollView to
+    // know what to scroll past).
+    @State private var scrollContentWidth: CGFloat = 0
+
+
     // Debug
     #if DEBUG
     @State private var showingPowerInspector = false
     #endif
 
     // Keep transcript/notes/attachments readable on wide inspector columns.
-    private let contentColumnMaxWidth: CGFloat = 860
+    // Body column width — slightly wider than the previous 860 to give
+    // long-form transcripts more breathing room horizontally. Anything
+    // beyond ~1000 hurts readability; this is a reasonable ceiling.
+    private let contentColumnMaxWidth: CGFloat = 980
 
     private var detailSlots: [SectionSlot] {
         recipeOverride ?? recording.type.detailRecipe
@@ -111,9 +121,38 @@ struct TalkieView: View {
                 ScrollView(.vertical, showsIndicators: true) {
                     scrollContent
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                // Continue is the primary follow-up intent — pinned
+                // above the playback footer, centered like the chrome
+                // bar's TALKIE pill. Delete lives at the end of the
+                // document (inside scrollContent → detailContent), so
+                // it reads as "end of memo" rather than competing for
+                // bottom-right attention.
+                if let continueAction = continueMemoAction {
+                    pinnedContinueBar(action: continueAction)
+                }
+
                 playbackFooter
             }
         )
+    }
+
+    /// Centered "Continue this memo" band, pinned just above the
+    /// playback footer. Mirrors the horizontal centering of the chrome
+    /// bar's TALKIE pill so the two read as a balanced pair.
+    @MainActor
+    @ViewBuilder
+    private func pinnedContinueBar(action: @escaping () -> Void) -> some View {
+        VStack(spacing: 0) {
+            ThemedScopeRule(.subtle, axis: .horizontal)
+            HStack {
+                Spacer()
+                ContinueMemoCTA(action: action)
+                Spacer()
+            }
+            .padding(.vertical, Spacing.sm)
+        }
     }
 
     /// Fixed footer at the bottom of the detail pane — the typesetter's
@@ -145,75 +184,75 @@ struct TalkieView: View {
 
     @MainActor
     private var scrollContent: AnyView {
-        // No outer horizontal padding — each top-tier section (toolbar
-        // slug, masthead, body, playback) controls its own 36pt internal
-        // padding so the studio composition can run edge-to-edge of the
-        // cool-gray document surface (hairlines, player rail) while body content keeps
-        // a comfortable measure.
-        AnyView(
-            GeometryReader { proxy in
-                // Two gates on the rail: viewport width must allow it,
-                // AND the rail must have something to say. The content
-                // gate avoids reserving a 220pt column + 40pt gutter +
-                // a hairline rule for a memo whose rail would just be
-                // whitespace (single-paragraph, no model/perf/cwd).
-                let widthAllowsRail = proxy.size.width >= TOMarginRail.collapseBelow
-                let railHasContent = TOMarginRail.hasContent(for: recording)
-                let canShowRail = widthAllowsRail && railHasContent
+        // Width-derived rail gate: viewport width must allow it AND the
+        // rail must have something to say. The content gate avoids
+        // reserving a 220pt column + 40pt gutter + a hairline rule for
+        // a memo whose rail would just be whitespace.
+        //
+        // CRITICAL: this layout must use intrinsic content height (a
+        // regular VStack). Wrapping it in `GeometryReader` makes the
+        // content sized to the proposed viewport, which makes the
+        // enclosing ScrollView think there's nothing to scroll past
+        // the viewport. Width is read via a transparent background
+        // GeometryReader → PreferenceKey instead.
+        let widthAllowsRail = scrollContentWidth >= TOMarginRail.collapseBelow
+        let railHasContent = TOMarginRail.hasContent(for: recording)
+        let canShowRail = widthAllowsRail && railHasContent
 
-                VStack(alignment: .leading, spacing: 0) {
-                    // Fixed header zone — clears the chrome bar's overlay
-                    // footprint (pill capsule + shadow) so the masthead
-                    // slug doesn't touch the bar's bottom edge.
-                    Color.clear
-                        .frame(height: PageLayout.headerOverlayClearance)
+        return AnyView(
+            VStack(alignment: .leading, spacing: 0) {
+                // Fixed header zone — clears the chrome bar's overlay
+                // footprint (pill capsule + shadow) so the masthead
+                // slug doesn't touch the bar's bottom edge.
+                Color.clear
+                    .frame(height: PageLayout.headerOverlayClearance)
 
-                    if canShowRail {
-                        // 1fr / 220pt grid. Detail content keeps its
-                        // measure; rail occupies the right margin. The
-                        // gate is a hard hide/show — no animation on
-                        // resize, because flicker is worse than a clean
-                        // jump.
-                        HStack(alignment: .top, spacing: 40) {
-                            detailContent
-                                .frame(maxWidth: contentColumnMaxWidth, alignment: .leading)
-                            ThemedScopeRule(.subtle, axis: .vertical)
-                            TOMarginRail(recording: recording)
-                                .frame(width: TOMarginRail.preferredWidth, alignment: .leading)
-                                .padding(.trailing, MastheadPadding.horizontal)
-                        }
-                        .padding(.leading, 0)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
+                if canShowRail {
+                    HStack(alignment: .top, spacing: 40) {
                         detailContent
                             .frame(maxWidth: contentColumnMaxWidth, alignment: .leading)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        ThemedScopeRule(.subtle, axis: .vertical)
+                        TOMarginRail(recording: recording)
+                            .frame(width: TOMarginRail.preferredWidth, alignment: .leading)
+                            .padding(.trailing, MastheadPadding.horizontal)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    // No rail → center the column horizontally so the
+                    // body doesn't sit hugging the leading edge on
+                    // wide windows.
+                    detailContent
+                        .frame(maxWidth: contentColumnMaxWidth, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .center)
                 }
-                .padding(.top, 0)
-                .padding(.bottom, PageLayout.bottomPadding)
+            }
+            .padding(.bottom, PageLayout.bottomPadding)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear
+                        .preference(key: ScrollContentWidthKey.self, value: proxy.size.width)
+                }
+            )
+            .onPreferenceChange(ScrollContentWidthKey.self) { newValue in
+                scrollContentWidth = newValue
             }
         )
     }
 
     @MainActor
     private var detailContent: AnyView {
+        // Delete sits at the very end of the document — reads as
+        // "end of memo" rather than chasing the reader. Continue is
+        // pinned outside the scroll, centered above the audio player.
         AnyView(
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 headerSection
                 recipeSections
                     .padding(.horizontal, MastheadPadding.horizontal)
 
-                Spacer(minLength: Spacing.xl)
-
-                if let continueAction = continueMemoAction {
-                    continueCTA(action: continueAction)
-                        .padding(.horizontal, MastheadPadding.horizontal)
-                        .padding(.bottom, Spacing.sm)
-                }
-
                 bottomActionRow
                     .padding(.horizontal, MastheadPadding.horizontal)
+                    .padding(.top, Spacing.lg)
                     .padding(.bottom, Spacing.md)
             }
         )
@@ -709,10 +748,44 @@ struct TalkieView: View {
     }
 
     private func seekTo(_ progress: Double) {
-        guard let player = audioPlayer else { return }
-        let time = progress * player.duration
-        player.currentTime = time
-        currentTime = time
+        if let player = audioPlayer {
+            let time = progress * player.duration
+            player.currentTime = time
+            currentTime = time
+            return
+        }
+        // No player yet (user clicked a paragraph timestamp before
+        // pressing play). Lazy-init the player off-main, then seek
+        // and start playback — mirrors how togglePlayback bootstraps
+        // the AVAudioPlayer.
+        guard let audioURL = fetchedAudioURL ?? recording.audioURL else { return }
+        let playbackVolume = settings.playbackVolume
+        Task.detached(priority: .userInitiated) {
+            do {
+                let data = try Data(contentsOf: audioURL)
+                await MainActor.run {
+                    do {
+                        let player = try AVAudioPlayer(data: data)
+                        audioPlayer = player
+                        player.volume = playbackVolume
+                        player.prepareToPlay()
+                        duration = player.duration
+                        let time = progress * player.duration
+                        player.currentTime = time
+                        currentTime = time
+                        player.play()
+                        startPlaybackTimer()
+                        isPlaying = true
+                    } catch {
+                        log.error("Failed to init player on seek: \(error.localizedDescription)")
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    log.error("Failed to load audio for seek: \(error.localizedDescription)")
+                }
+            }
+        }
     }
 
     private func revealAudioInFinder() {
@@ -948,7 +1021,7 @@ struct TalkieView: View {
             do {
                 _ = try await WorkflowExecutor.shared.executeWorkflow(
                     workflow.definition,
-                    for: recording.toMemoModel()
+                    for: recording
                 )
                 await fetchWorkflowRuns()
             } catch {
@@ -1129,3 +1202,14 @@ private struct ContinueMemoCTA: View {
         .help("Continue recording this memo")
     }
 }
+
+// Carries the scroll content width up so `TalkieView.scrollContent`
+// can decide whether to render the marginalia rail without using a
+// greedy GeometryReader (which would suppress vertical scrolling).
+private struct ScrollContentWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+

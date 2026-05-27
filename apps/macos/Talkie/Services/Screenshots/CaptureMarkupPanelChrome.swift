@@ -211,9 +211,102 @@ private final class CaptureMarkupPromptContainerView: NSView {
 // MARK: - Root layout
 
 @MainActor
+private final class CaptureMarkupDragHandleView: NSView, NSDraggingSource {
+    var isEnabledForDrag = false {
+        didSet {
+            alphaValue = isEnabledForDrag ? 1 : 0
+            isHidden = !isEnabledForDrag
+        }
+    }
+    var makeDragPayload: (() -> (fileURL: URL, dragImage: NSImage)?)?
+
+    private let dragThreshold: CGFloat = 4
+    private var dragStartLocation: NSPoint?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.cornerRadius = 5
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowOpacity = 0.14
+        layer?.shadowRadius = 8
+        layer?.shadowOffset = CGSize(width: 0, height: -2)
+        toolTip = "Drag annotated PNG"
+        isEnabledForDrag = false
+        isHidden = true
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    override var isFlipped: Bool { true }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let rect = bounds.insetBy(dx: 0.5, dy: 0.5)
+        let path = NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5)
+        NSColor(red: 0.98, green: 0.94, blue: 0.88, alpha: 0.96).setFill()
+        path.fill()
+        NSColor(red: 0.90, green: 0.78, blue: 0.55, alpha: 1).setStroke()
+        path.lineWidth = 0.75
+        path.stroke()
+
+        let text = "⇱ DRAG PNG"
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold),
+            .foregroundColor: NSColor(red: 0.62, green: 0.38, blue: 0.08, alpha: 1),
+        ]
+        let size = (text as NSString).size(withAttributes: attrs)
+        let point = NSPoint(
+            x: (bounds.width - size.width) / 2,
+            y: (bounds.height - size.height) / 2
+        )
+        (text as NSString).draw(at: point, withAttributes: attrs)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard isEnabledForDrag else { return }
+        dragStartLocation = convert(event.locationInWindow, from: nil)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard isEnabledForDrag, let startLocation = dragStartLocation else { return }
+        let current = convert(event.locationInWindow, from: nil)
+        guard hypot(current.x - startLocation.x, current.y - startLocation.y) >= dragThreshold else { return }
+        dragStartLocation = nil
+
+        guard let payload = makeDragPayload?() else { return }
+        let item = NSDraggingItem(pasteboardWriter: TalkieInternalDrag.pasteboardItem(for: payload.fileURL))
+        item.setDraggingFrame(bounds, contents: payload.dragImage)
+        beginDraggingSession(with: [item], event: event, source: self)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        dragStartLocation = nil
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .openHand)
+    }
+
+    nonisolated func draggingSession(
+        _ session: NSDraggingSession,
+        sourceOperationMaskFor context: NSDraggingContext
+    ) -> NSDragOperation {
+        .copy
+    }
+}
+
+@MainActor
 final class CaptureMarkupPanelRootView: NSView {
     let webHost = NSView()
     let inputBar = CaptureMarkupInputBarView()
+    private let dragHandle = CaptureMarkupDragHandleView()
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -221,7 +314,7 @@ final class CaptureMarkupPanelRootView: NSView {
 
         // webHost and inputBar fill the panel top-to-bottom. Canvas undo/redo
         // now lives inside the WKWebView toolbar with the rest of the tools.
-        [webHost, inputBar].forEach {
+        [webHost, inputBar, dragHandle].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             addSubview($0)
         }
@@ -235,12 +328,29 @@ final class CaptureMarkupPanelRootView: NSView {
             webHost.leadingAnchor.constraint(equalTo: leadingAnchor),
             webHost.trailingAnchor.constraint(equalTo: trailingAnchor),
             webHost.bottomAnchor.constraint(equalTo: inputBar.topAnchor),
+
+            // Native file drags must start in AppKit, not inside WKWebView.
+            // Keep the affordance tiny and outside the normal layer hit-test
+            // path so canvas layer-move drags continue to belong to markup.js.
+            dragHandle.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 236),
+            dragHandle.bottomAnchor.constraint(equalTo: inputBar.topAnchor, constant: -14),
+            dragHandle.widthAnchor.constraint(equalToConstant: 112),
+            dragHandle.heightAnchor.constraint(equalToConstant: 28),
         ])
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         nil
+    }
+
+    func setDragOutAvailable(_ available: Bool) {
+        dragHandle.isEnabledForDrag = available
+        dragHandle.needsDisplay = true
+    }
+
+    func setDragPayloadProvider(_ provider: @escaping () -> (fileURL: URL, dragImage: NSImage)?) {
+        dragHandle.makeDragPayload = provider
     }
 }
 

@@ -181,8 +181,10 @@ enum OnboardingLayout {
 enum PageLayout {
     /// 44pt - Standard page header height (matches macOS toolbar conventions)
     static let headerHeight: CGFloat = 44
-    /// 62pt - Clearance for chrome overlays above editorial mastheads
-    static let headerOverlayClearance: CGFloat = headerHeight + 18
+    /// Tight clearance below the chrome bar (TALKIE pill + shadow). The
+    /// previous value (44+18=62) reserved a generous overlay footprint;
+    /// the pill itself is short and the extra band read as empty space.
+    static let headerOverlayClearance: CGFloat = 28
     /// 24pt - Horizontal padding for page content
     static let horizontalPadding: CGFloat = Spacing.xl
     /// 8pt - Top padding below navigation

@@ -673,9 +673,9 @@
       // ⠿ grip is the explicit "attach this layer to the composer"
       // affordance. Click sends a `markup.attach` bridge message
       // (Swift inputBar appends it to the attachments row). The rest
-      // of the row is a normal select click. Native drag-out from
-      // WKWebView to AppKit is bigger work — deferring the actual
-      // drag gesture; this click does the same job for now.
+      // of the row is a normal select click. File drag-out is owned by
+      // the small native "DRAG PNG" handle over the canvas so it can
+      // start an AppKit drag without stealing layer-move drags here.
       row.innerHTML = `<span class="grip" aria-hidden="true" title="Attach to message">⠿</span><span class="dot ${layer.author || "agent"}"></span><span class="layer-row-label">${layer.kind}${layer.label ? " · " + layer.label : ""}</span>`;
       const grip = row.querySelector(".grip");
       if (grip) {

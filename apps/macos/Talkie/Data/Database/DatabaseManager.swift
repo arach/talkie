@@ -1458,6 +1458,86 @@ final class DatabaseManager: @unchecked Sendable {
                          columns: ["recordingId", "createdAt"])
         }
 
+        migrator.registerMigration("v28_action_workbench") { db in
+            try db.create(table: "action_runs", ifNotExists: true) { t in
+                t.column("id", .text).primaryKey()
+                t.column("actionId", .text).notNull()
+                t.column("actionKind", .text).notNull()
+                t.column("title", .text).notNull()
+                t.column("inputPackageId", .text)
+                t.column("status", .text).notNull()
+                t.column("originDeviceId", .text)
+                t.column("createdAt", .datetime).notNull()
+                t.column("updatedAt", .datetime).notNull()
+                t.column("startedAt", .datetime)
+                t.column("completedAt", .datetime)
+                t.column("summary", .text)
+                t.column("primaryResult", .text)
+                t.column("errorMessage", .text)
+                t.column("errorDetails", .text)
+            }
+
+            try db.create(table: "action_subject_refs", ifNotExists: true) { t in
+                t.column("id", .text).primaryKey()
+                t.column("actionRunId", .text).notNull()
+                    .references("action_runs", onDelete: .cascade)
+                t.column("kind", .text).notNull()
+                t.column("recordId", .text)
+                t.column("assetURLString", .text)
+                t.column("titleSnapshot", .text)
+                t.column("sha256", .text)
+                t.column("createdAt", .datetime).notNull()
+            }
+
+            try db.create(table: "action_input_packages", ifNotExists: true) { t in
+                t.column("id", .text).primaryKey()
+                t.column("actionRunId", .text).notNull()
+                    .references("action_runs", onDelete: .cascade)
+                t.column("parametersJSON", .text).notNull().defaults(to: "{}")
+                t.column("derivedContextRefsJSON", .text).notNull().defaults(to: "{}")
+                t.column("renderLogicVersion", .text).notNull()
+                t.column("renderedSnapshot", .text)
+                t.column("createdAt", .datetime).notNull()
+            }
+
+            try db.create(table: "action_events", ifNotExists: true) { t in
+                t.column("id", .text).primaryKey()
+                t.column("actionRunId", .text).notNull()
+                    .references("action_runs", onDelete: .cascade)
+                t.column("sequence", .integer).notNull()
+                t.column("kind", .text).notNull()
+                t.column("level", .text).notNull()
+                t.column("message", .text).notNull()
+                t.column("payloadJSON", .text).notNull().defaults(to: "{}")
+                t.column("createdAt", .datetime).notNull()
+            }
+
+            try db.create(index: "idx_action_runs_created_at",
+                         on: "action_runs",
+                         columns: ["createdAt"],
+                         ifNotExists: true)
+            try db.create(index: "idx_action_runs_status",
+                         on: "action_runs",
+                         columns: ["status"],
+                         ifNotExists: true)
+            try db.create(index: "idx_action_subject_refs_run",
+                         on: "action_subject_refs",
+                         columns: ["actionRunId"],
+                         ifNotExists: true)
+            try db.create(index: "idx_action_input_packages_run",
+                         on: "action_input_packages",
+                         columns: ["actionRunId"],
+                         ifNotExists: true)
+            try db.create(index: "idx_action_events_run_seq",
+                         on: "action_events",
+                         columns: ["actionRunId", "sequence"],
+                         ifNotExists: true)
+            try db.create(index: "idx_action_events_created_at",
+                         on: "action_events",
+                         columns: ["createdAt"],
+                         ifNotExists: true)
+        }
+
         return migrator
     }
 
