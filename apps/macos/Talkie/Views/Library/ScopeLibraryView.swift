@@ -561,14 +561,19 @@ struct ScopeLibraryView: View {
     // MARK: - States
 
     private var loadingState: some View {
-        HStack(spacing: 10) {
-            PhosphorDot(color: ScopeAmber.solid.opacity(0.5), size: 5)
-            Text("· LOADING")
-                .font(ScopeType.eyebrow)
-                .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(ScopeInk.faint)
+        // Skeleton rows that mirror the real list layout (channel
+        // letter, title slug, meta block). Reads as "library is
+        // arriving" rather than the blank slate it used to be.
+        VStack(spacing: 0) {
+            ForEach(0..<8, id: \.self) { _ in
+                ScopeLibraryRowSkeleton()
+                ThemedScopeRule(.row)
+            }
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Loading library")
     }
 
     private var emptyState: some View {
@@ -1064,5 +1069,56 @@ private extension Int {
         let f = NumberFormatter()
         f.numberStyle = .decimal
         return f.string(from: NSNumber(value: self)) ?? "\(self)"
+    }
+}
+
+// MARK: - Loading skeleton
+//
+// Single row mock that matches the real row layout so the
+// transition from skeleton → real list is a fade rather than a
+// reshuffle. Pulses subtly to read as "live".
+
+private struct ScopeLibraryRowSkeleton: View {
+    @State private var phase: Double = 0.0
+
+    var body: some View {
+        HStack(spacing: 14) {
+            // Channel column (one letter wide)
+            RoundedRectangle(cornerRadius: 2)
+                .fill(ScopeEdge.subtle)
+                .frame(width: 14, height: 12)
+
+            // Title + meta column
+            VStack(alignment: .leading, spacing: 6) {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(ScopeEdge.subtle)
+                    .frame(width: titleWidth, height: 11)
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(ScopeEdge.faint)
+                    .frame(width: 110, height: 8)
+            }
+
+            Spacer(minLength: 12)
+
+            // Right-side detail block (sparkline-or-meta width)
+            RoundedRectangle(cornerRadius: 2)
+                .fill(ScopeEdge.faint)
+                .frame(width: 48, height: 10)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .opacity(0.6 + 0.25 * abs(sin(phase)))
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
+                phase = .pi
+            }
+        }
+    }
+
+    /// Vary the title width subtly across rows so the skeleton block
+    /// doesn't read as eight identical bars.
+    private var titleWidth: CGFloat {
+        let widths: [CGFloat] = [180, 220, 150, 240, 200, 130, 210, 170]
+        return widths.randomElement() ?? 200
     }
 }
