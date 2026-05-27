@@ -207,15 +207,6 @@ private struct HomeDevicesCardView: View {
 
     private let visibleDeviceLimit = 3
 
-    private var statusColor: Color {
-        switch bridgeManager.bridgeStatus {
-        case .running: return .green
-        case .starting: return .orange
-        case .stopped: return Theme.current.foregroundMuted
-        case .error: return .red
-        }
-    }
-
     private var statusText: String {
         switch bridgeManager.bridgeStatus {
         case .running: return "Bridge live"
@@ -336,10 +327,6 @@ private struct HomeDevicesCardView: View {
                     .foregroundColor(Theme.current.foreground)
 
                 Spacer()
-
-                Circle()
-                    .fill(statusColor)
-                    .frame(width: 6, height: 6)
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -651,12 +638,6 @@ private struct HomeBridgeDebugCardView: View {
             Text("agent-managed")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(Theme.current.foregroundMuted.opacity(0.75))
-
-            Spacer()
-
-            Circle()
-                .fill(bridgeManager.bridgeStatus == .running ? .green : .orange)
-                .frame(width: 6, height: 6)
         }
     }
 
@@ -2486,12 +2467,6 @@ private struct AgentConsoleFeatureCardView: View {
                         .font(Theme.current.fontSMMedium)
                         .tracking(settings.uiAllCaps ? 1 : 0)
                         .foregroundColor(Theme.current.foregroundMuted)
-
-                    Spacer()
-
-                    Circle()
-                        .fill(liveState.isRunning ? .green : .red)
-                        .frame(width: 7, height: 7)
                 }
 
                 VStack(alignment: .leading, spacing: 4) {

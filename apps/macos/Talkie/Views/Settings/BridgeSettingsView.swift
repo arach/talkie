@@ -20,6 +20,7 @@ struct BridgeSettingsView: View {
     @State private var showingQRSheet = false
     @State private var isRefreshing = false
     @State private var showingInstallConfirmation = false
+    @State private var showingSetupGuide = false
 
     var body: some View {
         SettingsPageContainer {
@@ -56,6 +57,7 @@ struct BridgeSettingsView: View {
                         status: prereqs,
                         isInstalling: bridgeManager.isInstallingDependencies,
                         onInstallDependencies: { showingInstallConfirmation = true },
+                        onOpenSetupGuide: { showingSetupGuide = true },
                         onOpenBridgeDocs: { bridgeManager.openBridgeSetupDocs() },
                         onOpenTailscaleDocs: { bridgeManager.openTailscaleSetupDocs() }
                     )
@@ -64,14 +66,17 @@ struct BridgeSettingsView: View {
                 }
 
                 // Tailscale Status
-                TailscaleStatusSection(status: bridgeManager.tailscaleStatus)
+                TailscaleStatusSection(
+                    status: bridgeManager.tailscaleStatus,
+                    onOpenSetupGuide: { showingSetupGuide = true }
+                )
 
                 Divider()
 
                 // Bridge Server Status
                 BridgeServerSection(
                     status: bridgeManager.bridgeStatus,
-                    onStart: { Task { await bridgeManager.enableAndStartBridge() } },
+                    onStart: startBridgeFromSettings,
                     onStop: { Task { await bridgeManager.stopBridge() } },
                     onRestart: { Task { await bridgeManager.restartBridge() } },
                     onShowQR: { showingQRSheet = true }
@@ -132,6 +137,9 @@ struct BridgeSettingsView: View {
         .sheet(isPresented: $showingQRSheet) {
             QRCodeSheet()
         }
+        .sheet(isPresented: $showingSetupGuide) {
+            BridgeSetupGuideSheet()
+        }
         .onChange(of: showingQRSheet) { _, isShowing in
             guard !isShowing else { return }
             bridgeManager.checkStatus()
@@ -151,6 +159,19 @@ struct BridgeSettingsView: View {
         }
         .onAppear {
             bridgeManager.checkStatus()
+        }
+    }
+
+    private func startBridgeFromSettings() {
+        Task {
+            await bridgeManager.refreshNonNetworkStatusNow()
+
+            guard bridgeManager.prerequisiteStatus?.isReady == true else {
+                showingSetupGuide = true
+                return
+            }
+
+            await bridgeManager.enableAndStartBridge()
         }
     }
 
@@ -342,6 +363,7 @@ private struct PrerequisiteStatusSection: View {
     let status: BridgeManager.PrerequisiteStatus
     let isInstalling: Bool
     let onInstallDependencies: () -> Void
+    let onOpenSetupGuide: () -> Void
     let onOpenBridgeDocs: () -> Void
     let onOpenTailscaleDocs: () -> Void
 
@@ -355,6 +377,23 @@ private struct PrerequisiteStatusSection: View {
                 Text("SETUP REQUIRED")
                     .font(Theme.current.fontXSMedium)
                     .foregroundColor(.orange)
+
+                Spacer()
+
+                Button(action: onOpenSetupGuide) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "sparkles")
+                            .font(Theme.current.fontXS)
+                        Text("GUIDE")
+                            .font(Theme.current.fontXSMedium)
+                    }
+                    .foregroundColor(.orange)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.orange.opacity(0.12))
+                    .clipShape(.rect(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
             }
 
             // Status card
@@ -485,10 +524,449 @@ private struct PrerequisiteStatusSection: View {
     }
 }
 
+// MARK: - Bridge Setup Guide
+
+private struct BridgeSetupGuideSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var bridgeManager = BridgeManager.shared
+    @State private var isRefreshing = true
+    @State private var isStartingBridge = false
+    @State private var installMessage: String?
+
+    private var status: BridgeManager.PrerequisiteStatus? {
+        bridgeManager.prerequisiteStatus
+    }
+
+    private var canStartBridge: Bool {
+        status?.isReady == true
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    localServerCard
+                    remoteAccessCard
+
+                    if let installMessage {
+                        Text(installMessage)
+                            .font(Theme.current.fontXS)
+                            .foregroundColor(Theme.current.foregroundSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(20)
+            }
+
+            footer
+        }
+        .frame(width: 620, height: 640)
+        .background(Theme.current.background)
+        .task {
+            await refreshStatus()
+        }
+    }
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: "server.rack")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundColor(.teal)
+                .frame(width: 44, height: 44)
+                .background(Color.teal.opacity(0.12))
+                .clipShape(.rect(cornerRadius: 10))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("BRIDGE SETUP")
+                    .font(Theme.current.fontXSBold)
+                    .foregroundColor(Theme.current.foregroundSecondary)
+
+                Text("Turn on only the pieces needed for iPhone Bridge and remote access.")
+                    .font(Theme.current.fontSMBold)
+                    .foregroundColor(Theme.current.foreground)
+
+                Text("Bun runs the local TalkieServer sidecar. Tailscale is only needed when you want remote access away from the same network.")
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(Theme.current.foregroundSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer()
+
+            Button(action: { dismiss() }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Theme.current.foregroundSecondary)
+                    .frame(width: 30, height: 30)
+                    .background(Theme.current.surface1)
+                    .clipShape(.rect(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(20)
+        .background(Theme.current.surface1.opacity(0.72))
+    }
+
+    private var localServerCard: some View {
+        setupCard(
+            title: "LOCAL TALKIESERVER",
+            subtitle: "Required before Talkie can start the Bridge server from this Mac.",
+            icon: "terminal"
+        ) {
+            setupRow(
+                icon: "shippingbox",
+                title: "Bun Runtime",
+                detail: bunDetail,
+                state: status?.bunInstalled == true ? "Installed" : "Missing",
+                tint: status?.bunInstalled == true ? .green : .orange,
+                actionTitle: status?.bunInstalled == true ? nil : "Install",
+                actionIcon: "arrow.down.circle",
+                action: status?.bunInstalled == true ? nil : openBunInstall
+            )
+
+            setupRow(
+                icon: "doc.text",
+                title: "TalkieServer Source",
+                detail: status?.serverSourceExists == true
+                    ? "The local TalkieServer checkout is available."
+                    : "Talkie could not find apps/macos/TalkieServer for this build.",
+                state: status?.serverSourceExists == true ? "Found" : "Missing",
+                tint: status?.serverSourceExists == true ? .green : .red,
+                actionTitle: "Open",
+                actionIcon: "arrow.up.right",
+                action: bridgeManager.openTalkieServerOverview
+            )
+
+            setupRow(
+                icon: "square.and.arrow.down",
+                title: "Server Dependencies",
+                detail: dependencyDetail,
+                state: status?.dependenciesInstalled == true ? "Installed" : "Needed",
+                tint: status?.dependenciesInstalled == true ? .green : .orange,
+                actionTitle: status?.needsDependencyInstall == true ? "Install" : nil,
+                actionIcon: "arrow.down.circle",
+                isLoading: bridgeManager.isInstallingDependencies,
+                action: status?.needsDependencyInstall == true ? installDependencies : nil
+            )
+        }
+    }
+
+    private var remoteAccessCard: some View {
+        let tailscale = tailscalePresentation
+
+        return setupCard(
+            title: "REMOTE ACCESS",
+            subtitle: "Optional for same-network pairing, useful when your iPhone connects from anywhere.",
+            icon: "network"
+        ) {
+            setupRow(
+                icon: "network",
+                title: "Tailscale",
+                detail: tailscale.detail,
+                state: tailscale.state,
+                tint: tailscale.tint,
+                actionTitle: tailscale.actionTitle,
+                actionIcon: tailscale.actionIcon,
+                action: tailscale.action
+            )
+
+            Text("You can start Bridge without Tailscale for nearby LAN pairing. Remote pairing gets better once Tailscale is installed, running, and signed in.")
+                .font(Theme.current.fontXS)
+                .foregroundColor(Theme.current.foregroundSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 2)
+        }
+    }
+
+    private var footer: some View {
+        HStack(spacing: 10) {
+            Button(action: { Task { await refreshStatus() } }) {
+                HStack(spacing: 5) {
+                    if isRefreshing {
+                        BrailleSpinner(size: 10)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(Theme.current.fontXS)
+                    }
+                    Text("REFRESH")
+                        .font(Theme.current.fontXSMedium)
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(isRefreshing)
+
+            Spacer()
+
+            Button(action: { dismiss() }) {
+                Text("Later")
+                    .font(Theme.current.fontSM)
+            }
+            .buttonStyle(.plain)
+
+            Button(action: startBridge) {
+                HStack(spacing: 6) {
+                    if isStartingBridge {
+                        BrailleSpinner(size: 11)
+                    } else {
+                        Image(systemName: "play.fill")
+                            .font(Theme.current.fontXS)
+                    }
+                    Text(canStartBridge ? "START BRIDGE" : "FINISH LOCAL SETUP")
+                        .font(Theme.current.fontXSMedium)
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(canStartBridge ? Color.teal : Color.gray)
+                .clipShape(.rect(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .disabled(!canStartBridge || isStartingBridge)
+        }
+        .padding(20)
+        .background(Theme.current.surface1.opacity(0.72))
+    }
+
+    private var bunDetail: String {
+        if let path = status?.bunPath {
+            return path.replacing(FileManager.default.homeDirectoryForCurrentUser.path, with: "~")
+        }
+
+        return "Install Bun before Talkie can run the TalkieServer sidecar."
+    }
+
+    private var dependencyDetail: String {
+        guard let status else { return "Checking local package state..." }
+
+        if status.dependenciesInstalled {
+            return "The local TalkieServer packages are ready."
+        }
+
+        if status.needsDependencyInstall {
+            return "Run bun install in the TalkieServer checkout."
+        }
+
+        if !status.bunInstalled {
+            return "Install Bun first, then Talkie can install server packages."
+        }
+
+        return "TalkieServer source must be available before packages can install."
+    }
+
+    private var tailscalePresentation: (
+        state: String,
+        detail: String,
+        tint: Color,
+        actionTitle: String?,
+        actionIcon: String?,
+        action: (() -> Void)?
+    ) {
+        switch bridgeManager.tailscaleStatus {
+        case .notInstalled:
+            return ("Missing", "Install Tailscale for remote bridge access.", .orange, "Install", "arrow.down.circle", openTailscaleDownload)
+        case .notRunning:
+            return ("Not Running", "Open Tailscale before using remote access.", .orange, "Open", "play.fill", openTailscale)
+        case .needsLogin(let authUrl):
+            return ("Login", "Sign in to Tailscale to advertise this Mac.", .orange, "Login", "person.fill", { openTailscaleAuth(authUrl) })
+        case .offline:
+            return ("Offline", "Tailscale is installed but currently offline.", .orange, "Open", "play.fill", openTailscale)
+        case .noPeers(let hostname):
+            return ("Connected", "Connected as \(hostname). Add your iPhone to the tailnet for remote access.", .green, "Guide", "arrow.up.right", bridgeManager.openTailscaleSetupDocs)
+        case .ready(let hostname, let peers):
+            return ("Ready", "Connected as \(hostname) with \(peers.count) online peer\(peers.count == 1 ? "" : "s").", .green, nil, nil, nil)
+        }
+    }
+
+    private func setupCard<Content: View>(
+        title: String,
+        subtitle: String,
+        icon: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.teal)
+                    .frame(width: 30, height: 30)
+                    .background(Color.teal.opacity(0.12))
+                    .clipShape(.rect(cornerRadius: 8))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(Theme.current.fontXSBold)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+
+                    Text(subtitle)
+                        .font(Theme.current.fontXS)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            VStack(spacing: 8) {
+                content()
+            }
+        }
+        .padding(14)
+        .background(Theme.current.surface1)
+        .clipShape(.rect(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Theme.current.divider.opacity(0.7), lineWidth: 1)
+        )
+    }
+
+    private func setupRow(
+        icon: String,
+        title: String,
+        detail: String,
+        state: String,
+        tint: Color,
+        actionTitle: String? = nil,
+        actionIcon: String? = nil,
+        isLoading: Bool = false,
+        action: (() -> Void)? = nil
+    ) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(tint)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(Theme.current.fontSMMedium)
+                    .foregroundColor(Theme.current.foreground)
+
+                Text(detail)
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(Theme.current.foregroundSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 10)
+
+            Text(state.uppercased())
+                .font(Theme.current.fontXSMedium)
+                .foregroundColor(tint)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(tint.opacity(0.12))
+                .clipShape(.rect(cornerRadius: 6))
+
+            if let actionTitle,
+               let actionIcon,
+               let action {
+                Button(action: action) {
+                    HStack(spacing: 4) {
+                        if isLoading {
+                            BrailleSpinner(size: 10)
+                        } else {
+                            Image(systemName: actionIcon)
+                                .font(Theme.current.fontXS)
+                        }
+
+                        Text(actionTitle.uppercased())
+                            .font(Theme.current.fontXSMedium)
+                    }
+                    .foregroundColor(.blue)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 6)
+                    .background(Color.blue.opacity(0.1))
+                    .clipShape(.rect(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+                .disabled(isLoading)
+            }
+        }
+        .padding(10)
+        .background(Theme.current.background.opacity(0.5))
+        .clipShape(.rect(cornerRadius: 8))
+    }
+
+    private func refreshStatus() async {
+        isRefreshing = true
+        await bridgeManager.refreshNonNetworkStatusNow()
+        isRefreshing = false
+    }
+
+    private func installDependencies() {
+        Task {
+            installMessage = nil
+            let result = await bridgeManager.installDependencies()
+
+            switch result {
+            case .success:
+                installMessage = "TalkieServer dependencies are installed."
+            case .bunNotFound:
+                installMessage = "Bun was not found. Install Bun, then refresh."
+            case .sourceNotFound:
+                installMessage = "TalkieServer source was not found for this build."
+            case .installFailed(let message):
+                installMessage = "Dependency install failed: \(message)"
+            }
+
+            await refreshStatus()
+        }
+    }
+
+    private func startBridge() {
+        guard canStartBridge else { return }
+
+        Task {
+            isStartingBridge = true
+            await bridgeManager.enableAndStartBridge()
+            await bridgeManager.checkStatusNow()
+            isStartingBridge = false
+
+            if bridgeManager.bridgeStatus == .running {
+                dismiss()
+            }
+        }
+    }
+
+    private func openBunInstall() {
+        if let url = URL(string: "https://bun.sh") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    private func openTailscaleDownload() {
+        if let url = URL(string: "https://tailscale.com/download/mac") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    private func openTailscale() {
+        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "io.tailscale.ipn.macos")
+            ?? NSWorkspace.shared.urlForApplication(withBundleIdentifier: "io.tailscale.ipn.macsys") {
+            NSWorkspace.shared.openApplication(at: appURL, configuration: NSWorkspace.OpenConfiguration())
+            return
+        }
+
+        openTailscaleDownload()
+    }
+
+    private func openTailscaleAuth(_ authUrl: String?) {
+        if let authUrl,
+           let url = URL(string: authUrl) {
+            NSWorkspace.shared.open(url)
+            return
+        }
+
+        openTailscale()
+    }
+}
+
 // MARK: - Tailscale Status Section
 
 private struct TailscaleStatusSection: View {
     let status: BridgeManager.TailscaleStatus
+    let onOpenSetupGuide: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -523,7 +1001,26 @@ private struct TailscaleStatusSection: View {
                 Spacer()
 
                 // Action button based on status
-                actionButton
+                HStack(spacing: 8) {
+                    actionButton
+
+                    if !status.isReady {
+                        Button(action: onOpenSetupGuide) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "sparkles")
+                                    .font(Theme.current.fontXS)
+                                Text("GUIDE")
+                                    .font(Theme.current.fontXSMedium)
+                            }
+                            .foregroundColor(.orange)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.orange.opacity(0.1))
+                            .clipShape(.rect(cornerRadius: 6))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
             .padding(12)
             .background(Theme.current.surface1)
