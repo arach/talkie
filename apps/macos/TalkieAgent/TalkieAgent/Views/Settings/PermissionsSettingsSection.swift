@@ -9,6 +9,7 @@ import SwiftUI
 import AVFoundation
 import AppKit
 import ApplicationServices
+import CoreGraphics
 import TalkieKit
 
 // MARK: - Permission Types
@@ -16,6 +17,7 @@ import TalkieKit
 enum PermissionType: String, CaseIterable, Identifiable {
     case microphone
     case accessibility
+    case screenRecording
 
     var id: String { rawValue }
 
@@ -23,6 +25,7 @@ enum PermissionType: String, CaseIterable, Identifiable {
         switch self {
         case .microphone: return "Microphone"
         case .accessibility: return "Accessibility"
+        case .screenRecording: return "Screen Recording"
         }
     }
 
@@ -30,6 +33,7 @@ enum PermissionType: String, CaseIterable, Identifiable {
         switch self {
         case .microphone: return "mic.fill"
         case .accessibility: return "hand.point.up.left.fill"
+        case .screenRecording: return "rectangle.dashed.badge.record"
         }
     }
 
@@ -39,6 +43,8 @@ enum PermissionType: String, CaseIterable, Identifiable {
             return "Required to record audio for transcription"
         case .accessibility:
             return "Required to automatically paste transcribed text (simulates Cmd+V)"
+        case .screenRecording:
+            return "Used to capture screenshots and on-screen context for memos"
         }
     }
 
@@ -48,12 +54,18 @@ enum PermissionType: String, CaseIterable, Identifiable {
             return "For recording audio"
         case .accessibility:
             return "For auto-paste"
+        case .screenRecording:
+            return "For screenshots and context"
         }
     }
 
     var isRequired: Bool {
-        // Both permissions are required for TalkieAgent to function
-        return true
+        switch self {
+        case .microphone, .accessibility:
+            return true
+        case .screenRecording:
+            return false
+        }
     }
 
     var settingsURL: URL? {
@@ -62,6 +74,8 @@ enum PermissionType: String, CaseIterable, Identifiable {
             return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
         case .accessibility:
             return nil
+        case .screenRecording:
+            return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
         }
     }
 }
@@ -181,6 +195,7 @@ class PermissionManager: ObservableObject {
 
     @Published var microphoneStatus: PermissionStatus = .notDetermined
     @Published var accessibilityStatus: PermissionStatus = .notDetermined
+    @Published var screenRecordingStatus: PermissionStatus = .notDetermined
 
     private var pollTimer: Timer?
 
@@ -210,6 +225,7 @@ class PermissionManager: ObservableObject {
     func refreshAll() {
         checkMicrophone()
         checkAccessibility()
+        checkScreenRecording()
     }
 
     func checkMicrophone() {
@@ -224,6 +240,20 @@ class PermissionManager: ObservableObject {
         // Use the shared cache and update our published status
         let result = AccessibilityCache.shared.preflight()
         accessibilityStatus = result ? .granted : .denied
+    }
+
+    func checkScreenRecording() {
+        screenRecordingStatus = CGPreflightScreenCaptureAccess() ? .granted : .denied
+    }
+
+    /// Triggers the system Screen Recording prompt on first call; subsequent calls
+    /// no-op (CGRequestScreenCaptureAccess only prompts once per app lifetime).
+    /// After denial, the user must grant via System Settings.
+    @discardableResult
+    func requestScreenRecording() -> Bool {
+        let granted = CGRequestScreenCaptureAccess()
+        screenRecordingStatus = granted ? .granted : .denied
+        return granted
     }
 
     @discardableResult
@@ -295,21 +325,52 @@ class PermissionManager: ObservableObject {
         switch permission {
         case .microphone: return microphoneStatus
         case .accessibility: return accessibilityStatus
+        case .screenRecording: return screenRecordingStatus
         }
     }
 
     var allRequiredGranted: Bool {
-        microphoneStatus == .granted && accessibilityStatus == .granted
+        PermissionType.allCases
+            .filter(\.isRequired)
+            .allSatisfy { status(for: $0) == .granted }
+    }
+
+    /// Dispatches the appropriate request flow for a permission and falls back
+    /// to opening System Settings when the in-app prompt isn't available or was
+    /// already denied. Shared by Settings → Permissions and About → Permissions.
+    func handleRequest(for permission: PermissionType) {
+        switch permission {
+        case .microphone:
+            switch microphoneStatus {
+            case .notDetermined:
+                Task { @MainActor in
+                    let granted = await requestMicrophone()
+                    if !granted {
+                        openSettings(for: permission)
+                    }
+                }
+            case .granted, .denied, .restricted:
+                openSettings(for: permission)
+            }
+        case .accessibility:
+            if accessibilityStatus == .granted {
+                openSettings(for: permission)
+            } else {
+                requestAccessibility()
+            }
+        case .screenRecording:
+            let granted = requestScreenRecording()
+            if !granted {
+                openSettings(for: permission)
+            }
+        }
     }
 
     var grantedCount: Int {
-        var count = 0
-        if microphoneStatus == .granted { count += 1 }
-        if accessibilityStatus == .granted { count += 1 }
-        return count
+        PermissionType.allCases.count { status(for: $0) == .granted }
     }
 
-    var totalCount: Int { 2 }
+    var totalCount: Int { PermissionType.allCases.count }
 }
 
 // MARK: - Permissions Settings Section
@@ -550,26 +611,7 @@ struct PermissionsSettingsSection: View {
     // MARK: - Actions
 
     private func handlePermissionRequest(_ permission: PermissionType) {
-        switch permission {
-        case .microphone:
-            switch permissionManager.microphoneStatus {
-            case .notDetermined:
-                Task {
-                    let granted = await permissionManager.requestMicrophone()
-                    if !granted {
-                        permissionManager.openSettings(for: permission)
-                    }
-                }
-            case .granted, .denied, .restricted:
-                permissionManager.openSettings(for: permission)
-            }
-        case .accessibility:
-            if permissionManager.accessibilityStatus == .granted {
-                permissionManager.openSettings(for: permission)
-            } else {
-                permissionManager.requestAccessibility()
-            }
-        }
+        permissionManager.handleRequest(for: permission)
     }
 }
 

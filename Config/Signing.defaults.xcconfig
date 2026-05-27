@@ -6,6 +6,14 @@
 TALKIE_DEVELOPMENT_TEAM =
 TALKIE_CODE_SIGNING_ALLOWED = NO
 TALKIE_CODE_SIGNING_REQUIRED = NO
+TALKIE_CODE_SIGN_STYLE = Automatic
+TALKIE_CODE_SIGN_IDENTITY = Apple Development
+
+// Agent-specific overrides. The TalkieAgent target reads these directly so its
+// signing can be enabled independently of the other macOS targets (Talkie,
+// TalkieSync, etc.), which is required for stable TCC grants on dev builds.
+TALKIE_AGENT_CODE_SIGNING_ALLOWED = $(TALKIE_CODE_SIGNING_ALLOWED)
+TALKIE_AGENT_CODE_SIGNING_REQUIRED = $(TALKIE_CODE_SIGNING_REQUIRED)
 
 CODE_SIGNING_ALLOWED = $(TALKIE_CODE_SIGNING_ALLOWED)
 CODE_SIGNING_REQUIRED = $(TALKIE_CODE_SIGNING_REQUIRED)

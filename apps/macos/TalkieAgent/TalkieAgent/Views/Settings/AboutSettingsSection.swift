@@ -13,6 +13,7 @@ import TalkieKit
 
 struct AboutSettingsSection: View {
     @ObservedObject private var engineClient = EngineClient.shared
+    @ObservedObject private var permissionManager = PermissionManager.shared
     @State private var launchAgentStatus: LaunchAgentStatus = .checking
 
     // Report submission state
@@ -223,6 +224,22 @@ struct AboutSettingsSection: View {
                 checkLaunchAgentStatus()
             }
 
+            // Permissions (read-only glance; click-through to grant flow)
+            SettingsCard(title: "PERMISSIONS") {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    ForEach(PermissionType.allCases) { permission in
+                        AboutPermissionRow(
+                            permission: permission,
+                            status: permissionManager.status(for: permission),
+                            onTap: { permissionManager.handleRequest(for: permission) }
+                        )
+                    }
+                }
+            }
+            .onAppear {
+                permissionManager.refreshAll()
+            }
+
             // Support
             SettingsCard(title: "SUPPORT") {
                 VStack(alignment: .leading, spacing: Spacing.md) {
@@ -370,6 +387,62 @@ struct AboutSettingsSection: View {
         }
     }
 
+}
+
+// MARK: - About Permission Row
+
+struct AboutPermissionRow: View {
+    let permission: PermissionType
+    let status: PermissionStatus
+    let onTap: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            Image(systemName: permission.icon)
+                .font(.system(size: 11))
+                .foregroundColor(TalkieTheme.textSecondary)
+                .frame(width: 16, alignment: .center)
+
+            Text(permission.title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(TalkieTheme.textTertiary)
+
+            if !permission.isRequired {
+                Text("Optional")
+                    .font(.system(size: 9, weight: .semibold))
+                    .tracking(0.4)
+                    .foregroundColor(TalkieTheme.textMuted)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.white.opacity(0.05))
+                    )
+            }
+
+            Spacer()
+
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(status.color)
+                    .frame(width: 8, height: 8)
+                Text(status.label)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(status.color)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(TalkieTheme.textMuted.opacity(isHovered ? 1.0 : 0.4))
+            }
+        }
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+        .onTapGesture(perform: onTap)
+        .help(permission.description)
+    }
 }
 
 // MARK: - About Info Row

@@ -11,6 +11,8 @@ import ApplicationServices
 import CoreGraphics
 import TalkieKit
 
+private let permissionAssistantLog = Log(.ui)
+
 enum PermissionKind: String {
     case accessibility
     case screenRecording
@@ -132,8 +134,13 @@ final class AccessibilityInstallAssistant {
     private init() {}
 
     func present(target: AccessibilityInstallTarget, permission: PermissionKind = .accessibility) {
+        permissionAssistantLog.info(
+            "Presenting permission assistant",
+            detail: "permission=\(permission.displayName), target=\(target.displayName), bundle=\(target.bundleIdentifier)"
+        )
+
         // Trigger the system permission prompt. The OS dialog is what
-        // opens System Settings — we don't open it ourselves. If the
+        // opens System Settings for Accessibility. If the
         // user dismisses the prompt, Settings doesn't open, and our
         // panel never appears (which is the desired UX — no panel
         // hovering before the user agreed to go to Settings).
@@ -147,7 +154,16 @@ final class AccessibilityInstallAssistant {
                 openSettingsPane(for: permission)
             }
         case .screenRecording:
-            _ = CGRequestScreenCaptureAccess()
+            let wasGranted = CGPreflightScreenCaptureAccess()
+            let requestGranted = wasGranted || CGRequestScreenCaptureAccess()
+            permissionAssistantLog.debug(
+                "Screen Recording request returned",
+                detail: "wasGranted=\(wasGranted), requestGranted=\(requestGranted)"
+            )
+
+            if !requestGranted {
+                openSettingsPane(for: permission)
+            }
         }
 
         let content = AccessibilityInstallAssistantView(
@@ -198,7 +214,13 @@ final class AccessibilityInstallAssistant {
         // GRANT again to re-trigger the flow.
         Task { @MainActor [weak self] in
             let didActivate = await Self.waitForSystemSettingsFrontmost(timeout: 30.0)
-            guard let self, didActivate else { return }
+            guard let self, didActivate else {
+                permissionAssistantLog.debug(
+                    "Permission assistant hidden because System Settings did not become frontmost",
+                    detail: "permission=\(permission.displayName), target=\(target.displayName)"
+                )
+                return
+            }
             self.position(existingPanel)
             NSApp.activate(ignoringOtherApps: true)
             existingPanel.orderFrontRegardless()
@@ -212,13 +234,22 @@ final class AccessibilityInstallAssistant {
     private static func waitForSystemSettingsFrontmost(timeout: TimeInterval) async -> Bool {
         let start = Date()
         while Date().timeIntervalSince(start) < timeout {
-            if NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-                == "com.apple.systempreferences" {
+            if let app = NSWorkspace.shared.frontmostApplication,
+               Self.isSystemSettings(app) {
                 return true
             }
             try? await Task.sleep(for: .milliseconds(150))
         }
         return false
+    }
+
+    private static func isSystemSettings(_ app: NSRunningApplication) -> Bool {
+        switch app.bundleIdentifier {
+        case "com.apple.systempreferences", "com.apple.SystemSettings":
+            return true
+        default:
+            return app.localizedName == "System Settings"
+        }
     }
 
     private func close() {
@@ -395,7 +426,10 @@ private struct AccessibilityInstallAssistantView: View {
     }
 
     private var supportsDragToAdd: Bool {
-        permission == .accessibility
+        switch permission {
+        case .accessibility, .screenRecording:
+            return true
+        }
     }
 
     private var headline: String {
@@ -412,7 +446,7 @@ private struct AccessibilityInstallAssistantView: View {
         case .accessibility:
             return "Drag this app into the Accessibility list, or toggle it if it is already listed."
         case .screenRecording:
-            return "Toggle \(target.displayName) on in Screen Recording, then click Quit & Relaunch — macOS requires a relaunch for this permission to take effect."
+            return "If \(target.displayName) is not listed, drag it into Screen Recording. Toggle it on, then click Quit & Relaunch."
         }
     }
 
@@ -582,7 +616,12 @@ private struct AccessibilityInstallAssistantView: View {
                 await refreshStatus()
 
                 if target == .talkie {
-                    PermissionsManager.shared.checkAccessibilityPermission()
+                    switch permission {
+                    case .accessibility:
+                        PermissionsManager.shared.checkAccessibilityPermission()
+                    case .screenRecording:
+                        PermissionsManager.shared.checkScreenRecordingPermission()
+                    }
                 }
 
                 if isGranted {
@@ -773,17 +812,26 @@ private final class NativeAppFileDragCardView: NSView, NSDraggingSource {
 
     override func mouseDown(with event: NSEvent) {
         guard isDragEnabled else { return }
-        NSLog("🟢 AccessibilityInstallAssistant drag mouseDown at \(event.locationInWindow)")
+        permissionAssistantLog.debug(
+            "Permission assistant drag mouseDown",
+            detail: "location=\(event.locationInWindow)"
+        )
         window?.makeKey()
         let didBecomeFirstResponder = window?.makeFirstResponder(self) ?? false
-        NSLog("🟢 AccessibilityInstallAssistant drag firstResponder=\(didBecomeFirstResponder) windowKey=\(window?.isKeyWindow ?? false)")
+        permissionAssistantLog.debug(
+            "Permission assistant drag focus state",
+            detail: "firstResponder=\(didBecomeFirstResponder), windowKey=\(window?.isKeyWindow ?? false)"
+        )
         dragStartLocation = convert(event.locationInWindow, from: nil)
         isDragging = false
     }
 
     override func mouseDragged(with event: NSEvent) {
         guard isDragEnabled else { return }
-        NSLog("🟢 AccessibilityInstallAssistant drag mouseDragged isDragging=\(isDragging) hasStart=\(dragStartLocation != nil)")
+        permissionAssistantLog.debug(
+            "Permission assistant drag moved",
+            detail: "isDragging=\(isDragging), hasStart=\(dragStartLocation != nil)"
+        )
         guard !isDragging, let startLocation = dragStartLocation else { return }
 
         let currentLocation = convert(event.locationInWindow, from: nil)
@@ -791,9 +839,12 @@ private final class NativeAppFileDragCardView: NSView, NSDraggingSource {
         let dy = currentLocation.y - startLocation.y
         let distance = sqrt(dx * dx + dy * dy)
 
-        NSLog("🟢 AccessibilityInstallAssistant drag distance=\(distance) threshold=\(dragThreshold)")
+        permissionAssistantLog.debug(
+            "Permission assistant drag distance",
+            detail: "distance=\(distance), threshold=\(dragThreshold)"
+        )
         guard distance >= dragThreshold else { return }
-        NSLog("🟢 AccessibilityInstallAssistant beginDraggingSession")
+        permissionAssistantLog.debug("Permission assistant begin dragging session")
 
         startDrag(with: event)
     }
@@ -809,7 +860,10 @@ private final class NativeAppFileDragCardView: NSView, NSDraggingSource {
         // which only wrote `public.file-url` as a string + an internal
         // marker — System Settings accepted the drop but never added the
         // app, because the payload wasn't in the format it expects.
-        NSLog("🟢 AccessibilityInstallAssistant drag appURL=\(appURL.path) exists=\(FileManager.default.fileExists(atPath: appURL.path))")
+        permissionAssistantLog.debug(
+            "Permission assistant drag payload",
+            detail: "appURL=\(appURL.path), exists=\(FileManager.default.fileExists(atPath: appURL.path))"
+        )
 
         isDragging = true
         dragStartLocation = nil

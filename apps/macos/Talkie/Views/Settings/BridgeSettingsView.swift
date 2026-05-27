@@ -10,6 +10,7 @@ import SwiftUI
 import CloudKit
 import CryptoKit
 import CoreImage.CIFilterBuiltins
+import Security
 import TalkieKit
 
 private let bridgeSettingsLog = Log(.system)
@@ -2329,7 +2330,6 @@ private actor SSHTerminalPairingWrapKeyStore {
 
     static let shared = SSHTerminalPairingWrapKeyStore()
 
-    private let container = CKContainer(identifier: TalkieEnvironment.current.cloudKitContainerIdentifier)
     private let recordType = "TerminalPairingWrapKey"
     private let recordID = CKRecord.ID(recordName: "terminal-pairing-wrap-key-v1")
     private var cachedKeyData: Data?
@@ -2339,7 +2339,15 @@ private actor SSHTerminalPairingWrapKeyStore {
             return ResolvedWrapKey(recordName: recordID.recordName, keyData: cachedKeyData)
         }
 
-        if let existingKeyData = try await fetchExistingKeyData() {
+        guard let container = MacCloudKitContainerProvider.container() else {
+            let reason = MacCloudKitContainerProvider.unavailableReason ?? "CloudKit is unavailable"
+            bridgeSettingsLog.warning("Secure SSH pairing unavailable", detail: reason)
+            throw SSHKeyProvisioningError.wrapKeyUnavailable(
+                "Talkie couldn't prepare secure terminal pairing because iCloud is unavailable."
+            )
+        }
+
+        if let existingKeyData = try await fetchExistingKeyData(container: container) {
             cachedKeyData = existingKeyData
             return ResolvedWrapKey(recordName: recordID.recordName, keyData: existingKeyData)
         }
@@ -2359,7 +2367,7 @@ private actor SSHTerminalPairingWrapKeyStore {
             bridgeSettingsLog.info("Created secure SSH pairing wrap key", detail: "record=\(recordID.recordName)")
             return ResolvedWrapKey(recordName: recordID.recordName, keyData: keyData)
         } catch {
-            if let existingKeyData = try await fetchExistingKeyData() {
+            if let existingKeyData = try await fetchExistingKeyData(container: container) {
                 cachedKeyData = existingKeyData
                 return ResolvedWrapKey(recordName: recordID.recordName, keyData: existingKeyData)
             }
@@ -2371,7 +2379,7 @@ private actor SSHTerminalPairingWrapKeyStore {
         }
     }
 
-    private func fetchExistingKeyData() async throws -> Data? {
+    private func fetchExistingKeyData(container: CKContainer) async throws -> Data? {
         do {
             let record = try await container.privateCloudDatabase.record(for: recordID)
             guard let keyData = record["keyData"] as? Data, keyData.count == 32 else {
@@ -2387,6 +2395,61 @@ private actor SSHTerminalPairingWrapKeyStore {
                 "Talkie couldn't load secure terminal pairing. Make sure this Mac can reach iCloud and try again."
             )
         }
+    }
+}
+
+private enum MacCloudKitContainerProvider {
+    static var containerIdentifier: String {
+        TalkieEnvironment.current.cloudKitContainerIdentifier
+    }
+
+    static var unavailableReason: String? {
+        let identifier = containerIdentifier
+
+        guard !identifier.contains("$(") else {
+            return "CloudKit container build setting was not resolved"
+        }
+
+        guard identifier.hasPrefix("iCloud.") else {
+            return "CloudKit container identifier is invalid: \(identifier)"
+        }
+
+        guard let containers = entitlementStringArray("com.apple.developer.icloud-container-identifiers"),
+              containers.contains(identifier) else {
+            return "CloudKit container entitlement is missing for \(identifier)"
+        }
+
+        guard let services = entitlementStringArray("com.apple.developer.icloud-services"),
+              services.contains("CloudKit") else {
+            return "CloudKit service entitlement is missing"
+        }
+
+        return nil
+    }
+
+    static func container() -> CKContainer? {
+        guard unavailableReason == nil else {
+            return nil
+        }
+
+        return CKContainer(identifier: containerIdentifier)
+    }
+
+    private static func entitlementStringArray(_ key: String) -> [String]? {
+        guard let task = SecTaskCreateFromSelf(nil),
+              let value = SecTaskCopyValueForEntitlement(task, key as CFString, nil) else {
+            return nil
+        }
+
+        if let values = value as? [String] {
+            return values
+        }
+
+        if let value = value as? String {
+            return [value]
+        }
+
+        return nil
     }
 }
 
