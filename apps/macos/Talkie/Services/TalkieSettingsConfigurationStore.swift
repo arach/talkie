@@ -30,11 +30,13 @@ final class TalkieSettingsConfigurationStore {
         if let loaded = Self.load(from: fileURL) {
             var refreshed = loaded
             refreshed.refreshDefaultDeviceShortcutBoardCatalog()
+            Self.normalizeLaunchMode(&refreshed)
             configuration = refreshed
             save()
         } else {
             var bootstrap = Self.bootstrapFromLegacyStorage()
             bootstrap.refreshDefaultDeviceShortcutBoardCatalog()
+            Self.normalizeLaunchMode(&bootstrap)
             configuration = bootstrap
             save()
         }
@@ -49,6 +51,7 @@ final class TalkieSettingsConfigurationStore {
         guard let loaded = Self.load(from: fileURL) else { return }
         var refreshed = loaded
         refreshed.refreshDefaultDeviceShortcutBoardCatalog()
+        Self.normalizeLaunchMode(&refreshed)
         configuration = refreshed
         save()
     }
@@ -81,6 +84,11 @@ final class TalkieSettingsConfigurationStore {
             settingsConfigLog.error("Failed to decode declarative settings: \(error.localizedDescription)")
             return nil
         }
+    }
+
+    private static func normalizeLaunchMode(_ configuration: inout TalkieSettingsConfiguration) {
+        configuration.appearance.detailLevel = .max
+        configuration.appearance.settingsAudience = .pro
     }
 
     private static func bootstrapFromLegacyStorage() -> TalkieSettingsConfiguration {

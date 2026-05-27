@@ -42,7 +42,7 @@ struct ProOnboardingView: View {
             case .extensions:
                 return "See where JavaScript apps and extension events are configured."
             case .detailLevel:
-                return "Show more diagnostics, technical labels, and implementation context."
+                return "Technical diagnostics, labels, and implementation context are enabled by default."
             case .bridge:
                 return "Find the Bridge, TalkieServer, and device networking controls."
             }
@@ -55,7 +55,7 @@ struct ProOnboardingView: View {
             case .extensions:
                 return "Extensions live in Settings > Extensions. That is where you enable the framework, inspect loaded apps, and understand what JavaScript apps can do inside Talkie."
             case .detailLevel:
-                return "Pro Tools also switches the app to the Technical detail level so advanced surfaces stop hiding diagnostics. You can always dial it back later in Mode settings."
+                return "Talkie now launches with Technical detail, so advanced surfaces show the context needed to understand what is happening."
             case .bridge:
                 return "Bridge and TalkieServer settings live under Helpers. That area handles pairing, server access, and optional networking extras like Tailscale."
             }
@@ -68,7 +68,7 @@ struct ProOnboardingView: View {
             case .extensions:
                 return "Settings > Extensions"
             case .detailLevel:
-                return "Settings > Mode"
+                return "Enabled by default"
             case .bridge:
                 return "Settings > Helpers"
             }
@@ -81,7 +81,7 @@ struct ProOnboardingView: View {
             case .extensions:
                 return "Open Extensions"
             case .detailLevel:
-                return "Open Mode Settings"
+                return nil
             case .bridge:
                 return "Open Helpers"
             }
@@ -94,7 +94,7 @@ struct ProOnboardingView: View {
             case .extensions:
                 return .extensions
             case .detailLevel:
-                return .mode
+                return nil
             case .bridge:
                 return .helpers
             }
@@ -657,7 +657,7 @@ struct ProOnboardingView: View {
                     VStack(spacing: 0) {
                         activatedRow(icon: "terminal", title: "Console unlocked in the sidebar")
                         Divider().opacity(0.5)
-                        activatedRow(icon: "slider.horizontal.3", title: "Settings visibility switched to Pro")
+                        activatedRow(icon: "slider.horizontal.3", title: "Full settings surface is active")
                         Divider().opacity(0.5)
                         activatedRow(icon: "gauge.with.dots.needle.bottom.100percent", title: "Detail level set to Technical")
                         Divider().opacity(0.5)

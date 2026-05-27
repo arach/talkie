@@ -13,7 +13,7 @@ import TalkieKit
 enum SettingsSection: String, Hashable {
     // GENERAL (first things users see)
     case account             // User account & authentication
-    case mode                // Product mode: visibility + information density
+    case mode                // Legacy mode/detail surface
     case appearance
     case camera              // Camera bubble & clip capture settings
     case notch               // Legacy alias -> surface
@@ -559,7 +559,6 @@ struct SettingsSidebarColumn: View {
                     VStack(spacing: 2) {
                         sidebarItem(.about, icon: "info.circle", title: "About")
                         sidebarItem(.account, icon: "person.circle", title: "Account")
-                        sidebarItem(.mode, icon: "slider.horizontal.3", title: "Mode")
                         sidebarItem(.appearance, icon: "paintbrush", title: "Appearance")
                         sidebarItem(.surface, icon: "rectangle.topthird.inset.filled", title: "Notch")
                     }
@@ -761,9 +760,7 @@ struct SettingsContentColumn: View {
                             onDismiss: {
                                 dismissedDirectLinkNotices.insert(section)
                             }
-                        ) {
-                            selectedSection = .mode
-                        }
+                        )
                         .padding(.top, Spacing.sm)
                         .padding(.trailing, Spacing.md)
                         .frame(maxWidth: 520)
@@ -779,7 +776,6 @@ private struct SettingsAudienceDirectLinkNoticeView: View {
     let sectionName: String
     let requiredAudience: SettingsAudience
     let onDismiss: () -> Void
-    let onOpenMode: () -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.sm) {
@@ -793,19 +789,13 @@ private struct SettingsAudienceDirectLinkNoticeView: View {
                     .font(Theme.current.fontSMBold)
                     .foregroundColor(Theme.current.foreground)
 
-                Text("This section is usually shown in \(requiredAudience.displayName) Mode. To find it again from the Settings menu, open Mode and switch it there. You can still use direct links any time.")
+                Text("This section belongs to the \(requiredAudience.displayName) settings surface. Talkie now launches with the full surface enabled, so this notice should only appear for legacy saved state.")
                     .font(Theme.current.fontXS)
                     .foregroundColor(Theme.current.foregroundSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer(minLength: Spacing.sm)
-
-            Button("Open Mode") {
-                onOpenMode()
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
 
             Button {
                 onDismiss()

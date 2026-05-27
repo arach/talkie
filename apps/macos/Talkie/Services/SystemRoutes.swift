@@ -306,13 +306,17 @@ final class SystemRoutes: RouteGroup {
 
         Route(
             path: "onboarding/pro",
-            description: "Launch Pro Tools onboarding",
+            description: "Ensure Pro detail is active",
             isInternal: false
         ) { _, _ in
-            NSLog("[SystemRoutes] Launch Pro Tools onboarding")
+            NSLog("[SystemRoutes] Ensure Pro detail is active")
             NSApp.activate(ignoringOtherApps: true)
             NSApp.windows.first(where: { $0.canBecomeMain })?.makeKeyAndOrderFront(nil)
-            ProOnboardingManager.shared.shouldShowProOnboarding = true
+            SettingsManager.shared.detailLevel = .max
+            SettingsManager.shared.settingsAudience = .pro
+            SettingsManager.shared.isProToolsActive = true
+            SettingsManager.shared.hasCompletedProOnboarding = true
+            NavigationState.shared.navigateToSettings(.about)
         },
 
         // MARK: - Window Management

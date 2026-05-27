@@ -1210,8 +1210,27 @@ final class SettingsManager {
         voiceCommandConfidenceThreshold = declarativeSettings.developer.voiceCommandConfidenceThreshold
 
         isBatchingUpdates = false
+        enforceLaunchModeDefaults()
         Theme.refresh()
         applyThemeConfig()
+    }
+
+    private func enforceLaunchModeDefaults() {
+        if detailLevel != .max {
+            detailLevel = .max
+        }
+
+        if settingsAudience != .pro {
+            settingsAudience = .pro
+        }
+
+        if !isProToolsActive {
+            isProToolsActive = true
+        }
+
+        if !hasCompletedProOnboarding {
+            hasCompletedProOnboarding = true
+        }
     }
 
     /// The currently active theme preset
@@ -1432,14 +1451,11 @@ final class SettingsManager {
         }
     }
 
-    /// Settings visibility mode (simple/advanced/pro).
+    /// Settings surface tier. Launch builds normalize this to Pro.
     var settingsAudience: SettingsAudience {
         didSet {
             UserDefaults.standard.set(settingsAudience.rawValue, forKey: settingsAudienceKey)
             persistDeclarativeSettings { $0.appearance.settingsAudience = settingsAudience }
-            if settingsAudience != .pro && isProToolsActive {
-                isProToolsActive = false
-            }
         }
     }
 
@@ -3061,15 +3077,6 @@ final class SettingsManager {
         self._composeAssistantPrompt = declarativeSettings.compose.assistantPrompt
         TalkieSharedSettings.set(self._selectedTTSVoiceId, forKey: AgentSettingsKey.selectedTTSVoiceId)
 
-        // Grandfather clause: existing Pro users get auto-activated
-        if declarativeSettings.appearance.settingsAudience == .pro
-            && !self.isProToolsActive {
-            self.isProToolsActive = true
-            self.hasCompletedProOnboarding = true
-            UserDefaults.standard.set(true, forKey: isProToolsActiveKey)
-            UserDefaults.standard.set(true, forKey: hasCompletedProOnboardingKey)
-        }
-
         // If users have a saved theme but no explicit typography override, apply theme defaults.
         if let theme = self.currentTheme {
             let hasUIFontOverride =
@@ -3125,6 +3132,7 @@ final class SettingsManager {
 
         // Re-enable per-property Theme.refresh() now that init is complete
         isBatchingUpdates = false
+        enforceLaunchModeDefaults()
 
         StartupProfiler.shared.mark("singleton.SettingsManager.done")
     }

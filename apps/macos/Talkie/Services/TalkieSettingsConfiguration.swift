@@ -86,8 +86,8 @@ struct TalkieSettingsConfiguration: Codable {
             consoleTerminalFont: ConsoleTerminalFontOption = .recommendedDefault,
             consoleTerminalFontSize: ConsoleTerminalFontSizeOption = .regular,
             uiAllCaps: Bool = false,
-            detailLevel: DetailLevel = .standard,
-            settingsAudience: SettingsAudience = .simple
+            detailLevel: DetailLevel = .max,
+            settingsAudience: SettingsAudience = .pro
         ) {
             self.mode = mode
             self.accentColor = accentColor
