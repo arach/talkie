@@ -265,6 +265,19 @@ private struct TalkieCommands: Commands {
             .keyboardShortcut(",", modifiers: .command)
         }
 
+        // Find — routes to the library search field. ⌘F was advertised
+        // in onboarding ("Use ⌘F to search across all your transcriptions")
+        // but never bound; this is the binding catching up to the promise.
+        // Added after `.pasteboard` so cut/copy/paste stay untouched.
+        CommandGroup(after: .pasteboard) {
+            Divider()
+            Button("Find…") {
+                NavigationState.shared.navigate(to: .recordings)
+                NotificationCenter.default.post(name: .focusLibrarySearch, object: nil)
+            }
+            .keyboardShortcut("f", modifiers: .command)
+        }
+
         // Help menu additions
         CommandGroup(after: .help) {
             Button("Send Feedback…") {

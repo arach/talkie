@@ -42,21 +42,13 @@ private enum KeyboardShortcutCatalog {
             "Search & commands",
             "command",
             [
-                ShortcutItem(keys: "⌥⌘K", description: "Command palette"),
-                ShortcutItem(keys: "⌥⌘K → type", description: "Jump to a screen"),
+                ShortcutItem(keys: "⌘K", description: "Command palette"),
+                ShortcutItem(keys: "⌘K → type", description: "Jump to a screen"),
                 ShortcutItem(keys: "⇧⌘V", description: "Voice command"),
-                ShortcutItem(keys: "⌥⌘L", description: "Toggle dictation"),
-                ShortcutItem(keys: "⌃⌥⇧⌘F", description: "Paste last screenshot"),
+                ShortcutItem(keys: "⌃⇧⌘D", description: "Toggle dictation"),
+                ShortcutItem(keys: "⌘⇧F", description: "Send feedback"),
                 ShortcutItem(keys: "⌘,", description: "Settings"),
                 ShortcutItem(keys: "⌃⌘S", description: "Toggle sidebar"),
-            ]
-        ),
-        (
-            "Windows & history",
-            "arrow.uturn.backward",
-            [
-                ShortcutItem(keys: "⌘[", description: "Back"),
-                ShortcutItem(keys: "⌘]", description: "Forward"),
             ]
         ),
         (
@@ -90,10 +82,10 @@ private enum KeyboardShortcutCatalog {
             "Global",
             "globe",
             [
-                ShortcutItem(keys: "⌥⌘K", description: "Command palette"),
+                ShortcutItem(keys: "⌘K", description: "Command palette"),
                 ShortcutItem(keys: "⇧⌘V", description: "Voice command"),
-                ShortcutItem(keys: "⌥⌘L", description: "Toggle dictation"),
-                ShortcutItem(keys: "⌃⌥⇧⌘F", description: "Paste last screenshot"),
+                ShortcutItem(keys: "⌃⇧⌘D", description: "Toggle dictation"),
+                ShortcutItem(keys: "⌃⇧⌘S", description: "Capture screenshot"),
                 ShortcutItem(keys: "⌘,", description: "Settings"),
                 ShortcutItem(keys: "⌃⌘S", description: "Toggle sidebar"),
             ]
@@ -102,9 +94,8 @@ private enum KeyboardShortcutCatalog {
             "Navigation",
             "arrow.triangle.branch",
             [
-                ShortcutItem(keys: "⌥⌘K → type", description: "Jump to any section"),
-                ShortcutItem(keys: "⌘[", description: "Go back"),
-                ShortcutItem(keys: "⌘]", description: "Go forward"),
+                ShortcutItem(keys: "⌘K → type", description: "Jump to any section"),
+                ShortcutItem(keys: "C R D N S", description: "Jump to Compose / Record / Dictations / Notes / Screenshots"),
             ]
         ),
         (
@@ -143,7 +134,7 @@ private enum KeyboardShortcutCatalog {
         ShortcutItem(keys: "J K O", description: "List move / open"),
         ShortcutItem(keys: "↑↓ ↵", description: "List navigate"),
         ShortcutItem(keys: "C R D N S", description: "Jump screens"),
-        ShortcutItem(keys: "⌥⌘K", description: "Command palette"),
+        ShortcutItem(keys: "⌘K", description: "Command palette"),
         ShortcutItem(keys: "?", description: "Cheat sheet"),
         ShortcutItem(keys: "⌘⇧?", description: "These hints"),
     ]

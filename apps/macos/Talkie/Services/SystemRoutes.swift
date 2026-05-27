@@ -415,6 +415,10 @@ extension Notification.Name {
     static let openSettings = Notification.Name("to.talkie.app.openSettings")
     static let navigateHome = Notification.Name("to.talkie.app.navigateHome")
     static let navigateAgent = Notification.Name("to.talkie.app.navigateAgent")
+    /// Posted by the `Find…` menu item (⌘F). ScopeLibraryView listens and
+    /// focuses its search field; nav to .recordings happens alongside the
+    /// post so it works from anywhere in the app.
+    static let focusLibrarySearch = Notification.Name("to.talkie.app.focusLibrarySearch")
     @available(*, deprecated, renamed: "navigateAgent")
     static let navigateLive = navigateAgent
 }

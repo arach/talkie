@@ -101,6 +101,7 @@ struct ScopeLibraryView: View {
     @State private var typeFilter: RecordingTypeFilter = .all
     @State private var suppressFilterReload = false
     @State private var pendingScrollID: UUID?
+    @FocusState private var searchFieldFocused: Bool
 
     /// Show the recording overlay (start a new memo).
     @State private var showingRecordingView = false
@@ -442,6 +443,10 @@ struct ScopeLibraryView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 11))
                 .foregroundStyle(ScopeInk.dim)
+                .focused($searchFieldFocused)
+                .onReceive(NotificationCenter.default.publisher(for: .focusLibrarySearch)) { _ in
+                    searchFieldFocused = true
+                }
             if !searchText.isEmpty {
                 Button {
                     searchText = ""

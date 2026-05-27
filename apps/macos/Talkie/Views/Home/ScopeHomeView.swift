@@ -214,7 +214,7 @@ struct ScopeHomeView: View {
                     state: captureStateDictation,
                     action: "DICTATE",
                     hint: "⌃⇧⌘ D",
-                    onTap: {}
+                    onTap: triggerDictation
                 )
                 CaptureModeCard(
                     glyph: .crosshair,
@@ -223,7 +223,7 @@ struct ScopeHomeView: View {
                     state: captureStateTray,
                     action: "CAPTURE",
                     hint: "⌃⇧⌘ S",
-                    onTap: {}
+                    onTap: triggerCapture
                 )
             }
         }
@@ -307,7 +307,7 @@ struct ScopeHomeView: View {
                             glyph: "○",
                             label: "Dictate",
                             kbd: ["⌃", "⇧", "⌘", "D"],
-                            onTap: {}
+                            onTap: triggerDictation
                         )
                     ),
                 ],
@@ -336,7 +336,7 @@ struct ScopeHomeView: View {
                             glyph: "◫",
                             label: "Capture screen",
                             kbd: ["⌃", "⇧", "⌘", "S"],
-                            onTap: {}
+                            onTap: triggerCapture
                         )
                     ),
                     RecentSection(
@@ -366,11 +366,49 @@ struct ScopeHomeView: View {
                             glyph: "¶",
                             label: "Write a note",
                             kbd: ["⌃", "⇧", "⌘", "N"],
-                            onTap: {}
+                            onTap: triggerNewNote
                         )
                     ),
                 ]
             )
+        }
+    }
+
+    // MARK: - Capture / dictation / note triggers
+    //
+    // These mirror the keyboard-shortcut path so home-screen CTAs and
+    // hotkeys converge on the same code, avoiding state drift. (Audit #2:
+    // these used to be `onTap: {}` — kind of the worst impression a new
+    // user could get clicking around the home screen.)
+
+    /// Toggle the live dictation pipeline. Same path as ⌃⇧⌘D.
+    private func triggerDictation() {
+        ServiceManager.shared.live.toggleRecording()
+    }
+
+    /// Fire a region-mode standalone capture via AppDelegate's executeCapture,
+    /// which is the same pipeline used by the hotkey-driven shortcut.
+    private func triggerCapture() {
+        Task { @MainActor in
+            guard let delegate = NSApp.delegate as? AppDelegate else { return }
+            _ = await delegate.executeCapture(mode: .region)
+        }
+    }
+
+    /// Create a blank note row, save it, then deep-link into the library
+    /// detail (which mounts ScopeNoteDetailView in edit-ready state).
+    private func triggerNewNote() {
+        Task { @MainActor in
+            let id = UUID()
+            let note = TalkieObject.newNote(id: id, text: "")
+            do {
+                let repository = TalkieObjectRepository()
+                try await repository.saveRecording(note)
+                await RecordingsViewModel.shared.loadRecordings()
+                NavigationState.shared.navigate(to: .recordings, params: ["recordingId": id.uuidString])
+            } catch {
+                print("⚠️ ScopeHomeView: failed to create note: \(error)")
+            }
         }
     }
 

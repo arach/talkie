@@ -2091,8 +2091,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     /// Shared capture logic used by both chord flow and direct shortcuts.
     /// If recording is active, attaches screenshot to the recording (always uses built-in).
     /// Otherwise, checks the preferred launcher setting.
+    /// Internal so Home-screen CTAs can fire the same path the hotkeys take.
     @MainActor
-    private func executeCapture(mode: CaptureMode, preselectedRegion: CGRect? = nil) async -> Bool {
+    func executeCapture(mode: CaptureMode, preselectedRegion: CGRect? = nil) async -> Bool {
         let recorder = MemoRecordingController.shared
 
         if recorder.state.isRecording {
