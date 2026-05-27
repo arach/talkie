@@ -133,6 +133,8 @@ struct ScopeWorkflowListColumn: View {
                 description: template.description,
                 icon: template.icon,
                 color: template.color,
+                maintainer: template.maintainer,
+                inputs: template.inputs,
                 steps: template.steps.map { step in
                     WorkflowStep(
                         id: UUID(),
@@ -183,7 +185,7 @@ private struct ScopeWorkflowRow: View {
 
     var body: some View {
         Button(action: onSelect) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 12) {
                     iconBadge
 
@@ -251,7 +253,7 @@ private struct ScopeWorkflowRow: View {
                 }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.vertical, 8)
             .background {
                 if isSelected {
                     ScopeAmber.tintSubtle
@@ -268,7 +270,10 @@ private struct ScopeWorkflowRow: View {
             }
         }
         .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
+        .onHover { hovering in
+            isHovered = hovering
+            if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
     }
 
     private var pipelineStrip: some View {

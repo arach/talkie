@@ -226,7 +226,10 @@ struct KeyboardShortcutsHelpView: View {
                 .padding(Spacing.lg)
             }
         }
-        .frame(width: 420, height: 520)
+        .frame(
+            minWidth: 420, idealWidth: 560, maxWidth: 760,
+            minHeight: 520, idealHeight: 680, maxHeight: 880
+        )
         .background(Theme.current.background)
     }
 }

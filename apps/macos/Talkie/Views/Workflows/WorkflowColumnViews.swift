@@ -2010,9 +2010,7 @@ struct ScopeWorkflowDetailShell: View {
         VStack(spacing: 0) {
             ScopeWorkflowProductBar(
                 workflowName: workflow.name,
-                onBack: onBack,
-                onRun: { Task { await runState.runTest(workflow: workflow) } },
-                canRun: runState.canRun
+                onBack: onBack
             )
 
             GeometryReader { proxy in
@@ -2143,8 +2141,6 @@ private struct ScopeWorkflowResizeHandle: View {
 private struct ScopeWorkflowProductBar: View {
     let workflowName: String
     let onBack: () -> Void
-    let onRun: () -> Void
-    let canRun: Bool
 
     var body: some View {
         HStack(spacing: 8) {
@@ -2177,8 +2173,6 @@ private struct ScopeWorkflowProductBar: View {
                 .foregroundStyle(ScopeInk.primary)
 
             Spacer()
-
-            ScopeWorkflowRunButton(action: onRun, enabled: canRun)
         }
         .padding(.horizontal, 20)
         .frame(height: 44)
@@ -2703,18 +2697,16 @@ private struct ScopeWorkflowComposer: View {
                 }
             }
 
-            // Input row
+            // Input row — mic on the left replaces the old `›` chevron
             HStack(alignment: .top, spacing: 8) {
-                Text("›")
-                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(ScopeBrass.solid)
-                    .padding(.top, 2)
+                ScopeMicButton(recording: $recording)
 
                 if recording {
                     Text("(speak — release ⎇ to send, ⌘. to cancel)")
                         .font(.system(size: 13, design: .monospaced))
                         .foregroundStyle(ScopeInk.subtle)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 3)
                 } else {
                     TextField(
                         "Tell the builder what to change…",
@@ -2728,9 +2720,8 @@ private struct ScopeWorkflowComposer: View {
                     .focused($draftFocused)
                     .onSubmit { performSend() }
                     .disabled(isSending)
+                    .padding(.top, 3)
                 }
-
-                ScopeMicButton(recording: $recording)
 
                 Button(action: performSend) {
                     Text("send")
@@ -2906,19 +2897,9 @@ private struct ScopeWorkflowInspector: View {
                         .lineLimit(1)
                 }
 
-                // Preview tile
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(ScopeAmber.tintSubtle)
-                    .frame(height: 96)
-                    .overlay(
-                        Text(preview.kind.previewLabel)
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(ScopeInk.subtle)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(ScopeEdge.subtle, lineWidth: 1)
-                    )
+                // Preview tile — renders the real image for captures,
+                // placeholder strip for audio / text until we wire those.
+                ScopeWorkflowInputPreviewTile(object: selected, kind: preview.kind)
             } else {
                 // No selection yet
                 HStack(spacing: 8) {
@@ -2970,11 +2951,19 @@ private struct ScopeWorkflowInspector: View {
                 .padding(.top, 2)
             }
 
-            // Action chips
+            // Action chips — filtered by the workflow's input contract.
+            // Library is always offered (it's just a navigator); record /
+            // text only when the workflow accepts audio / text inputs.
             HStack(spacing: 6) {
                 ScopeInputSourceChip(label: "library", action: onPickLibrary)
-                ScopeInputSourceChip(label: "record")
-                ScopeInputSourceChip(label: "text")
+                if workflow.inputs.acceptedRecordTypes.contains(.memo)
+                    || workflow.inputs.acceptedRecordTypes.contains(.dictation) {
+                    ScopeInputSourceChip(label: "record")
+                }
+                if workflow.inputs.acceptedRecordTypes.contains(.note)
+                    || workflow.inputs.acceptedRecordTypes.contains(.selection) {
+                    ScopeInputSourceChip(label: "text")
+                }
             }
             .padding(.top, 2)
         }
@@ -4120,10 +4109,10 @@ private struct ScopeMicButton: View {
         Button {
             recording.toggle()
         } label: {
-            Text(recording ? "●" : "◉")
-                .font(.system(size: 11, design: .monospaced))
+            Image(systemName: recording ? "mic.fill" : "mic")
+                .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(recording ? ScopeCanvas.canvas : ScopeBrass.solid)
-                .frame(width: 24, height: 22)
+                .frame(width: 26, height: 24)
                 .background(
                     RoundedRectangle(cornerRadius: 5)
                         .fill(recording ? ScopeBrass.solid : Color.clear)
@@ -4132,8 +4121,12 @@ private struct ScopeMicButton: View {
                     RoundedRectangle(cornerRadius: 5)
                         .stroke(recording ? ScopeBrass.solid : ScopeEdge.normal, lineWidth: 1)
                 )
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { hovering in
+            if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
         .help(recording ? "Stop dictation" : "Start dictation")
     }
 }
@@ -4355,6 +4348,186 @@ private enum ScopeSourceKind {
 
 private enum ScopeSampleInputs {
     static let recentVisible = 3
+}
+
+// MARK: - App-wide lightbox utility
+//
+// `.scopeExpandable(imageURL:)` makes any view click-to-expand into a
+// full-bleed image preview. Lives here for now because the inspector
+// tile is the first adopter; lift to a shared file once a second
+// surface (memo detail, capture row, etc.) wires it up.
+//
+// Wiring: `ScopeLightboxHost()` must be installed once at the app
+// root (already done in TalkieApp.swift) so the overlay can paint
+// over the whole window when triggered.
+
+@Observable
+@MainActor
+final class ScopeLightboxPresenter {
+    static let shared = ScopeLightboxPresenter()
+    private init() {}
+
+    var currentURL: URL? = nil
+
+    func present(_ url: URL) { currentURL = url }
+    func dismiss() { currentURL = nil }
+}
+
+struct ScopeLightboxHost: View {
+    @Bindable private var presenter = ScopeLightboxPresenter.shared
+
+    var body: some View {
+        ZStack {
+            if let url = presenter.currentURL {
+                ScopeLightboxView(imageURL: url) { presenter.dismiss() }
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.16), value: presenter.currentURL)
+    }
+}
+
+private struct ScopeLightboxView: View {
+    let imageURL: URL
+    let onDismiss: () -> Void
+
+    private var image: NSImage? {
+        NSImage(contentsOf: imageURL)
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.78)
+                .ignoresSafeArea()
+                .onTapGesture { onDismiss() }
+
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .padding(40)
+            } else {
+                Text("Couldn't load preview")
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+
+            VStack {
+                HStack {
+                    Spacer()
+                    Button(action: onDismiss) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 26, height: 26)
+                            .background(Circle().fill(.white.opacity(0.18)))
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.escape, modifiers: [])
+                    .padding(12)
+                }
+                Spacer()
+            }
+        }
+        .contentShape(Rectangle())
+    }
+}
+
+extension View {
+    /// Adds click-to-expand behavior to any view that displays an image
+    /// (or could). When `imageURL` is non-nil, hover shows the pointing-
+    /// hand cursor and a click promotes the image into the app-wide
+    /// lightbox overlay. No-op when nil.
+    func scopeExpandable(imageURL: URL?) -> some View {
+        modifier(ScopeExpandableModifier(imageURL: imageURL))
+    }
+}
+
+private struct ScopeExpandableModifier: ViewModifier {
+    let imageURL: URL?
+
+    func body(content: Content) -> some View {
+        content
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                guard imageURL != nil else { return }
+                if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+            }
+            .onTapGesture {
+                guard let url = imageURL else { return }
+                ScopeLightboxPresenter.shared.present(url)
+            }
+    }
+}
+
+// Real input preview for the inspector. Captures render the actual
+// screenshot; text/note types show a snippet; audio still falls back
+// to a label until a real waveform lands.
+private struct ScopeWorkflowInputPreviewTile: View {
+    let object: TalkieObject
+    let kind: ScopeSourceKind
+
+    private var screenshotURL: URL? {
+        guard let shot = object.screenshots.first else { return nil }
+        if shot.filename.hasPrefix("/") {
+            return URL(fileURLWithPath: shot.filename)
+        }
+        return ScreenshotStorage.screenshotsDirectory.appending(
+            path: shot.filename,
+            directoryHint: .notDirectory
+        )
+    }
+
+    private var image: NSImage? {
+        guard let url = screenshotURL else { return nil }
+        return NSImage(contentsOf: url)
+    }
+
+    private var textSnippet: String? {
+        guard let text = object.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else { return nil }
+        return String(text.prefix(280))
+    }
+
+    var body: some View {
+        let frame = RoundedRectangle(cornerRadius: 6)
+
+        Group {
+            if let image {
+                // Letterbox the image — never crop. Tall portrait
+                // screenshots and wide landscapes both stay legible
+                // against a soft canvas mat at a fixed tile height.
+                // Click to expand into the app-wide lightbox.
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .padding(6)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 120)
+                    .background(ScopeAmber.tintSubtle)
+                    .scopeExpandable(imageURL: screenshotURL)
+            } else if let snippet = textSnippet, (kind == .note || kind == .text || kind == .memo) {
+                Text(snippet)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(ScopeInk.muted)
+                    .lineLimit(6)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .padding(10)
+                    .frame(height: 96)
+                    .background(ScopeAmber.tintSubtle)
+            } else {
+                Text(kind.previewLabel)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(ScopeInk.subtle)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 96)
+                    .background(ScopeAmber.tintSubtle)
+            }
+        }
+        .clipShape(frame)
+        .overlay(frame.stroke(ScopeEdge.subtle, lineWidth: 1))
+    }
 }
 
 // Display shim — maps TalkieObject to the small bundle the picker rows need.

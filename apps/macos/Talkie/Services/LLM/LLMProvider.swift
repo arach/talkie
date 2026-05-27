@@ -127,8 +127,32 @@ class LLMProviderRegistry {
 
     private(set) var providers: [LLMProvider] = []
     private(set) var allModels: [LLMModel] = []
-    var selectedProviderId: String?
-    var selectedModelId: String?
+
+    // Persisted across launches via UserDefaults so the user's last pick
+    // sticks instead of falling back to first-available (Apple Local).
+    private static let providerKey = "LLMRegistry.selectedProviderId"
+    private static let modelKey = "LLMRegistry.selectedModelId"
+
+    var selectedProviderId: String? {
+        didSet { persistSelection() }
+    }
+    var selectedModelId: String? {
+        didSet { persistSelection() }
+    }
+
+    private func persistSelection() {
+        let defaults = UserDefaults.standard
+        if let id = selectedProviderId {
+            defaults.set(id, forKey: Self.providerKey)
+        } else {
+            defaults.removeObject(forKey: Self.providerKey)
+        }
+        if let id = selectedModelId {
+            defaults.set(id, forKey: Self.modelKey)
+        } else {
+            defaults.removeObject(forKey: Self.modelKey)
+        }
+    }
 
     /// Get recommended models for a specific provider
     func recommendedModels(for providerId: String) -> [LLMModel] {
@@ -146,6 +170,11 @@ class LLMProviderRegistry {
     }
 
     private init() {
+        // Restore the last picked provider/model before any UI binds.
+        let defaults = UserDefaults.standard
+        selectedProviderId = defaults.string(forKey: Self.providerKey)
+        selectedModelId = defaults.string(forKey: Self.modelKey)
+
         // Register providers synchronously so they're available immediately
         registerProvidersSync()
 
@@ -171,6 +200,7 @@ class LLMProviderRegistry {
         providers.append(AnthropicProvider())
         providers.append(GeminiProvider())
         providers.append(GroqProvider())
+        providers.append(ServerProvider())
 
     }
 

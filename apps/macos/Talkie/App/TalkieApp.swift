@@ -163,6 +163,8 @@ private struct TalkieRootWindow: View {
             .overlay {
                 CommandPaletteOverlay(isPresented: $showCommandPalette)
             }
+            // App-wide image lightbox (.scopeExpandable adopters)
+            .overlay { ScopeLightboxHost() }
             // Report sheet overlay
             .overlay {
                 ReportSheetOverlay(isPresented: $showReportSheet)
