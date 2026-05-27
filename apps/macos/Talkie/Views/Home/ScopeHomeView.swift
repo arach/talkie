@@ -678,26 +678,24 @@ struct ScopeHomeView: View {
     private var routinesStrip: some View {
         VStack(alignment: .leading, spacing: 14) {
             Eyebrow("Routines")
-            HStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 0) {
                 RoutinesPanel(
                     title: "Workflows",
                     trailing: workflowRunsTodayText,
                     rows: workflowRunRows,
                     footer: "MANAGE WORKFLOWS",
-                    accent: ScopeBrass.solid
+                    accent: ScopeBrass.solid,
+                    onTitleTap: { NavigationState.shared.navigate(to: .workflows) }
                 )
                 ScopeRule(.subtle, axis: .vertical)
                     .padding(.vertical, 14)
                 RoutinesPanel(
                     title: "Console",
                     trailing: "2 tabs",
-                    rows: [
-                        .init(leading: .filled, label: "iTerm2", trailing: "ACTIVE"),
-                        .init(leading: .filled, label: "Codex",  trailing: "IDLE"),
-                        .init(leading: .hollow, label: "Claude", trailing: "OFF"),
-                    ],
+                    rows: consoleRows,
                     footer: "OPEN CONSOLE",
-                    accent: ScopeAmber.solid
+                    accent: ScopeAmber.solid,
+                    onTitleTap: { NavigationState.shared.navigate(to: .systemConsole) }
                 )
             }
             .background(
@@ -737,15 +735,43 @@ struct ScopeHomeView: View {
             RoutinesPanel.Row(
                 leading: .filled,
                 label: run.workflowName,
-                trailing: workflowRunTimeText(run.runDate)
+                trailing: workflowRunTimeText(run.runDate),
+                onSelect: {
+                    NavigationState.shared.navigate(
+                        to: .workflows,
+                        params: ["workflowId": run.workflowId.uuidString]
+                    )
+                }
             )
         }
 
         if rows.isEmpty {
-            return [.init(leading: .hollow, label: "Ready", trailing: "")]
+            return [.init(
+                leading: .hollow,
+                label: "Ready",
+                trailing: "",
+                onSelect: { NavigationState.shared.navigate(to: .workflows) }
+            )]
         }
 
         return rows
+    }
+
+    private var consoleRows: [RoutinesPanel.Row] {
+        [
+            .init(
+                leading: .filled, label: "iTerm2", trailing: "ACTIVE",
+                onSelect: { NavigationState.shared.navigate(to: .systemConsole) }
+            ),
+            .init(
+                leading: .filled, label: "Codex",  trailing: "IDLE",
+                onSelect: { NavigationState.shared.navigate(to: .systemConsole) }
+            ),
+            .init(
+                leading: .hollow, label: "Claude", trailing: "OFF",
+                onSelect: { NavigationState.shared.navigate(to: .systemConsole) }
+            ),
+        ]
     }
 
     private func workflowRunTimeText(_ date: Date) -> String {
@@ -1981,34 +2007,50 @@ struct BayCornerBrackets: View {
 
 private struct RoutinesPanel: View {
     enum Dot { case filled, hollow }
-    struct Row { let leading: Dot; let label: String; let trailing: String }
+    struct Row {
+        let leading: Dot
+        let label: String
+        let trailing: String
+        var onSelect: (() -> Void)? = nil
+    }
 
     let title: String
     let trailing: String
     let rows: [Row]
     let footer: String
     let accent: Color
+    var onTitleTap: (() -> Void)? = nil
 
     @State private var footerHovered = false
+    @State private var hoveredRowIndex: Int? = nil
+    @State private var titleHovered = false
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    PhosphorDot(color: accent.opacity(0.72), size: 4)
-                    Text(title)
-                        .font(ScopeFont.display(size: 15, medium: true))
-                        .foregroundStyle(ScopeInk.primary)
+            Button {
+                onTitleTap?()
+            } label: {
+                HStack(alignment: .firstTextBaseline) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        PhosphorDot(color: accent.opacity(0.72), size: 4)
+                        Text(title)
+                            .font(ScopeFont.display(size: 15, medium: true))
+                            .foregroundStyle(titleHovered ? accent : ScopeInk.primary)
+                    }
+                    Spacer()
+                    Text(trailing.uppercased())
+                        .font(ScopeType.chrome)
+                        .tracking(ScopeType.Tracking.wide)
+                        .foregroundStyle(ScopeInk.faint)
                 }
-                Spacer()
-                Text(trailing.uppercased())
-                    .font(ScopeType.chrome)
-                    .tracking(ScopeType.Tracking.wide)
-                    .foregroundStyle(ScopeInk.faint)
+                .padding(.horizontal, 16)
+                .padding(.top, 13)
+                .padding(.bottom, 10)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 13)
-            .padding(.bottom, 10)
+            .buttonStyle(.plain)
+            .disabled(onTitleTap == nil)
+            .onHover { titleHovered = $0 && onTitleTap != nil }
             .overlay(alignment: .bottom) {
                 ScopeRule(.section)
                     .padding(.horizontal, 16)
@@ -2019,25 +2061,42 @@ private struct RoutinesPanel: View {
                     // Row + trailing rule wrapped in a VStack so the
                     // conditional view has a stable layout slot.
                     VStack(spacing: 0) {
-                        HStack(spacing: 10) {
-                            Circle()
-                                .fill(row.leading == .filled ? accent : Color.clear)
-                                .overlay(
-                                    Circle().stroke(accent.opacity(0.88), lineWidth: row.leading == .hollow ? 1 : 0)
-                                )
-                                .shadow(color: row.leading == .filled ? accent.opacity(0.22) : .clear, radius: 2)
-                                .frame(width: 5, height: 5)
-                            Text(row.label)
-                                .font(.system(size: 12, weight: .regular))
-                                .foregroundStyle(ScopeInk.primary)
-                            Spacer()
-                            Text(row.trailing.uppercased())
-                                .font(ScopeType.chrome)
-                                .tracking(ScopeType.Tracking.wide)
-                                .foregroundStyle(ScopeInk.subtle)
+                        Button {
+                            row.onSelect?()
+                        } label: {
+                            HStack(spacing: 10) {
+                                Circle()
+                                    .fill(row.leading == .filled ? accent : Color.clear)
+                                    .overlay(
+                                        Circle().stroke(accent.opacity(0.88), lineWidth: row.leading == .hollow ? 1 : 0)
+                                    )
+                                    .shadow(color: row.leading == .filled ? accent.opacity(0.22) : .clear, radius: 2)
+                                    .frame(width: 5, height: 5)
+                                Text(row.label)
+                                    .font(.system(size: 12, weight: .regular))
+                                    .foregroundStyle(hoveredRowIndex == idx ? accent : ScopeInk.primary)
+                                Spacer()
+                                Text(row.trailing.uppercased())
+                                    .font(ScopeType.chrome)
+                                    .tracking(ScopeType.Tracking.wide)
+                                    .foregroundStyle(ScopeInk.subtle)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 7.5)
+                            .background(
+                                hoveredRowIndex == idx
+                                ? accent.opacity(0.05)
+                                : Color.clear
+                            )
+                            .contentShape(Rectangle())
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 7.5)
+                        .buttonStyle(.plain)
+                        .disabled(row.onSelect == nil)
+                        .onHover { hover in
+                            if row.onSelect != nil {
+                                hoveredRowIndex = hover ? idx : (hoveredRowIndex == idx ? nil : hoveredRowIndex)
+                            }
+                        }
 
                         if idx < rows.count - 1 {
                             ScopeRule(.row)

@@ -338,19 +338,13 @@ struct ScopeLibraryView: View {
     }
 
     private var titleRow: some View {
-        let counts = filterCounts()
-        return HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(titleForCurrentFilter)
                 .font(.system(size: 15, weight: .medium, design: .serif))
                 .foregroundStyle(ScopeInk.primary)
                 .tracking(-0.2)
 
             Spacer(minLength: 8)
-
-            Text(metaForCurrentFilter(counts: counts))
-                .font(.system(size: 9, weight: .regular, design: .monospaced))
-                .tracking(1.6)
-                .foregroundStyle(ScopeInk.faint)
         }
     }
 

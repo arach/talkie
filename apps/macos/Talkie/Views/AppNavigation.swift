@@ -429,17 +429,6 @@ struct AppNavigation: View {
     private var navigationSplitContent: some View {
         navigationSplitViewCore
             .navigationSplitViewStyle(.balanced)
-            .overlay(alignment: .top) {
-                // Structural horizontal rule, offset to clear the chrome
-                // bar pill + its drop shadow. Sits just above where the
-                // page's own eyebrow row begins so it reads as a page rule
-                // rather than a line cutting through the pill capsule.
-                Rectangle()
-                    .fill(Theme.current.foreground.opacity(0.06))
-                    .frame(height: 0.5)
-                    .offset(y: PageLayout.headerHeight + 14)
-                    .allowsHitTesting(false)
-            }
             .toolbarBackground(
                 TechnicalStyle.isActive ? TechnicalStyle.surface0 : Theme.current.surfaceBase,
                 for: .windowToolbar
@@ -884,12 +873,10 @@ struct AppNavigation: View {
             entries.append(.item(SidebarItem(id: .contextRules, title: "Context", icon: "square.stack.3d.forward.dottedline", selectedIcon: "square.stack.3d.forward.dottedline.fill")))
         }
 
-        if pendingActionsManager.hasActiveActions || pendingActionsManager.recentActions.count > 0 {
-            entries.append(.section(id: "activity", title: "Activity"))
-            entries.append(.item(SidebarItem(id: .aiResults, title: "Actions", icon: "chart.line.uptrend.xyaxis", selectedIcon: "chart.xyaxis.line")))
-            if pendingActionsManager.hasActiveActions {
-                entries.append(.item(SidebarItem(id: .pendingActions, title: "Pending", icon: "clock.arrow.circlepath", selectedIcon: "clock.fill")))
-            }
+        entries.append(.section(id: "activity", title: "Activity"))
+        entries.append(.item(SidebarItem(id: .aiResults, title: "Actions", icon: "chart.line.uptrend.xyaxis", selectedIcon: "chart.xyaxis.line")))
+        if pendingActionsManager.hasActiveActions {
+            entries.append(.item(SidebarItem(id: .pendingActions, title: "Pending", icon: "clock.arrow.circlepath", selectedIcon: "clock.fill")))
         }
 
         entries.append(.section(id: "tools", title: "Tools"))
@@ -1068,8 +1055,8 @@ struct AppNavigation: View {
                     AllowedCommandsView()
                         .wrapInTalkieSection("AllowedCommands")
                 case .aiResults:
-                    ActivityLogFullView()
-                        .wrapInTalkieSection("AIResults")
+                    ActionWorkbenchView()
+                        .wrapInTalkieSection("Actions", showHeader: false)
                 case .allMemos:
                     if SettingsManager.shared.isScopeTheme {
                         ScopeLibraryView(initialTypeFilter: .memos)

@@ -60,6 +60,14 @@ const STUDIES: Study[] = [
     blurb:
       "Earlier framing comparison that produced mac-skills — markup-primary, chat-driven, and trifold layouts. Kept as a record of the alternatives considered.",
   },
+  {
+    slug: "mac-workflows",
+    name: "Workflows",
+    kind: "Composition study",
+    platform: "macOS",
+    blurb:
+      "Three-column workflows surface — list · step sheet · run inspector. Theme-aware (dark amber + light bone). v0 strips the donor's embellishment (prompt bodies, cost meter, multi-tab inspector) for a readable skeleton; embellishments earn their way back in. Pre-Swift.",
+  },
 
   // — iOS —
   {
