@@ -168,6 +168,10 @@ struct TOHeaderSection: View {
             }
             bylineRow
             if !isEditing {
+                TOMetadataRow(recording: recording)
+                    .padding(.top, 10)
+            }
+            if !isEditing {
                 inlineActionRow
                     .padding(.top, 14)
             }
@@ -811,23 +815,146 @@ struct TOHeaderSection: View {
 
 // MARK: - Metadata Row
 
-/// Structured metadata cells aligned with the secondary band (filter bar height).
-/// Each cell is a discrete chip showing one facet of the recording's identity.
+/// Compact "classic" metadata row. Keeps provenance/context in the
+/// document flow so it remains visible even when the wide-window margin
+/// rail collapses.
 struct TOMetadataRow: View {
     let recording: TalkieObject
-    let settings: SettingsManager
 
-    @State private var copiedRefID = false
-
-    private var typeColor: Color {
-        switch recording.type {
-        case .memo: .blue
-        case .dictation: .cyan
-        case .note: .orange
-        case .segment: .gray
-        case .selection: .teal
-        case .capture: .pink
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Array(items.enumerated()), id: \.element.key) { index, item in
+                    if index > 0 {
+                        cellDivider
+                    }
+                    metadataCell(item)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 24)
+    }
+
+    // MARK: - Items
+
+    private struct Item {
+        let key: String
+        let icon: String
+        let label: String
+        let value: String
+        var accent: Bool = false
+        var monospaced: Bool = false
+        var help: String? = nil
+        var maximumWidth: CGFloat? = nil
+    }
+
+    private var items: [Item] {
+        var out: [Item] = []
+
+        out.append(.init(
+            key: "recorded",
+            icon: sourceIcon,
+            label: "recorded",
+            value: recordedOnValue,
+            help: recording.sourceDeviceId
+        ))
+
+        out.append(.init(
+            key: "created",
+            icon: "calendar",
+            label: "when",
+            value: formatDate(recording.createdAt),
+            help: recording.createdAt.formatted(date: .complete, time: .shortened)
+        ))
+
+        if let appName = firstNonEmpty(recording.metadata?.app?.name, flatMetadata["sourceApplicationName"]) {
+            out.append(.init(
+                key: "app",
+                icon: "app",
+                label: recording.isDictation || recording.isSelection ? "in" : "from",
+                value: shortenAppName(appName),
+                help: appName,
+                maximumWidth: 150
+            ))
+        }
+
+        if let windowTitle = recording.metadata?.app?.windowTitle,
+           !windowTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            out.append(.init(
+                key: "window",
+                icon: "macwindow",
+                label: "window",
+                value: windowTitle,
+                help: windowTitle,
+                maximumWidth: 210
+            ))
+        } else if let context = primaryContextValue {
+            out.append(.init(
+                key: "context",
+                icon: context.icon,
+                label: context.label,
+                value: context.value,
+                help: context.help,
+                maximumWidth: 190
+            ))
+        }
+
+        if let elapsed = elapsedProcessingValue {
+            out.append(.init(
+                key: "elapsed",
+                icon: "timer",
+                label: "took",
+                value: elapsed,
+                accent: true,
+                monospaced: true
+            ))
+        }
+
+        if let model = recording.transcriptionModel, !model.isEmpty {
+            out.append(.init(
+                key: "model",
+                icon: "cpu",
+                label: "model",
+                value: prettyModel(model),
+                accent: true,
+                help: model,
+                maximumWidth: 150
+            ))
+        }
+
+        if recording.duration > 0 {
+            out.append(.init(
+                key: "duration",
+                icon: "clock",
+                label: "length",
+                value: formatDuration(recording.duration),
+                monospaced: true
+            ))
+        }
+
+        if recording.wordCount > 0 {
+            out.append(.init(
+                key: "words",
+                icon: "text.word.spacing",
+                label: "words",
+                value: "\(recording.wordCount)",
+                monospaced: true
+            ))
+        }
+
+        if let route = recording.metadata?.routing?.mode,
+           !route.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            out.append(.init(
+                key: "route",
+                icon: "arrow.turn.down.right",
+                label: "route",
+                value: route
+            ))
+        }
+
+        return out
     }
 
     private var sourceIcon: String {
@@ -835,103 +962,112 @@ struct TOMetadataRow: View {
         case .mac: "desktopcomputer"
         case .iphone: "iphone"
         case .watch: "applewatch"
-        case .live: "mic.fill"
+        case .live: "waveform.circle.fill"
         }
     }
 
-    private var sourceLabel: String {
-        recording.source.displayName
+    private var recordedOnValue: String {
+        if let sourceDevice = flatMetadata["sourceDevice"],
+           !sourceDevice.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return sourceDevice
+        }
+
+        guard let sourceDeviceId = recording.sourceDeviceId,
+              !sourceDeviceId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return recording.source.displayName
+        }
+
+        if sourceDeviceId == "live-auto" { return recording.source.displayName }
+        if sourceDeviceId.hasPrefix("watch-") { return "Watch" }
+        if sourceDeviceId.hasPrefix("mac-") { return "Mac" }
+        if sourceDeviceId.hasPrefix("live-") { return "Agent" }
+        if sourceDeviceId.localizedCaseInsensitiveContains("iphone") { return "iPhone" }
+        if sourceDeviceId.count <= 18 { return sourceDeviceId }
+        return recording.source.displayName
     }
 
-    var body: some View {
-        HStack(spacing: Spacing.xs) {
-            // Type cell
-            metadataCell {
-                HStack(spacing: 4) {
-                    Image(systemName: recording.type.icon)
-                    Text(recording.type.displayName)
-                }
-                .foregroundColor(typeColor)
-            }
-
-            cellDivider
-
-            // Source cell
-            metadataCell {
-                HStack(spacing: 4) {
-                    Image(systemName: sourceIcon)
-                    Text(sourceLabel)
-                }
-            }
-
-            cellDivider
-
-            // Date cell
-            metadataCell {
-                HStack(spacing: 4) {
-                    Image(systemName: "calendar")
-                    Text(formatDate(recording.createdAt))
-                }
-            }
-
-            // Duration cell — only for types with audio, not notes
-            if !recording.isNote && recording.duration > 0 {
-                cellDivider
-
-                metadataCell {
-                    HStack(spacing: 4) {
-                        Image(systemName: "clock")
-                        Text(formatDuration(recording.duration))
-                            .monospacedDigit()
-                    }
-                }
-            }
-
-            // Word count cell
-            if recording.wordCount > 0 {
-                cellDivider
-
-                metadataCell {
-                    HStack(spacing: 4) {
-                        Image(systemName: "text.word.spacing")
-                        Text("\(recording.wordCount) words")
-                    }
-                }
-            }
-
-            cellDivider
-
-            // Ref cell — truncated UUID, click to copy full ID
-            Button {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(recording.id.uuidString, forType: .string)
-                copiedRefID = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copiedRefID = false }
-            } label: {
-                metadataCell {
-                    HStack(spacing: 4) {
-                        Image(systemName: copiedRefID ? "checkmark" : "number")
-                        Text(recording.id.uuidString.prefix(8).lowercased())
-                            .monospaced()
-                    }
-                    .foregroundColor(copiedRefID ? .green : Theme.current.foregroundMuted)
-                }
-            }
-            .buttonStyle(.plain)
-            .help("Copy full ID")
-
-            Spacer(minLength: 0)
+    private var elapsedProcessingValue: String? {
+        if let endToEnd = recording.metadata?.performance?.endToEndMs {
+            return formatMs(endToEnd)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: RecordingsHeaderLayout.secondaryBandHeight)
+        if let engine = recording.metadata?.performance?.engineMs {
+            return formatMs(engine)
+        }
+        return nil
+    }
+
+    private var primaryContextValue: (icon: String, label: String, value: String, help: String?)? {
+        if let cwd = recording.metadata?.context?.terminalWorkingDir,
+           !cwd.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return ("terminal", "cwd", shortPath(cwd), cwd)
+        }
+
+        if let browserURL = recording.metadata?.context?.browserURL,
+           !browserURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return ("globe", "url", displayURL(browserURL), browserURL)
+        }
+
+        if let documentURL = recording.metadata?.context?.documentURL,
+           !documentURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return ("doc", "doc", displayURL(documentURL), documentURL)
+        }
+
+        if let sourceURL = flatMetadata["sourceURL"],
+           !sourceURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return ("link", "source", displayURL(sourceURL), sourceURL)
+        }
+
+        if let host = flatMetadata["bookmarkHost"],
+           !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return ("globe", "site", host, nil)
+        }
+
+        if let fileCount = flatMetadata["fileCount"],
+           !fileCount.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return ("paperclip", "files", fileCount, nil)
+        }
+
+        return nil
+    }
+
+    private var flatMetadata: [String: String] {
+        guard let json = recording.metadataJSON,
+              let data = json.data(using: .utf8),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return [:]
+        }
+
+        var out: [String: String] = [:]
+        for (key, value) in dict {
+            if let string = value as? String {
+                out[key] = string
+            } else if let number = value as? NSNumber {
+                out[key] = number.stringValue
+            }
+        }
+        return out
     }
 
     // MARK: - Cell Components
 
-    private func metadataCell<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        content()
-            .font(settings.fontXS)
-            .foregroundColor(Theme.current.foregroundSecondary)
+    private func metadataCell(_ item: Item) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: item.icon)
+                .font(.system(size: 10, weight: .regular))
+                .foregroundStyle(item.accent ? ThemedScopeAccent.brass : Theme.current.foregroundSecondary.opacity(0.68))
+            Text(item.label.uppercased())
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .tracking(1.5)
+                .foregroundStyle(Theme.current.foregroundSecondary.opacity(0.58))
+            Text(item.value)
+                .font(.system(size: 10, weight: .regular, design: item.monospaced ? .monospaced : .default))
+                .monospacedDigit()
+                .foregroundStyle(item.accent ? ThemedScopeAccent.brass : Theme.current.foreground.opacity(0.76))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: item.maximumWidth, alignment: .leading)
+        }
+        .help(item.help ?? "\(item.label) \(item.value)")
     }
 
     private var cellDivider: some View {
@@ -940,6 +1076,60 @@ struct TOMetadataRow: View {
     }
 
     // MARK: - Formatting
+
+    private func firstNonEmpty(_ values: String?...) -> String? {
+        values.compactMap { value in
+            let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed?.isEmpty == false ? trimmed : nil
+        }.first
+    }
+
+    private func prettyModel(_ raw: String) -> String {
+        let parts = raw.split(separator: ":", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { return raw }
+        let family = parts[0].prefix(1).uppercased() + parts[0].dropFirst()
+        let variant = parts[1]
+            .replacing("openai_whisper-", with: "")
+            .replacing("distil-whisper_distil-", with: "")
+            .replacing("_", with: " ")
+        return "\(family) \(variant)"
+    }
+
+    private func shortenAppName(_ name: String) -> String {
+        let lookup: [String: String] = [
+            "visual studio code": "VS Code",
+            "google chrome": "Chrome",
+            "microsoft edge": "Edge",
+            "chatgpt desktop": "ChatGPT",
+            "claude desktop": "Claude",
+            "iterm2": "iTerm2",
+            "warp terminal": "Warp",
+        ]
+        return lookup[name.lowercased()] ?? name
+    }
+
+    private func shortPath(_ path: String) -> String {
+        let home = NSHomeDirectory()
+        let collapsed = path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
+        if collapsed.count <= 28 { return String(collapsed) }
+        return "…" + collapsed.suffix(26)
+    }
+
+    private func displayURL(_ raw: String) -> String {
+        guard let url = URL(string: raw) else {
+            return shortPath(raw)
+        }
+        if let host = url.host, !host.isEmpty {
+            return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+        }
+        return shortPath(url.path.isEmpty ? raw : url.path)
+    }
+
+    private func formatMs(_ ms: Int) -> String {
+        if ms < 1000 { return "\(ms) ms" }
+        let seconds = Double(ms) / 1000.0
+        return "\(seconds.formatted(.number.precision(.fractionLength(2)))) s"
+    }
 
     private func formatDate(_ date: Date) -> String {
         let calendar = Calendar.current
@@ -961,6 +1151,7 @@ struct TOMetadataRow: View {
     private func formatDuration(_ seconds: Double) -> String {
         let mins = Int(seconds) / 60
         let secs = Int(seconds) % 60
-        return String(format: "%d:%02d", mins, secs)
+        let paddedSeconds = secs < 10 ? "0\(secs)" : "\(secs)"
+        return "\(mins):\(paddedSeconds)"
     }
 }
