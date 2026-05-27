@@ -165,6 +165,9 @@ private struct TalkieRootWindow: View {
             }
             // App-wide image lightbox (.scopeExpandable adopters)
             .overlay { ScopeLightboxHost() }
+            // App-wide user-action snackbar (delete+undo, save errors).
+            // Distinct from ExtensionToastOverlay which is for milestones.
+            .overlay(alignment: .bottomLeading) { ToastHost() }
             // Report sheet overlay
             .overlay {
                 ReportSheetOverlay(isPresented: $showReportSheet)

@@ -316,8 +316,9 @@ struct ScopeNoteDetailView: View {
                 updated.lastModified = Date()
                 try await repository.saveRecording(updated)
             } catch {
-                // Silent failure for now — toast service lands in iter #36.
-                print("⚠️ ScopeNoteDetailView: failed to save edited text: \(error)")
+                await MainActor.run {
+                    ToastService.shared.showError("Couldn't save note: \(error.localizedDescription)")
+                }
             }
         }
     }
@@ -351,8 +352,12 @@ struct ScopeNoteDetailView: View {
             let header = "# \(note.displayTitle)\n\n"
             let body = note.text ?? ""
             let content = header + body + "\n"
-            do { try content.write(to: url, atomically: true, encoding: .utf8) }
-            catch { print("⚠️ ScopeNoteDetailView: failed to export: \(error)") }
+            do {
+                try content.write(to: url, atomically: true, encoding: .utf8)
+                ToastService.shared.showSuccess("Exported to \(url.lastPathComponent)")
+            } catch {
+                ToastService.shared.showError("Export failed: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -471,8 +476,13 @@ struct ScopeNoteDetailView: View {
                 list.append(attachment)
                 assets.attachments = list
                 try await repository.updateAssets(id: note.id, assetsJSON: assets.toJSON())
+                await MainActor.run {
+                    ToastService.shared.showSuccess("Attached \(attachment.originalName)")
+                }
             } catch {
-                print("⚠️ ScopeNoteDetailView: failed to attach: \(error)")
+                await MainActor.run {
+                    ToastService.shared.showError("Couldn't attach: \(error.localizedDescription)")
+                }
             }
         }
     }

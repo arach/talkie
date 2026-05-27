@@ -128,6 +128,7 @@
 		3A295348C9E5B3171890C593 /* GeminiService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95F0695BC582E2740F8700BD /* GeminiService.swift */; };
 		3A82694060BF7CD29FC9A051 /* Resources in Resources */ = {isa = PBXBuildFile; fileRef = 48A97AE8636C7CFD039A9631 /* Resources */; };
 		3A84FE35A80A8764AA263AC5 /* TalkieData.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7F37679E41BF9883C8531F3 /* TalkieData.swift */; };
+		7A571CE000000000000000B1 /* ToastService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A571CE000000000000000F1 /* ToastService.swift */; };
 		3AF6A0A6C8984CA0EC7F1E8C /* TranscriptVersionModel+CloudKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DE6D960ECC5B682EB15EE43 /* TranscriptVersionModel+CloudKit.swift */; };
 		3B2F00A181FAA34E52FA1495 /* TrayDragSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC7338A369F703909C2C691A /* TrayDragSource.swift */; };
 		3BB8D709F21DA3DC7040B67B /* ManagedAgentConsoleModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A111CACEC92EE3DB70DFDE37 /* ManagedAgentConsoleModel.swift */; };
@@ -910,6 +911,7 @@
 		B77DD31A8614224637F33F74 /* MemosViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemosViewModel.swift; sourceTree = "<group>"; };
 		B7AD6A10334A0F0BD97ECA9B /* NotchInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchInfo.swift; sourceTree = "<group>"; };
 		B7F37679E41BF9883C8531F3 /* TalkieData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieData.swift; sourceTree = "<group>"; };
+		7A571CE000000000000000F1 /* ToastService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastService.swift; sourceTree = "<group>"; };
 		B7F857C41477C5EDF314E241 /* AuditRunDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuditRunDetailView.swift; sourceTree = "<group>"; };
 		B848CA51647C728E15DE9B85 /* settings-01-dictation-capture.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "settings-01-dictation-capture.png"; sourceTree = "<group>"; };
 		B85E11D8D3E8BED31169CF0F /* Migrations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Migrations.swift; sourceTree = "<group>"; };
@@ -2185,6 +2187,7 @@
 				21E7CFB7BA19EE59D1A229FC /* SpeechSynthesisService.swift */,
 				2FB70FA4E7E1B2231E8E9264 /* SyncQueue.swift */,
 				9B58FB85A27C5849FF8313D7 /* SystemRoutes.swift */,
+				7A571CE000000000000000F1 /* ToastService.swift */,
 				B7F37679E41BF9883C8531F3 /* TalkieData.swift */,
 				84A73CE1C82339B07ED6BD9A /* TalkieServer.swift */,
 				F59E586AB573B09D4CA56576 /* TalkieSettingsConfiguration.swift */,
@@ -2744,6 +2747,7 @@
 				3C78567EF5ECF4CE903160D0 /* TalkieChromeBar.swift in Sources */,
 				266718FBC0A9B1F4E58C9E6A /* TalkieComponents.swift in Sources */,
 				3A84FE35A80A8764AA263AC5 /* TalkieData.swift in Sources */,
+				7A571CE000000000000000B1 /* ToastService.swift in Sources */,
 				C274CD58C3BEABE5C134A5A8 /* TalkieDetailLayout.swift in Sources */,
 				68132B9194554B25C0B12B73 /* TalkieExtension.swift in Sources */,
 				D26516B4906D1987C50FDC33 /* TalkiePage.swift in Sources */,
