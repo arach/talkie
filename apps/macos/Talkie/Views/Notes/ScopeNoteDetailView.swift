@@ -40,6 +40,16 @@ private enum NoteFont {
 
 struct ScopeNoteDetailView: View {
     let note: TalkieObject
+    /// Library passes through so Delete from the rail/menu can clear selection.
+    var onDelete: (() -> Void)? = nil
+
+    @State private var isEditing = false
+    @State private var editedText: String = ""
+    @State private var saveTask: Task<Void, Never>? = nil
+    @State private var showShareSheet = false
+
+    private var viewModel: RecordingsViewModel { .shared }
+    private var repository: TalkieObjectRepository { TalkieObjectRepository() }
 
     var body: some View {
         GeometryReader { proxy in
@@ -153,14 +163,27 @@ struct ScopeNoteDetailView: View {
             // macOS rendering; switching to sans with more line spacing
             // gives the note body the airier feel intentional notes
             // want — closer to a notebook page than a printed article.
-            VStack(alignment: .leading, spacing: 14) {
-                ForEach(Array(bodyParagraphs.enumerated()), id: \.offset) { _, paragraph in
-                    Text(paragraph)
+            Group {
+                if isEditing {
+                    TextEditor(text: $editedText)
                         .font(.system(size: 13.5, weight: .regular, design: .default))
-                        .foregroundStyle(ThemedScopeInk.dim)
+                        .foregroundStyle(ThemedScopeInk.primary)
                         .lineSpacing(7)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .scrollContentBackground(.hidden)
+                        .background(Color.clear)
+                        .frame(minHeight: 220, idealHeight: 320, alignment: .topLeading)
+                        .padding(.leading, -5)  // counter TextEditor's insets
+                } else {
+                    VStack(alignment: .leading, spacing: 14) {
+                        ForEach(Array(bodyParagraphs.enumerated()), id: \.offset) { _, paragraph in
+                            Text(paragraph)
+                                .font(.system(size: 13.5, weight: .regular, design: .default))
+                                .foregroundStyle(ThemedScopeInk.dim)
+                                .lineSpacing(7)
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                 }
             }
             .frame(maxWidth: proseMax, alignment: .leading)
@@ -222,14 +245,114 @@ struct ScopeNoteDetailView: View {
                 .tracking(2.8)
                 .foregroundStyle(ThemedScopeInk.faint)
                 .padding(.bottom, 4)
-            NoteRailAction(label: "Edit",   icon: "pencil",                 isPrimary: true, action: {})
-            NoteRailAction(label: "Star",   icon: "star",                   action: {})
-            NoteRailAction(label: "Pin",    icon: "pin",                    action: {})
-            NoteRailAction(label: "Share",  icon: "square.and.arrow.up",    action: {})
-            NoteRailAction(label: "Export", icon: "arrow.down.doc",         action: {})
+            NoteRailAction(
+                label: isEditing ? "Done" : "Edit",
+                icon:  isEditing ? "checkmark" : "pencil",
+                isPrimary: true,
+                action: { toggleEdit() }
+            )
+            NoteRailAction(
+                label: note.isStarred ? "Starred" : "Star",
+                icon:  note.isStarred ? "star.fill" : "star",
+                isActive: note.isStarred,
+                action: { Task { await viewModel.toggleStar(note) } }
+            )
+            NoteRailAction(
+                label: note.isPinned ? "Pinned" : "Pin",
+                icon:  note.isPinned ? "pin.fill" : "pin",
+                isActive: note.isPinned,
+                action: { Task { await viewModel.togglePin(note) } }
+            )
+            NoteRailAction(label: "Share",  icon: "square.and.arrow.up", action: { shareNote() })
+            NoteRailAction(label: "Export", icon: "arrow.down.doc",      action: { exportNote() })
             ThemedScopeRule(.subtle)
                 .padding(.vertical, 4)
-            NoteRailAction(label: "More",   icon: "ellipsis",               action: {})
+            Menu {
+                Button {
+                    copyNote()
+                } label: {
+                    Label("Copy text", systemImage: "doc.on.doc")
+                }
+                if onDelete != nil {
+                    Divider()
+                    Button(role: .destructive) {
+                        Task {
+                            await viewModel.deleteRecording(note)
+                            onDelete?()
+                        }
+                    } label: {
+                        Label("Delete note", systemImage: "trash")
+                    }
+                }
+            } label: {
+                NoteRailAction.menuLabel
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: - Action handlers
+
+    private func toggleEdit() {
+        if isEditing {
+            persistEditedText()
+            isEditing = false
+        } else {
+            editedText = note.text ?? ""
+            isEditing = true
+        }
+    }
+
+    private func persistEditedText() {
+        let trimmed = editedText
+        guard trimmed != (note.text ?? "") else { return }
+        saveTask?.cancel()
+        saveTask = Task {
+            do {
+                var updated = note
+                updated.text = trimmed
+                updated.lastModified = Date()
+                try await repository.saveRecording(updated)
+            } catch {
+                // Silent failure for now — toast service lands in iter #36.
+                print("⚠️ ScopeNoteDetailView: failed to save edited text: \(error)")
+            }
+        }
+    }
+
+    private func shareNote() {
+        let text = note.text ?? ""
+        guard !text.isEmpty else { return }
+        let picker = NSSharingServicePicker(items: [text])
+        if let window = NSApp.keyWindow,
+           let content = window.contentView {
+            picker.show(relativeTo: .zero, of: content, preferredEdge: .minY)
+        }
+    }
+
+    private func copyNote() {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(note.text ?? "", forType: .string)
+    }
+
+    private func exportNote() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.plainText]
+        panel.canCreateDirectories = true
+        let base = note.displayTitle
+            .components(separatedBy: CharacterSet(charactersIn: "/:\\"))
+            .joined(separator: "-")
+        panel.nameFieldStringValue = "\(base).md"
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            let header = "# \(note.displayTitle)\n\n"
+            let body = note.text ?? ""
+            let content = header + body + "\n"
+            do { try content.write(to: url, atomically: true, encoding: .utf8) }
+            catch { print("⚠️ ScopeNoteDetailView: failed to export: \(error)") }
         }
     }
 
@@ -281,7 +404,7 @@ struct ScopeNoteDetailView: View {
                 }
             }
             Spacer()
-            Button(action: {}) {
+            Button(action: pickAttachment) {
                 Text("+ ADD")
                     .font(NoteFont.mono(size: 9, weight: .semibold))
                     .tracking(2.2)
@@ -305,6 +428,53 @@ struct ScopeNoteDetailView: View {
             Rectangle().fill(ThemedScopeCanvas.surface)
                 .overlay(ThemedScopeRule(.row), alignment: .top)
         )
+    }
+
+    // MARK: - Attachment picker
+
+    private func pickAttachment() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.message = "Attach files to this note"
+        panel.begin { response in
+            guard response == .OK else { return }
+            for url in panel.urls {
+                addAttachment(from: url)
+            }
+        }
+    }
+
+    private func addAttachment(from url: URL) {
+        guard let result = AttachmentStorage.save(from: url, recordingId: note.id) else { return }
+        let kind = AttachmentKind.from(extension: url.pathExtension)
+        var width: Int?
+        var height: Int?
+        if kind == .image, let image = NSImage(contentsOf: url) {
+            width = Int(image.size.width)
+            height = Int(image.size.height)
+        }
+        let attachment = RecordingAttachment(
+            filename: result.filename,
+            originalName: url.lastPathComponent,
+            kind: kind,
+            fileSizeBytes: result.size,
+            width: width,
+            height: height
+        )
+        Task {
+            do {
+                let fresh = try await repository.fetchRecording(id: note.id)
+                var assets = fresh?.assets ?? TalkieObjectAssets()
+                var list = assets.attachments ?? []
+                list.append(attachment)
+                assets.attachments = list
+                try await repository.updateAssets(id: note.id, assetsJSON: assets.toJSON())
+            } catch {
+                print("⚠️ ScopeNoteDetailView: failed to attach: \(error)")
+            }
+        }
     }
 
     @ViewBuilder
@@ -349,40 +519,68 @@ private struct NoteRailAction: View {
     let label: String
     let icon: String
     var isPrimary: Bool = false
+    /// When true, render the row as a sticky toggled state (used for
+    /// Pin/Star when the value is set). Distinct from `isPrimary`,
+    /// which signals the most-common action regardless of state.
+    var isActive: Bool = false
     let action: () -> Void
 
     @State private var hovered = false
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 9) {
-                Image(systemName: icon)
-                    .font(.system(size: 12, weight: isPrimary ? .semibold : .regular))
-                    .frame(width: 14, alignment: .center)
-                Text(label)
-                    .font(.system(size: 12, weight: isPrimary ? .medium : .regular))
-                Spacer(minLength: 0)
-            }
-            .foregroundStyle(foregroundColor)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(backgroundFill)
-            )
+            content
         }
         .buttonStyle(.plain)
         .onHover { hovered = $0; if hovered { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() } }
         .animation(.easeOut(duration: 0.12), value: hovered)
+        .animation(.easeOut(duration: 0.12), value: isActive)
+    }
+
+    private var content: some View {
+        HStack(spacing: 9) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: (isPrimary || isActive) ? .semibold : .regular))
+                .frame(width: 14, alignment: .center)
+            Text(label)
+                .font(.system(size: 12, weight: (isPrimary || isActive) ? .medium : .regular))
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(foregroundColor)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 3)
+                .fill(backgroundFill)
+        )
+    }
+
+    /// Reusable label for the rail's "More" menu button so the visual
+    /// rhythm matches the rest of the rail rows.
+    static var menuLabel: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 12, weight: .regular))
+                .frame(width: 14, alignment: .center)
+            Text("More")
+                .font(.system(size: 12, weight: .regular))
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(ThemedScopeInk.faint)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .contentShape(Rectangle())
     }
 
     private var foregroundColor: Color {
+        if isActive { return ThemedScopeAccent.amber }
         if isPrimary { return hovered ? ThemedScopeAccent.amber : ThemedScopeAccent.brass }
         if hovered { return ThemedScopeInk.primary }
         return ThemedScopeInk.faint
     }
 
     private var backgroundFill: Color {
+        if isActive { return ThemedScopeAccent.amber.opacity(hovered ? 0.18 : 0.1) }
         if isPrimary {
             return hovered ? ThemedScopeAccent.amber.opacity(0.14) : ThemedScopeAccent.amber.opacity(0.07)
         }

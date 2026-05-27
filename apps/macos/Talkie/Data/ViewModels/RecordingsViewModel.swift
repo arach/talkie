@@ -325,6 +325,28 @@ final class RecordingsViewModel {
     func loadWithSemanticFilters() async { await startObservation() }
     func loadNextPageWithSemanticFilters() async { await loadNextPage() }
 
+    // MARK: - Pin / Star
+
+    /// Toggle pin on the given recording; the value observer will refresh the list.
+    func togglePin(_ recording: TalkieObject) async {
+        do {
+            try await repository.setRecordingPinned(id: recording.id, pinned: !recording.isPinned)
+        } catch {
+            self.error = error
+            log.error("Failed to toggle pin: \(error.localizedDescription)")
+        }
+    }
+
+    /// Toggle star on the given recording.
+    func toggleStar(_ recording: TalkieObject) async {
+        do {
+            try await repository.setRecordingStarred(id: recording.id, starred: !recording.isStarred)
+        } catch {
+            self.error = error
+            log.error("Failed to toggle star: \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Delete Operations
 
     /// Soft delete a recording (for memos)

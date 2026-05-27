@@ -37,6 +37,10 @@ private enum CapFont {
 
 struct ScopeCaptureDetailView: View {
     let capture: TalkieObject
+    /// Library passes through so Delete from the rail/foot can clear selection.
+    var onDelete: (() -> Void)? = nil
+
+    private var viewModel: RecordingsViewModel { .shared }
 
     var body: some View {
         GeometryReader { proxy in
@@ -375,11 +379,38 @@ struct ScopeCaptureDetailView: View {
             CapRailAction(label: "Copy",  icon: "doc.on.doc",            isPrimary: true, action: copyCapture)
             CapRailAction(label: "Annotate", icon: "sparkles.rectangle.stack", action: openMarkup)
             CapRailAction(label: "Open",  icon: "arrow.up.right.square", action: openInDefault)
-            CapRailAction(label: "Pin",   icon: "pin",                   action: {})
-            CapRailAction(label: "Share", icon: "square.and.arrow.up",   action: {})
+            CapRailAction(
+                label: capture.isPinned ? "Pinned" : "Pin",
+                icon:  capture.isPinned ? "pin.fill" : "pin",
+                isActive: capture.isPinned,
+                action: { Task { await viewModel.togglePin(capture) } }
+            )
+            CapRailAction(label: "Share", icon: "square.and.arrow.up", action: shareCapture)
             ThemedScopeRule(.subtle)
                 .padding(.vertical, 4)
-            CapRailAction(label: "More",  icon: "ellipsis",              action: {})
+            Menu {
+                Button {
+                    revealInFinder()
+                } label: {
+                    Label("Reveal in Finder", systemImage: "folder")
+                }
+                if onDelete != nil {
+                    Divider()
+                    Button(role: .destructive) {
+                        Task {
+                            await viewModel.deleteRecording(capture)
+                            onDelete?()
+                        }
+                    } label: {
+                        Label("Delete capture", systemImage: "trash")
+                    }
+                }
+            } label: {
+                CapRailAction.menuLabel
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -421,7 +452,7 @@ struct ScopeCaptureDetailView: View {
                 ThemedScopeRule(.subtle, axis: .vertical)
                     .frame(height: 12)
                     .padding(.horizontal, 4)
-                footAction(label: "Delete", tone: .red, action: {})
+                footAction(label: "Delete", tone: .red, action: deleteCapture)
             }
         }
         .padding(.horizontal, bodyPad)
@@ -464,6 +495,29 @@ struct ScopeCaptureDetailView: View {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
+    private func shareCapture() {
+        let items: [Any]
+        if let url = imageURL {
+            items = [url]
+        } else if let text = capture.text, !text.isEmpty {
+            items = [text]
+        } else {
+            return
+        }
+        let picker = NSSharingServicePicker(items: items)
+        if let window = NSApp.keyWindow,
+           let content = window.contentView {
+            picker.show(relativeTo: .zero, of: content, preferredEdge: .minY)
+        }
+    }
+
+    private func deleteCapture() {
+        Task {
+            await viewModel.deleteRecording(capture)
+            onDelete?()
+        }
+    }
+
     // MARK: - Helpers
 
     private func formatBytes(_ bytes: Int) -> String {
@@ -480,40 +534,66 @@ private struct CapRailAction: View {
     let label: String
     let icon: String
     var isPrimary: Bool = false
+    /// Sticky toggled state (Pin "on"). Distinct from `isPrimary`.
+    var isActive: Bool = false
     let action: () -> Void
 
     @State private var hovered = false
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 9) {
-                Image(systemName: icon)
-                    .font(.system(size: 12, weight: isPrimary ? .semibold : .regular))
-                    .frame(width: 14, alignment: .center)
-                Text(label)
-                    .font(.system(size: 12, weight: isPrimary ? .medium : .regular))
-                Spacer(minLength: 0)
-            }
-            .foregroundStyle(foregroundColor)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(backgroundFill)
-            )
+            content
         }
         .buttonStyle(.plain)
         .onHover { hovered = $0; if hovered { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() } }
         .animation(.easeOut(duration: 0.12), value: hovered)
+        .animation(.easeOut(duration: 0.12), value: isActive)
+    }
+
+    private var content: some View {
+        HStack(spacing: 9) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: (isPrimary || isActive) ? .semibold : .regular))
+                .frame(width: 14, alignment: .center)
+            Text(label)
+                .font(.system(size: 12, weight: (isPrimary || isActive) ? .medium : .regular))
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(foregroundColor)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 3)
+                .fill(backgroundFill)
+        )
+    }
+
+    /// Reusable label for the rail's "More" menu button so the visual
+    /// rhythm matches the rest of the rail rows.
+    static var menuLabel: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 12, weight: .regular))
+                .frame(width: 14, alignment: .center)
+            Text("More")
+                .font(.system(size: 12, weight: .regular))
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(ThemedScopeInk.faint)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .contentShape(Rectangle())
     }
 
     private var foregroundColor: Color {
+        if isActive { return ThemedScopeAccent.amber }
         if isPrimary { return hovered ? ThemedScopeAccent.amber : ThemedScopeAccent.brass }
         if hovered { return ThemedScopeInk.primary }
         return ThemedScopeInk.faint
     }
 
     private var backgroundFill: Color {
+        if isActive { return ThemedScopeAccent.amber.opacity(hovered ? 0.18 : 0.1) }
         if isPrimary {
             return hovered ? ThemedScopeAccent.amber.opacity(0.14) : ThemedScopeAccent.amber.opacity(0.07)
         }

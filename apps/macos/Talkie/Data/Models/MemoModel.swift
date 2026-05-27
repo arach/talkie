@@ -63,6 +63,13 @@ struct MemoModel: Identifiable, Codable, Hashable {
     /// User must approve in Cloud Manager to permanently delete
     var deletedAt: Date?
 
+    // MARK: - Pin / Star
+
+    /// When set, the row is pinned (sticky in the library).
+    var pinnedAt: Date?
+    /// When set, the row is starred (favorite).
+    var starredAt: Date?
+
     // MARK: - Workflows
 
     /// JSON array of pending workflow IDs
@@ -99,6 +106,8 @@ struct MemoModel: Identifiable, Codable, Hashable {
         macReceivedAt: Date? = nil,
         cloudSyncedAt: Date? = nil,
         deletedAt: Date? = nil,
+        pinnedAt: Date? = nil,
+        starredAt: Date? = nil,
         pendingWorkflowIds: String? = nil,
         revisionHistoryJSON: String? = nil
     ) {
@@ -124,6 +133,8 @@ struct MemoModel: Identifiable, Codable, Hashable {
         self.macReceivedAt = macReceivedAt
         self.cloudSyncedAt = cloudSyncedAt
         self.deletedAt = deletedAt
+        self.pinnedAt = pinnedAt
+        self.starredAt = starredAt
         self.pendingWorkflowIds = pendingWorkflowIds
         self.revisionHistoryJSON = revisionHistoryJSON
     }
@@ -157,6 +168,8 @@ extension MemoModel: FetchableRecord, PersistableRecord {
         static let macReceivedAt = Column(CodingKeys.macReceivedAt)
         static let cloudSyncedAt = Column(CodingKeys.cloudSyncedAt)
         static let deletedAt = Column(CodingKeys.deletedAt)
+        static let pinnedAt = Column(CodingKeys.pinnedAt)
+        static let starredAt = Column(CodingKeys.starredAt)
         static let pendingWorkflowIds = Column(CodingKeys.pendingWorkflowIds)
         static let revisionHistoryJSON = Column(CodingKeys.revisionHistoryJSON)
     }

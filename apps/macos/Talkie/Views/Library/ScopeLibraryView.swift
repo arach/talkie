@@ -660,13 +660,19 @@ struct ScopeLibraryView: View {
                 Group {
                     switch recording.type {
                     case .note:
-                        ScopeNoteDetailView(note: recording)
+                        ScopeNoteDetailView(
+                            note: recording,
+                            onDelete: { selectedRecordingIDs.remove(recording.id) }
+                        )
                     case .capture, .selection:
                         // Selections are text-content captures (Quick
                         // Selection grabs a passage). Same chrome as a
                         // screenshot capture; the hero branches on
                         // content.
-                        ScopeCaptureDetailView(capture: recording)
+                        ScopeCaptureDetailView(
+                            capture: recording,
+                            onDelete: { selectedRecordingIDs.remove(recording.id) }
+                        )
                     default:
                         TalkieView(recording: recording, onDelete: {
                             Task { await viewModel.deleteRecording(recording) }

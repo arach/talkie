@@ -1538,6 +1538,38 @@ final class DatabaseManager: @unchecked Sendable {
                          ifNotExists: true)
         }
 
+        // Migration v29: pin + star timestamps
+        // Stored as nullable dates so we keep the same shape as deletedAt
+        // (presence = set, plus a usable timestamp for ordering pinned items).
+        // Lives on both `voice_memos` (memo source-of-truth) and `recordings`
+        // (unified read path — captures + notes only live here).
+        migrator.registerMigration("v29_pin_and_star") { db in
+            try db.alter(table: "voice_memos") { t in
+                t.add(column: "pinnedAt", .datetime)
+                t.add(column: "starredAt", .datetime)
+            }
+            try db.alter(table: "recordings") { t in
+                t.add(column: "pinnedAt", .datetime)
+                t.add(column: "starredAt", .datetime)
+            }
+            try db.create(index: "idx_memos_pinned_at",
+                         on: "voice_memos",
+                         columns: ["pinnedAt"],
+                         ifNotExists: true)
+            try db.create(index: "idx_memos_starred_at",
+                         on: "voice_memos",
+                         columns: ["starredAt"],
+                         ifNotExists: true)
+            try db.create(index: "idx_recordings_pinned_at",
+                         on: "recordings",
+                         columns: ["pinnedAt"],
+                         ifNotExists: true)
+            try db.create(index: "idx_recordings_starred_at",
+                         on: "recordings",
+                         columns: ["starredAt"],
+                         ifNotExists: true)
+        }
+
         return migrator
     }
 

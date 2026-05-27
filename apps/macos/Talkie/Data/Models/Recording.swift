@@ -82,6 +82,8 @@ extension TalkieObject {
             macReceivedAt: nil,
             cloudSyncedAt: cloudSyncedAt,
             deletedAt: deletedAt,
+            pinnedAt: pinnedAt,
+            starredAt: starredAt,
             pendingWorkflowIds: pendingWorkflowIds
         )
     }
@@ -106,6 +108,8 @@ extension TalkieObject {
             createdAt: memo.createdAt,
             lastModified: memo.lastModified,
             deletedAt: memo.deletedAt,
+            pinnedAt: memo.pinnedAt,
+            starredAt: memo.starredAt,
             source: RecordingSource.from(originDeviceId: memo.originDeviceId),
             sourceDeviceId: memo.originDeviceId,
             promotedAt: nil,
