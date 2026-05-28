@@ -199,9 +199,13 @@ struct ScopeCaptureDetailView: View {
             .padding(.top, 20)
             .frame(maxWidth: .infinity, alignment: .center)
 
-            // Promote-to-Note CTA
+            // Promote-to-Note CTA. The capture stays in the same row
+            // in the library — it just changes shape, so the user can
+            // start composing on top of it (caption, follow-on notes,
+            // workflows). Library will re-route to ScopeNoteDetailView
+            // on next selection because the type switched.
             HStack(spacing: 12) {
-                Button(action: {}) {
+                Button(action: promoteToNote) {
                     HStack(spacing: 8) {
                         Text("＋ ADD CAPTION")
                             .font(ScopeType.mono(size: 10, weight: .semibold))
@@ -220,6 +224,7 @@ struct ScopeCaptureDetailView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .keyboardShortcut("n", modifiers: .command)
                 Text("⌘N")
                     .font(ScopeType.mono(size: 9, weight: .regular))
                     .tracking(1.8)
@@ -505,6 +510,26 @@ struct ScopeCaptureDetailView: View {
         Task {
             await viewModel.deleteRecording(capture)
             onDelete?()
+        }
+    }
+
+    /// Promote this capture into a note so the user can author a
+    /// caption / follow-on content. The screenshot stays attached;
+    /// the library re-routes to ScopeNoteDetailView on the same id
+    /// since the type now reads as `.note`.
+    private func promoteToNote() {
+        Task {
+            do {
+                var updated = capture
+                updated.type = .note
+                updated.lastModified = Date()
+                let repository = TalkieObjectRepository()
+                try await repository.saveRecording(updated)
+                await viewModel.loadRecordings()
+                ToastService.shared.showSuccess("Promoted to note")
+            } catch {
+                ToastService.shared.showError("Couldn't promote: \(error.localizedDescription)")
+            }
         }
     }
 
