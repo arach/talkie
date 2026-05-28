@@ -263,6 +263,7 @@ struct ScopeNoteDetailView: View {
                 isPrimary: true,
                 action: { toggleEdit() }
             )
+            .background(editKeyboardShortcut)
             NoteRailAction(
                 label: note.isStarred ? "Starred" : "Star",
                 icon:  note.isStarred ? "star.fill" : "star",
@@ -302,6 +303,24 @@ struct ScopeNoteDetailView: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// Hidden Buttons that bind ⌘E and ⌘Return so keyboard-driven users
+    /// can toggle edit / save without reaching for the rail. Lives in a
+    /// `.background` of the Edit row so the buttons are mounted but
+    /// invisible. Each branch on `isEditing` so the wrong shortcut
+    /// doesn't fire in the wrong state.
+    @ViewBuilder
+    private var editKeyboardShortcut: some View {
+        if isEditing {
+            Button("Save & close edit") { toggleEdit() }
+                .keyboardShortcut(.return, modifiers: .command)
+                .hidden()
+        } else {
+            Button("Edit note") { toggleEdit() }
+                .keyboardShortcut("e", modifiers: .command)
+                .hidden()
         }
     }
 
