@@ -1486,6 +1486,9 @@ private struct WorkflowAgentTurnsPanel: View {
 
     @State private var prompt = ""
     @State private var localTurns: [WorkflowAgentTurnDraft] = []
+    @State private var isDictating = false
+    @State private var isTranscribingDictation = false
+    @State private var dictationError: String?
 
     private var run: ActionRunModel? {
         context.run
@@ -1532,16 +1535,17 @@ private struct WorkflowAgentTurnsPanel: View {
 
     private var composer: some View {
         HStack(alignment: .bottom, spacing: Spacing.sm) {
-            Button(action: {}) {
-                Image(systemName: "mic.fill")
+            Button(action: toggleDictation) {
+                Image(systemName: isDictating ? "stop.circle.fill" : "mic.fill")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.current.foregroundSecondary)
+                    .foregroundStyle(isDictating ? Color.red : Theme.current.foregroundSecondary)
                     .frame(width: 32, height: 32)
                     .background(Theme.current.surface1)
                     .clipShape(.rect(cornerRadius: CornerRadius.xs))
             }
             .buttonStyle(.plain)
-            .help("Voice input")
+            .disabled(isTranscribingDictation)
+            .help(isDictating ? "Recording — click to stop" : "Dictate into the prompt")
 
             TextField("Message agent...", text: $prompt, axis: .vertical)
                 .textFieldStyle(.plain)
@@ -1600,6 +1604,50 @@ private struct WorkflowAgentTurnsPanel: View {
             profile: .talkieAgent,
             prompt: agentContextPrompt(instruction: instruction)
         )
+    }
+
+    private func toggleDictation() {
+        if isDictating {
+            Task { await stopDictation() }
+        } else if !isTranscribingDictation {
+            startDictation()
+        }
+    }
+
+    private func startDictation() {
+        // Optimistic: flip the visual immediately so the user sees feedback
+        // before AVAudioEngine spin-up completes. Revert on failure.
+        isDictating = true
+        dictationError = nil
+        do {
+            try EphemeralTranscriber.shared.startCapture(purpose: .composeDictation)
+        } catch {
+            isDictating = false
+            dictationError = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func stopDictation() async {
+        guard isDictating else { return }
+        isDictating = false
+        isTranscribingDictation = true
+        do {
+            let text = try await EphemeralTranscriber.shared.stopAndTranscribe()
+            isTranscribingDictation = false
+            let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !cleaned.isEmpty else { return }
+            // Append to existing draft (with leading space) so dictation augments
+            // rather than overwrites whatever the user was typing.
+            if prompt.isEmpty {
+                prompt = cleaned
+            } else {
+                prompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines) + " " + cleaned
+            }
+        } catch {
+            isTranscribingDictation = false
+            dictationError = error.localizedDescription
+        }
     }
 
     private func agentContextPrompt(instruction: String) -> String {
