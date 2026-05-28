@@ -100,7 +100,8 @@ struct SectionRouter: View {
                 // would dead-disable seek before first play.
                 onTimestampSeek: (recording.hasAudio && recording.duration > 0)
                     ? { seconds in onSeek(seconds / recording.duration) }
-                    : nil
+                    : nil,
+                currentTime: currentTime
             )
 
         case .playback:

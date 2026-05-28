@@ -764,6 +764,9 @@ struct RecordingTranscriptCard: View {
     /// Optional seek hook fired when a paragraph timestamp is clicked.
     /// Takes absolute seconds from audio start.
     var onTimestampSeek: ((Double) -> Void)? = nil
+    /// Current playback time, threaded through to DocumentBody so the
+    /// "now playing" paragraph gets a subtle reading highlight.
+    var currentTime: TimeInterval = 0
 
     private let settings = SettingsManager.shared
     private let quickOpenService = QuickOpenService.shared
@@ -1048,7 +1051,8 @@ struct RecordingTranscriptCard: View {
                         // groups here would produce a second right column
                         // alongside the rail.
                         segments: recording.assets?.segments,
-                        onSeek: onTimestampSeek
+                        onSeek: onTimestampSeek,
+                        currentTime: currentTime
                     )
                 }
             }
@@ -1359,6 +1363,11 @@ struct DocumentBody: View {
     /// Tap-the-timestamp seek hook. Takes absolute seconds from audio
     /// start. When nil, paragraph timestamps render as static labels.
     var onSeek: ((Double) -> Void)? = nil
+    /// Current playback time (seconds from audio start). When > 0 and
+    /// timings are available, the paragraph containing this time is
+    /// rendered with a subtle "now playing" treatment so the reader
+    /// can follow along with audio.
+    var currentTime: TimeInterval = 0
 
     @State private var hoveredParagraphIndex: Int? = nil
 
@@ -1585,13 +1594,15 @@ struct DocumentBody: View {
         let seconds = computedDisplaySeconds(for: rest)
         let boundaries = boundaryIndices(seconds: seconds)
 
+        let nowPlayingIdx = currentParagraphIndex(seconds: seconds)
         return VStack(alignment: .leading, spacing: paragraphSpacing) {
             ForEach(Array(rest.enumerated()), id: \.offset) { idx, p in
                 paragraphRow(
                     index: idx,
                     paragraph: p,
                     seconds: seconds[idx],
-                    isBoundary: boundaries.contains(idx)
+                    isBoundary: boundaries.contains(idx),
+                    isNowPlaying: nowPlayingIdx == idx
                 )
             }
             endSlug
@@ -1616,16 +1627,27 @@ struct DocumentBody: View {
     /// overlay by the parent `documentColumn`; this row just leaves
     /// the gutter+rule space empty. Timestamp is shown when (a) the
     /// paragraph crosses a 5-minute bucket boundary, or (b) the row
-    /// is hovered. Click → seek.
+    /// is hovered, or (c) it's the currently-playing paragraph.
+    /// Click → seek.
     @ViewBuilder
-    private func paragraphRow(index: Int, paragraph p: Paragraph, seconds: Double?, isBoundary: Bool) -> some View {
+    private func paragraphRow(
+        index: Int,
+        paragraph p: Paragraph,
+        seconds: Double?,
+        isBoundary: Bool,
+        isNowPlaying: Bool
+    ) -> some View {
         let isHovered = hoveredParagraphIndex == index
-        let shouldShowStamp = isBoundary || isHovered
+        let shouldShowStamp = isBoundary || isHovered || isNowPlaying
 
         HStack(alignment: .top, spacing: 12) {
-            timestampSlot(seconds: seconds, visible: shouldShowStamp, prominent: isBoundary)
-                .frame(width: 36, alignment: .trailing)
-                .padding(.top, 4)
+            timestampSlot(
+                seconds: seconds,
+                visible: shouldShowStamp,
+                prominent: isBoundary || isNowPlaying
+            )
+            .frame(width: 36, alignment: .trailing)
+            .padding(.top, 4)
 
             // Spacer column where the continuous rule lives. Same
             // width (1pt) as the rule so layout matches what we'd get
@@ -1635,7 +1657,7 @@ struct DocumentBody: View {
             Text(p.text)
                 .font(.system(size: bodyFontSize, weight: .regular))
                 .lineSpacing(bodyLineSpacing)
-                .foregroundColor(Theme.current.foreground.opacity(0.78))
+                .foregroundColor(Theme.current.foreground.opacity(isNowPlaying ? 0.98 : 0.78))
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1648,6 +1670,25 @@ struct DocumentBody: View {
                 hoveredParagraphIndex = nil
             }
         }
+        .animation(.easeInOut(duration: 0.25), value: isNowPlaying)
+    }
+
+    /// Which paragraph contains `currentTime`. The paragraph at index
+    /// i owns the half-open range `[seconds[i], seconds[i+1])`; the
+    /// last paragraph owns everything from its start to the end of
+    /// the audio. Returns nil when we don't have usable timings.
+    private func currentParagraphIndex(seconds: [Double?]) -> Int? {
+        guard currentTime > 0 else { return nil }
+        var lastValidIdx: Int? = nil
+        for (idx, s) in seconds.enumerated() {
+            guard let s else { continue }
+            if currentTime >= s {
+                lastValidIdx = idx
+            } else {
+                break
+            }
+        }
+        return lastValidIdx
     }
 
     /// The gutter timestamp. When seek is wired, renders as a button;

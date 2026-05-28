@@ -26,6 +26,10 @@ struct TOTranscriptSection: View {
     /// Optional audio-seek hook propagated to RecordingTranscriptCard's
     /// paragraph timestamps. Takes absolute seconds.
     var onTimestampSeek: ((Double) -> Void)? = nil
+    /// Current playback time, threaded into RecordingTranscriptCard so
+    /// DocumentBody can render a "now playing" highlight on the
+    /// matching paragraph.
+    var currentTime: TimeInterval = 0
 
     private var needsTranscription: Bool {
         (recording.transcriptionStatus == .failed || recording.transcriptionStatus == .pending)
@@ -66,7 +70,8 @@ struct TOTranscriptSection: View {
                 isRetranscribing: isRetranscribing,
                 onTranscriptChange: { onTranscriptChange() },
                 onRetranscribe: { modelId in onRetranscribe(modelId) },
-                onTimestampSeek: onTimestampSeek
+                onTimestampSeek: onTimestampSeek,
+                currentTime: currentTime
             )
             // Continue-memo affordance moved into TOHeaderSection's
             // inlineActionRow as a real labeled chip. The previous
