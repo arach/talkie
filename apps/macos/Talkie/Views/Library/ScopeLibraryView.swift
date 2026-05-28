@@ -185,7 +185,19 @@ struct ScopeLibraryView: View {
                 suppressFilterReload = false
                 return
             }
-            Task { await viewModel.toggleSemanticFilter(newValue.semanticFilter) }
+            Task {
+                await viewModel.toggleSemanticFilter(newValue.semanticFilter)
+                await MainActor.run {
+                    // If the prior selection is no longer in the filtered list,
+                    // pick the first row of the new list so the inspector isn't
+                    // stranded blank.
+                    let visibleIds = Set(viewModel.recordings.map(\.id))
+                    let stillVisible = selectedRecordingIDs.intersection(visibleIds)
+                    if stillVisible.isEmpty, let first = viewModel.recordings.first {
+                        selectedRecordingIDs = [first.id]
+                    }
+                }
+            }
         }
         .onChange(of: searchText) { _, newValue in
             searchTask?.cancel()
@@ -448,6 +460,13 @@ struct ScopeLibraryView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 11))
                 .foregroundStyle(ScopeInk.dim)
+                .onKeyPress(.escape) {
+                    if !searchText.isEmpty {
+                        searchText = ""
+                        return .handled
+                    }
+                    return .ignored
+                }
             if !searchText.isEmpty {
                 Button {
                     searchText = ""
@@ -706,6 +725,16 @@ private struct ScopeLibraryRow: View {
 
     @State private var isHovered = false
 
+    /// PNG file URL for capture rows — enables drag-out to other apps.
+    /// Returns nil for non-capture rows (memo/dictation/note/selection),
+    /// which fall back to an empty `NSItemProvider` so the existing
+    /// row-click behavior isn't disturbed.
+    private var captureFileURL: URL? {
+        guard recording.type == .capture,
+              let filename = recording.screenshots.first?.filename else { return nil }
+        return ScreenshotStorage.screenshotsDirectory.appendingPathComponent(filename)
+    }
+
     private var channelLetter: String {
         switch recording.type {
         case .memo: return "M"
@@ -842,6 +871,12 @@ private struct ScopeLibraryRow: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .contentShape(Rectangle())
+        .onDrag {
+            if let url = captureFileURL {
+                return NSItemProvider(object: url as NSURL)
+            }
+            return NSItemProvider()  // empty for non-captures
+        }
     }
 
     private var timeAgo: String {
