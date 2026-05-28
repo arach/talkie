@@ -181,7 +181,19 @@ struct ScopeLibraryView: View {
                 suppressFilterReload = false
                 return
             }
-            Task { await viewModel.toggleSemanticFilter(newValue.semanticFilter) }
+            Task {
+                await viewModel.toggleSemanticFilter(newValue.semanticFilter)
+                await MainActor.run {
+                    // If the prior selection is no longer in the filtered list,
+                    // pick the first row of the new list so the inspector isn't
+                    // stranded blank.
+                    let visibleIds = Set(viewModel.recordings.map(\.id))
+                    let stillVisible = selectedRecordingIDs.intersection(visibleIds)
+                    if stillVisible.isEmpty, let first = viewModel.recordings.first {
+                        selectedRecordingIDs = [first.id]
+                    }
+                }
+            }
         }
         .onChange(of: searchText) { _, newValue in
             searchTask?.cancel()
@@ -463,6 +475,13 @@ struct ScopeLibraryView: View {
                 .focused($searchFieldFocused)
                 .onReceive(NotificationCenter.default.publisher(for: .focusLibrarySearch)) { _ in
                     searchFieldFocused = true
+                }
+                .onKeyPress(.escape) {
+                    if !searchText.isEmpty {
+                        searchText = ""
+                        return .handled
+                    }
+                    return .ignored
                 }
             if !searchText.isEmpty {
                 Button {
