@@ -165,6 +165,7 @@
 		4B5EE0AB97A7A67EA90A21D8 /* ScreenshotPreviewPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8DE7D34B7650E668A4D4A46 /* ScreenshotPreviewPanel.swift */; };
 		4B7FA677771D42FAC5CC4AC6 /* LLMModelCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 478B8969CCF8329C0038C831 /* LLMModelCards.swift */; };
 		4C10B512C74503D11EF59795 /* ScopeLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5664E4A5668D96EB83E63B3A /* ScopeLibraryView.swift */; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* RecentlyDeletedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B2C3D4E5F6A7B8C9D0E1F2 /* RecentlyDeletedView.swift */; };
 		4CDB7BAA9BCFC320223C61E1 /* AuditRunDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7F857C41477C5EDF314E241 /* AuditRunDetailView.swift */; };
 		4D0FF6D8AA2B517D6F329293 /* BuildInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76D097437D3CBB76ADE1BD3B /* BuildInfo.swift */; };
 		4D3FD4085D2DB795DCF778FF /* TextDiff.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BD8DF892503A5D50D83286A /* TextDiff.swift */; };
@@ -708,6 +709,7 @@
 		55ED3C1ECEB6EE9A165E043E /* ModelInstallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelInstallView.swift; sourceTree = "<group>"; };
 		564536C8D1D22F1C51FBDCCE /* NoteComposeCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteComposeCard.swift; sourceTree = "<group>"; };
 		5664E4A5668D96EB83E63B3A /* ScopeLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScopeLibraryView.swift; sourceTree = "<group>"; };
+		B1B2C3D4E5F6A7B8C9D0E1F2 /* RecentlyDeletedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentlyDeletedView.swift; sourceTree = "<group>"; };
 		5699D36DE5FDBFFC9D5DB2AC /* TranscriptFileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptFileManager.swift; sourceTree = "<group>"; };
 		56B351A3A4AF6A3815B5B3E2 /* SidebarLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarLayout.swift; sourceTree = "<group>"; };
 		579BF76B5B95DA96C1465E94 /* KeyboardShortcutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutView.swift; sourceTree = "<group>"; };
@@ -1577,6 +1579,7 @@
 			children = (
 				FEFA9D9485C8EBE6644BF4EB /* ScopeLibraryEmptyState.swift */,
 				5664E4A5668D96EB83E63B3A /* ScopeLibraryView.swift */,
+				B1B2C3D4E5F6A7B8C9D0E1F2 /* RecentlyDeletedView.swift */,
 			);
 			path = Library;
 			sourceTree = "<group>";
@@ -2642,6 +2645,7 @@
 				0145C0C477C7E6101A790CEC /* ScopeLearnScreen.swift in Sources */,
 				E818418118BE4FE5B9EF71D3 /* ScopeLibraryEmptyState.swift in Sources */,
 				4C10B512C74503D11EF59795 /* ScopeLibraryView.swift in Sources */,
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* RecentlyDeletedView.swift in Sources */,
 				265D767D7F0F717CBE8406ED /* ScopeModelsView.swift in Sources */,
 				8BF11A619D97715CEE45179C /* ScopeNotesScreen.swift in Sources */,
 				8B78EDDEEEE4739E29D07B93 /* ScopeNoteDetailView.swift in Sources */,

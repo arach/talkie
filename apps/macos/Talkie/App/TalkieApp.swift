@@ -298,6 +298,11 @@ private struct TalkieCommands: Commands {
             }
             .keyboardShortcut("/", modifiers: [.command, .shift])
 
+            Button("Recently Deleted") {
+                NavigationState.shared.navigate(to: .recentlyDeleted)
+            }
+            .keyboardShortcut(.delete, modifiers: [.command, .shift])
+
             #if DEBUG
             Divider()
 

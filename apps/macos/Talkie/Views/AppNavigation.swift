@@ -36,6 +36,7 @@ enum NavigationSection: Hashable {
     case systemConsole
     case screenshots
     case pendingActions
+    case recentlyDeleted  // Restore or permanently delete soft-deleted memos / notes
     case talkieService  // Accessible via engine icon click, not in sidebar
     case talkieLiveMonitor  // Accessible via live icon click, not in sidebar
     case models
@@ -68,6 +69,7 @@ extension NavigationSection {
         case .systemConsole: return "Console"
         case .screenshots: return "Screenshots"
         case .pendingActions: return "PendingActions"
+        case .recentlyDeleted: return "RecentlyDeleted"
         case .talkieService: return "TalkieService"
         case .talkieLiveMonitor: return "TalkieAgentMonitor"
         case .models: return "Models"
@@ -591,7 +593,8 @@ struct AppNavigation: View {
     private var usesTwoColumns: Bool {
         switch selectedSection {
         case .home, .drafts, .notes, .models, .allowedCommands, .aiResults, .allMemos,
-             .recordings, .liveDashboard, .dictations, .systemConsole, .pendingActions, .contextRules, .screenshots:
+             .recordings, .liveDashboard, .dictations, .systemConsole, .pendingActions,
+             .recentlyDeleted, .contextRules, .screenshots:
             return true
         #if DEBUG
         case .designHome, .designAudit, .designComponents:
@@ -1121,6 +1124,9 @@ struct AppNavigation: View {
                 case .pendingActions:
                     PendingActionsScreen()
                         .wrapInTalkieSection("PendingActions")
+                case .recentlyDeleted:
+                    RecentlyDeletedView()
+                        .wrapInTalkieSection("RecentlyDeleted", showHeader: false)
 
                 // Three-column sections
                 case .settings:
