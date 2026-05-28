@@ -39,9 +39,11 @@ struct ScopeNoteDetailView: View {
 
     @State private var isEditing = false
     @State private var editedText: String = ""
+    @State private var editedTitle: String = ""
     @State private var saveTask: Task<Void, Never>? = nil
     @State private var showShareSheet = false
     @FocusState private var bodyFieldFocused: Bool
+    @FocusState private var titleFieldFocused: Bool
 
     private var viewModel: RecordingsViewModel { .shared }
     private var repository: TalkieObjectRepository { TalkieObjectRepository() }
@@ -136,15 +138,29 @@ struct ScopeNoteDetailView: View {
                     .foregroundStyle(ThemedScopeInk.faint)
             }
 
-            // Title
-            Text(note.displayTitle)
-                .font(ScopeType.display(size: 26, weight: .medium))
-                .tracking(-0.3)
-                .foregroundStyle(ThemedScopeInk.primary)
-                .lineLimit(3)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 10)
+            // Title — TextField while editing so the user can set a
+            // real title (otherwise displayTitle stays a heuristic);
+            // plain Text otherwise. Same font + tracking either way
+            // so the swap reads as the field "wanting input" without
+            // shifting layout.
+            if isEditing {
+                TextField("Untitled", text: $editedTitle, prompt: Text("Untitled"))
+                    .textFieldStyle(.plain)
+                    .font(ScopeType.display(size: 26, weight: .medium))
+                    .tracking(-0.3)
+                    .foregroundStyle(ThemedScopeInk.primary)
+                    .focused($titleFieldFocused)
+                    .padding(.top, 10)
+            } else {
+                Text(note.displayTitle)
+                    .font(ScopeType.display(size: 26, weight: .medium))
+                    .tracking(-0.3)
+                    .foregroundStyle(ThemedScopeInk.primary)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 10)
+            }
 
             // Byline
             Text(bylineText)
@@ -293,11 +309,13 @@ struct ScopeNoteDetailView: View {
 
     private func toggleEdit() {
         if isEditing {
-            persistEditedText()
+            persistEdits()
             isEditing = false
             bodyFieldFocused = false
+            titleFieldFocused = false
         } else {
             editedText = note.text ?? ""
+            editedTitle = note.title ?? ""
             isEditing = true
             // Focus on the next runloop — the TextEditor isn't in the
             // hierarchy yet on this tick.
@@ -305,14 +323,17 @@ struct ScopeNoteDetailView: View {
         }
     }
 
-    private func persistEditedText() {
-        let trimmed = editedText
-        guard trimmed != (note.text ?? "") else { return }
+    private func persistEdits() {
+        let trimmedTitle = editedTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let titleChanged = trimmedTitle != (note.title ?? "")
+        let bodyChanged = editedText != (note.text ?? "")
+        guard titleChanged || bodyChanged else { return }
         saveTask?.cancel()
         saveTask = Task {
             do {
                 var updated = note
-                updated.text = trimmed
+                if bodyChanged { updated.text = editedText }
+                if titleChanged { updated.title = trimmedTitle.isEmpty ? nil : trimmedTitle }
                 updated.lastModified = Date()
                 try await repository.saveRecording(updated)
             } catch {
