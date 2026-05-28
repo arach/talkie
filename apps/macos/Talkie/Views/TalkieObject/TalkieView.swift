@@ -637,6 +637,9 @@ struct TalkieView: View {
                 log.info("Saved \(id.uuidString.prefix(8)) [\(source.rawValue), \(transcript.count) chars]")
             } catch {
                 log.error("Save failed for \(id.uuidString.prefix(8)): \(error.localizedDescription)")
+                await MainActor.run {
+                    ToastService.shared.showError("Couldn't save: \(error.localizedDescription)")
+                }
             }
         }
     }
@@ -891,6 +894,9 @@ struct TalkieView: View {
                 }
             } catch {
                 log.error("Failed to save notes: \(error.localizedDescription)")
+                await MainActor.run {
+                    ToastService.shared.showError("Couldn't save notes: \(error.localizedDescription)")
+                }
             }
         }
     }
@@ -1145,6 +1151,9 @@ struct TalkieView: View {
                 try await repository.updateAssets(id: recording.id, assetsJSON: assets.toJSON())
             } catch {
                 log.error("Failed to save attachments: \(error)")
+                await MainActor.run {
+                    ToastService.shared.showError("Couldn't save attachment: \(error.localizedDescription)")
+                }
             }
         }
     }
