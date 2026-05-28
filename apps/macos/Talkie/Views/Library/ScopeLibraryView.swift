@@ -213,6 +213,28 @@ struct ScopeLibraryView: View {
             footerBar
         }
         .frame(maxHeight: .infinity, alignment: .top)
+        .background(deleteHotkey)
+    }
+
+    /// Invisible button bound to ⌘⌫. macOS expects Cmd+Backspace to
+    /// delete the selected list item; everywhere else we lean on the
+    /// rail/menu Delete, but for keyboard-driven users this is the
+    /// missing affordance. Soft delete + undo toast is wired by
+    /// RecordingsViewModel.deleteRecording.
+    private var deleteHotkey: some View {
+        Button {
+            for id in selectedRecordingIDs {
+                if let record = viewModel.recordings.first(where: { $0.id == id }) {
+                    Task { await viewModel.deleteRecording(record) }
+                }
+            }
+            selectedRecordingIDs.removeAll()
+        } label: {
+            EmptyView()
+        }
+        .keyboardShortcut(.delete, modifiers: .command)
+        .disabled(selectedRecordingIDs.isEmpty)
+        .hidden()
     }
 
     private var newRecordingButton: some View {
