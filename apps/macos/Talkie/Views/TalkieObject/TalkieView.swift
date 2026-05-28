@@ -51,6 +51,13 @@ struct TalkieView: View {
     @State private var lastSavedTitle: String = ""
     @State private var lastSavedTranscript: String = ""
 
+    // Briefly surfaces "✓ Saved" near the title after a successful write.
+    // Cleared by a fire-and-forget Task ~1.5s later so the eyebrow returns
+    // to its neutral state.
+    @State private var showSavedBadge = false
+    @State private var exportError: String? = nil
+    @State private var showExportError = false
+
     /// Notes are always editable — no read/edit mode split.
     private var isAlwaysEditable: Bool { recording.isNote }
     private var effectiveIsEditing: Bool { isAlwaysEditable || isEditing }
@@ -300,6 +307,7 @@ struct TalkieView: View {
             onOpenInCompose: openInComposeAction,
             onContinueMemo: continueMemoAction,
             isDirty: isDirty,
+            showSavedBadge: showSavedBadge,
             onTitleChange: titleChangeAction
         )
     }
@@ -437,6 +445,61 @@ struct TalkieView: View {
                 .hidden()
         }
         #endif
+        // Hidden keyboard shortcuts: space toggles playback, ⌘P exports
+        // the transcript to a Markdown file. SwiftUI yields keyboardShortcut
+        // to focused text inputs, so neither fires while the user is
+        // editing the title or transcript.
+        .background(keyboardShortcutLayer)
+        .alert("Export failed", isPresented: $showExportError, presenting: exportError) { _ in
+            Button("OK", role: .cancel) {}
+        } message: { error in
+            Text(error)
+        }
+    }
+
+    // MARK: - Keyboard Shortcuts
+
+    @ViewBuilder
+    private var keyboardShortcutLayer: some View {
+        ZStack {
+            Button("Toggle playback") { togglePlayback() }
+                .keyboardShortcut(.space, modifiers: [])
+                .disabled(!(recording.hasAudio || fetchedAudioURL != nil))
+                .hidden()
+
+            Button("Export transcript") { exportTranscriptAsMarkdown() }
+                .keyboardShortcut("p", modifiers: .command)
+                .hidden()
+        }
+    }
+
+    // MARK: - Export
+
+    /// ⌘P export: writes the memo as a small Markdown document
+    /// (`# Title` + transcript) via NSSavePanel. Mirrors the existing
+    /// `.txt` export in the masthead, but produces a `.md` file with a
+    /// title header so the document round-trips into editors that
+    /// understand Markdown.
+    private func exportTranscriptAsMarkdown() {
+        let title = recording.displayTitle
+        let text = recording.text ?? ""
+        let markdown = "# \(title)\n\n\(text)\n"
+
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.plainText]
+        panel.nameFieldStringValue = "\(title).md"
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            do {
+                try markdown.write(to: url, atomically: true, encoding: .utf8)
+                log.info("Exported transcript to \(url.lastPathComponent)")
+            } catch {
+                Task { @MainActor in
+                    exportError = "Export failed: \(error.localizedDescription)"
+                    showExportError = true
+                }
+            }
+        }
     }
 
     // MARK: - Section Router Factory
@@ -596,6 +659,22 @@ struct TalkieView: View {
                 }
 
                 log.info("Saved \(id.uuidString.prefix(8)) [\(source.rawValue), \(transcript.count) chars]")
+
+                // Surface a brief "Saved" confirmation near the title.
+                // Only flash when this save was for the currently-shown
+                // recording (background flushes for an old id shouldn't
+                // light up the new memo's header).
+                await MainActor.run {
+                    if id == recording.id {
+                        showSavedBadge = true
+                    }
+                }
+                try? await Task.sleep(for: .milliseconds(1500))
+                await MainActor.run {
+                    if id == recording.id {
+                        showSavedBadge = false
+                    }
+                }
             } catch {
                 log.error("Save failed for \(id.uuidString.prefix(8)): \(error.localizedDescription)")
             }
