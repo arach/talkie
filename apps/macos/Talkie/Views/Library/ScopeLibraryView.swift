@@ -93,6 +93,13 @@ struct ScopeLibraryView: View {
     @AppStorage("scopeLibrary.listColumnWidth")
     private var listColumnWidth: Double = 520
 
+    /// Last picked type filter. Survives relaunch so coming back to
+    /// the library lands on whatever the user was last looking at.
+    /// `initialTypeFilter` (set by deep-link navigation) overrides
+    /// this on appearance, since the caller is asking for a specific tab.
+    @AppStorage("scopeLibrary.lastTypeFilter")
+    private var persistedTypeFilterRaw: String = RecordingTypeFilter.all.rawValue
+
 
     private var selectedRecording: TalkieObject? {
         guard selectedRecordingIDs.count == 1, let id = selectedRecordingIDs.first else { return nil }
@@ -143,10 +150,16 @@ struct ScopeLibraryView: View {
         .background(ScopeCanvas.canvas)
         .animation(.easeInOut(duration: 0.2), value: showingRecordingView)
         .task {
-            if initialTypeFilter != .all {
+            // Pick the initial filter:
+            //   1. Explicit deep-link (`initialTypeFilter != .all`) wins
+            //   2. Otherwise restore the user's last picked filter
+            //   3. Otherwise `.all`
+            let restored = RecordingTypeFilter(rawValue: persistedTypeFilterRaw) ?? .all
+            let desired = initialTypeFilter != .all ? initialTypeFilter : restored
+            if desired != .all {
                 suppressFilterReload = true
-                typeFilter = initialTypeFilter
-                viewModel.filterState.select(initialTypeFilter.semanticFilter)
+                typeFilter = desired
+                viewModel.filterState.select(desired.semanticFilter)
             }
             await viewModel.loadWithSemanticFilters()
             // Consume pending navigation params — when the home (or
@@ -163,6 +176,7 @@ struct ScopeLibraryView: View {
             consumePendingNavigationParams()
         }
         .onChange(of: typeFilter) { _, newValue in
+            persistedTypeFilterRaw = newValue.rawValue
             if suppressFilterReload {
                 suppressFilterReload = false
                 return
