@@ -41,6 +41,7 @@ struct ScopeNoteDetailView: View {
     @State private var editedText: String = ""
     @State private var saveTask: Task<Void, Never>? = nil
     @State private var showShareSheet = false
+    @FocusState private var bodyFieldFocused: Bool
 
     private var viewModel: RecordingsViewModel { .shared }
     private var repository: TalkieObjectRepository { TalkieObjectRepository() }
@@ -167,6 +168,7 @@ struct ScopeNoteDetailView: View {
                         .background(Color.clear)
                         .frame(minHeight: 220, idealHeight: 320, alignment: .topLeading)
                         .padding(.leading, -5)  // counter TextEditor's insets
+                        .focused($bodyFieldFocused)
                 } else {
                     VStack(alignment: .leading, spacing: 14) {
                         ForEach(Array(bodyParagraphs.enumerated()), id: \.offset) { _, paragraph in
@@ -293,9 +295,13 @@ struct ScopeNoteDetailView: View {
         if isEditing {
             persistEditedText()
             isEditing = false
+            bodyFieldFocused = false
         } else {
             editedText = note.text ?? ""
             isEditing = true
+            // Focus on the next runloop — the TextEditor isn't in the
+            // hierarchy yet on this tick.
+            DispatchQueue.main.async { bodyFieldFocused = true }
         }
     }
 
