@@ -313,11 +313,22 @@ final class DictationStore {
         }
     }
 
-    /// Dictations loaded in memory whose timestamp falls on the current local day.
-    var todayCount: Int {
-        let calendar = Calendar.current
-        return dictations.filter { calendar.isDateInToday($0.timestamp) }.count
+    /// Authoritative count for today's dictations, refreshed from SQLite.
+    private(set) var cachedTodayCount: Int {
+        didSet {
+            UserDefaults.standard.set(cachedTodayCount, forKey: "dictationTodayCount")
+            UserDefaults.standard.set(Self.todayCacheKey(for: Date()), forKey: "dictationTodayCountDate")
+        }
     }
+
+    /// Authoritative total words across dictations, refreshed from SQLite.
+    private(set) var totalWordCount: Int {
+        didSet {
+            UserDefaults.standard.set(totalWordCount, forKey: "dictationTotalWordCount")
+        }
+    }
+
+    var todayCount: Int { cachedTodayCount }
 
     /// TTL in hours - default 48 hours
     var ttlHours: Int = 48
@@ -336,6 +347,17 @@ final class DictationStore {
     private init() {
         // Instant load from UserDefaults
         cachedCount = UserDefaults.standard.integer(forKey: "dictationCount")
+        if UserDefaults.standard.string(forKey: "dictationTodayCountDate") == Self.todayCacheKey(for: Date()) {
+            cachedTodayCount = UserDefaults.standard.integer(forKey: "dictationTodayCount")
+        } else {
+            cachedTodayCount = 0
+        }
+        totalWordCount = UserDefaults.standard.integer(forKey: "dictationTotalWordCount")
+    }
+
+    private static func todayCacheKey(for date: Date) -> String {
+        let components = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return "\(components.year ?? 0)-\(components.month ?? 0)-\(components.day ?? 0)"
     }
 
     // MARK: - Public API
@@ -403,6 +425,10 @@ final class DictationStore {
         // Optimistically remove from local array
         dictations.removeAll { $0.id == dictation.id }
         cachedCount = max(0, cachedCount - 1)
+        if Calendar.current.isDateInToday(dictation.timestamp) {
+            cachedTodayCount = max(0, cachedTodayCount - 1)
+        }
+        totalWordCount = max(0, totalWordCount - dictation.wordCount)
     }
 
     /// Clear all dictations
@@ -412,6 +438,8 @@ final class DictationStore {
         // Optimistically clear local array
         dictations.removeAll()
         cachedCount = 0
+        cachedTodayCount = 0
+        totalWordCount = 0
         lastSeenDate = nil
     }
 
@@ -449,6 +477,13 @@ final class DictationStore {
 
                     if recordings.isEmpty {
                         // No new dictations - skip expensive processing (silent - this is the common case)
+                        async let todayQ = recordingRepo.countRecordingsToday(type: .dictation)
+                        async let wordsQ = recordingRepo.totalDictationWords()
+                        let (today, words) = try await (todayQ, wordsQ)
+                        await MainActor.run {
+                            self.cachedTodayCount = today
+                            self.totalWordCount = words
+                        }
                         return
                     }
 
@@ -540,14 +575,24 @@ final class DictationStore {
 
                 if isFirstLoad {
                     // First load needs authoritative total count.
-                    let count = try await recordingRepo.countDictations()
+                    async let countQ = recordingRepo.countDictations()
+                    async let todayQ = recordingRepo.countRecordingsToday(type: .dictation)
+                    async let wordsQ = recordingRepo.totalDictationWords()
+                    let (count, today, words) = try await (countQ, todayQ, wordsQ)
                     await MainActor.run {
                         self.cachedCount = count
+                        self.cachedTodayCount = today
+                        self.totalWordCount = words
                     }
                 } else if insertedCount > 0 {
                     // Incremental passes can update count cheaply from newly inserted rows.
+                    async let todayQ = recordingRepo.countRecordingsToday(type: .dictation)
+                    async let wordsQ = recordingRepo.totalDictationWords()
+                    let (today, words) = try await (todayQ, wordsQ)
                     await MainActor.run {
                         self.cachedCount += insertedCount
+                        self.cachedTodayCount = today
+                        self.totalWordCount = words
                     }
                 }
 

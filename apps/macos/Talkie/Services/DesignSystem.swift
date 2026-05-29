@@ -195,6 +195,10 @@ enum PageLayout {
     static let sectionSpacing: CGFloat = Spacing.lg
     /// 24pt - Spacing between header and first content
     static let headerSpacing: CGFloat = Spacing.xl
+    /// 1600pt - Detail bodies left-align by default; above this canvas
+    /// width they re-center, since hugging the leading edge on giant
+    /// monitors strands the body far from the masthead chrome.
+    static let recenterAbove: CGFloat = 1600
 }
 
 // MARK: - Home Card Heights

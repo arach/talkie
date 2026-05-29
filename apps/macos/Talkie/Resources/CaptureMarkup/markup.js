@@ -26,6 +26,13 @@
     /** Snapshot stacks for universal undo/redo. Pre-mutation snapshots of
      *  `document` (deep copy). Each side is capped at HISTORY_LIMIT. */
     history: { past: [], future: [] },
+    /** Per-tool defaults. Picked via the style stack on the toolbar.
+     *  Applied at layer creation; selected-layer live-edit is a follow-up. */
+    style: {
+      color: "#C47D1C",
+      strokeWidth: 2,
+      fontSize: 16,
+    },
   };
 
   const HISTORY_LIMIT = 50;
@@ -37,8 +44,18 @@
   const layerCount = document.getElementById("layer-count");
   const popover = document.getElementById("popover");
   const toolToolbar = document.getElementById("tool-toolbar");
-  const undoButton = toolToolbar.querySelector('[data-action="undo"]');
-  const redoButton = toolToolbar.querySelector('[data-action="redo"]');
+  const styleStack = document.getElementById("style-stack");
+  const zoomCluster = document.getElementById("canvas-zoom-cluster");
+  const zoomDisplay = document.getElementById("zoom-display");
+  // Undo / redo live in the floating canvas zoom cluster now (the top bar
+  // is pure drawing). Query both surfaces so a future relocation doesn't
+  // silently lose the enabled-state wiring.
+  const undoButton =
+    (zoomCluster && zoomCluster.querySelector('[data-action="undo"]')) ||
+    toolToolbar.querySelector('[data-action="undo"]');
+  const redoButton =
+    (zoomCluster && zoomCluster.querySelector('[data-action="redo"]')) ||
+    toolToolbar.querySelector('[data-action="redo"]');
 
   const DEFAULT_COLOR = "#C47D1C";
   // Tools that create a new layer by click-dragging on the canvas
@@ -369,6 +386,11 @@
     return { w, h, dpr };
   }
 
+  function updateZoomDisplay() {
+    if (!zoomDisplay) return;
+    zoomDisplay.textContent = Math.round((state.viewport.zoom || 1) * 100) + "%";
+  }
+
   function fitViewportToCanvas() {
     const rect = canvas.getBoundingClientRect();
     const vw = Math.max(1, state.viewport.width || 1);
@@ -377,6 +399,7 @@
     state.viewport.zoom = zoom;
     state.viewport.panX = (rect.width - vw * zoom) / 2;
     state.viewport.panY = (rect.height - vh * zoom) / 2;
+    updateZoomDisplay();
   }
 
   function zoomAt(clientX, clientY, factor) {
@@ -388,6 +411,7 @@
     state.viewport.zoom = next;
     state.viewport.panX = sx - before.x * next;
     state.viewport.panY = sy - before.y * next;
+    updateZoomDisplay();
     render();
   }
 
@@ -409,7 +433,8 @@
       id: uuid(),
       kind: "rect",
       frame,
-      color: DEFAULT_COLOR,
+      color: state.style.color,
+      strokeWidth: state.style.strokeWidth,
       visible: true,
       author: "user",
     };
@@ -421,7 +446,8 @@
       kind: "arrow",
       from,
       to,
-      color: DEFAULT_COLOR,
+      color: state.style.color,
+      strokeWidth: state.style.strokeWidth,
       // `label: "line"` is the sentinel the renderer reads to skip the arrowhead.
       // Schema-compliant — `label` is an optional string on CaptureMarkupLayer.
       label: asLine ? "line" : undefined,
@@ -436,7 +462,8 @@
       kind: "label",
       frame,
       text,
-      color: DEFAULT_COLOR,
+      color: state.style.color,
+      fontSize: state.style.fontSize,
       visible: true,
       author: "user",
     };
@@ -474,7 +501,14 @@
   function drawLayer(layer, w, h) {
     if (!layer.visible) return;
     ctx.save();
-    ctx.lineWidth = Math.max(2, w / 600);
+    // Stroke scales with image width so a thin pick doesn't disappear on
+    // 4K captures. `layer.strokeWidth` (set by the style stack at create
+    // time) is interpreted in relative units: 2 matches the historical
+    // default of `max(2, w/600)`, so existing sidecar docs that don't
+    // carry a strokeWidth still render unchanged.
+    const baseUnit = Math.max(1, w / 600);
+    const strokeUnits = typeof layer.strokeWidth === "number" ? layer.strokeWidth : 2;
+    ctx.lineWidth = strokeUnits * baseUnit;
     switch (layer.kind) {
       case "rect":
       case "highlight": {
@@ -737,8 +771,74 @@
     toolToolbar.querySelectorAll(".tool-btn").forEach((btn) => {
       btn.classList.toggle("active", btn.hasAttribute("data-tool") && btn.getAttribute("data-tool") === tool);
     });
+    updateStyleStackVisibility();
     // Cursor hint: crosshair while a create-tool is selected, default in select mode.
     updateCursor();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Style stack — per-tool defaults editor
+  //
+  // The style stack lives on the right half of the top toolbar. Groups
+  // are hidden/shown based on the active tool:
+  //   · shape tools (rect/arrow/line/blur) → stroke + color
+  //   · text tool                          → font-size + color
+  //   · null tool (select mode)            → all groups visible
+  //
+  // Clicking a swatch / pip updates `state.style`, which is the source
+  // of truth used by the layer factories when a new layer is created.
+  // ---------------------------------------------------------------------------
+  function updateStyleStackVisibility() {
+    if (!styleStack) return;
+    const tool = state.activeTool;
+    const isText = tool === "text";
+    const isShape = tool === "rect" || tool === "arrow" || tool === "line" || tool === "blur";
+
+    const strokeGroup = styleStack.querySelector('[data-group="stroke"]');
+    const fontDivider = styleStack.querySelector('[data-group="font-divider"]');
+    const fontGroup = styleStack.querySelector('[data-group="font-size"]');
+
+    if (strokeGroup) strokeGroup.classList.toggle("hidden", isText);
+    // Font controls only show when text is the active tool — they're
+    // meaningless for shape primitives. Null tool keeps them visible so
+    // the defaults panel shows everything you might pre-pick.
+    if (fontGroup) fontGroup.classList.toggle("hidden", isShape);
+    if (fontDivider) fontDivider.classList.toggle("hidden", isShape);
+  }
+
+  function applyStylePick(kind, value) {
+    if (kind === "stroke") {
+      state.style.strokeWidth = Number(value) || 2;
+    } else if (kind === "color") {
+      state.style.color = value;
+    } else if (kind === "font-size") {
+      state.style.fontSize = Number(value) || 16;
+    }
+  }
+
+  function markStyleButtonActive(btn) {
+    if (!btn) return;
+    const kind = btn.getAttribute("data-style");
+    if (!kind) return;
+    // Within a single group, exactly one button is active. Sibling
+    // buttons in the same group share the same data-style attribute.
+    styleStack
+      .querySelectorAll(`.style-btn[data-style="${kind}"]`)
+      .forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+  }
+
+  if (styleStack) {
+    styleStack.addEventListener("click", (e) => {
+      const btn = e.target.closest(".style-btn");
+      if (!btn) return;
+      const kind = btn.getAttribute("data-style");
+      const value = btn.getAttribute("data-value");
+      if (!kind || value === null) return;
+      applyStylePick(kind, value);
+      markStyleButtonActive(btn);
+      e.preventDefault();
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -782,8 +882,23 @@
   toolToolbar.addEventListener("click", (e) => {
     const btn = e.target.closest(".tool-btn");
     if (!btn) return;
-    const action = btn.getAttribute("data-action");
-    if (action) {
+    const tool = btn.getAttribute("data-tool");
+    if (tool === null) return;
+    setActiveTool(state.activeTool === tool ? null : tool);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Canvas zoom cluster — viewport + history actions
+  //
+  // Lives over the canvas (floating bottom-right) so the top toolbar
+  // stays pure drawing. Handles zoom in / out / fit + undo + redo.
+  // ---------------------------------------------------------------------------
+  if (zoomCluster) {
+    zoomCluster.addEventListener("click", (e) => {
+      const btn = e.target.closest(".zoom-btn");
+      if (!btn) return;
+      const action = btn.getAttribute("data-action");
+      if (!action) return;
       if (action === "undo") undo();
       else if (action === "redo") redo();
       else if (action === "zoom-in") zoomAt(null, null, 1.2);
@@ -793,11 +908,8 @@
         render();
       }
       e.preventDefault();
-      return;
-    }
-    const tool = btn.getAttribute("data-tool");
-    setActiveTool(state.activeTool === tool ? null : tool);
-  });
+    });
+  }
 
   // ---------------------------------------------------------------------------
   // Canvas interaction
@@ -1081,5 +1193,11 @@
     updateCursor();
     e.preventDefault();
   });
+
+  // Initial paint of the style-stack visibility + zoom badge. Both are
+  // safe to call before init() — they read live state but write only
+  // to the DOM, and start with a sane null-tool / 100% zoom default.
+  updateStyleStackVisibility();
+  updateZoomDisplay();
 
 })();

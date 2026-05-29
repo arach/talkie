@@ -23,7 +23,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   display: flex;
   align-items: center;
   gap: 4px;
-  height: 40px;
+  height: 44px;
   padding: 0 8px;
   background: var(--pane);
   border-bottom: 1px solid var(--edge);
@@ -32,6 +32,23 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
 
 .tool-toolbar.hidden {
   display: none;
+}
+
+.toolbar-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Inline vertical rule between toolbar sections. Treated as chrome —
+   never a content element. */
+.toolbar-divider,
+.style-divider {
+  display: inline-block;
+  width: 1px;
+  height: 20px;
+  margin: 0 8px;
+  background: var(--edge);
 }
 
 .tool-btn {
@@ -64,12 +81,170 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
 .tool-btn .glyph { font-size: 13px; line-height: 1; }
 .tool-btn .label { font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; }
 
-.toolbar-spacer { flex: 1; }
-.toolbar-hint {
-  font: 9px/1 ui-monospace, monospace;
-  letter-spacing: 0.18em;
+/* ─── Style Stack ─────────────────────────────────────────────────────
+   Contextual editor on the right half of the toolbar. Per-tool defaults
+   today (first port pass); selected-layer live-edit is a follow-up.
+
+   Groups are visible/hidden depending on the active tool:
+     · shape tools (rect/arrow/line/blur) → stroke + color
+     · text tool → font-size + color
+     · null tool → all groups visible (defaults panel) */
+
+.style-stack {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.style-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.style-group.hidden {
+  display: none;
+}
+
+.style-label {
+  font: 8.5px/1 ui-monospace, monospace;
+  letter-spacing: 0.20em;
   text-transform: uppercase;
-  color: rgba(35, 36, 35, 0.35);
+  color: rgba(35, 36, 35, 0.40);
+}
+
+.style-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.style-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 0.5px solid var(--edge);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.style-btn.active {
+  border-color: rgba(196, 125, 28, 0.55);
+  background: rgba(196, 125, 28, 0.10);
+}
+
+/* Stroke-width pip — a horizontal rule of the given thickness. Visual
+   weight changes with width; selected state recolors to amber-deep. */
+.stroke-pip {
+  display: block;
+  width: 14px;
+  background: var(--ink-faint);
+  border-radius: 1px;
+}
+.style-btn.stroke-pick.active .stroke-pip { background: #9a6310; }
+
+/* Color swatch — circular dot whose hue is set via `--c`. White is
+   special-cased so it still reads on a cream substrate. */
+.style-btn.swatch {
+  background: var(--c, var(--ink));
+  border-radius: 999px;
+  width: 16px;
+  height: 16px;
+}
+.style-btn.swatch.swatch-light {
+  border: 0.5px solid var(--edge);
+}
+.style-btn.swatch.active {
+  outline: 1.5px solid #9a6310;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px rgba(196, 125, 28, 0.18);
+}
+
+/* Font-size picker — text labels (S / M / L). Mono cap glyphs so they
+   read as controls, not body content. */
+.style-btn.font-pick {
+  font: 600 10px/1 ui-monospace, monospace;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+}
+.style-btn.font-pick.active {
+  color: #9a6310;
+}
+
+/* ─── Canvas Zoom Cluster (Hudson pattern) ────────────────────────────
+   Floats over the canvas bottom-right. Holds viewport controls (zoom
+   in/out/fit + percent badge) and history (undo/redo) so the top bar
+   can be pure drawing. */
+
+.canvas-wrap { position: relative; }
+
+.canvas-zoom-cluster {
+  position: absolute;
+  bottom: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: #ffffff;
+  border: 0.5px solid var(--edge);
+  border-radius: 5px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.55) inset,
+    0 4px 12px rgba(0, 0, 0, 0.10);
+  z-index: 10;
+}
+
+.zoom-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0.5px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  font: 12px/1 ui-monospace, monospace;
+}
+.zoom-btn:hover {
+  background: rgba(35, 36, 35, 0.04);
+  color: var(--ink);
+}
+.zoom-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.zoom-btn-label {
+  width: auto;
+  padding: 0 7px;
+  font: 600 8.5px/1 ui-monospace, monospace;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.zoom-divider {
+  display: inline-block;
+  width: 1px;
+  height: 14px;
+  margin: 0 2px;
+  background: var(--edge);
+}
+
+.zoom-badge {
+  font: 9.5px/1 ui-monospace, monospace;
+  color: rgba(35, 36, 35, 0.65);
+  padding: 0 4px;
+  min-width: 38px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .bay-body {

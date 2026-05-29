@@ -19,15 +19,9 @@ import {
   Note,
   Homescreen,
   HOMESCREEN_OVERLAY_TOP,
-  HOMESCREEN_FIRST_ROW_TOP,
-  HOMESCREEN_ROW_HEIGHT,
-  AMBER,
   INK,
   INK_FAINT,
   INK_FAINTER,
-  useTimeline,
-  smoothstep,
-  lerp,
   LiveFlourish,
   BirthAnimator,
 } from "./shared";
@@ -62,26 +56,11 @@ export function LightInstrument() {
         </Homescreen>
       </Stage>
       <Note>
-        The chrome is gone. No cancel, no REC chip, no mic/engine
-        whisper, no STOP pill — the surface is the wave, full stop.
-        The glass disc is a stronger pour than before so the
-        transparency stays felt but never leaks through to homescreen
-        content or stage edges behind it. Stop and cancel live on the
-        keyboard (<code>⌘.</code> / <code>esc</code>) in this
-        treatment; the surface refuses to compete with what it&rsquo;s
-        recording. Birth re-runs every 7s: blur 22 → 0, scale 0.93 →
-        1, stroke draws in left → right.
-      </Note>
-
-      <Stage tall>
-        <SettleHomescreen />
-      </Stage>
-      <Note>
-        Settle: trace decays AND fades to zero before the transcript
-        shows so text never reads against an ugly baseline. The line
-        emerges as italic display serif inside what was the card, then
-        the card itself compacts down into the placeholder row in the
-        memos list. The amber dot stays as the row leader. Loop ~11s.
+        Birth re-runs every 7s: blur 22 → 0, scale 0.93 → 1, stroke
+        draws in left → right. Decorations rest near-invisible (REC
+        timer + close top-right, STOP bottom-right) and sharpen on
+        hover; the resting state is the wave, full stop. ⌘. and esc
+        still drive stop / cancel from the keyboard.
       </Note>
     </TreatmentSection>
   );
@@ -113,9 +92,15 @@ function DiscMount({ children }: { children: React.ReactNode }) {
 }
 
 function FloatingDisc() {
+  // Corner decorations rest near-invisible (0.06) and sharpen on hover.
+  // Light-instrument's contract is "the surface is the wave" — even the
+  // close + stop affordances live like marginalia, barely felt until
+  // the cursor lands on them.
+  const restOpacity = 0.06;
+
   return (
     <div
-      className="relative flex items-center justify-center"
+      className="group relative flex items-center justify-center"
       style={{
         padding: "44px 56px",
         borderRadius: CARD_RADIUS,
@@ -134,122 +119,93 @@ function FloatingDisc() {
           ampVariance={0.25}
         />
       </div>
+
+      {/* Top-right: timer + REC label + close. Hover-reveal. */}
+      <div
+        className="absolute right-4 top-3 flex items-center gap-2 transition-opacity duration-200 group-hover:opacity-100"
+        style={{ opacity: restOpacity }}
+      >
+        <DiscDetails />
+        <DiscClose />
+      </div>
+
+      {/* Bottom-right: STOP. Hover-reveal. */}
+      <div
+        className="absolute bottom-3 right-4 transition-opacity duration-200 group-hover:opacity-100"
+        style={{ opacity: restOpacity }}
+      >
+        <DiscStop />
+      </div>
     </div>
   );
 }
 
-// ── Settle stage — wave → transcript → row ──────────────────────────
-
-function SettleHomescreen() {
-  const progress = useTimeline(11000);
-
-  const decay = smoothstep(progress, 0.10, 0.22);
-  const waveOpacity = 1 - smoothstep(progress, 0.14, 0.26);
-  const transcript = smoothstep(progress, 0.30, 0.56);
-  const land = smoothstep(progress, 0.56, 0.78);
-  const filled = smoothstep(progress, 0.74, 0.92);
-
-  const cardScale = 1 - land * 0.58;
-  const cardOffsetY = land * 24;
-  const cardOpacity = 1 - filled * 0.95;
-
+function DiscDetails() {
   return (
-    <Homescreen highlightSlot>
-      <div
-        className="absolute left-1/2"
-        style={{
-          top: HOMESCREEN_OVERLAY_TOP,
-          transform: `translate(-50%, ${cardOffsetY}px) scale(${cardScale})`,
-          transformOrigin: "center top",
-          opacity: cardOpacity,
-          width: CARD_W,
-        }}
-      >
-        <div
-          className="relative flex items-center justify-center"
-          style={{
-            padding: "44px 56px",
-            borderRadius: CARD_RADIUS,
-            background: GLASS_BG,
-            backdropFilter: GLASS_BLUR,
-            WebkitBackdropFilter: GLASS_BLUR,
-            boxShadow: GLASS_SHADOW,
-          }}
-        >
-          <div style={{ width: CARD_W - 112, height: 96, position: "relative" }}>
-            <div className="absolute inset-0" style={{ opacity: waveOpacity }}>
-              <LiveFlourish
-                width={CARD_W - 112}
-                height={96}
-                strokeWidth={2.4}
-                ampBase={lerp(0.5, 0.04, decay)}
-                ampVariance={lerp(0.25, 0.0, decay)}
-              />
-            </div>
-            <div
-              className="pointer-events-none absolute inset-0 flex items-center justify-center px-3 text-center"
-              style={{
-                opacity: transcript,
-                transform: `translateY(${(1 - transcript) * 4}px)`,
-              }}
-            >
-              <span
-                className="font-display"
-                style={{
-                  color: INK,
-                  fontSize: 17,
-                  lineHeight: 1.42,
-                  fontStyle: "italic",
-                  fontWeight: 400,
-                  maxWidth: "96%",
-                }}
-              >
-                &ldquo;Q1 plan recap with Sam — agreed on the Tuesday ship date.&rdquo;
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <FillReveal filled={filled} />
-    </Homescreen>
+    <div
+      className="flex items-baseline gap-2 font-mono text-[9px] font-semibold uppercase tracking-[0.22em]"
+      style={{ color: INK_FAINT }}
+    >
+      <span
+        className="inline-block h-1.5 w-1.5 rounded-full"
+        style={{ background: "#C03A2A" }}
+      />
+      <span style={{ color: INK }}>REC</span>
+      <span style={{ color: INK_FAINTER }}>·</span>
+      <span className="tabular-nums" style={{ color: INK }}>
+        0:14
+      </span>
+    </div>
   );
 }
 
-function FillReveal({ filled }: { filled: number }) {
-  if (filled <= 0.01) return null;
+function DiscClose() {
   return (
-    <div
-      className="pointer-events-none absolute left-[18px] right-[18px] flex items-center gap-3 py-2"
+    <button
+      type="button"
+      aria-label="Cancel recording"
+      className="flex h-5 w-5 items-center justify-center rounded-full border transition-colors"
       style={{
-        top: HOMESCREEN_FIRST_ROW_TOP,
-        height: HOMESCREEN_ROW_HEIGHT,
-        opacity: filled,
-        transition: "opacity 160ms ease-out",
+        borderColor: "rgba(35,36,35,0.20)",
+        color: INK_FAINT,
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = INK;
+        e.currentTarget.style.color = INK;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = "rgba(35,36,35,0.20)";
+        e.currentTarget.style.color = INK_FAINT;
+      }}
+    >
+      <span aria-hidden className="text-[11px] leading-none">
+        ×
+      </span>
+    </button>
+  );
+}
+
+function DiscStop() {
+  return (
+    <button
+      type="button"
+      aria-label="Stop recording"
+      className="flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.20em]"
+      style={{
+        background: "#C03A2A",
+        color: "#FFF7F5",
+        boxShadow:
+          "0 1px 0 rgba(255,255,255,0.18) inset, 0 2px 6px rgba(192,58,42,0.22)",
       }}
     >
       <span
-        className="block h-1.5 w-1.5 rounded-full"
-        style={{ background: AMBER }}
+        aria-hidden
+        className="inline-block h-1.5 w-1.5"
+        style={{ background: "#FFF7F5" }}
       />
-      <span
-        className="flex-1 truncate font-display text-[13px]"
-        style={{ color: INK }}
-      >
-        Q1 plan recap with Sam
-      </span>
-      <span
-        className="font-mono text-[10px] tabular-nums"
-        style={{ color: INK_FAINT }}
-      >
-        0:14
-      </span>
-      <span
-        className="font-mono text-[10px] uppercase tracking-[0.18em]"
-        style={{ color: INK_FAINTER }}
-      >
-        just now
-      </span>
-    </div>
+      <span>STOP</span>
+      <span style={{ color: "rgba(255,247,245,0.65)" }}>⌘.</span>
+    </button>
   );
 }
+

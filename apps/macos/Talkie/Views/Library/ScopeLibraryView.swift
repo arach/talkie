@@ -15,6 +15,7 @@
 
 import SwiftUI
 import TalkieKit
+import AppKit
 
 // MARK: - Scope display fonts
 
@@ -100,6 +101,20 @@ struct ScopeLibraryView: View {
     @AppStorage("scopeLibrary.lastTypeFilter")
     private var persistedTypeFilterRaw: String = RecordingTypeFilter.all.rawValue
 
+    // MARK: Cmd-hold shortcut overlay
+    //
+    // Holding ⌘ while the library is on screen fades in glyph badges on
+    // the filter chips (⌘M / ⌘D / ⌘C / ⌘N) and on the first nine list
+    // rows (⌘1-⌘9). The bindings themselves are always live — ⌘ is
+    // purely the revealer. Releasing ⌘ hides the badges.
+
+    /// True while the ⌘ key is held. Driven by a local NSEvent monitor
+    /// installed on view appear.
+    @State private var cmdHeld: Bool = false
+
+    /// The NSEvent monitor token, retained so it can be torn down when
+    /// the library is no longer on screen.
+    @State private var cmdEventMonitor: Any?
 
     private var selectedRecording: TalkieObject? {
         guard selectedRecordingIDs.count == 1, let id = selectedRecordingIDs.first else { return nil }
@@ -181,19 +196,10 @@ struct ScopeLibraryView: View {
                 suppressFilterReload = false
                 return
             }
-            Task {
-                await viewModel.toggleSemanticFilter(newValue.semanticFilter)
-                await MainActor.run {
-                    // If the prior selection is no longer in the filtered list,
-                    // pick the first row of the new list so the inspector isn't
-                    // stranded blank.
-                    let visibleIds = Set(viewModel.recordings.map(\.id))
-                    let stillVisible = selectedRecordingIDs.intersection(visibleIds)
-                    if stillVisible.isEmpty, let first = viewModel.recordings.first {
-                        selectedRecordingIDs = [first.id]
-                    }
-                }
-            }
+            Task { await viewModel.toggleSemanticFilter(newValue.semanticFilter) }
+        }
+        .onChange(of: viewModel.recordings.map(\.id)) { _, _ in
+            reconcileSelectionWithVisibleRecordings()
         }
         .onChange(of: searchText) { _, newValue in
             searchTask?.cancel()
@@ -208,6 +214,80 @@ struct ScopeLibraryView: View {
         .onReceive(NotificationCenter.default.publisher(for: .init("ShowRecordingView"))) { _ in
             withAnimation(.easeInOut(duration: 0.2)) { showingRecordingView = true }
         }
+        .background(cmdShortcutBindings)
+        .onAppear { startCmdMonitor() }
+        .onDisappear { stopCmdMonitor() }
+    }
+
+    // MARK: - Cmd-hold shortcuts
+
+    /// Hidden ⌘+key buttons. The bindings are always live while the
+    /// library is on screen; the `cmdHeld` overlay just makes them
+    /// discoverable. Mirrors the pattern used by `deleteHotkey`.
+    @ViewBuilder
+    private var cmdShortcutBindings: some View {
+        Group {
+            Button("") { typeFilter = .memos }
+                .keyboardShortcut("m", modifiers: [.command])
+            Button("") { typeFilter = .dictations }
+                .keyboardShortcut("d", modifiers: [.command])
+            Button("") { typeFilter = .captures }
+                .keyboardShortcut("c", modifiers: [.command])
+            // ⌘N is now File > New Window globally; the Notes filter
+            // loses its cmd-hold shortcut (it's still reachable via
+            // the chip itself or the bare-letter N nav binding).
+            ForEach(1...9, id: \.self) { n in
+                Button("") { openItemAtPosition(n) }
+                    .keyboardShortcut(KeyEquivalent(Character("\(n)")), modifiers: [.command])
+            }
+        }
+        .frame(width: 0, height: 0)
+        .opacity(0)
+        .allowsHitTesting(false)
+    }
+
+    /// Map of recording id → 1-based position for the first nine items
+    /// in the currently-displayed list. Used both for badge rendering
+    /// (`shortcutBadge` on rows) and to resolve ⌘N → recording.
+    private var firstNineShortcuts: [UUID: Int] {
+        var map: [UUID: Int] = [:]
+        for (idx, recording) in viewModel.recordings.prefix(9).enumerated() {
+            map[recording.id] = idx + 1
+        }
+        return map
+    }
+
+    /// ⌘N action — selects the Nth visible item so the inspector opens
+    /// straight to it.
+    private func openItemAtPosition(_ n: Int) {
+        let items = Array(viewModel.recordings.prefix(9))
+        guard items.indices.contains(n - 1) else { return }
+        let recording = items[n - 1]
+        selectedRecordingIDs = [recording.id]
+        pendingScrollID = recording.id
+    }
+
+    private func startCmdMonitor() {
+        // `addLocalMonitorForEvents` fires for events delivered to our
+        // own app, so we don't track ⌘ presses while the user is in
+        // another window. Lightweight enough to leave installed.
+        cmdEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+            let isHeld = event.modifierFlags.contains(.command)
+            if isHeld != cmdHeld {
+                withAnimation(.easeOut(duration: 0.12)) {
+                    cmdHeld = isHeld
+                }
+            }
+            return event
+        }
+    }
+
+    private func stopCmdMonitor() {
+        if let monitor = cmdEventMonitor {
+            NSEvent.removeMonitor(monitor)
+            cmdEventMonitor = nil
+        }
+        cmdHeld = false
     }
 
     // MARK: - List column
@@ -328,6 +408,22 @@ struct ScopeLibraryView: View {
         }
     }
 
+    /// Keep the inspector attached to a visible row after async GRDB
+    /// observation updates land. Filter/search changes install the
+    /// observation first; the actual row list arrives later.
+    private func reconcileSelectionWithVisibleRecordings() {
+        guard !selectedRecordingIDs.isEmpty else { return }
+
+        let visibleIds = Set(viewModel.recordings.map(\.id))
+        let stillVisible = selectedRecordingIDs.intersection(visibleIds)
+
+        if stillVisible.isEmpty, let first = viewModel.recordings.first {
+            selectedRecordingIDs = [first.id]
+        } else if stillVisible.count != selectedRecordingIDs.count {
+            selectedRecordingIDs = stillVisible
+        }
+    }
+
     private func filterCounts() -> FilterCounts {
         var memos = 0, dictations = 0, notes = 0, captures = 0
         for r in viewModel.recordings {
@@ -436,6 +532,18 @@ struct ScopeLibraryView: View {
                     .fill(isSelected ? ScopeAmber.solid : Color.clear)
                     .frame(height: 1)
             }
+            .overlay(alignment: .topTrailing) {
+                // ⌘-hold badge. `All` deliberately has no shortcut (⌘A
+                // is the standard Select All binding); everywhere else
+                // the chip gets a ⌘+letter glyph that fades in while
+                // the user holds the command key.
+                if cmdHeld, let letter = option.cmdShortcutLetter {
+                    CmdGlyphBadge(letter: letter)
+                        .offset(x: 8, y: -6)
+                        .transition(.opacity.combined(with: .scale(scale: 0.85)))
+                        .allowsHitTesting(false)
+                }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -513,6 +621,7 @@ struct ScopeLibraryView: View {
                             ScopeLibraryRow(
                                 recording: recording,
                                 isSelected: selectedRecordingIDs.contains(recording.id),
+                                shortcutNumber: cmdHeld ? firstNineShortcuts[recording.id] : nil,
                                 onSelect: { selectedRecordingIDs = [recording.id] }
                             )
                             .id(recording.id)
@@ -748,6 +857,9 @@ struct ScopeLibraryView: View {
 private struct ScopeLibraryRow: View {
     let recording: TalkieObject
     let isSelected: Bool
+    /// 1-9 while ⌘ is held and this row is in the first nine slots.
+    /// Nil otherwise — no badge is rendered.
+    let shortcutNumber: Int?
     let onSelect: () -> Void
 
     @State private var isHovered = false
@@ -942,6 +1054,18 @@ private struct ScopeLibraryRow: View {
                     Rectangle()
                         .fill(isSelected ? ScopeAmber.solid : ScopeAmber.solid.opacity(0.4))
                         .frame(width: 2)
+                }
+            }
+            .overlay(alignment: .trailing) {
+                // ⌘-hold position badge. Lives in the right margin so
+                // it doesn't fight the channel label on the left or
+                // overlap the time-ago / sparkline in the trailing
+                // slot. Fades with the parent `cmdHeld` animation.
+                if let n = shortcutNumber {
+                    CmdGlyphBadge(letter: "\(n)")
+                        .padding(.trailing, 10)
+                        .transition(.opacity.combined(with: .scale(scale: 0.85)))
+                        .allowsHitTesting(false)
                 }
             }
         }
@@ -1175,5 +1299,55 @@ private struct ScopeLibraryRowSkeleton: View {
     private var titleWidth: CGFloat {
         let widths: [CGFloat] = [180, 220, 150, 240, 200, 130, 210, 170]
         return widths.randomElement() ?? 200
+    }
+}
+
+// MARK: - Cmd-hold glyph badge
+
+/// Editorial cmd-hint chip rendered next to navigation targets while
+/// the user holds ⌘. Reads as a small printer's tag on the Scope page:
+/// cream substrate, ink letterform, amber ⌘ glyph as the accent dot.
+/// Sits on top of whatever surface it's overlaid on; allowsHitTesting
+/// is the caller's responsibility.
+private struct CmdGlyphBadge: View {
+    let letter: String
+
+    var body: some View {
+        HStack(spacing: 1) {
+            Text("⌘")
+                .foregroundColor(ScopeAmber.solid)
+            Text(letter)
+                .foregroundColor(ScopeInk.primary)
+        }
+        .font(.system(size: 8.5, weight: .semibold, design: .monospaced))
+        .padding(.horizontal, 4)
+        .padding(.vertical, 1.5)
+        .background(
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(ScopeCanvas.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .strokeBorder(ScopeEdge.normal, lineWidth: 0.5)
+        )
+        .shadow(color: ScopeInk.primary.opacity(0.10), radius: 2, y: 1)
+    }
+}
+
+// MARK: - RecordingTypeFilter cmd binding
+
+private extension RecordingTypeFilter {
+    /// Letter shown inside the ⌘-hold badge for this filter. `All` is
+    /// intentionally nil — ⌘A is the standard Select All binding and
+    /// we don't override it.
+    var cmdShortcutLetter: String? {
+        switch self {
+        case .all: return nil
+        case .memos: return "M"
+        case .dictations: return "D"
+        case .captures: return "C"
+        // ⌘N is reserved for File > New Window globally.
+        case .notes: return nil
+        }
     }
 }

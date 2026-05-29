@@ -237,8 +237,21 @@ private struct TalkieRootWindow: View {
 }
 
 private struct TalkieCommands: Commands {
+    @Environment(\.openWindow) private var openWindow
+
     var body: some Commands {
-        CommandGroup(replacing: .newItem) {}
+        // Replace the default New file group with a single "New Window"
+        // item. SwiftUI's WindowGroup already lets us spawn additional
+        // instances; the windows stay in sync via shared singletons
+        // (recording controller, view models, navigation), so opening a
+        // second window gives the user "two viewports on the same
+        // workspace" — independent selection / scroll, shared truth.
+        CommandGroup(replacing: .newItem) {
+            Button("New Window") {
+                openWindow(id: "main")
+            }
+            .keyboardShortcut("n", modifiers: .command)
+        }
 
         // Add sidebar toggle to View menu
         CommandGroup(after: .sidebar) {

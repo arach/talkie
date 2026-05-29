@@ -127,11 +127,10 @@ final class TrayDragSourceView: NSView, NSDraggingSource {
     override var isFlipped: Bool { true }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        // Only claim hits inside our bounds
-        if bounds.contains(point) {
-            return self
-        }
-        return nil
+        // `point` is in the SUPERVIEW's coords; `bounds` is local — comparing
+        // them silently fails when frame.origin != (0,0). Fall through to the
+        // default hitTest so clicks are intercepted reliably.
+        super.hitTest(point)
     }
 
     private func startMultiDrag(with event: NSEvent) {

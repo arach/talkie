@@ -225,12 +225,15 @@ struct TalkieView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    // No rail → center the column horizontally so the
-                    // body doesn't sit hugging the leading edge on
-                    // wide windows.
+                    // No rail → left-align until the canvas gets very
+                    // wide. Above the very-large threshold we re-center
+                    // so the body doesn't drift away from the masthead
+                    // and playback chrome on giant windows.
+                    let bodyAlignment: Alignment =
+                        scrollContentWidth >= PageLayout.recenterAbove ? .center : .leading
                     detailContent
                         .frame(maxWidth: contentColumnMaxWidth, alignment: .leading)
-                        .frame(maxWidth: .infinity, alignment: .center)
+                        .frame(maxWidth: .infinity, alignment: bodyAlignment)
                 }
             }
             .padding(.bottom, PageLayout.bottomPadding)
@@ -525,8 +528,8 @@ struct TalkieView: View {
         let markdown = "# \(title)\n\n\(text)\n"
 
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [.plainText]
-        panel.nameFieldStringValue = "\(title).md"
+        panel.allowedContentTypes = [UTType(filenameExtension: "md") ?? .plainText]
+        panel.nameFieldStringValue = "\(safeExportFilename(for: title)).md"
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
             do {
@@ -539,6 +542,17 @@ struct TalkieView: View {
                 }
             }
         }
+    }
+
+    private func safeExportFilename(for title: String) -> String {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fallback = trimmed.isEmpty ? "Untitled" : trimmed
+        let invalid = CharacterSet(charactersIn: "/\\:?%*|\"<>")
+        let cleaned = fallback
+            .components(separatedBy: invalid)
+            .joined(separator: "-")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleaned.isEmpty ? "Untitled" : cleaned
     }
 
     // MARK: - Section Router Factory
@@ -1300,4 +1314,3 @@ private struct ScrollContentWidthKey: PreferenceKey {
         value = max(value, nextValue())
     }
 }
-

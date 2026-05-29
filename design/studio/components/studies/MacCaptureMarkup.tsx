@@ -164,6 +164,12 @@ export function MacCaptureMarkup() {
         hint="agent marked it up · pick a layer · its chip rides into the talk bar"
       />
       <TouchUpState />
+      <SectionBreak
+        label="3 · toolbar redesign · style stack + canvas tools"
+        hint="tools left · contextual style right · zoom floats bottom-right · esc cancel removed"
+      />
+      <ToolbarRedesignState />
+      <ToolbarStyleVariants />
       <StudyFooter />
     </div>
   );
@@ -432,7 +438,7 @@ function CompactVoiceButton() {
       }}
       title="hold to speak"
     >
-      <span style={{ fontSize: 13, lineHeight: 1 }}>♪</span>
+      <MicGlyph size={13} />
       <span
         className="font-mono font-semibold uppercase tracking-[0.18em]"
         style={{ fontSize: 9 }}
@@ -599,7 +605,7 @@ function SpeakStrip({
               {s}
             </span>
           ))}
-          {scopeBadge && (
+          {scopeBadge && !selection && (
             <span
               className="ml-auto font-mono uppercase tracking-[0.18em]"
               style={{ fontSize: 9, color: T.inkFainter }}
@@ -609,6 +615,11 @@ function SpeakStrip({
           )}
         </div>
       )}
+
+      {/* Selection bar — same architectural slot as in InputBar. The
+          chip is a scope signal, so it lives in its own row above the
+          mic/prompt/run, not inside the prompt itself. */}
+      {selection && <SelectionBar selection={selection} scopeBadge={scopeBadge} />}
 
       {/* Main row · Mic | Prompt | Run — three distinct elements */}
       <div className="flex items-center" style={{ gap: 10 }}>
@@ -623,7 +634,6 @@ function SpeakStrip({
             boxShadow: "0 1px 0 rgba(255,255,255,0.55) inset",
           }}
         >
-          {selection && <SelectionChip selection={selection} />}
           <span
             className="font-display italic"
             style={{ fontSize: 12.5, color: T.inkFainter }}
@@ -669,7 +679,7 @@ function NarrowMic() {
       title="hold to speak"
       aria-label="hold to speak"
     >
-      <span style={{ fontSize: 14, lineHeight: 1 }}>♪</span>
+      <MicGlyph size={14} />
     </button>
   );
 }
@@ -1022,7 +1032,7 @@ function InputBar({
     >
       {/* Examples row */}
       {examples && examples.length > 0 && (
-        <div className="flex items-center gap-2" style={{ flexWrap: "wrap", marginBottom: 10 }}>
+        <div className="flex items-center gap-2" style={{ flexWrap: "wrap", marginBottom: 8 }}>
           <span
             className="font-mono uppercase tracking-[0.20em]"
             style={{ fontSize: 9, color: T.inkFainter }}
@@ -1045,7 +1055,7 @@ function InputBar({
               {s}
             </span>
           ))}
-          {scopeBadge && (
+          {scopeBadge && !selection && (
             <span
               className="ml-auto font-mono uppercase tracking-[0.18em]"
               style={{ fontSize: 9, color: T.inkFainter }}
@@ -1056,7 +1066,14 @@ function InputBar({
         </div>
       )}
 
-      {/* Main row · voice | selection? + text | run */}
+      {/* Selection bar — separate row above the composer when a layer
+          is selected. Was embedded inside the composer (rode next to
+          the prompt text) which read as disruptive. Pulling it up
+          gives it the same architectural weight as the Examples row:
+          a context strip, not a content fragment. */}
+      {selection && <SelectionBar selection={selection} scopeBadge={scopeBadge} />}
+
+      {/* Main row · voice | text | run · selection lives elsewhere now */}
       <div
         className="flex items-stretch"
         style={{
@@ -1072,7 +1089,6 @@ function InputBar({
         <VoiceButton />
         <Divider />
         <div className="flex items-center gap-2 flex-1 px-3">
-          {selection && <SelectionChip selection={selection} />}
           <span
             className="font-display italic"
             style={{ fontSize: 13, color: T.inkFainter }}
@@ -1101,6 +1117,123 @@ function InputBar({
   );
 }
 
+// SelectionBar — context strip that lifts the selected-layer chip out
+// of the composer and parks it directly above. Reads as "this is what
+// you're acting on" without disrupting the clean composer row.
+//
+// Readability note: earlier draft used amberDeep text on amberFaint
+// fill (~8% amber). The deep-on-pale-amber pairing washed out — too
+// little contrast against amber-tinted ink. This revision flips the
+// model: neutral pane background, ink text for the layer name (high
+// contrast), amber reserved for the leading accent stripe + ID badge
+// (the "scope indicator" semaphore). Amber stays sparse so it still
+// reads as accent, not a fill.
+function SelectionBar({
+  selection,
+  scopeBadge,
+}: {
+  selection: { id: string; label: string; kind: string };
+  scopeBadge?: string;
+}) {
+  return (
+    <div
+      className="flex items-stretch"
+      style={{
+        marginBottom: 8,
+        background: T.pane,
+        border: `0.5px solid ${T.inkRule}`,
+        borderRadius: 4,
+        overflow: "hidden",
+      }}
+    >
+      {/* Leading amber accent — the "scope active" semaphore. Thin
+          stripe is enough; doesn't need to fill the row. */}
+      <span style={{ width: 3, background: T.amber }} />
+
+      <div className="flex items-center gap-2 flex-1" style={{ padding: "6px 10px" }}>
+        <span
+          className="font-mono uppercase tracking-[0.22em]"
+          style={{ fontSize: 9, color: T.inkFainter }}
+        >
+          · scope
+        </span>
+        <span
+          className="font-mono font-semibold uppercase tracking-[0.18em]"
+          style={{
+            fontSize: 9,
+            color: T.amberDeep,
+            padding: "2px 5px",
+            background: T.amberFaint,
+            border: `0.5px solid ${T.amberSoft}`,
+            borderRadius: 2,
+          }}
+        >
+          {selection.id}
+        </span>
+        <span
+          className="font-display"
+          style={{ fontSize: 12, color: T.ink, fontWeight: 500 }}
+        >
+          {selection.label}
+        </span>
+        <button
+          title="Clear selection"
+          aria-label="Clear selection"
+          className="ml-1 flex items-center justify-center"
+          style={{
+            width: 16,
+            height: 16,
+            borderRadius: 999,
+            background: "transparent",
+            color: T.inkFaint,
+            fontSize: 11,
+            lineHeight: 1,
+          }}
+        >
+          ×
+        </button>
+        {scopeBadge && (
+          <span
+            className="ml-auto font-mono uppercase tracking-[0.18em]"
+            style={{ fontSize: 9, color: T.inkFainter }}
+          >
+            {scopeBadge}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// MicGlyph — small editorial mic SVG. Uses currentColor so it inherits
+// from the parent button's text color (amberDeep on the speak strip,
+// could swap to ink for a quieter context). Replaces the music note
+// (♪) that was reading as audio playback rather than capture.
+function MicGlyph({ size = 14 }: { size?: number }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.4}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      {/* Capsule */}
+      <rect x="6" y="2" width="4" height="7.5" rx="2" />
+      {/* Yoke */}
+      <path d="M3.5 8 A 4.5 4.5 0 0 0 12.5 8" />
+      {/* Stand */}
+      <line x1="8" y1="12.5" x2="8" y2="14" />
+      <line x1="5.5" y1="14" x2="10.5" y2="14" />
+    </svg>
+  );
+}
+
 function Divider() {
   return <div style={{ width: 1, background: T.inkRuleS }} />;
 }
@@ -1115,7 +1248,7 @@ function VoiceButton() {
       }}
       title="hold to speak"
     >
-      <span style={{ fontSize: 15, lineHeight: 1 }}>♪</span>
+      <MicGlyph size={15} />
       <span
         className="font-mono font-semibold uppercase tracking-[0.18em]"
         style={{ fontSize: 9.5 }}
@@ -1874,5 +2007,677 @@ function CaptionStrip({ text }: { text: string }) {
     >
       {text}
     </p>
+  );
+}
+
+// ─── State 3 · Toolbar redesign · style stack + canvas tools ─────────
+//
+// The Swift markup window today crams *everything* into the top bar —
+// tools, zoom, undo/redo, mode toggles, ESC CANCEL. That mixes three
+// distinct purposes (drawing · viewport · dismiss) into one cluster.
+//
+// Redesign separates them:
+//   · Top bar (LEFT)   — tool selection: rect / arrow / line / text / blur.
+//   · Top bar (RIGHT)  — STYLE STACK · contextual to the current tool
+//                        or selected layer. Stroke width, color, texture,
+//                        fill for shapes; font size + color for text.
+//                        Doubles as per-tool defaults — set them once,
+//                        next shape inherits.
+//   · Canvas (BOTTOM-RIGHT) — floating CANVAS ZOOM CLUSTER: − / + / FIT,
+//                        modeled after the Hudson canvas pattern.
+//                        Lives over the canvas, not in the toolbar.
+//   · ESC CANCEL — gone. ⎋ still dismisses; the binding doesn't need a
+//                  chip parked next to drawing tools that read as modes.
+
+function ToolbarRedesignState() {
+  return (
+    <Surface>
+      <MarkupWindow
+        title="Markup · C-0017"
+        subtitle="redesign · rect selected · style stack + floating zoom"
+      >
+        <ToolToolbarV2 active="rect" selection={{ kind: "rect" }} />
+        <div
+          className="relative flex items-center justify-center"
+          style={{ background: T.rail, padding: "26px 26px", minHeight: 360 }}
+        >
+          <MockedScreenshotWithMarkup markup selectedIndex={1} />
+          <CanvasZoomCluster />
+          <PassVerdict status="ready" />
+        </div>
+        <SpeakStrip
+          placeholder="modify this layer · or speak another pass…"
+          examples={[
+            "make the ring thicker",
+            "switch to dashed",
+            "color it amber",
+            "add a label above it",
+          ]}
+          scopeBadge="scoped · L2 selected"
+        />
+      </MarkupWindow>
+      <ToolbarRedesignMarginalia />
+      <CaptionStrip
+        text="Tools on the left, style on the right — same row, but the right half is now contextual to whatever's selected. Pick a rect: stroke, color, texture, fill. Pick text: font size + color. Zoom drops out of the top bar entirely and lives as a floating cluster over the canvas, the way Hudson does it. ESC stays on the keyboard; it doesn't need its own chip."
+      />
+    </Surface>
+  );
+}
+
+// Three style-stack states shown side-by-side for comparison: idle (no
+// selection · tool defaults), rect selected, text selected. Each one is
+// just the toolbar — no canvas, no strip — so the reader can compare
+// what the style half does across selections at a glance.
+
+function ToolbarStyleVariants() {
+  return (
+    <Surface>
+      <div className="flex flex-col gap-4" style={{ marginTop: 6 }}>
+        <PaneHeader title="style stack · selection variants" sub="3 states" />
+        <div
+          className="flex flex-col"
+          style={{
+            background: T.page,
+            border: `0.5px solid ${T.edge}`,
+            borderRadius: 6,
+            overflow: "hidden",
+          }}
+        >
+          <ToolToolbarV2 active={null} selection={null} variantLabel="idle · tool defaults" />
+          <ToolToolbarV2 active="rect" selection={{ kind: "rect" }} variantLabel="rect selected" />
+          <ToolToolbarV2 active="text" selection={{ kind: "text" }} variantLabel="text selected" />
+        </div>
+        <CaptionStrip
+          text="Idle reads as 'what will the next shape look like' — the style stack is the pen settings until you select something. Selecting a layer swaps the same controls to act on that layer. Text-selected drops stroke/fill controls (they're meaningless) and surfaces size + color instead. Same row, same neighborhood, different contents."
+        />
+      </div>
+    </Surface>
+  );
+}
+
+// ─── Tool Toolbar V2 — tools left · style stack right ────────────────
+
+type StyleSelection = { kind: ToolId } | null;
+
+function ToolToolbarV2({
+  active,
+  selection,
+  variantLabel,
+}: {
+  active: ToolId | null;
+  selection: StyleSelection;
+  variantLabel?: string;
+}) {
+  return (
+    <div
+      className="flex items-center px-2"
+      style={{
+        height: 44,
+        background: T.chrome,
+        borderBottom: `0.5px solid ${T.inkRuleS}`,
+        gap: 4,
+      }}
+    >
+      {TOOLS.map((t) => {
+        const on = t.id === active;
+        return (
+          <button
+            key={t.id}
+            title={t.label}
+            className="flex items-center gap-1.5 px-2.5"
+            style={{
+              height: 28,
+              color: on ? T.amberDeep : T.inkFaint,
+              background: on ? T.amberFaint : "transparent",
+              border: on ? `0.5px solid ${T.amberSoft}` : "0.5px solid transparent",
+              borderRadius: 3,
+            }}
+          >
+            <span className="font-mono" style={{ fontSize: 13, lineHeight: 1 }}>
+              {t.glyph}
+            </span>
+            <span
+              className="font-mono uppercase tracking-[0.16em]"
+              style={{ fontSize: 9, lineHeight: 1 }}
+            >
+              {t.label}
+            </span>
+          </button>
+        );
+      })}
+
+      <ToolbarDivider />
+
+      <StyleStack selection={selection ?? (active ? { kind: active } : null)} />
+
+      <span className="flex-1" />
+
+      {variantLabel && (
+        <span
+          className="font-mono uppercase tracking-[0.18em]"
+          style={{ fontSize: 9, color: T.inkFainter }}
+        >
+          {variantLabel}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function ToolbarDivider() {
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        width: 1,
+        height: 20,
+        margin: "0 8px",
+        background: T.inkRuleS,
+      }}
+    />
+  );
+}
+
+// ─── Style Stack ──────────────────────────────────────────────────────
+//
+// Contextual to the current selection (or the active tool if nothing's
+// selected). Branches once on `kind`:
+//   · rect / arrow / line / blur  → stroke width + color + texture
+//   · rect                        → ALSO fill (transparent / opaque)
+//   · blur                        → intensity instead of color + texture
+//   · text                        → font size + color (no stroke/texture)
+//   · null                        → all swatches dimmed; reads as "no
+//                                    selection — pick a tool to set defaults"
+
+function StyleStack({ selection }: { selection: StyleSelection }) {
+  if (!selection) {
+    return (
+      <span
+        className="font-display italic"
+        style={{ fontSize: 11, color: T.inkFainter }}
+      >
+        pick a tool · style applies to the next shape
+      </span>
+    );
+  }
+
+  if (selection.kind === "text") {
+    return (
+      <div className="flex items-center" style={{ gap: 10 }}>
+        <FontSizeStepper />
+        <MiniGroupDivider />
+        <ColorRow />
+      </div>
+    );
+  }
+
+  if (selection.kind === "blur") {
+    return (
+      <div className="flex items-center" style={{ gap: 10 }}>
+        <BlurIntensityStepper />
+      </div>
+    );
+  }
+
+  // Shape default: rect / arrow / line — stroke + color + texture, plus
+  // fill for rect.
+  return (
+    <div className="flex items-center" style={{ gap: 10 }}>
+      <StrokeWidthRow />
+      <MiniGroupDivider />
+      <ColorRow />
+      <MiniGroupDivider />
+      <TextureRow />
+      {selection.kind === "rect" && (
+        <>
+          <MiniGroupDivider />
+          <FillToggle />
+        </>
+      )}
+    </div>
+  );
+}
+
+function MiniGroupDivider() {
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        width: 1,
+        height: 14,
+        background: T.inkRuleS,
+      }}
+    />
+  );
+}
+
+function StyleLabel({ text }: { text: string }) {
+  return (
+    <span
+      className="font-mono uppercase tracking-[0.20em]"
+      style={{ fontSize: 8.5, color: T.inkFainter }}
+    >
+      {text}
+    </span>
+  );
+}
+
+function StrokeWidthRow() {
+  // Four discrete widths. Second one selected as the canonical default.
+  const widths = [1, 2, 3, 5];
+  const selected = 2;
+  return (
+    <div className="flex items-center" style={{ gap: 6 }}>
+      <StyleLabel text="width" />
+      <div className="flex items-center" style={{ gap: 3 }}>
+        {widths.map((w) => {
+          const on = w === selected;
+          return (
+            <button
+              key={w}
+              title={`${w}px stroke`}
+              className="flex items-center justify-center"
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: 3,
+                background: on ? T.amberFaint : "transparent",
+                border: on ? `0.5px solid ${T.amberSoft}` : `0.5px solid ${T.inkRuleS}`,
+              }}
+            >
+              <span
+                style={{
+                  display: "block",
+                  width: 14,
+                  height: w,
+                  background: on ? T.amberDeep : T.inkFaint,
+                  borderRadius: 1,
+                }}
+              />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ColorRow() {
+  // Five swatches: ink · alert · amber · brass · ghost. Amber selected
+  // as the canonical agent-overlay color.
+  const swatches = [
+    { color: T.ink,     label: "ink"   },
+    { color: T.alert,   label: "alert" },
+    { color: T.amber,   label: "amber" },
+    { color: T.brass,   label: "brass" },
+    { color: "#FFFFFF", label: "white" },
+  ];
+  const selected = 2;
+  return (
+    <div className="flex items-center" style={{ gap: 6 }}>
+      <StyleLabel text="color" />
+      <div className="flex items-center" style={{ gap: 3 }}>
+        {swatches.map((s, i) => {
+          const on = i === selected;
+          return (
+            <button
+              key={s.label}
+              title={s.label}
+              className="block"
+              style={{
+                width: 16,
+                height: 16,
+                borderRadius: 999,
+                background: s.color,
+                border: on
+                  ? `1.5px solid ${T.amberDeep}`
+                  : `0.5px solid ${T.inkRule}`,
+                boxShadow: on
+                  ? `0 0 0 2px ${T.amberFaint}`
+                  : "0 1px 0 rgba(255,255,255,0.55) inset",
+              }}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function TextureRow() {
+  // Three options: solid, dashed, dotted. Solid selected by default.
+  const textures: { id: string; preview: React.CSSProperties; label: string }[] = [
+    { id: "solid",  preview: { borderTop: `2px solid ${T.ink}` },               label: "solid"  },
+    { id: "dashed", preview: { borderTop: `2px dashed ${T.ink}` },              label: "dashed" },
+    { id: "dotted", preview: { borderTop: `2px dotted ${T.ink}` },              label: "dotted" },
+  ];
+  const selected = "solid";
+  return (
+    <div className="flex items-center" style={{ gap: 6 }}>
+      <StyleLabel text="texture" />
+      <div className="flex items-center" style={{ gap: 3 }}>
+        {textures.map((t) => {
+          const on = t.id === selected;
+          return (
+            <button
+              key={t.id}
+              title={t.label}
+              className="flex items-center justify-center"
+              style={{
+                width: 24,
+                height: 22,
+                borderRadius: 3,
+                background: on ? T.amberFaint : "transparent",
+                border: on ? `0.5px solid ${T.amberSoft}` : `0.5px solid ${T.inkRuleS}`,
+              }}
+            >
+              <span style={{ display: "block", width: 16, ...t.preview }} />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function FillToggle() {
+  // Two states: outlined (transparent fill) vs filled. Outlined as
+  // default since the rest of the markup vocabulary uses ringed shapes.
+  const filled = false;
+  return (
+    <div className="flex items-center" style={{ gap: 6 }}>
+      <StyleLabel text="fill" />
+      <div className="flex items-center" style={{ gap: 3 }}>
+        <button
+          title="outline"
+          className="flex items-center justify-center"
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: 3,
+            background: !filled ? T.amberFaint : "transparent",
+            border: !filled
+              ? `0.5px solid ${T.amberSoft}`
+              : `0.5px solid ${T.inkRuleS}`,
+          }}
+        >
+          <span
+            style={{
+              display: "block",
+              width: 12,
+              height: 12,
+              border: `1.5px solid ${!filled ? T.amberDeep : T.inkFaint}`,
+              borderRadius: 2,
+              background: "transparent",
+            }}
+          />
+        </button>
+        <button
+          title="filled"
+          className="flex items-center justify-center"
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: 3,
+            background: filled ? T.amberFaint : "transparent",
+            border: filled
+              ? `0.5px solid ${T.amberSoft}`
+              : `0.5px solid ${T.inkRuleS}`,
+          }}
+        >
+          <span
+            style={{
+              display: "block",
+              width: 12,
+              height: 12,
+              background: filled ? T.amberDeep : T.inkFaint,
+              borderRadius: 2,
+            }}
+          />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function FontSizeStepper() {
+  // Three preset sizes: S / M / L. Plus a mono caption so the chosen
+  // size is legible at a glance. M selected as default.
+  const sizes = ["S", "M", "L"];
+  const selected = "M";
+  return (
+    <div className="flex items-center" style={{ gap: 6 }}>
+      <StyleLabel text="size" />
+      <div className="flex items-center" style={{ gap: 3 }}>
+        {sizes.map((s) => {
+          const on = s === selected;
+          return (
+            <button
+              key={s}
+              title={`Font size ${s}`}
+              className="flex items-center justify-center font-mono"
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: 3,
+                fontSize: 10,
+                color: on ? T.amberDeep : T.inkFaint,
+                background: on ? T.amberFaint : "transparent",
+                border: on ? `0.5px solid ${T.amberSoft}` : `0.5px solid ${T.inkRuleS}`,
+              }}
+            >
+              {s}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function BlurIntensityStepper() {
+  // Three discrete intensities. Mid selected.
+  const sizes = [4, 8, 16];
+  const selected = 8;
+  return (
+    <div className="flex items-center" style={{ gap: 6 }}>
+      <StyleLabel text="blur" />
+      <div className="flex items-center" style={{ gap: 3 }}>
+        {sizes.map((b) => {
+          const on = b === selected;
+          return (
+            <button
+              key={b}
+              title={`${b}px blur`}
+              className="flex items-center justify-center font-mono"
+              style={{
+                width: 30,
+                height: 22,
+                borderRadius: 3,
+                fontSize: 9.5,
+                color: on ? T.amberDeep : T.inkFaint,
+                background: on ? T.amberFaint : "transparent",
+                border: on ? `0.5px solid ${T.amberSoft}` : `0.5px solid ${T.inkRuleS}`,
+              }}
+            >
+              {b}px
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Canvas Zoom Cluster — floating bottom-right ─────────────────────
+//
+// Hudson-style floating viewport controls. Lives over the canvas, not
+// in the toolbar — viewport is a different category from drawing.
+// Pinned bottom-right so the user's hand naturally lands there when
+// reaching for a "zoom to fit" or a quick scale tweak; doesn't compete
+// with the speak strip which lives further down and full-width.
+
+function CanvasZoomCluster() {
+  return (
+    <div
+      className="absolute flex items-center"
+      style={{
+        bottom: 14,
+        right: 14,
+        gap: 2,
+        padding: 3,
+        background: T.pane,
+        border: `0.5px solid ${T.inkRule}`,
+        borderRadius: 5,
+        boxShadow:
+          "0 1px 0 rgba(255,255,255,0.55) inset, 0 4px 12px rgba(0,0,0,0.10)",
+      }}
+    >
+      <ZoomButton glyph="−" title="Zoom out" />
+      <ZoomBadge text="100%" />
+      <ZoomButton glyph="+" title="Zoom in" />
+      <ZoomClusterDivider />
+      <ZoomButton label="FIT" title="Fit to canvas" />
+    </div>
+  );
+}
+
+function ZoomButton({
+  glyph,
+  label,
+  title,
+}: {
+  glyph?: string;
+  label?: string;
+  title: string;
+}) {
+  return (
+    <button
+      title={title}
+      aria-label={title}
+      className="flex items-center justify-center"
+      style={{
+        width: label ? 38 : 22,
+        height: 22,
+        borderRadius: 3,
+        color: T.inkFaint,
+        background: "transparent",
+      }}
+    >
+      {glyph && (
+        <span className="font-mono" style={{ fontSize: 12, lineHeight: 1 }}>
+          {glyph}
+        </span>
+      )}
+      {label && (
+        <span
+          className="font-mono uppercase tracking-[0.16em]"
+          style={{ fontSize: 8.5, lineHeight: 1 }}
+        >
+          {label}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function ZoomBadge({ text }: { text: string }) {
+  return (
+    <span
+      className="font-mono tabular-nums"
+      style={{
+        fontSize: 9.5,
+        color: T.inkMid,
+        padding: "0 4px",
+        minWidth: 38,
+        textAlign: "center",
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
+function ZoomClusterDivider() {
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        width: 1,
+        height: 14,
+        margin: "0 2px",
+        background: T.inkRuleS,
+      }}
+    />
+  );
+}
+
+// Vocabulary entries specific to the redesigned toolbar.
+
+function ToolbarRedesignMarginalia() {
+  const entries: [string, string][] = [
+    ["Tool Toolbar V2",    "the redesigned top band — tools left · style stack right"],
+    ["Style Stack",        "contextual editor for the active tool or selected layer"],
+    ["Stroke Row",         "width picker · 4 discrete weights · doubles as default"],
+    ["Color Row",          "5 swatch palette · ink · alert · amber · brass · white"],
+    ["Texture Row",        "solid · dashed · dotted · applies to shape borders"],
+    ["Fill Toggle",        "outlined vs filled — rect only · meaningless for arrows / lines"],
+    ["Font Size Stepper",  "S / M / L · text-only · stroke/texture drop out"],
+    ["Blur Intensity",     "4/8/16 px · replaces color + texture for blur tool"],
+    ["Canvas Zoom Cluster", "floating bottom-right · − / 100% / + / fit · Hudson pattern"],
+  ];
+  return (
+    <div
+      style={{
+        marginTop: 14,
+        padding: "12px 16px",
+        background: T.pane,
+        border: `0.5px solid ${T.inkRuleS}`,
+        borderRadius: 4,
+      }}
+    >
+      <div
+        className="flex items-baseline gap-3"
+        style={{ marginBottom: 10 }}
+      >
+        <span
+          className="font-mono font-semibold uppercase tracking-[0.24em]"
+          style={{ fontSize: 9, color: T.amberDeep }}
+        >
+          · toolbar redesign · names
+        </span>
+        <span
+          className="font-display italic"
+          style={{ fontSize: 11, color: T.inkFaint }}
+        >
+          additions to the Capture Markup vocabulary
+        </span>
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "180px 1fr",
+          rowGap: 4,
+          columnGap: 18,
+        }}
+      >
+        {entries.map(([name, def]) => (
+          <React.Fragment key={name}>
+            <span
+              className="font-mono font-semibold uppercase tracking-[0.16em]"
+              style={{ fontSize: 10, color: T.amberDeep }}
+            >
+              {name}
+            </span>
+            <span
+              className="font-display italic"
+              style={{ fontSize: 12, color: T.inkMid, lineHeight: 1.45 }}
+            >
+              {def}
+            </span>
+          </React.Fragment>
+        ))}
+      </div>
+    </div>
   );
 }

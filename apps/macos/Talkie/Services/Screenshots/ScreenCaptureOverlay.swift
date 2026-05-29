@@ -22,6 +22,8 @@ final class ScreenCaptureOverlay {
     private var overlayView: OverlayView?
 
     func selectRegion(freezesDesktop: Bool = true) async -> CGRect? {
+        OverlayView.cursor(for: .region).set()
+
         // Freeze-the-desktop: snapshot the screen BEFORE the overlay shows
         // so the user crops a still image, not a live target. The actual
         // capture on mouseUp still goes through SCScreenshotManager fresh
@@ -87,7 +89,9 @@ final class ScreenCaptureOverlay {
     }
 
     func selectWindow() async -> CGWindowID? {
-        await withCheckedContinuation { continuation in
+        OverlayView.cursor(for: .window).set()
+
+        return await withCheckedContinuation { continuation in
             let view = OverlayView(mode: .window)
             var didResume = false
             let resume: (CGWindowID?) -> Void = { result in
@@ -194,8 +198,13 @@ private final class OverlayView: NSView {
     private let windowCacheRefreshIntervalNs: UInt64 = 1_200_000_000 // 1.2s
     private var richCaptureUIEnabled: Bool { FeatureFlags.shared.enableCaptureRichUI }
     private var overlayCursor: NSCursor {
-        mode == .region ? .crosshair : Self.cameraCursor
+        Self.cursor(for: mode)
     }
+
+    fileprivate static func cursor(for mode: OverlayMode) -> NSCursor {
+        mode == .region ? .crosshair : cameraCursor
+    }
+
     private static let cameraCursor: NSCursor = {
         let size = NSSize(width: 24, height: 24)
         let image = NSImage(size: size)
@@ -578,12 +587,12 @@ private final class OverlayView: NSView {
     func activateCursor() {
         guard window != nil, !completed else { return }
         window?.invalidateCursorRects(for: self)
+        overlayCursor.set()
         if didPushCursor {
-            overlayCursor.set()
-        } else {
-            overlayCursor.push()
-            didPushCursor = true
+            return
         }
+        overlayCursor.push()
+        didPushCursor = true
     }
 
     func deactivateCursor() {

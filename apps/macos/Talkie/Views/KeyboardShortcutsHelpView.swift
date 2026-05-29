@@ -186,39 +186,50 @@ struct KeyboardShortcutsHelpView: View {
             Divider()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.xl) {
-                    switch helpTab {
-                    case .navigation:
+                VStack(alignment: .leading, spacing: Spacing.lg) {
+                    if helpTab == .navigation {
                         Text("Use these when a list or the main window is focused—no need to open the full reference.")
                             .font(.system(size: 12))
                             .foregroundColor(Theme.current.foregroundSecondary)
                             .fixedSize(horizontal: false, vertical: true)
+                    }
 
-                        ForEach(Array(KeyboardShortcutCatalog.navigationTabSections.enumerated()), id: \.offset) { _, section in
-                            ShortcutSection(title: section.title, icon: section.icon, shortcuts: section.items)
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.flexible(), spacing: Spacing.lg, alignment: .top),
+                            GridItem(.flexible(), spacing: Spacing.lg, alignment: .top),
+                        ],
+                        alignment: .leading,
+                        spacing: Spacing.lg
+                    ) {
+                        switch helpTab {
+                        case .navigation:
+                            ForEach(Array(KeyboardShortcutCatalog.navigationTabSections.enumerated()), id: \.offset) { _, section in
+                                ShortcutSection(title: section.title, icon: section.icon, shortcuts: section.items)
+                            }
+
+                        case .all:
+                            ForEach(Array(KeyboardShortcutCatalog.allShortcutsScroll.enumerated()), id: \.offset) { _, section in
+                                ShortcutSection(title: section.title, icon: section.icon, shortcuts: section.items)
+                            }
+
+                            #if DEBUG
+                            ShortcutSection(
+                                title: "Debug",
+                                icon: "ant",
+                                shortcuts: [
+                                    ShortcutItem(keys: "⇧⌘T", description: "E2E trace viewer"),
+                                ]
+                            )
+                            #endif
                         }
-
-                    case .all:
-                        ForEach(Array(KeyboardShortcutCatalog.allShortcutsScroll.enumerated()), id: \.offset) { _, section in
-                            ShortcutSection(title: section.title, icon: section.icon, shortcuts: section.items)
-                        }
-
-                        #if DEBUG
-                        ShortcutSection(
-                            title: "Debug",
-                            icon: "ant",
-                            shortcuts: [
-                                ShortcutItem(keys: "⇧⌘T", description: "E2E trace viewer"),
-                            ]
-                        )
-                        #endif
                     }
                 }
                 .padding(Spacing.lg)
             }
         }
         .frame(
-            minWidth: 420, idealWidth: 560, maxWidth: 760,
+            minWidth: 640, idealWidth: 820, maxWidth: 1040,
             minHeight: 520, idealHeight: 680, maxHeight: 880
         )
         .background(Theme.current.background)

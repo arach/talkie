@@ -8,6 +8,7 @@
 
 import Foundation
 import GRDB
+import SQLite3
 import TalkieKit
 
 private let log = Log(.database)
@@ -16,6 +17,9 @@ private let log = Log(.database)
 
 final class DatabaseManager: @unchecked Sendable {
     static let shared = DatabaseManager()
+
+    private static let latestMigrationIdentifier = "v29_pin_and_star"
+    private static let migrationBeforePinAndStar = "v28_action_workbench"
 
     private var dbQueue: DatabaseQueue?
     private let lock = NSLock()
@@ -54,9 +58,10 @@ final class DatabaseManager: @unchecked Sendable {
 
     private init() {}
 
-    /// Initialize database (call on app launch)
-    /// Runs blocking SQLite operations on background thread to avoid blocking UI
+    /// Initialize database (call on app launch) and publish the shared GRDB queue.
     func initialize() async throws {
+        log.info("Database initialization starting...", section: "Startup")
+
         #if DEBUG
         // Sandbox mode: use isolated empty database for testing onboarding
         if Self.isUsingSandbox {
@@ -101,6 +106,8 @@ final class DatabaseManager: @unchecked Sendable {
             log.info("Setting up local storage...", section: "Startup")
         }
 
+        let canSkipGRDBMigrations = fileExists && Self.prepareCurrentSchemaFastPathIfPossible(at: dbPath)
+
         // Start a timeout warning task (only warn after 3 seconds)
         let timeoutTask = Task {
             try? await Task.sleep(for: .seconds(3))
@@ -110,68 +117,38 @@ final class DatabaseManager: @unchecked Sendable {
             }
         }
 
-        // Run blocking SQLite operations on background thread
-        // This prevents the main thread from freezing during file lock acquisition
-        let dbQueue: DatabaseQueue = try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                do {
-                    // Configure database with PRAGMAs during initialization
-                    // (must be done outside transactions)
-                    var config = Configuration()
-                    config.prepareDatabase { db in
-                        try db.execute(sql: "PRAGMA foreign_keys = ON")
-                        try db.execute(sql: "PRAGMA journal_mode = WAL")
-                        try db.execute(sql: "PRAGMA synchronous = NORMAL")
-                        try db.execute(sql: "PRAGMA temp_store = MEMORY")
-                        try db.execute(sql: "PRAGMA cache_size = -2000")  // 2MB cache (default)
-                        try db.execute(sql: "PRAGMA busy_timeout = 5000")  // Retry on lock contention (cross-process safety)
-                        try db.execute(sql: "PRAGMA journal_size_limit = 67108864")  // Cap WAL at 64MB
-                    }
+        log.info("Opening local database connection...", section: "Startup")
 
-                    let queue = try DatabaseQueue(path: dbPath, configuration: config)
-                    continuation.resume(returning: queue)
-                } catch {
-                    continuation.resume(throwing: error)
-                }
-            }
+        // Configure database with PRAGMAs during initialization
+        // (must be done outside transactions).
+        var config = Configuration()
+        config.prepareDatabase { db in
+            try db.execute(sql: "PRAGMA busy_timeout = 5000")  // Retry on lock contention (cross-process safety)
+            try db.execute(sql: "PRAGMA foreign_keys = ON")
+            try db.execute(sql: "PRAGMA journal_mode = WAL")
+            try db.execute(sql: "PRAGMA synchronous = NORMAL")
+            try db.execute(sql: "PRAGMA temp_store = MEMORY")
+            try db.execute(sql: "PRAGMA cache_size = -2000")  // 2MB cache (default)
+            try db.execute(sql: "PRAGMA journal_size_limit = 67108864")  // Cap WAL at 64MB
+        }
+
+        let dbQueue = try DatabaseQueue(path: dbPath, configuration: config)
+        log.info("Database connection open", section: "Startup")
+
+        if canSkipGRDBMigrations {
+            log.info("Database schema up to date (SQLite fast path)", section: "Startup")
+        } else {
+            log.info("Running database migrations...", section: "Startup")
+            try Self.migrator.migrate(dbQueue)
+            log.info("Database schema up to date", section: "Startup")
         }
 
         timeoutTask.cancel()
 
-        let migrator = self.migrator
-
-        // Run migrations on background thread, with concise startup logging.
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            DispatchQueue.global(qos: .userInitiated).async {
-                do {
-                    let appliedBefore = try Self.loadAppliedMigrationIdentifiers(from: dbQueue)
-                    try migrator.migrate(dbQueue)
-                    let appliedAfter = try Self.loadAppliedMigrationIdentifiers(from: dbQueue)
-                    let newlyApplied = appliedAfter.filter { !appliedBefore.contains($0) }
-
-                    if newlyApplied.isEmpty {
-                        log.info("Database schema up to date (\(appliedAfter.count) migrations)", section: "Startup")
-                    } else {
-                        let preview = newlyApplied.prefix(5).joined(separator: ", ")
-                        let more = newlyApplied.count > 5 ? " (+\(newlyApplied.count - 5) more)" : ""
-                        log.info("Applied \(newlyApplied.count) database migration(s): \(preview)\(more)", section: "Startup")
-                    }
-                    continuation.resume()
-                } catch {
-                    continuation.resume(throwing: error)
-                }
-            }
-        }
-
         // Single "ready" message - keep it simple
         log.info("Local storage ready", section: "Startup")
 
-        // Thread-safe assignment and run pending callbacks
-        lock.lock()
-        self.dbQueue = dbQueue
-        let callbacks = pendingCallbacks
-        pendingCallbacks.removeAll()
-        lock.unlock()
+        let callbacks = installDatabaseQueue(dbQueue)
 
         // Run any queued callbacks now that DB is ready
         for callback in callbacks {
@@ -179,20 +156,161 @@ final class DatabaseManager: @unchecked Sendable {
         }
     }
 
-    private static func loadAppliedMigrationIdentifiers(from dbQueue: DatabaseQueue) throws -> [String] {
-        try dbQueue.read { db in
-            let migrationsTableExists = try Bool.fetchOne(
-                db,
-                sql: """
-                    SELECT COUNT(*) > 0
-                    FROM sqlite_master
-                    WHERE type = 'table' AND name = 'grdb_migrations'
-                    """
-            ) ?? false
-
-            guard migrationsTableExists else { return [] }
-            return try String.fetchAll(db, sql: "SELECT identifier FROM grdb_migrations ORDER BY identifier")
+    private static func prepareCurrentSchemaFastPathIfPossible(at dbPath: String) -> Bool {
+        guard migrator.migrations.last == latestMigrationIdentifier else {
+            return false
         }
+
+        do {
+            return try prepareCurrentSchemaFastPath(at: dbPath)
+        } catch {
+            log.warning("SQLite schema fast path unavailable: \(error.localizedDescription)", section: "Startup")
+            return false
+        }
+    }
+
+    private static func prepareCurrentSchemaFastPath(at dbPath: String) throws -> Bool {
+        var sqlite: OpaquePointer?
+        let openResult = sqlite3_open_v2(dbPath, &sqlite, SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX, nil)
+        guard openResult == SQLITE_OK, let sqlite else {
+            throw makeSQLiteError("open", db: sqlite, code: openResult)
+        }
+        defer { sqlite3_close(sqlite) }
+
+        try executeSQLite("PRAGMA busy_timeout = 5000", db: sqlite)
+        try executeSQLite("PRAGMA journal_mode = WAL", db: sqlite)
+        try executeSQLite("PRAGMA foreign_keys = ON", db: sqlite)
+
+        guard try sqliteTableExists("grdb_migrations", db: sqlite),
+              try sqliteMigrationIsApplied(migrationBeforePinAndStar, db: sqlite) else {
+            return false
+        }
+
+        try ensurePinAndStarMigration(db: sqlite)
+        return try sqliteMigrationIsApplied(latestMigrationIdentifier, db: sqlite)
+    }
+
+    private static func ensurePinAndStarMigration(db sqlite: OpaquePointer) throws {
+        guard try sqliteTableExists("voice_memos", db: sqlite),
+              try sqliteTableExists("recordings", db: sqlite) else {
+            return
+        }
+
+        try executeSQLite("BEGIN IMMEDIATE", db: sqlite)
+        do {
+            let memoColumns = try sqliteColumns(in: "voice_memos", db: sqlite)
+            if !memoColumns.contains("pinnedAt") {
+                try executeSQLite("ALTER TABLE voice_memos ADD COLUMN pinnedAt DATETIME", db: sqlite)
+            }
+            if !memoColumns.contains("starredAt") {
+                try executeSQLite("ALTER TABLE voice_memos ADD COLUMN starredAt DATETIME", db: sqlite)
+            }
+
+            let recordingColumns = try sqliteColumns(in: "recordings", db: sqlite)
+            if !recordingColumns.contains("pinnedAt") {
+                try executeSQLite("ALTER TABLE recordings ADD COLUMN pinnedAt DATETIME", db: sqlite)
+            }
+            if !recordingColumns.contains("starredAt") {
+                try executeSQLite("ALTER TABLE recordings ADD COLUMN starredAt DATETIME", db: sqlite)
+            }
+
+            try executeSQLite("CREATE INDEX IF NOT EXISTS idx_memos_pinned_at ON voice_memos(pinnedAt)", db: sqlite)
+            try executeSQLite("CREATE INDEX IF NOT EXISTS idx_memos_starred_at ON voice_memos(starredAt)", db: sqlite)
+            try executeSQLite("CREATE INDEX IF NOT EXISTS idx_recordings_pinned_at ON recordings(pinnedAt)", db: sqlite)
+            try executeSQLite("CREATE INDEX IF NOT EXISTS idx_recordings_starred_at ON recordings(starredAt)", db: sqlite)
+            try executeSQLite("INSERT OR IGNORE INTO grdb_migrations(identifier) VALUES ('v29_pin_and_star')", db: sqlite)
+            try executeSQLite("COMMIT", db: sqlite)
+        } catch {
+            try? executeSQLite("ROLLBACK", db: sqlite)
+            throw error
+        }
+    }
+
+    private static func sqliteTableExists(_ tableName: String, db sqlite: OpaquePointer) throws -> Bool {
+        try sqliteScalarInt(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '\(tableName)'",
+            db: sqlite
+        ) > 0
+    }
+
+    private static func sqliteMigrationIsApplied(_ identifier: String, db sqlite: OpaquePointer) throws -> Bool {
+        try sqliteScalarInt(
+            "SELECT COUNT(*) FROM grdb_migrations WHERE identifier = '\(identifier)'",
+            db: sqlite
+        ) > 0
+    }
+
+    private static func sqliteColumns(in tableName: String, db sqlite: OpaquePointer) throws -> Set<String> {
+        var statement: OpaquePointer?
+        let sql = "PRAGMA table_info(\(tableName))"
+        let prepareResult = sqlite3_prepare_v2(sqlite, sql, -1, &statement, nil)
+        guard prepareResult == SQLITE_OK else {
+            throw makeSQLiteError(sql, db: sqlite, code: prepareResult)
+        }
+        defer { sqlite3_finalize(statement) }
+
+        var columns = Set<String>()
+        while sqlite3_step(statement) == SQLITE_ROW {
+            if let name = sqlite3_column_text(statement, 1) {
+                columns.insert(String(cString: name))
+            }
+        }
+        return columns
+    }
+
+    private static func sqliteScalarInt(_ sql: String, db sqlite: OpaquePointer) throws -> Int {
+        var statement: OpaquePointer?
+        let prepareResult = sqlite3_prepare_v2(sqlite, sql, -1, &statement, nil)
+        guard prepareResult == SQLITE_OK else {
+            throw makeSQLiteError(sql, db: sqlite, code: prepareResult)
+        }
+        defer { sqlite3_finalize(statement) }
+
+        let stepResult = sqlite3_step(statement)
+        guard stepResult == SQLITE_ROW else {
+            if stepResult == SQLITE_DONE { return 0 }
+            throw makeSQLiteError(sql, db: sqlite, code: stepResult)
+        }
+        return Int(sqlite3_column_int(statement, 0))
+    }
+
+    private static func executeSQLite(_ sql: String, db sqlite: OpaquePointer) throws {
+        var errorMessage: UnsafeMutablePointer<CChar>?
+        let result = sqlite3_exec(sqlite, sql, nil, nil, &errorMessage)
+        guard result == SQLITE_OK else {
+            let message = errorMessage.map { String(cString: $0) } ?? sqliteErrorMessage(sqlite)
+            sqlite3_free(errorMessage)
+            throw NSError(
+                domain: "Talkie.DatabaseManager.SQLiteStartup",
+                code: Int(result),
+                userInfo: [NSLocalizedDescriptionKey: "SQLite \(sql) failed: \(message)"]
+            )
+        }
+    }
+
+    private static func makeSQLiteError(_ operation: String, db sqlite: OpaquePointer?, code: Int32) -> NSError {
+        NSError(
+            domain: "Talkie.DatabaseManager.SQLiteStartup",
+            code: Int(code),
+            userInfo: [NSLocalizedDescriptionKey: "SQLite \(operation) failed: \(sqliteErrorMessage(sqlite))"]
+        )
+    }
+
+    private static func sqliteErrorMessage(_ sqlite: OpaquePointer?) -> String {
+        guard let sqlite, let message = sqlite3_errmsg(sqlite) else {
+            return "unknown error"
+        }
+        return String(cString: message)
+    }
+
+    private func installDatabaseQueue(_ dbQueue: DatabaseQueue) -> [@Sendable () async -> Void] {
+        lock.lock()
+        defer { lock.unlock() }
+
+        self.dbQueue = dbQueue
+        let callbacks = pendingCallbacks
+        pendingCallbacks.removeAll()
+        return callbacks
     }
 
     /// Check if database is initialized (thread-safe)
@@ -249,7 +367,7 @@ final class DatabaseManager: @unchecked Sendable {
 
     // MARK: - Migrations
 
-    private var migrator: DatabaseMigrator {
+    nonisolated private static var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
 
         // Migration v1: Initial schema
@@ -1544,13 +1662,28 @@ final class DatabaseManager: @unchecked Sendable {
         // Lives on both `voice_memos` (memo source-of-truth) and `recordings`
         // (unified read path — captures + notes only live here).
         migrator.registerMigration("v29_pin_and_star") { db in
-            try db.alter(table: "voice_memos") { t in
-                t.add(column: "pinnedAt", .datetime)
-                t.add(column: "starredAt", .datetime)
+            let memoColumns = try Row.fetchAll(db, sql: "PRAGMA table_info(voice_memos)").map { $0["name"] as String }
+            if !memoColumns.contains("pinnedAt") {
+                try db.alter(table: "voice_memos") { t in
+                    t.add(column: "pinnedAt", .datetime)
+                }
             }
-            try db.alter(table: "recordings") { t in
-                t.add(column: "pinnedAt", .datetime)
-                t.add(column: "starredAt", .datetime)
+            if !memoColumns.contains("starredAt") {
+                try db.alter(table: "voice_memos") { t in
+                    t.add(column: "starredAt", .datetime)
+                }
+            }
+
+            let recordingColumns = try Row.fetchAll(db, sql: "PRAGMA table_info(recordings)").map { $0["name"] as String }
+            if !recordingColumns.contains("pinnedAt") {
+                try db.alter(table: "recordings") { t in
+                    t.add(column: "pinnedAt", .datetime)
+                }
+            }
+            if !recordingColumns.contains("starredAt") {
+                try db.alter(table: "recordings") { t in
+                    t.add(column: "starredAt", .datetime)
+                }
             }
             try db.create(index: "idx_memos_pinned_at",
                          on: "voice_memos",

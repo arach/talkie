@@ -1422,19 +1422,31 @@ extension TalkieObjectRepository {
 
     /// Sum of all word counts for dictations (computed from text)
     func totalDictationWords() async throws -> Int {
+        try await totalTranscribedWords(types: [.dictation])
+    }
+
+    /// Sum of all word counts for transcribed recordings of the requested types.
+    func totalTranscribedWords(types: [TalkieObjectType]) async throws -> Int {
+        guard !types.isEmpty else { return 0 }
         let db = try await db()
 
+        let placeholders = Array(repeating: "?", count: types.count).joined(separator: ", ")
+        let arguments = StatementArguments(types.map(\.rawValue))
         return try await db.read { db in
-            // Fetch only text column as strings (not full TalkieObject structs)
-            let request = TalkieObject
-                .filter(TalkieObject.Columns.type == TalkieObjectType.dictation.rawValue)
-                .filter(TalkieObject.Columns.deletedAt == nil)
-                .select(TalkieObject.Columns.text)
-
-            let texts = try String.fetchAll(db, request)
+            let texts = try String.fetchAll(
+                db,
+                sql: """
+                    SELECT COALESCE(text, '')
+                    FROM recordings
+                    WHERE deletedAt IS NULL
+                      AND type IN (\(placeholders))
+                      AND COALESCE(text, '') != ''
+                    """,
+                arguments: arguments
+            )
 
             return texts.reduce(0) { total, text in
-                total + text.split(separator: " ").count
+                total + text.split { $0.isWhitespace }.count
             }
         }
     }

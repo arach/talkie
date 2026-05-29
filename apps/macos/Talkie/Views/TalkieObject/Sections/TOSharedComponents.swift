@@ -1128,12 +1128,27 @@ struct RecordingTranscriptCard: View {
         // could collapse to zero inside a `.fixedSize`-free VStack and
         // looked like clicking the toggle did nothing). Tall payloads
         // get a scrollable cap.
-        ScrollView {
+        let isScope = SettingsManager.shared.isScopeTheme
+        return ScrollView {
             SyntaxHighlightedJSON(json: renderJSON())
                 .padding(Spacing.md)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(minHeight: 280, maxHeight: 520)
+        .background {
+            // In Scope mode, give the JSON panel its own surface lift
+            // (a cool-cream card) with a subtle ink hairline. Reads as
+            // an editorial code panel sitting on the page instead of a
+            // dark slab dropped in from a different theme.
+            if isScope {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(ScopeCanvas.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .strokeBorder(ScopeEdge.faint, lineWidth: 0.5)
+                    )
+            }
+        }
     }
 
     // MARK: - Tool Tray
@@ -1827,16 +1842,35 @@ struct DocumentBody: View {
 struct SyntaxHighlightedJSON: View {
     let json: String
 
-    private let keyColor = Color(red: 0.6, green: 0.8, blue: 1.0)
-    private let stringColor = Color(red: 0.8, green: 0.9, blue: 0.7)
-    private let numberColor = Color(red: 1.0, green: 0.8, blue: 0.6)
-    private let boolColor = Color(red: 0.9, green: 0.7, blue: 0.9)
-    private let nullColor = Color(red: 0.7, green: 0.7, blue: 0.7)
-    private let bracketColor = Theme.current.foregroundSecondary
+    private var isScope: Bool { SettingsManager.shared.isScopeTheme }
+
+    /// Light-Scope palette: dark inks + amber/brass accents on cream
+    /// canvas. The pastels used in the dark-theme branch wash out on a
+    /// cream surface, so we swap to high-contrast editorial colors that
+    /// pair with the rest of the Scope substrate (ink ladder + amber
+    /// accent + brass for warmer values).
+    private var keyColor: Color {
+        isScope ? ScopeAmber.solid : Color(red: 0.6, green: 0.8, blue: 1.0)
+    }
+    private var stringColor: Color {
+        isScope ? ScopeInk.dim : Color(red: 0.8, green: 0.9, blue: 0.7)
+    }
+    private var numberColor: Color {
+        isScope ? ScopeBrass.solid : Color(red: 1.0, green: 0.8, blue: 0.6)
+    }
+    private var boolColor: Color {
+        isScope ? ScopeBrass.deep : Color(red: 0.9, green: 0.7, blue: 0.9)
+    }
+    private var nullColor: Color {
+        isScope ? ScopeInk.subtle : Color(red: 0.7, green: 0.7, blue: 0.7)
+    }
+    private var bracketColor: Color {
+        isScope ? ScopeInk.subtle : Theme.current.foregroundSecondary
+    }
 
     var body: some View {
         Text(attributedJSON)
-            .font(.system(size: 11, weight: .light, design: .monospaced))
+            .font(.system(size: 11, weight: isScope ? .regular : .light, design: .monospaced))
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
     }

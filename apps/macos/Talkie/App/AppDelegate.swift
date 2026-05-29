@@ -199,6 +199,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         StartupCoordinator.shared.initializeCritical()
         StartupProfiler.shared.markEarly("phase1.critical.done")
 
+        // Phase 2: Database - start from the delegate path as well as
+        // TalkieApp.init so restored windows and early view tasks never race a
+        // missing GRDB boot.
+        Task { @MainActor in
+            StartupProfiler.shared.mark("db.grdb.start.delegate")
+            let didInitialize = await StartupCoordinator.shared.initializeDatabase()
+            StartupProfiler.shared.mark(didInitialize ? "db.grdb.ready.delegate" : "db.grdb.failed.delegate")
+        }
+
         // Set notification delegate to show notifications while app is in foreground
         signposter.emitEvent("Notification Delegate")
         UNUserNotificationCenter.current().delegate = self
