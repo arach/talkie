@@ -433,6 +433,12 @@ struct TOHeaderSection: View {
             inlineActionButton(label: "Export",
                                icon: "arrow.down.doc",
                                action: exportRecording)
+            // JSON lives here in the top action row — it's a view of the
+            // whole payload (a peer of Copy/Share/Export), not a
+            // transcript-section affordance.
+            if let showJSON {
+                jsonToggleChip(showJSON: showJSON)
+            }
             Spacer(minLength: 8)
             overflowMenu
         }

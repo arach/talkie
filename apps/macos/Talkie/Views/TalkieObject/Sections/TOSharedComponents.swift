@@ -774,7 +774,6 @@ struct RecordingTranscriptCard: View {
 
     @State private var copied = false
     @State private var toolTrayHovered = false
-    @State private var jsonChipHovered = false
     @State private var copyChipHovered = false
 
     private var hasTranscriptionData: Bool {
@@ -875,10 +874,12 @@ struct RecordingTranscriptCard: View {
             //    affordance lives on the card whose body it changes
             //    (was previously in the masthead's action row, which read
             //    as detached chrome).
+            // JSON entry now lives in the top action row (it's a
+            // whole-payload view, not a transcript-section affordance).
+            // In document mode the transcript shows no top strip; JSON
+            // mode still gets its dismissal row with the easy copy.
             if !isEditing && showJSON {
                 jsonDismissalRow
-            } else if !isEditing {
-                cardModeStrip
             }
 
             contentArea
@@ -914,44 +915,6 @@ struct RecordingTranscriptCard: View {
     // Replaces the old persistent TEXT/JSON tab pair. Only renders when
     // the user has actively flipped to JSON via the overflow menu;
     // gives them a one-tap path back to the editorial text view.
-
-    /// Top strip in document mode — flush-right TEXT/JSON toggle.
-    /// Sits over the transparent paper (no background) so it reads as
-    /// editorial chrome on the document, not a control bar.
-    private var cardModeStrip: some View {
-        // The canonical "section rule" treatment: a hairline rule fills the
-        // row to a pair of right-aligned affordances (COPY · JSON). Reads as
-        // a deliberate section divider between the document above and the
-        // transcript below — structural, not a lone chip floating top-right.
-        HStack(spacing: 8) {
-            ThemedScopeRule(.subtle)
-            sectionRuleChip(
-                icon: copied ? "checkmark" : "doc.on.doc",
-                label: copied ? "COPIED" : "COPY",
-                hovered: copyChipHovered,
-                tint: copied ? Color.green.opacity(0.8) : nil,
-                action: copyContent,
-                hover: { copyChipHovered = $0 },
-                help: "Copy transcript"
-            )
-            sectionRuleChip(
-                icon: "curlybraces",
-                label: "JSON",
-                hovered: jsonChipHovered,
-                tint: nil,
-                action: { withAnimation(.easeOut(duration: 0.12)) { showJSON = true } },
-                hover: { jsonChipHovered = $0 },
-                help: "View as JSON"
-            )
-        }
-        .padding(.horizontal, documentMode ? 0 : Spacing.sm)
-        .padding(.vertical, documentMode ? 6 : Spacing.xs)
-        .background(
-            documentMode
-                ? Color.clear
-                : (isTechnical ? TechnicalStyle.surface1 : Theme.current.foreground.opacity(0.02))
-        )
-    }
 
     /// Reusable affordance chip for the section-rule treatment — a mono label
     /// + glyph that's subtle by default and lights up to brass on hover (or a
@@ -1011,6 +974,17 @@ struct RecordingTranscriptCard: View {
                 .tracking(2.8)
                 .foregroundColor(Theme.current.foregroundSecondary.opacity(0.62))
             ThemedScopeRule(.subtle)
+            // Easy copy lives here, inside JSON mode — copyContent() copies
+            // renderJSON() while showJSON is true, so this grabs the JSON.
+            sectionRuleChip(
+                icon: copied ? "checkmark" : "doc.on.doc",
+                label: copied ? "COPIED" : "COPY",
+                hovered: copyChipHovered,
+                tint: copied ? Color.green.opacity(0.8) : nil,
+                action: copyContent,
+                hover: { copyChipHovered = $0 },
+                help: "Copy JSON"
+            )
             Button {
                 withAnimation(.easeOut(duration: 0.12)) { showJSON = false }
             } label: {
