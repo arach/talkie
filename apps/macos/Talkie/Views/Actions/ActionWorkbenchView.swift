@@ -30,6 +30,12 @@ struct ActionWorkbenchView: View {
         return UUID(uuidString: raw)
     }
 
+    /// Scope paints all structural surfaces with the single light canvas
+    /// token so the left side matches every other Scope screen (the
+    /// Theme.current surface ladder read as a slightly heavier, different
+    /// tone). Other themes keep their own surface ladder.
+    private var isScope: Bool { SettingsManager.shared.isScopeTheme }
+
     var body: some View {
         VStack(spacing: 0) {
             // Scope renders the shared top band (title · count · refresh);
@@ -74,7 +80,7 @@ struct ActionWorkbenchView: View {
                 workbenchLayout
             }
         }
-        .background(Theme.current.surfaceBase)
+        .background(isScope ? ScopeCanvas.canvas : Theme.current.surfaceBase)
         .task {
             await load()
             while !Task.isCancelled {
@@ -106,7 +112,7 @@ struct ActionWorkbenchView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Theme.current.surfaceInput)
+        .background(isScope ? ScopeCanvas.canvas : Theme.current.surfaceInput)
     }
 
     private var runRail: some View {
