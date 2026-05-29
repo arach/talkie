@@ -32,14 +32,21 @@ struct ActionWorkbenchView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PageHeaderBar {
-                TalkieText("Actions", style: .pageTitle)
-                Spacer()
-                Button("Refresh", systemImage: "arrow.clockwise") {
-                    Task { await load(showLoading: false) }
+            // Scope renders the shared top band (title · count · refresh);
+            // Pro/Light keep the legacy PageHeaderBar until the band is
+            // brought onto those themes. Same `refreshButton` either way.
+            if SettingsManager.shared.isScopeTheme {
+                ScopeTopBand(
+                    title: "Actions",
+                    chrome: runs.isEmpty ? nil : "\(runs.count) RUNS",
+                    trailing: { refreshButton }
+                )
+            } else {
+                PageHeaderBar {
+                    TalkieText("Actions", style: .pageTitle)
+                    Spacer()
+                    refreshButton
                 }
-                .buttonStyle(.plain)
-                .font(Theme.current.fontXS)
             }
 
             Divider()
@@ -78,6 +85,14 @@ struct ActionWorkbenchView: View {
         .onChange(of: NavigationState.shared.params) { _, _ in
             Task { await applyNavigationSelection() }
         }
+    }
+
+    private var refreshButton: some View {
+        Button("Refresh", systemImage: "arrow.clockwise") {
+            Task { await load(showLoading: false) }
+        }
+        .buttonStyle(.plain)
+        .font(Theme.current.fontXS)
     }
 
     private var workbenchLayout: some View {
