@@ -61,6 +61,15 @@ public enum CaptureMarkupRenderer {
         return data as Data
     }
 
+    /// Stroke weight in pixels for the export bitmap. Mirrors the web canvas:
+    /// `strokeUnits * max(1, width/600)`, with `2` as the historical default
+    /// when a layer carries no explicit `strokeWidth`.
+    private static func strokeLineWidth(_ layer: CaptureMarkupLayer, size: CGSize) -> CGFloat {
+        let baseUnit = max(1, size.width / 600)
+        let units = layer.strokeWidth.map { CGFloat($0) } ?? 2
+        return units * baseUnit
+    }
+
     private static func draw(layer: CaptureMarkupLayer, in context: CGContext, size: CGSize) {
         let color = parseColor(layer.color)
         switch layer.kind {
@@ -68,11 +77,11 @@ public enum CaptureMarkupRenderer {
             guard let frame = layer.frame else { return }
             let rect = frame.pixelRect(in: size)
             if layer.kind == .highlight {
-                context.setFillColor(color.copy(alpha: 0.12) ?? color)
+                context.setFillColor(color.copy(alpha: layer.label == "BLUR" ? 0.32 : 0.12) ?? color)
                 context.fill(rect)
             }
             context.setStrokeColor(color)
-            context.setLineWidth(max(2, size.width / 600))
+            context.setLineWidth(strokeLineWidth(layer, size: size))
             context.stroke(rect)
             if let label = layer.label {
                 drawLabel(label, near: rect, in: context, size: size)
@@ -82,12 +91,16 @@ public enum CaptureMarkupRenderer {
             let start = from.pixelPoint(in: size)
             let end = to.pixelPoint(in: size)
             context.setStrokeColor(color)
-            context.setLineWidth(max(2, size.width / 600))
+            context.setLineWidth(strokeLineWidth(layer, size: size))
             context.move(to: start)
             context.addLine(to: end)
             context.strokePath()
-            drawArrowHead(at: end, from: start, color: color, in: context, size: size)
-            if let label = layer.label {
+            // `label == "line"` is the sentinel for a plain line (no arrowhead),
+            // matching the web canvas. Other labels are rendered as a tag.
+            if layer.label != "line" {
+                drawArrowHead(at: end, from: start, color: color, in: context, size: size)
+            }
+            if let label = layer.label, label != "line" {
                 drawLabel(label, near: CGRect(origin: end, size: .zero), in: context, size: size)
             }
         case .label:

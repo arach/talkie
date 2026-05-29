@@ -485,6 +485,106 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Selection restyle — change a selected layer's shape / color / width in
+  // place. The toolbar's shape buttons + style stack act on the SELECTED layer
+  // when one exists and no create-tool is active ("editing selection" mode),
+  // instead of only setting new-draw defaults.
+  // ---------------------------------------------------------------------------
+
+  function selectedLayer() {
+    return state.document.layers.find((l) => l.id === state.selectedLayerId) || null;
+  }
+
+  /** The toolbar "shape" identity of a layer (matches data-tool values).
+   *  Returns null for kinds that have no shape button (label/guide). */
+  function layerShape(layer) {
+    if (!layer) return null;
+    if (layer.kind === "rect") return "rect";
+    if (layer.kind === "highlight") return layer.label === "BLUR" ? "blur" : null;
+    if (layer.kind === "arrow") return layer.label === "line" ? "line" : "arrow";
+    return null; // label (text), guide — not shape-convertible
+  }
+
+  // Shapes the user may freely convert between. Two families:
+  //   · frame-based:   rect ⇄ blur   (both carry a `frame`)
+  //   · segment-based: arrow ⇄ line  (both carry from/to endpoints)
+  // Cross-family conversions (rect→arrow) and conversions to/from text/guide
+  // are intentionally disallowed — the geometry doesn't map cleanly.
+  const CONVERTIBLE_SHAPES = new Set(["rect", "arrow", "line", "blur"]);
+
+  function shapeFamily(shape) {
+    if (shape === "rect" || shape === "blur") return "frame";
+    if (shape === "arrow" || shape === "line") return "segment";
+    return null;
+  }
+
+  /** Can the selected layer be converted to `targetShape`? Only within the
+   *  same geometry family, and only between convertible shapes. */
+  function canConvertSelectionTo(targetShape) {
+    const layer = selectedLayer();
+    if (!layer) return false;
+    const from = layerShape(layer);
+    if (!from || !CONVERTIBLE_SHAPES.has(targetShape)) return false;
+    if (from === targetShape) return false;
+    return shapeFamily(from) === shapeFamily(targetShape);
+  }
+
+  /** Mutate the selected layer in place to `targetShape`, preserving geometry,
+   *  color and stroke width. Returns true if a change was applied. */
+  function convertSelectionTo(targetShape) {
+    const layer = selectedLayer();
+    if (!layer || !canConvertSelectionTo(targetShape)) return false;
+    snapshotForUndo();
+    switch (targetShape) {
+      case "rect":
+        layer.kind = "rect";
+        delete layer.label;
+        break;
+      case "blur":
+        // Frame-based placeholder blur (highlight + "BLUR" sentinel). Keep the
+        // user's frame; the grey fill comes from the renderer.
+        layer.kind = "highlight";
+        layer.label = "BLUR";
+        break;
+      case "arrow":
+        layer.kind = "arrow";
+        delete layer.label; // arrowhead on
+        break;
+      case "line":
+        layer.kind = "arrow";
+        layer.label = "line"; // arrowhead off
+        break;
+    }
+    layer.author = "user";
+    debouncedUpdate();
+    render();
+    return true;
+  }
+
+  /** Apply a style pick (color / stroke / font-size) to the selected layer.
+   *  Returns true if a change was applied. */
+  function applyStyleToSelection(kind, value) {
+    const layer = selectedLayer();
+    if (!layer) return false;
+    snapshotForUndo();
+    if (kind === "color") {
+      layer.color = value;
+    } else if (kind === "stroke") {
+      layer.strokeWidth = Number(value) || 2;
+    } else if (kind === "font-size") {
+      layer.fontSize = Number(value) || 16;
+    } else {
+      state.history.past.pop(); // nothing changed; drop the speculative snapshot
+      updateHistoryButtons();
+      return false;
+    }
+    layer.author = "user";
+    debouncedUpdate();
+    render();
+    return true;
+  }
+
+  // ---------------------------------------------------------------------------
   // Rendering
   // ---------------------------------------------------------------------------
   function drawArrowhead(x1, y1, x2, y2, w) {
@@ -693,6 +793,11 @@
     drawCreatingPreview(w, h);
     ctx.restore();
     renderRail();
+    // Keep the toolbar in sync with the current selection (edit-mode shape
+    // highlight, disabled conversions, style-stack mirror). render() is the
+    // common path for every selection change (canvas/sidebar select, undo,
+    // delete, escape), so this is the single place to refresh it.
+    syncToolbarState();
     postStats();
     postSelection();
     updateHistoryButtons();
@@ -741,11 +846,21 @@
       return;
     }
     body.className = "";
+    const shape = layerShape(selected);
     const rows = [
-      ["kind", selected.kind],
+      ["shape", shape || selected.kind],
       ["author", selected.author || "agent"],
+      ["color", selected.color || "—"],
     ];
-    if (selected.label) rows.push(["label", selected.label]);
+    if (shape && shape !== "blur") {
+      rows.push(["width", String(typeof selected.strokeWidth === "number" ? selected.strokeWidth : 2)]);
+    }
+    if (selected.kind === "label") {
+      rows.push(["size", String(typeof selected.fontSize === "number" ? selected.fontSize : 16)]);
+    }
+    if (selected.label && selected.label !== "line" && selected.label !== "BLUR") {
+      rows.push(["label", selected.label]);
+    }
     if (selected.frame) {
       rows.push(["x", selected.frame.x.toFixed(3)]);
       rows.push(["y", selected.frame.y.toFixed(3)]);
@@ -768,12 +883,89 @@
 
   function setActiveTool(tool) {
     state.activeTool = tool;
-    toolToolbar.querySelectorAll(".tool-btn").forEach((btn) => {
-      btn.classList.toggle("active", btn.hasAttribute("data-tool") && btn.getAttribute("data-tool") === tool);
-    });
-    updateStyleStackVisibility();
+    syncToolbarState();
     // Cursor hint: crosshair while a create-tool is selected, default in select mode.
     updateCursor();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Toolbar state — reflects EITHER the active create-tool's defaults OR the
+  // selected layer. When a layer is selected and no create-tool is active we
+  // enter "editing selection" mode: the shape buttons highlight the layer's
+  // current shape (and disable cross-family conversions), and the style stack
+  // mirrors the layer's color / width / font.
+  // ---------------------------------------------------------------------------
+  function isEditingSelection() {
+    return state.activeTool == null && !!selectedLayer();
+  }
+
+  function syncToolbarState() {
+    const editing = isEditingSelection();
+    const layer = editing ? selectedLayer() : null;
+    const selShape = layer ? layerShape(layer) : null;
+
+    // Shape buttons: in edit mode highlight the layer's shape and disable
+    // conversions that don't map cleanly. In draw mode highlight the active
+    // create-tool as before.
+    toolToolbar.querySelectorAll(".tool-btn[data-tool]").forEach((btn) => {
+      const tool = btn.getAttribute("data-tool");
+      if (editing) {
+        btn.classList.toggle("active", tool === selShape);
+        // Text + the layer's own shape stay enabled; cross-family shape
+        // conversions are disabled. (Text tool is left enabled so the user
+        // can still drop a new label even while a layer is selected.)
+        const allow = tool === "text" || tool === selShape || canConvertSelectionTo(tool);
+        btn.disabled = !allow;
+      } else {
+        btn.classList.toggle("active", tool === state.activeTool);
+        btn.disabled = false;
+      }
+    });
+
+    // The "editing selection" affordance on the toolbar.
+    toolToolbar.classList.toggle("editing-selection", editing);
+    const badge = document.getElementById("selection-mode-badge");
+    if (badge) {
+      badge.classList.toggle("hidden", !editing);
+      if (editing && layer) {
+        badge.textContent = "Editing " + (selShape || layer.kind);
+      }
+    }
+
+    updateStyleStackVisibility();
+    syncStyleStackActive();
+  }
+
+  /** Reflect the active style values onto the style-stack buttons. In edit
+   *  mode the values come from the selected layer; otherwise from the per-tool
+   *  defaults in `state.style`. */
+  function syncStyleStackActive() {
+    if (!styleStack) return;
+    const layer = isEditingSelection() ? selectedLayer() : null;
+    const color = layer ? layer.color : state.style.color;
+    const stroke = layer
+      ? (typeof layer.strokeWidth === "number" ? layer.strokeWidth : 2)
+      : state.style.strokeWidth;
+    const font = layer
+      ? (typeof layer.fontSize === "number" ? layer.fontSize : 16)
+      : state.style.fontSize;
+
+    setGroupActiveByValue("color", color, true);
+    setGroupActiveByValue("stroke", String(stroke), false);
+    setGroupActiveByValue("font-size", String(font), false);
+  }
+
+  /** Mark the button in `kind`'s group whose data-value matches `value`.
+   *  `caseInsensitive` handles hex colors. Clears the rest of the group. */
+  function setGroupActiveByValue(kind, value, caseInsensitive) {
+    const buttons = styleStack.querySelectorAll(`.style-btn[data-style="${kind}"]`);
+    const target = caseInsensitive ? String(value).toLowerCase() : String(value);
+    buttons.forEach((b) => {
+      const bv = caseInsensitive
+        ? String(b.getAttribute("data-value")).toLowerCase()
+        : b.getAttribute("data-value");
+      b.classList.toggle("active", bv === target);
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -790,20 +982,31 @@
   // ---------------------------------------------------------------------------
   function updateStyleStackVisibility() {
     if (!styleStack) return;
-    const tool = state.activeTool;
-    const isText = tool === "text";
-    const isShape = tool === "rect" || tool === "arrow" || tool === "line" || tool === "blur";
+
+    // In "editing selection" mode the relevant groups follow the selected
+    // layer's kind; otherwise they follow the active create-tool.
+    let isText;
+    let isShape;
+    if (isEditingSelection()) {
+      const layer = selectedLayer();
+      isText = layer && layer.kind === "label";
+      isShape = !!layerShape(layer); // rect / arrow / line / blur
+    } else {
+      const tool = state.activeTool;
+      isText = tool === "text";
+      isShape = tool === "rect" || tool === "arrow" || tool === "line" || tool === "blur";
+    }
 
     const strokeGroup = styleStack.querySelector('[data-group="stroke"]');
     const fontDivider = styleStack.querySelector('[data-group="font-divider"]');
     const fontGroup = styleStack.querySelector('[data-group="font-size"]');
 
-    if (strokeGroup) strokeGroup.classList.toggle("hidden", isText);
-    // Font controls only show when text is the active tool — they're
-    // meaningless for shape primitives. Null tool keeps them visible so
-    // the defaults panel shows everything you might pre-pick.
-    if (fontGroup) fontGroup.classList.toggle("hidden", isShape);
-    if (fontDivider) fontDivider.classList.toggle("hidden", isShape);
+    // Stroke width is meaningless for text labels; hide it for text.
+    if (strokeGroup) strokeGroup.classList.toggle("hidden", !!isText);
+    // Font size only applies to text labels; hide it for shapes. The null /
+    // nothing-selected defaults panel keeps everything visible.
+    if (fontGroup) fontGroup.classList.toggle("hidden", !!isShape);
+    if (fontDivider) fontDivider.classList.toggle("hidden", !!isShape);
   }
 
   function applyStylePick(kind, value) {
@@ -835,7 +1038,13 @@
       const kind = btn.getAttribute("data-style");
       const value = btn.getAttribute("data-value");
       if (!kind || value === null) return;
+      // Always update the per-tool default so the next new shape inherits the
+      // pick too. When a layer is selected (no create-tool active), also apply
+      // it live to that layer and autosave.
       applyStylePick(kind, value);
+      if (isEditingSelection()) {
+        applyStyleToSelection(kind, value);
+      }
       markStyleButtonActive(btn);
       e.preventDefault();
     });
@@ -881,9 +1090,27 @@
   // ---------------------------------------------------------------------------
   toolToolbar.addEventListener("click", (e) => {
     const btn = e.target.closest(".tool-btn");
-    if (!btn) return;
+    if (!btn || btn.disabled) return;
     const tool = btn.getAttribute("data-tool");
     if (tool === null) return;
+
+    // Editing-selection mode: a shape button restyles the SELECTED layer's
+    // shape in place (rect⇄blur, arrow⇄line) instead of arming a draw tool.
+    // Clicking the layer's current shape is a no-op; clicking the text tool
+    // (or any non-convertible target) falls through to normal tool arming.
+    if (isEditingSelection()) {
+      const layer = selectedLayer();
+      const current = layerShape(layer);
+      if (tool === current) return; // already this shape
+      if (canConvertSelectionTo(tool)) {
+        convertSelectionTo(tool);
+        syncToolbarState();
+        return;
+      }
+      // Non-convertible (e.g. text): arming the tool drops the selection edit.
+      state.selectedLayerId = null;
+    }
+
     setActiveTool(state.activeTool === tool ? null : tool);
   });
 

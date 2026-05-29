@@ -81,6 +81,32 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
 .tool-btn .glyph { font-size: 13px; line-height: 1; }
 .tool-btn .label { font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; }
 
+/* "Editing selection" affordance — a small amber pill that appears in the
+   toolbar while a layer is selected (and no create-tool is armed). Signals
+   that the shape buttons + style stack restyle the SELECTED layer in place. */
+.selection-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 8px;
+  border: 0.5px solid rgba(196, 125, 28, 0.45);
+  border-radius: 999px;
+  background: rgba(196, 125, 28, 0.12);
+  color: #9a6310;
+  font: 600 8.5px/1 ui-monospace, monospace;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.selection-mode-badge.hidden { display: none; }
+
+/* While editing a selection, the active shape button reads as amber (the
+   normal .active style); disabled conversions dim out via :disabled below. */
+.tool-toolbar.editing-selection .tool-btn:disabled {
+  opacity: 0.3;
+}
+
 /* ─── Style Stack ─────────────────────────────────────────────────────
    Contextual editor on the right half of the toolbar. Per-tool defaults
    today (first port pass); selected-layer live-edit is a follow-up.

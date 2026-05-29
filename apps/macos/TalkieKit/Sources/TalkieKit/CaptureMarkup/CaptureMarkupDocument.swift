@@ -126,6 +126,14 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
     public var to: CaptureMarkupPoint?
     public var text: String?
     public var color: String
+    /// Relative stroke weight (the web canvas interprets `2` as the historical
+    /// default `max(2, imageWidth/600)`). Optional so older sidecars that never
+    /// carried it keep rendering unchanged. Set by the markup toolbar's width
+    /// picker — both at create time and when restyling a selected layer.
+    public var strokeWidth: Double?
+    /// Relative label font size, same convention as `strokeWidth`. Only
+    /// meaningful for `.label` layers.
+    public var fontSize: Double?
     public var label: String?
     public var orientation: String?
     public var interval: Double?
@@ -140,6 +148,8 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         case to
         case text
         case color
+        case strokeWidth
+        case fontSize
         case label
         case orientation
         case interval
@@ -155,6 +165,8 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         to: CaptureMarkupPoint? = nil,
         text: String? = nil,
         color: String = "#C47D1C",
+        strokeWidth: Double? = nil,
+        fontSize: Double? = nil,
         label: String? = nil,
         orientation: String? = nil,
         interval: Double? = nil,
@@ -168,6 +180,8 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         self.to = to
         self.text = text
         self.color = color
+        self.strokeWidth = strokeWidth
+        self.fontSize = fontSize
         self.label = label
         self.orientation = orientation
         self.interval = interval
@@ -184,6 +198,8 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         to = try container.decodeIfPresent(CaptureMarkupPoint.self, forKey: .to)
         text = try container.decodeIfPresent(String.self, forKey: .text)
         color = try container.decodeIfPresent(String.self, forKey: .color) ?? "#C47D1C"
+        strokeWidth = try container.decodeIfPresent(Double.self, forKey: .strokeWidth)
+        fontSize = try container.decodeIfPresent(Double.self, forKey: .fontSize)
         label = try container.decodeIfPresent(String.self, forKey: .label)
         orientation = try container.decodeIfPresent(String.self, forKey: .orientation)
         interval = try container.decodeIfPresent(Double.self, forKey: .interval)

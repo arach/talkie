@@ -18,6 +18,11 @@
         <button type="button" class="tool-btn" data-tool="blur" title="Blur (B)"><span class="glyph">▒</span><span class="label">Blur</span></button>
       </div>
 
+      <!-- "Editing selection" affordance. Shown only while a layer is selected
+           and no create-tool is armed; makes it clear the shape buttons +
+           style stack are restyling the SELECTED layer, not new-draw defaults. -->
+      <span class="selection-mode-badge hidden" id="selection-mode-badge" aria-hidden="true">Editing selection</span>
+
       <span class="toolbar-divider" aria-hidden="true"></span>
 
       <!-- Right: contextual style stack (per-tool defaults; selected-layer

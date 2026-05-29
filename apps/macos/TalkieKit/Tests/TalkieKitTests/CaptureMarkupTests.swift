@@ -52,6 +52,34 @@ func captureMarkupLayerDecodeDefaults() throws {
     #expect(layer.color == "#C47D1C")
     #expect(layer.visible)
     #expect(layer.author == .agent)
+    // Older sidecars carry no stroke/font — they stay nil and the renderer
+    // falls back to its historical defaults.
+    #expect(layer.strokeWidth == nil)
+    #expect(layer.fontSize == nil)
+}
+
+@Test("Capture markup layer persists stroke width and font size")
+func captureMarkupLayerStyleRoundTrip() throws {
+    let layer = CaptureMarkupLayer(
+        kind: .rect,
+        frame: CaptureMarkupRect(x: 0.1, y: 0.2, width: 0.3, height: 0.1),
+        color: "#D03A1C",
+        strokeWidth: 5,
+        author: .user
+    )
+    let label = CaptureMarkupLayer(
+        kind: .label,
+        frame: CaptureMarkupRect(x: 0.1, y: 0.2, width: 0.3, height: 0.1),
+        text: "Hi",
+        fontSize: 22
+    )
+    let document = CaptureMarkupDocument(imageWidth: 800, imageHeight: 600, layers: [layer, label])
+
+    let data = try JSONEncoder().encode(document)
+    let decoded = try JSONDecoder().decode(CaptureMarkupDocument.self, from: data)
+    #expect(decoded == document)
+    #expect(decoded.layers[0].strokeWidth == 5)
+    #expect(decoded.layers[1].fontSize == 22)
 }
 
 @Test("Screenshot vision description payload caches target variants")
