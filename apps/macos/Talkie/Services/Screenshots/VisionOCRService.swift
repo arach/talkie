@@ -552,26 +552,11 @@ final class ScreenshotVisionPasteService {
     }
 
     private static func jpegData(for assetURL: URL) throws -> Data {
-        guard let source = CGImageSourceCreateWithURL(assetURL as CFURL, nil),
-              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+        // Downscaled, AI-bound copy. The stored screenshot stays full-res.
+        guard let data = ScreenshotCaptureService.aiJPEGData(for: assetURL) else {
             throw ScreenshotVisionPasteError.imageLoadFailed
         }
-
-        let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(
-            data as CFMutableData,
-            "public.jpeg" as CFString,
-            1,
-            nil
-        ) else {
-            throw ScreenshotVisionPasteError.imageLoadFailed
-        }
-        let properties = [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary
-        CGImageDestinationAddImage(destination, image, properties)
-        guard CGImageDestinationFinalize(destination) else {
-            throw ScreenshotVisionPasteError.imageLoadFailed
-        }
-        return data as Data
+        return data
     }
 
     private static func renderPasteText(

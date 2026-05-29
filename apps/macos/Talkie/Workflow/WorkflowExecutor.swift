@@ -316,27 +316,11 @@ class WorkflowExecutor {
     }
 
     private func screenshotJPEGData(for assetURL: URL) throws -> Data {
-        guard let source = CGImageSourceCreateWithURL(assetURL as CFURL, nil),
-              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-            throw WorkflowError.executionFailed("Could not load screenshot image for VLM description.")
-        }
-
-        let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(
-            data as CFMutableData,
-            "public.jpeg" as CFString,
-            1,
-            nil
-        ) else {
+        // Downscaled, AI-bound copy. The stored screenshot stays full-res.
+        guard let data = ScreenshotCaptureService.aiJPEGData(for: assetURL) else {
             throw WorkflowError.executionFailed("Could not prepare screenshot image for VLM description.")
         }
-
-        let properties = [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary
-        CGImageDestinationAddImage(destination, image, properties)
-        guard CGImageDestinationFinalize(destination) else {
-            throw WorkflowError.executionFailed("Could not encode screenshot image for VLM description.")
-        }
-        return data as Data
+        return data
     }
 
     private func saveScreenshotVisionVariant(

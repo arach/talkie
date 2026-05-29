@@ -251,21 +251,8 @@ final class CaptureMarkupAgentService {
     }
 
     private func jpegData(for imageURL: URL) throws -> Data? {
-        guard let source = CGImageSourceCreateWithURL(imageURL as CFURL, nil),
-              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-            return nil
-        }
-        let data = NSMutableData()
-        guard let dest = CGImageDestinationCreateWithData(
-            data as CFMutableData,
-            "public.jpeg" as CFString,
-            1,
-            nil
-        ) else { return nil }
-        let props = [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary
-        CGImageDestinationAddImage(dest, image, props)
-        guard CGImageDestinationFinalize(dest) else { return nil }
-        return data as Data
+        // Downscaled, AI-bound copy. The stored screenshot stays full-res.
+        ScreenshotCaptureService.aiJPEGData(for: imageURL)
     }
 
     private func emptyGeometry(for imageURL: URL) throws -> OCRGeometryResult {

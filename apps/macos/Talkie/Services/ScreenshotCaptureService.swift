@@ -27,13 +27,18 @@ enum ScreenshotCapturePreset: String, CaseIterable, Codable {
     }
 
     var detail: String {
+        // Note: the saved screenshot is always full-resolution (for markup /
+        // preview). This preset only governs the downscaled copy sent to AI
+        // workflows (VLM description, OCR, markup agent).
         switch self {
-        case .agent: return "Smallest files. Downscales aggressively for AI workflows."
-        case .balanced: return "Readable captures with moderate storage use."
-        case .archive: return "Full-size lossless captures for human review."
+        case .agent: return "Smallest AI payloads. Sends a 1280px copy to models."
+        case .balanced: return "Sharper AI input (2200px). Larger model payloads."
+        case .archive: return "Full-resolution AI input. Largest model payloads."
         }
     }
 
+    /// Max edge of the image handed to AI workflows. `nil` = send full size.
+    /// The stored canonical screenshot is unaffected (always full-res).
     var maxPixelLength: CGFloat? {
         switch self {
         case .agent: return 1280
@@ -44,9 +49,9 @@ enum ScreenshotCapturePreset: String, CaseIterable, Codable {
 
     var sizeSummary: String {
         switch self {
-        case .agent: return "Max edge 1280 px"
-        case .balanced: return "Max edge 2200 px"
-        case .archive: return "Full size PNG"
+        case .agent: return "AI image ≤ 1280 px"
+        case .balanced: return "AI image ≤ 2200 px"
+        case .archive: return "AI image full size"
         }
     }
 }
@@ -147,7 +152,9 @@ final class ScreenshotCaptureService {
         let timestampMs = Int(capturedAt.timeIntervalSince(recordingStartTime) * 1000)
         CapturePerformanceMonitor.shared.mark("capture.image.complete")
 
-        async let storedImageTask = processedImageForStorage(image)
+        // Canonical screenshot is stored at full resolution so markup /
+        // preview stay crisp. Downscaling now happens only on the AI path.
+        let storedImage = image
         let previewImage = await previewThumbnail(for: image)
 
         // Show floating preview
@@ -158,8 +165,6 @@ final class ScreenshotCaptureService {
             sourceHeight: image.height
         )
         CapturePerformanceMonitor.shared.mark("preview.show.complete")
-
-        let storedImage = await storedImageTask
 
         // Convert to PNG data
         CapturePerformanceMonitor.shared.mark("encode.begin")
@@ -257,7 +262,8 @@ final class ScreenshotCaptureService {
         let capturedAt = Date()
         CapturePerformanceMonitor.shared.mark("capture.image.complete")
 
-        let storedImage = await processedImageForStorage(image)
+        // Canonical screenshot stored full-resolution; AI downscale is separate.
+        let storedImage = image
 
         CapturePerformanceMonitor.shared.mark("encode.begin")
         async let encodedData = encodePNG(storedImage)
@@ -516,17 +522,54 @@ final class ScreenshotCaptureService {
         }.value
     }
 
-    private func processedImageForStorage(_ image: CGImage) async -> CGImage {
-        guard let maxPixelLength = capturePreset.maxPixelLength else {
-            return image
+    /// Max edge for the AI-bound copy of a screenshot, from the current
+    /// capture preset (default `.agent` → 1280). `nil` means send full size.
+    /// Reads UserDefaults directly so it's safe to call off the main actor
+    /// from the various AI encoders.
+    nonisolated static var aiMaxPixelLength: CGFloat? {
+        let raw = UserDefaults.standard.string(forKey: "screenshotCapturePreset")
+        let preset = raw.flatMap(ScreenshotCapturePreset.init(rawValue:)) ?? .agent
+        return preset.maxPixelLength
+    }
+
+    /// Load a screenshot file and JPEG-encode it for an AI workflow,
+    /// downscaling to `maxEdge` (long edge) first when the source is larger.
+    /// The canonical on-disk PNG is untouched — this is the derived copy.
+    nonisolated static func aiJPEGData(
+        for url: URL,
+        maxEdge: CGFloat? = ScreenshotCaptureService.aiMaxPixelLength,
+        quality: CGFloat = 0.85
+    ) -> Data? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+
+        let image: CGImage?
+        if let maxEdge {
+            let options: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: Int(maxEdge.rounded())
+            ]
+            image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+                ?? CGImageSourceCreateImageAtIndex(source, 0, nil)
+        } else {
+            image = CGImageSourceCreateImageAtIndex(source, 0, nil)
         }
-        let longestEdge = max(image.width, image.height)
-        guard CGFloat(longestEdge) > maxPixelLength else {
-            return image
-        }
-        return await Task.detached(priority: .userInitiated) {
-            Self.downscaledImage(from: image, maxPixelLength: maxPixelLength) ?? image
-        }.value
+        guard let cgImage = image else { return nil }
+
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            data as CFMutableData,
+            UTType.jpeg.identifier as CFString,
+            1,
+            nil
+        ) else { return nil }
+        CGImageDestinationAddImage(
+            destination,
+            cgImage,
+            [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary
+        )
+        guard CGImageDestinationFinalize(destination) else { return nil }
+        return data as Data
     }
 
     private func previewThumbnail(for image: CGImage) async -> CGImage {

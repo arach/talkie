@@ -7,6 +7,7 @@
 //
 
 import AppKit
+import ImageIO
 import SwiftUI
 import TalkieKit
 import UserNotifications
@@ -45,6 +46,12 @@ struct ScreenshotsScreen: View {
     @State private var isLoading = true
     @State private var searchText = ""
 
+    // ── Preview (Quick Look) takeover ────────────────────────────
+    // When set, the whole screen swaps to a clean read-only preview of
+    // this item (image-forward, no inspector), with a Markup escalation.
+    // Mirrors macOS Quick Look → Markup; see the /mac-screenshots studio.
+    @State private var previewItemID: String?
+
     // ── Visible window ───────────────────────────────────────────
     // Render only the first `visibleCount` items so 200+ thumbnails
     // don't all decode at once on view-appear. The bottom sentinel
@@ -56,9 +63,9 @@ struct ScreenshotsScreen: View {
     private static let pageSize: Int = 10
 
     // Layout
-    @State private var detailWidth: CGFloat = 420
+    @State private var detailWidth: CGFloat = 340
     private let detailMinWidth: CGFloat = 300
-    private let detailMaxWidth: CGFloat = 700
+    private let detailMaxWidth: CGFloat = 460
     private let compactThreshold: CGFloat = 800
 
     // MARK: - Derived
@@ -119,21 +126,55 @@ struct ScreenshotsScreen: View {
         selectedItem?.parent
     }
 
+    private var previewItem: ScreenshotItem? {
+        guard let previewItemID else { return nil }
+        return allItems.first { $0.id == previewItemID }
+    }
+
     // MARK: - Body
 
     var body: some View {
+        ZStack {
+            galleryBody
+                .opacity(previewItem == nil ? 1 : 0)
+
+            if let item = previewItem {
+                ScreenshotPreviewOverlay(
+                    item: item,
+                    sourceLabel: sourceLabel(item),
+                    dimensions: imageDimensions(item),
+                    byteLabel: fileBytes(item),
+                    layerCount: layerCount(for: item),
+                    canMarkup: canAnnotate(item),
+                    onMarkup: { annotateItem(item) },
+                    onShare: { shareFile(item.fileURL) },
+                    onReveal: { NSWorkspace.shared.activateFileViewerSelecting([item.fileURL]) },
+                    onClose: { previewItemID = nil }
+                )
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.18), value: previewItemID)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task { await loadLibrary() }
+        .onChange(of: allItems.map(\.id)) { _, visibleIDs in
+            pruneSelection(visibleIDs: visibleIDs)
+        }
+    }
+
+    private var galleryBody: some View {
         GeometryReader { geometry in
             let compact = geometry.size.width < compactThreshold
-            let showDetail = !compact && selectedObject != nil
+            let showInspector = !compact && selectedItem != nil
 
             HStack(spacing: 0) {
                 gridPane
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                if showDetail {
+                if showInspector, let item = selectedItem {
                     // Drag handle
                     Rectangle()
-                        .fill(TalkieTheme.borderSubtle)
+                        .fill(ScopePalette.rule)
                         .frame(width: 1)
                         .overlay(
                             Rectangle()
@@ -150,20 +191,14 @@ struct ScreenshotsScreen: View {
                                 )
                         )
 
-                    if let object = selectedObject {
-                        detailPane(object)
-                            .frame(width: detailWidth)
-                            .transition(.move(edge: .trailing))
-                    }
+                    inspectorPane(item)
+                        .frame(width: detailWidth)
+                        .transition(.move(edge: .trailing))
                 }
             }
-            .animation(.easeInOut(duration: 0.2), value: selectedObject?.id)
+            .animation(.easeInOut(duration: 0.2), value: selectedItem?.id)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task { await loadLibrary() }
-        .onChange(of: allItems.map(\.id)) { _, visibleIDs in
-            pruneSelection(visibleIDs: visibleIDs)
-        }
     }
 
     // MARK: - Grid Pane
@@ -254,29 +289,93 @@ struct ScreenshotsScreen: View {
                         }
                 }
             }
+
+            if !selectedIDs.isEmpty {
+                selectionStatusBar
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(TalkieTheme.surface)
     }
 
-    // MARK: - Detail Pane
+    // MARK: - Selection Status Bar
 
-    private func detailPane(_ object: TalkieObject) -> some View {
-        TalkieView(
-            recording: object,
-            onDelete: {
-                libraryItems.removeAll { $0.parent?.id == object.id }
-                objectsWithScreenshots.removeAll { $0.id == object.id }
-                selectedID = nil
-            },
-            recipeOverride: DetailRecipeOverride.screenshotForward(for: object.type)
-        )
-        .id(object.id)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background {
-            TalkieTheme.surface
-                .ignoresSafeArea(.container, edges: .top)
+    private var selectionStatusBar: some View {
+        let count = selectedIDs.count
+        let anchor = selectedItem
+        return HStack(spacing: 10) {
+            if count == 1, let anchor {
+                PhosphorDot(color: ScopeAmber.solid, size: 5)
+                Text("1 selected")
+                    .font(ScopeType.mono(size: 9, weight: .semibold))
+                    .tracking(ScopeType.Tracking.normal)
+                    .foregroundStyle(ScopePalette.amberDeep)
+                ScopeRule(.subtle, axis: .vertical).frame(height: 12)
+                Text(anchor.fileURL.lastPathComponent)
+                    .font(ScopeType.mono(size: 9))
+                    .tracking(ScopeType.Tracking.normal)
+                    .foregroundStyle(ScopePalette.inkFaint)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                Spacer(minLength: 8)
+
+                StatusVerb(label: "preview", tone: .neutral) { openPreview(anchor) }
+                if canAnnotate(anchor) {
+                    StatusVerb(label: "markup", tone: .primary) { annotateItem(anchor) }
+                }
+                StatusVerb(label: "reveal", tone: .neutral) {
+                    NSWorkspace.shared.activateFileViewerSelecting([anchor.fileURL])
+                }
+                StatusVerb(label: "delete", tone: .alert) { deleteItem(anchor) }
+                StatusVerb(label: "clear", tone: .ghost) { clearSelection() }
+            } else {
+                PhosphorDot(color: ScopeAmber.solid, size: 5)
+                Text("\(count) selected")
+                    .font(ScopeType.mono(size: 9, weight: .semibold))
+                    .tracking(ScopeType.Tracking.normal)
+                    .foregroundStyle(ScopePalette.amberDeep)
+                ScopeRule(.subtle, axis: .vertical).frame(height: 12)
+                Text("bulk action")
+                    .font(ScopeType.mono(size: 9))
+                    .tracking(ScopeType.Tracking.normal)
+                    .foregroundStyle(ScopePalette.amberDeep.opacity(0.7))
+
+                Spacer(minLength: 8)
+
+                StatusVerb(label: "share", tone: .neutral) { shareSelected() }
+                StatusVerb(label: "delete", tone: .alert) { deleteSelected() }
+                StatusVerb(label: "clear", tone: .ghost) { clearSelection() }
+            }
         }
+        .padding(.horizontal, 14)
+        .frame(height: 32)
+        .background(count > 1 ? ScopePalette.amberFaint : ScopePalette.bg)
+        .overlay(alignment: .top) { ScopeRule(.subtle) }
+    }
+
+    // MARK: - Inspector Pane
+
+    private func inspectorPane(_ item: ScreenshotItem) -> some View {
+        ScreenshotInspector(
+            item: item,
+            multiCount: selectedIDs.count,
+            sourceLabel: sourceLabel(item),
+            dimensions: imageDimensions(item),
+            byteLabel: fileBytes(item),
+            layerCount: layerCount(for: item),
+            ageLabel: relativeAge(item.date),
+            canMarkup: canAnnotate(item),
+            showRecording: canShowRecording(item),
+            onOpenPreview: { openPreview(item) },
+            onOpenMarkup: { annotateItem(item) },
+            onReveal: { NSWorkspace.shared.activateFileViewerSelecting([item.fileURL]) },
+            onCopy: { copyItem(item) },
+            onShowRecording: { showRecording(item) }
+        )
+        .id(item.id)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(ScopePalette.bgRaised)
     }
 
     // MARK: - Empty State
@@ -305,15 +404,17 @@ struct ScreenshotsScreen: View {
     }
 
     private func trayCard(_ item: ScreenshotItem, trayItem: TrayItem, allItems: [ScreenshotItem]) -> some View {
-        AdaptiveCardView(
+        let selected = selectedIDs.contains(item.id)
+        return AdaptiveCardView(
             item: trayItem,
-            isSelected: selectedIDs.contains(item.id),
+            isSelected: selected,
             fontSize: 7
         )
         .aspectRatio(1, contentMode: .fit)
+        .overlay(selectionOverlay(isSelected: selected))
         .contentShape(Rectangle())
         .accessibilityLabel(itemAccessibilityLabel(item))
-        .accessibilityAddTraits(selectedIDs.contains(item.id) ? .isSelected : [])
+        .accessibilityAddTraits(selected ? .isSelected : [])
         .screenshotGridDrag(
             itemID: item.id,
             payloads: dragPayloads(from: allItems),
@@ -353,7 +454,8 @@ struct ScreenshotsScreen: View {
             TrayActionService.shared.togglePinSelected(ids: [trayItem.id], in: [trayItem])
         }
 
-        Button("Open in Preview") { NSWorkspace.shared.open(item.fileURL) }
+        Button("Open in Preview") { openPreview(item) }
+        Button("Open in Preview.app") { NSWorkspace.shared.open(item.fileURL) }
         Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([item.fileURL]) }
 
         Divider()
@@ -362,13 +464,15 @@ struct ScreenshotsScreen: View {
     }
 
     private func libraryCard(_ item: ScreenshotItem, allItems: [ScreenshotItem]) -> some View {
-        LibraryCardView(
+        let selected = selectedIDs.contains(item.id)
+        return LibraryCardView(
             item: item,
-            isSelected: selectedIDs.contains(item.id)
+            isSelected: selected
         )
+        .overlay(selectionOverlay(isSelected: selected))
         .contentShape(Rectangle())
         .accessibilityLabel(itemAccessibilityLabel(item))
-        .accessibilityAddTraits(selectedIDs.contains(item.id) ? .isSelected : [])
+        .accessibilityAddTraits(selected ? .isSelected : [])
         .screenshotGridDrag(
             itemID: item.id,
             payloads: dragPayloads(from: allItems),
@@ -378,6 +482,21 @@ struct ScreenshotsScreen: View {
             }
         )
         .contextMenu { libraryContextMenu(item) }
+    }
+
+    /// A prominent selection ring placed on top of the card. Pairs with the
+    /// inner card's subtle accent border so multi-select is unmissable.
+    @ViewBuilder
+    private func selectionOverlay(isSelected: Bool) -> some View {
+        if isSelected {
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .strokeBorder(Color.accentColor, lineWidth: 2)
+                .background(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.12))
+                )
+                .allowsHitTesting(false)
+        }
     }
 
     @ViewBuilder
@@ -396,13 +515,12 @@ struct ScreenshotsScreen: View {
 
         Divider()
 
-        if item.parent != nil {
-            Button("Show Recording") {
-                selectedID = item.id
-            }
+        if canShowRecording(item) {
+            Button("Show Recording") { showRecording(item) }
         }
 
-        Button("Open in Preview") { NSWorkspace.shared.open(item.fileURL) }
+        Button("Open in Preview") { openPreview(item) }
+        Button("Open in Preview.app") { NSWorkspace.shared.open(item.fileURL) }
 
         Button("Share…") { shareFile(item.fileURL) }
 
@@ -487,6 +605,113 @@ struct ScreenshotsScreen: View {
                 Task { await loadLibrary() }
             }
         }
+    }
+
+    // MARK: - Preview / Inspector actions
+
+    /// Anchor on the item and swap the screen into the read-only Quick Look
+    /// preview. Markup is the escalation from there.
+    private func openPreview(_ item: ScreenshotItem) {
+        selectedID = item.id
+        if !selectedIDs.contains(item.id) {
+            selectedIDs = [item.id]
+            selectionAnchorID = item.id
+        }
+        previewItemID = item.id
+    }
+
+    private func clearSelection() {
+        selectedIDs.removeAll()
+        selectedID = nil
+        selectionAnchorID = nil
+    }
+
+    private func shareSelected() {
+        let urls = allItems.filter { selectedIDs.contains($0.id) }.map(\.fileURL)
+        guard !urls.isEmpty else { return }
+        let picker = NSSharingServicePicker(items: urls)
+        if let window = NSApp.keyWindow, let contentView = window.contentView {
+            picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
+        }
+    }
+
+    private func deleteSelected() {
+        let items = allItems.filter { selectedIDs.contains($0.id) }
+        for item in items { deleteItem(item) }
+    }
+
+    private func canShowRecording(_ item: ScreenshotItem) -> Bool {
+        guard let parent = item.parent else { return false }
+        let t = parent.type.rawValue.lowercased()
+        return t == "memo" || t == "dictation"
+    }
+
+    private func showRecording(_ item: ScreenshotItem) {
+        guard let parent = item.parent else { return }
+        if parent.type.rawValue.lowercased() == "dictation" {
+            NavigationState.shared.navigateToDictation(parent.id)
+        } else {
+            NavigationState.shared.navigateToMemo(parent.id)
+        }
+    }
+
+    // MARK: - Item metadata formatters
+
+    private func sourceLabel(_ item: ScreenshotItem) -> String {
+        if let mode = item.screenshot?.captureMode, !mode.isEmpty { return mode }
+        if let trayItem = item.trayItem {
+            switch trayItem {
+            case .screenshot: return "screenshot"
+            case .clip:       return "clip"
+            case .selection:  return "selection"
+            }
+        }
+        return "screenshot"
+    }
+
+    private func imageDimensions(_ item: ScreenshotItem) -> String? {
+        if let ss = item.screenshot, let w = ss.width, let h = ss.height {
+            return "\(w) × \(h)"
+        }
+        // Tray items have no stored metadata; read true pixel dims from the
+        // file header (cheap) rather than the small in-memory thumbnail.
+        if let (w, h) = pixelSize(of: item.fileURL) {
+            return "\(w) × \(h)"
+        }
+        if let img = item.trayItem?.image, img.size.width > 0 {
+            return "\(Int(img.size.width)) × \(Int(img.size.height))"
+        }
+        return nil
+    }
+
+    private func pixelSize(of url: URL) -> (Int, Int)? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = props[kCGImagePropertyPixelWidth] as? Int,
+              let height = props[kCGImagePropertyPixelHeight] as? Int else {
+            return nil
+        }
+        return (width, height)
+    }
+
+    private func fileBytes(_ item: ScreenshotItem) -> String? {
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: item.fileURL.path),
+              let size = attrs[.size] as? NSNumber else { return nil }
+        return ByteCountFormatter.string(fromByteCount: size.int64Value, countStyle: .file)
+    }
+
+    private func layerCount(for item: ScreenshotItem) -> Int {
+        CaptureMarkupStorage.load(forImageURL: item.fileURL)?.layers.count ?? 0
+    }
+
+    private func relativeAge(_ date: Date) -> String {
+        let s = Int(-date.timeIntervalSinceNow)
+        if s < 60 { return "just now" }
+        let m = s / 60
+        if m < 60 { return "\(m) min" }
+        let h = m / 60
+        if h < 24 { return "\(h)h" }
+        return "\(h / 24)d"
     }
 
     private func runWorkflow(_ workflow: Workflow, on item: ScreenshotItem) {
@@ -979,12 +1204,12 @@ private struct LibraryCardView: View {
         }
         .aspectRatio(1, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        // Selected-state stroke intentionally omitted — the prominent outer
+        // `selectionOverlay` handles selection; an inner accent stroke would
+        // produce a faint double-ring.
         .overlay(
             RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .strokeBorder(
-                    isSelected ? Color.accentColor.opacity(0.65) : Color.white.opacity(0.1),
-                    lineWidth: isSelected ? 1.2 : 0.5
-                )
+                .strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5)
         )
         .task { thumbnail = await loadThumbnail() }
     }
@@ -1013,6 +1238,605 @@ private struct LibraryCardView: View {
         let h = m / 60
         if h < 24 { return "\(h)h" }
         return "\(h / 24)d"
+    }
+}
+
+// MARK: - Framed Screenshot (shared image + faux titlebar)
+
+/// The screenshot rendered inside a faux captured-app window frame —
+/// traffic lights + app name strip on top, the image below. Shared by
+/// the inspector LargePreview and the full Quick Look overlay so both
+/// read as "the actual screenshot," not a stretched thumbnail.
+private struct FramedScreenshot: View {
+    let item: ScreenshotItem
+    let appLabel: String
+    let annotated: Bool
+    var fullResolution: Bool = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 4) {
+                trafficDot
+                trafficDot
+                trafficDot
+                Spacer()
+                Text(appLabel.uppercased())
+                    .font(ScopeType.mono(size: 7))
+                    .tracking(1.2)
+                    .foregroundStyle(ScopePalette.inkFainter)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 18)
+            .background(Color.hex("ECEAE6"))
+
+            ScreenshotImageView(item: item, maxSize: 1400, fullResolution: fullResolution)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(ScopePalette.bg)
+                .clipped()
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 5))
+        .overlay(
+            RoundedRectangle(cornerRadius: 5).stroke(ScopeEdge.normal, lineWidth: 0.5)
+        )
+        .overlay(alignment: .topLeading) {
+            if annotated {
+                Text("MARKUP")
+                    .font(ScopeType.mono(size: 7))
+                    .tracking(1.4)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(ScopeBrass.deep)
+                    .clipShape(RoundedRectangle(cornerRadius: 1))
+                    .padding(8)
+            }
+        }
+    }
+
+    private var trafficDot: some View {
+        Circle().fill(Color.hex("DDDDDD")).frame(width: 5, height: 5)
+    }
+}
+
+/// Loads the screenshot image — tray items carry an in-memory NSImage;
+/// library items decode a thumbnail off the main thread (same pattern as
+/// LibraryCardView).
+private struct ScreenshotImageView: View {
+    let item: ScreenshotItem
+    let maxSize: CGFloat
+    /// When true, decode the original file at full resolution instead of a
+    /// downscaled thumbnail. Used by the Quick Look preview so zooming
+    /// reveals real pixels, not an upscaled thumbnail.
+    var fullResolution: Bool = false
+    @State private var image: NSImage?
+
+    var body: some View {
+        ZStack {
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                Image(systemName: "photo")
+                    .font(.system(size: 18, weight: .light))
+                    .foregroundStyle(ScopePalette.inkSubtle)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .task(id: item.id) { image = await load() }
+    }
+
+    private func load() async -> NSImage? {
+        let url = item.fileURL
+        // Full-res (Quick Look preview): always decode the original file.
+        // The tray's in-memory `image` is a small thumbnail, so using it
+        // here would show a blurry upscale even though the file is full-res.
+        if fullResolution {
+            if let full = await Task.detached(operation: { NSImage(contentsOf: url) }).value {
+                return full
+            }
+            return item.trayItem?.image
+        }
+        // Thumbnail path (grid / small inspector preview): fast in-memory
+        // image for tray items, else a downscaled decode from disk.
+        if let img = item.trayItem?.image { return img }
+        let size = maxSize
+        return await Task.detached {
+            ScreenshotTray.generateThumbnail(for: url, maxSize: size)
+        }.value
+    }
+}
+
+// MARK: - Inspector
+
+/// Lightweight metadata + actions rail that replaced the full TalkieView
+/// detail pane. Shows for any selected item (tray or library) and offers
+/// the two open destinations — Preview (read-only) and Markup (annotate).
+private struct ScreenshotInspector: View {
+    let item: ScreenshotItem
+    let multiCount: Int
+    let sourceLabel: String
+    let dimensions: String?
+    let byteLabel: String?
+    let layerCount: Int
+    let ageLabel: String
+    let canMarkup: Bool
+    let showRecording: Bool
+    let onOpenPreview: () -> Void
+    let onOpenMarkup: () -> Void
+    let onReveal: () -> Void
+    let onCopy: () -> Void
+    let onShowRecording: () -> Void
+
+    private var appLabel: String { item.screenshot?.appName ?? sourceLabel }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header strip
+            HStack {
+                Text("· inspector")
+                    .font(ScopeType.mono(size: 9, weight: .semibold))
+                    .tracking(ScopeType.Tracking.wide)
+                    .foregroundStyle(ScopePalette.inkFaint)
+                Spacer()
+                if multiCount > 1 {
+                    Text("\(multiCount) selected")
+                        .font(ScopeType.mono(size: 8.5, weight: .semibold))
+                        .tracking(ScopeType.Tracking.normal)
+                        .foregroundStyle(ScopePalette.amberDeep)
+                }
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 28)
+            .background(ScopePalette.bgSunk)
+            .overlay(alignment: .bottom) { ScopeRule(.subtle) }
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    FramedScreenshot(item: item, appLabel: appLabel, annotated: layerCount > 0)
+                        .frame(height: 172)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.fileURL.lastPathComponent)
+                            .font(ScopeType.mono(size: 10, weight: .semibold))
+                            .foregroundStyle(ScopePalette.ink)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Text("\(appLabel) · captured \(ageLabel) ago")
+                            .font(.system(size: 12))
+                            .foregroundStyle(ScopePalette.inkFaint)
+                            .lineLimit(1)
+                    }
+
+                    VStack(spacing: 6) {
+                        MetaRow(label: "source", value: sourceLabel)
+                        if let dimensions { MetaRow(label: "dimensions", value: dimensions) }
+                        if let byteLabel { MetaRow(label: "size", value: byteLabel) }
+                        MetaRow(
+                            label: "layers",
+                            value: layerCount > 0 ? "\(layerCount) · sidecar" : "—",
+                            accent: layerCount > 0
+                        )
+                    }
+
+                    // Open destinations
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("open")
+                            .font(ScopeType.mono(size: 8.5))
+                            .tracking(ScopeType.Tracking.wide)
+                            .foregroundStyle(ScopePalette.inkFainter)
+                        HStack(spacing: 6) {
+                            OpenDestButton(label: "Preview", systemImage: "eye", action: onOpenPreview)
+                            OpenDestButton(
+                                label: "Markup",
+                                systemImage: "pencil.tip.crop.circle",
+                                primary: true,
+                                disabled: !canMarkup,
+                                action: onOpenMarkup
+                            )
+                        }
+                        InspectorSecondary(label: "Reveal in Finder", systemImage: "folder", action: onReveal)
+                        InspectorSecondary(label: "Copy to clipboard", systemImage: "doc.on.doc", action: onCopy)
+                        if showRecording {
+                            InspectorSecondary(label: "Show Recording", systemImage: "arrow.up.right.square", action: onShowRecording)
+                        }
+                    }
+                    .padding(.top, 2)
+                }
+                .padding(14)
+            }
+        }
+    }
+}
+
+private struct MetaRow: View {
+    let label: String
+    let value: String
+    var accent: Bool = false
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(label)
+                .font(ScopeType.mono(size: 9))
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopePalette.inkFainter)
+            Spacer()
+            Text(value)
+                .font(ScopeType.mono(size: 11))
+                .foregroundStyle(accent ? ScopePalette.amberDeep : ScopePalette.ink)
+        }
+    }
+}
+
+private struct OpenDestButton: View {
+    let label: String
+    let systemImage: String
+    var primary: Bool = false
+    var disabled: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: systemImage).font(.system(size: 11, weight: .semibold))
+                Text(label)
+                    .font(ScopeType.mono(size: 10, weight: .semibold))
+                    .tracking(ScopeType.Tracking.normal)
+                    .textCase(.uppercase)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 34)
+            .foregroundStyle(primary ? Color.white : ScopePalette.ink)
+            .background(
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(primary ? ScopeAmber.solid : ScopePalette.bgRaised)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 3)
+                    .stroke(primary ? Color.clear : ScopePalette.rule, lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+        .opacity(disabled ? 0.4 : 1)
+        .disabled(disabled)
+    }
+}
+
+private struct InspectorSecondary: View {
+    let label: String
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: systemImage).font(.system(size: 10))
+                Text(label)
+                    .font(ScopeType.mono(size: 10, weight: .medium))
+                    .tracking(ScopeType.Tracking.normal)
+                    .textCase(.uppercase)
+                Spacer()
+            }
+            .frame(height: 30)
+            .padding(.horizontal, 10)
+            .foregroundStyle(ScopePalette.inkFaint)
+            .overlay(
+                RoundedRectangle(cornerRadius: 3).stroke(ScopePalette.rule, lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Selection status-bar verb
+
+private struct StatusVerb: View {
+    enum Tone { case neutral, primary, alert, ghost }
+    let label: String
+    let tone: Tone
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(ScopeType.mono(size: 9, weight: .semibold))
+                .tracking(ScopeType.Tracking.normal)
+                .textCase(.uppercase)
+                .foregroundStyle(foreground)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(RoundedRectangle(cornerRadius: 2).fill(background))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 2).stroke(border, lineWidth: 0.5)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var foreground: Color {
+        switch tone {
+        case .neutral: return ScopePalette.ink
+        case .primary: return ScopePalette.amberDeep
+        case .alert:   return Color.hex("C43A1C")
+        case .ghost:   return ScopePalette.inkFainter
+        }
+    }
+    private var background: Color {
+        tone == .primary ? ScopePalette.amberFaint : Color.clear
+    }
+    private var border: Color {
+        switch tone {
+        case .primary: return ScopePalette.amberSoft
+        case .alert:   return Color.hex("C43A1C").opacity(0.30)
+        case .ghost:   return Color.clear
+        case .neutral: return ScopePalette.rule
+        }
+    }
+}
+
+// MARK: - Preview (Quick Look) Overlay
+
+/// Full-screen read-only preview that the gallery swaps to on "Open in
+/// Preview." Image-forward on a calm backdrop with a floating action
+/// cluster (Markup hero · Share · Reveal). Markup is the escalation.
+private struct ScreenshotPreviewOverlay: View {
+    let item: ScreenshotItem
+    let sourceLabel: String
+    let dimensions: String?
+    let byteLabel: String?
+    let layerCount: Int
+    let canMarkup: Bool
+    let onMarkup: () -> Void
+    let onShare: () -> Void
+    let onReveal: () -> Void
+    let onClose: () -> Void
+
+    @State private var zoom: CGFloat = 1
+
+    private var appLabel: String { item.screenshot?.appName ?? sourceLabel }
+
+    /// Pixel aspect (w/h) of the capture — drives the fit-to-window base
+    /// size so the image fills the backdrop instead of floating small.
+    private var aspect: CGFloat {
+        if let ss = item.screenshot, let w = ss.width, let h = ss.height, h > 0 {
+            return CGFloat(w) / CGFloat(h)
+        }
+        if let img = item.trayItem?.image, img.size.height > 0 {
+            return img.size.width / img.size.height
+        }
+        return 4.0 / 3.0
+    }
+
+    private var footerLine: String {
+        var parts = [item.fileURL.lastPathComponent, sourceLabel]
+        if let dimensions { parts.append(dimensions) }
+        if let byteLabel { parts.append(byteLabel) }
+        return parts.joined(separator: " · ")
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Top bar
+            HStack(spacing: 8) {
+                Button(action: onClose) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left").font(.system(size: 9, weight: .semibold))
+                        Text("back")
+                            .font(ScopeType.mono(size: 9))
+                            .tracking(ScopeType.Tracking.normal)
+                            .textCase(.uppercase)
+                    }
+                    .foregroundStyle(ScopePalette.inkFaint)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .overlay(RoundedRectangle(cornerRadius: 3).stroke(ScopePalette.rule, lineWidth: 0.5))
+                }
+                .buttonStyle(.plain)
+
+                Text("Preview · \(item.fileURL.lastPathComponent)")
+                    .font(ScopeType.mono(size: 9, weight: .semibold))
+                    .tracking(ScopeType.Tracking.normal)
+                    .foregroundStyle(ScopePalette.ink)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 30)
+            .background(ScopePalette.bgSunk)
+            .overlay(alignment: .bottom) { ScopeRule(.subtle) }
+
+            // Backdrop + image + floating cluster
+            ZStack {
+                Color.hex("DCDCDB")
+
+                PreviewCanvas(
+                    item: item,
+                    appLabel: appLabel,
+                    annotated: layerCount > 0,
+                    aspect: aspect,
+                    zoom: zoom
+                )
+
+                // Zoom cluster — bottom-right, functional.
+                ZoomCluster(
+                    zoom: zoom,
+                    onZoomOut: { zoom = max(0.25, zoom - 0.25) },
+                    onZoomIn: { zoom = min(4, zoom + 0.25) },
+                    onFit: { zoom = 1 }
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .padding(16)
+
+                VStack {
+                    Spacer()
+                    HStack(spacing: 2) {
+                        Button(action: onMarkup) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "pencil.tip.crop.circle").font(.system(size: 12, weight: .semibold))
+                                Text("markup")
+                                    .font(ScopeType.mono(size: 9.5, weight: .semibold))
+                                    .tracking(ScopeType.Tracking.normal)
+                                    .textCase(.uppercase)
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12)
+                            .frame(height: 30)
+                            .background(RoundedRectangle(cornerRadius: 5).fill(ScopeAmber.solid))
+                        }
+                        .buttonStyle(.plain)
+                        .opacity(canMarkup ? 1 : 0.4)
+                        .disabled(!canMarkup)
+
+                        PreviewClusterVerb(label: "share", systemImage: "square.and.arrow.up", action: onShare)
+                        PreviewClusterVerb(label: "reveal", systemImage: "folder", action: onReveal)
+                    }
+                    .padding(4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.white)
+                            .shadow(color: .black.opacity(0.14), radius: 6, x: 0, y: 3)
+                    )
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(ScopePalette.rule, lineWidth: 0.5))
+                    .padding(.bottom, 18)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // Footer rail
+            HStack(spacing: 10) {
+                Text(footerLine)
+                    .font(ScopeType.mono(size: 9))
+                    .tracking(ScopeType.Tracking.normal)
+                    .foregroundStyle(ScopePalette.inkFainter)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer()
+                Button(action: onClose) {
+                    Text("done · back to screenshots")
+                        .font(ScopeType.mono(size: 9, weight: .semibold))
+                        .tracking(ScopeType.Tracking.normal)
+                        .textCase(.uppercase)
+                        .foregroundStyle(ScopePalette.inkFaint)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .overlay(RoundedRectangle(cornerRadius: 3).stroke(ScopePalette.rule, lineWidth: 0.5))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 30)
+            .background(ScopePalette.bgSunk)
+            .overlay(alignment: .top) { ScopeRule(.subtle) }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(ScopePalette.bg)
+        .onChange(of: item.id) { _, _ in zoom = 1 }
+    }
+}
+
+// Fit-to-window canvas with pan-on-zoom. At zoom 1 the framed screenshot
+// fits the backdrop; above 1 it grows and the ScrollView lets you pan.
+private struct PreviewCanvas: View {
+    let item: ScreenshotItem
+    let appLabel: String
+    let annotated: Bool
+    let aspect: CGFloat
+    let zoom: CGFloat
+
+    private let pad: CGFloat = 36
+    private let titlebar: CGFloat = 18
+
+    var body: some View {
+        GeometryReader { geo in
+            let availW = max(geo.size.width - pad * 2, 1)
+            let availH = max(geo.size.height - pad * 2, 1)
+            // Fit a (titlebar + aspect image) block into the available area.
+            let widthIfHeightBound = (availH - titlebar) * aspect
+            let baseW = min(availW, max(widthIfHeightBound, 1))
+            let baseH = baseW / aspect + titlebar
+            let w = baseW * zoom
+            let h = baseH * zoom
+
+            ScrollView([.horizontal, .vertical], showsIndicators: zoom > 1) {
+                FramedScreenshot(item: item, appLabel: appLabel, annotated: annotated, fullResolution: true)
+                    .frame(width: w, height: h)
+                    .shadow(color: .black.opacity(0.18), radius: 22, x: 0, y: 14)
+                    .frame(minWidth: geo.size.width, minHeight: geo.size.height)
+                    .animation(.easeOut(duration: 0.14), value: zoom)
+            }
+        }
+    }
+}
+
+private struct ZoomCluster: View {
+    let zoom: CGFloat
+    let onZoomOut: () -> Void
+    let onZoomIn: () -> Void
+    let onFit: () -> Void
+
+    var body: some View {
+        HStack(spacing: 1) {
+            stepButton("minus", action: onZoomOut)
+            Text("\(Int((zoom * 100).rounded()))%")
+                .font(ScopeType.mono(size: 9.5))
+                .foregroundStyle(ScopePalette.inkFaint)
+                .frame(minWidth: 38)
+                .monospacedDigit()
+            stepButton("plus", action: onZoomIn)
+            ScopeRule(.subtle, axis: .vertical).frame(height: 14).padding(.horizontal, 2)
+            Button(action: onFit) {
+                Text("FIT")
+                    .font(ScopeType.mono(size: 8.5, weight: .semibold))
+                    .tracking(ScopeType.Tracking.normal)
+                    .foregroundStyle(ScopePalette.inkFaint)
+                    .padding(.horizontal, 7)
+                    .frame(height: 22)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(3)
+        .background(
+            RoundedRectangle(cornerRadius: 5)
+                .fill(Color.white)
+                .shadow(color: .black.opacity(0.10), radius: 4, x: 0, y: 2)
+        )
+        .overlay(RoundedRectangle(cornerRadius: 5).stroke(ScopePalette.rule, lineWidth: 0.5))
+    }
+
+    private func stepButton(_ systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(ScopePalette.inkFaint)
+                .frame(width: 22, height: 22)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct PreviewClusterVerb: View {
+    let label: String
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: systemImage).font(.system(size: 11))
+                Text(label)
+                    .font(ScopeType.mono(size: 9))
+                    .tracking(ScopeType.Tracking.normal)
+                    .textCase(.uppercase)
+            }
+            .foregroundStyle(ScopePalette.inkFaint)
+            .padding(.horizontal, 10)
+            .frame(height: 30)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -1080,7 +1904,14 @@ private final class ScreenshotGridDragSourceView: NSView, NSDraggingSource {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        bounds.contains(point) ? self : nil
+        // `point` is in the SUPERVIEW's coordinate system. The previous
+        // implementation compared it to `bounds` (our local coords), which
+        // only worked when our frame.origin happened to be (0, 0) in the
+        // superview. Inside SwiftUI's hosting hierarchy that's not reliable,
+        // so we'd silently fail to intercept clicks → cards never selected.
+        // Falling through to the default hitTest correctly checks against
+        // our frame in superview coords.
+        super.hitTest(point)
     }
 
     override func mouseDown(with event: NSEvent) {
