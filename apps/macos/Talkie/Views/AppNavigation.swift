@@ -1260,17 +1260,23 @@ private struct AppNavigationSidebar<RailHeader: View, LabelHeader: View, Footer:
             .padding(.leading, SidebarLayout.leadingInset)
             .frame(width: layoutWidth, alignment: .leading)
             .overlay(alignment: .trailing) {
-                // Permanent trailing separator. Renders on top of the
-                // handle so the resize pill never visually hides it.
-                // `Color.primary` adapts to light/dark; very low opacity
-                // — should read as a discrete hairline, not assert itself.
-                // Vertical padding gives the line breathing room from
-                // the title-bar above and the window bottom edge below,
-                // so it doesn't feel like it's running window-to-window.
+                // Permanent trailing separator — the structural divider
+                // between the nav rail and the content BODY. Renders on
+                // top of the handle so the resize pill never hides it.
+                // `Color.primary` adapts to light/dark.
+                //
+                // It starts at the BOTTOM of the header band (not the very
+                // top) so it never slices through the masthead: the top
+                // ~48pt — sidebar logo/wordmark, page title, centered
+                // pill, complications — reads as ONE continuous header
+                // band across the whole window, and the rail|content split
+                // only exists in the bodies below it. (At the old full-
+                // height + 0.09 value the line both vanished on cream AND
+                // cut the header, so the header felt disjointed.)
                 Rectangle()
-                    .fill(Color.primary.opacity(0.09))
+                    .fill(Color.primary.opacity(0.14))
                     .frame(width: 0.5)
-                    .padding(.vertical, 3)
+                    .padding(.top, SidebarLayout.headerHeight + SidebarLayout.headerTopPadding)
                     .allowsHitTesting(false)
             }
             .overlay(alignment: .trailing) {

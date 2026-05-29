@@ -467,35 +467,38 @@ struct ScopeDraftsScreen: View {
     /// the typeset hint was an over-correction).
     private var editingContent: some View {
         ZStack(alignment: .bottom) {
-            HStack(alignment: .top, spacing: 18) {
-                // Brass marginal rule
+            // Bounded paper sheet. The tint now spans the FULL width so the
+            // writing area reads as one contained surface against the cream
+            // canvas, and the brass marginal rule sits ON its left edge as a
+            // true margin. (It used to float 18pt left of the sheet with
+            // bare canvas between them — which read as a stray vertical line
+            // sitting at its own placement, disconnected from everything.)
+            ZStack(alignment: .topTrailing) {
                 Rectangle()
-                    .fill(Color.hex("9A6A22").opacity(0.30))
-                    .frame(width: 0.5)
-                    .padding(.vertical, 6)
+                    .fill(ScopeCanvas.surface.opacity(0.7))
 
-                // Text column with a subtle paper background so the
-                // writing area reads as a sheet, not as unbounded canvas.
-                ZStack(alignment: .topTrailing) {
-                    Rectangle()
-                        .fill(ScopeCanvas.surface.opacity(0.55))
+                TalkieTextEditor(
+                    text: $editorState.text,
+                    selectedRange: $editorState.selectedRange,
+                    font: NSFont.systemFont(ofSize: 14 * settings.contentFontSize.scale),
+                    textColor: NSColor(ScopeInk.primary),
+                    insertionPointColor: NSColor(ScopeAmber.solid)
+                )
+                .padding(.leading, 26)
+                .padding(.trailing, 14)
+                .padding(.top, 14)
+                .padding(.bottom, 56)
+                .frame(minHeight: 240, maxHeight: .infinity)
 
-                    TalkieTextEditor(
-                        text: $editorState.text,
-                        selectedRange: $editorState.selectedRange,
-                        font: NSFont.systemFont(ofSize: 14 * settings.contentFontSize.scale),
-                        textColor: NSColor(ScopeInk.primary),
-                        insertionPointColor: NSColor(ScopeAmber.solid)
-                    )
-                    .padding(.horizontal, 14)
-                    .padding(.top, 14)
-                    .padding(.bottom, 56)
-                    .frame(minHeight: 240, maxHeight: .infinity)
-
-                    if editorState.isTransformingSelection {
-                        selectionIndicator
-                    }
+                if editorState.isTransformingSelection {
+                    selectionIndicator
                 }
+            }
+            .overlay(alignment: .leading) {
+                // Brass marginal rule — now the sheet's own left edge.
+                Rectangle()
+                    .fill(Color.hex("9A6A22").opacity(0.42))
+                    .frame(width: 1.5)
             }
             .padding(.horizontal, 4)
 
