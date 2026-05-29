@@ -1252,23 +1252,30 @@ private struct FramedScreenshot: View {
     let appLabel: String
     let annotated: Bool
     var fullResolution: Bool = false
+    /// When true, wrap the image in a faux captured-app titlebar (traffic
+    /// lights + app name). The small inspector preview uses this so a tile
+    /// reads as "a screenshot"; the full Quick Look overlay turns it off and
+    /// shows the raw image, the way real Quick Look does.
+    var showsChrome: Bool = true
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 4) {
-                trafficDot
-                trafficDot
-                trafficDot
-                Spacer()
-                Text(appLabel.uppercased())
-                    .font(ScopeType.mono(size: 7))
-                    .tracking(1.2)
-                    .foregroundStyle(ScopePalette.inkFainter)
-                    .lineLimit(1)
+            if showsChrome {
+                HStack(spacing: 4) {
+                    trafficDot
+                    trafficDot
+                    trafficDot
+                    Spacer()
+                    Text(appLabel.uppercased())
+                        .font(ScopeType.mono(size: 7))
+                        .tracking(1.2)
+                        .foregroundStyle(ScopePalette.inkFainter)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 8)
+                .frame(height: 18)
+                .background(Color.hex("ECEAE6"))
             }
-            .padding(.horizontal, 8)
-            .frame(height: 18)
-            .background(Color.hex("ECEAE6"))
 
             ScreenshotImageView(item: item, maxSize: 1400, fullResolution: fullResolution)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1748,21 +1755,26 @@ private struct PreviewCanvas: View {
     let zoom: CGFloat
 
     private let pad: CGFloat = 36
-    private let titlebar: CGFloat = 18
 
     var body: some View {
         GeometryReader { geo in
             let availW = max(geo.size.width - pad * 2, 1)
             let availH = max(geo.size.height - pad * 2, 1)
-            // Fit a (titlebar + aspect image) block into the available area.
-            let widthIfHeightBound = (availH - titlebar) * aspect
+            // Fit the raw image (no titlebar) into the available area.
+            let widthIfHeightBound = availH * aspect
             let baseW = min(availW, max(widthIfHeightBound, 1))
-            let baseH = baseW / aspect + titlebar
+            let baseH = baseW / aspect
             let w = baseW * zoom
             let h = baseH * zoom
 
             ScrollView([.horizontal, .vertical], showsIndicators: zoom > 1) {
-                FramedScreenshot(item: item, appLabel: appLabel, annotated: annotated, fullResolution: true)
+                FramedScreenshot(
+                    item: item,
+                    appLabel: appLabel,
+                    annotated: annotated,
+                    fullResolution: true,
+                    showsChrome: false
+                )
                     .frame(width: w, height: h)
                     .shadow(color: .black.opacity(0.18), radius: 22, x: 0, y: 14)
                     .frame(minWidth: geo.size.width, minHeight: geo.size.height)
