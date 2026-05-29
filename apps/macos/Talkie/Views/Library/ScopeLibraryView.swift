@@ -444,33 +444,61 @@ struct ScopeLibraryView: View {
         )
     }
 
-    /// Library list header — title row + filter pills + search row.
-    /// Sits below the chrome-bar zone: a small offset keeps the title
-    /// clear of the centered Talkie pill without burning a full band
-    /// of whitespace below the toolbar.
+    /// Library list header — the universal `ScopeTopBand` (serif title
+    /// baseline-locked to the sidebar wordmark, mono count chrome, and a
+    /// trailing controls slot holding the search field + new-recording
+    /// mic) with the full-width filter-pill row docked beneath it.
+    ///
+    /// This replaces the old bespoke masthead so the Dictations / Library
+    /// screen matches every other Scope surface (Models, Screenshots).
+    /// The filter pills stay as their own full-width row because they
+    /// carry the ⌘-hold glyph badges and an underline-selected treatment
+    /// that doesn't compress into the inline trailing slot — same call
+    /// ScreenshotsScreen makes for controls that don't fit inline.
     @ViewBuilder
     private var topComponent: some View {
         VStack(spacing: 8) {
-            titleRow
+            ScopeTopBand(
+                title: titleForCurrentFilter,
+                chrome: headerChromeLine,
+                trailing: { headerControls }
+            )
             filterRow
-            searchRow
+                .padding(.horizontal, 32)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
         .padding(.bottom, 10)
         .overlay(alignment: .bottom) {
             ScopeRule(.section)
         }
     }
 
-    private var titleRow: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(titleForCurrentFilter)
-                .font(.system(size: 15, weight: .medium, design: .serif))
-                .foregroundStyle(ScopeInk.primary)
-                .tracking(-0.2)
+    /// Count + recency line shown as mono caps in the band's chrome slot
+    /// (e.g. "33 MEMOS · 7D"). Mirrors the old `metaForCurrentFilter`
+    /// but names the active type so the band reads on its own.
+    private var headerChromeLine: String {
+        let counts = filterCounts()
+        let n = counts.count(for: typeFilter)
+        let noun = typeFilter == .all ? "ITEMS" : titleForCurrentFilter.uppercased()
+        return "\(n) \(noun) · 7D"
+    }
 
-            Spacer(minLength: 8)
+    /// Band trailing slot — the search field and the new-recording mic,
+    /// the two controls that read fine inline next to the title.
+    private var headerControls: some View {
+        HStack(spacing: 8) {
+            searchField
+                .frame(maxWidth: 200)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.white)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(ScopeEdge.faint, lineWidth: 0.5)
+                )
+            newRecordingButton
         }
     }
 
@@ -484,12 +512,6 @@ struct ScopeLibraryView: View {
         case .notes:      return "Notes"
         case .captures:   return "Captures"
         }
-    }
-
-    /// "{n} · 7D" — total count for the active filter, with the studio's
-    /// "7d" recency hint. Mono caps, faint.
-    private func metaForCurrentFilter(counts: FilterCounts) -> String {
-        "\(counts.count(for: typeFilter)) · 7D"
     }
 
     private var filterRow: some View {
@@ -547,23 +569,6 @@ struct ScopeLibraryView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-
-    private var searchRow: some View {
-        HStack(spacing: 8) {
-            searchField
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(Color.white)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 3)
-                        .stroke(ScopeEdge.faint, lineWidth: 0.5)
-                )
-            newRecordingButton
-        }
     }
 
     /// The text-field + magnifier + clear-button — shared by every
