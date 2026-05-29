@@ -23,6 +23,7 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
     private var imageURL: URL?
     private var onComplete: ((Result<CaptureMarkupDocument?, Error>) -> Void)?
     private var layerCount = 0
+    private var passCount = 0
     private var currentSelection: CaptureMarkupLayerSelection?
     private var currentDocument: CaptureMarkupDocument?
     private var dragExportURLs: [URL] = []
@@ -143,23 +144,41 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
     func captureMarkupPanelDidRun(instruction: String) {
         guard let imageURL else { return }
         rootView?.inputBar.setRunning(true)
+        let started = Date()
+        passCount += 1
+        let pass = passCount
+        webSession?.beginThread(instruction: instruction)
         Task {
             defer {
                 rootView?.inputBar.setRunning(false)
             }
             do {
                 let existing = await webSession?.fetchDocument()
+                let beforeIDs = Set(existing?.layers.map(\.id) ?? [])
                 let doc = try await CaptureMarkupAgentService.shared.runInstruction(
                     imageURL: imageURL,
                     instruction: instruction,
                     existing: existing,
-                    openWebBay: false
+                    openWebBay: false,
+                    onPhase: { [weak self] phase in
+                        self?.webSession?.handlePhase(
+                            phase,
+                            elapsed: Date().timeIntervalSince(started)
+                        )
+                    }
                 )
                 currentDocument = doc
                 webSession?.push(document: doc)
+                let added = doc.layers.filter { !beforeIDs.contains($0.id) }
+                await webSession?.finishThread(
+                    added: added,
+                    elapsed: Date().timeIntervalSince(started),
+                    pass: pass
+                )
                 syncChrome(layerCount: doc.layers.count, selection: nil)
                 rootView?.inputBar.clearPrompt()
             } catch {
+                webSession?.failThread(elapsed: Date().timeIntervalSince(started))
                 log.error("Markup run failed", detail: error.localizedDescription)
                 presentAgentError(error)
             }
@@ -298,6 +317,7 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
         imageURL = nil
         onComplete = nil
         layerCount = 0
+        passCount = 0
         currentSelection = nil
         currentDocument = nil
         cleanupDragExports()

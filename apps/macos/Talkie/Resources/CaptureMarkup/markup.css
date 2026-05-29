@@ -202,12 +202,60 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   color: #9a6310;
 }
 
+/* Font-family picker — each button shows "Aa" in its own typeface. Slightly
+   wider so the serif/sans difference is legible at a glance. */
+.style-btn.font-fam {
+  width: 26px;
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+.style-btn.font-fam.active { color: #9a6310; }
+
+/* Decoration toggles (Bold / Italic). Independent — both can be active. */
+.style-btn.deco {
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+.style-btn.deco.active {
+  color: #9a6310;
+  border-color: rgba(196, 125, 28, 0.55);
+  background: rgba(196, 125, 28, 0.10);
+}
+
+/* Pill-vs-plain segmented pick. */
+.style-btn.labelbg {
+  font: 11px/1 ui-monospace, monospace;
+  color: var(--ink-faint);
+}
+.style-btn.labelbg.active { color: #9a6310; }
+
 /* ─── Canvas Zoom Cluster (Hudson pattern) ────────────────────────────
    Floats over the canvas bottom-right. Holds viewport controls (zoom
    in/out/fit + percent badge) and history (undo/redo) so the top bar
    can be pure drawing. */
 
 .canvas-wrap { position: relative; }
+
+/* Floating tool selector — Select + Hand viewport modes, floating over the
+   canvas top (Excalidraw pattern). Mirrors the zoom cluster's pill chrome. */
+.canvas-tool-cluster {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: #ffffff;
+  border: 0.5px solid var(--edge);
+  border-radius: 5px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.55) inset,
+    0 4px 12px rgba(0, 0, 0, 0.10);
+  z-index: 10;
+}
+.canvas-tool-cluster .tool-btn { height: 26px; }
 
 .canvas-zoom-cluster {
   position: absolute;
@@ -276,11 +324,38 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
 .bay-body {
   flex: 1;
   display: grid;
-  /* layers · canvas · inspector. Layers left because it's navigation;
-     inspector right because it's the per-selection editor (still a
-     placeholder until in-place edit lands). */
-  grid-template-columns: 220px 1fr 240px;
+  /* layers · resizer · canvas · resizer · inspector. Layers left because
+     it's navigation; inspector right because it's the per-selection editor.
+     Both rail widths are user-draggable (persisted to localStorage) via the
+     6px resizer columns; the CSS vars carry the live width. */
+  grid-template-columns:
+    var(--layer-w, 220px) 6px 1fr 6px var(--inspector-w, 240px);
   min-height: 0;
+}
+
+/* Rail resizer — thin draggable column. The divider line lives in ::after so
+   the hit target (the full 6px cell) is comfortably wider than the 1px rule. */
+.rail-resizer {
+  position: relative;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 6;
+}
+.rail-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: var(--edge);
+  transition: background 0.12s ease, width 0.12s ease;
+}
+.rail-resizer:hover::after,
+.rail-resizer.dragging::after {
+  width: 2px;
+  background: rgba(196, 125, 28, 0.6);
 }
 
 .canvas-wrap {
@@ -306,10 +381,11 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   display: flex;
   flex-direction: column;
 }
-.layer-rail-left { border-right: 1px solid var(--edge); }
+/* Rail dividers are owned by the .rail-resizer columns now, so the rails
+   themselves carry no border (avoids a doubled line beside the handle). */
+.layer-rail-left { border-right: none; }
 
 .inspector-rail {
-  border-left: 1px solid var(--edge);
   background: var(--bg);
   overflow: auto;
   display: flex;
@@ -341,9 +417,376 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   font-style: italic;
   /* match the muted "nothing selected" tone used elsewhere in the chrome */
 }
+
+/* ─── Work Thread ─────────────────────────────────────────────────────
+   Streamed run log in the right rail. The rail is contextual: while a
+   thread is showing, the inspector head + body collapse out; selecting a
+   layer flips it back (see updateRailMode() in markup.js). Visual spec
+   mirrors design/studio MacCaptureMarkup "Work Thread". */
+
+.work-thread {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.work-thread.hidden { display: none; }
+.inspector-rail.thread-active .inspector-rail-head,
+.inspector-rail.thread-active #inspector-body { display: none; }
+
+.wt-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--edge);
+  background: var(--pane);
+}
+.wt-title {
+  font: 600 8.5px/1 ui-monospace, monospace;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.wt-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.wt-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(35, 36, 35, 0.30);
+}
+.wt-dot.live {
+  background: var(--amber);
+  box-shadow: 0 0 5px rgba(196, 125, 28, 0.6);
+  animation: wtpulse 1.2s ease-in-out infinite;
+}
+.wt-state {
+  font: 8px/1 ui-monospace, monospace;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.wt-body { flex: 1; overflow: auto; padding: 8px 0; }
+
+/* Which model is doing this — top of the thread. */
+.wt-model {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 2px 12px 8px 12px;
+}
+.wt-model-k {
+  font: 600 8px/1 ui-monospace, monospace;
+  letter-spacing: 0.20em;
+  text-transform: uppercase;
+  color: rgba(35, 36, 35, 0.40);
+}
+.wt-model-v {
+  font: 10px/1 ui-monospace, monospace;
+  color: var(--ink);
+  padding: 3px 7px;
+  background: var(--pane);
+  border: 0.5px solid var(--edge);
+  border-radius: 4px;
+}
+
+/* Section kicker — "· actions" between the process steps and the marks. */
+.wt-kicker {
+  font: 600 8px/1 ui-monospace, monospace;
+  letter-spacing: 0.20em;
+  text-transform: uppercase;
+  color: rgba(35, 36, 35, 0.40);
+  margin: 8px 12px 5px 26px;
+}
+
+/* Instruction pinned at the head of the thread — "what this pass is for." */
+.wt-prompt {
+  display: flex;
+  gap: 6px;
+  margin: 0 12px 8px 12px;
+  padding: 7px 9px;
+  background: rgba(196, 125, 28, 0.08);
+  border: 0.5px solid rgba(196, 125, 28, 0.30);
+  border-radius: 5px;
+}
+.wt-prompt-mark {
+  font: 600 11px/1.3 ui-monospace, monospace;
+  color: #9a6310;
+  flex-shrink: 0;
+}
+.wt-prompt-text {
+  font: italic 11.5px/1.35 -apple-system, system-ui, sans-serif;
+  color: var(--ink);
+}
+
+.wt-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 26px;
+  padding: 0 12px 0 26px;
+}
+.wt-row.pending { opacity: 0.5; }
+
+/* thread spine — a vertical rule down the left, trimmed at the first/last
+   node so the line begins and ends on a node center. */
+.wt-spine {
+  position: absolute;
+  left: 13px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--edge);
+}
+.wt-row.first .wt-spine { top: 50%; }
+.wt-row.last .wt-spine { bottom: 50%; }
+.wt-spine.half { top: 0; bottom: 50%; }
+
+.wt-node {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  border: 1px solid var(--ink-faint);
+  background: transparent;
+  box-sizing: border-box;
+}
+.wt-row.mark .wt-node { width: 7px; height: 7px; border-color: var(--amber); }
+.wt-row.meta.done .wt-node { background: var(--ink-faint); }
+.wt-row.mark.done .wt-node { background: var(--amber); }
+.wt-row.active .wt-node {
+  background: var(--amber);
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px rgba(196, 125, 28, 0.18);
+  animation: wtpulse 1.1s ease-in-out infinite;
+}
+.wt-row.pending .wt-node { border-color: var(--edge); }
+
+.wt-verb {
+  font: 600 10px/1 ui-monospace, monospace;
+  color: var(--ink-faint);
+  flex-shrink: 0;
+}
+.wt-row.mark .wt-verb { color: var(--ink); }
+.wt-row.active .wt-verb { color: #9a6310; }
+.wt-detail {
+  font: italic 10.5px/1.3 -apple-system, system-ui, sans-serif;
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.wt-row.active .wt-detail { color: var(--ink); }
+
+/* live tail — a blinking caret hanging off the spine */
+.wt-row.caret { min-height: 20px; }
+.wt-caret {
+  display: inline-block;
+  width: 1px;
+  height: 12px;
+  background: var(--amber);
+  animation: wtblink 1s steps(2) infinite;
+}
+
+.wt-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 12px;
+  border-top: 1px solid var(--edge);
+  background: var(--pane);
+}
+.wt-foot-live {
+  font: italic 11px/1 -apple-system, system-ui, sans-serif;
+  color: rgba(35, 36, 35, 0.70);
+}
+.wt-foot-elapsed {
+  margin-left: auto;
+  font: 9px/1 ui-monospace, monospace;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.wt-foot-pass {
+  font: 600 8.5px/1 ui-monospace, monospace;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #9a6310;
+}
+.wt-foot-summary {
+  font: 9px/1 ui-monospace, monospace;
+  color: var(--ink-faint);
+}
+.wt-undo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  height: 20px;
+  padding: 0 7px;
+  border: 0.5px solid var(--edge);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  font: 600 8px/1 ui-monospace, monospace;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.wt-undo:hover { color: var(--ink); border-color: rgba(35, 36, 35, 0.25); }
+.wt-undo .kbd { opacity: 0.7; letter-spacing: 0; }
+
+/* Newest streamed mark slides in; prior rows stay put (see markup.js). */
+.wt-row.enter { animation: wtrowin 0.26s ease both; }
+
+@keyframes wtpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+@keyframes wtblink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes wtrowin {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 .inspector-row { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; }
 .inspector-row .k { color: var(--ink-faint); letter-spacing: 0.08em; text-transform: uppercase; font-size: 9.5px; }
 .inspector-row .v { color: var(--ink); }
+
+/* ─── Inspector · readable layout ─────────────────────────────────────
+   Geometry reads in image pixels (not normalized 0…1 — those were the
+   hard-to-parse numbers). Position/size sit in a small card grid; style
+   facts list below; the layer's color shows as a swatch beside its hex. */
+
+.insp-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.insp-title {
+  font: 600 13px/1 ui-monospace, monospace;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.insp-chip {
+  font: 600 8px/1 ui-monospace, monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 3px 6px;
+  border-radius: 999px;
+}
+.insp-chip-user {
+  color: #9a6310;
+  background: rgba(196, 125, 28, 0.12);
+  border: 0.5px solid rgba(196, 125, 28, 0.35);
+}
+.insp-chip-agent {
+  color: var(--ink-faint);
+  background: rgba(35, 36, 35, 0.06);
+  border: 0.5px solid var(--edge);
+}
+
+.insp-section { margin-bottom: 16px; }
+.insp-kicker {
+  font: 600 8px/1 ui-monospace, monospace;
+  letter-spacing: 0.20em;
+  text-transform: uppercase;
+  color: rgba(35, 36, 35, 0.40);
+  margin-bottom: 8px;
+}
+
+.insp-geo { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.insp-geo-seg { grid-template-columns: 1fr; }
+.insp-cell {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  background: var(--pane);
+  border: 0.5px solid var(--edge);
+  border-radius: 5px;
+}
+.insp-cell .ck {
+  font: 600 8px/1 ui-monospace, monospace;
+  letter-spacing: 0.14em;
+  color: rgba(35, 36, 35, 0.45);
+}
+.insp-cell .cv {
+  font: 12px/1 ui-monospace, monospace;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.insp-cell .cu { font-size: 8px; color: var(--ink-faint); margin-left: 2px; }
+
+.insp-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+  font: 11px/1.4 ui-monospace, monospace;
+}
+.insp-row .k {
+  color: var(--ink-faint);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 9.5px;
+}
+.insp-row .v { color: var(--ink); }
+.insp-color { display: inline-flex; align-items: center; gap: 6px; }
+.insp-swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  border: 0.5px solid var(--edge);
+  display: inline-block;
+}
+.insp-text { font-style: normal; color: var(--ink); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Inspector controls — the inspector is the per-layer editor. Reuses the
+   .style-btn button family from the toolbar so the swatches / pickers match. */
+.insp-ctrl {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 0;
+}
+.insp-ctrl-k {
+  font: 600 8px/1 ui-monospace, monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(35, 36, 35, 0.45);
+}
+.insp-ctrl-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.insp-ctrl-text { flex-direction: column; align-items: stretch; gap: 5px; }
+.insp-text-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 8px;
+  border: 0.5px solid var(--edge);
+  border-radius: 5px;
+  background: #fff;
+  font: 11px/1.3 ui-monospace, monospace;
+  color: var(--ink);
+}
+.insp-text-input:focus { outline: none; border-color: rgba(196, 125, 28, 0.55); }
 
 .layer-rail-head {
   display: flex;

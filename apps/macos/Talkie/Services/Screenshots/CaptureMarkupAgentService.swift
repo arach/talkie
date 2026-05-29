@@ -50,6 +50,20 @@ struct CaptureMarkupPlan: Codable, Sendable {
     var summary: String?
 }
 
+/// Coarse phases of a markup run, surfaced to the Work Thread so the user
+/// watches what the agent is doing instead of a bare "RUNNING" spinner.
+/// These are the real async boundaries inside `plan()` + `runInstruction()`
+/// — the run is not token-streamed, but each phase is genuine elapsed work.
+enum CaptureMarkupRunPhase: Sendable {
+    case reading                  // OCR geometry pass starting
+    case read(detail: String)     // OCR done — e.g. "42 text regions"
+    case describing               // VLM scene read starting
+    case described                // scene read done
+    case planning(model: String)  // LLM planning starting — provider · model
+    case planned(detail: String)  // plan decoded — summary + op count
+    case applying                 // ops applied to the document
+}
+
 @MainActor
 final class CaptureMarkupAgentService {
     static let shared = CaptureMarkupAgentService()
@@ -69,19 +83,25 @@ final class CaptureMarkupAgentService {
     func plan(
         imageURL: URL,
         instruction: String,
-        existing: CaptureMarkupDocument? = nil
+        existing: CaptureMarkupDocument? = nil,
+        onPhase: ((CaptureMarkupRunPhase) -> Void)? = nil
     ) async throws -> CaptureMarkupPlan {
+        onPhase?(.reading)
         let geometry: OCRGeometryResult
         if let recognized = try? await VisionOCRService.shared.recognizeTextWithGeometry(atURL: imageURL) {
             geometry = recognized
         } else {
             geometry = try emptyGeometry(for: imageURL)
         }
+        onPhase?(.read(detail: Self.regionDetail(geometry)))
+        onPhase?(.describing)
         let description = try? await describe(imageURL: imageURL)
+        onPhase?(.described)
 
         guard let providerInfo = await LLMProviderRegistry.shared.resolveProviderAndModel() else {
             throw CaptureMarkupAgentError.providerUnavailable
         }
+        onPhase?(.planning(model: "\(providerInfo.provider.name) · \(providerInfo.modelId)"))
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -143,7 +163,9 @@ final class CaptureMarkupAgentService {
 
         let cleaned = Self.stripJSONFences(raw)
         do {
-            return try Self.decodePlan(from: cleaned)
+            let decoded = try Self.decodePlan(from: cleaned)
+            onPhase?(.planned(detail: Self.planDetail(decoded)))
+            return decoded
         } catch {
             log.error("Markup plan decode failed", detail: cleaned.prefix(400).description, error: error)
             let decodeError = String(describing: error)
@@ -167,7 +189,9 @@ final class CaptureMarkupAgentService {
 
             let retryCleaned = Self.stripJSONFences(retryRaw)
             do {
-                return try Self.decodePlan(from: retryCleaned)
+                let decoded = try Self.decodePlan(from: retryCleaned)
+                onPhase?(.planned(detail: Self.planDetail(decoded)))
+                return decoded
             } catch {
                 log.error("Markup plan retry decode failed", detail: retryCleaned.prefix(400).description, error: error)
                 throw CaptureMarkupAgentError.planDecodeFailed
@@ -216,19 +240,54 @@ final class CaptureMarkupAgentService {
         return data
     }
 
+    /// Materialize the computed doc into a flat artifact and write it to the
+    /// exports folder. The source capture and the sidecar are untouched —
+    /// export reads the doc, never mutates it. Returns the written file URL.
+    @discardableResult
+    func exportArtifact(
+        imageURL: URL,
+        document: CaptureMarkupDocument? = nil,
+        format: CaptureMarkupExportFormat,
+        scale: Int
+    ) throws -> URL {
+        guard let source = CGImageSourceCreateWithURL(imageURL as CFURL, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            throw CaptureMarkupAgentError.imageLoadFailed
+        }
+        let doc = document ?? CaptureMarkupStorage.load(forImageURL: imageURL)
+            ?? CaptureMarkupDocument(imageWidth: Double(image.width), imageHeight: Double(image.height))
+        guard let data = CaptureMarkupRenderer.encodedData(
+            image: image,
+            document: doc,
+            format: format,
+            scale: CGFloat(scale)
+        ) else {
+            throw CaptureMarkupAgentError.imageLoadFailed
+        }
+        return try CaptureMarkupStorage.writeExport(
+            data,
+            forImageURL: imageURL,
+            format: format,
+            scale: scale
+        )
+    }
+
     func runInstruction(
         imageURL: URL,
         instruction: String,
         existing: CaptureMarkupDocument? = nil,
-        openWebBay: Bool = true
+        openWebBay: Bool = true,
+        onPhase: ((CaptureMarkupRunPhase) -> Void)? = nil
     ) async throws -> CaptureMarkupDocument {
         do {
             let currentDocument = existing ?? CaptureMarkupStorage.load(forImageURL: imageURL)
             let plan = try await plan(
                 imageURL: imageURL,
                 instruction: instruction,
-                existing: currentDocument
+                existing: currentDocument,
+                onPhase: onPhase
             )
+            onPhase?(.applying)
             let document = try applyPlan(
                 imageURL: imageURL,
                 plan: plan,
@@ -269,6 +328,22 @@ final class CaptureMarkupAgentService {
             lines: [],
             anchors: [:]
         )
+    }
+
+    private static func regionDetail(_ geometry: OCRGeometryResult) -> String {
+        let n = geometry.observations.count
+        return n > 0 ? "\(n) text region\(n == 1 ? "" : "s")" : "no text found"
+    }
+
+    private static func planDetail(_ plan: CaptureMarkupPlan) -> String {
+        let n = plan.ops.count
+        let ops = "\(n) op\(n == 1 ? "" : "s")"
+        if let summary = plan.summary?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !summary.isEmpty {
+            let trimmed = summary.count > 60 ? String(summary.prefix(57)) + "…" : summary
+            return "\(trimmed) · \(ops)"
+        }
+        return ops
     }
 
     private static func stripJSONFences(_ raw: String) -> String {

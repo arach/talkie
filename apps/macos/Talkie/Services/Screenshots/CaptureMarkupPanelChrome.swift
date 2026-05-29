@@ -86,6 +86,118 @@ private final class CaptureMarkupMicButton: NSButton {
     }
 }
 
+// MARK: - Mag-tape waveform (recording state of the prompt lane)
+//
+// While the mic is hot the prompt lane becomes a magnetic-tape transport —
+// VU bars riding an amber centerline, newest sample at the right under a
+// tape-head marker, an elapsed readout on the left. Bars are sampled from
+// EphemeralTranscriber.shared.audioLevel (live RMS) on a ~24fps timer.
+
+@MainActor
+private final class CaptureMarkupWaveformView: NSView {
+    private var levels: [CGFloat] = []
+    private var timer: Timer?
+    private var startedAt: Date?
+    private let maxBars = 56
+
+    private static let amber = NSColor(red: 0.77, green: 0.49, blue: 0.11, alpha: 1)
+    private static let amberDeep = NSColor(red: 0.62, green: 0.38, blue: 0.08, alpha: 1)
+    private static let ink = NSColor(white: 0.14, alpha: 0.55)
+    private static let alert = NSColor(red: 0.82, green: 0.23, blue: 0.11, alpha: 1)
+
+    override var isFlipped: Bool { false }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { false }
+
+    func start() {
+        levels.removeAll()
+        startedAt = Date()
+        timer?.invalidate()
+        let t = Timer(timeInterval: 1.0 / 24.0, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.tick() }
+        }
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
+        needsDisplay = true
+    }
+
+    func stop() {
+        timer?.invalidate()
+        timer = nil
+        levels.removeAll()
+        startedAt = nil
+        needsDisplay = true
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { stop() }
+    }
+
+    private func tick() {
+        let raw = CGFloat(EphemeralTranscriber.shared.audioLevel)
+        // RMS is small; sqrt-shape it for liveliness and keep a faint floor
+        // so the tape always reads as "running," not flatlined.
+        let norm = min(1, max(0.07, sqrt(max(0, raw)) * 1.9))
+        levels.append(norm)
+        if levels.count > maxBars { levels.removeFirst(levels.count - maxBars) }
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let b = bounds
+        let elapsed = startedAt.map { Date().timeIntervalSince($0) } ?? 0
+        let timeStr = String(format: "%d:%02d", Int(elapsed) / 60, Int(elapsed) % 60)
+        let timeAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .regular),
+            .foregroundColor: Self.amberDeep,
+        ]
+        let timeSize = (timeStr as NSString).size(withAttributes: timeAttrs)
+        (timeStr as NSString).draw(at: NSPoint(x: 10, y: b.midY - timeSize.height / 2), withAttributes: timeAttrs)
+
+        let leftInset: CGFloat = 44
+        let rightInset: CGFloat = 36 // room for the REC tag
+        let track = NSRect(x: b.minX + leftInset, y: b.minY + 4, width: b.width - leftInset - rightInset, height: b.height - 8)
+        guard track.width > 8 else { return }
+
+        // amber centerline
+        Self.amber.withAlphaComponent(0.5).setStroke()
+        let center = NSBezierPath()
+        center.move(to: NSPoint(x: track.minX, y: track.midY))
+        center.line(to: NSPoint(x: track.maxX, y: track.midY))
+        center.lineWidth = 1
+        center.stroke()
+
+        // VU bars — newest sample nearest the tape head (right)
+        let barW: CGFloat = 2
+        let stride = barW + 2
+        let count = levels.count
+        for i in 0..<count {
+            let level = levels[count - 1 - i]
+            let x = track.maxX - CGFloat(i + 1) * stride
+            if x < track.minX { break }
+            let h = max(2, level * (track.height - 2))
+            let rect = NSRect(x: x, y: track.midY - h / 2, width: barW, height: h)
+            (i < 3 ? Self.amber : Self.ink).setFill()
+            NSBezierPath(roundedRect: rect, xRadius: 1, yRadius: 1).fill()
+        }
+
+        // tape head marker at the write point (right edge of the track)
+        Self.amberDeep.setStroke()
+        let head = NSBezierPath()
+        head.move(to: NSPoint(x: track.maxX, y: track.minY))
+        head.line(to: NSPoint(x: track.maxX, y: track.maxY))
+        head.lineWidth = 1.5
+        head.stroke()
+
+        let recAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: 8.5, weight: .semibold),
+            .foregroundColor: Self.alert,
+        ]
+        let recSize = ("REC" as NSString).size(withAttributes: recAttrs)
+        ("REC" as NSString).draw(at: NSPoint(x: b.maxX - recSize.width - 12, y: b.midY - recSize.height / 2), withAttributes: recAttrs)
+    }
+}
+
 // MARK: - Example chip
 //
 // Dashed-pill action chip used in the "· TRY" suggestions row. Replaces
@@ -357,6 +469,107 @@ final class CaptureMarkupPanelRootView: NSView {
     }
 }
 
+// MARK: - Pill button (Save / Run)
+//
+// Custom-drawn pills so the fills, radius, and keycaps are fully under our
+// control. The keycap (⌘S / ⌘↵ / ✓) is rendered in the SYSTEM font — the
+// monospaced font tofus those glyphs, which was the garbled "X" in the
+// shipped bar. Label stays mono uppercase to match the chrome.
+
+@MainActor
+private final class CaptureMarkupPillButton: NSView {
+    enum Kind { case primary, faint }
+
+    var onClick: (() -> Void)?
+
+    private let kind: Kind
+    private let labelField = NSTextField(labelWithString: "")
+    private let keycapField = NSTextField(labelWithString: "")
+    private var enabledForClick = true
+
+    private static let amber = NSColor(red: 0.77, green: 0.49, blue: 0.11, alpha: 1)
+    private static let amberDeep = NSColor(red: 0.62, green: 0.38, blue: 0.08, alpha: 1)
+    private static let amberFaint = NSColor(red: 0.98, green: 0.94, blue: 0.88, alpha: 1)
+    private static let amberSoft = NSColor(red: 0.90, green: 0.78, blue: 0.55, alpha: 1)
+
+    init(kind: Kind) {
+        self.kind = kind
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+        wantsLayer = true
+        layer?.cornerRadius = 7
+        layer?.borderWidth = 0.5
+
+        labelField.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold)
+        keycapField.font = NSFont.systemFont(ofSize: 10.5, weight: .medium)
+        for field in [labelField, keycapField] {
+            field.translatesAutoresizingMaskIntoConstraints = false
+            field.isEditable = false
+            field.isSelectable = false
+            field.drawsBackground = false
+            field.isBordered = false
+            addSubview(field)
+        }
+
+        NSLayoutConstraint.activate([
+            heightAnchor.constraint(equalToConstant: 32),
+            labelField.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+            labelField.centerYAnchor.constraint(equalTo: centerYAnchor),
+            keycapField.leadingAnchor.constraint(equalTo: labelField.trailingAnchor, constant: 6),
+            keycapField.centerYAnchor.constraint(equalTo: centerYAnchor),
+            trailingAnchor.constraint(equalTo: keycapField.trailingAnchor, constant: 12),
+        ])
+        applyDefaultColors()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { nil }
+
+    func configure(label: String, keycap: String?) {
+        labelField.stringValue = label
+        keycapField.stringValue = keycap ?? ""
+        keycapField.isHidden = (keycap == nil)
+        applyDefaultColors()
+    }
+
+    func setEnabledForClick(_ enabled: Bool) {
+        enabledForClick = enabled
+        alphaValue = enabled ? 1 : 0.45
+    }
+
+    func applyDefaultColors() {
+        switch kind {
+        case .primary:
+            layer?.backgroundColor = Self.amber.cgColor
+            layer?.borderColor = Self.amber.cgColor
+            labelField.textColor = .white
+            keycapField.textColor = NSColor.white.withAlphaComponent(0.85)
+        case .faint:
+            layer?.backgroundColor = Self.amberFaint.cgColor
+            layer?.borderColor = Self.amberSoft.cgColor
+            labelField.textColor = Self.amberDeep
+            keycapField.textColor = Self.amberDeep.withAlphaComponent(0.7)
+        }
+    }
+
+    /// Override the palette for transient states (e.g. the "SAVED ✓" flash).
+    func setColors(background: NSColor, border: NSColor, label: NSColor, keycap: NSColor) {
+        layer?.backgroundColor = background.cgColor
+        layer?.borderColor = border.cgColor
+        labelField.textColor = label
+        keycapField.textColor = keycap
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard enabledForClick else { return }
+        onClick?()
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .pointingHand)
+    }
+}
+
 // MARK: - Input bar
 
 @MainActor
@@ -369,6 +582,8 @@ final class CaptureMarkupInputBarView: NSView {
     private static let amberDeep = NSColor(red: 0.62, green: 0.38, blue: 0.08, alpha: 1)
     private static let amberFaint = NSColor(red: 0.98, green: 0.94, blue: 0.88, alpha: 1)
     private static let amberSoft = NSColor(red: 0.90, green: 0.78, blue: 0.55, alpha: 1)
+    private static let fieldBorder = NSColor(white: 0.10, alpha: 0.20)
+    private static let fieldBorderActive = NSColor(red: 0.82, green: 0.23, blue: 0.11, alpha: 0.45)
 
     private let examplesStack = NSStackView()
     private let tryLabel = NSTextField(labelWithString: "· TRY")
@@ -376,8 +591,9 @@ final class CaptureMarkupInputBarView: NSView {
     private let voiceButton = CaptureMarkupMicButton()
     private let selectionChip = CaptureMarkupSelectionChipView()
     private let promptField = NSTextField()
-    private let saveButton = NSButton()
-    private let runButton = NSButton()
+    private let waveform = CaptureMarkupWaveformView()
+    private let saveButton = CaptureMarkupPillButton(kind: .faint)
+    private let runButton = CaptureMarkupPillButton(kind: .primary)
     private let promptContainer = CaptureMarkupPromptContainerView()
     /// Resets the Save button out of its transient "SAVED ✓" state.
     private var saveFeedbackResetWork: DispatchWorkItem?
@@ -426,10 +642,10 @@ final class CaptureMarkupInputBarView: NSView {
         examplesStack.alignment = .centerY
 
         promptContainer.wantsLayer = true
-        promptContainer.layer?.backgroundColor = Self.pane.cgColor
-        promptContainer.layer?.borderColor = NSColor.separatorColor.cgColor
+        promptContainer.layer?.backgroundColor = NSColor.white.cgColor
+        promptContainer.layer?.borderColor = Self.fieldBorder.cgColor
         promptContainer.layer?.borderWidth = 0.5
-        promptContainer.layer?.cornerRadius = 5
+        promptContainer.layer?.cornerRadius = 7
 
         // Mic affordance is the shape. Glyph + colors swap with state.
         voiceButton.toolTip = "Tap to record · tap again to stop"
@@ -444,37 +660,12 @@ final class CaptureMarkupInputBarView: NSView {
         promptField.target = self
         promptField.action = #selector(runTapped)
 
-        // Save — explicit persist of the current document to the sidecar.
-        // Distinct from Run (dispatches the prompt) and Accept (commits +
-        // closes). Quieter than Run: amber-faint pill, not a filled amber
-        // primary. ⌘S is the bound shortcut; mirrors the studio's `⌘S SAVE`
-        // control sitting just left of `↵ RUN`.
-        saveButton.bezelStyle = .rounded
-        saveButton.isBordered = false
-        saveButton.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold)
-        saveButton.keyEquivalent = "s"
-        saveButton.keyEquivalentModifierMask = .command
-        saveButton.target = self
-        saveButton.action = #selector(saveTapped)
-        saveButton.wantsLayer = true
-        saveButton.layer?.cornerRadius = 5
-        saveButton.layer?.borderWidth = 0.5
-
-        runButton.title = "RUN  ⌘↵"
-        runButton.bezelStyle = .rounded
-        runButton.isBordered = false
-        runButton.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold)
-        runButton.keyEquivalent = "\r"
-        runButton.keyEquivalentModifierMask = .command
-        runButton.target = self
-        runButton.action = #selector(runTapped)
-        if let cell = runButton.cell as? NSButtonCell {
-            cell.backgroundColor = Self.amber
-            cell.attributedTitle = NSAttributedString(
-                string: "RUN  ⌘↵",
-                attributes: [.foregroundColor: NSColor.white, .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold)]
-            )
-        }
+        // Save / Run — custom pill buttons. Save is the quieter amber-faint
+        // pill; Run the filled amber primary. Keyboard shortcuts (⌘S / ⌘↵)
+        // are handled in performKeyEquivalent below; the pills carry the
+        // keycaps as visible hints.
+        saveButton.onClick = { [weak self] in self?.saveTapped() }
+        runButton.onClick = { [weak self] in self?.runTapped() }
 
         selectionChip.onDismiss = { [weak self] in
             self?.delegate?.captureMarkupPanelDidClearSelection()
@@ -506,6 +697,12 @@ final class CaptureMarkupInputBarView: NSView {
         }
         promptContainer.addSubview(promptField)
         promptField.translatesAutoresizingMaskIntoConstraints = false
+
+        // Waveform overlays the prompt lane and only shows while recording —
+        // the lane is the prompt at rest, the tape transport when hot.
+        waveform.translatesAutoresizingMaskIntoConstraints = false
+        waveform.isHidden = true
+        promptContainer.addSubview(waveform)
 
         let attachmentsTop = attachmentsRow.topAnchor.constraint(equalTo: tryLabel.bottomAnchor, constant: 8)
         let attachmentsHeight = attachmentsRow.heightAnchor.constraint(equalToConstant: 0)
@@ -545,15 +742,16 @@ final class CaptureMarkupInputBarView: NSView {
             promptField.trailingAnchor.constraint(equalTo: promptContainer.trailingAnchor, constant: -12),
             promptField.centerYAnchor.constraint(equalTo: promptContainer.centerYAnchor),
 
+            waveform.leadingAnchor.constraint(equalTo: promptContainer.leadingAnchor),
+            waveform.trailingAnchor.constraint(equalTo: promptContainer.trailingAnchor),
+            waveform.topAnchor.constraint(equalTo: promptContainer.topAnchor),
+            waveform.bottomAnchor.constraint(equalTo: promptContainer.bottomAnchor),
+
             saveButton.trailingAnchor.constraint(equalTo: runButton.leadingAnchor, constant: -8),
             saveButton.centerYAnchor.constraint(equalTo: voiceButton.centerYAnchor),
-            saveButton.heightAnchor.constraint(equalToConstant: 34),
-            saveButton.widthAnchor.constraint(equalToConstant: 92),
 
             runButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
             runButton.centerYAnchor.constraint(equalTo: voiceButton.centerYAnchor),
-            runButton.heightAnchor.constraint(equalToConstant: 34),
-            runButton.widthAnchor.constraint(equalToConstant: 80),
         ])
 
         setAttachmentsRowVisible(false)
@@ -738,47 +936,63 @@ final class CaptureMarkupInputBarView: NSView {
         voiceButton.layer?.borderColor = border.cgColor
         voiceButton.toolTip = tip
         updateRunButtonAppearance()
+        updateComposerRecordingState()
+    }
+
+    /// While the mic is hot, the prompt lane becomes the tape transport:
+    /// hide the text field, reveal + run the waveform, flush the lane border
+    /// to alert-red. At rest it's the prompt again.
+    private func updateComposerRecordingState() {
+        let recording = isVoiceRecording
+        waveform.isHidden = !recording
+        promptField.isHidden = recording
+        if recording {
+            waveform.start()
+        } else {
+            waveform.stop()
+        }
+        let border = recording ? Self.fieldBorderActive : Self.fieldBorder
+        promptContainer.layer?.borderColor = border.cgColor
     }
 
     private func updateRunButtonAppearance() {
         let enabled = !isRunning && !isVoiceRecording && !isVoiceTranscribing
-        let title = isRunning ? "RUNNING" : "RUN  ⌘↵"
-        runButton.title = title
-        runButton.isEnabled = enabled
-        if let cell = runButton.cell as? NSButtonCell {
-            cell.backgroundColor = Self.amber.withAlphaComponent(enabled ? 1 : 0.35)
-            cell.attributedTitle = NSAttributedString(
-                string: title,
-                attributes: [
-                    .foregroundColor: NSColor.white.withAlphaComponent(enabled ? 1 : 0.6),
-                    .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold),
-                ]
-            )
+        if isRunning {
+            runButton.configure(label: "RUNNING", keycap: nil)
+        } else {
+            runButton.configure(label: "RUN", keycap: "⌘↵")
         }
+        runButton.setEnabledForClick(enabled)
     }
 
     private func updateSaveButtonAppearance() {
-        // Quieter than Run: amber-faint pill with a brass border. While a
-        // run is in flight the button is disabled. When a save just landed
-        // it flips to a confirmed check state for ~1.4s.
-        let enabled = !isRunning
-        let title = isSaveConfirming ? "SAVED  ✓" : "⌘S  SAVE"
-        let titleColor: NSColor = isSaveConfirming
-            ? Self.amber
-            : (enabled ? Self.amberDeep : Self.amberDeep.withAlphaComponent(0.4))
-        saveButton.title = title
-        saveButton.isEnabled = enabled
-        saveButton.layer?.backgroundColor = Self.amberFaint
-            .withAlphaComponent(enabled ? 1 : 0.5).cgColor
-        saveButton.layer?.borderColor = Self.amberSoft
-            .withAlphaComponent(enabled ? 1 : 0.5).cgColor
-        saveButton.attributedTitle = NSAttributedString(
-            string: title,
-            attributes: [
-                .foregroundColor: titleColor,
-                .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold),
-            ]
-        )
+        // Quieter than Run: amber-faint pill. While a run is in flight it's
+        // disabled; when a save just landed it flashes a confirmed check.
+        if isSaveConfirming {
+            saveButton.configure(label: "SAVED", keycap: "✓")
+            saveButton.setColors(
+                background: Self.amberFaint,
+                border: Self.amber,
+                label: Self.amber,
+                keycap: Self.amber
+            )
+        } else {
+            saveButton.configure(label: "SAVE", keycap: "⌘S")
+        }
+        saveButton.setEnabledForClick(!isRunning)
+    }
+
+    /// ⌘↵ runs, ⌘S saves — works whether the prompt field or the bar has
+    /// key focus. (The webview canvas handles its own ⌘S via the bridge.)
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard event.modifierFlags.contains(.command) else {
+            return super.performKeyEquivalent(with: event)
+        }
+        switch event.charactersIgnoringModifiers {
+        case "\r": runTapped(); return true
+        case "s": saveTapped(); return true
+        default: return super.performKeyEquivalent(with: event)
+        }
     }
 
     @objc private func saveTapped() {

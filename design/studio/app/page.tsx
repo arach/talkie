@@ -93,6 +93,14 @@ const STUDIES: Study[] = [
       "Annotation surface for a single capture — drawing tools on the left, contextual style stack on the right, floating zoom cluster bottom-right, speak strip at the foot. Lives in a WKWebView panel; the studio mock leads the port.",
   },
   {
+    slug: "mac-capture-markup-levelup",
+    name: "Capture Markup · Level Up",
+    kind: "Composition study",
+    platform: "macOS",
+    blurb:
+      "Leveled-up run feedback: a Work Thread (the right rail streams the agent's run log-style — a line per step as each mark lands — then settles into a pass summary with a single undo) and Speak Strip v2 (the prompt lane becomes a magnetic-tape waveform while recording). Ports to CaptureMarkupPanelChrome.swift.",
+  },
+  {
     slug: "mac-capture-detail",
     name: "Capture Detail",
     kind: "Composition study",

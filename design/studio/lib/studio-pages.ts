@@ -88,6 +88,17 @@ export const STUDIO_PAGES: StudioPage[] = [
     ],
     blurb: "One header standard — mono eyebrow + serif title + mono tags — and the screens that drifted from it.",
   },
+  {
+    href: "/top-band",
+    label: "Top Band",
+    bucket: "foundations",
+    status: "concept",
+    swift: [
+      "apps/macos/TalkieKit/Sources/TalkieKit/UI/ScopeComponents.swift",
+      "apps/macos/Talkie/Components/TalkieChromeBar.swift",
+    ],
+    blurb: "One top-band component — wordmark · title · TALKIE · complications — with a variant per view.",
+  },
 
   // ── Surfaces · Mac ──────────────────────────────────────────────
   {
@@ -201,7 +212,16 @@ export const STUDIO_PAGES: StudioPage[] = [
     platform: "mac",
     family: "capture",
     status: "concept",
-    blurb: "Voice + image markup · ask then touch up · replaces CleanShot delegate.",
+    blurb: "Voice + image markup · ask then touch up · save the computed doc, share/export a flat PNG/JPEG · replaces CleanShot delegate.",
+  },
+  {
+    href: "/mac-capture-markup-levelup",
+    label: "Markup · Level Up",
+    bucket: "surfaces",
+    platform: "mac",
+    family: "capture",
+    status: "concept",
+    blurb: "Leveled-up run feedback · Work Thread (right rail streams the agent's run log-style → pass summary + undo) + Speak Strip v2 (mag-tape waveform while recording). Ports to CaptureMarkupPanelChrome.swift.",
   },
   {
     href: "/mac-capture-flow",

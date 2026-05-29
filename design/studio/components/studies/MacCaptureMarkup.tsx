@@ -170,6 +170,69 @@ export function MacCaptureMarkup() {
       />
       <ToolbarRedesignState />
       <ToolbarStyleVariants />
+      <SectionBreak
+        label="4 · save · export · share"
+        hint="markup is a computed doc · save persists it · export materializes a flat PNG/JPEG · share is why"
+      />
+      <SaveShareState />
+      <SectionBreak
+        label="5 · level up · intern viewer + speak strip v2"
+        hint="the bottom band, leveled up — the intern accounts for its pass · the mic speaks in mag-tape"
+      />
+      <LevelUpState />
+      <StudyFooter />
+    </div>
+  );
+}
+
+/**
+ * Focused view of just the "5 · level up" exploration — the streaming
+ * Work Thread (right rail) + Speak Strip v2. Exported so it gets its own
+ * sidebar route instead of living at the foot of the full study.
+ */
+export function MacCaptureMarkupLevelUp() {
+  return (
+    <div style={{ width: 1180, background: T.page }} className="flex flex-col">
+      <div style={{ padding: "20px 32px 6px 32px" }}>
+        <div className="flex items-baseline gap-3">
+          <span
+            className="font-mono font-semibold uppercase tracking-[0.32em]"
+            style={{ color: T.inkFaint, fontSize: 9 }}
+          >
+            · CAPTURE MARKUP · level up · the bottom band
+          </span>
+          <span className="font-display italic" style={{ color: T.inkFaint, fontSize: 13 }}>
+            stream what the agent's doing · log-style on the right · the mic speaks in mag-tape
+          </span>
+          <div className="ml-auto flex items-center gap-3">
+            <Chip label="CONCEPT" tone="amber" />
+            <span
+              className="font-mono uppercase tracking-[0.18em]"
+              style={{ color: T.inkFaint, fontSize: 10 }}
+            >
+              ports to · CaptureMarkupPanelChrome.swift
+            </span>
+          </div>
+        </div>
+        <h2
+          className="font-display tracking-tight"
+          style={{ color: T.ink, fontSize: 30, fontWeight: 500, lineHeight: 1, marginTop: 8 }}
+        >
+          Level up · Work Thread + Speak Strip
+        </h2>
+        <p
+          className="font-display italic"
+          style={{ color: T.inkFaint, fontSize: 13, lineHeight: 1.6, marginTop: 10, maxWidth: 820 }}
+        >
+          Hitting RUN used to say "RUNNING" and leave you staring. Now the
+          right rail is a <em>Work Thread</em> — the agent's run streamed
+          log-style, a line per step as each mark lands, with a live node
+          at the head. And the composer is no longer a dead field: tap the
+          mic and the prompt lane becomes a magnetic-tape waveform while
+          you talk.
+        </p>
+      </div>
+      <LevelUpState />
       <StudyFooter />
     </div>
   );
@@ -1579,10 +1642,12 @@ function PopoverGlyph({ label, tone = "faint" }: { label: string; tone?: "faint"
 function MarkupWindow({
   title,
   subtitle,
+  titleRight,
   children,
 }: {
   title: string;
   subtitle?: string;
+  titleRight?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -1597,11 +1662,14 @@ function MarkupWindow({
       }}
     >
       <div
-        className="flex items-center gap-2 px-3"
+        className="relative flex items-center gap-2 px-3"
         style={{
           height: 32,
           background: T.chrome,
           borderBottom: `0.5px solid ${T.inkRuleS}`,
+          // Document-action menus (Share) drop out of the title bar over the
+          // canvas, so the bar can't clip its own overflow.
+          zIndex: 5,
         }}
       >
         <span className="flex items-center gap-1.5">
@@ -1624,6 +1692,7 @@ function MarkupWindow({
             {subtitle}
           </span>
         )}
+        {titleRight}
       </div>
       {children}
     </div>
@@ -2657,6 +2726,1420 @@ function ToolbarRedesignMarginalia() {
         style={{
           display: "grid",
           gridTemplateColumns: "180px 1fr",
+          rowGap: 4,
+          columnGap: 18,
+        }}
+      >
+        {entries.map(([name, def]) => (
+          <React.Fragment key={name}>
+            <span
+              className="font-mono font-semibold uppercase tracking-[0.16em]"
+              style={{ fontSize: 10, color: T.amberDeep }}
+            >
+              {name}
+            </span>
+            <span
+              className="font-display italic"
+              style={{ fontSize: 12, color: T.inkMid, lineHeight: 1.45 }}
+            >
+              {def}
+            </span>
+          </React.Fragment>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── State 4 · Save · Export · Share ─────────────────────────────────
+//
+// The markup is a COMPUTED document — a list of layers in a sidecar JSON,
+// not a baked image. That distinction is the whole feature:
+//
+//   · SAVE    persists the computed doc. The source PNG is never touched
+//             and we never flatten to pixels — the markup stays editable
+//             forever (re-open, re-style, re-prompt).
+//   · EXPORT  materializes the computed doc → a flat PNG / JPEG artifact,
+//             on demand, at 1× or 2×. Rendered on the way out; the doc it
+//             came from is unchanged.
+//   · SHARE   is *why* you export — a concrete file to hand off. "Exports
+//             are just a different way to save." (operator · 2026-05-28)
+//
+// Two consequences for the chrome:
+//   1. Document-level actions leave the talk strip (which goes back to
+//      pure mic · prompt · run) and move into a title-bar ACTION CLUSTER.
+//   2. That cluster carries a PERSISTENT "computed · N layers · saved Xs
+//      ago" readout — the original complaint was "I can't tell it saved."
+//      A 1.4s flash isn't state; a standing readout is.
+
+function SaveShareState() {
+  return (
+    <Surface>
+      <ComputedVsMaterialized />
+      <MarkupWindow
+        title="Markup · C-0017"
+        titleRight={<DocActionCluster shareOpen savedAgo="3s ago" layers={4} />}
+      >
+        <ToolToolbarV2 active={null} selection={null} />
+        <div
+          className="relative flex items-center justify-center"
+          style={{ background: T.rail, padding: "26px 26px", minHeight: 360 }}
+        >
+          <MockedScreenshotWithMarkup markup selectedIndex={1} />
+          <CanvasZoomCluster />
+        </div>
+        <SpeakStrip
+          placeholder="speak or type another pass…"
+          examples={[
+            "circle the error and label it",
+            "blur the email",
+            "arrow title → failed line",
+          ]}
+          scopeBadge="global · whole image"
+        />
+      </MarkupWindow>
+      <ExportConfirmStrip />
+      <SaveShareMarginalia />
+      <PreviewShareNote />
+      <CaptionStrip
+        text="Save and Share are siblings, not a sequence. Save persists the computed layer doc — editable, non-destructive, the source of truth. Share opens the export matrix: PNG or JPEG, 1× or 2×, rendered to the Talkie exports folder on the way out. The original capture is never re-encoded and the markup never gets flattened into the thing you keep — only into the thing you send. The title-bar readout makes the save state legible at all times, which is the part that was missing."
+      />
+    </Surface>
+  );
+}
+
+// ─── The model · computed doc → materialized artifact ────────────────
+//
+// Leads the section because it's the *why*. Three boxes: the untouched
+// source, the computed doc that SAVE persists, and the flat artifact that
+// EXPORT renders. The arrow is one-way — export reads the doc, never
+// writes back to it.
+
+function ComputedVsMaterialized() {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <PaneHeader title="the model · computed → materialized" sub="why save ≠ export" />
+      <div
+        className="flex items-stretch"
+        style={{
+          background: T.pane,
+          border: `0.5px solid ${T.inkRuleS}`,
+          borderRadius: 6,
+          padding: "16px 18px",
+          gap: 14,
+        }}
+      >
+        <ModelBox
+          tone="ink"
+          kicker="source"
+          title="C-0017.png"
+          line="the raw capture · never re-encoded"
+          glyph="▦"
+        />
+        <ModelGlue label="+" />
+        <ModelBox
+          tone="amber"
+          kicker="computed doc · SAVE persists this"
+          title="C-0017.markup.json"
+          line="layers · rect · arrow · label · blur — editable forever"
+          glyph="❖"
+          primary
+        />
+        <ModelArrow label="EXPORT renders →" />
+        <ModelBox
+          tone="ink"
+          kicker="materialized · SHARE hands this off"
+          title="C-0017@2x.png"
+          line="flat pixels · made on demand · not kept as state"
+          glyph="◳"
+        />
+      </div>
+    </div>
+  );
+}
+
+function ModelBox({
+  tone,
+  kicker,
+  title,
+  line,
+  glyph,
+  primary,
+}: {
+  tone: "ink" | "amber";
+  kicker: string;
+  title: string;
+  line: string;
+  glyph: string;
+  primary?: boolean;
+}) {
+  const accent = tone === "amber" ? T.amberDeep : T.inkMid;
+  return (
+    <div
+      className="flex-1"
+      style={{
+        background: primary ? T.amberFaint : T.page,
+        border: `0.5px solid ${primary ? T.amberSoft : T.inkRuleS}`,
+        borderRadius: 5,
+        padding: "11px 12px",
+        minWidth: 0,
+      }}
+    >
+      <div className="flex items-center gap-2" style={{ marginBottom: 7 }}>
+        <span className="font-mono" style={{ fontSize: 13, color: accent, lineHeight: 1 }}>
+          {glyph}
+        </span>
+        <span
+          className="font-mono font-semibold uppercase tracking-[0.18em]"
+          style={{ fontSize: 8, color: accent }}
+        >
+          {kicker}
+        </span>
+      </div>
+      <div className="font-mono" style={{ fontSize: 12, color: T.ink, marginBottom: 4 }}>
+        {title}
+      </div>
+      <div
+        className="font-display italic"
+        style={{ fontSize: 11, color: T.inkFaint, lineHeight: 1.4 }}
+      >
+        {line}
+      </div>
+    </div>
+  );
+}
+
+function ModelGlue({ label }: { label: string }) {
+  return (
+    <div className="flex items-center">
+      <span className="font-mono" style={{ fontSize: 14, color: T.inkFainter }}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function ModelArrow({ label }: { label: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center" style={{ minWidth: 96 }}>
+      <span
+        className="font-mono font-semibold uppercase tracking-[0.16em]"
+        style={{ fontSize: 8, color: T.amberDeep, marginBottom: 3, textAlign: "center" }}
+      >
+        {label}
+      </span>
+      <div style={{ width: "100%", height: 1, background: T.amberSoft }} />
+      <span
+        className="font-display italic"
+        style={{ fontSize: 9, color: T.inkFainter, marginTop: 3 }}
+      >
+        one-way
+      </span>
+    </div>
+  );
+}
+
+// ─── Title-bar document action cluster ───────────────────────────────
+//
+// Save state + the two document actions, parked top-right in the window
+// chrome where a document's actions belong. The standing readout is the
+// fix for "I can't tell it saved": dot + "computed · N layers · saved Xs
+// ago" is always visible, not a transient flash.
+
+function DocActionCluster({
+  shareOpen,
+  savedAgo,
+  layers,
+}: {
+  shareOpen?: boolean;
+  savedAgo: string;
+  layers: number;
+}) {
+  return (
+    <div className="relative flex items-center gap-2.5">
+      <SaveStatusReadout savedAgo={savedAgo} layers={layers} />
+      <span className="h-3.5 w-px" style={{ background: T.inkRule }} />
+      <DocActionButton label="Save" kbd="⌘S" />
+      <DocActionButton label="Share" caret tone="amber" active={shareOpen} />
+      {shareOpen && <ShareMenu />}
+    </div>
+  );
+}
+
+function SaveStatusReadout({ savedAgo, layers }: { savedAgo: string; layers: number }) {
+  return (
+    <span className="flex items-center gap-1.5" title="The computed markup doc is saved to its sidecar.">
+      <span
+        className="inline-block rounded-full"
+        style={{ width: 6, height: 6, background: T.amber, boxShadow: "0 0 5px rgba(196,125,28,0.55)" }}
+      />
+      <span
+        className="font-mono uppercase tracking-[0.16em]"
+        style={{ fontSize: 8.5, color: T.inkFaint }}
+      >
+        computed · {layers} layers · saved {savedAgo}
+      </span>
+    </span>
+  );
+}
+
+function DocActionButton({
+  label,
+  kbd,
+  caret,
+  tone = "ink",
+  active,
+}: {
+  label: string;
+  kbd?: string;
+  caret?: boolean;
+  tone?: "ink" | "amber";
+  active?: boolean;
+}) {
+  const amber = tone === "amber";
+  return (
+    <button
+      className="flex items-center gap-1.5"
+      style={{
+        height: 22,
+        padding: "0 8px",
+        borderRadius: 4,
+        color: amber ? T.amberDeep : T.inkMid,
+        background: active ? T.amberFaint : amber ? T.amberFaint : "transparent",
+        border: `0.5px solid ${active || amber ? T.amberSoft : T.inkRule}`,
+      }}
+    >
+      <span
+        className="font-mono font-semibold uppercase tracking-[0.18em]"
+        style={{ fontSize: 9 }}
+      >
+        {label}
+      </span>
+      {kbd && (
+        <span className="font-mono" style={{ fontSize: 8.5, opacity: 0.7 }}>
+          {kbd}
+        </span>
+      )}
+      {caret && (
+        <span className="font-mono" style={{ fontSize: 8, lineHeight: 1, opacity: 0.8 }}>
+          ▾
+        </span>
+      )}
+    </button>
+  );
+}
+
+// ─── Share menu — the predetermined export matrix ────────────────────
+//
+// Drops from the Share button. Two formats × two scales, each a one-click
+// render to the exports folder. The header reframes it as the operator
+// did: this is a way to *save out*, and the doc you're editing stays a
+// computed doc. Footer names the fixed destination.
+
+function ShareMenu() {
+  const rows: { fmt: string; scale: string; note: string; primary?: boolean }[] = [
+    { fmt: "PNG", scale: "1×", note: "lossless · native size" },
+    { fmt: "PNG", scale: "2×", note: "lossless · retina", primary: true },
+    { fmt: "JPEG", scale: "1×", note: "smaller · for chat / email" },
+    { fmt: "JPEG", scale: "2×", note: "smaller · retina" },
+  ];
+  return (
+    <div
+      className="absolute"
+      style={{
+        top: "calc(100% + 6px)",
+        right: 0,
+        width: 268,
+        background: T.pane,
+        border: `0.5px solid ${T.inkRule}`,
+        borderRadius: 6,
+        boxShadow: "0 12px 30px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.10)",
+        overflow: "hidden",
+        zIndex: 20,
+      }}
+    >
+      <div
+        className="flex items-baseline gap-2 px-3"
+        style={{ height: 30, borderBottom: `0.5px solid ${T.inkRuleS}`, background: T.chrome }}
+      >
+        <span
+          className="font-mono font-semibold uppercase tracking-[0.20em]"
+          style={{ fontSize: 8.5, color: T.amberDeep }}
+        >
+          · share · export a flat copy
+        </span>
+      </div>
+      <p
+        className="font-display italic"
+        style={{ fontSize: 10.5, color: T.inkFaint, lineHeight: 1.4, padding: "8px 12px 6px 12px" }}
+      >
+        Render the markup to pixels. The computed doc stays editable —
+        this just makes a copy to send.
+      </p>
+      <div style={{ padding: "2px 6px 6px 6px" }}>
+        {rows.map((r) => (
+          <button
+            key={`${r.fmt}-${r.scale}`}
+            className="flex items-center gap-2 w-full"
+            style={{
+              padding: "6px 8px",
+              borderRadius: 4,
+              background: r.primary ? T.amberFaint : "transparent",
+              border: `0.5px solid ${r.primary ? T.amberSoft : "transparent"}`,
+              textAlign: "left",
+            }}
+          >
+            <span
+              className="font-mono font-semibold uppercase tracking-[0.16em]"
+              style={{
+                fontSize: 9,
+                color: r.primary ? T.amberDeep : T.ink,
+                width: 34,
+              }}
+            >
+              {r.fmt}
+            </span>
+            <span
+              className="font-mono"
+              style={{
+                fontSize: 9,
+                color: r.primary ? T.amberDeep : T.inkMid,
+                padding: "1px 5px",
+                borderRadius: 2,
+                border: `0.5px solid ${r.primary ? T.amberSoft : T.inkRuleS}`,
+              }}
+            >
+              {r.scale}
+            </span>
+            <span
+              className="font-display italic flex-1"
+              style={{ fontSize: 10.5, color: T.inkFaint }}
+            >
+              {r.note}
+            </span>
+            {r.primary && (
+              <span
+                className="font-mono uppercase tracking-[0.14em]"
+                style={{ fontSize: 7.5, color: T.amberDeep }}
+              >
+                default
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+      <div
+        className="flex items-center gap-1.5 px-3"
+        style={{ height: 26, borderTop: `0.5px solid ${T.inkRuleS}`, background: T.chrome }}
+      >
+        <span className="font-mono" style={{ fontSize: 9, color: T.inkFainter }}>
+          ↳
+        </span>
+        <span
+          className="font-mono uppercase tracking-[0.14em]"
+          style={{ fontSize: 8, color: T.inkFaint }}
+        >
+          Talkie / Exports
+        </span>
+        <span className="flex-1" />
+        <span
+          className="font-display italic"
+          style={{ fontSize: 9.5, color: T.inkFainter }}
+        >
+          opens after export
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Post-export confirmation ────────────────────────────────────────
+//
+// Export is a hand-off, so it needs a receipt. Shows what was written and
+// where, with a Reveal affordance. Distinct from the SAVE readout (which
+// is about the computed doc); this is about the artifact that just left.
+
+function ExportConfirmStrip() {
+  return (
+    <div
+      className="flex items-center gap-3"
+      style={{
+        marginTop: 12,
+        padding: "9px 12px",
+        background: T.pane,
+        border: `0.5px solid ${T.amberSoft}`,
+        borderRadius: 5,
+      }}
+    >
+      <span
+        className="flex items-center justify-center rounded-full"
+        style={{ width: 18, height: 18, background: T.amberFaint, color: T.amberDeep, fontSize: 11 }}
+      >
+        ✓
+      </span>
+      <span className="font-mono" style={{ fontSize: 11, color: T.ink }}>
+        C-0017@2x.png
+      </span>
+      <span
+        className="font-display italic"
+        style={{ fontSize: 11, color: T.inkFaint }}
+      >
+        rendered to{" "}
+        <span className="font-mono" style={{ fontSize: 10.5, color: T.inkMid }}>
+          Talkie / Exports
+        </span>{" "}
+        · 1.2 MB · PNG · 2×
+      </span>
+      <span className="flex-1" />
+      <button
+        className="font-mono font-semibold uppercase tracking-[0.18em]"
+        style={{
+          fontSize: 8.5,
+          color: T.amberDeep,
+          padding: "4px 9px",
+          background: T.amberFaint,
+          border: `0.5px solid ${T.amberSoft}`,
+          borderRadius: 3,
+        }}
+      >
+        Reveal in Finder
+      </button>
+    </div>
+  );
+}
+
+// ─── Preview parity note ─────────────────────────────────────────────
+//
+// Share belongs anywhere you're looking at a capture, not just inside the
+// markup editor. The capture Preview gets the same Share ▾ control, so a
+// quick PNG/JPEG export doesn't require opening markup at all.
+
+function PreviewShareNote() {
+  return (
+    <div className="flex gap-4" style={{ marginTop: 14 }}>
+      <div style={{ flex: "1 1 0%" }}>
+        <PaneHeader title="same control in preview" sub="capture preview" />
+        <div
+          style={{
+            background: T.pane,
+            border: `1px solid ${T.inkRuleS}`,
+            borderRadius: 4,
+            padding: 16,
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+          }}
+        >
+          <MiniPreviewCard />
+          <p
+            className="font-display italic"
+            style={{ color: T.inkFaint, fontSize: 12, lineHeight: 1.5 }}
+          >
+            The capture Preview shows the same Share ▾ next to Markup. If the
+            shot has a computed doc, Share renders it flat; if it&apos;s bare, Share
+            exports the raw capture in the chosen format. One verb, one menu,
+            both surfaces.
+          </p>
+        </div>
+      </div>
+      <div style={{ flex: "1 1 0%" }}>
+        <PaneHeader title="what doesn't change" sub="invariants" />
+        <div
+          style={{
+            background: T.pane,
+            border: `1px solid ${T.inkRuleS}`,
+            borderRadius: 4,
+            padding: 16,
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
+          {[
+            ["source PNG", "never re-encoded · the capture you took is the capture on disk"],
+            ["computed doc", "the only thing SAVE writes · stays editable across sessions"],
+            ["export", "always a fresh artifact · reading the doc, never mutating it"],
+            ["drag-out", "the existing ⇱ DRAG PNG handle is the same renderer, now also a menu"],
+          ].map(([k, v]) => (
+            <div key={k} className="flex gap-2" style={{ alignItems: "baseline" }}>
+              <span
+                className="font-mono font-semibold uppercase tracking-[0.14em]"
+                style={{ fontSize: 8.5, color: T.amberDeep, width: 92, flexShrink: 0 }}
+              >
+                {k}
+              </span>
+              <span
+                className="font-display italic"
+                style={{ fontSize: 11, color: T.inkMid, lineHeight: 1.4 }}
+              >
+                {v}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MiniPreviewCard() {
+  return (
+    <div
+      className="relative"
+      style={{
+        height: 120,
+        background: T.rail,
+        borderRadius: 4,
+        border: `0.5px solid ${T.inkRuleS}`,
+        overflow: "hidden",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <div
+        style={{
+          width: 150,
+          height: 92,
+          background: T.page,
+          borderRadius: 3,
+          border: `0.5px solid ${T.inkRule}`,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+        }}
+      />
+      {/* Floating action row, bottom-right — mirrors the markup title bar */}
+      <div
+        className="absolute flex items-center gap-1.5"
+        style={{
+          bottom: 10,
+          right: 10,
+          padding: 3,
+          background: T.pane,
+          border: `0.5px solid ${T.inkRule}`,
+          borderRadius: 5,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.10)",
+        }}
+      >
+        <span
+          className="font-mono font-semibold uppercase tracking-[0.16em]"
+          style={{ fontSize: 8, color: T.inkMid, padding: "3px 7px" }}
+        >
+          Markup
+        </span>
+        <span className="h-3 w-px" style={{ background: T.inkRule }} />
+        <span
+          className="flex items-center gap-1 font-mono font-semibold uppercase tracking-[0.16em]"
+          style={{
+            fontSize: 8,
+            color: T.amberDeep,
+            padding: "3px 7px",
+            background: T.amberFaint,
+            border: `0.5px solid ${T.amberSoft}`,
+            borderRadius: 3,
+          }}
+        >
+          Share <span style={{ fontSize: 7 }}>▾</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Save · Export · Share vocabulary ────────────────────────────────
+
+function SaveShareMarginalia() {
+  const entries: [string, string][] = [
+    ["Computed Doc", "the markup as layers in the sidecar JSON — the editable source of truth"],
+    ["Save", "persist the computed doc · ⌘S · never flattens · original untouched"],
+    ["Export", "render the computed doc → a flat PNG / JPEG artifact, on demand"],
+    ["Share", "the reason to export — a concrete file to hand off"],
+    ["Action Cluster", "title-bar zone · save readout + Save + Share · out of the talk strip"],
+    ["Save Readout", "standing 'computed · N layers · saved Xs ago' — replaces the 1.4s flash"],
+    ["Share Menu", "the predetermined matrix · PNG / JPEG × 1× / 2×"],
+    ["Format Preset", "one row in the matrix · format + scale → one-click export"],
+    ["Exports Folder", "fixed destination · Talkie / Exports · reveal after write"],
+  ];
+  return (
+    <div
+      style={{
+        marginTop: 14,
+        padding: "12px 16px",
+        background: T.pane,
+        border: `0.5px solid ${T.inkRuleS}`,
+        borderRadius: 4,
+      }}
+    >
+      <div className="flex items-baseline gap-3" style={{ marginBottom: 10 }}>
+        <span
+          className="font-mono font-semibold uppercase tracking-[0.24em]"
+          style={{ fontSize: 9, color: T.amberDeep }}
+        >
+          · save · share · names
+        </span>
+        <span className="font-display italic" style={{ fontSize: 11, color: T.inkFaint }}>
+          computed doc vs materialized artifact — the words we keep in Swift + chat
+        </span>
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "140px 1fr",
+          rowGap: 4,
+          columnGap: 18,
+        }}
+      >
+        {entries.map(([name, def]) => (
+          <React.Fragment key={name}>
+            <span
+              className="font-mono font-semibold uppercase tracking-[0.16em]"
+              style={{ fontSize: 10, color: T.amberDeep }}
+            >
+              {name}
+            </span>
+            <span
+              className="font-display italic"
+              style={{ fontSize: 12, color: T.inkMid, lineHeight: 1.45 }}
+            >
+              {def}
+            </span>
+          </React.Fragment>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── State 5 · Level up · work thread + speak strip v2 ───────────────
+//
+// The bottom band was "lacking" (operator · 2026-05-29). A first pass
+// added a tidy "pass receipt" strip between canvas and composer.
+// Operator cut it: don't summarize after the fact — SHOW the agent
+// working, what it's doing, streaming. Work-thread / log style, parked
+// in the empty rail on the right of the window (the one circled in the
+// 2026-05-29 markup).
+//
+// So this section levels up two things:
+//
+//   1. WORK THREAD — a streaming run log on the RIGHT RAIL. As the agent
+//      runs it writes a line per step — read · plan · then each mark as
+//      it lands (guide · rect · label · blur) — a live node pulsing at
+//      the head of the thread. When the pass finishes the thread stays
+//      as the record, footed with "pass 1 · 4 marks · 1.4s" and a single
+//      `↶ undo` (⌘Z). No accept/cancel commit-gate.
+//
+//   2. SPEAK STRIP v2 — the composer gets live states. Idle is a clean
+//      mic · prompt · run. While RECORDING, the prompt lane becomes a
+//      magnetic-tape waveform — VU bars, amber centerline, tape-head
+//      marker — the house voice aesthetic, instead of a dead field.
+//
+// The right rail is contextual, the way the toolbar's style stack is:
+// the WORK THREAD while/after a run, the layer INSPECTOR when you select
+// a mark. One rail, the content that matters right now.
+
+type StripMode = "idle" | "recording" | "running";
+type ThreadEntry = {
+  t: string;
+  verb: string;
+  detail: string;
+  kind: "meta" | "mark";
+  status: "done" | "active" | "pending";
+};
+
+function LevelUpState() {
+  return (
+    <Surface>
+      <MarkupWindow
+        title="Markup · C-0017"
+        subtitle="leveled up · pass 1 · work thread on the right"
+      >
+        <ToolToolbarV2 active={null} selection={null} />
+        <div className="flex" style={{ background: T.pane }}>
+          <div
+            className="relative flex-1 flex items-center justify-center"
+            style={{ background: T.rail, padding: 22, minHeight: 360 }}
+          >
+            <MockedScreenshotWithMarkup markup />
+            <CanvasZoomCluster />
+          </div>
+          <WorkThread mode="done" />
+        </div>
+        <SpeakStripV2
+          mode="idle"
+          placeholder="speak or type another pass…"
+          examples={[
+            "circle the error and label it",
+            "blur the email",
+            "arrow title → failed line",
+          ]}
+          scopeBadge="global · whole image"
+        />
+      </MarkupWindow>
+      <LevelUpDetail />
+      <LevelUpMarginalia />
+      <CaptionStrip
+        text="Two upgrades, both to the right and the foot of the window. The Work Thread streams the run as it happens — read the capture, plan the marks, then a line per mark as it lands — log-style in the right rail, so you watch what the agent is doing instead of staring at a spinner that only says RUNNING. When it's done the thread is the record: four marks, 1.4 seconds, one ⌘Z to walk it back. And the Speak Strip is no longer a dead field — tap the mic and the prompt lane becomes a magnetic-tape waveform so the machine visibly hears you."
+      />
+      <style jsx global>{`
+        @keyframes promptcaret { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        @keyframes recpulse { 0% { opacity: 0.7; transform: scale(1); } 100% { opacity: 0; transform: scale(1.4); } }
+        @keyframes threadpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+      `}</style>
+    </Surface>
+  );
+}
+
+// ─── Work Thread · the streaming run log ─────────────────────────────
+//
+// Right rail of the markup window (mirrors LayersColumn's slot). A header
+// with a live indicator; a vertical thread spine with one node per step;
+// a footer that's the pass summary + undo (done) or a live status
+// (working). Reads as a build log / activity thread, not a tidy receipt.
+
+function WorkThread({ mode }: { mode: "working" | "done" }) {
+  const working = mode === "working";
+  const entries: ThreadEntry[] = [
+    { t: "0.0s", verb: "read", detail: "capture · 760×432", kind: "meta", status: "done" },
+    { t: "0.3s", verb: "plan", detail: "4 marks queued", kind: "meta", status: "done" },
+    { t: "0.6s", verb: "guide", detail: "horizontal · first word", kind: "mark", status: "done" },
+    { t: "0.9s", verb: "rect", detail: "build-failed line", kind: "mark", status: "done" },
+    { t: "1.2s", verb: "label", detail: "“Error”", kind: "mark", status: working ? "active" : "done" },
+    { t: "1.4s", verb: "blur", detail: "email row", kind: "mark", status: working ? "pending" : "done" },
+  ];
+  return (
+    <div
+      style={{
+        width: 288,
+        flexShrink: 0,
+        borderLeft: `0.5px solid ${T.inkRuleS}`,
+        background: T.page,
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      {/* header */}
+      <div
+        className="flex items-center gap-2 px-3"
+        style={{ height: 26, borderBottom: `0.5px solid ${T.inkRuleS}`, background: T.chrome }}
+      >
+        <span
+          className="font-mono font-semibold uppercase tracking-[0.22em]"
+          style={{ fontSize: 8.5, color: T.inkFaint }}
+        >
+          · WORK THREAD
+        </span>
+        <span className="flex-1" />
+        <span
+          className="inline-block rounded-full"
+          style={{
+            width: 6,
+            height: 6,
+            background: working ? T.amber : T.inkFainter,
+            boxShadow: working ? "0 0 5px rgba(196,125,28,0.6)" : "none",
+            animation: working ? "threadpulse 1.2s ease-in-out infinite" : "none",
+          }}
+        />
+        <span
+          className="font-mono uppercase tracking-[0.16em]"
+          style={{ fontSize: 8, color: working ? T.amberDeep : T.inkFainter }}
+        >
+          {working ? "live" : "done"}
+        </span>
+      </div>
+
+      {/* thread body */}
+      <div style={{ padding: "8px 0", flex: 1, overflow: "auto" }}>
+        {entries.map((e, i) => (
+          <ThreadRow
+            key={i}
+            entry={e}
+            first={i === 0}
+            last={i === entries.length - 1 && !working}
+          />
+        ))}
+        {working && <ThreadCaretRow />}
+      </div>
+
+      {/* footer */}
+      {working ? (
+        <div
+          className="flex items-center gap-2 px-3"
+          style={{ height: 30, borderTop: `0.5px solid ${T.inkRuleS}`, background: T.chrome }}
+        >
+          <span
+            className="inline-block rounded-full"
+            style={{ width: 6, height: 6, background: T.amber, animation: "threadpulse 1.2s ease-in-out infinite" }}
+          />
+          <span className="font-display italic" style={{ fontSize: 11, color: T.inkMid }}>
+            drawing pass 1…
+          </span>
+          <span className="flex-1" />
+          <span className="font-mono uppercase tracking-[0.16em]" style={{ fontSize: 8, color: T.inkFainter }}>
+            ⎋ stop
+          </span>
+        </div>
+      ) : (
+        <div
+          className="flex items-center gap-2 px-3"
+          style={{ height: 30, borderTop: `0.5px solid ${T.inkRuleS}`, background: T.chrome }}
+        >
+          <span
+            className="font-mono font-semibold uppercase tracking-[0.16em]"
+            style={{ fontSize: 8.5, color: T.amberDeep }}
+          >
+            pass 1
+          </span>
+          <span className="font-mono" style={{ fontSize: 9, color: T.inkFaint }}>
+            4 marks · 1.4s
+          </span>
+          <span className="flex-1" />
+          <button
+            className="flex items-center gap-1"
+            title="Undo the whole pass"
+            style={{ height: 20, padding: "0 7px", borderRadius: 4, background: "transparent", border: `0.5px solid ${T.inkRule}`, color: T.inkMid }}
+          >
+            <span className="font-mono" style={{ fontSize: 10, lineHeight: 1 }}>↶</span>
+            <span className="font-mono font-semibold uppercase tracking-[0.16em]" style={{ fontSize: 8 }}>undo</span>
+            <span className="font-mono" style={{ fontSize: 8, opacity: 0.7 }}>⌘Z</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ThreadRow({
+  entry,
+  first,
+  last,
+}: {
+  entry: ThreadEntry;
+  first: boolean;
+  last: boolean;
+}) {
+  const { t, verb, detail, kind, status } = entry;
+  const done = status === "done";
+  const active = status === "active";
+  const pending = status === "pending";
+  const isMark = kind === "mark";
+  const nodeColor = pending ? T.inkRule : isMark ? T.amber : T.inkFainter;
+  return (
+    <div
+      className="relative flex items-center"
+      style={{
+        minHeight: 26,
+        paddingLeft: 26,
+        paddingRight: 12,
+        gap: 7,
+        opacity: pending ? 0.5 : 1,
+      }}
+    >
+      {/* thread spine */}
+      <span
+        className="absolute"
+        style={{
+          left: 13,
+          top: first ? "50%" : 0,
+          bottom: last ? "50%" : 0,
+          width: 1,
+          background: T.inkRuleS,
+        }}
+      />
+      {/* node */}
+      <span
+        className="absolute"
+        style={{
+          left: 13,
+          top: "50%",
+          width: isMark ? 7 : 5,
+          height: isMark ? 7 : 5,
+          transform: "translate(-50%, -50%)",
+          borderRadius: 999,
+          background: done || active ? nodeColor : "transparent",
+          border: `1px solid ${nodeColor}`,
+          boxShadow: active ? "0 0 0 3px rgba(196,125,28,0.18)" : "none",
+          animation: active ? "threadpulse 1.1s ease-in-out infinite" : "none",
+        }}
+      />
+      <span
+        className="font-mono tabular-nums"
+        style={{ fontSize: 8.5, color: T.inkFainter, width: 22, flexShrink: 0 }}
+      >
+        {t}
+      </span>
+      <span
+        className="font-mono font-semibold"
+        style={{
+          fontSize: 10,
+          color: active ? T.amberDeep : isMark ? T.ink : T.inkFaint,
+          width: 34,
+          flexShrink: 0,
+        }}
+      >
+        {verb}
+      </span>
+      <span
+        className="font-display italic truncate"
+        style={{ fontSize: 10.5, color: active ? T.ink : T.inkFaint, minWidth: 0 }}
+      >
+        {detail}
+      </span>
+    </div>
+  );
+}
+
+// The live tail of the thread while a pass is in flight — a blinking
+// caret hanging off the spine, "the next line is being written."
+function ThreadCaretRow() {
+  return (
+    <div
+      className="relative flex items-center"
+      style={{ minHeight: 22, paddingLeft: 26, paddingRight: 12 }}
+    >
+      <span
+        className="absolute"
+        style={{ left: 13, top: 0, bottom: "50%", width: 1, background: T.inkRuleS }}
+      />
+      <span
+        style={{
+          display: "inline-block",
+          width: 1,
+          height: 12,
+          background: T.amber,
+          animation: "promptcaret 1s steps(2) infinite",
+        }}
+      />
+    </div>
+  );
+}
+
+// ─── Speak Strip v2 ──────────────────────────────────────────────────
+//
+// Same three-element rhythm (Mic · Prompt · Run) plus a quieter Save,
+// but the prompt lane is now stateful: idle shows the placeholder +
+// caret; recording swaps it for the magnetic-tape waveform.
+
+function SpeakStripV2({
+  mode,
+  placeholder,
+  examples,
+  scopeBadge,
+  value,
+}: {
+  mode: StripMode;
+  placeholder: string;
+  examples: string[];
+  scopeBadge?: string;
+  value?: string;
+}) {
+  const recording = mode === "recording";
+  const running = mode === "running";
+  const laneBorder = recording ? "rgba(208,58,28,0.40)" : T.inkRule;
+  return (
+    <div
+      style={{
+        background: T.chrome,
+        borderTop: `0.5px solid ${T.inkRuleS}`,
+        padding: "8px 14px 10px 14px",
+      }}
+    >
+      {/* Context row — TRY chips when idle, a LISTENING banner when hot */}
+      {recording ? (
+        <div className="flex items-center gap-2" style={{ marginBottom: 7 }}>
+          <span
+            className="inline-block rounded-full"
+            style={{ width: 6, height: 6, background: T.alert }}
+          />
+          <span
+            className="font-mono font-semibold uppercase tracking-[0.20em]"
+            style={{ fontSize: 9, color: T.alert }}
+          >
+            · listening
+          </span>
+          <span
+            className="font-display italic"
+            style={{ fontSize: 10.5, color: T.inkFaint }}
+          >
+            tap the mic or press ↵ to stop · transcript drops into the prompt
+          </span>
+          <span className="flex-1" />
+          <span
+            className="font-mono uppercase tracking-[0.18em]"
+            style={{ fontSize: 9, color: T.alert }}
+          >
+            rec
+          </span>
+        </div>
+      ) : (
+        examples.length > 0 && (
+          <div
+            className="flex items-center gap-2"
+            style={{ flexWrap: "wrap", marginBottom: 7 }}
+          >
+            <span
+              className="font-mono uppercase tracking-[0.20em]"
+              style={{ fontSize: 9, color: T.inkFainter }}
+            >
+              · try
+            </span>
+            {examples.map((s) => (
+              <span
+                key={s}
+                className="font-display italic"
+                style={{
+                  fontSize: 10.5,
+                  color: T.inkFaint,
+                  padding: "2px 8px",
+                  border: `0.5px dashed ${T.inkRule}`,
+                  borderRadius: 999,
+                  background: T.pane,
+                }}
+              >
+                {s}
+              </span>
+            ))}
+            {scopeBadge && (
+              <span
+                className="ml-auto font-mono uppercase tracking-[0.18em]"
+                style={{ fontSize: 9, color: T.inkFainter }}
+              >
+                {scopeBadge}
+              </span>
+            )}
+          </div>
+        )
+      )}
+
+      {/* Main row · Mic | Prompt/Waveform | Save | Run */}
+      <div className="flex items-center" style={{ gap: 10 }}>
+        <LevelMic recording={recording} />
+        <div
+          className="flex items-center"
+          style={{
+            flex: 1,
+            minWidth: 0,
+            background: T.pane,
+            border: `0.5px solid ${laneBorder}`,
+            borderRadius: 5,
+            height: 34,
+            boxShadow: "0 1px 0 rgba(255,255,255,0.55) inset",
+            overflow: "hidden",
+          }}
+        >
+          {recording ? (
+            <MagTapeWaveform />
+          ) : (
+            <PromptLane placeholder={placeholder} value={value} running={running} />
+          )}
+        </div>
+        <SaveChip dimmed={recording || running} />
+        <RunChip mode={mode} />
+      </div>
+    </div>
+  );
+}
+
+function PromptLane({
+  placeholder,
+  value,
+  running,
+}: {
+  placeholder: string;
+  value?: string;
+  running?: boolean;
+}) {
+  return (
+    <div
+      className="flex items-center gap-2"
+      style={{ flex: 1, padding: "0 12px", opacity: running ? 0.6 : 1 }}
+    >
+      {value ? (
+        <span className="font-display" style={{ fontSize: 13, color: T.ink }}>
+          {value}
+        </span>
+      ) : (
+        <>
+          <span
+            className="font-display italic"
+            style={{ fontSize: 13, color: T.inkFainter }}
+          >
+            {placeholder}
+          </span>
+          <span
+            style={{
+              display: "inline-block",
+              width: 1,
+              height: 14,
+              background: T.amber,
+              animation: "promptcaret 1s steps(2) infinite",
+            }}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+// Magnetic-tape waveform — the house voice aesthetic (VU bars + amber
+// centerline + tape-head marker). Fixed bar heights so it renders
+// identically on server + client (no hydration drift). Bars near the
+// head warm to amber; the tail dims as "not yet recorded."
+function MagTapeWaveform({ elapsed = "0:04" }: { elapsed?: string }) {
+  const bars = [
+    3, 6, 10, 7, 12, 8, 5, 9, 14, 10, 6, 11, 7, 4, 8, 12, 9, 6, 10, 5, 8, 13,
+    7, 11, 6, 4, 8, 5, 7, 4, 6, 3,
+  ];
+  const headIndex = 23; // tape-head sits just past the last "recorded" bar
+  return (
+    <div
+      className="flex items-center"
+      style={{ flex: 1, gap: 8, padding: "0 12px", position: "relative" }}
+    >
+      <span
+        className="font-mono tabular-nums"
+        style={{ fontSize: 10, color: T.amberDeep }}
+      >
+        {elapsed}
+      </span>
+      <div
+        className="relative flex items-center"
+        style={{ flex: 1, height: 22, gap: 1.5, minWidth: 0 }}
+      >
+        {/* amber centerline */}
+        <span
+          className="absolute"
+          style={{
+            left: 0,
+            right: 0,
+            top: "50%",
+            height: 1,
+            background: T.amber,
+            opacity: 0.5,
+            transform: "translateY(-50%)",
+          }}
+        />
+        {bars.map((h, i) => (
+          <span
+            key={i}
+            style={{
+              width: 2,
+              height: h,
+              borderRadius: 1,
+              flexShrink: 0,
+              background:
+                i > headIndex ? T.inkRule : i > headIndex - 4 ? T.amber : T.inkMid,
+              opacity: i > headIndex ? 0.4 : 1,
+            }}
+          />
+        ))}
+        {/* tape-head marker */}
+        <span
+          className="absolute"
+          style={{
+            left: `${(headIndex / bars.length) * 100}%`,
+            top: -3,
+            bottom: -3,
+            width: 1.5,
+            background: T.amberDeep,
+          }}
+        />
+        <span
+          className="absolute"
+          style={{
+            left: `${(headIndex / bars.length) * 100}%`,
+            top: -7,
+            width: 0,
+            height: 0,
+            borderLeft: "3px solid transparent",
+            borderRight: "3px solid transparent",
+            borderTop: `4px solid ${T.amberDeep}`,
+            transform: "translateX(-50%)",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function LevelMic({ recording }: { recording?: boolean }) {
+  return (
+    <button
+      className="relative flex items-center justify-center"
+      title={recording ? "tap to stop" : "tap to record"}
+      style={{
+        width: 34,
+        height: 34,
+        borderRadius: "50%",
+        flexShrink: 0,
+        background: recording ? "rgba(208,58,28,0.14)" : T.amberFaint,
+        border: `0.5px solid ${recording ? "rgba(208,58,28,0.45)" : T.amberSoft}`,
+        color: recording ? T.alert : T.amberDeep,
+        boxShadow: "0 1px 0 rgba(255,255,255,0.55) inset",
+      }}
+    >
+      {recording ? (
+        <span style={{ width: 10, height: 10, borderRadius: 2, background: T.alert }} />
+      ) : (
+        <MicGlyph size={15} />
+      )}
+      {recording && (
+        <span
+          className="absolute"
+          style={{
+            inset: -3,
+            borderRadius: "50%",
+            border: "1px solid rgba(208,58,28,0.45)",
+            animation: "recpulse 1.4s ease-out infinite",
+          }}
+        />
+      )}
+    </button>
+  );
+}
+
+function SaveChip({ dimmed }: { dimmed?: boolean }) {
+  return (
+    <button
+      className="flex items-center gap-1.5 px-3"
+      style={{
+        height: 34,
+        borderRadius: 5,
+        background: T.amberFaint,
+        border: `0.5px solid ${T.amberSoft}`,
+        color: T.amberDeep,
+        opacity: dimmed ? 0.5 : 1,
+        flexShrink: 0,
+      }}
+    >
+      <span style={{ fontSize: 9.5 }}>⌘S</span>
+      <span
+        className="font-mono font-semibold uppercase tracking-[0.18em]"
+        style={{ fontSize: 9 }}
+      >
+        save
+      </span>
+    </button>
+  );
+}
+
+function RunChip({ mode }: { mode: StripMode }) {
+  const running = mode === "running";
+  const dim = mode !== "idle";
+  return (
+    <button
+      className="flex items-center gap-1.5 px-4"
+      style={{
+        height: 34,
+        borderRadius: 5,
+        background: T.amber,
+        color: "#fff",
+        opacity: dim ? 0.5 : 1,
+        flexShrink: 0,
+      }}
+    >
+      <span
+        className="font-mono font-semibold uppercase tracking-[0.20em]"
+        style={{ fontSize: 9.5 }}
+      >
+        {running ? "running" : "run"}
+      </span>
+      {!running && <span style={{ fontSize: 9.5 }}>⌘↵</span>}
+    </button>
+  );
+}
+
+// ─── Level-up detail tiles ───────────────────────────────────────────
+//
+// The two new behaviors shown in their live states side-by-side: the
+// intern mid-pass (streaming), and the composer mid-recording (waveform).
+
+function LevelUpDetail() {
+  return (
+    <div className="flex gap-4" style={{ marginTop: 14 }}>
+      <DetailTile
+        eyebrow="show it working"
+        title="The thread streams the run"
+        caption="As the agent runs, the right rail writes a line per step — read the capture, plan the marks, then guide · rect · label · blur as each one lands. A live node pulses at the head; the next line is a blinking caret. You watch what it's doing, not a spinner that only says RUNNING."
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            background: T.rail,
+            borderRadius: 5,
+            padding: 14,
+          }}
+        >
+          <div
+            style={{
+              border: `0.5px solid ${T.inkRule}`,
+              borderRadius: 5,
+              overflow: "hidden",
+              boxShadow: "0 4px 14px rgba(0,0,0,0.08)",
+            }}
+          >
+            <WorkThread mode="working" />
+          </div>
+        </div>
+      </DetailTile>
+      <DetailTile
+        eyebrow="speak"
+        title="The mic talks in magnetic tape"
+        caption="Tap to record and the prompt lane becomes a tape transport — VU bars riding an amber centerline, a tape-head marking where you are. It reads as the machine hearing you, not a dead field waiting for keys."
+      >
+        <div
+          style={{
+            border: `0.5px solid ${T.inkRuleS}`,
+            borderRadius: 5,
+            overflow: "hidden",
+          }}
+        >
+          <SpeakStripV2 mode="recording" placeholder="" examples={[]} />
+        </div>
+      </DetailTile>
+    </div>
+  );
+}
+
+// ─── Level-up vocabulary ─────────────────────────────────────────────
+
+function LevelUpMarginalia() {
+  const entries: [string, string][] = [
+    ["Work Thread", "right rail · the agent's run, streamed log-style as it happens"],
+    ["Thread Row", "one step · time · verb · detail · a node on the thread spine"],
+    ["Thread Spine", "the vertical line + nodes · meta steps hollow · marks filled amber"],
+    ["Live Node", "the pulsing head of the thread while the pass is in flight"],
+    ["Pass", "one agent run · its rows are the steps it took"],
+    ["Pass Summary", "thread footer when done · ‘pass 1 · 4 marks · 1.4s’"],
+    ["Undo", "↶ / ⌘Z · walks back the whole pass · no accept/cancel gate"],
+    ["Right Rail", "contextual · Work Thread during/after a run · Inspector on select"],
+    ["Tape Waveform", "recording state of the prompt lane · VU bars + centerline + head"],
+    ["Tape Head", "the marker on the waveform · where the recording is now"],
+  ];
+  return (
+    <div
+      style={{
+        marginTop: 14,
+        padding: "12px 16px",
+        background: T.pane,
+        border: `0.5px solid ${T.inkRuleS}`,
+        borderRadius: 4,
+      }}
+    >
+      <div className="flex items-baseline gap-3" style={{ marginBottom: 10 }}>
+        <span
+          className="font-mono font-semibold uppercase tracking-[0.24em]"
+          style={{ fontSize: 9, color: T.amberDeep }}
+        >
+          · level up · names
+        </span>
+        <span className="font-display italic" style={{ fontSize: 11, color: T.inkFaint }}>
+          the agent's run, streamed on the right · the mic speaks in tape — words for Swift + chat
+        </span>
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "150px 1fr",
           rowGap: 4,
           columnGap: 18,
         }}
