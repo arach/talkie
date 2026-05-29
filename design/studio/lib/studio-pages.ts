@@ -229,6 +229,15 @@ export const STUDIO_PAGES: StudioPage[] = [
     blurb: "Centered TALKIE pill — chrome anchor for record + nav.",
   },
   {
+    href: "/mac-actor-hud",
+    label: "Actor HUD",
+    bucket: "surfaces",
+    platform: "mac",
+    family: "actor-hud",
+    status: "concept",
+    blurb: "Flat 2D WebView dashboard for app-icon actors.",
+  },
+  {
     href: "/mac-notch-settings",
     label: "Notch Settings",
     bucket: "surfaces",
