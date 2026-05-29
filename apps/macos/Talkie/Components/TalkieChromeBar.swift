@@ -57,7 +57,7 @@ private let chromeNavSlots: [ChromeNavSlot] = [
 // MARK: - Tuning constants
 
 private enum ChromeMetrics {
-    static let pillHeight: CGFloat = 26
+    static let pillHeight: CGFloat = 24
     static let slotWidth: CGFloat = 112       // Matches studio Shape A
     static let stripChipSize: CGFloat = 22
     static let barRadius: CGFloat = 10
@@ -81,6 +81,12 @@ private enum ChromeTone {
     static let edge       = Color(red: 0.878, green: 0.863, blue: 0.827)  // #E0DCD3
     static let mutedInk   = Color(red: 0.353, green: 0.333, blue: 0.298)  // #5A554C
     static let subtleInk  = Color(red: 0.659, green: 0.635, blue: 0.592)  // #A8A29E
+
+    // Pill espresso + label — the /top-band studio spec (TopBandSystem
+    // `TalkiePill`). Darker/warmer than `ink` so the centered pill reads
+    // as the one solid anchor in an otherwise cream band.
+    static let pillFill   = Color(red: 0.102, green: 0.090, blue: 0.078)  // #1A1714
+    static let pillLabel  = Color(red: 0.953, green: 0.933, blue: 0.902)  // #F3EEE6
 }
 
 // MARK: - Chrome bar
@@ -210,19 +216,22 @@ private struct TalkieChromePill: View {
                     .frame(width: 70, height: 16)
                 } else {
                     Text("TALKIE")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .tracking(2.0)
-                        .foregroundStyle(ChromeTone.cream)
+                        // 9.5pt / 0.24em tracking / #F3EEE6 — the studio
+                        // TopBandSystem pill spec. A touch smaller + warmer
+                        // than before so it sits quietly at band center.
+                        .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                        .tracking(2.3)
+                        .foregroundStyle(ChromeTone.pillLabel)
                     // No shortcut hint in the idle label — the brand
                     // word IS the affordance. If we later want a hint,
                     // ⌘T (record) is more honest than ⌘K (search).
                 }
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 12)
             .frame(height: ChromeMetrics.pillHeight)
             .background(
                 Capsule()
-                    .fill(ChromeTone.ink)
+                    .fill(ChromeTone.pillFill)
             )
             .overlay(
                 // Stroke only appears on hover — recording state is
@@ -260,30 +269,27 @@ private struct TalkieChromePill: View {
     }
 }
 
-// MARK: - Talkie mark (amber concentric ring + dot)
+// MARK: - Talkie mark (single amber dot — the shared band motif)
 
 private struct TalkieMark: View {
     let glow: Bool
     let isActive: Bool
 
     var body: some View {
-        ZStack {
-            Circle()
-                .strokeBorder(ScopeAmber.solid.opacity(0.45), lineWidth: 1)
-                .frame(width: 11, height: 11)
-
-            Circle()
-                .fill(ScopeAmber.solid)
-                .frame(width: 6, height: 6)
-                .shadow(
-                    // Amber glow only on hover. During recording, the
-                    // REC label + waveform carry the signal — adding
-                    // an amber light reads as noise alongside the red
-                    // recording cue.
-                    color: glow ? ScopeAmber.glowStrong : .clear,
-                    radius: glow ? 4 : 0
-                )
-        }
+        // One 5pt amber dot, matching the studio TopBandSystem pill and
+        // the title-cluster leading marks. The earlier concentric ring
+        // was dropped so the amber dot reads as a single, consistent
+        // signal across every band slot (logo · title · pill).
+        Circle()
+            .fill(ScopeAmber.solid)
+            .frame(width: 5, height: 5)
+            .shadow(
+                // Amber glow only on hover. During recording, the REC
+                // label + waveform carry the signal — adding an amber
+                // light reads as noise alongside the red recording cue.
+                color: glow ? ScopeAmber.glowStrong : .clear,
+                radius: glow ? 4 : 0
+            )
     }
 }
 
