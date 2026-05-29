@@ -1119,8 +1119,11 @@ struct AppNavigation: View {
                             .wrapInTalkieSection("Console")
                     }
                 case .screenshots:
+                    // Screenshots renders its own mono instrument header in
+                    // the grid pane; suppress the universal title to avoid a
+                    // duplicate header row.
                     ScreenshotsScreen()
-                        .wrapInTalkieSection("Screenshots")
+                        .wrapInTalkieSection("Screenshots", showHeader: false)
                 case .pendingActions:
                     PendingActionsScreen()
                         .wrapInTalkieSection("PendingActions")

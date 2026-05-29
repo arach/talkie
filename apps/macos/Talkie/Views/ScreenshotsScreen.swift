@@ -28,6 +28,12 @@ private struct ScreenshotItem: Identifiable {
     let screenshot: RecordingScreenshot?
 }
 
+// MARK: - View Mode
+
+/// How the gallery lays out captures. Grid = thumbnail wall; List = dense
+/// rows with metadata (sibling to the dictations ScopeLibraryView list).
+private enum ScreenshotsViewMode: String { case grid, list }
+
 // MARK: - Screenshots Screen
 
 struct ScreenshotsScreen: View {
@@ -45,6 +51,10 @@ struct ScreenshotsScreen: View {
     @State private var selectionAnchorID: String?
     @State private var isLoading = true
     @State private var searchText = ""
+
+    // Grid (thumbnail wall) vs list (dense metadata rows). Persisted so the
+    // choice sticks across launches.
+    @AppStorage("screenshotsViewMode") private var viewMode: ScreenshotsViewMode = .grid
 
     // ── Preview (Quick Look) takeover ────────────────────────────
     // When set, the whole screen swaps to a clean read-only preview of
@@ -166,9 +176,13 @@ struct ScreenshotsScreen: View {
         GeometryReader { geometry in
             let compact = geometry.size.width < compactThreshold
             let showInspector = !compact && selectedItem != nil
+            // Header degrades on the grid pane's own width (inspector open or
+            // small window), not raw window width.
+            let inspectorSpace: CGFloat = showInspector ? detailWidth + 9 : 0
+            let gridWidth = max(geometry.size.width - inspectorSpace, 1)
 
             HStack(spacing: 0) {
-                gridPane
+                gridPane(width: gridWidth)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 if showInspector, let item = selectedItem {
@@ -203,53 +217,17 @@ struct ScreenshotsScreen: View {
 
     // MARK: - Grid Pane
 
-    private var gridPane: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            PageHeaderBar {
-                Spacer()
-
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(Theme.current.foregroundMuted)
-                        .font(.system(size: 11))
-                    TextField("Search…", text: $searchText)
-                        .textFieldStyle(.plain)
-                        .font(Theme.current.fontSM)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Theme.current.foreground.opacity(0.06))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-                .frame(maxWidth: 180)
-
-                if !trayScreenshotItems.isEmpty {
-                    Button("Tray Viewer") {
-                        TrayViewer.shared.show()
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-
-                Button {
-                    if let item = selectedAnnotatableItem {
-                        annotateItem(item)
-                    }
-                } label: {
-                    Image(systemName: "sparkles.rectangle.stack")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(selectedAnnotatableItem == nil)
-                .help("Annotate selected screenshot")
-
-                Button {
-                    NSWorkspace.shared.open(ScreenshotStorage.screenshotsDirectory)
-                } label: {
-                    Image(systemName: "folder")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
+    private func gridPane(width: CGFloat) -> some View {
+        let headerCompact = width < 820
+        return VStack(alignment: .leading, spacing: 0) {
+            // Canonical header — baseline-locked to the sidebar wordmark and
+            // the TALKIE pill, same as Models. Controls ride the trailing slot;
+            // the count chrome drops when the pane is tight.
+            ScopeTopBand(
+                title: "Screenshots",
+                chrome: headerCompact ? nil : headerCountLine,
+                trailing: { headerControls(compact: headerCompact) }
+            )
 
             if isLoading {
                 ProgressView()
@@ -257,36 +235,9 @@ struct ScreenshotsScreen: View {
             } else if allItems.isEmpty {
                 emptyState
             } else {
-                ScrollView {
-                    LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 8)],
-                        spacing: 8
-                    ) {
-                        ForEach(visibleItems) { item in
-                            screenshotCard(item, allItems: visibleItems)
-                        }
-
-                        // Infinite-scroll sentinel. When this 1pt-tall placeholder
-                        // appears in the LazyVGrid viewport, bump the window by
-                        // `pageSize`. Cheap: only renders when more items exist.
-                        if visibleCount < allItems.count {
-                            Color.clear
-                                .frame(height: 1)
-                                .onAppear {
-                                    visibleCount = min(visibleCount + Self.pageSize, allItems.count)
-                                }
-                        }
-                    }
-                    .padding(PageLayout.horizontalPadding)
-                    .padding(.vertical, Spacing.md)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                }
-                .background {
-                    TalkieTheme.surface
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            selectAllVisibleItems()
-                        }
+                switch viewMode {
+                case .grid: gridContent
+                case .list: listContent
                 }
             }
 
@@ -296,6 +247,152 @@ struct ScreenshotsScreen: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(TalkieTheme.surface)
+    }
+
+
+    // Right-side controls. Condense as the pane narrows: search shrinks and
+    // Tray Viewer collapses to an icon.
+    @ViewBuilder
+    private func headerControls(compact: Bool) -> some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 0) {
+                viewModeButton(.grid, "square.grid.2x2")
+                viewModeButton(.list, "list.bullet")
+            }
+            .padding(2)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Theme.current.foreground.opacity(0.06))
+            )
+
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(Theme.current.foregroundMuted)
+                    .font(.system(size: 11))
+                TextField("Search…", text: $searchText)
+                    .textFieldStyle(.plain)
+                    .font(Theme.current.fontSM)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Theme.current.foreground.opacity(0.06))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .frame(maxWidth: compact ? 120 : 180)
+
+            if !trayScreenshotItems.isEmpty {
+                Button {
+                    TrayViewer.shared.show()
+                } label: {
+                    if compact {
+                        Image(systemName: "tray.full")
+                    } else {
+                        Text("Tray Viewer")
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Tray Viewer")
+            }
+
+            Button {
+                if let item = selectedAnnotatableItem {
+                    annotateItem(item)
+                }
+            } label: {
+                Image(systemName: "sparkles.rectangle.stack")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(selectedAnnotatableItem == nil)
+            .help("Annotate selected screenshot")
+
+            Button {
+                NSWorkspace.shared.open(ScreenshotStorage.screenshotsDirectory)
+            } label: {
+                Image(systemName: "folder")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+    }
+
+    private var headerCountLine: String {
+        let total = allItems.count
+        let today = allItems.filter { Calendar.current.isDateInToday($0.date) }.count
+        var parts = ["\(total) capture\(total == 1 ? "" : "s")"]
+        if today > 0 { parts.append("\(today) today") }
+        return parts.joined(separator: " · ")
+    }
+
+    @ViewBuilder
+    private func viewModeButton(_ mode: ScreenshotsViewMode, _ icon: String) -> some View {
+        let active = viewMode == mode
+        Button {
+            viewMode = mode
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(active ? ScopeAmber.solid : Theme.current.foregroundMuted)
+                .frame(width: 26, height: 20)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(active ? ScopeAmber.tintSubtle : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+        .help(mode == .grid ? "Grid view" : "List view")
+    }
+
+    // Shared infinite-scroll sentinel: bump the visible window as it appears.
+    @ViewBuilder
+    private var loadMoreSentinel: some View {
+        if visibleCount < allItems.count {
+            Color.clear
+                .frame(height: 1)
+                .onAppear {
+                    visibleCount = min(visibleCount + Self.pageSize, allItems.count)
+                }
+        }
+    }
+
+    private var gridContent: some View {
+        ScrollView {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 8)],
+                spacing: 8
+            ) {
+                ForEach(visibleItems) { item in
+                    screenshotCard(item, allItems: visibleItems)
+                }
+                loadMoreSentinel
+            }
+            .padding(PageLayout.horizontalPadding)
+            .padding(.vertical, Spacing.md)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .background {
+            TalkieTheme.surface
+                .contentShape(Rectangle())
+                .onTapGesture { selectAllVisibleItems() }
+        }
+    }
+
+    private var listContent: some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(visibleItems) { item in
+                    screenshotListRow(item, allItems: visibleItems)
+                    ScopeRule(.subtle)
+                }
+                loadMoreSentinel
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .background {
+            TalkieTheme.surface
+                .contentShape(Rectangle())
+                .onTapGesture { selectAllVisibleItems() }
+        }
     }
 
     // MARK: - Selection Status Bar
@@ -402,6 +499,64 @@ struct ScreenshotsScreen: View {
             }
         }
     }
+
+    // MARK: - Screenshot List Row
+
+    /// A dense metadata row for list view. Reuses the same click / drag /
+    /// context-menu wiring as the grid cards so selection and behavior match.
+    private func screenshotListRow(_ item: ScreenshotItem, allItems: [ScreenshotItem]) -> some View {
+        let selected = selectedIDs.contains(item.id)
+        let row = ScreenshotRowView(
+            item: item,
+            isSelected: selected,
+            title: rowTitle(item),
+            metaLine: rowMetaLine(item),
+            ageLabel: relativeAge(item.date)
+        )
+        .contentShape(Rectangle())
+        .accessibilityLabel(itemAccessibilityLabel(item))
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .screenshotGridDrag(
+            itemID: item.id,
+            payloads: dragPayloads(from: allItems),
+            selectedIDs: selectedIDs,
+            onClick: { event in
+                handleItemClick(item, allItems: allItems, modifiers: event.modifierFlags)
+            }
+        )
+
+        return Group {
+            if let trayItem = item.trayItem {
+                row.contextMenu { trayContextMenu(item, trayItem: trayItem) }
+            } else {
+                row.contextMenu { libraryContextMenu(item) }
+            }
+        }
+    }
+
+    /// Title for a list row — prefers the human label, else the app name.
+    private func rowTitle(_ item: ScreenshotItem) -> String {
+        if let label = item.label?.trimmingCharacters(in: .whitespacesAndNewlines), !label.isEmpty {
+            return label
+        }
+        if let app = item.screenshot?.appName, !app.isEmpty {
+            return app
+        }
+        return "Screenshot"
+    }
+
+    /// Chrome line for a list row. Only uses free metadata (no per-row disk
+    /// reads) so long lists stay smooth — dimensions appear when the library
+    /// record carries them.
+    private func rowMetaLine(_ item: ScreenshotItem) -> String {
+        var parts = [sourceLabel(item).uppercased()]
+        if let ss = item.screenshot, let w = ss.width, let h = ss.height {
+            parts.append("\(w) × \(h)")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    // MARK: - Screenshot Card
 
     private func trayCard(_ item: ScreenshotItem, trayItem: TrayItem, allItems: [ScreenshotItem]) -> some View {
         let selected = selectedIDs.contains(item.id)
@@ -1354,6 +1509,68 @@ private struct ScreenshotImageView: View {
         return await Task.detached {
             ScreenshotTray.generateThumbnail(for: url, maxSize: size)
         }.value
+    }
+}
+
+// MARK: - List Row
+
+/// Dense metadata row for list view — thumbnail + title + chrome line +
+/// time-ago. Selection styling mirrors the dictations ScopeLibraryView rows
+/// (amber tint + 2pt leading rail) so the two lists read as siblings.
+private struct ScreenshotRowView: View {
+    let item: ScreenshotItem
+    let isSelected: Bool
+    let title: String
+    let metaLine: String
+    let ageLabel: String
+    @State private var hovered = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ScreenshotImageView(item: item, maxSize: 120)
+                .frame(width: 48, height: 34)
+                .background(ScopePalette.bg)
+                .clipShape(RoundedRectangle(cornerRadius: 3))
+                .overlay(RoundedRectangle(cornerRadius: 3).stroke(ScopeEdge.subtle, lineWidth: 0.5))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 13, weight: isSelected ? .medium : .regular))
+                    .foregroundStyle(isSelected ? ScopeInk.primary : ScopeInk.dim)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text(metaLine)
+                    .font(ScopeType.chrome)
+                    .tracking(ScopeType.Tracking.normal)
+                    .foregroundStyle(ScopeInk.subtle)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text(ageLabel)
+                .font(ScopeType.chrome)
+                .tracking(ScopeType.Tracking.wide)
+                .foregroundStyle(ScopeInk.faint)
+                .frame(width: 64, alignment: .trailing)
+        }
+        .padding(.horizontal, PageLayout.horizontalPadding)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            if isSelected {
+                ScopeAmber.tintSubtle
+            } else if hovered {
+                ScopeCanvas.canvasOverlay
+            }
+        }
+        .overlay(alignment: .leading) {
+            if isSelected || hovered {
+                Rectangle()
+                    .fill(isSelected ? ScopeAmber.solid : ScopeAmber.solid.opacity(0.4))
+                    .frame(width: 2)
+            }
+        }
+        .onHover { hovered = $0 }
     }
 }
 

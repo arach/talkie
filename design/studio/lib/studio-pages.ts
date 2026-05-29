@@ -76,6 +76,18 @@ export const STUDIO_PAGES: StudioPage[] = [
     ],
     blurb: "macOS chrome type audit — every .font() config in the capture + tray + palette surfaces.",
   },
+  {
+    href: "/header-system",
+    label: "Header System",
+    bucket: "foundations",
+    status: "concept",
+    swift: [
+      "apps/macos/Talkie/Services/DesignSystem.swift",
+      "apps/macos/Talkie/Views/Library/ScopeLibraryView.swift",
+      "apps/macos/Talkie/Views/ScreenshotsScreen.swift",
+    ],
+    blurb: "One header standard — mono eyebrow + serif title + mono tags — and the screens that drifted from it.",
+  },
 
   // ── Surfaces · Mac ──────────────────────────────────────────────
   {
@@ -208,6 +220,16 @@ export const STUDIO_PAGES: StudioPage[] = [
     family: "capture",
     status: "concept",
     blurb: "Focused gallery · anchor/⌘-toggle/shift-range selection · bulk actions + inspector pane.",
+    swift: ["apps/macos/Talkie/Views/ScreenshotsScreen.swift"],
+  },
+  {
+    href: "/mac-screenshots-headers",
+    label: "Screenshots Header",
+    bucket: "surfaces",
+    platform: "mac",
+    family: "capture",
+    status: "concept",
+    blurb: "Header in place over the real grid — serif standard vs mono instrument.",
     swift: ["apps/macos/Talkie/Views/ScreenshotsScreen.swift"],
   },
   {
