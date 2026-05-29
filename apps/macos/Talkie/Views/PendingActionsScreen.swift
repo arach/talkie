@@ -21,24 +21,14 @@ struct PendingActionsScreen: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header - standardized 44pt height
-            PageHeaderBar {
-                TalkieText("Pending", style: .pageTitle)
-
-                Spacer()
-
-                if pendingManager.hasActiveActions {
-                    Text("\(pendingManager.activeCount) active")
-                        .font(Theme.current.fontSM)
-                        .foregroundColor(Theme.current.foregroundSecondary)
-                }
-
-                if pendingManager.failedCount > 0 {
-                    Text("\(pendingManager.failedCount) failed")
-                        .font(Theme.current.fontSM)
-                        .foregroundColor(.red)
-                }
-            }
+            // Canonical header — baseline-locked to the sidebar wordmark, same
+            // as Models / Screenshots. Active count rides the chrome caption;
+            // the failed count keeps its red emphasis in the trailing slot.
+            ScopeTopBand(
+                title: "Actions",
+                chrome: headerCountLine,
+                trailing: { headerControls }
+            )
 
             // Content
             ScrollView {
@@ -150,6 +140,28 @@ struct PendingActionsScreen: View {
         }
         .onDisappear {
             stopTimer()
+        }
+    }
+
+    // MARK: - Header
+
+    /// Uppercase mono caption for the top band — mirrors the active-count line
+    /// the bespoke header used to show. `nil` when nothing is running so the
+    /// chrome slot stays empty rather than printing "0 ACTIVE".
+    private var headerCountLine: String? {
+        pendingManager.hasActiveActions
+            ? "\(pendingManager.activeCount) ACTIVE"
+            : nil
+    }
+
+    /// Trailing controls. Keeps the failed-count indicator with its red
+    /// emphasis (chrome is single-tone, so it can't carry the alert color).
+    @ViewBuilder
+    private var headerControls: some View {
+        if pendingManager.failedCount > 0 {
+            Text("\(pendingManager.failedCount) failed")
+                .font(Theme.current.fontSM)
+                .foregroundColor(.red)
         }
     }
 
