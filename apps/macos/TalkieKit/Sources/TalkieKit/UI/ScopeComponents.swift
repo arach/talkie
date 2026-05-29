@@ -536,7 +536,9 @@ public struct ScopeTopBand<Trailing: View>: View {
 
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(title)
-                    .font(ScopeTopBand.display(size: 24))
+                    // 21 (was 24): a touch smaller across every band-screen at
+                    // once — the /top-band studio spec. One knob for the system.
+                    .font(ScopeTopBand.display(size: 21))
                     .foregroundColor(ScopeInk.primary)
                     .tracking(-0.3)
                     .lineLimit(1)
