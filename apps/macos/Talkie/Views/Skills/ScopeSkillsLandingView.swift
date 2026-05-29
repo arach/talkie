@@ -276,26 +276,29 @@ struct ScopeSkillsLandingView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                header
-                editorBay
-                consoleStrip
-                    .padding(.top, 14)
-                sectionIntro(
-                    label: "starters",
-                    meta: "\(SHIPPED_STARTERS.count) shipped",
-                    intro: "Four skills shipped with Talkie — each leans on something the app already has: dictation, local context, the screenshot chord, scheduled awareness. Click one to load it into the editor above, talk to the agent, save it as yours."
-                )
-                startersRow
-                sectionLine(label: "your skills", hint: yourSkillsHint)
-                yourSkillsRow
-                sectionLine(label: "where it fires", hint: "saved skills show up in these surfaces")
-                whereItFiresRow
-                footer
+        VStack(spacing: 0) {
+            header
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    editorBay
+                    consoleStrip
+                        .padding(.top, 14)
+                    sectionIntro(
+                        label: "starters",
+                        meta: "\(SHIPPED_STARTERS.count) shipped",
+                        intro: "Four skills shipped with Talkie — each leans on something the app already has: dictation, local context, the screenshot chord, scheduled awareness. Click one to load it into the editor above, talk to the agent, save it as yours."
+                    )
+                    startersRow
+                    sectionLine(label: "your skills", hint: yourSkillsHint)
+                    yourSkillsRow
+                    sectionLine(label: "where it fires", hint: "saved skills show up in these surfaces")
+                    whereItFiresRow
+                    footer
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 12)
+                .padding(.bottom, SkillsSpacing.sectionGap)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.bottom, SkillsSpacing.sectionGap)
         }
         .background(ScopeCanvas.canvas)
         .onAppear {
@@ -314,26 +317,15 @@ struct ScopeSkillsLandingView: View {
 
     @ViewBuilder
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text("· SKILLS")
-                    .font(ScopeType.mono(size: 9, weight: .semibold))
-                    .tracking(2.6)
-                    .foregroundStyle(ScopeInk.faint)
-                Text("one surface · pick a starter, iterate, save")
-                    .font(ScopeType.displayItalic(size: 13))
-                    .foregroundStyle(ScopeInk.faint)
-                Spacer()
-                chip(label: editorStatusChipLabel, tone: .amber)
-            }
-            Text("Skills")
-                .font(ScopeType.display(size: 30, weight: .medium))
-                .tracking(-0.5)
-                .foregroundStyle(ScopeInk.primary)
-        }
-        .padding(.horizontal, 32)
-        .padding(.top, 20)
-        .padding(.bottom, 12)
+        // Universal top band. Was a bespoke 30pt masthead with its own
+        // eyebrow that read larger than every other Scope screen (and
+        // scrolled, since it lived inside the ScrollView). Now the shared
+        // band: tagline → chrome line, status chip → trailing slot.
+        ScopeTopBand(
+            title: "Skills",
+            chrome: "ONE SURFACE · ITERATE · SAVE",
+            trailing: { chip(label: editorStatusChipLabel, tone: .amber) }
+        )
     }
 
     private var editorStatusChipLabel: String {
