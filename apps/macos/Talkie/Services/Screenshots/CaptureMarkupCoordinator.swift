@@ -113,6 +113,26 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
         }
     }
 
+    func captureMarkupPanelDidSave() {
+        // Explicit Save — persist the current canvas document to the sidecar
+        // now, then confirm on the button. Distinct from Accept: the panel
+        // stays open. Autosave on `markup.update` may already have written
+        // the same bytes; this path exists for explicit, user-confirmed save.
+        Task {
+            guard let imageURL else { return }
+            let doc = await webSession?.fetchDocument() ?? currentDocument
+            guard let doc else { return }
+            currentDocument = doc
+            do {
+                try CaptureMarkupStorage.save(doc, forImageURL: imageURL)
+                rootView?.inputBar.flashSaved()
+            } catch {
+                log.error("Capture markup explicit save failed", detail: error.localizedDescription)
+                captureMarkupPanelDidReportError("Could not save the markup: \(error.localizedDescription)")
+            }
+        }
+    }
+
     func captureMarkupPanelDidCancel() {
         if let imageURL {
             CaptureMarkupStorage.deleteSidecar(forImageURL: imageURL)
@@ -204,6 +224,21 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
                 layerCount: message.layerCount ?? message.document?.layers.count ?? layerCount,
                 selection: message.selection
             )
+        case "markup.save":
+            // Explicit Save via ⌘S while the canvas (WKWebView) has key
+            // focus. The button's own ⌘S keyEquivalent + saveTapped covers
+            // the prompt-focused case; both end here. Persist now and
+            // confirm on the button. Stays open — distinct from Accept.
+            if let doc = message.document, let imageURL {
+                currentDocument = doc
+                do {
+                    try CaptureMarkupStorage.save(doc, forImageURL: imageURL)
+                    rootView?.inputBar.flashSaved()
+                } catch {
+                    log.error("Capture markup explicit save failed", detail: error.localizedDescription)
+                    captureMarkupPanelDidReportError("Could not save the markup: \(error.localizedDescription)")
+                }
+            }
         case "markup.stats":
             syncChrome(
                 layerCount: message.layerCount ?? layerCount,

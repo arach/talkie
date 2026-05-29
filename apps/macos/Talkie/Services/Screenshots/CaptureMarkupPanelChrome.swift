@@ -23,6 +23,9 @@ protocol CaptureMarkupPanelChromeDelegate: AnyObject {
     func captureMarkupPanelDidAccept()
     func captureMarkupPanelDidCancel()
     func captureMarkupPanelDidRun(instruction: String)
+    /// Explicit Save (⌘S / SAVE button) — persist the current document to
+    /// the sidecar now. Distinct from Accept: does NOT close the panel.
+    func captureMarkupPanelDidSave()
     func captureMarkupPanelDidClearSelection()
     func captureMarkupPanelTryExampleSelected(_ text: String)
     func captureMarkupPanelDidReportError(_ message: String)
@@ -373,8 +376,11 @@ final class CaptureMarkupInputBarView: NSView {
     private let voiceButton = CaptureMarkupMicButton()
     private let selectionChip = CaptureMarkupSelectionChipView()
     private let promptField = NSTextField()
+    private let saveButton = NSButton()
     private let runButton = NSButton()
     private let promptContainer = CaptureMarkupPromptContainerView()
+    /// Resets the Save button out of its transient "SAVED ✓" state.
+    private var saveFeedbackResetWork: DispatchWorkItem?
 
     // Attachments row. Hidden when empty; shows the selection chip(s)
     // between the TRY row and the composer row, so things you've pulled
@@ -387,6 +393,7 @@ final class CaptureMarkupInputBarView: NSView {
     private var isVoiceRecording = false
     private var isVoiceTranscribing = false
     private var isRunning = false
+    private var isSaveConfirming = false
 
     private var askExamples = [
         "circle the error and label it",
@@ -437,6 +444,22 @@ final class CaptureMarkupInputBarView: NSView {
         promptField.target = self
         promptField.action = #selector(runTapped)
 
+        // Save — explicit persist of the current document to the sidecar.
+        // Distinct from Run (dispatches the prompt) and Accept (commits +
+        // closes). Quieter than Run: amber-faint pill, not a filled amber
+        // primary. ⌘S is the bound shortcut; mirrors the studio's `⌘S SAVE`
+        // control sitting just left of `↵ RUN`.
+        saveButton.bezelStyle = .rounded
+        saveButton.isBordered = false
+        saveButton.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold)
+        saveButton.keyEquivalent = "s"
+        saveButton.keyEquivalentModifierMask = .command
+        saveButton.target = self
+        saveButton.action = #selector(saveTapped)
+        saveButton.wantsLayer = true
+        saveButton.layer?.cornerRadius = 5
+        saveButton.layer?.borderWidth = 0.5
+
         runButton.title = "RUN  ⌘↵"
         runButton.bezelStyle = .rounded
         runButton.isBordered = false
@@ -477,7 +500,7 @@ final class CaptureMarkupInputBarView: NSView {
         // elements with gaps, not one merged composer row. Attachments
         // live in their own row; nothing is ever crammed inside the
         // prompt's text area.
-        [tryLabel, examplesStack, scopeBadge, attachmentsRow, voiceButton, promptContainer, runButton].forEach {
+        [tryLabel, examplesStack, scopeBadge, attachmentsRow, voiceButton, promptContainer, saveButton, runButton].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             addSubview($0)
         }
@@ -514,13 +537,18 @@ final class CaptureMarkupInputBarView: NSView {
             voiceButton.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10),
 
             promptContainer.leadingAnchor.constraint(equalTo: voiceButton.trailingAnchor, constant: 10),
-            promptContainer.trailingAnchor.constraint(equalTo: runButton.leadingAnchor, constant: -10),
+            promptContainer.trailingAnchor.constraint(equalTo: saveButton.leadingAnchor, constant: -8),
             promptContainer.centerYAnchor.constraint(equalTo: voiceButton.centerYAnchor),
             promptContainer.heightAnchor.constraint(equalToConstant: 34),
 
             promptField.leadingAnchor.constraint(equalTo: promptContainer.leadingAnchor, constant: 12),
             promptField.trailingAnchor.constraint(equalTo: promptContainer.trailingAnchor, constant: -12),
             promptField.centerYAnchor.constraint(equalTo: promptContainer.centerYAnchor),
+
+            saveButton.trailingAnchor.constraint(equalTo: runButton.leadingAnchor, constant: -8),
+            saveButton.centerYAnchor.constraint(equalTo: voiceButton.centerYAnchor),
+            saveButton.heightAnchor.constraint(equalToConstant: 34),
+            saveButton.widthAnchor.constraint(equalToConstant: 92),
 
             runButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
             runButton.centerYAnchor.constraint(equalTo: voiceButton.centerYAnchor),
@@ -531,6 +559,7 @@ final class CaptureMarkupInputBarView: NSView {
         setAttachmentsRowVisible(false)
         setTouchUpMode(false)
         updateVoiceButtonAppearance()
+        updateSaveButtonAppearance()
     }
 
     @available(*, unavailable)
@@ -552,6 +581,23 @@ final class CaptureMarkupInputBarView: NSView {
         promptField.isEnabled = !running
         voiceButton.isEnabled = !running
         updateRunButtonAppearance()
+        updateSaveButtonAppearance()
+    }
+
+    /// Flash the Save button into a confirmed "SAVED ✓" state, then settle
+    /// back to the idle "⌘S SAVE" label after a short beat. Called by the
+    /// coordinator once the document is persisted to the sidecar.
+    func flashSaved() {
+        saveFeedbackResetWork?.cancel()
+        isSaveConfirming = true
+        updateSaveButtonAppearance()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.isSaveConfirming = false
+            self.updateSaveButtonAppearance()
+        }
+        saveFeedbackResetWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4, execute: work)
     }
 
     func setTouchUpMode(_ touchUp: Bool) {
@@ -709,6 +755,35 @@ final class CaptureMarkupInputBarView: NSView {
                 ]
             )
         }
+    }
+
+    private func updateSaveButtonAppearance() {
+        // Quieter than Run: amber-faint pill with a brass border. While a
+        // run is in flight the button is disabled. When a save just landed
+        // it flips to a confirmed check state for ~1.4s.
+        let enabled = !isRunning
+        let title = isSaveConfirming ? "SAVED  ✓" : "⌘S  SAVE"
+        let titleColor: NSColor = isSaveConfirming
+            ? Self.amber
+            : (enabled ? Self.amberDeep : Self.amberDeep.withAlphaComponent(0.4))
+        saveButton.title = title
+        saveButton.isEnabled = enabled
+        saveButton.layer?.backgroundColor = Self.amberFaint
+            .withAlphaComponent(enabled ? 1 : 0.5).cgColor
+        saveButton.layer?.borderColor = Self.amberSoft
+            .withAlphaComponent(enabled ? 1 : 0.5).cgColor
+        saveButton.attributedTitle = NSAttributedString(
+            string: title,
+            attributes: [
+                .foregroundColor: titleColor,
+                .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold),
+            ]
+        )
+    }
+
+    @objc private func saveTapped() {
+        guard !isRunning else { return }
+        delegate?.captureMarkupPanelDidSave()
     }
 
     @objc private func runTapped() {

@@ -90,6 +90,18 @@
     });
   }
 
+  // Explicit Save (⌘S / SAVE button). Hands the full document to Swift,
+  // which persists it to the sidecar now and confirms on the button. The
+  // payload mirrors markup.update so the Swift side has one decode path.
+  function requestSave() {
+    post("markup.save", {
+      sessionId: state.sessionId,
+      document: attachViewportToDocument(state.document),
+      layerCount: state.document.layers.length,
+      selection: selectionPayload(),
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // Undo / redo — snapshot-based universal history.
   // Call snapshotForUndo() before any mutation; it pushes current state to
@@ -1081,6 +1093,7 @@
     },
     exportDocument() { return attachViewportToDocument(state.document); },
     clearSelection() { state.selectedLayerId = null; render(); },
+    save() { requestSave(); },
     undo() { return undo(); },
     redo() { return redo(); },
   };
@@ -1356,6 +1369,15 @@
     if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === "z" || e.key === "Z")) {
       if (e.shiftKey) redo();
       else undo();
+      e.preventDefault();
+      return;
+    }
+
+    // ⌘S — explicit save. Fires when the WKWebView (canvas) has key focus;
+    // the native SAVE button's ⌘S keyEquivalent covers the case where the
+    // prompt field is focused instead. Either way Swift persists + confirms.
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && (e.key === "s" || e.key === "S")) {
+      requestSave();
       e.preventDefault();
       return;
     }
