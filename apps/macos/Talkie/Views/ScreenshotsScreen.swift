@@ -72,10 +72,11 @@ struct ScreenshotsScreen: View {
     @State private var visibleCount: Int = 10
     private static let pageSize: Int = 10
 
-    // Layout
-    @State private var detailWidth: CGFloat = 340
+    // Layout — inspector width persists across launches so a user who wants
+    // the richer metadata pane wider doesn't have to re-drag every session.
+    @AppStorage("screenshotsInspectorWidth") private var detailWidth: Double = 380
     private let detailMinWidth: CGFloat = 300
-    private let detailMaxWidth: CGFloat = 460
+    private let detailMaxWidth: CGFloat = 600
     private let compactThreshold: CGFloat = 800
 
     // MARK: - Derived
@@ -178,7 +179,7 @@ struct ScreenshotsScreen: View {
             let showInspector = !compact && selectedItem != nil
             // Header degrades on the grid pane's own width (inspector open or
             // small window), not raw window width.
-            let inspectorSpace: CGFloat = showInspector ? detailWidth + 9 : 0
+            let inspectorSpace: CGFloat = showInspector ? CGFloat(detailWidth) + 9 : 0
             let gridWidth = max(geometry.size.width - inspectorSpace, 1)
 
             HStack(spacing: 0) {
@@ -199,14 +200,15 @@ struct ScreenshotsScreen: View {
                                 .gesture(
                                     DragGesture(minimumDistance: 1)
                                         .onChanged { value in
-                                            let newWidth = detailWidth - value.translation.width
-                                            detailWidth = min(max(newWidth, detailMinWidth), min(detailMaxWidth, geometry.size.width * 0.6))
+                                            let newWidth = CGFloat(detailWidth) - value.translation.width
+                                            let clamped = min(max(newWidth, detailMinWidth), min(detailMaxWidth, geometry.size.width * 0.7))
+                                            detailWidth = Double(clamped)
                                         }
                                 )
                         )
 
                     inspectorPane(item)
-                        .frame(width: detailWidth)
+                        .frame(width: CGFloat(detailWidth))
                         .transition(.move(edge: .trailing))
                 }
             }
@@ -378,15 +380,19 @@ struct ScreenshotsScreen: View {
     }
 
     private var listContent: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                ForEach(visibleItems) { item in
-                    screenshotListRow(item, allItems: visibleItems)
-                    ScopeRule(.subtle)
+        VStack(spacing: 0) {
+            ScreenshotListHeader()
+            ScopeRule(.subtle)
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(visibleItems) { item in
+                        screenshotListRow(item, allItems: visibleItems)
+                        ScopeRule(.subtle)
+                    }
+                    loadMoreSentinel
                 }
-                loadMoreSentinel
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .background {
             TalkieTheme.surface
@@ -462,6 +468,12 @@ struct ScreenshotsScreen: View {
             byteLabel: fileBytes(item),
             layerCount: layerCount(for: item),
             ageLabel: relativeAge(item.date),
+            absoluteDate: absoluteDate(item.date),
+            appName: appBundleLine(item),
+            windowTitle: windowTitleLine(item),
+            displayName: displayLine(item),
+            recordingOffset: recordingOffsetLine(item),
+            trayOCRText: trayOCRText(item),
             canMarkup: canAnnotate(item),
             showRecording: canShowRecording(item),
             onOpenPreview: { openPreview(item) },
@@ -510,7 +522,7 @@ struct ScreenshotsScreen: View {
             item: item,
             isSelected: selected,
             title: rowTitle(item),
-            metaLine: rowMetaLine(item),
+            columns: rowColumns(item),
             ageLabel: relativeAge(item.date)
         )
         .contentShape(Rectangle())
@@ -545,15 +557,30 @@ struct ScreenshotsScreen: View {
         return "Screenshot"
     }
 
-    /// Chrome line for a list row. Only uses free metadata (no per-row disk
-    /// reads) so long lists stay smooth — dimensions appear when the library
-    /// record carries them.
-    private func rowMetaLine(_ item: ScreenshotItem) -> String {
-        var parts = [sourceLabel(item).uppercased()]
+    /// Aligned column values for a list row. STRICTLY in-memory metadata —
+    /// `RecordingScreenshot` / `TrayScreenshot` fields plus `item.date`. No
+    /// file-header decode, no sidecar load, no markup-layer load (those are
+    /// per-row disk reads that would tank scroll perf on hundreds of rows).
+    private func rowColumns(_ item: ScreenshotItem) -> ScreenshotRowColumns {
+        // App / window context — already carried on both models.
+        let app = item.screenshot?.appName
+            ?? item.trayItem?.appName
+            ?? item.screenshot?.windowTitle
+            ?? item.trayItem?.windowTitle
+
+        // Dimensions — width/height live on both record types in memory.
+        var dimensions: String?
         if let ss = item.screenshot, let w = ss.width, let h = ss.height {
-            parts.append("\(w) × \(h)")
+            dimensions = "\(w)×\(h)"
+        } else if let trayItem = item.trayItem, trayItem.width > 0 {
+            dimensions = "\(trayItem.width)×\(trayItem.height)"
         }
-        return parts.joined(separator: " · ")
+
+        return ScreenshotRowColumns(
+            app: app?.trimmingCharacters(in: .whitespaces).screenshotActionNilIfEmpty,
+            source: sourceLabel(item).uppercased(),
+            dimensions: dimensions
+        )
     }
 
     // MARK: - Screenshot Card
@@ -867,6 +894,46 @@ struct ScreenshotsScreen: View {
         let h = m / 60
         if h < 24 { return "\(h)h" }
         return "\(h / 24)d"
+    }
+
+    /// Absolute capture date for the inspector (e.g. "May 28, 2026 · 3:14 PM").
+    private func absoluteDate(_ date: Date) -> String {
+        date.formatted(date: .abbreviated, time: .shortened)
+    }
+
+    /// In-memory (no disk) source/app/window/display facts. Cheap — safe for
+    /// the inspector header and also for the recording-attached library row,
+    /// which already carries the `RecordingScreenshot`.
+    private func appBundleLine(_ item: ScreenshotItem) -> String? {
+        item.screenshot?.appName ?? item.trayItem?.appName
+    }
+
+    private func windowTitleLine(_ item: ScreenshotItem) -> String? {
+        let title = item.screenshot?.windowTitle ?? item.trayItem?.windowTitle
+        guard let title, !title.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        return title
+    }
+
+    private func displayLine(_ item: ScreenshotItem) -> String? {
+        item.screenshot?.displayName ?? item.trayItem?.displayName
+    }
+
+    /// Inline OCR text for tray items (stored on the model, not the sidecar).
+    private func trayOCRText(_ item: ScreenshotItem) -> String? {
+        if let trayItem = item.trayItem, case .screenshot(let ts) = trayItem {
+            return ts.ocrText
+        }
+        return nil
+    }
+
+    /// Recording-offset for library captures — the `timestampMs` field records
+    /// how far into the parent recording the shot was taken.
+    private func recordingOffsetLine(_ item: ScreenshotItem) -> String? {
+        guard item.parent != nil, let ms = item.screenshot?.timestampMs, ms > 0 else { return nil }
+        let totalSeconds = ms / 1000
+        let m = totalSeconds / 60
+        let s = totalSeconds % 60
+        return String(format: "+%d:%02d into recording", m, s)
     }
 
     private func runWorkflow(_ workflow: Workflow, on item: ScreenshotItem) {
@@ -1514,44 +1581,108 @@ private struct ScreenshotImageView: View {
 
 // MARK: - List Row
 
-/// Dense metadata row for list view — thumbnail + title + chrome line +
-/// time-ago. Selection styling mirrors the dictations ScopeLibraryView rows
-/// (amber tint + 2pt leading rail) so the two lists read as siblings.
+/// In-memory column values for a list row. Built on the screen side from
+/// `RecordingScreenshot` / `TrayScreenshot` fields only — never a disk read.
+private struct ScreenshotRowColumns {
+    let app: String?
+    let source: String
+    let dimensions: String?
+}
+
+/// Fixed widths so the header and every row line up as a table. The title
+/// column is flexible (`.infinity`); the rest are right- or left-aligned
+/// fixed columns.
+private enum ScreenshotListLayout {
+    static let thumb: CGFloat = 48
+    static let source: CGFloat = 96
+    static let dimensions: CGFloat = 84
+    static let age: CGFloat = 60
+    static let columnSpacing: CGFloat = 12
+}
+
+/// Header row above the list — labels the table columns. Static, so it
+/// never reads disk.
+private struct ScreenshotListHeader: View {
+    var body: some View {
+        HStack(spacing: ScreenshotListLayout.columnSpacing) {
+            Color.clear.frame(width: ScreenshotListLayout.thumb, height: 1)
+            headerCell("NAME · APP", width: nil, alignment: .leading)
+            headerCell("SOURCE", width: ScreenshotListLayout.source, alignment: .leading)
+            headerCell("DIMENSIONS", width: ScreenshotListLayout.dimensions, alignment: .trailing)
+            headerCell("AGE", width: ScreenshotListLayout.age, alignment: .trailing)
+        }
+        .padding(.horizontal, PageLayout.horizontalPadding)
+        .padding(.vertical, 6)
+        .background(ScopePalette.bgSunk)
+    }
+
+    @ViewBuilder
+    private func headerCell(_ label: String, width: CGFloat?, alignment: Alignment) -> some View {
+        Text(label)
+            .font(ScopeType.mono(size: 8.5))
+            .tracking(ScopeType.Tracking.wide)
+            .foregroundStyle(ScopePalette.inkFainter)
+            .lineLimit(1)
+            .frame(width: width, alignment: alignment)
+            .frame(maxWidth: width == nil ? .infinity : nil, alignment: alignment)
+    }
+}
+
+/// Dense, table-aligned row for list view — thumbnail + name/app + source +
+/// dimensions + age, all from in-memory metadata. Selection styling mirrors
+/// the dictations ScopeLibraryView rows (amber tint + 2pt leading rail).
 private struct ScreenshotRowView: View {
     let item: ScreenshotItem
     let isSelected: Bool
     let title: String
-    let metaLine: String
+    let columns: ScreenshotRowColumns
     let ageLabel: String
     @State private var hovered = false
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: ScreenshotListLayout.columnSpacing) {
             ScreenshotImageView(item: item, maxSize: 120)
-                .frame(width: 48, height: 34)
+                .frame(width: ScreenshotListLayout.thumb, height: 34)
                 .background(ScopePalette.bg)
                 .clipShape(RoundedRectangle(cornerRadius: 3))
                 .overlay(RoundedRectangle(cornerRadius: 3).stroke(ScopeEdge.subtle, lineWidth: 0.5))
 
-            VStack(alignment: .leading, spacing: 3) {
+            // Name + app (flexible column)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 13, weight: isSelected ? .medium : .regular))
                     .foregroundStyle(isSelected ? ScopeInk.primary : ScopeInk.dim)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                Text(metaLine)
-                    .font(ScopeType.chrome)
-                    .tracking(ScopeType.Tracking.normal)
-                    .foregroundStyle(ScopeInk.subtle)
-                    .lineLimit(1)
+                if let app = columns.app, app != title {
+                    Text(app)
+                        .font(ScopeType.chrome)
+                        .tracking(ScopeType.Tracking.normal)
+                        .foregroundStyle(ScopeInk.subtle)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text(columns.source)
+                .font(ScopeType.mono(size: 9))
+                .tracking(ScopeType.Tracking.normal)
+                .foregroundStyle(ScopeInk.subtle)
+                .lineLimit(1)
+                .frame(width: ScreenshotListLayout.source, alignment: .leading)
+
+            Text(columns.dimensions ?? "—")
+                .font(ScopeType.mono(size: 10))
+                .foregroundStyle(columns.dimensions == nil ? ScopeInk.faint : ScopeInk.subtle)
+                .lineLimit(1)
+                .frame(width: ScreenshotListLayout.dimensions, alignment: .trailing)
 
             Text(ageLabel)
                 .font(ScopeType.chrome)
                 .tracking(ScopeType.Tracking.wide)
                 .foregroundStyle(ScopeInk.faint)
-                .frame(width: 64, alignment: .trailing)
+                .frame(width: ScreenshotListLayout.age, alignment: .trailing)
         }
         .padding(.horizontal, PageLayout.horizontalPadding)
         .padding(.vertical, 7)
@@ -1574,6 +1705,114 @@ private struct ScreenshotRowView: View {
     }
 }
 
+// MARK: - Inspector Disk Metadata
+
+/// Metadata that requires a disk read (image-file header + TK sidecar +
+/// file attributes). Loaded ASYNC for the single selected item only —
+/// NEVER on the per-row list path, which would tank scroll perf.
+private struct InspectorDiskMetadata: Equatable {
+    var format: String?         // PNG / JPEG …
+    var colorModel: String?     // RGB / Gray …
+    var hasAlpha: Bool?
+    var dpi: Int?
+    var pixelSize: String?      // "2880 × 1800" from the file header
+    var createdDate: Date?
+    var ocrPresent: Bool = false
+    var ocrCharacterCount: Int = 0
+    var ocrSnippet: String?     // first line(s) of detected text
+    var appBundleID: String?
+    var backingScale: Double?
+    var visionDescribed: Bool = false
+
+    /// Reads the image file header, FileManager attrs, and the TK sidecar
+    /// for `url`. Pure (no SwiftUI / main-actor needs) so it runs detached.
+    static func load(for url: URL, trayOCRText: String?) -> InspectorDiskMetadata {
+        var meta = InspectorDiskMetadata()
+
+        if let source = CGImageSourceCreateWithURL(url as CFURL, nil) {
+            if let type = CGImageSourceGetType(source) as String? {
+                meta.format = utiToFormatLabel(type)
+            }
+            if let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] {
+                if let w = props[kCGImagePropertyPixelWidth] as? Int,
+                   let h = props[kCGImagePropertyPixelHeight] as? Int {
+                    meta.pixelSize = "\(w) × \(h)"
+                }
+                if let hasAlpha = props[kCGImagePropertyHasAlpha] as? Bool {
+                    meta.hasAlpha = hasAlpha
+                }
+                // DPI: prefer the explicit DPI keys, then per-format dicts.
+                if let dpi = (props[kCGImagePropertyDPIWidth] as? Double) {
+                    meta.dpi = Int(dpi.rounded())
+                }
+                meta.colorModel = colorModelLabel(props)
+            }
+        }
+
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+           let created = attrs[.creationDate] as? Date {
+            meta.createdDate = created
+        }
+
+        // TK sidecar — OCR text + window-meta + vision description presence.
+        if let sidecar = try? TKSidecarStore.read(forAsset: url) {
+            if let ocr = sidecar.entry(of: .ocr),
+               let geometry = try? ocr.data.decode(OCRGeometryResult.self) {
+                meta.ocrPresent = true
+                applyOCR(geometry.fullText, to: &meta)
+            }
+            if let win = sidecar.entry(of: .windowMeta),
+               let payload = try? win.data.decode(WindowMetaAugmenter.Payload.self) {
+                meta.appBundleID = payload.appBundleID
+                meta.backingScale = payload.backingScale
+            }
+            meta.visionDescribed = sidecar.entry(of: .visionDescription) != nil
+        }
+
+        // Tray items keep OCR inline on the model (no sidecar), so fall back
+        // to that when the sidecar didn't carry text.
+        if !meta.ocrPresent, let trayOCRText, !trayOCRText.isEmpty {
+            meta.ocrPresent = true
+            applyOCR(trayOCRText, to: &meta)
+        }
+
+        return meta
+    }
+
+    private static func applyOCR(_ text: String, to meta: inout InspectorDiskMetadata) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        meta.ocrCharacterCount = trimmed.count
+        let firstLines = trimmed
+            .split(separator: "\n", maxSplits: 2, omittingEmptySubsequences: true)
+            .prefix(2)
+            .joined(separator: " · ")
+        meta.ocrSnippet = firstLines.count > 140 ? String(firstLines.prefix(140)) + "…" : firstLines
+    }
+
+    private static func utiToFormatLabel(_ uti: String) -> String {
+        switch uti {
+        case "public.png": return "PNG"
+        case "public.jpeg": return "JPEG"
+        case "public.heic", "public.heif": return "HEIC"
+        case "com.compuserve.gif": return "GIF"
+        case "public.tiff": return "TIFF"
+        default:
+            return uti.split(separator: ".").last.map(String.init)?.uppercased() ?? uti
+        }
+    }
+
+    private static func colorModelLabel(_ props: [CFString: Any]) -> String? {
+        guard let model = props[kCGImagePropertyColorModel] as? String else { return nil }
+        switch model as CFString {
+        case kCGImagePropertyColorModelRGB: return "RGB"
+        case kCGImagePropertyColorModelGray: return "Grayscale"
+        case kCGImagePropertyColorModelCMYK: return "CMYK"
+        default: return model
+        }
+    }
+}
+
 // MARK: - Inspector
 
 /// Lightweight metadata + actions rail that replaced the full TalkieView
@@ -1587,6 +1826,12 @@ private struct ScreenshotInspector: View {
     let byteLabel: String?
     let layerCount: Int
     let ageLabel: String
+    let absoluteDate: String
+    let appName: String?
+    let windowTitle: String?
+    let displayName: String?
+    let recordingOffset: String?
+    let trayOCRText: String?
     let canMarkup: Bool
     let showRecording: Bool
     let onOpenPreview: () -> Void
@@ -1595,7 +1840,11 @@ private struct ScreenshotInspector: View {
     let onCopy: () -> Void
     let onShowRecording: () -> Void
 
-    private var appLabel: String { item.screenshot?.appName ?? sourceLabel }
+    /// Disk-loaded extras (file header + sidecar). Loaded async per selection.
+    @State private var disk: InspectorDiskMetadata?
+    @State private var showDetectedText = false
+
+    private var appLabel: String { appName ?? sourceLabel }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -1619,7 +1868,7 @@ private struct ScreenshotInspector: View {
             .overlay(alignment: .bottom) { ScopeRule(.subtle) }
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 16) {
                     FramedScreenshot(item: item, appLabel: appLabel, annotated: layerCount > 0)
                         .frame(height: 172)
 
@@ -1635,15 +1884,85 @@ private struct ScreenshotInspector: View {
                             .lineLimit(1)
                     }
 
-                    VStack(spacing: 6) {
-                        MetaRow(label: "source", value: sourceLabel)
-                        if let dimensions { MetaRow(label: "dimensions", value: dimensions) }
+                    // ── Source group ─────────────────────────────────
+                    MetaGroup(title: "source") {
+                        MetaRow(label: "capture", value: sourceLabel)
+                        if let appName { MetaRow(label: "app", value: appName) }
+                        if let bundle = disk?.appBundleID { MetaRow(label: "bundle", value: bundle) }
+                        if let windowTitle { MetaRow(label: "window", value: windowTitle) }
+                        if let displayName { MetaRow(label: "display", value: displayName) }
+                    }
+
+                    // ── Image group ──────────────────────────────────
+                    MetaGroup(title: "image") {
+                        if let dims = dimensions ?? disk?.pixelSize {
+                            MetaRow(label: "dimensions", value: dims)
+                        }
+                        if let format = disk?.format { MetaRow(label: "format", value: format) }
+                        if let color = disk?.colorModel { MetaRow(label: "color", value: color) }
+                        if let dpi = disk?.dpi { MetaRow(label: "dpi", value: "\(dpi)") }
+                        if let scale = disk?.backingScale { MetaRow(label: "scale", value: "\(formatScale(scale))×") }
+                        if let hasAlpha = disk?.hasAlpha { MetaRow(label: "alpha", value: hasAlpha ? "yes" : "no") }
                         if let byteLabel { MetaRow(label: "size", value: byteLabel) }
+                    }
+
+                    // ── Captured group ───────────────────────────────
+                    MetaGroup(title: "captured") {
+                        MetaRow(label: "when", value: absoluteDate)
+                        MetaRow(label: "ago", value: ageLabel)
+                        if let recordingOffset { MetaRow(label: "offset", value: recordingOffset) }
+                    }
+
+                    // ── Detected text + layers group ─────────────────
+                    MetaGroup(title: "analysis") {
                         MetaRow(
                             label: "layers",
-                            value: layerCount > 0 ? "\(layerCount) · sidecar" : "—",
+                            value: layerCount > 0 ? "\(layerCount) · markup" : "—",
                             accent: layerCount > 0
                         )
+                        if let disk {
+                            MetaRow(
+                                label: "ocr",
+                                value: disk.ocrPresent
+                                    ? (disk.ocrCharacterCount > 0 ? "\(disk.ocrCharacterCount) chars" : "no text")
+                                    : "—",
+                                accent: disk.ocrCharacterCount > 0
+                            )
+                            if disk.visionDescribed {
+                                MetaRow(label: "vision", value: "described", accent: true)
+                            }
+                        }
+                    }
+
+                    // Detected-text disclosure — surfaces the OCR snippet that
+                    // was previously only reachable via the context menu.
+                    if let snippet = disk?.ocrSnippet, !snippet.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Button {
+                                showDetectedText.toggle()
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Image(systemName: showDetectedText ? "chevron.down" : "chevron.right")
+                                        .font(.system(size: 8, weight: .semibold))
+                                    Text("detected text")
+                                        .font(ScopeType.mono(size: 8.5))
+                                        .tracking(ScopeType.Tracking.wide)
+                                        .textCase(.uppercase)
+                                    Spacer()
+                                }
+                                .foregroundStyle(ScopePalette.inkFainter)
+                            }
+                            .buttonStyle(.plain)
+
+                            Text(showDetectedText ? (fullOCRText ?? snippet) : snippet)
+                                .font(ScopeType.mono(size: 10))
+                                .foregroundStyle(ScopePalette.inkFaint)
+                                .lineLimit(showDetectedText ? nil : 2)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(8)
+                                .background(RoundedRectangle(cornerRadius: 3).fill(ScopePalette.bgSunk))
+                        }
                     }
 
                     // Open destinations
@@ -1672,6 +1991,52 @@ private struct ScreenshotInspector: View {
                 }
                 .padding(14)
             }
+            .task(id: item.id) {
+                // Single-item disk read — header + sidecar + attrs — off the
+                // main actor. This is the ONLY disk read tied to selection;
+                // list rows never hit this path.
+                disk = nil
+                showDetectedText = false
+                let url = item.fileURL
+                let trayText = trayOCRText
+                disk = await Task.detached {
+                    InspectorDiskMetadata.load(for: url, trayOCRText: trayText)
+                }.value
+            }
+        }
+    }
+
+    /// Full OCR text for the expanded disclosure — re-read from the sidecar
+    /// (or the tray model) only when the user expands it.
+    private var fullOCRText: String? {
+        if let trayOCRText, !trayOCRText.isEmpty { return trayOCRText }
+        guard let sidecar = try? TKSidecarStore.read(forAsset: item.fileURL),
+              let entry = sidecar.entry(of: .ocr),
+              let geometry = try? entry.data.decode(OCRGeometryResult.self),
+              !geometry.fullText.isEmpty else { return nil }
+        return geometry.fullText
+    }
+
+    private func formatScale(_ scale: Double) -> String {
+        scale == scale.rounded() ? "\(Int(scale))" : String(format: "%.1f", scale)
+    }
+}
+
+/// A titled cluster of MetaRows. Renders nothing if it has no rows (the
+/// `@ViewBuilder` content collapses), but in practice each group always
+/// has at least one row.
+private struct MetaGroup<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(ScopeType.mono(size: 8.5))
+                .tracking(ScopeType.Tracking.wide)
+                .textCase(.uppercase)
+                .foregroundStyle(ScopePalette.inkFainter)
+            VStack(spacing: 6) { content }
         }
     }
 }
