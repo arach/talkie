@@ -138,6 +138,12 @@ final class ScreenshotTray {
         saveManifest()
     }
 
+    func cacheOCRText(_ text: String, for id: UUID) {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        items[index].ocrText = text
+        saveManifest()
+    }
+
     /// Remove unpinned items from disk and array after successful delivery.
     /// Pinned items remain in the tray.
     func clearUnpinned() {

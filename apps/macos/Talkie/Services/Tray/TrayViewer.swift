@@ -715,6 +715,19 @@ private struct TrayViewerView: View {
                 .onDrag {
                     dragProvider(for: item)
                 }
+                .overlay(selectionRing(isSelected: isSelected, isFocused: isFocused))
+                .overlay(alignment: .topLeading) {
+                    selectionBadge(isSelected: isSelected)
+                }
+                .trayDrag(
+                    item: item,
+                    onClick: { event in
+                        handleItemClick(item, allItems: allItems, event: event)
+                    },
+                    onRightClick: { event in
+                        showContextMenu(for: item, allItems: allItems, event: event)
+                    }
+                )
 
             if isHovered {
                 Button(action: {
@@ -735,7 +748,6 @@ private struct TrayViewerView: View {
         .animation(.easeOut(duration: 0.15), value: isHovered)
         .onHover { over in hoveredItem = over ? item.id : nil }
         .contextMenu { trayItemContextMenu(item: item, allItems: allItems) }
-        .trayDrag(item: item)
     }
 
     // MARK: - List Content
@@ -841,6 +853,15 @@ private struct TrayViewerView: View {
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
             .buttonStyle(.plain)
+            .trayDrag(
+                item: item,
+                onClick: { event in
+                    handleItemClick(item, allItems: allItems, event: event)
+                },
+                onRightClick: { event in
+                    showContextMenu(for: item, allItems: allItems, event: event)
+                }
+            )
 
             if isHovered {
                 Button(action: { removeItem(item) }) {
@@ -858,7 +879,6 @@ private struct TrayViewerView: View {
         .animation(.easeOut(duration: 0.1), value: isHovered)
         .onHover { over in hoveredItem = over ? item.id : nil }
         .contextMenu { trayItemContextMenu(item: item, allItems: allItems) }
-        .trayDrag(item: item)
     }
 
     // MARK: - Carousel
@@ -1009,7 +1029,15 @@ private struct TrayViewerView: View {
         }
         .buttonStyle(.plain)
         .contextMenu { trayItemContextMenu(item: item, allItems: allItems) }
-        .trayDrag(item: item)
+        .trayDrag(
+            item: item,
+            onClick: { event in
+                handleItemClick(item, allItems: allItems, event: event)
+            },
+            onRightClick: { event in
+                showContextMenu(for: item, allItems: allItems, event: event)
+            }
+        )
     }
 
     // MARK: - Detail Preview
@@ -1125,15 +1153,16 @@ private struct TrayViewerView: View {
                 .help("Save as Capture")
 
                 Button(action: {
-                    TrayActionService.shared.promoteTrayToCapture(item, runOCR: true)
-                    closeDetailPreview()
+                    Task {
+                        _ = await TrayActionService.shared.copyDetectedText(from: [item])
+                    }
                 }) {
                     Image(systemName: "text.viewfinder")
                         .font(.system(size: 11))
                         .foregroundStyle(item.ocrText != nil && !item.ocrText!.isEmpty ? .primary : .secondary)
                 }
                 .buttonStyle(.plain)
-                .help(item.ocrText != nil && !item.ocrText!.isEmpty ? "Extract Text (ready)" : "Extract Text\u{2026}")
+                .help(item.ocrText != nil && !item.ocrText!.isEmpty ? "Copy detected text" : "Detect and copy text")
 
                 Button(action: {
                     _ = withAnimation(.easeOut(duration: 0.15)) {
@@ -1376,56 +1405,110 @@ private struct TrayViewerView: View {
 
         if selection.count > 0 {
             let selectedItems = TrayActionService.shared.selectedItems(ids: selection.selectedIDs, in: allItems)
+            let selectedScreenshots = screenshots(in: selectedItems)
+            let selectedScreenshot = selectedScreenshots.count == 1 ? selectedScreenshots[0] : nil
             let allPinned = !selectedItems.isEmpty && selectedItems.allSatisfy(\.pinned)
 
-            HStack(spacing: 10) {
-                Text("\(selectedItems.count) selected")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.secondary)
-
-                Button(action: {
-                    _ = TrayActionService.shared.copySelected(ids: selection.selectedIDs, in: allItems)
-                }) {
-                    Label("Copy", systemImage: "doc.on.doc")
-                        .font(.system(size: 12, weight: .medium))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-
-                Button(action: {
-                    _ = TrayActionService.shared.togglePinSelected(ids: selection.selectedIDs, in: allItems)
-                }) {
-                    Label(allPinned ? "Unpin" : "Pin", systemImage: allPinned ? "pin.slash" : "pin")
-                        .font(.system(size: 12, weight: .medium))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-
-                Button(action: {
-                    withAnimation(.easeOut(duration: 0.15)) {
-                        _ = TrayActionService.shared.deleteSelected(ids: selection.selectedIDs, in: allItems)
-                    }
-                    if TrayItem.allItems().isEmpty {
-                        dismiss()
-                    }
-                }) {
-                    Label("Delete", systemImage: "trash")
-                        .font(.system(size: 12, weight: .medium))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .tint(.red)
-
-                Spacer()
-
-                Button(action: {
-                    selection.clearSelection()
-                }) {
-                    Text("Clear Selection")
-                        .font(.system(size: 11))
+            VStack(spacing: 8) {
+                HStack(spacing: 10) {
+                    Text("\(selectedItems.count) selected")
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
                         .foregroundStyle(.secondary)
+
+                    if !selectedScreenshots.isEmpty {
+                        Text(screenshotActionSummary(for: selectedScreenshots))
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer()
+
+                    Button(action: {
+                        selection.clearSelection()
+                    }) {
+                        Text("Clear Selection")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+
+                HStack(spacing: 8) {
+                    Button(action: {
+                        _ = TrayActionService.shared.copySelected(ids: selection.selectedIDs, in: allItems)
+                    }) {
+                        Label("Copy", systemImage: "doc.on.doc")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
+                    if let selectedScreenshot {
+                        Button(action: {
+                            CaptureMarkupCoordinator.shared.openSession(imageURL: selectedScreenshot.tempURL)
+                        }) {
+                            Label("Markup", systemImage: "sparkles.rectangle.stack")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    }
+
+                    if !selectedScreenshots.isEmpty {
+                        Button(action: {
+                            copyDetectedText(from: selectedScreenshots)
+                        }) {
+                            Label("Text", systemImage: "text.viewfinder")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+
+                        Button(action: {
+                            saveScreenshotsAsCaptures(selectedScreenshots, runOCR: false)
+                        }) {
+                            Label("Save", systemImage: "square.and.arrow.down")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+
+                    Menu {
+                        selectedItemsMenuItems(
+                            selectedItems: selectedItems,
+                            selectedScreenshots: selectedScreenshots,
+                            selectedScreenshot: selectedScreenshot,
+                            allPinned: allPinned
+                        )
+                    } label: {
+                        Label("More", systemImage: "ellipsis.circle")
+                            .font(.system(size: 12, weight: .medium))
+                            .labelStyle(.iconOnly)
+                            .frame(width: 26, height: 24)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .controlSize(.small)
+                    .help("More actions")
+
+                    Button(action: {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            _ = TrayActionService.shared.deleteSelected(ids: selection.selectedIDs, in: allItems)
+                        }
+                        if TrayItem.allItems().isEmpty {
+                            dismiss()
+                        }
+                    }) {
+                        Label("Delete", systemImage: "trash")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .tint(.red)
+
+                    Spacer(minLength: 0)
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -1478,14 +1561,14 @@ private struct TrayViewerView: View {
 
     // MARK: - Interaction
 
-    private func handleItemClick(_ item: TrayItem, allItems: [TrayItem]) {
-        let modifiers = currentModifiers()
+    private func handleItemClick(_ item: TrayItem, allItems: [TrayItem], event: NSEvent? = nil) {
+        let modifiers = currentModifiers(event: event)
         let isModifiedClick =
             modifiers.contains(.shift) ||
             modifiers.contains(.command) ||
             modifiers.contains(.option) ||
             modifiers.contains(.control)
-        let clickCount = NSApp.currentEvent?.clickCount ?? 1
+        let clickCount = event?.clickCount ?? NSApp.currentEvent?.clickCount ?? 1
 
         if modifiers.contains(.shift) {
             selection.rangeSelect(to: item.id, in: allItems)
@@ -1500,6 +1583,22 @@ private struct TrayViewerView: View {
         } else if clickCount == 1 {
             previewItemID = nil
         }
+    }
+
+    private func showContextMenu(for item: TrayItem, allItems: [TrayItem], event: NSEvent) {
+        if selection.isSelected(item.id) {
+            selection.focusedID = item.id
+        } else {
+            selection.select(item.id)
+        }
+        previewItemID = nil
+
+        guard let view = event.window?.contentView else { return }
+        NSMenu.popUpContextMenu(
+            appKitContextMenu(for: item, allItems: allItems),
+            with: event,
+            for: view
+        )
     }
 
     @ViewBuilder
@@ -1526,9 +1625,24 @@ private struct TrayViewerView: View {
 
             if hasOCR {
                 Button("Copy Detected Text") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(ts.ocrText!, forType: .string)
+                    copyDetectedText(from: [ts])
                 }
+            } else {
+                Button("Detect and Copy Text") {
+                    copyDetectedText(from: [ts])
+                }
+            }
+
+            Button("Annotate…") {
+                CaptureMarkupCoordinator.shared.openSession(imageURL: ts.tempURL)
+            }
+
+            Button("Open in Preview") {
+                TrayActionService.shared.openInPreview(item)
+            }
+
+            Button("Reveal in Finder") {
+                TrayActionService.shared.revealInFinder(item)
             }
         }
 
@@ -1537,6 +1651,97 @@ private struct TrayViewerView: View {
         Button("Delete", role: .destructive) {
             removeItem(item)
         }
+    }
+
+    private func appKitContextMenu(for item: TrayItem, allItems: [TrayItem]) -> NSMenu {
+        let targetIDs = selection.isSelected(item.id) ? selection.selectedIDs : [item.id]
+        let targetItems = TrayActionService.shared.selectedItems(ids: targetIDs, in: allItems)
+        let targetScreenshots = screenshots(in: targetItems)
+        let menu = NSMenu()
+        let selectedCount = targetItems.count
+
+        if selectedCount > 1 {
+            let title = "\(selectedCount) items selected"
+            let titleItem = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            titleItem.isEnabled = false
+            menu.addItem(titleItem)
+            menu.addItem(.separator())
+        }
+
+        menu.addItem(TrayContextMenuItem(title: "Copy") {
+            _ = TrayActionService.shared.copySelected(ids: targetIDs, in: allItems)
+        })
+
+        if selectedCount == 1, let firstItem = targetItems.first {
+            menu.addItem(TrayContextMenuItem(title: "Open Detail") {
+                openDetailPreview(for: firstItem.id, in: allItems)
+            })
+        }
+
+        let allPinned = !targetItems.isEmpty && targetItems.allSatisfy(\.pinned)
+        menu.addItem(TrayContextMenuItem(title: allPinned ? "Unpin" : "Pin") {
+            _ = TrayActionService.shared.togglePinSelected(ids: targetIDs, in: allItems)
+        })
+
+        if !targetScreenshots.isEmpty {
+            menu.addItem(.separator())
+
+            menu.addItem(TrayContextMenuItem(title: targetScreenshots.count == 1 ? "Save as Capture" : "Save Captures") {
+                saveScreenshotsAsCaptures(targetScreenshots, runOCR: false)
+            })
+
+            menu.addItem(TrayContextMenuItem(title: targetScreenshots.count == 1 ? "Save Capture with OCR" : "Save Captures with OCR") {
+                saveScreenshotsAsCaptures(targetScreenshots, runOCR: true)
+            })
+
+            let allTextReady = targetScreenshots.allSatisfy { screenshot in
+                guard let text = screenshot.ocrText?.trimmingCharacters(in: .whitespacesAndNewlines) else {
+                    return false
+                }
+                return !text.isEmpty
+            }
+            menu.addItem(TrayContextMenuItem(title: allTextReady ? "Copy Detected Text" : "Detect and Copy Text") {
+                copyDetectedText(from: targetScreenshots)
+            })
+
+            if targetScreenshots.count == 1, let screenshot = targetScreenshots.first {
+                menu.addItem(TrayContextMenuItem(title: "Annotate…") {
+                    CaptureMarkupCoordinator.shared.openSession(imageURL: screenshot.tempURL)
+                })
+
+                let screenshotItem = TrayItem.screenshot(screenshot)
+                menu.addItem(TrayContextMenuItem(title: "Open in Preview") {
+                    TrayActionService.shared.openInPreview(screenshotItem)
+                })
+
+                let editTool = SettingsManager.shared.preferredScreenshotLauncher
+                if editTool.isEditTool && editTool.isInstalled {
+                    menu.addItem(TrayContextMenuItem(title: "Edit in \(editTool.label)") {
+                        Task {
+                            await editTool.openFile(screenshot.tempURL)
+                        }
+                    })
+                }
+            }
+        }
+
+        if let firstItem = targetItems.first {
+            menu.addItem(TrayContextMenuItem(title: selectedCount == 1 ? "Reveal in Finder" : "Reveal First in Finder") {
+                TrayActionService.shared.revealInFinder(firstItem)
+            })
+        }
+
+        menu.addItem(.separator())
+        menu.addItem(TrayContextMenuItem(title: selectedCount == 1 ? "Delete" : "Delete \(selectedCount) Items") {
+            withAnimation(.easeOut(duration: 0.15)) {
+                _ = TrayActionService.shared.deleteSelected(ids: targetIDs, in: allItems)
+            }
+            if TrayItem.allItems().isEmpty {
+                dismiss()
+            }
+        })
+
+        return menu
     }
 
     private func removeItem(_ item: TrayItem) {
@@ -1551,11 +1756,120 @@ private struct TrayViewerView: View {
 
 
 
-    private func currentModifiers() -> NSEvent.ModifierFlags {
-        NSApp.currentEvent?.modifierFlags.intersection(.deviceIndependentFlagsMask) ?? []
+    private func currentModifiers(event: NSEvent? = nil) -> NSEvent.ModifierFlags {
+        (event ?? NSApp.currentEvent)?
+            .modifierFlags
+            .intersection(.deviceIndependentFlagsMask) ?? []
     }
 
     // MARK: - Helpers
+
+    @ViewBuilder
+    private func selectedItemsMenuItems(
+        selectedItems: [TrayItem],
+        selectedScreenshots: [TrayScreenshot],
+        selectedScreenshot: TrayScreenshot?,
+        allPinned: Bool
+    ) -> some View {
+        Button(allPinned ? "Unpin" : "Pin") {
+            _ = TrayActionService.shared.togglePinSelected(ids: selection.selectedIDs)
+        }
+
+        if !selectedScreenshots.isEmpty {
+            Divider()
+
+            Button(selectedScreenshots.count == 1 ? "Save Capture with OCR" : "Save Captures with OCR") {
+                saveScreenshotsAsCaptures(selectedScreenshots, runOCR: true)
+            }
+        }
+
+        if let selectedScreenshot {
+            let screenshotItem = TrayItem.screenshot(selectedScreenshot)
+            Button("Open in Preview") {
+                TrayActionService.shared.openInPreview(screenshotItem)
+            }
+
+            let editTool = SettingsManager.shared.preferredScreenshotLauncher
+            if editTool.isEditTool && editTool.isInstalled {
+                Button("Edit in \(editTool.label)") {
+                    Task {
+                        await editTool.openFile(selectedScreenshot.tempURL)
+                    }
+                }
+            }
+        }
+
+        if let firstItem = selectedItems.first {
+            Button(selectedItems.count == 1 ? "Reveal in Finder" : "Reveal First in Finder") {
+                TrayActionService.shared.revealInFinder(firstItem)
+            }
+        }
+    }
+
+    private func screenshots(in items: [TrayItem]) -> [TrayScreenshot] {
+        items.compactMap { item in
+            if case .screenshot(let screenshot) = item { return screenshot }
+            return nil
+        }
+    }
+
+    private func screenshotActionSummary(for screenshots: [TrayScreenshot]) -> String {
+        if screenshots.count == 1 {
+            return "Screenshot actions ready"
+        }
+        return "\(screenshots.count) screenshots"
+    }
+
+    private func copyDetectedText(from screenshots: [TrayScreenshot]) {
+        Task {
+            _ = await TrayActionService.shared.copyDetectedText(from: screenshots)
+        }
+    }
+
+    private func saveScreenshotsAsCaptures(_ screenshots: [TrayScreenshot], runOCR: Bool) {
+        Task {
+            let savedCount = await TrayActionService.shared.saveScreenshotsAsCaptures(
+                screenshots,
+                runOCR: runOCR,
+                removeFromTrayOnSuccess: true
+            )
+            guard savedCount > 0 else { return }
+            selection.pruneStaleIDs()
+            if TrayItem.allItems().isEmpty {
+                dismiss()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func selectionRing(isSelected: Bool, isFocused: Bool) -> some View {
+        if isSelected || isFocused {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .strokeBorder(
+                    isSelected ? Color.accentColor.opacity(0.95) : Color.accentColor.opacity(0.55),
+                    lineWidth: isSelected ? 2 : 1.2
+                )
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
+                )
+                .padding(-2)
+                .allowsHitTesting(false)
+        }
+    }
+
+    @ViewBuilder
+    private func selectionBadge(isSelected: Bool) -> some View {
+        if isSelected {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 17, weight: .semibold))
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(.white, Color.accentColor)
+                .shadow(color: .black.opacity(0.28), radius: 2, y: 1)
+                .padding(5)
+                .allowsHitTesting(false)
+        }
+    }
 
     private func dragProvider(for item: TrayItem) -> NSItemProvider {
         if case .selection(let selection) = item, let text = selection.text {
@@ -1714,6 +2028,25 @@ private struct TrayViewerView: View {
         return StrokeStyle(lineWidth: 0)
     }
 
+}
+
+private final class TrayContextMenuItem: NSMenuItem {
+    private let handler: () -> Void
+
+    init(title: String, handler: @escaping () -> Void) {
+        self.handler = handler
+        super.init(title: title, action: #selector(performAction), keyEquivalent: "")
+        target = self
+    }
+
+    @available(*, unavailable)
+    required init(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    @objc private func performAction() {
+        handler()
+    }
 }
 
 // MARK: - Waterfall Layout
