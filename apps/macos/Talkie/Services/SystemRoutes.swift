@@ -227,6 +227,24 @@ final class SystemRoutes: RouteGroup {
         },
 
         Route(
+            path: "capture/markup",
+            description: "Open ephemeral capture markup bay for a screenshot file",
+            isInternal: false
+        ) { _, params in
+            guard let path = params["path"], !path.isEmpty else {
+                NSLog("[SystemRoutes] capture/markup missing path param")
+                return
+            }
+            let expanded = (path as NSString).expandingTildeInPath
+            let url = URL(fileURLWithPath: expanded)
+            let instruction = params["instruction"]
+            CaptureMarkupCoordinator.shared.openSessionIfNeeded(
+                imageURL: url,
+                instruction: instruction?.isEmpty == true ? nil : instruction
+            )
+        },
+
+        Route(
             path: "models",
             description: "Navigate to models view",
             isInternal: false
@@ -397,6 +415,10 @@ extension Notification.Name {
     static let openSettings = Notification.Name("to.talkie.app.openSettings")
     static let navigateHome = Notification.Name("to.talkie.app.navigateHome")
     static let navigateAgent = Notification.Name("to.talkie.app.navigateAgent")
+    /// Posted by the `Find…` menu item (⌘F). ScopeLibraryView listens and
+    /// focuses its search field; nav to .recordings happens alongside the
+    /// post so it works from anywhere in the app.
+    static let focusLibrarySearch = Notification.Name("to.talkie.app.focusLibrarySearch")
     @available(*, deprecated, renamed: "navigateAgent")
     static let navigateLive = navigateAgent
 }

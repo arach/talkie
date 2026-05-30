@@ -23,10 +23,28 @@ struct TOTranscriptSection: View {
     var onRetranscribe: (String) -> Void = { _ in }
     var onCopy: () -> Void = {}
     var onContinueMemo: (() -> Void)? = nil
+    /// Optional audio-seek hook propagated to RecordingTranscriptCard's
+    /// paragraph timestamps. Takes absolute seconds.
+    var onTimestampSeek: ((Double) -> Void)? = nil
+    /// Current playback time, threaded into RecordingTranscriptCard so
+    /// DocumentBody can render a "now playing" highlight on the
+    /// matching paragraph.
+    var currentTime: TimeInterval = 0
 
     private var needsTranscription: Bool {
         (recording.transcriptionStatus == .failed || recording.transcriptionStatus == .pending)
         && recording.hasAudio
+    }
+
+    /// Heuristic: a freshly-created memo whose transcription hasn't
+    /// landed yet is almost certainly being auto-transcribed in the
+    /// background. Showing the manual CTA in that window suggests
+    /// "stuck — click here", which is wrong. After ~2 minutes we
+    /// assume the auto pass didn't run and surface the manual CTA.
+    private var isProbablyAutoTranscribing: Bool {
+        guard recording.transcriptionStatus == .pending else { return false }
+        guard recording.hasAudio else { return false }
+        return Date().timeIntervalSince(recording.createdAt) < 120 || isRetranscribing
     }
 
     var body: some View {
@@ -38,6 +56,8 @@ struct TOTranscriptSection: View {
                 onImmediateSave: onImmediateSave,
                 onCopy: onCopy
             )
+        } else if isProbablyAutoTranscribing {
+            transcribingActive
         } else if needsTranscription {
             transcriptionCTA
         } else if let text = recording.text, !text.isEmpty {
@@ -49,7 +69,9 @@ struct TOTranscriptSection: View {
                 editedTranscript: $editedTranscript,
                 isRetranscribing: isRetranscribing,
                 onTranscriptChange: { onTranscriptChange() },
-                onRetranscribe: { modelId in onRetranscribe(modelId) }
+                onRetranscribe: { modelId in onRetranscribe(modelId) },
+                onTimestampSeek: onTimestampSeek,
+                currentTime: currentTime
             )
             // Continue-memo affordance moved into TOHeaderSection's
             // inlineActionRow as a real labeled chip. The previous
@@ -152,6 +174,50 @@ struct TOTranscriptSection: View {
                 RoundedRectangle(cornerRadius: CornerRadius.md)
                     .stroke(Theme.current.foreground.opacity(0.08), lineWidth: 0.5)
             )
+        }
+    }
+
+    // MARK: - Active Transcribing
+
+    /// State for a freshly-recorded memo where the auto-transcribe
+    /// pass is most likely still running. Replaces the manual CTA so
+    /// users don't think the system is stuck and click "Transcribe"
+    /// (which would queue a redundant pass).
+    private var transcribingActive: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text("TRANSCRIPT")
+                .font(settings.fontXSMedium)
+                .tracking(Tracking.wide)
+                .foregroundColor(Theme.current.foregroundSecondary)
+
+            VStack(spacing: Spacing.md) {
+                HStack(spacing: Spacing.sm) {
+                    BrailleSpinner(size: 14)
+                    Text(isRetranscribing ? "Transcribing…" : "Working on your transcript…")
+                        .font(Theme.current.fontSMMedium)
+                        .foregroundColor(Theme.current.foregroundSecondary)
+                }
+                Text(isRetranscribing
+                     ? "Your selected model is running. The transcript will appear here when it's ready."
+                     : "Auto-transcribe is running on your recording. This usually takes a few seconds.")
+                    .font(Theme.current.fontXS)
+                    .foregroundColor(Theme.current.foregroundMuted)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 360)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 32)
+            .background(
+                RoundedRectangle(cornerRadius: CornerRadius.md)
+                    .fill(Theme.current.foreground.opacity(0.04))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.md)
+                    .stroke(Theme.current.foreground.opacity(0.08), lineWidth: 0.5)
+            )
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Transcript pending")
         }
     }
 

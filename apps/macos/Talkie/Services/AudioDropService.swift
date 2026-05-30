@@ -308,12 +308,19 @@ actor AudioDropService {
             await onProgress?(.transcribing(filename: file.originalFilename, size: fileSizeStr))
             log.info("Transcribing dropped file: \(file.originalFilename) (\(fileSizeStr))")
 
+            // Critical-path transcription is the regular variant —
+            // inverse-text-normalized prose is what the reader needs
+            // immediately. Word-level timings (for paragraph anchors
+            // and precise click-to-seek) are deferred to the
+            // background augmentation pass below, so we don't add
+            // import latency.
             let transcription = try await EngineClient.shared.transcribe(
                 audioPath: storedURL.path,
                 modelId: AgentSettings.shared.selectedModelId,
                 priority: .userInitiated,
                 postProcess: .inverseTextNormalization
             )
+            let timedTranscription: TimedTranscription? = nil
 
             try Task.checkCancellation()
             let memo = MemoModel(
@@ -328,10 +335,66 @@ actor AudioDropService {
             )
 
             try await memoRepository.saveMemo(memo)
-            try await recordingRepository.saveRecording(TalkieObject(from: memo))
+            var record = TalkieObject(from: memo)
+            if let timed = timedTranscription {
+                record.assetsJSON = TalkieObjectAssets(segments: timed).toJSON()
+            }
+            try await recordingRepository.saveRecording(record)
+
+            // Background timing pass — runs AFTER the import returns
+            // so the user sees their memo immediately. When the timing
+            // transcribe completes, merge the segments into the
+            // existing assetsJSON so paragraph anchors + click-to-seek
+            // get word-precise. Best-effort: any failure is silent.
+            let memoId = memo.id
+            let modelId = await AgentSettings.shared.selectedModelId
+            let audioPath = storedURL.path
+            Task.detached(priority: .utility) { [recordingRepository] in
+                do {
+                    let (_, timed) = try await EngineClient.shared.transcribeWithTimings(
+                        audioPath: audioPath,
+                        modelId: modelId,
+                        priority: .medium,
+                        postProcess: .none
+                    )
+                    guard let timed else { return }
+                    guard var existing = try await recordingRepository.fetchRecording(id: memoId) else { return }
+                    let prior = TalkieObjectAssets.from(json: existing.assetsJSON) ?? TalkieObjectAssets()
+                    let merged = TalkieObjectAssets(
+                        segments: timed,
+                        screenshots: prior.screenshots,
+                        clips: prior.clips,
+                        attachments: prior.attachments,
+                        textProvenance: prior.textProvenance
+                    )
+                    existing.assetsJSON = merged.toJSON()
+                    try await recordingRepository.saveRecording(existing)
+                    await MemosViewModel.shared.loadMemos()
+                    await RecordingsViewModel.shared.loadRecordings()
+                    log.info("Backfilled word timings for dropped audio \(memoId)")
+                } catch {
+                    log.warning("Background timing pass failed for \(memoId): \(error.localizedDescription)")
+                }
+            }
 
             await MemosViewModel.shared.loadMemos()
             await RecordingsViewModel.shared.loadRecordings()
+
+            // Background augmentation — VAD, re-transcription with a
+            // bigger model, embeddings. The live transcription that
+            // the user is waiting on already happened above; this is
+            // purely additive enrichment.
+            var augContext = TKAugmentationContext()
+            augContext["recording.id"] = memo.id.uuidString
+            augContext["origin"] = "audio-drop"
+            augContext["source.filename"] = file.originalFilename
+            MediaAugmentationService.shared.enqueue(
+                AugmentationTask(
+                    assetURL: storedURL,
+                    assetKind: .audio,
+                    context: augContext
+                )
+            )
 
             await onProgress?(.complete)
             log.info("Created memo from dropped audio: \(memo.id)")

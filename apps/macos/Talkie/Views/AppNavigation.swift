@@ -36,6 +36,7 @@ enum NavigationSection: Hashable {
     case systemConsole
     case screenshots
     case pendingActions
+    case recentlyDeleted  // Restore or permanently delete soft-deleted memos / notes
     case talkieService  // Accessible via engine icon click, not in sidebar
     case talkieLiveMonitor  // Accessible via live icon click, not in sidebar
     case models
@@ -68,6 +69,7 @@ extension NavigationSection {
         case .systemConsole: return "Console"
         case .screenshots: return "Screenshots"
         case .pendingActions: return "PendingActions"
+        case .recentlyDeleted: return "RecentlyDeleted"
         case .talkieService: return "TalkieService"
         case .talkieLiveMonitor: return "TalkieAgentMonitor"
         case .models: return "Models"
@@ -429,17 +431,6 @@ struct AppNavigation: View {
     private var navigationSplitContent: some View {
         navigationSplitViewCore
             .navigationSplitViewStyle(.balanced)
-            .overlay(alignment: .top) {
-                // Structural horizontal rule, offset to clear the chrome
-                // bar pill + its drop shadow. Sits just above where the
-                // page's own eyebrow row begins so it reads as a page rule
-                // rather than a line cutting through the pill capsule.
-                Rectangle()
-                    .fill(Theme.current.foreground.opacity(0.06))
-                    .frame(height: 0.5)
-                    .offset(y: PageLayout.headerHeight + 14)
-                    .allowsHitTesting(false)
-            }
             .toolbarBackground(
                 TechnicalStyle.isActive ? TechnicalStyle.surface0 : Theme.current.surfaceBase,
                 for: .windowToolbar
@@ -602,7 +593,8 @@ struct AppNavigation: View {
     private var usesTwoColumns: Bool {
         switch selectedSection {
         case .home, .drafts, .notes, .models, .allowedCommands, .aiResults, .allMemos,
-             .recordings, .liveDashboard, .dictations, .systemConsole, .pendingActions, .contextRules, .screenshots:
+             .recordings, .liveDashboard, .dictations, .systemConsole, .pendingActions,
+             .recentlyDeleted, .contextRules, .screenshots:
             return true
         #if DEBUG
         case .designHome, .designAudit, .designComponents:
@@ -625,7 +617,16 @@ struct AppNavigation: View {
         }
 
         dropTask?.cancel()
-        dropTask = Task {
+        dropTask = Task { @MainActor in
+            // Defensive cleanup: regardless of how the task ends, the
+            // drop-target flag should not survive past the work. Without
+            // this, performDrop's `isDropTargeted = false` could be
+            // overridden by a late dropUpdated event during navigation,
+            // leaving the overlay stuck on the "Drop to import" empty
+            // state after a successful import.
+            defer {
+                isDropTargeted = false
+            }
             do {
                 let result = try await AudioDropService.shared.processDroppedItems(
                     providers: providers,
@@ -884,12 +885,10 @@ struct AppNavigation: View {
             entries.append(.item(SidebarItem(id: .contextRules, title: "Context", icon: "square.stack.3d.forward.dottedline", selectedIcon: "square.stack.3d.forward.dottedline.fill")))
         }
 
-        if pendingActionsManager.hasActiveActions || pendingActionsManager.recentActions.count > 0 {
-            entries.append(.section(id: "activity", title: "Activity"))
-            entries.append(.item(SidebarItem(id: .aiResults, title: "Actions", icon: "chart.line.uptrend.xyaxis", selectedIcon: "chart.xyaxis.line")))
-            if pendingActionsManager.hasActiveActions {
-                entries.append(.item(SidebarItem(id: .pendingActions, title: "Pending", icon: "clock.arrow.circlepath", selectedIcon: "clock.fill")))
-            }
+        entries.append(.section(id: "activity", title: "Activity"))
+        entries.append(.item(SidebarItem(id: .aiResults, title: "Actions", icon: "chart.line.uptrend.xyaxis", selectedIcon: "chart.xyaxis.line")))
+        if pendingActionsManager.hasActiveActions {
+            entries.append(.item(SidebarItem(id: .pendingActions, title: "Pending", icon: "clock.arrow.circlepath", selectedIcon: "clock.fill")))
         }
 
         entries.append(.section(id: "tools", title: "Tools"))
@@ -1068,8 +1067,8 @@ struct AppNavigation: View {
                     AllowedCommandsView()
                         .wrapInTalkieSection("AllowedCommands")
                 case .aiResults:
-                    ActivityLogFullView()
-                        .wrapInTalkieSection("AIResults")
+                    ActionWorkbenchView()
+                        .wrapInTalkieSection("Actions", showHeader: false)
                 case .allMemos:
                     if SettingsManager.shared.isScopeTheme {
                         ScopeLibraryView(initialTypeFilter: .memos)
@@ -1120,11 +1119,17 @@ struct AppNavigation: View {
                             .wrapInTalkieSection("Console")
                     }
                 case .screenshots:
+                    // Screenshots renders its own mono instrument header in
+                    // the grid pane; suppress the universal title to avoid a
+                    // duplicate header row.
                     ScreenshotsScreen()
-                        .wrapInTalkieSection("Screenshots")
+                        .wrapInTalkieSection("Screenshots", showHeader: false)
                 case .pendingActions:
                     PendingActionsScreen()
                         .wrapInTalkieSection("PendingActions")
+                case .recentlyDeleted:
+                    RecentlyDeletedView()
+                        .wrapInTalkieSection("RecentlyDeleted", showHeader: false)
 
                 // Three-column sections
                 case .settings:
@@ -1255,17 +1260,23 @@ private struct AppNavigationSidebar<RailHeader: View, LabelHeader: View, Footer:
             .padding(.leading, SidebarLayout.leadingInset)
             .frame(width: layoutWidth, alignment: .leading)
             .overlay(alignment: .trailing) {
-                // Permanent trailing separator. Renders on top of the
-                // handle so the resize pill never visually hides it.
-                // `Color.primary` adapts to light/dark; very low opacity
-                // — should read as a discrete hairline, not assert itself.
-                // Vertical padding gives the line breathing room from
-                // the title-bar above and the window bottom edge below,
-                // so it doesn't feel like it's running window-to-window.
+                // Permanent trailing separator — the structural divider
+                // between the nav rail and the content BODY. Renders on
+                // top of the handle so the resize pill never hides it.
+                // `Color.primary` adapts to light/dark.
+                //
+                // It starts at the BOTTOM of the header band (not the very
+                // top) so it never slices through the masthead: the top
+                // ~48pt — sidebar logo/wordmark, page title, centered
+                // pill, complications — reads as ONE continuous header
+                // band across the whole window, and the rail|content split
+                // only exists in the bodies below it. (At the old full-
+                // height + 0.09 value the line both vanished on cream AND
+                // cut the header, so the header felt disjointed.)
                 Rectangle()
-                    .fill(Color.primary.opacity(0.09))
+                    .fill(Color.primary.opacity(0.14))
                     .frame(width: 0.5)
-                    .padding(.vertical, 3)
+                    .padding(.top, SidebarLayout.headerHeight + SidebarLayout.headerTopPadding)
                     .allowsHitTesting(false)
             }
             .overlay(alignment: .trailing) {

@@ -152,8 +152,9 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             try context.save()
             AppLogger.persistence.info("[Watch] Memo saved from Watch recording")
 
-            // Update widget with new memo
-            PersistenceController.refreshWidgetData(context: context)
+            await MainActor.run {
+                VoiceMemoStore.publishChange(context: context)
+            }
 
             let memoObjectID = newMemo.objectID
             let memoId = newMemo.id

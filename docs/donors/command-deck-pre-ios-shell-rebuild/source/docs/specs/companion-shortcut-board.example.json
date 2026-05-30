@@ -1,0 +1,626 @@
+{
+  "version": 1,
+  "spaces": [
+    {
+      "id": "talkie",
+      "title": "Talkie",
+      "layout": {
+        "rows": 4,
+        "columns": 4
+      },
+      "tiles": [
+        {
+          "id": "memo-record",
+          "title": "Memo",
+          "subtitle": "Start or stop memo recording on your Mac.",
+          "icon": "square.and.pencil",
+          "accentColor": "indigo",
+          "type": "liveAction",
+          "action": {
+            "target": "talkie",
+            "kind": "memo-recording"
+          },
+          "liveUI": {
+            "showsTimer": true,
+            "showsWaveform": true,
+            "showsStopControl": true
+          }
+        },
+        {
+          "id": "dictation",
+          "title": "Dictate",
+          "subtitle": "Start or stop dictation on the paired Mac.",
+          "icon": "waveform.badge.mic",
+          "accentColor": "orange",
+          "type": "liveAction",
+          "action": {
+            "target": "talkie",
+            "kind": "dictation"
+          },
+          "liveUI": {
+            "showsTimer": true,
+            "showsWaveform": true,
+            "showsStopControl": true
+          }
+        },
+        {
+          "id": "screenshot",
+          "title": "Screenshot",
+          "subtitle": "Capture the current Mac screen.",
+          "icon": "camera.viewfinder",
+          "accentColor": "green",
+          "type": "action",
+          "action": {
+            "target": "talkie",
+            "kind": "screenshot"
+          }
+        },
+        {
+          "id": "screen-record",
+          "title": "Screen Record",
+          "subtitle": "Start or stop screen recording on your Mac.",
+          "icon": "record.circle",
+          "accentColor": "red",
+          "type": "liveAction",
+          "action": {
+            "target": "talkie",
+            "kind": "screen-recording"
+          },
+          "liveUI": {
+            "showsTimer": true,
+            "showsWaveform": false,
+            "showsStopControl": true
+          }
+        },
+        {
+          "id": "ask-screen",
+          "title": "Ask Screen",
+          "subtitle": "Analyze the latest screen capture.",
+          "icon": "sparkles.rectangle.stack",
+          "accentColor": "purple",
+          "type": "action",
+          "action": {
+            "target": "talkie",
+            "kind": "ask-about-screen"
+          }
+        },
+        {
+          "id": "ocr-screen",
+          "title": "OCR Screen",
+          "subtitle": "Extract text from the latest screen capture.",
+          "icon": "doc.text.viewfinder",
+          "accentColor": "mint",
+          "type": "action",
+          "action": {
+            "target": "talkie",
+            "kind": "ocr-screen"
+          }
+        },
+        {
+          "id": "latest-memo",
+          "title": "Latest Memo",
+          "subtitle": "Jump to the newest memo in Talkie.",
+          "icon": "waveform",
+          "accentColor": "pink",
+          "type": "action",
+          "action": {
+            "target": "talkie",
+            "kind": "open-latest-memo"
+          }
+        },
+        {
+          "id": "quick-summary",
+          "title": "Quick Summary",
+          "subtitle": "Run the fast memo summary flow.",
+          "icon": "text.alignleft",
+          "accentColor": "teal",
+          "type": "action",
+          "action": {
+            "target": "workflow",
+            "kind": "quick-summary"
+          }
+        },
+        {
+          "id": "extract-tasks",
+          "title": "Extract Tasks",
+          "subtitle": "Pull tasks from the latest memo or transcript.",
+          "icon": "checklist",
+          "accentColor": "blue",
+          "type": "action",
+          "action": {
+            "target": "workflow",
+            "kind": "extract-tasks"
+          }
+        },
+        {
+          "id": "workflow-picker",
+          "title": "Workflow",
+          "subtitle": "Open your workflow picker on the Mac.",
+          "icon": "wand.and.stars",
+          "accentColor": "cyan",
+          "type": "action",
+          "action": {
+            "target": "workflow",
+            "kind": "open-picker"
+          }
+        },
+        {
+          "id": "search",
+          "title": "Search",
+          "subtitle": "Open Talkie search on the Mac.",
+          "icon": "magnifyingglass",
+          "accentColor": "blue",
+          "type": "action",
+          "action": {
+            "target": "talkie",
+            "kind": "search"
+          }
+        },
+        {
+          "id": "memos",
+          "title": "Memos",
+          "subtitle": "Open the memo library.",
+          "icon": "rectangle.stack.badge.person.crop",
+          "accentColor": "pink",
+          "type": "action",
+          "action": {
+            "target": "talkie",
+            "kind": "open-memos"
+          }
+        },
+        {
+          "id": "queue",
+          "title": "Queue",
+          "subtitle": "See what is waiting or running.",
+          "icon": "list.bullet.rectangle.portrait",
+          "accentColor": "yellow",
+          "type": "action",
+          "action": {
+            "target": "talkie",
+            "kind": "open-queue"
+          }
+        },
+        {
+          "id": "failed",
+          "title": "Failed",
+          "subtitle": "Jump to failed workflow runs.",
+          "icon": "exclamationmark.triangle",
+          "accentColor": "red",
+          "type": "action",
+          "action": {
+            "target": "workflow",
+            "kind": "open-failures"
+          }
+        },
+        {
+          "id": "voice-command",
+          "title": "Voice Command",
+          "subtitle": "Start Talkie voice command capture.",
+          "icon": "waveform.badge.plus",
+          "accentColor": "orange",
+          "type": "action",
+          "action": {
+            "target": "talkie",
+            "kind": "voice-command"
+          }
+        },
+        {
+          "id": "talkie-focus",
+          "title": "Talkie",
+          "subtitle": "Bring Talkie to the front.",
+          "icon": "app.badge",
+          "accentColor": "indigo",
+          "type": "action",
+          "action": {
+            "target": "talkie",
+            "kind": "focus"
+          }
+        }
+      ]
+    },
+    {
+      "id": "workspace",
+      "title": "Workspace",
+      "layout": {
+        "rows": 4,
+        "columns": 4
+      },
+      "tiles": [
+        {
+          "id": "focus-browser",
+          "title": "Browser",
+          "subtitle": "Bring the browser to the front.",
+          "icon": "globe",
+          "accentColor": "blue",
+          "type": "action",
+          "action": {
+            "target": "browser",
+            "kind": "focus-browser"
+          }
+        },
+        {
+          "id": "focus-editor",
+          "title": "Editor",
+          "subtitle": "Bring the editor to the front.",
+          "icon": "chevron.left.forwardslash.chevron.right",
+          "accentColor": "indigo",
+          "type": "action",
+          "action": {
+            "target": "mac",
+            "kind": "focus-editor"
+          }
+        },
+        {
+          "id": "focus-terminal",
+          "title": "Terminal",
+          "subtitle": "Bring terminal forward.",
+          "icon": "terminal",
+          "accentColor": "mint",
+          "type": "action",
+          "action": {
+            "target": "terminal",
+            "kind": "focus-terminal"
+          }
+        },
+        {
+          "id": "focus-chat",
+          "title": "Chat",
+          "subtitle": "Bring the active chat app forward.",
+          "icon": "bubble.left.and.bubble.right",
+          "accentColor": "teal",
+          "type": "action",
+          "action": {
+            "target": "mac",
+            "kind": "focus-chat"
+          }
+        },
+        {
+          "id": "show-windows",
+          "title": "Windows",
+          "subtitle": "Show active windows on the Mac.",
+          "icon": "macwindow.on.rectangle",
+          "accentColor": "gray",
+          "type": "action",
+          "action": {
+            "target": "mac",
+            "kind": "show-windows"
+          }
+        },
+        {
+          "id": "github",
+          "title": "GitHub",
+          "subtitle": "Open the current GitHub context.",
+          "icon": "chevron.left.slash.chevron.right",
+          "accentColor": "gray",
+          "type": "action",
+          "action": {
+            "target": "browser",
+            "kind": "open-github"
+          }
+        },
+        {
+          "id": "linear",
+          "title": "Linear",
+          "subtitle": "Open the current Linear workspace.",
+          "icon": "point.3.connected.trianglepath.dotted",
+          "accentColor": "purple",
+          "type": "action",
+          "action": {
+            "target": "browser",
+            "kind": "open-linear"
+          }
+        },
+        {
+          "id": "notes",
+          "title": "Notes",
+          "subtitle": "Open Apple Notes.",
+          "icon": "note.text",
+          "accentColor": "yellow",
+          "type": "action",
+          "action": {
+            "target": "mac",
+            "kind": "open-notes"
+          }
+        },
+        {
+          "id": "calendar",
+          "title": "Calendar",
+          "subtitle": "Open your calendar.",
+          "icon": "calendar",
+          "accentColor": "red",
+          "type": "action",
+          "action": {
+            "target": "mac",
+            "kind": "open-calendar"
+          }
+        },
+        {
+          "id": "slack",
+          "title": "Slack",
+          "subtitle": "Bring Slack to the front.",
+          "icon": "message",
+          "accentColor": "pink",
+          "type": "action",
+          "action": {
+            "target": "mac",
+            "kind": "open-slack"
+          }
+        },
+        {
+          "id": "ssh",
+          "title": "SSH",
+          "subtitle": "Open your SSH helper session.",
+          "icon": "lock.shield",
+          "accentColor": "mint",
+          "type": "action",
+          "action": {
+            "target": "terminal",
+            "kind": "open-ssh"
+          }
+        },
+        {
+          "id": "last-terminal",
+          "title": "Reconnect",
+          "subtitle": "Reconnect the last terminal session.",
+          "icon": "arrow.clockwise",
+          "accentColor": "mint",
+          "type": "action",
+          "action": {
+            "target": "terminal",
+            "kind": "reconnect-last"
+          }
+        },
+        {
+          "id": "logs",
+          "title": "Logs",
+          "subtitle": "Open the current logs tail.",
+          "icon": "doc.text.magnifyingglass",
+          "accentColor": "orange",
+          "type": "action",
+          "action": {
+            "target": "terminal",
+            "kind": "open-logs"
+          }
+        },
+        {
+          "id": "dev-server",
+          "title": "Dev Server",
+          "subtitle": "Bring the dev server console forward.",
+          "icon": "bolt.horizontal.circle",
+          "accentColor": "orange",
+          "type": "action",
+          "action": {
+            "target": "terminal",
+            "kind": "open-dev-server"
+          }
+        },
+        {
+          "id": "tests",
+          "title": "Tests",
+          "subtitle": "Run or inspect tests for the current project.",
+          "icon": "checkmark.circle",
+          "accentColor": "green",
+          "type": "action",
+          "action": {
+            "target": "terminal",
+            "kind": "run-tests"
+          }
+        },
+        {
+          "id": "project-switcher",
+          "title": "Project",
+          "subtitle": "Jump to the current project context.",
+          "icon": "folder",
+          "accentColor": "blue",
+          "type": "action",
+          "action": {
+            "target": "mac",
+            "kind": "project-switcher"
+          }
+        }
+      ]
+    },
+    {
+      "id": "command",
+      "title": "Command",
+      "layout": {
+        "rows": 4,
+        "columns": 4
+      },
+      "tiles": [
+        {
+          "id": "daily-review",
+          "title": "Daily Review",
+          "subtitle": "Run your daily review flow.",
+          "icon": "sun.max",
+          "accentColor": "yellow",
+          "type": "action",
+          "action": {
+            "target": "workflow",
+            "kind": "daily-review"
+          }
+        },
+        {
+          "id": "weekly-review",
+          "title": "Weekly Review",
+          "subtitle": "Run your weekly review flow.",
+          "icon": "calendar.badge.clock",
+          "accentColor": "orange",
+          "type": "action",
+          "action": {
+            "target": "workflow",
+            "kind": "weekly-review"
+          }
+        },
+        {
+          "id": "meeting-start",
+          "title": "Meeting Start",
+          "subtitle": "Open the meeting capture bundle.",
+          "icon": "person.2.wave.2",
+          "accentColor": "teal",
+          "type": "action",
+          "action": {
+            "target": "workflow",
+            "kind": "meeting-start"
+          }
+        },
+        {
+          "id": "meeting-end",
+          "title": "Meeting End",
+          "subtitle": "Process the meeting you just captured.",
+          "icon": "checkmark.seal",
+          "accentColor": "teal",
+          "type": "action",
+          "action": {
+            "target": "workflow",
+            "kind": "meeting-end"
+          }
+        },
+        {
+          "id": "follow-up-email",
+          "title": "Follow-Up",
+          "subtitle": "Draft an email from the latest memo.",
+          "icon": "envelope.badge",
+          "accentColor": "blue",
+          "type": "action",
+          "action": {
+            "target": "workflow",
+            "kind": "follow-up-email"
+          }
+        },
+        {
+          "id": "save-notes",
+          "title": "Save to Notes",
+          "subtitle": "Push the latest output into Notes.",
+          "icon": "square.and.arrow.down",
+          "accentColor": "yellow",
+          "type": "action",
+          "action": {
+            "target": "workflow",
+            "kind": "save-to-notes"
+          }
+        },
+        {
+          "id": "save-reminders",
+          "title": "Reminders",
+          "subtitle": "Create reminders from current output.",
+          "icon": "list.clipboard",
+          "accentColor": "green",
+          "type": "action",
+          "action": {
+            "target": "workflow",
+            "kind": "save-to-reminders"
+          }
+        },
+        {
+          "id": "calendar-event",
+          "title": "Event",
+          "subtitle": "Turn current context into a calendar event.",
+          "icon": "calendar.badge.plus",
+          "accentColor": "red",
+          "type": "action",
+          "action": {
+            "target": "workflow",
+            "kind": "create-calendar-event"
+          }
+        },
+        {
+          "id": "open-raycast",
+          "title": "Raycast",
+          "subtitle": "Open Raycast on the Mac.",
+          "icon": "sparkle.magnifyingglass",
+          "accentColor": "purple",
+          "type": "action",
+          "action": {
+            "target": "raycast",
+            "kind": "open"
+          }
+        },
+        {
+          "id": "raycast-ai",
+          "title": "Raycast AI",
+          "subtitle": "Open a Raycast AI route.",
+          "icon": "wand.and.rays",
+          "accentColor": "purple",
+          "type": "action",
+          "action": {
+            "target": "raycast",
+            "kind": "ai-command"
+          }
+        },
+        {
+          "id": "open-claude",
+          "title": "Claude",
+          "subtitle": "Open Claude with a starter prompt.",
+          "icon": "sparkles",
+          "accentColor": "purple",
+          "type": "action",
+          "action": {
+            "target": "mac",
+            "kind": "open-claude"
+          }
+        },
+        {
+          "id": "recent-sessions",
+          "title": "Sessions",
+          "subtitle": "Open recent sessions or workflows.",
+          "icon": "clock.arrow.circlepath",
+          "accentColor": "gray",
+          "type": "action",
+          "action": {
+            "target": "mac",
+            "kind": "recent-sessions"
+          }
+        },
+        {
+          "id": "recent-projects",
+          "title": "Recent Project",
+          "subtitle": "Jump to a recent project context.",
+          "icon": "folder.badge.clock",
+          "accentColor": "blue",
+          "type": "action",
+          "action": {
+            "target": "mac",
+            "kind": "recent-projects"
+          }
+        },
+        {
+          "id": "talkie-settings",
+          "title": "Settings",
+          "subtitle": "Open Talkie settings.",
+          "icon": "gearshape",
+          "accentColor": "gray",
+          "type": "action",
+          "action": {
+            "target": "talkie",
+            "kind": "open-settings"
+          }
+        },
+        {
+          "id": "favorite-workflows",
+          "title": "Favorites",
+          "subtitle": "Open favorite workflow actions.",
+          "icon": "star",
+          "accentColor": "yellow",
+          "type": "action",
+          "action": {
+            "target": "workflow",
+            "kind": "favorites"
+          }
+        },
+        {
+          "id": "command-palette",
+          "title": "Command",
+          "subtitle": "Open the command palette.",
+          "icon": "command",
+          "accentColor": "indigo",
+          "type": "action",
+          "action": {
+            "target": "mac",
+            "kind": "command-palette"
+          }
+        }
+      ]
+    }
+  ]
+}

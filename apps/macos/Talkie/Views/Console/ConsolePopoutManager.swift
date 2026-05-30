@@ -264,6 +264,8 @@ final class ConsoleTerminalCaptureController {
             switch result {
             case .screenshot(let mode):
                 await captureSelectedScreenshot(mode: mode, sendTo: session)
+            case .screenshotRegion(let rect):
+                await captureSelectedScreenshot(mode: .region, preselectedRegion: rect, sendTo: session)
             case .screenRecord(let mode):
                 await ScreenRecordingController.shared.startRecording(mode: mode)
             case .toggleCamera:
@@ -289,11 +291,24 @@ final class ConsoleTerminalCaptureController {
         session.send(screenshotPrompt(for: item))
     }
 
-    private func captureSelectedScreenshot(mode: CaptureMode, sendTo session: ManagedAgentConsoleSession) async {
-        guard let capture = await ScreenshotCaptureService.shared.captureStandalone(mode: mode) else {
+    private func captureSelectedScreenshot(
+        mode: CaptureMode,
+        preselectedRegion: CGRect? = nil,
+        sendTo session: ManagedAgentConsoleSession
+    ) async {
+        guard let capture = await ScreenshotCaptureService.shared.captureStandalone(
+            mode: mode,
+            preselectedRegion: preselectedRegion
+        ) else {
             screenshotError = "Screenshot capture cancelled"
             return
         }
+
+        let previewID = ScreenshotPreviewPanel.shared.show(
+            thumbnail: capture.previewImage,
+            sourceWidth: capture.width,
+            sourceHeight: capture.height
+        )
 
         guard let item = await ScreenshotTray.shared.addReturningItem(
             data: capture.data,
@@ -302,24 +317,19 @@ final class ConsoleTerminalCaptureController {
             mode: mode,
             windowTitle: capture.windowTitle,
             appName: capture.appName,
-            displayName: capture.displayName
+            displayName: capture.displayName,
+            initialThumbnail: capture.previewImage
         ) else {
             screenshotError = "Could not save screenshot"
             return
         }
 
-        let previewImage: CGImage
-        if let decodedImage = NSImage(data: capture.data),
-           let decodedCG = decodedImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-            previewImage = decodedCG
-        } else {
-            previewImage = capture.image
-        }
-
-        ScreenshotPreviewPanel.shared.show(image: previewImage, fileURL: item.tempURL)
+        ScreenshotPreviewPanel.shared.attachFileURL(item.tempURL, to: previewID)
 
         guard !isTerminalDictationActive else { return }
         session.send(screenshotPrompt(for: item))
+
+        TrayActionService.shared.persistStandaloneScreenshotToLibrary(item)
     }
 
     private var isTerminalDictationActive: Bool {

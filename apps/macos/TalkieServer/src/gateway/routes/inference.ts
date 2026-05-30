@@ -24,11 +24,16 @@ export interface InferenceBody {
   model: string;
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
   temperature?: number;
+  topP?: number;
   maxTokens?: number;
 }
 
 export interface ProvidersResponse {
-  providers: ProviderName[];
+  providers: Array<{
+    id: ProviderName;
+    name: string;
+    available: boolean;
+  }>;
 }
 
 export interface ModelsResponse {
@@ -49,7 +54,7 @@ export async function inferenceRoute(
     return badRequest("provider, model, and messages are required");
   }
 
-  const validProviders: ProviderName[] = ["openai", "anthropic", "google", "groq"];
+  const validProviders = listProviders();
   if (!validProviders.includes(body.provider)) {
     return badRequest(`Invalid provider. Valid: ${validProviders.join(", ")}`);
   }
@@ -62,6 +67,7 @@ export async function inferenceRoute(
       model: body.model,
       messages: body.messages,
       temperature: body.temperature,
+      topP: body.topP,
       maxTokens: body.maxTokens,
     };
 
@@ -78,7 +84,11 @@ export async function inferenceRoute(
  */
 export function providersRoute(): ProvidersResponse {
   return {
-    providers: listProviders(),
+    providers: listProviders().map((provider) => ({
+      id: provider,
+      name: providerDisplayName(provider),
+      available: true,
+    })),
   };
 }
 
@@ -93,7 +103,7 @@ export async function modelsRoute(
     return badRequest("provider query param required");
   }
 
-  const validProviders: ProviderName[] = ["openai", "anthropic", "google", "groq"];
+  const validProviders = listProviders();
   if (!validProviders.includes(provider as ProviderName)) {
     return badRequest(`Invalid provider. Valid: ${validProviders.join(", ")}`);
   }
@@ -106,5 +116,20 @@ export async function modelsRoute(
     };
   } catch (error) {
     return serverError("Failed to list models", String(error));
+  }
+}
+
+function providerDisplayName(provider: ProviderName): string {
+  switch (provider) {
+    case "openai":
+      return "OpenAI";
+    case "anthropic":
+      return "Anthropic";
+    case "google":
+      return "Google Gemini";
+    case "groq":
+      return "Groq";
+    case "minimax":
+      return "MiniMax";
   }
 }

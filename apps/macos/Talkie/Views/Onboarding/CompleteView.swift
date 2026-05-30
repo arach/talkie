@@ -110,7 +110,7 @@ struct CompleteView: View {
                     colors: colors,
                     icon: "magnifyingglass",
                     title: "Search Everything",
-                    description: "Use ⌘F to search across all your transcriptions"
+                    description: "Press ⌘F anywhere to jump to the library and filter your transcriptions"
                 )
 
                 TipCard(

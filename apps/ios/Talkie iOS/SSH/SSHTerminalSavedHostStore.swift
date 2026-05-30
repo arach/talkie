@@ -28,6 +28,9 @@ struct SSHTerminalSavedHostStore {
                 host.startupCommandOverride,
                 for: normalizedHost.startupProfile
             )
+            if normalizedHost.shouldUseNativeLauncher(for: normalizedHost.startupProfile) {
+                normalizedHost.startupProfile = .standardShell
+            }
             return normalizedHost
         }
 

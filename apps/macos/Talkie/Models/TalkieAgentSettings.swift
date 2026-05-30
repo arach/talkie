@@ -521,27 +521,20 @@ final class AgentSettings {
         get {
             guard let theme = SettingsManager.shared.currentTheme else { return .live }
             switch theme {
+            case .scope: return .light       // Light agent UI matches cream-phosphor
             case .talkiePro: return .midnight
-            case .technical: return .technical
-            case .terminal: return .terminal
-            case .darkMatte: return .darkMatte
-            case .classic: return .live
-            case .warm: return .warm
             case .light: return .light
-            case .liquidGlass: return .midnight  // Deep dark for glass to pop
-            case .scope: return .light           // Light agent UI matches cream-phosphor
             }
         }
         set {
             let preset: ThemePreset
             switch newValue {
-            case .live: preset = .talkiePro
-            case .midnight: preset = .talkiePro
-            case .technical: preset = .technical
-            case .terminal: preset = .terminal
-            case .darkMatte: preset = .darkMatte
-            case .warm: preset = .warm
-            case .light: preset = .light
+            // All retired VisualThemes collapse to Pro dark — the same
+            // migration policy as ThemePreset.init(from:).
+            case .live, .midnight, .technical, .terminal, .darkMatte, .warm:
+                preset = .talkiePro
+            case .light:
+                preset = .light
             }
             SettingsManager.shared.applyTheme(preset)
         }

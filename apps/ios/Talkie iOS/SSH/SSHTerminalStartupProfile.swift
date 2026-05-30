@@ -63,6 +63,10 @@ enum SSHTerminalStartupProfile: String, Codable, CaseIterable, Sendable {
         )
     }
 
+    static func nativeLauncherCommand() -> String {
+        nativePersistentShellCommand
+    }
+
     static func normalizedStartupCommandOverride(
         _ command: String?,
         for profile: SSHTerminalStartupProfile
@@ -77,6 +81,14 @@ enum SSHTerminalStartupProfile: String, Codable, CaseIterable, Sendable {
         }
 
         if isLegacyHelperWrapper(trimmedCommand, for: profile) {
+            return nil
+        }
+
+        if isPairedHomeLauncherCommand(trimmedCommand) {
+            return nil
+        }
+
+        if isNativeLauncherCommand(trimmedCommand) {
             return nil
         }
 
@@ -103,6 +115,10 @@ enum SSHTerminalStartupProfile: String, Codable, CaseIterable, Sendable {
 
         if trimmedCommand == pairedHomeLauncherCommand().trimmingCharacters(in: .whitespacesAndNewlines) {
             return .talkieShell
+        }
+
+        if isNativeLauncherCommand(trimmedCommand) {
+            return .standardShell
         }
 
         if isLegacyHelperWrapper(trimmedCommand, for: .talkieShell) {
@@ -149,13 +165,19 @@ enum SSHTerminalStartupProfile: String, Codable, CaseIterable, Sendable {
         )
     }
 
+    private static var nativePersistentShellCommand: String {
+        #"""
+/bin/zsh -fc 'export PATH="$HOME/bin:$HOME/.local/bin:$HOME/.opencode/bin:$HOME/.bun/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin"; SESSION_NAME="${TALKIE_NATIVE_SESSION:-talkie-native-${TALKIE_SURFACE:-phone}}"; SHELL_BIN="${SHELL:-}"; if [[ -z "$SHELL_BIN" || ! -x "$SHELL_BIN" ]]; then SHELL_BIN="$(dscl . -read "/Users/$USER" UserShell 2>/dev/null | sed "s/^UserShell: //")"; fi; if [[ -z "$SHELL_BIN" || ! -x "$SHELL_BIN" ]]; then SHELL_BIN="$(command -v zsh || printf /bin/zsh)"; fi; TMUX_BIN="$(command -v tmux || true)"; if [[ -n "$TMUX_BIN" ]]; then TMUX_SHELL_COMMAND="exec \"$SHELL_BIN\" -il"; "$TMUX_BIN" has-session -t "$SESSION_NAME" 2>/dev/null || "$TMUX_BIN" new-session -d -s "$SESSION_NAME" -c "$HOME" "$TMUX_SHELL_COMMAND"; "$TMUX_BIN" set-option -t "$SESSION_NAME" status off >/dev/null 2>&1 || true; exec "$TMUX_BIN" attach -t "$SESSION_NAME"; fi; exec "$SHELL_BIN" -il'
+"""#
+    }
+
     private static func remoteHelperCommand(helperName: String, fallbackMessage: String) -> String {
         let escapedFallbackMessage = fallbackMessage
             .replacing("\\", with: "\\\\")
             .replacing("\"", with: "\\\"")
 
         return #"""
-/bin/zsh -lc 'helper="$HOME/.talkie-shell/bin/\#(helperName)"; if [[ -x "$helper" ]]; then exec "$helper"; fi; printf "\r\n\#(escapedFallbackMessage)\r\n"; exec "$(command -v zsh || printf /bin/zsh)" -il'
+/bin/zsh -fc 'export PATH="$HOME/.talkie-shell/bin:$HOME/.talkie-shell/runtime/bin:$HOME/bin:$HOME/.local/bin:$HOME/.opencode/bin:$HOME/.bun/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin"; helper="$HOME/.talkie-shell/bin/\#(helperName)"; if [[ -x "$helper" ]]; then exec "$helper"; fi; printf "\r\n\#(escapedFallbackMessage)\r\n"; export PROMPT="${PROMPT:-%n@%m:%~ %# }"; cd "$HOME" 2>/dev/null || true; exec "$(command -v zsh || printf /bin/zsh)" -f -i'
 """#
     }
 
@@ -205,6 +227,16 @@ enum SSHTerminalStartupProfile: String, Codable, CaseIterable, Sendable {
             .reduce(into: Set<String>()) { result, value in
             result.insert(value)
             }
+    }
+
+    private static func isPairedHomeLauncherCommand(_ command: String) -> Bool {
+        command.contains(#"helper="$HOME/.talkie-shell/bin/talkie-enter""#)
+            || command.contains(#"HELPER="$HOME/.talkie-shell/bin/talkie-enter""#)
+    }
+
+    private static func isNativeLauncherCommand(_ command: String) -> Bool {
+        command.contains("TALKIE_NATIVE_SESSION")
+            || command.contains("talkie-native-${TALKIE_SURFACE:-phone}")
     }
 
     private static func isLegacyRawStartupScript(_ command: String) -> Bool {

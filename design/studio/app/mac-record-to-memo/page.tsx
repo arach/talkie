@@ -51,6 +51,7 @@ const SAMPLE_TITLE = "Chrome bar consolidation";
 
 export default function MacRecordToMemoStudy() {
   const [phase, setPhase] = useState<Phase>("idle");
+  const [forceHover, setForceHover] = useState(false);
   const timeoutsRef = useRef<number[]>([]);
 
   function clearScheduled() {
@@ -66,16 +67,22 @@ export default function MacRecordToMemoStudy() {
   function play() {
     clearScheduled();
     setPhase("recording");
-    // Hold "recording" for a beat so the wave reads as active.
-    schedule(1800, () => setPhase("stopping"));
-    schedule(1800 + 400, () => setPhase("settling"));
-    schedule(1800 + 400 + 300, () => setPhase("emerging"));
-    schedule(1800 + 400 + 300 + 1100, () => setPhase("memo"));
+    // Hold "recording" long enough to actually read the wave + cluster
+    // hover-reveal; the previous timing blew past it in under 2s.
+    schedule(3600, () => setPhase("stopping"));
+    schedule(3600 + 800, () => setPhase("settling"));
+    schedule(3600 + 800 + 700, () => setPhase("emerging"));
+    schedule(3600 + 800 + 700 + 1800, () => setPhase("memo"));
   }
 
   function reset() {
     clearScheduled();
     setPhase("idle");
+  }
+
+  function jumpTo(target: Phase) {
+    clearScheduled();
+    setPhase(target);
   }
 
   useEffect(() => () => clearScheduled(), []);
@@ -87,11 +94,20 @@ export default function MacRecordToMemoStudy() {
       help="Press Play to watch the wave decelerate, flatten, and reveal text in place. Source of truth for the Swift port."
     >
       <div className="flex flex-col gap-7 py-4">
-        <Controls phase={phase} onPlay={play} onReset={reset} />
+        <Controls
+          phase={phase}
+          onPlay={play}
+          onReset={reset}
+          forceHover={forceHover}
+          onToggleForceHover={() => setForceHover((v) => !v)}
+        />
 
-        <Stage phase={phase} />
+        <Stage phase={phase} forceHover={forceHover} />
 
-        <PhaseLegend phase={phase} />
+        <PhaseLegend phase={phase} onJump={jumpTo} />
+
+        <PipIteration />
+
 
         <SpecNotes />
       </div>
@@ -106,10 +122,14 @@ function Controls({
   phase,
   onPlay,
   onReset,
+  forceHover,
+  onToggleForceHover,
 }: {
   phase: Phase;
   onPlay: () => void;
   onReset: () => void;
+  forceHover: boolean;
+  onToggleForceHover: () => void;
 }) {
   const isPlaying = phase !== "idle" && phase !== "memo";
   return (
@@ -128,6 +148,19 @@ function Controls({
       >
         Reset
       </button>
+      <button
+        type="button"
+        onClick={onToggleForceHover}
+        aria-pressed={forceHover}
+        className="rounded-sm border px-3 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.22em] transition-colors"
+        style={{
+          borderColor: forceHover ? "#232423" : "rgba(35,36,35,0.16)",
+          background: forceHover ? "#232423" : "transparent",
+          color: forceHover ? "#F8F8F7" : "rgba(35,36,35,0.55)",
+        }}
+      >
+        {forceHover ? "Hover · ON" : "Show hover"}
+      </button>
 
       <div className="ml-auto flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.22em] text-studio-ink-faint">
         <span>Phase</span>
@@ -137,7 +170,13 @@ function Controls({
   );
 }
 
-function PhaseLegend({ phase }: { phase: Phase }) {
+function PhaseLegend({
+  phase,
+  onJump,
+}: {
+  phase: Phase;
+  onJump: (p: Phase) => void;
+}) {
   return (
     <div className="flex items-stretch gap-0 rounded-md border border-studio-edge font-mono text-[9px] font-semibold uppercase tracking-[0.22em]">
       {PHASE_ORDER.map((p, i) => {
@@ -145,9 +184,11 @@ function PhaseLegend({ phase }: { phase: Phase }) {
         const reached =
           PHASE_ORDER.indexOf(phase) >= PHASE_ORDER.indexOf(p);
         return (
-          <div
+          <button
             key={p}
-            className="flex-1 border-r border-studio-edge px-3 py-2.5 text-center last:border-r-0"
+            type="button"
+            onClick={() => onJump(p)}
+            className="flex-1 cursor-pointer border-r border-studio-edge px-3 py-2.5 text-center transition-colors last:border-r-0 hover:bg-[rgba(35,36,35,0.06)]"
             style={{
               background: active
                 ? "rgba(196,125,28,0.12)"
@@ -162,7 +203,7 @@ function PhaseLegend({ phase }: { phase: Phase }) {
             }}
           >
             {i}&nbsp;·&nbsp;{p}
-          </div>
+          </button>
         );
       })}
     </div>
@@ -172,7 +213,13 @@ function PhaseLegend({ phase }: { phase: Phase }) {
 // ──────────────────────────────────────────────────────────────────────
 // Stage — the actual visual surface that morphs through phases
 
-function Stage({ phase }: { phase: Phase }) {
+function Stage({
+  phase,
+  forceHover,
+}: {
+  phase: Phase;
+  forceHover: boolean;
+}) {
   return (
     <div
       className="relative overflow-hidden rounded-lg"
@@ -190,7 +237,7 @@ function Stage({ phase }: { phase: Phase }) {
         {phase === "memo" ? (
           <MemoDetailLayout />
         ) : (
-          <RecordingCompanion phase={phase} />
+          <RecordingCompanion phase={phase} forceHover={forceHover} />
         )}
       </div>
     </div>
@@ -200,7 +247,13 @@ function Stage({ phase }: { phase: Phase }) {
 // ──────────────────────────────────────────────────────────────────────
 // Recording companion that decays through phases
 
-function RecordingCompanion({ phase }: { phase: Phase }) {
+function RecordingCompanion({
+  phase,
+  forceHover = false,
+}: {
+  phase: Phase;
+  forceHover?: boolean;
+}) {
   // Phase-driven amplitude target. CSS transitions interpolate.
   const amplitude =
     phase === "recording"
@@ -219,15 +272,17 @@ function RecordingCompanion({ phase }: { phase: Phase }) {
       ? 1.8
       : 1.2;
 
-  // The line color shifts subtly from amber to a more anchored amber-ink
-  // as it settles — gives a sense of resolve.
-  const strokeColor = SCOPE_AMBER;
-
   const visible = phase !== "idle";
+  const recording = phase === "recording";
+
+  // Corner cluster + STOP rest near-invisible; hover sharpens them
+  // to full presence. The waveform owns the center — every glyph
+  // that isn't the wave is barely felt until the cursor lands on it.
+  const restOpacity = 0.06;
 
   return (
     <div
-      className="flex flex-col items-stretch transition-opacity duration-300"
+      className="group relative flex-1 transition-opacity duration-300"
       style={{
         opacity: visible ? 1 : 0,
         padding: "32px 80px",
@@ -236,84 +291,136 @@ function RecordingCompanion({ phase }: { phase: Phase }) {
       {/* Top hairline */}
       <div style={{ height: 0.5, background: "rgba(35,36,35,0.16)" }} />
 
-      <div
-        className="flex flex-col items-center gap-7 py-9"
-        style={{ flex: "1 1 auto" }}
-      >
-        {/* Eyebrow — caption changes with phase */}
-        <EyebrowRow phase={phase} />
-
-        {/* The wave / baseline / emerging text — same vertical slot */}
+      {/* Center: waveform / baseline / emerging text — no surrounding
+          chrome. Decorations live in the corners. */}
+      <div className="flex flex-1 items-center justify-center py-9">
         <div className="relative" style={{ width: 880, height: 196 }}>
-          {/* Animated wave / baseline */}
           <div className="absolute inset-0 flex items-center justify-center">
             <MorphingFlourish
               amplitude={amplitude}
               strokeWidth={strokeWidth}
-              strokeColor={strokeColor}
+              strokeColor={SCOPE_AMBER}
             />
           </div>
-
-          {/* Emerging text — sits on top once we're at "emerging" */}
           <div className="absolute inset-0 flex items-center justify-center">
             <EmergingTranscript active={phase === "emerging"} />
           </div>
         </div>
-
-        {/* Caption row */}
-        <CaptionRow phase={phase} />
       </div>
 
       {/* Bottom hairline */}
       <div style={{ height: 0.5, background: "rgba(35,36,35,0.16)" }} />
+
+      {/* Top-right cluster: RECORDING dot + label · LIBRARY · SCOPE · timer · close.
+          Hover-reveal — at rest this is a quiet stripe; under the cursor
+          (or with forceHover on) it sharpens. */}
+      <div
+        className="absolute right-[88px] top-[58px] flex items-center gap-3 transition-opacity duration-200 group-hover:opacity-100"
+        style={{ opacity: forceHover ? 1 : restOpacity }}
+      >
+        <DetailsCluster phase={phase} />
+        <CloseButton />
+      </div>
+
+      {/* Bottom-right: STOP. Only present while recording; hover-reveal. */}
+      <div
+        className="absolute bottom-[58px] right-[88px] transition-opacity duration-200 group-hover:opacity-100"
+        style={{
+          opacity: recording ? (forceHover ? 1 : restOpacity) : 0,
+        }}
+      >
+        <StopButton />
+      </div>
     </div>
   );
 }
 
-function EyebrowRow({ phase }: { phase: Phase }) {
-  const eyebrowText =
-    phase === "stopping" || phase === "settling" || phase === "emerging"
-      ? "TRANSCRIBING"
-      : "RECORDING";
+/**
+ * Top-right details — phase-aware label + channel chips + timer.
+ * No more centered eyebrow / centered caption; the waveform owns the
+ * center, the corner owns the metadata.
+ */
+function DetailsCluster({ phase }: { phase: Phase }) {
+  const isRecording = phase === "recording";
+  const label = isRecording
+    ? "RECORDING"
+    : phase === "stopping"
+    ? "STOPPING"
+    : phase === "settling" || phase === "emerging"
+    ? "TRANSCRIBING"
+    : "—";
 
   return (
     <div
-      className="flex items-center gap-3 font-mono text-[10px] font-semibold uppercase tracking-[0.36em]"
+      className="flex items-baseline gap-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.28em]"
       style={{ color: TALKIE_INK_FAINT }}
     >
-      <RecDot active={phase === "recording"} />
-      <span>{eyebrowText}</span>
-      <span style={{ color: TALKIE_INK_FAINTER }}>·</span>
+      <span className="tabular-nums" style={{ color: TALKIE_INK }}>
+        0:14
+      </span>
+      <Dot />
+      <RecDot active={isRecording} />
+      <span style={{ color: isRecording ? TALKIE_INK : TALKIE_INK_FAINT }}>
+        {label}
+      </span>
+      <Dot />
       <span>LIBRARY</span>
-      <span style={{ color: TALKIE_INK_FAINTER }}>·</span>
+      <Dot />
       <span>SCOPE</span>
     </div>
   );
 }
 
-function CaptionRow({ phase }: { phase: Phase }) {
-  const elapsed = "0:14";
-  const status =
-    phase === "recording"
-      ? "RECORDING MEMO"
-      : phase === "stopping"
-      ? "STOPPING"
-      : phase === "settling" || phase === "emerging"
-      ? "TRANSCRIBING…"
-      : "—";
+function Dot() {
+  return <span style={{ color: TALKIE_INK_FAINTER }}>·</span>;
+}
 
+function CloseButton() {
   return (
-    <div
-      className="flex w-full items-baseline justify-between font-mono text-[10px] uppercase tracking-[0.28em]"
-      style={{ color: TALKIE_INK_FAINT }}
+    <button
+      type="button"
+      aria-label="Close"
+      className="flex h-6 w-6 items-center justify-center rounded-full border transition-colors"
+      style={{
+        borderColor: "rgba(35,36,35,0.20)",
+        color: TALKIE_INK_FAINT,
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = TALKIE_INK;
+        e.currentTarget.style.color = TALKIE_INK;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = "rgba(35,36,35,0.20)";
+        e.currentTarget.style.color = TALKIE_INK_FAINT;
+      }}
     >
-      <span>
-        <span className="tabular-nums">{elapsed}</span>
-        &nbsp;·&nbsp;
-        <span>{status}</span>
+      <span aria-hidden className="text-[13px] leading-none">
+        ×
       </span>
-      <span style={{ opacity: phase === "recording" ? 1 : 0 }}>⌘. STOP</span>
-    </div>
+    </button>
+  );
+}
+
+function StopButton() {
+  return (
+    <button
+      type="button"
+      aria-label="Stop recording"
+      className="flex items-center gap-2 rounded-full px-3.5 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.22em] transition-colors"
+      style={{
+        background: REC_RED,
+        color: "#FFF7F5",
+        boxShadow: "0 1px 0 rgba(255,255,255,0.18) inset, 0 2px 6px rgba(192,58,42,0.25)",
+      }}
+    >
+      <span
+        aria-hidden
+        className="inline-block h-2 w-2"
+        style={{ background: "#FFF7F5" }}
+      />
+      <span>STOP</span>
+      <span style={{ color: "rgba(255,247,245,0.65)" }}>⌘.</span>
+    </button>
   );
 }
 
@@ -683,6 +790,228 @@ function RecDot({ active }: { active: boolean }) {
         transition: "opacity 400ms ease-out, box-shadow 400ms ease-out",
       }}
     />
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// PiP iteration — minimized recording state for moving around the app.
+// Same data (REC dot, timer, mini wave, STOP) compressed into a floating
+// capsule that anchors to a window corner while the rest of the app
+// stays usable underneath. The expand glyph returns you to the full
+// overlay; close ends the recording.
+
+function PipIteration() {
+  return (
+    <div className="flex flex-col gap-3">
+      <SubHeader
+        eyebrow="· PiP · minimized while you keep working"
+        title="Recording follows you around the app"
+        hint="floating capsule · live wave · STOP + expand affordances · hover-reveal pattern"
+      />
+      <div
+        className="relative overflow-hidden rounded-lg"
+        style={{
+          background: TALKIE_CREAM,
+          border: `0.5px solid rgba(35,36,35,0.10)`,
+          minHeight: 320,
+        }}
+      >
+        {/* Background app surface — desaturated mock so the PiP capsule
+            reads as foreground without us having to render a real app. */}
+        <PipBackdrop />
+
+        {/* The PiP capsule, anchored bottom-right of the fake window. */}
+        <div className="absolute bottom-6 right-6">
+          <PipCapsule />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PipBackdrop() {
+  return (
+    <div className="absolute inset-0 flex flex-col" style={{ opacity: 0.55 }}>
+      {/* Faux chrome */}
+      <div
+        className="flex items-center gap-2 border-b px-4 py-2.5"
+        style={{ borderColor: "rgba(35,36,35,0.10)", background: TALKIE_PAPER }}
+      >
+        <div className="flex gap-1.5">
+          <span className="h-3 w-3 rounded-full" style={{ background: "#DEDEDD" }} />
+          <span className="h-3 w-3 rounded-full" style={{ background: "#DEDEDD" }} />
+          <span className="h-3 w-3 rounded-full" style={{ background: "#DEDEDD" }} />
+        </div>
+        <div
+          className="ml-auto font-mono text-[9px] uppercase tracking-[0.20em]"
+          style={{ color: TALKIE_INK_FAINTER }}
+        >
+          Talkie · Memo · Chrome bar consolidation
+        </div>
+        <div className="ml-auto" />
+      </div>
+      {/* Body lines — suggest a memo detail being read while recording continues */}
+      <div className="flex flex-col gap-2 px-8 pt-6">
+        <div
+          className="h-3 w-1/3 rounded-sm"
+          style={{ background: "rgba(35,36,35,0.10)" }}
+        />
+        <div
+          className="h-2 w-2/3 rounded-sm"
+          style={{ background: "rgba(35,36,35,0.06)" }}
+        />
+        <div
+          className="mt-3 h-2 w-11/12 rounded-sm"
+          style={{ background: "rgba(35,36,35,0.06)" }}
+        />
+        <div
+          className="h-2 w-10/12 rounded-sm"
+          style={{ background: "rgba(35,36,35,0.06)" }}
+        />
+        <div
+          className="h-2 w-9/12 rounded-sm"
+          style={{ background: "rgba(35,36,35,0.06)" }}
+        />
+        <div
+          className="mt-3 h-2 w-11/12 rounded-sm"
+          style={{ background: "rgba(35,36,35,0.06)" }}
+        />
+        <div
+          className="h-2 w-7/12 rounded-sm"
+          style={{ background: "rgba(35,36,35,0.06)" }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Floating recording capsule. Always-visible (no hover-gate) since it's
+ * the only persistent reminder that you're still recording while you
+ * navigate elsewhere. Hover sharpens the affordances and exposes the
+ * mini-waveform; rest state shows a slim REC dot · timer pair with the
+ * STOP + expand glyphs ghosted to ~40%.
+ */
+function PipCapsule() {
+  return (
+    <div
+      className="group flex items-center gap-3 rounded-full pl-3 pr-1 py-1.5 transition-shadow"
+      style={{
+        background: "rgba(255,255,255,0.92)",
+        border: "0.5px solid rgba(35,36,35,0.16)",
+        backdropFilter: "blur(18px) saturate(1.4)",
+        WebkitBackdropFilter: "blur(18px) saturate(1.4)",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.10), 0 1px 0 rgba(255,255,255,0.6) inset",
+      }}
+    >
+      {/* Always-visible: REC dot + timer. The minimum honest signal that
+          a recording is still happening. */}
+      <div className="flex items-center gap-1.5">
+        <span
+          className="block h-2 w-2 rounded-full"
+          style={{ background: REC_RED, boxShadow: "0 0 6px rgba(192,58,42,0.45)" }}
+        />
+        <span
+          className="font-mono text-[10px] font-semibold tabular-nums uppercase tracking-[0.16em]"
+          style={{ color: TALKIE_INK }}
+        >
+          0:14
+        </span>
+      </div>
+
+      {/* Mini waveform — sharpens on hover. */}
+      <div
+        className="transition-opacity duration-200"
+        style={{ opacity: 0.55, width: 80, height: 16 }}
+      >
+        <PipMiniWave />
+      </div>
+
+      {/* Action cluster: expand + STOP. Ghosted at rest, full on hover. */}
+      <div
+        className="ml-1 flex items-center gap-1 transition-opacity duration-200 group-hover:opacity-100"
+        style={{ opacity: 0.4 }}
+      >
+        <button
+          type="button"
+          aria-label="Expand recording overlay"
+          className="flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-[rgba(35,36,35,0.06)]"
+          style={{ color: TALKIE_INK_FAINT }}
+        >
+          <span aria-hidden className="text-[11px] leading-none">
+            ↗
+          </span>
+        </button>
+        <button
+          type="button"
+          aria-label="Stop recording"
+          className="flex h-7 items-center gap-1 rounded-full px-2.5 font-mono text-[9px] font-semibold uppercase tracking-[0.20em]"
+          style={{
+            background: REC_RED,
+            color: "#FFF7F5",
+            boxShadow: "0 1px 0 rgba(255,255,255,0.18) inset",
+          }}
+        >
+          <span
+            aria-hidden
+            className="inline-block h-1.5 w-1.5"
+            style={{ background: "#FFF7F5" }}
+          />
+          <span>STOP</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PipMiniWave() {
+  return (
+    <svg width="80" height="16" viewBox="0 0 80 16" fill="none" aria-hidden>
+      <path
+        d="M0 8 Q 4 4, 8 8 T 16 8 T 24 6 T 32 8 T 40 9 T 48 5 T 56 8 T 64 7 T 72 8 T 80 8"
+        stroke={SCOPE_AMBER}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        fill="none"
+      />
+    </svg>
+  );
+}
+
+function SubHeader({
+  eyebrow,
+  title,
+  hint,
+}: {
+  eyebrow: string;
+  title: string;
+  hint?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div
+        className="font-mono text-[9px] font-semibold uppercase tracking-[0.32em]"
+        style={{ color: TALKIE_INK_FAINTER }}
+      >
+        {eyebrow}
+      </div>
+      <div className="flex items-baseline justify-between gap-4">
+        <h3
+          className="m-0 font-display text-[18px] font-medium tracking-tight"
+          style={{ color: TALKIE_INK }}
+        >
+          {title}
+        </h3>
+        {hint ? (
+          <span
+            className="font-mono text-[10px] tracking-[0.12em]"
+            style={{ color: TALKIE_INK_FAINT }}
+          >
+            {hint}
+          </span>
+        ) : null}
+      </div>
+    </div>
   );
 }
 

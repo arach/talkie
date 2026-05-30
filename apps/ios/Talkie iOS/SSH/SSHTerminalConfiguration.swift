@@ -16,4 +16,5 @@ struct SSHTerminalConfiguration: Equatable, Sendable {
     var term: String = "xterm-256color"
     var startupProfile: SSHTerminalStartupProfile = .standardShell
     var startupCommand: String? = nil
+    var connectTimeoutSeconds: Int = 8
 }

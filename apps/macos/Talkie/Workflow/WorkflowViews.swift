@@ -1199,6 +1199,7 @@ struct WorkflowInlineEditor: View {
     let onDelete: () -> Void
     let onDuplicate: () -> Void
     let onRun: () -> Void
+    var onBack: (() -> Void)?
 
     private let workflowService = WorkflowService.shared
     private let settings = SettingsManager.shared
@@ -1225,6 +1226,11 @@ struct WorkflowInlineEditor: View {
             // Header bar with glass styling
             GlassHeaderBar {
                 HStack(spacing: Spacing.sm) {
+                    if let onBack {
+                        GlassPillButton("All", icon: "chevron.left", style: .ghost, action: onBack)
+                            .help("Back to workflows")
+                    }
+
                     // Inline icon/color picker - clickable in edit mode
                     WorkflowIconColorPicker(
                         selectedIcon: $workflow.icon,

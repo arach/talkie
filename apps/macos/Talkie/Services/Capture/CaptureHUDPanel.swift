@@ -47,7 +47,7 @@ final class CaptureHUDPanel {
         let screen: NSScreen? = {
             switch position {
             case .cursor: return cursorScreen ?? NSScreen.main ?? NSScreen.screens.first
-            case .fixed:  return NSScreen.main ?? cursorScreen ?? NSScreen.screens.first
+            case .fixed:  return cursorScreen ?? NSScreen.main ?? NSScreen.screens.first
             }
         }()
         guard let screen else {
@@ -58,13 +58,16 @@ final class CaptureHUDPanel {
 
         switch position {
         case .fixed:
-            // Top-center of the main display, hugging the notch / menu bar.
+            // Top-center, fixed slot. The screenshot preview lives in
+            // the same lane; they're allowed to overlap. Avoidance/
+            // stacking was tried (offset, push-below) and dropped —
+            // visual clutter wasn't worth the layout complexity.
             let x = clamp(
                 visibleFrame.midX - panelWidth / 2,
                 min: visibleFrame.minX + margin,
                 max: visibleFrame.maxX - panelWidth - margin
             )
-            let y = visibleFrame.maxY - panelHeight - 18
+            let y = visibleFrame.maxY - panelHeight - 8
             return NSRect(x: x, y: y, width: panelWidth, height: panelHeight)
 
         case .cursor:
@@ -181,6 +184,7 @@ final class CaptureHUDPanel {
     func toggleMode() {
         state.mode = (state.mode == .screenshot) ? .video : .screenshot
     }
+
 }
 
 // MARK: - HUD SwiftUI View
@@ -247,36 +251,29 @@ private struct CaptureHUDView: View {
 
     // MARK: - Top strip
 
+    /// Top strip now hosts BOTH mode tabs (Screenshot · Video) side by
+    /// side. Each is clickable and toggles `state.mode`. The active tab
+    /// carries the accent dot + lit text + tinted background; the
+    /// inactive tab is a hollow dot + faint text. Replaces the older
+    /// single-mode badge so the user can see — and switch — what mode
+    /// the HUD is in at a glance.
     private var topStrip: some View {
-        HStack(spacing: 6) {
-            // Accent dot — pulses in video mode.
-            Circle()
-                .fill(accent)
-                .frame(width: 7, height: 7)
-                .shadow(color: accentGlow, radius: 4)
-                .opacity(isVideo && pulseOn ? 0.35 : 1)
-                .animation(
-                    isVideo
-                        ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
-                        : .default,
-                    value: pulseOn
-                )
-
-            Text(isVideo ? "Video · Record" : "Screenshot")
-                .font(.system(size: 9.5, weight: .semibold))
-                .tracking(1.6)
-                .foregroundColor(accent)
-                .textCase(.uppercase)
+        HStack(spacing: 4) {
+            modeTab(kind: .screenshot)
+            modeTab(kind: .video)
 
             Spacer(minLength: 0)
 
-            Text("⎋ dismiss")
+            // Picker affordance: when the HUD opens REGION is preselected,
+            // ↵ commits it. Showing both cues is more honest than only
+            // showing dismiss.
+            Text("↵ capture · ⎋ dismiss")
                 .font(.system(size: 9, weight: .regular))
                 .tracking(1.6)
                 .foregroundColor(Color(hex: tokens.inkFaintHex))
                 .textCase(.uppercase)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 10)
         .frame(height: 26)
         .background(gradient(from: tokens.stripTop))
         .overlay(
@@ -285,6 +282,66 @@ private struct CaptureHUDView: View {
                 .frame(height: 0.5)
                 .frame(maxHeight: .infinity, alignment: .bottom)
         )
+    }
+
+    private func modeTab(kind: CaptureBarMode) -> some View {
+        let isActive = state.mode == kind
+        let isVideoTab = kind == .video
+        let tabAccent: Color = isVideoTab
+            ? Color(hex: tokens.recHex)
+            : Color(hex: tokens.accentHex)
+        let tabAccentGlow: Color = isVideoTab
+            ? tokens.recGlow.color
+            : tokens.accentGlow.color
+        let label = isVideoTab ? "Video · Record" : "Screenshot"
+
+        return Button {
+            // Set mode directly rather than toggling — clicking a tab
+            // should land you on it, not flip away if you double-tap.
+            state.mode = kind
+            state.onAction?(nil)
+        } label: {
+            HStack(spacing: 5) {
+                if isActive {
+                    Circle()
+                        .fill(tabAccent)
+                        .frame(width: 6, height: 6)
+                        .shadow(color: tabAccentGlow, radius: 3)
+                        .opacity(isVideoTab && pulseOn ? 0.35 : 1)
+                        .animation(
+                            isVideoTab
+                                ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
+                                : .default,
+                            value: pulseOn
+                        )
+                } else {
+                    Circle()
+                        .stroke(Color(hex: tokens.inkFaintHex), lineWidth: 0.5)
+                        .frame(width: 6, height: 6)
+                }
+
+                Text(label)
+                    .font(.system(size: 9, weight: .semibold))
+                    .tracking(1.6)
+                    .foregroundColor(isActive ? tabAccent : Color(hex: tokens.inkFaintHex))
+                    .textCase(.uppercase)
+            }
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(isActive ? tabAccent.opacity(0.14) : .clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(
+                        isActive ? tabAccent.opacity(0.45) : .clear,
+                        lineWidth: 0.5
+                    )
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Primary cells
@@ -330,28 +387,37 @@ private struct CaptureHUDView: View {
 
     private func primaryCell(key: String, icon: HUDIcon, label: String) -> some View {
         let isHovered = hoveredKey == key
-        let iconColor: Color = isHovered ? accent : Color(hex: tokens.inkHex)
+        let isActive = captureMode(forKey: key) == state.selectedCaptureMode
+        // Active beats hover for icon color; hover still adds the
+        // glass-lift treatment so the user feels "I can switch here too".
+        let iconColor: Color = (isActive || isHovered) ? accent : Color(hex: tokens.inkHex)
 
         return Button(action: { tapAction(key: key) }) {
             VStack(spacing: 6) {
                 icon.view(color: iconColor, size: 18)
-                keyChip(key)
+                keyChip(key, isActive: isActive)
                 Text(label)
                     .font(.system(size: 9.5, weight: .medium))
                     .tracking(1.2)
-                    .foregroundColor(Color(hex: tokens.inkFaintHex))
+                    .foregroundColor(isActive ? accent : Color(hex: tokens.inkFaintHex))
                     .textCase(.uppercase)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(isHovered ? tokens.detailsBg.color : Color(hex: tokens.bgHex).opacity(0.5))
+                    .fill(
+                        isActive
+                            ? accent.opacity(0.14)
+                            : (isHovered ? tokens.detailsBg.color : Color(hex: tokens.bgHex).opacity(0.5))
+                    )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .strokeBorder(
-                        isHovered ? tokens.edgeStrong.color : tokens.edge.color,
+                        isActive
+                            ? accent.opacity(0.55)
+                            : (isHovered ? tokens.edgeStrong.color : tokens.edge.color),
                         lineWidth: 0.5
                     )
             )
@@ -360,7 +426,11 @@ private struct CaptureHUDView: View {
                     .inset(by: 0.5)
                     .strokeBorder(tokens.bezelHighlight.color, lineWidth: 0.5)
                     .blendMode(.plusLighter)
-                    .opacity(isHovered ? 0.9 : 0)
+                    .opacity(isHovered ? 0.9 : (isActive ? 0.6 : 0))
+            )
+            .shadow(
+                color: isActive ? accentGlow.opacity(0.6) : .clear,
+                radius: isActive ? 6 : 0
             )
             .contentShape(Rectangle())
         }
@@ -371,19 +441,33 @@ private struct CaptureHUDView: View {
         }
     }
 
-    private func keyChip(_ key: String) -> some View {
+    /// Maps the cell key letter back to its `CaptureMode` so the
+    /// primaryCell rendering can compare against `state.selectedCaptureMode`.
+    private func captureMode(forKey key: String) -> CaptureMode? {
+        switch key {
+        case "A": return .region
+        case "S": return .fullscreen
+        case "D": return .window
+        default:  return nil
+        }
+    }
+
+    private func keyChip(_ key: String, isActive: Bool = false) -> some View {
         Text(key)
             .font(.system(size: 10.5, weight: .bold, design: .monospaced))
-            .foregroundColor(Color(hex: tokens.inkHex))
+            .foregroundColor(isActive ? accent : Color(hex: tokens.inkHex))
             .frame(minWidth: 18, minHeight: 16)
             .padding(.horizontal, 4)
             .background(
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(tokens.detailsBg.color)
+                    .fill(isActive ? accent.opacity(0.22) : tokens.detailsBg.color)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .strokeBorder(tokens.edgeStrong.color, lineWidth: 0.5)
+                    .strokeBorder(
+                        isActive ? accent.opacity(0.7) : tokens.edgeStrong.color,
+                        lineWidth: 0.5
+                    )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 4, style: .continuous)

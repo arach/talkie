@@ -21,22 +21,16 @@ import AppKit
 import SwiftUI
 import TalkieKit
 
-private enum CapFont {
-    static func display(size: CGFloat, weight: Font.Weight = .medium) -> Font {
-        Font.system(size: size, weight: weight, design: .serif)
-    }
-    static func displayItalic(size: CGFloat) -> Font {
-        Font.system(size: size, weight: .regular, design: .serif).italic()
-    }
-    static func mono(size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        Font.system(size: size, weight: weight, design: .monospaced)
-    }
-}
+// Capture typography routed through ScopeType — see TalkieKit/UI/ScopeDesign.swift.
 
 // MARK: - View
 
 struct ScopeCaptureDetailView: View {
     let capture: TalkieObject
+    /// Library passes through so Delete from the rail/foot can clear selection.
+    var onDelete: (() -> Void)? = nil
+
+    private var viewModel: RecordingsViewModel { .shared }
 
     var body: some View {
         GeometryReader { proxy in
@@ -149,12 +143,12 @@ struct ScopeCaptureDetailView: View {
             // ID exists.
             HStack(spacing: 10) {
                 Text("· \(channelLabel)")
-                    .font(CapFont.mono(size: 9, weight: .semibold))
+                    .font(ScopeType.mono(size: 9, weight: .semibold))
                     .tracking(2.2)
                     .foregroundStyle(ThemedScopeAccent.capture)
                 ThemedScopeRule(.subtle)
                 Text("\(dateLabel) · \(timeLabel)")
-                    .font(CapFont.mono(size: 9))
+                    .font(ScopeType.mono(size: 9, weight: .regular))
                     .tracking(1.8)
                     .foregroundStyle(ThemedScopeInk.faint)
             }
@@ -163,7 +157,7 @@ struct ScopeCaptureDetailView: View {
             // provenance metadata below the headline for image captures.
             if isTextCapture {
                 Text(capture.displayTitle)
-                    .font(CapFont.display(size: 22, weight: .medium))
+                    .font(ScopeType.display(size: 22, weight: .medium))
                     .tracking(-0.3)
                     .foregroundStyle(ThemedScopeInk.primary)
                     .lineLimit(2)
@@ -171,13 +165,13 @@ struct ScopeCaptureDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 12)
                 Text(bylineTextCapture)
-                    .font(CapFont.mono(size: 10))
+                    .font(ScopeType.mono(size: 10, weight: .regular))
                     .tracking(1.6)
                     .foregroundStyle(ThemedScopeInk.faint)
                     .padding(.top, 6)
             } else {
                 Text(imageHeadline)
-                    .font(CapFont.display(size: 22, weight: .medium))
+                    .font(ScopeType.display(size: 22, weight: .medium))
                     .tracking(-0.3)
                     .foregroundStyle(ThemedScopeInk.primary)
                     .lineLimit(2)
@@ -185,7 +179,7 @@ struct ScopeCaptureDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 12)
                 Text(imageByline)
-                    .font(CapFont.mono(size: 10))
+                    .font(ScopeType.mono(size: 10, weight: .regular))
                     .tracking(1.6)
                     .foregroundStyle(ThemedScopeInk.faint)
                     .lineLimit(1)
@@ -205,12 +199,16 @@ struct ScopeCaptureDetailView: View {
             .padding(.top, 20)
             .frame(maxWidth: .infinity, alignment: .center)
 
-            // Promote-to-Note CTA
+            // Promote-to-Note CTA. The capture stays in the same row
+            // in the library — it just changes shape, so the user can
+            // start composing on top of it (caption, follow-on notes,
+            // workflows). Library will re-route to ScopeNoteDetailView
+            // on next selection because the type switched.
             HStack(spacing: 12) {
-                Button(action: {}) {
+                Button(action: promoteToNote) {
                     HStack(spacing: 8) {
                         Text("＋ ADD CAPTION")
-                            .font(CapFont.mono(size: 10, weight: .semibold))
+                            .font(ScopeType.mono(size: 10, weight: .semibold))
                             .tracking(2.2)
                             .foregroundStyle(ThemedScopeAccent.brass)
                     }
@@ -226,8 +224,9 @@ struct ScopeCaptureDetailView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .keyboardShortcut("n", modifiers: .command)
                 Text("⌘N")
-                    .font(CapFont.mono(size: 9))
+                    .font(ScopeType.mono(size: 9, weight: .regular))
                     .tracking(1.8)
                     .foregroundStyle(ThemedScopeInk.faint)
             }
@@ -311,6 +310,10 @@ struct ScopeCaptureDetailView: View {
                         .stroke(ThemedScopeEdge.faint, lineWidth: 0.5)
                 )
                 .shadow(color: Color(red: 46/255, green: 68/255, blue: 82/255).opacity(0.10), radius: 12, y: 6)
+                // Drag the screenshot file out to other apps (Slack /
+                // Messages / Finder). Pasteboard carries the on-disk URL
+                // so receivers treat it as a real file, not bitmap data.
+                .onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
         } else {
             // Placeholder mat when image isn't available — cool checker
             Rectangle()
@@ -319,7 +322,7 @@ struct ScopeCaptureDetailView: View {
                 .frame(maxWidth: .infinity)
                 .overlay(
                     Text("(image unavailable)")
-                        .font(CapFont.displayItalic(size: 12))
+                        .font(ScopeType.displayItalic(size: 12))
                         .foregroundStyle(ThemedScopeInk.subtle)
                 )
                 .overlay(
@@ -364,17 +367,45 @@ struct ScopeCaptureDetailView: View {
     private var actionsBlock: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("· ACTIONS")
-                .font(CapFont.mono(size: 8.5, weight: .semibold))
+                .font(ScopeType.mono(size: 8.5, weight: .semibold))
                 .tracking(2.8)
                 .foregroundStyle(ThemedScopeInk.faint)
                 .padding(.bottom, 4)
-            CapRailAction(label: "Copy",  icon: "doc.on.doc",            isPrimary: true, action: {})
+            CapRailAction(label: "Copy",  icon: "doc.on.doc",            isPrimary: true, action: copyCapture)
+            CapRailAction(label: "Annotate", icon: "sparkles.rectangle.stack", action: openMarkup)
             CapRailAction(label: "Open",  icon: "arrow.up.right.square", action: openInDefault)
-            CapRailAction(label: "Pin",   icon: "pin",                   action: {})
-            CapRailAction(label: "Share", icon: "square.and.arrow.up",   action: {})
+            CapRailAction(
+                label: capture.isPinned ? "Pinned" : "Pin",
+                icon:  capture.isPinned ? "pin.fill" : "pin",
+                isActive: capture.isPinned,
+                action: { Task { await viewModel.togglePin(capture) } }
+            )
+            CapRailAction(label: "Share", icon: "square.and.arrow.up", action: shareCapture)
             ThemedScopeRule(.subtle)
                 .padding(.vertical, 4)
-            CapRailAction(label: "More",  icon: "ellipsis",              action: {})
+            Menu {
+                Button {
+                    revealInFinder()
+                } label: {
+                    Label("Reveal in Finder", systemImage: "folder")
+                }
+                if onDelete != nil {
+                    Divider()
+                    Button(role: .destructive) {
+                        Task {
+                            await viewModel.deleteRecording(capture)
+                            onDelete?()
+                        }
+                    } label: {
+                        Label("Delete capture", systemImage: "trash")
+                    }
+                }
+            } label: {
+                CapRailAction.menuLabel
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -382,19 +413,19 @@ struct ScopeCaptureDetailView: View {
     private func metaBlock(title: String, rows: [(String, String, Bool)]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("· \(title.uppercased())")
-                .font(CapFont.mono(size: 8.5, weight: .semibold))
+                .font(ScopeType.mono(size: 8.5, weight: .semibold))
                 .tracking(2.8)
                 .foregroundStyle(ThemedScopeInk.faint)
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                     HStack(alignment: .firstTextBaseline) {
                         Text(row.0)
-                            .font(CapFont.mono(size: 9))
+                            .font(ScopeType.mono(size: 9, weight: .regular))
                             .tracking(1.4)
                             .foregroundStyle(ThemedScopeInk.faint)
                         Spacer()
                         Text(row.1)
-                            .font(CapFont.mono(size: 10))
+                            .font(ScopeType.mono(size: 10, weight: .regular))
                             .tracking(0.6)
                             .foregroundStyle(row.2 ? ThemedScopeAccent.capture : ThemedScopeInk.primary)
                     }
@@ -407,7 +438,7 @@ struct ScopeCaptureDetailView: View {
     private func footRail(bodyPad: CGFloat) -> some View {
         HStack(spacing: 16) {
             Text("· \(dimensions) · \(fileSize) · \(sourceLabel)")
-                .font(CapFont.mono(size: 9))
+                .font(ScopeType.mono(size: 9, weight: .regular))
                 .tracking(2.2)
                 .foregroundStyle(ThemedScopeInk.faint)
             Spacer()
@@ -416,7 +447,7 @@ struct ScopeCaptureDetailView: View {
                 ThemedScopeRule(.subtle, axis: .vertical)
                     .frame(height: 12)
                     .padding(.horizontal, 4)
-                footAction(label: "Delete", tone: .red, action: {})
+                footAction(label: "Delete", tone: .red, action: deleteCapture)
             }
         }
         .padding(.horizontal, bodyPad)
@@ -431,7 +462,7 @@ struct ScopeCaptureDetailView: View {
     private func footAction(label: String, tone: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label.uppercased())
-                .font(CapFont.mono(size: 9, weight: .semibold))
+                .font(ScopeType.mono(size: 9, weight: .semibold))
                 .tracking(2.2)
                 .foregroundStyle(tone)
                 .padding(.horizontal, 6)
@@ -442,9 +473,64 @@ struct ScopeCaptureDetailView: View {
 
     // MARK: - Actions
 
+    private func openMarkup() {
+        guard let url = imageURL else { return }
+        CaptureMarkupCoordinator.shared.openSession(imageURL: url)
+    }
+
+    private func copyCapture() {
+        guard let url = imageURL,
+              let image = NSImage(contentsOf: url) else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.writeObjects([image])
+    }
+
     private func revealInFinder() {
         guard let url = imageURL else { return }
         NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    private func shareCapture() {
+        let items: [Any]
+        if let url = imageURL {
+            items = [url]
+        } else if let text = capture.text, !text.isEmpty {
+            items = [text]
+        } else {
+            return
+        }
+        let picker = NSSharingServicePicker(items: items)
+        if let window = NSApp.keyWindow,
+           let content = window.contentView {
+            picker.show(relativeTo: .zero, of: content, preferredEdge: .minY)
+        }
+    }
+
+    private func deleteCapture() {
+        Task {
+            await viewModel.deleteRecording(capture)
+            onDelete?()
+        }
+    }
+
+    /// Promote this capture into a note so the user can author a
+    /// caption / follow-on content. The screenshot stays attached;
+    /// the library re-routes to ScopeNoteDetailView on the same id
+    /// since the type now reads as `.note`.
+    private func promoteToNote() {
+        Task {
+            do {
+                var updated = capture
+                updated.type = .note
+                updated.lastModified = Date()
+                let repository = TalkieObjectRepository()
+                try await repository.saveRecording(updated)
+                await viewModel.loadRecordings()
+                ToastService.shared.showSuccess("Promoted to note")
+            } catch {
+                ToastService.shared.showError("Couldn't promote: \(error.localizedDescription)")
+            }
+        }
     }
 
     // MARK: - Helpers
@@ -463,40 +549,66 @@ private struct CapRailAction: View {
     let label: String
     let icon: String
     var isPrimary: Bool = false
+    /// Sticky toggled state (Pin "on"). Distinct from `isPrimary`.
+    var isActive: Bool = false
     let action: () -> Void
 
     @State private var hovered = false
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 9) {
-                Image(systemName: icon)
-                    .font(.system(size: 12, weight: isPrimary ? .semibold : .regular))
-                    .frame(width: 14, alignment: .center)
-                Text(label)
-                    .font(.system(size: 12, weight: isPrimary ? .medium : .regular))
-                Spacer(minLength: 0)
-            }
-            .foregroundStyle(foregroundColor)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(backgroundFill)
-            )
+            content
         }
         .buttonStyle(.plain)
         .onHover { hovered = $0; if hovered { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() } }
         .animation(.easeOut(duration: 0.12), value: hovered)
+        .animation(.easeOut(duration: 0.12), value: isActive)
+    }
+
+    private var content: some View {
+        HStack(spacing: 9) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: (isPrimary || isActive) ? .semibold : .regular))
+                .frame(width: 14, alignment: .center)
+            Text(label)
+                .font(.system(size: 12, weight: (isPrimary || isActive) ? .medium : .regular))
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(foregroundColor)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 3)
+                .fill(backgroundFill)
+        )
+    }
+
+    /// Reusable label for the rail's "More" menu button so the visual
+    /// rhythm matches the rest of the rail rows.
+    static var menuLabel: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 12, weight: .regular))
+                .frame(width: 14, alignment: .center)
+            Text("More")
+                .font(.system(size: 12, weight: .regular))
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(ThemedScopeInk.faint)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .contentShape(Rectangle())
     }
 
     private var foregroundColor: Color {
+        if isActive { return ThemedScopeAccent.amber }
         if isPrimary { return hovered ? ThemedScopeAccent.amber : ThemedScopeAccent.brass }
         if hovered { return ThemedScopeInk.primary }
         return ThemedScopeInk.faint
     }
 
     private var backgroundFill: Color {
+        if isActive { return ThemedScopeAccent.amber.opacity(hovered ? 0.18 : 0.1) }
         if isPrimary {
             return hovered ? ThemedScopeAccent.amber.opacity(0.14) : ThemedScopeAccent.amber.opacity(0.07)
         }

@@ -40,9 +40,7 @@ struct TranscriptRouter: AgentRouter {
         let cleaned = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Filter noise
-        guard !cleaned.isEmpty,
-              !cleaned.hasPrefix("["),
-              cleaned != "(silence)" else {
+        guard !Self.isSkippableNoise(cleaned) else {
             log.info("Skipping noise: \(transcript)")
             return
         }
@@ -74,6 +72,10 @@ struct TranscriptRouter: AgentRouter {
                 await submitAfterPaste()
             }
         }
+    }
+
+    static func isSkippableNoise(_ cleaned: String) -> Bool {
+        cleaned.isEmpty || cleaned == "(silence)"
     }
 
     private func copyToClipboard(_ text: String) -> Bool {

@@ -1449,7 +1449,6 @@ public final class ServiceManager {
 @MainActor
 @Observable
 public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol {
-
     // ─── Core State ───
     public private(set) var isRunning: Bool = false
     public private(set) var state: LiveState = .idle
@@ -1571,6 +1570,43 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
                 logger.warning("[Agent] Paste failed")
             }
             completion(success)
+        }
+    }
+
+    /// Fire-and-forget side channel for screenshots captured while Agent is actively
+    /// listening. The tray still owns its normal file, but Agent gets an immediate
+    /// recording-scoped copy for post-transcription insertion.
+    public func recordLiveScreenshot(
+        data: Data,
+        capturedAt: Date,
+        captureMode: String,
+        width: Int,
+        height: Int,
+        windowTitle: String?,
+        appName: String?,
+        displayName: String?
+    ) {
+        guard isRecording else { return }
+        guard let service = xpcManager?.remoteObjectProxy(errorHandler: { error in
+            logger.debug("[Agent] recordLiveScreenshot XPC error: \(error.localizedDescription)")
+        }) else {
+            logger.debug("[Agent] Skipping live screenshot side channel - not connected")
+            return
+        }
+
+        service.recordLiveScreenshot(
+            imageData: data,
+            capturedAt: capturedAt.timeIntervalSince1970,
+            captureMode: captureMode,
+            width: width,
+            height: height,
+            windowTitle: windowTitle,
+            appName: appName,
+            displayName: displayName
+        ) { success in
+            if success {
+                logger.info("[Agent] Recorded live screenshot for active dictation")
+            }
         }
     }
 
@@ -2004,28 +2040,17 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
         }
     }
 
-    /// Called by Agent after tray assets were attached to a stored dictation.
-    /// Clear consumed unpinned screenshot tray items so they are not reattached
-    /// to later dictations. Pinned items remain available in the tray.
-    nonisolated public func dictationWasPasted(recordingId: String) {
-        Task { @MainActor in
-            let screenshotTray = ScreenshotTray.shared
-            if screenshotTray.hasUnpinnedItems {
-                screenshotTray.clearUnpinned()
-            }
-            let clipTray = ClipTray.shared
-            if clipTray.hasUnpinnedItems {
-                clipTray.clearUnpinned()
-            }
-            DictationStore.shared.refresh()
-            logger.info("[Tray] Cleared consumed unpinned tray assets for recording \(recordingId.prefix(8))")
-        }
-    }
+    /// Legacy callback retained for compatibility. Dictation never mutates the tray.
+    nonisolated public func dictationWasPasted(recordingId: String) {}
 
     /// Saves unpinned tray screenshots to ScreenshotStorage and returns metadata
     /// that Agent can attach to an existing recording.
     nonisolated public func fetchTrayScreenshots(recordingId: String, reply: @escaping (String?) -> Void) {
-        Task { @MainActor in
+        Task { @MainActor [weak self] in
+            guard self != nil else {
+                reply(nil)
+                return
+            }
             let screenshotTray = ScreenshotTray.shared
 
             guard let recordingUUID = UUID(uuidString: recordingId) else {
@@ -2092,16 +2117,19 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
         }
     }
 
-    /// Saves unpinned tray screenshots and screen clips to permanent storage and
-    /// returns a TalkieObjectAssets JSON blob Agent can attach after DB storage.
+    /// Copies in-window tray screenshots and screen clips to recording storage
+    /// and returns a TalkieObjectAssets JSON blob Agent can attach after DB storage.
     nonisolated public func fetchTrayAssets(
         recordingId: String,
         recordingStartedAt: TimeInterval,
+        recordingEndedAt: TimeInterval,
+        includeScreenshots: Bool,
         reply: @escaping (String?) -> Void
     ) {
-        Task { @MainActor in
-            if ScreenRecordingController.shared.state == .recording {
-                await ScreenRecordingController.shared.stopRecording()
+        Task { @MainActor [weak self] in
+            guard self != nil else {
+                reply(nil)
+                return
             }
 
             guard let recordingUUID = UUID(uuidString: recordingId) else {
@@ -2110,23 +2138,54 @@ public final class AgentServiceState: NSObject, TalkieAgentStateObserverProtocol
                 return
             }
 
-            let recordingStart = recordingStartedAt > 0
-                ? Date(timeIntervalSince1970: recordingStartedAt)
-                : Date()
-
-            func timestampMs(for capturedAt: Date) -> Int {
-                guard capturedAt >= recordingStart else { return 0 }
-                return max(0, Int(capturedAt.timeIntervalSince(recordingStart) * 1000))
-            }
-
-            let screenshotItems = ScreenshotTray.shared.unpinnedItems
-            let clipItems = ClipTray.shared.unpinnedItems
-            guard !screenshotItems.isEmpty || !clipItems.isEmpty else {
+            guard recordingStartedAt > 0,
+                  recordingEndedAt >= recordingStartedAt else {
+                logger.warning(
+                    "[Tray] fetchTrayAssets: invalid recording window for \(recordingId.prefix(8))",
+                    detail: "start=\(recordingStartedAt), end=\(recordingEndedAt)"
+                )
                 reply(nil)
                 return
             }
 
-            logger.info("[Tray] Agent pulling \(screenshotItems.count) screenshots and \(clipItems.count) clips for recording \(recordingId.prefix(8))")
+            let recordingStart = Date(timeIntervalSince1970: recordingStartedAt)
+            let recordingEnd = Date(timeIntervalSince1970: recordingEndedAt)
+
+            func timestampMs(for capturedAt: Date) -> Int {
+                return max(0, Int(capturedAt.timeIntervalSince(recordingStart) * 1000))
+            }
+
+            let allScreenshotItems = includeScreenshots ? ScreenshotTray.shared.unpinnedItems : []
+            let allClipItems = ClipTray.shared.unpinnedItems
+            let screenshotItems = allScreenshotItems.filter {
+                $0.capturedAt >= recordingStart && $0.capturedAt <= recordingEnd
+            }
+            let clipItems = allClipItems.filter {
+                $0.capturedAt >= recordingStart && $0.capturedAt <= recordingEnd
+            }
+            let deferredScreenshotCount = allScreenshotItems.count - screenshotItems.count
+            let deferredClipCount = allClipItems.count - clipItems.count
+            if !includeScreenshots {
+                logger.debug("[Tray] Skipping tray screenshot merge; live screenshots already attached")
+            }
+
+            guard !screenshotItems.isEmpty || !clipItems.isEmpty else {
+                if deferredScreenshotCount > 0 || deferredClipCount > 0 {
+                    logger.info(
+                        "[Tray] No in-recording tray assets for recording \(recordingId.prefix(8)); leaving tray unchanged",
+                        detail: "outside window \(deferredScreenshotCount) screenshots, \(deferredClipCount) clips"
+                    )
+                }
+                reply(nil)
+                return
+            }
+
+            logger.info(
+                "[Tray] Agent pulling \(screenshotItems.count) screenshots and \(clipItems.count) clips for recording \(recordingId.prefix(8))",
+                detail: deferredScreenshotCount > 0 || deferredClipCount > 0
+                    ? "outside window \(deferredScreenshotCount) screenshots, \(deferredClipCount) clips left in tray"
+                    : nil
+            )
 
             var screenshots: [RecordingScreenshot] = []
             for (index, item) in screenshotItems.enumerated() {

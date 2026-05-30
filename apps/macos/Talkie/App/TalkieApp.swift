@@ -163,6 +163,11 @@ private struct TalkieRootWindow: View {
             .overlay {
                 CommandPaletteOverlay(isPresented: $showCommandPalette)
             }
+            // App-wide image lightbox (.scopeExpandable adopters)
+            .overlay { ScopeLightboxHost() }
+            // App-wide user-action snackbar (delete+undo, save errors).
+            // Distinct from ExtensionToastOverlay which is for milestones.
+            .overlay(alignment: .bottomLeading) { ToastHost() }
             // Report sheet overlay
             .overlay {
                 ReportSheetOverlay(isPresented: $showReportSheet)
@@ -232,8 +237,21 @@ private struct TalkieRootWindow: View {
 }
 
 private struct TalkieCommands: Commands {
+    @Environment(\.openWindow) private var openWindow
+
     var body: some Commands {
-        CommandGroup(replacing: .newItem) {}
+        // Replace the default New file group with a single "New Window"
+        // item. SwiftUI's WindowGroup already lets us spawn additional
+        // instances; the windows stay in sync via shared singletons
+        // (recording controller, view models, navigation), so opening a
+        // second window gives the user "two viewports on the same
+        // workspace" — independent selection / scroll, shared truth.
+        CommandGroup(replacing: .newItem) {
+            Button("New Window") {
+                openWindow(id: "main")
+            }
+            .keyboardShortcut("n", modifiers: .command)
+        }
 
         // Add sidebar toggle to View menu
         CommandGroup(after: .sidebar) {
@@ -263,6 +281,19 @@ private struct TalkieCommands: Commands {
             .keyboardShortcut(",", modifiers: .command)
         }
 
+        // Find — routes to the library search field. ⌘F was advertised
+        // in onboarding ("Use ⌘F to search across all your transcriptions")
+        // but never bound; this is the binding catching up to the promise.
+        // Added after `.pasteboard` so cut/copy/paste stay untouched.
+        CommandGroup(after: .pasteboard) {
+            Divider()
+            Button("Find…") {
+                NavigationState.shared.navigate(to: .recordings)
+                NotificationCenter.default.post(name: .focusLibrarySearch, object: nil)
+            }
+            .keyboardShortcut("f", modifiers: .command)
+        }
+
         // Help menu additions
         CommandGroup(after: .help) {
             Button("Send Feedback…") {
@@ -279,6 +310,11 @@ private struct TalkieCommands: Commands {
                 NotificationCenter.default.post(name: .toggleKeyboardHintOverlay, object: nil)
             }
             .keyboardShortcut("/", modifiers: [.command, .shift])
+
+            Button("Recently Deleted") {
+                NavigationState.shared.navigate(to: .recentlyDeleted)
+            }
+            .keyboardShortcut(.delete, modifiers: [.command, .shift])
 
             #if DEBUG
             Divider()

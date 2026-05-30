@@ -325,6 +325,28 @@ final class RecordingsViewModel {
     func loadWithSemanticFilters() async { await startObservation() }
     func loadNextPageWithSemanticFilters() async { await loadNextPage() }
 
+    // MARK: - Pin / Star
+
+    /// Toggle pin on the given recording; the value observer will refresh the list.
+    func togglePin(_ recording: TalkieObject) async {
+        do {
+            try await repository.setRecordingPinned(id: recording.id, pinned: !recording.isPinned)
+        } catch {
+            self.error = error
+            log.error("Failed to toggle pin: \(error.localizedDescription)")
+        }
+    }
+
+    /// Toggle star on the given recording.
+    func toggleStar(_ recording: TalkieObject) async {
+        do {
+            try await repository.setRecordingStarred(id: recording.id, starred: !recording.isStarred)
+        } catch {
+            self.error = error
+            log.error("Failed to toggle star: \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Delete Operations
 
     /// Soft delete a recording (for memos)
@@ -351,12 +373,33 @@ final class RecordingsViewModel {
         }
     }
 
-    /// Delete recording (uses soft delete for memos/notes, hard delete for dictations)
+    /// Delete recording (uses soft delete for memos/notes, hard delete for dictations).
+    /// Posts a snackbar toast on success — undoable for soft deletes,
+    /// info-only for hard deletes (which can't be reversed).
     func deleteRecording(_ recording: TalkieObject) async {
+        let label = recording.displayTitle
+        let trimmed = label.count > 40 ? String(label.prefix(40)) + "…" : label
         if recording.type == .memo || recording.type == .note {
             await softDeleteRecording(recording)
+            let id = recording.id
+            ToastService.shared.showUndoable("Deleted \(trimmed.isEmpty ? "item" : "“\(trimmed)”")") { [weak self] in
+                Task { await self?.restoreRecording(id: id) }
+            }
         } else {
             await hardDeleteRecording(recording)
+            ToastService.shared.showInfo("Permanently deleted \(trimmed.isEmpty ? "item" : "“\(trimmed)”")")
+        }
+    }
+
+    /// Restore a previously soft-deleted memo/note. Used by the toast's
+    /// Undo action.
+    func restoreRecording(id: UUID) async {
+        do {
+            try await repository.restoreRecording(id: id)
+        } catch {
+            self.error = error
+            ToastService.shared.showError("Could not restore: \(error.localizedDescription)")
+            log.error("Failed to restore: \(error.localizedDescription)")
         }
     }
 

@@ -55,6 +55,7 @@ enum SkillFileFormat {
             icon: metadata.icon,
             color: metadata.color,
             maintainer: metadata.maintainer,
+            inputs: .memoTranscript,
             steps: steps,
             isEnabled: metadata.isEnabled,
             isPinned: metadata.isPinned,

@@ -10,13 +10,13 @@ import SwiftUI
 import TalkieKit
 
 // MARK: - Apps Settings View
+//
+// Page wrapper is retained for compatibility with deep links / older
+// navigation paths, but the canonical home for this UI is now the
+// "Apps" tab inside the Helpers settings page (Settings → Helpers).
 
 struct AppsSettingsView: View {
-    @State private var settingsManager = SettingsManager.shared
-
     var body: some View {
-        @Bindable var settings = settingsManager
-
         SettingsPageContainer {
             SettingsPageHeader(
                 icon: "square.stack.3d.up",
@@ -24,16 +24,32 @@ struct AppsSettingsView: View {
                 subtitle: "Extend Talkie with JavaScript apps."
             )
         } content: {
-            VStack(spacing: Spacing.lg) {
-                ExtensionsFrameworkToggle(isEnabled: $settings.extensionsFrameworkEnabled)
+            AppsSettingsContent()
+                .padding(Spacing.md)
+        }
+    }
+}
 
-                if settings.extensionsFrameworkEnabled {
-                    AppsEnabledContent()
-                } else {
-                    ExtensionsFrameworkDisabledView()
-                }
+// MARK: - Apps Settings Content
+//
+// Body of the Apps settings — extracted so the Helpers tab and the
+// legacy standalone page can both render the same content without a
+// page wrapper.
+
+struct AppsSettingsContent: View {
+    @State private var settingsManager = SettingsManager.shared
+
+    var body: some View {
+        @Bindable var settings = settingsManager
+
+        VStack(spacing: Spacing.lg) {
+            ExtensionsFrameworkToggle(isEnabled: $settings.extensionsFrameworkEnabled)
+
+            if settings.extensionsFrameworkEnabled {
+                AppsEnabledContent()
+            } else {
+                ExtensionsFrameworkDisabledView()
             }
-            .padding(Spacing.md)
         }
         .onChange(of: settings.extensionsFrameworkEnabled) { _, isEnabled in
             if !isEnabled {

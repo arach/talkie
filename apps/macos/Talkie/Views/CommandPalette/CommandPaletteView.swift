@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AppKit
+import TalkieKit
 
 struct CommandPaletteView: View {
     @Binding var isPresented: Bool
@@ -18,6 +19,7 @@ struct CommandPaletteView: View {
     @State private var keyMonitor: Any?
     @State private var appearAnimation = false
     @State private var debounceTask: Task<Void, Never>?
+    @State private var indicatorPulse = false
 
     private let registry = CommandRegistry.shared
 
@@ -25,21 +27,17 @@ struct CommandPaletteView: View {
         registry.search(debouncedSearchText)
     }
 
+    private var commandGroups: [PaletteCommandGroup] {
+        PaletteCommandGroup.group(filteredCommands)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            // Search field - hero element
+            paletteChromeStrip
+
             searchField
 
-            // Subtle separator
-            Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [.white.opacity(0.06), .white.opacity(0.02), .clear],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .frame(height: 1)
+            paletteDivider
 
             // Command list
             if filteredCommands.isEmpty {
@@ -51,22 +49,15 @@ struct CommandPaletteView: View {
             // Footer
             footer
         }
-        .frame(width: 560, height: 420)
+        .frame(width: 600, height: 460)
         .background(paletteBackground)
-        .clipShape(RoundedRectangle(cornerRadius: CornerRadius.lg, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: CornerRadius.lg, style: .continuous)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [.white.opacity(0.15), .white.opacity(0.05)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .strokeBorder(ScopePalette.ruleStrong, lineWidth: 0.5)
         )
-        .shadow(color: .black.opacity(0.5), radius: 40, x: 0, y: 20)
-        .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 5)
+        .shadow(color: .black.opacity(0.22), radius: 28, x: 0, y: 14)
+        .shadow(color: .black.opacity(0.12), radius: 6, x: 0, y: 3)
         .scaleEffect(appearAnimation ? 1 : 0.95)
         .opacity(appearAnimation ? 1 : 0)
         .onAppear {
@@ -79,6 +70,11 @@ struct CommandPaletteView: View {
             }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 appearAnimation = true
+            }
+            // Start the chrome-strip dot pulse — gentle "palette is
+            // live" signal, runs the whole time the palette is up.
+            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
+                indicatorPulse = true
             }
         }
         .onDisappear {
@@ -111,25 +107,47 @@ struct CommandPaletteView: View {
 
     // MARK: - Search Field
 
+    private var paletteChromeStrip: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(ScopePalette.amber)
+                .frame(width: 6, height: 6)
+                .shadow(
+                    color: ScopePalette.amber.opacity(indicatorPulse ? 0.85 : 0.35),
+                    radius: indicatorPulse ? 6 : 3
+                )
+                .opacity(indicatorPulse ? 1.0 : 0.65)
+
+            Text("· PALETTE · cmd ⇧ K")
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .tracking(2.0)
+                .foregroundStyle(ScopePalette.amber.opacity(0.85))
+
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 28)
+        .background(ScopePalette.amber.opacity(0.13))
+        .overlay(alignment: .bottom) {
+            paletteDivider
+        }
+    }
+
     private var searchField: some View {
         HStack(spacing: 12) {
-            // Search icon with subtle glow
-            ZStack {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.white.opacity(0.7), .white.opacity(0.5)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-            }
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(ScopePalette.inkFaint)
 
-            TextField("Search commands...", text: $searchText)
+            TextField(
+                "",
+                text: $searchText,
+                prompt: Text("Search commands...")
+                    .foregroundStyle(ScopePalette.inkFainter)
+            )
                 .textFieldStyle(.plain)
                 .font(.system(size: 18, weight: .regular))
-                .foregroundColor(.white.opacity(0.95))
+                .foregroundStyle(ScopePalette.ink)
                 .focused($isSearchFocused)
                 .onSubmit {
                     executeSelected()
@@ -143,7 +161,7 @@ struct CommandPaletteView: View {
                 }) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 16))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundStyle(ScopePalette.inkFainter)
                 }
                 .buttonStyle(.plain)
                 .transition(.scale.combined(with: .opacity))
@@ -151,37 +169,51 @@ struct CommandPaletteView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
+        .background(ScopePalette.bgRaised)
     }
 
     // MARK: - Command List
 
     private var commandList: some View {
         let commands = filteredCommands
+        let groups = commandGroups
         return ScrollViewReader { proxy in
             ScrollView {
-                VStack(spacing: 2) {
-                    ForEach(Array(commands.enumerated()), id: \.element.id) { index, command in
-                        CommandRow(
-                            command: command,
-                            isSelected: index == selectedIndex,
-                            isHovered: index == hoveredIndex
-                        )
-                        .id(command.id)
-                        .onTapGesture {
-                            selectedIndex = index
-                            executeSelected()
+                VStack(spacing: 0) {
+                    ForEach(Array(groups.enumerated()), id: \.element.id) { groupIndex, group in
+                        if groupIndex > 0 {
+                            // Breath between groups — small palette-bg gap
+                            // so each section reads as its own block.
+                            Color.clear.frame(height: 4)
                         }
-                        .onHover { hovering in
-                            if hovering {
-                                hoveredIndex = index
-                            } else if hoveredIndex == index {
-                                hoveredIndex = nil
+                        CommandSectionHeader(title: group.title)
+
+                        ForEach(group.commands) { command in
+                            if let index = commands.firstIndex(where: { $0.id == command.id }) {
+                                Button {
+                                    selectedIndex = index
+                                    executeSelected()
+                                } label: {
+                                    CommandRow(
+                                        command: command,
+                                        isSelected: index == selectedIndex,
+                                        isHovered: index == hoveredIndex
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                .id(command.id)
+                                .onHover { hovering in
+                                    if hovering {
+                                        hoveredIndex = index
+                                    } else if hoveredIndex == index {
+                                        hoveredIndex = nil
+                                    }
+                                }
                             }
                         }
                     }
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 8)
+                .padding(.vertical, 6)
             }
             .scrollIndicators(.hidden)
             .onChange(of: selectedIndex) { _, newIndex in
@@ -198,17 +230,11 @@ struct CommandPaletteView: View {
         VStack(spacing: 12) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 36, weight: .light))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.white.opacity(0.3), .white.opacity(0.15)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
+                .foregroundStyle(ScopePalette.inkFainter)
 
             Text("No commands found")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundStyle(ScopePalette.inkFainter)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -225,57 +251,63 @@ struct CommandPaletteView: View {
 
             // Branding
             Text("⌘⇧K")
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundColor(.white.opacity(0.25))
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .foregroundStyle(ScopePalette.glyphOnAmber)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: CornerRadius.xs, style: .continuous)
+                        .fill(ScopePalette.amber)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: CornerRadius.xs, style: .continuous)
+                        .strokeBorder(ScopePalette.amberSoft, lineWidth: 0.5)
+                )
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Color.white.opacity(0.03))
+        .padding(.vertical, 9)
+        .background(ScopePalette.bgRaised)
+        .overlay(alignment: .top) {
+            paletteDivider
+        }
     }
 
     private func keyHint(keys: String, label: String) -> some View {
         HStack(spacing: 6) {
             Text(keys)
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundStyle(ScopePalette.inkFaint)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
                 .background(
                     RoundedRectangle(cornerRadius: CornerRadius.xs, style: .continuous)
-                        .fill(Color.white.opacity(0.08))
+                        .fill(ScopePalette.ink.opacity(0.04))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: CornerRadius.xs, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5)
+                        .strokeBorder(ScopePalette.rule, lineWidth: 0.5)
                 )
 
             Text(label)
                 .font(.system(size: 11))
-                .foregroundColor(.white.opacity(0.35))
+                .foregroundStyle(ScopePalette.inkFainter)
         }
     }
 
     // MARK: - Background
 
     private var paletteBackground: some View {
-        ZStack {
-            // Base dark layer
-            Color(red: 0.08, green: 0.08, blue: 0.10)
+        // Flat PORCELAIN — light surface doesn't need depth gradients
+        // to read as a panel. The dark-glass era's multi-layer
+        // background fought legibility; the porcelain version lets the
+        // ink and amber accents do the work.
+        ScopePalette.bg
+    }
 
-            // Subtle gradient
-            LinearGradient(
-                colors: [
-                    Color.white.opacity(0.04),
-                    Color.clear,
-                    Color.black.opacity(0.1)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-
-            // Noise texture effect (simulated)
-            Color.white.opacity(0.015)
-        }
+    private var paletteDivider: some View {
+        Rectangle()
+            .fill(ScopePalette.rule)
+            .frame(height: 0.5)
     }
 
     // MARK: - Key Handling
@@ -333,6 +365,54 @@ struct CommandPaletteView: View {
     }
 }
 
+// MARK: - Command Groups
+
+private struct PaletteCommandGroup: Identifiable {
+    let title: String
+    let commands: [PaletteCommand]
+
+    var id: String { title }
+
+    static func group(_ commands: [PaletteCommand]) -> [PaletteCommandGroup] {
+        var orderedTitles: [String] = []
+        var commandsByTitle: [String: [PaletteCommand]] = [:]
+
+        for command in commands {
+            let title = command.subtitle.isEmpty ? "Other" : command.subtitle
+            if commandsByTitle[title] == nil {
+                orderedTitles.append(title)
+                commandsByTitle[title] = []
+            }
+            commandsByTitle[title]?.append(command)
+        }
+
+        return orderedTitles.map { title in
+            PaletteCommandGroup(title: title, commands: commandsByTitle[title] ?? [])
+        }
+    }
+}
+
+private struct CommandSectionHeader: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .textCase(.uppercase)
+                .tracking(0.6)
+                .foregroundStyle(ScopePalette.amber.opacity(0.85))
+
+            Rectangle()
+                .fill(ScopePalette.rule)
+                .frame(height: 0.5)
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 26)
+        .background(ScopePalette.bgSunk)
+    }
+}
+
 // MARK: - Command Row
 
 private struct CommandRow: View {
@@ -345,77 +425,57 @@ private struct CommandRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Icon with gradient background
-            ZStack {
-                RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous)
-                    .fill(
-                        isHighlighted
-                            ? LinearGradient(
-                                colors: [Color.accentColor, Color.accentColor.opacity(0.8)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                            : LinearGradient(
-                                colors: [Color.white.opacity(0.1), Color.white.opacity(0.05)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                    )
-                    .frame(width: 32, height: 32)
+        HStack(spacing: 0) {
+            // Selected-row accent bar — 3pt amber edge at the leading
+            // side. Bigger than the prior 2pt sliver so the selection
+            // reads decisively against the porcelain panel.
+            Rectangle()
+                .fill(isSelected ? ScopePalette.amber : .clear)
+                .frame(width: 3)
 
+            HStack(spacing: 12) {
                 Image(systemName: command.icon)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(isHighlighted ? .white : .white.opacity(0.7))
-            }
+                    .foregroundStyle(isSelected ? ScopePalette.amber : ScopePalette.inkFaint)
+                    .frame(width: 22, height: 22)
 
-            // Title and subtitle
-            VStack(alignment: .leading, spacing: 2) {
+                // Single-line row — the prior secondary "Navigation"
+                // line was a duplicate of the section header above it.
+                // Title alone keeps the list scannable and crisp.
                 Text(command.title)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white.opacity(isHighlighted ? 1 : 0.9))
+                    .font(.system(size: 13.5, weight: isSelected ? .semibold : .regular))
+                    .foregroundStyle(isHighlighted ? ScopePalette.ink : ScopePalette.ink.opacity(0.86))
 
-                Text(command.subtitle)
-                    .font(.system(size: 12))
-                    .foregroundColor(.white.opacity(isHighlighted ? 0.6 : 0.4))
+                Spacer()
+
+                if let shortcut = command.shortcut {
+                    Text(shortcut)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(isSelected ? ScopePalette.amberDeep : ScopePalette.inkFainter)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(
+                            RoundedRectangle(cornerRadius: CornerRadius.xs, style: .continuous)
+                                .fill(isSelected ? ScopePalette.amberFaint : ScopePalette.ink.opacity(0.04))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: CornerRadius.xs, style: .continuous)
+                                .strokeBorder(
+                                    isSelected ? ScopePalette.amberSoft : ScopePalette.rule,
+                                    lineWidth: 0.5
+                                )
+                        )
+                }
             }
-
-            Spacer()
-
-            // Shortcut badge
-            if let shortcut = command.shortcut {
-                Text(shortcut)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.5))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: CornerRadius.xs, style: .continuous)
-                            .fill(Color.white.opacity(0.08))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CornerRadius.xs, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
-                    )
-            }
+            .padding(.leading, 12)
+            .padding(.trailing, 14)
+            .frame(height: 38)
+            .background(
+                isSelected
+                    ? ScopePalette.amber.opacity(0.16)
+                    : (isHovered ? ScopePalette.ink.opacity(0.045) : Color.clear)
+            )
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: CornerRadius.md, style: .continuous)
-                .fill(
-                    isSelected
-                        ? Color.accentColor.opacity(0.2)
-                        : (isHovered ? Color.white.opacity(0.06) : Color.clear)
-                )
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: CornerRadius.md, style: .continuous)
-                .strokeBorder(
-                    isSelected ? Color.accentColor.opacity(0.3) : Color.clear,
-                    lineWidth: 1
-                )
-        )
         .contentShape(Rectangle())
         .animation(.easeOut(duration: 0.1), value: isHighlighted)
     }

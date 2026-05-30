@@ -14,6 +14,7 @@ enum PasteFormat: String, CaseIterable {
     case filePath // Absolute file path string
     case url      // http://localhost:8766/tray/<uuid>.png
     case base64   // data:image/png;base64,<encoded>
+    case visionDescription // VLM UI description text
     case dragFile // Programmatic drag session with file
 
     var label: String {
@@ -22,6 +23,7 @@ enum PasteFormat: String, CaseIterable {
         case .filePath: "path"
         case .url:      "url"
         case .base64:   "base64"
+        case .visionDescription: "describe"
         case .dragFile: "drag"
         }
     }
@@ -32,6 +34,7 @@ enum PasteFormat: String, CaseIterable {
         case .filePath: "PATH"
         case .url:      "URL"
         case .base64:   "B64"
+        case .visionDescription: "VLM"
         case .dragFile: "DRAG"
         }
     }
@@ -42,6 +45,7 @@ enum PasteFormat: String, CaseIterable {
         case .filePath: "⇧"
         case .url:      "⌥"
         case .base64:   "⌃"
+        case .visionDescription: "⇧⌥"
         case .dragFile: "⌘"
         }
     }
@@ -49,7 +53,7 @@ enum PasteFormat: String, CaseIterable {
     /// Whether this format pastes via Cmd+V or uses a different delivery mechanism.
     var pastesByKeyboard: Bool {
         switch self {
-        case .image, .filePath, .url, .base64: true
+        case .image, .filePath, .url, .base64, .visionDescription: true
         case .dragFile: false
         }
     }

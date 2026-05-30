@@ -20,13 +20,6 @@ enum TalkieQRCodeRouter {
     static func route(scannedCode: String) async throws -> TalkieQRCodeRoute {
         let trimmedCode = scannedCode.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        if let url = URL(string: trimmedCode), url.scheme == "talkie" {
-            if let payload = TalkieAIProviderCredentialPayload.from(url: url) {
-                return .aiProviderCredential(payload)
-            }
-            return .talkieURL(url)
-        }
-
         if let data = trimmedCode.data(using: .utf8),
            let payload = try? JSONDecoder().decode(TalkieAIProviderCredentialPayload.self, from: data) {
             return .aiProviderCredential(payload)
@@ -45,6 +38,13 @@ enum TalkieQRCodeRouter {
 
         if let payload = try? await SSHPrivateKeyQRCodePayload.decode(from: trimmedCode) {
             return .sshPayload(rawCode: trimmedCode, payload: payload)
+        }
+
+        if let url = URL(string: trimmedCode), url.scheme == "talkie" {
+            if let payload = TalkieAIProviderCredentialPayload.from(url: url) {
+                return .aiProviderCredential(payload)
+            }
+            return .talkieURL(url)
         }
 
         throw TalkieQRCodeRouterError.unrecognizedCode

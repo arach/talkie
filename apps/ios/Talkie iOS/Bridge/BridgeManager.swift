@@ -744,6 +744,79 @@ final class BridgeManager {
         return response
     }
 
+    func sendCompanionTrackpad(
+        event: BridgeClient.TrackpadEvent,
+        dx: Double = 0,
+        dy: Double = 0
+    ) async throws {
+        guard isPaired else {
+            throw BridgeError.notConfigured
+        }
+
+        if status != .connected {
+            await connect()
+        }
+
+        guard status == .connected else {
+            throw BridgeError.connectionFailed
+        }
+
+        try await client.companionTrackpad(event: event, dx: dx, dy: dy)
+        lastSuccessfulContactAt = .now
+        updateActiveMacContactDate(.now)
+    }
+
+    func sendCompanionImageToMac(
+        imageData: Data,
+        mimeType: String,
+        autoPaste: Bool = true
+    ) async throws -> CompanionTriggerResponse {
+        guard isPaired else {
+            throw BridgeError.notConfigured
+        }
+
+        if status != .connected {
+            await connect()
+        }
+
+        guard status == .connected else {
+            throw BridgeError.connectionFailed
+        }
+
+        let response = try await client.companionPasteImage(
+            imageData: imageData,
+            mimeType: mimeType,
+            autoPaste: autoPaste
+        )
+        lastSuccessfulContactAt = .now
+        updateActiveMacContactDate(.now)
+        return response
+    }
+
+    func terminalAccessPayload() async throws -> SSHPrivateKeyQRCodePayload {
+        guard isPaired else {
+            throw BridgeError.notConfigured
+        }
+
+        if status != .connected {
+            await connect()
+        }
+
+        guard status == .connected else {
+            throw BridgeError.connectionFailed
+        }
+
+        let response = try await client.terminalAccessPayload()
+        lastSuccessfulContactAt = .now
+        updateActiveMacContactDate(.now)
+
+        guard response.ok, let payload = response.payload else {
+            throw BridgeError.messageFailed(response.error ?? "Terminal access preparation failed")
+        }
+
+        return try await SSHPrivateKeyQRCodePayload.decode(from: payload)
+    }
+
     func sendMessageWithImage(sessionId: String, text: String, image: UIImage) async throws {
         try await sendMessage(sessionId: sessionId, text: text)
     }

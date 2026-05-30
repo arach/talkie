@@ -198,6 +198,11 @@ actor BridgeClient {
         return try JSONDecoder().decode(CompanionStateResponse.self, from: data)
     }
 
+    func terminalAccessPayload() async throws -> TerminalAccessResponse {
+        let data = try await post("/terminal/access", body: EmptyBridgeRequest(), timeout: 120)
+        return try JSONDecoder().decode(TerminalAccessResponse.self, from: data)
+    }
+
     func acknowledgeSecurityEvent(id: String) async throws {
         _ = try await post("/security/events/\(id)/ack", body: EmptyBridgeRequest())
     }
@@ -1225,6 +1230,16 @@ struct CompanionEventEnvelope: Codable {
     let type: String
     let snapshot: CompanionStateResponse?
     let reason: String?
+    let error: String?
+}
+
+struct TerminalAccessResponse: Codable {
+    let ok: Bool
+    let payload: String?
+    let label: String?
+    let host: String?
+    let alternateHosts: [String]?
+    let fingerprint: String?
     let error: String?
 }
 

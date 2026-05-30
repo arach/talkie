@@ -10,6 +10,8 @@ import Combine
 import AppKit
 import TalkieKit
 
+private let homeLog = Log(.ui)
+
 // MARK: - Card Style Modifier
 
 /// Unified card styling - uses Liquid Glass on macOS 26+, falls back to shadow-based on older
@@ -93,6 +95,7 @@ struct HomeScreen: View {
     // Task tracking for cancellation on view dismissal
     @State private var streakTask: Task<Void, Never>?
     @State private var activityTask: Task<Void, Never>?
+    @State private var homeStatsRefreshTask: Task<Void, Never>?
 
     private var todayTotal: Int { todayMemos + todayDictations }
     private var hasActivity: Bool { !unifiedActivity.isEmpty }
@@ -157,15 +160,8 @@ struct HomeScreen: View {
             )
             .task {
                 if !hasPerformedInitialLoad {
-                    DatabaseManager.shared.afterInitialized { [memosVM, dictationStore] in
-                        Task { @MainActor in
-                            await memosVM.loadStats()
-                            await memosVM.loadRecentMemos(limit: Self.startupMemoLoadLimit)
-                            dictationStore.refresh()
-                        }
-                    }
-                    loadData()
                     hasPerformedInitialLoad = true
+                    await loadInitialHomeData(refreshSecondaryInsights: true)
                 }
             }
             // The Scope path was missing the store-change reactivity the
@@ -173,10 +169,10 @@ struct HomeScreen: View {
             // the view never re-pulled, so new dictations / memos never
             // showed up. Mirror the standard path's onChange wiring.
             .onChange(of: dictationStore.dictations.count) { _, _ in
-                loadData()
+                refreshAfterStoreChange()
             }
             .onChange(of: memosVM.totalCount) { _, _ in
-                loadData()
+                refreshAfterStoreChange()
             }
             .onReceive(NotificationCenter.default.publisher(for: .syncDataAvailable)) { _ in
                 handleSyncDrivenRefresh()
@@ -234,32 +230,7 @@ struct HomeScreen: View {
             hasPerformedInitialLoad = true
             scheduleStartupProfilingFallbackIfNeeded()
 
-            // Wait for database to be ready before loading stats and dictations
-            DatabaseManager.shared.afterInitialized { [memosVM, dictationStore] in
-                await MainActor.run {
-                    if isStartupProfilingActive {
-                        StartupProfiler.shared.mark("home.stats.start")
-                    }
-                }
-                await memosVM.loadStats()
-                await MainActor.run {
-                    if isStartupProfilingActive {
-                        StartupProfiler.shared.mark("home.stats.done")
-                    }
-                }
-                await memosVM.loadRecentMemos(limit: Self.startupMemoLoadLimit)
-                await MainActor.run {
-                    if isStartupProfilingActive {
-                        StartupProfiler.shared.mark("home.memos.done")
-                    }
-                }
-
-                // Load dictations after DB is ready
-                await MainActor.run {
-                    dictationStore.refresh()
-                }
-            }
-            loadData(refreshSecondaryInsights: true)
+            await loadInitialHomeData(refreshSecondaryInsights: true)
             if isStartupProfilingActive {
                 StartupProfiler.shared.mark("home.task.done")
             }
@@ -270,19 +241,20 @@ struct HomeScreen: View {
             }
         }
         .onChange(of: dictationStore.dictations.count) { oldCount, newCount in
-            loadData()
+            refreshAfterStoreChange()
             // Mark ready when dictations are first populated
             if isStartupProfilingActive, oldCount == 0, newCount > 0 {
                 finishStartupProfiling(reason: "dictations rendered")
             }
         }
         .onChange(of: memosVM.totalCount) { _, _ in
-            loadData()
+            refreshAfterStoreChange()
         }
         .onDisappear {
             // Cancel in-flight tasks when view is dismissed
             streakTask?.cancel()
             activityTask?.cancel()
+            homeStatsRefreshTask?.cancel()
             startupProfilingFallbackTask?.cancel()
         }
         .onReceive(NotificationCenter.default.publisher(for: .syncDataAvailable)) { _ in
@@ -347,6 +319,85 @@ struct HomeScreen: View {
     // MARK: - Data Loading
 
     @MainActor
+    private func waitForHomeDatabase() async -> Bool {
+        guard !DatabaseManager.shared.isInitialized else { return true }
+
+        do {
+            _ = try await DatabaseManager.shared.databaseWhenReady()
+            return true
+        } catch {
+            homeLog.error("Home database wait failed: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    @MainActor
+    private func loadInitialHomeData(refreshSecondaryInsights: Bool) async {
+        guard await waitForHomeDatabase() else { return }
+
+        if isStartupProfilingActive {
+            StartupProfiler.shared.mark("home.stats.start")
+        }
+        await memosVM.loadStats()
+        _ = await dictationStore.refreshAndWait()
+        await refreshHomeInsights()
+        if isStartupProfilingActive {
+            StartupProfiler.shared.mark("home.stats.done")
+        }
+
+        await memosVM.loadRecentMemos(limit: Self.startupMemoLoadLimit)
+        if isStartupProfilingActive {
+            StartupProfiler.shared.mark("home.memos.done")
+        }
+
+        loadData(refreshSecondaryInsights: refreshSecondaryInsights)
+    }
+
+    @MainActor
+    private func refreshHomeInsights() async {
+        guard DatabaseManager.shared.isInitialized else { return }
+
+        do {
+            async let streakQ = recordingRepo.calculateDictationStreak()
+            async let topAppsQ = recordingRepo.topDictationApps(limit: 5)
+
+            todayMemos = memosVM.todayCount
+            todayDictations = dictationStore.todayCount
+            totalWords = dictationStore.totalWordCount
+            streak = try await streakQ
+            topApps = try await topAppsQ
+
+            if settings.extensionsFrameworkEnabled {
+                ExtensionManager.shared.syncWithDatabaseCounts(
+                    memoCount: memosVM.totalCount,
+                    dictationCount: dictationStore.cachedCount,
+                    totalWords: totalWords,
+                    streak: streak
+                )
+            }
+        } catch is CancellationError {
+        } catch {
+            homeLog.error("Failed to refresh home insights: \(error.localizedDescription)")
+        }
+    }
+
+    @MainActor
+    private func refreshAfterStoreChange() {
+        loadData()
+
+        homeStatsRefreshTask?.cancel()
+        homeStatsRefreshTask = Task {
+            guard await waitForHomeDatabase(), !Task.isCancelled else { return }
+
+            await memosVM.loadStats()
+            await refreshHomeInsights()
+
+            guard !Task.isCancelled else { return }
+            loadData()
+        }
+    }
+
+    @MainActor
     private func handleSyncDrivenRefresh() {
         let now = Date()
         guard now.timeIntervalSince(lastSyncRefreshAt) >= Self.syncRefreshDedupInterval else {
@@ -354,12 +405,13 @@ struct HomeScreen: View {
         }
         lastSyncRefreshAt = now
 
-        dictationStore.refresh()
         Task {
             await memosVM.loadRecentMemos(limit: Self.startupMemoLoadLimit)
             await memosVM.loadStats()
+            _ = await dictationStore.refreshAndWait()
+            await refreshHomeInsights()
+            loadData(refreshSecondaryInsights: true)
         }
-        loadData(refreshSecondaryInsights: true)
     }
 
     private func loadData(refreshSecondaryInsights: Bool = false) {
@@ -399,13 +451,9 @@ struct HomeScreen: View {
         // Sort by date descending
         unifiedActivity = Array(items.sorted { $0.date > $1.date }.prefix(Self.maxUnifiedActivityItems))
 
-        // Calculate stats - use memosVM for memo stats
         todayMemos = memosVM.todayCount
-
         todayDictations = dictationStore.todayCount
-
-        totalWords = dictationStore.dictations.reduce(0) { $0 + $1.wordCount }
-            + memosVM.memos.reduce(0) { $0 + ($1.transcription?.split(separator: " ").count ?? 0) }
+        totalWords = dictationStore.totalWordCount
 
         #if DEBUG
         FrameRateMonitor.shared.markNavigationDataVisible(
@@ -433,7 +481,11 @@ struct HomeScreen: View {
             guard DatabaseManager.shared.isInitialized else { return }
             do {
                 let streakVal = try await recordingRepo.calculateDictationStreak()
-                await MainActor.run { streak = streakVal }
+                let apps = try await recordingRepo.topDictationApps(limit: 5)
+                await MainActor.run {
+                    streak = streakVal
+                    topApps = apps
+                }
             } catch is CancellationError {
             } catch {
             }
@@ -457,14 +509,6 @@ struct HomeScreen: View {
                     activityData = data
                     countByDay = dayMap
                 }
-            }
-        }
-
-        // Load top dictation apps.
-        Task {
-            guard DatabaseManager.shared.isInitialized else { return }
-            if let apps = try? await recordingRepo.topDictationApps(limit: 5) {
-                await MainActor.run { topApps = apps }
             }
         }
     }

@@ -44,24 +44,36 @@ function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function unwrapSwiftEnumPayload(value: UnknownRecord): UnknownRecord {
+  const keys = Object.keys(value);
+  if (keys.length === 1 && keys[0] === "_0") {
+    const payload = value._0;
+    if (isRecord(payload)) {
+      return payload;
+    }
+  }
+
+  return value;
+}
+
 function normalizeConfig(step: UnknownRecord, type: WorkflowStepType): Record<string, unknown> {
   const nested = step.config;
   if (isRecord(nested)) {
     const preferredKey = configKeysByType[type];
     const preferredConfig = nested[preferredKey];
     if (isRecord(preferredConfig)) {
-      return preferredConfig;
+      return unwrapSwiftEnumPayload(preferredConfig);
     }
 
     const nestedKeys = Object.keys(nested);
     if (nestedKeys.length === 1) {
       const onlyValue = nested[nestedKeys[0]];
       if (isRecord(onlyValue)) {
-        return onlyValue;
+        return unwrapSwiftEnumPayload(onlyValue);
       }
     }
 
-    return nested;
+    return unwrapSwiftEnumPayload(nested);
   }
 
   const flatConfig: Record<string, unknown> = {};

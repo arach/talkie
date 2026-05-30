@@ -74,7 +74,8 @@ final class SSHTerminalSession {
         listener?.sshTerminalSession(self, didResetTranscript: transcriptData)
     }
 
-    func connect(configuration: SSHTerminalConfiguration) async {
+    @discardableResult
+    func connect(configuration: SSHTerminalConfiguration) async -> Status {
         await disconnect()
         isTearingDown = false
         didObserveRemoteExit = false
@@ -86,15 +87,16 @@ final class SSHTerminalSession {
         let password = configuration.password.trimmingCharacters(in: .whitespacesAndNewlines)
         let privateKeyPEM = configuration.privateKeyPEM?.trimmingCharacters(in: .whitespacesAndNewlines)
         let startupCommand = configuration.startupCommand?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let connectTimeoutSeconds = max(configuration.connectTimeoutSeconds, 1)
 
         guard !host.isEmpty, !username.isEmpty else {
             status = .failed("Enter a host and username.")
-            return
+            return status
         }
 
         guard !password.isEmpty || !(privateKeyPEM ?? "").isEmpty else {
             status = .failed(SSHClientError.authenticationRequired.localizedDescription)
-            return
+            return status
         }
 
         let parsedPrivateKey: NIOSSHPrivateKey?
@@ -106,7 +108,7 @@ final class SSHTerminalSession {
             }
         } catch {
             status = .failed(SSHErrorFormatter.message(for: error))
-            return
+            return status
         }
 
         endpointLabel = "\(username)@\(host):\(configuration.port)"
@@ -167,6 +169,7 @@ final class SSHTerminalSession {
 
         do {
             let bootstrap = NIOTSConnectionBootstrap(group: group)
+                .connectTimeout(.seconds(Int64(connectTimeoutSeconds)))
                 .channelInitializer { channel in
                     do {
                         try channel.pipeline.syncOperations.addHandler(
@@ -223,6 +226,8 @@ final class SSHTerminalSession {
         } catch {
             await handleConnectionError(error)
         }
+
+        return status
     }
 
     func disconnect() async {
@@ -498,6 +503,11 @@ final class SSHTerminalSession {
 
         if trimmedCommand.contains(".talkie-shell/bin/talkie-enter") {
             return "talkie-enter helper"
+        }
+
+        if trimmedCommand.contains("TALKIE_NATIVE_SESSION")
+            || trimmedCommand.contains("talkie-native-${TALKIE_SURFACE:-phone}") {
+            return "native reusable shell"
         }
 
         switch profile {

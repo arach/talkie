@@ -8,9 +8,11 @@
 //
 
 import SwiftUI
+import TalkieMobileKit
 
 struct AppShellNext<Content: View>: View {
     @StateObject private var chrome = ShellChrome()
+    @StateObject private var deepLinkManager = DeepLinkManager.shared
     @StateObject private var router = AppShellRouter.shared
     @StateObject private var recordingSheet = RecordingSheetController.shared
     @EnvironmentObject private var theme: ThemeManager
@@ -61,9 +63,9 @@ struct AppShellNext<Content: View>: View {
             // inside the summoned tray (see LiquidGlassTray), keeping
             // those screens focused on their own content.
             if router.surface == .home {
-                MicFAB()
+                MicFAB(size: 56)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, 12)
             }
 
             // Left-edge swipe-back: on any sub-surface, a horizontal
@@ -104,7 +106,52 @@ struct AppShellNext<Content: View>: View {
             // (which returns empty on the simulator). Fire-and-forget;
             // ParakeetModelManager has its own re-entry guards.
             ParakeetModelManager.shared.preheatForKeyboard()
+            handleGlobalDeepLinkAction(deepLinkManager.pendingAction)
         }
+        .onChange(of: router.pendingNewMemoText) { _, text in
+            handlePendingNewMemoText(text)
+        }
+        .onChange(of: deepLinkManager.pendingAction) { _, action in
+            handleGlobalDeepLinkAction(action)
+        }
+    }
+
+    private func handlePendingNewMemoText(_ text: String?) {
+        guard let text else { return }
+        router.pendingNewMemoText = nil
+
+        guard let memo = VoiceMemoStore.shared.createTextMemo(
+            text: text,
+            engine: "ask_ai"
+        ), let memoID = memo.id?.uuidString else {
+            return
+        }
+
+        router.openMemoDetail(memoID: memoID)
+    }
+
+    private func handleGlobalDeepLinkAction(_ action: DeepLinkAction) {
+        switch action {
+        case .importURL(let url, let title):
+            SharedCaptureIngress.importURLContent(
+                from: url,
+                suggestedTitle: title,
+                ingestionMethod: "deeplink",
+                onCapture: saveAndOpenCapture
+            )
+            deepLinkManager.clearAction()
+        case .processShare(let id):
+            SharedCaptureIngress.processQueuedShare(id: id, onCapture: saveAndOpenCapture)
+            deepLinkManager.clearAction()
+        default:
+            break
+        }
+    }
+
+    private func saveAndOpenCapture(_ capture: Capture) {
+        CaptureStore.shared.add(capture)
+        CaptureSyncService.shared.syncIfConnected()
+        router.openCaptureDetail(captureID: capture.id.uuidString)
     }
 
     /// Direction-aware push/pop transition. Forward (push): new
@@ -325,8 +372,8 @@ final class AppShellRouter: ObservableObject {
     /// the new document opens with the seed already populated.
     @Published var pendingComposeSeed: String?
     /// Text payload for "Save as memo" actions (e.g. AskAI's Save chip).
-    /// Codex wires VoiceMemoStore to create a memo from the payload
-    /// and route to its detail surface. Paint side just sets this.
+    /// AppShellNext consumes this, creates the VoiceMemo, and routes
+    /// to the new detail surface.
     @Published var pendingNewMemoText: String?
     /// Prompt routed into the next Ask AI surface. Set by `openAskAISeeded`
     /// — typically the fallthrough path when a voice command lands on a
@@ -334,6 +381,10 @@ final class AppShellRouter: ObservableObject {
     /// clears this on appear (sets `session.prompt = pending`, user
     /// reviews + sends).
     @Published var pendingAskAIPrompt: String?
+    /// Signals that the next Compose surface should auto-focus its
+    /// editor on appear (popping the embedded Talkie keyboard).
+    /// ComposeNextView consumes + clears this on appear.
+    @Published var pendingComposeFocus: Bool = false
     @Published var transitionDirection: TransitionDirection = .forward
 
     private init() {
@@ -449,6 +500,15 @@ final class AppShellRouter: ObservableObject {
     /// on the router for ComposeStore to consume.
     func openComposeSeeded(text: String) {
         pendingComposeSeed = text
+        openCompose(documentID: UUID().uuidString)
+    }
+
+    /// Open a fresh Compose document with the embedded Talkie keyboard
+    /// already up. Used by the bottom-right keyboard complication so
+    /// "I want to type" lands directly in a typing-ready editor instead
+    /// of the keyboard-extension status surface.
+    func openComposeWithKeyboard() {
+        pendingComposeFocus = true
         openCompose(documentID: UUID().uuidString)
     }
 

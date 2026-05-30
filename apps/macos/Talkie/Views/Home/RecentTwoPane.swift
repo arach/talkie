@@ -62,6 +62,41 @@ struct RecentRow: Identifiable {
     let meta: String
     let when: String
     let onTap: () -> Void
+    let menuActions: [RecentMenuItem]
+
+    init(
+        id: UUID,
+        glyph: String,
+        line: String,
+        body: String?,
+        meta: String,
+        when: String,
+        onTap: @escaping () -> Void,
+        menuActions: [RecentMenuItem] = []
+    ) {
+        self.id = id
+        self.glyph = glyph
+        self.line = line
+        self.body = body
+        self.meta = meta
+        self.when = when
+        self.onTap = onTap
+        self.menuActions = menuActions
+    }
+}
+
+/// Right-click action on a `RecentRow`. `label == ""` renders as a divider so
+/// callers can group destructive actions visually without a second type.
+struct RecentMenuItem: Identifiable {
+    let id = UUID()
+    let label: String
+    let systemImage: String
+    let role: ButtonRole?
+    let handler: () -> Void
+
+    static let divider = RecentMenuItem(label: "", systemImage: "", role: nil, handler: {})
+
+    var isDivider: Bool { label.isEmpty }
 }
 
 struct RecentCTA {
@@ -289,6 +324,29 @@ private struct RecentRowView: View {
         .buttonStyle(.plain)
         .onHover { hovered = $0 }
         .overlay(ScopeRule(.subtle), alignment: .top)
+        .modifier(RecentRowContextMenu(actions: row.menuActions))
+    }
+}
+
+private struct RecentRowContextMenu: ViewModifier {
+    let actions: [RecentMenuItem]
+
+    func body(content: Content) -> some View {
+        if actions.isEmpty {
+            content
+        } else {
+            content.contextMenu {
+                ForEach(actions) { item in
+                    if item.isDivider {
+                        Divider()
+                    } else {
+                        Button(role: item.role, action: item.handler) {
+                            Label(item.label, systemImage: item.systemImage)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -12,6 +12,7 @@ const REQUESTED_CAPABILITIES = [
   "companion.activateApp",
   "companion.trackpad",
   "companion.pasteImage",
+  "terminal.access",
   "desktop.windows.read",
   "desktop.screenshot.read",
   "message.inject",

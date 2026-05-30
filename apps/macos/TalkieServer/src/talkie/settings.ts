@@ -31,6 +31,7 @@ export type TalkieComposeProviderId =
   | "anthropic"
   | "gemini"
   | "groq"
+  | "minimax"
   | "apple-local";
 
 export interface ComposeSettingsSnapshot {
@@ -42,7 +43,7 @@ export interface ComposeSettingsSnapshot {
 
 export function talkieProviderToInferenceProvider(
   providerId: string | null | undefined
-): "openai" | "anthropic" | "google" | "groq" | null {
+): "openai" | "anthropic" | "google" | "groq" | "minimax" | null {
   switch ((providerId || "").trim()) {
     case "openai":
       return "openai";
@@ -52,13 +53,15 @@ export function talkieProviderToInferenceProvider(
       return "google";
     case "groq":
       return "groq";
+    case "minimax":
+      return "minimax";
     default:
       return null;
   }
 }
 
 export function inferenceProviderToTalkieProvider(
-  providerId: "openai" | "anthropic" | "google" | "groq"
+  providerId: "openai" | "anthropic" | "google" | "groq" | "minimax"
 ): Exclude<TalkieComposeProviderId, "apple-local"> {
   switch (providerId) {
     case "google":
@@ -66,6 +69,7 @@ export function inferenceProviderToTalkieProvider(
     case "openai":
     case "anthropic":
     case "groq":
+    case "minimax":
       return providerId;
   }
 }
@@ -83,13 +87,15 @@ export function providerDisplayName(
       return "Google Gemini";
     case "groq":
       return "Groq";
+    case "minimax":
+      return "MiniMax";
     case "apple-local":
       return "Apple Intelligence";
   }
 }
 
 export function defaultModelForProvider(
-  providerId: "openai" | "anthropic" | "google" | "groq"
+  providerId: "openai" | "anthropic" | "google" | "groq" | "minimax"
 ): string {
   switch (providerId) {
     case "openai":
@@ -100,6 +106,8 @@ export function defaultModelForProvider(
       return "gemini-2.0-flash";
     case "groq":
       return "llama-3.3-70b-versatile";
+    case "minimax":
+      return "MiniMax-M2.7";
   }
 }
 
@@ -137,7 +145,7 @@ export async function loadComposeSettings(): Promise<ComposeSettingsSnapshot> {
 }
 
 export function readProviderAPIKey(
-  providerId: "openai" | "anthropic" | "google" | "groq"
+  providerId: "openai" | "anthropic" | "google" | "groq" | "minimax"
 ): string | null {
   const settingsKey = providerSettingsKey(providerId);
   const explicitSuite = process.env.TALKIE_SHARED_SETTINGS_SUITE?.trim();
@@ -165,7 +173,7 @@ function resolveSettingsConfigPath(): string | null {
 }
 
 function providerSettingsKey(
-  providerId: "openai" | "anthropic" | "google" | "groq"
+  providerId: "openai" | "anthropic" | "google" | "groq" | "minimax"
 ): string {
   switch (providerId) {
     case "openai":
@@ -176,6 +184,8 @@ function providerSettingsKey(
       return "gemini_api_key";
     case "groq":
       return "groq_api_key";
+    case "minimax":
+      return "minimax_api_key";
   }
 }
 
@@ -194,7 +204,7 @@ function readDefaultsValue(suite: string, key: string): string | null {
 }
 
 function readProviderEnvValue(
-  providerId: "openai" | "anthropic" | "google" | "groq"
+  providerId: "openai" | "anthropic" | "google" | "groq" | "minimax"
 ): string | null {
   const keys = providerEnvKeys(providerId);
   for (const key of keys) {
@@ -208,7 +218,7 @@ function readProviderEnvValue(
 }
 
 function providerEnvKeys(
-  providerId: "openai" | "anthropic" | "google" | "groq"
+  providerId: "openai" | "anthropic" | "google" | "groq" | "minimax"
 ): string[] {
   switch (providerId) {
     case "openai":
@@ -219,5 +229,7 @@ function providerEnvKeys(
       return ["GEMINI_API_KEY", "GOOGLE_API_KEY", "GEMINI_KEY", "GOOGLE_KEY"];
     case "groq":
       return ["GROQ_API_KEY", "GROQ_KEY"];
+    case "minimax":
+      return ["MINIMAX_API_KEY", "MINIMAX_KEY"];
   }
 }

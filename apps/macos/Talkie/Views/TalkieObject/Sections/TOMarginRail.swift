@@ -138,6 +138,11 @@ struct TOMarginRail: View {
             ))
         }
 
+        // Timing markers belong in the left marginal rule alongside
+        // paragraphs (see DocumentBody.documentColumn), not on the
+        // right rail — they read as "where am I in the audio" cues
+        // anchored to the text, not as technical metadata.
+
         return out
     }
 

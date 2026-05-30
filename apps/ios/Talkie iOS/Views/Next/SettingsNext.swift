@@ -18,8 +18,8 @@
 //      accent, motion)
 //    - CONNECT → iCloudStatusManager, BridgeManager, account state
 //    - KEYS → TalkieAppSettings keyboard config
-//    - LAB → reset helpers, log viewer presentation (DEBUG)
-//    - ABOUT → Bundle info, engine bundle id, bridge protocol
+//    - LAB → reset helpers (DEBUG)
+//    - ABOUT → Bundle info, logs, bridge protocol
 //
 //  Studio source: design/studio/components/studies/Settings.tsx,
 //  variant "inspector" with the rail-on-left layout.
@@ -37,6 +37,7 @@ struct SettingsNext: View {
     @State private var appSettings = TalkieAppSettings.shared
     @State private var bridgeManager = BridgeManager.shared
     @State private var active: InspectorTab
+    @State private var showingLogViewer = false
 
     enum InspectorTab: String, CaseIterable, Identifiable {
         case voice = "VOICE"
@@ -147,6 +148,9 @@ struct SettingsNext: View {
                     panel
                 }
             }
+        }
+        .sheet(isPresented: $showingLogViewer) {
+            DebugLogsView()
         }
     }
 
@@ -619,9 +623,23 @@ struct SettingsNext: View {
                             .frame(height: 1)
                     }
 
-                HStack(spacing: 0) {
-                    ForEach(AppTheme.allCases, id: \.self) { t in
-                        themeSwatch(t)
+                // ≤4 themes → single row. 5+ → 3-column grid so labels
+                // like TACTICAL / GRAPHITE never compete for ~56pt of
+                // width on a mini-class phone.
+                if AppTheme.allCases.count > 4 {
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3),
+                        spacing: 14
+                    ) {
+                        ForEach(AppTheme.allCases, id: \.self) { t in
+                            themeSwatch(t)
+                        }
+                    }
+                } else {
+                    HStack(spacing: 0) {
+                        ForEach(AppTheme.allCases, id: \.self) { t in
+                            themeSwatch(t)
+                        }
                     }
                 }
             }
@@ -646,6 +664,8 @@ struct SettingsNext: View {
                 )
             Text(t.rawValue.uppercased())
                 .talkieType(.channelLabelTiny)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
                 .foregroundStyle(
                     isActive
                         ? theme.colors.textPrimary
@@ -692,6 +712,7 @@ struct SettingsNext: View {
             #if DEBUG
             navRow("SSH Terminal") { AppShellRouter.shared.openTerminal() }
             #endif
+            navRow("Command Deck remote") { AppShellRouter.shared.openDeck() }
             navRow("View connections detail") { AppShellRouter.shared.openConnectionCenter() }
             navRow("Workspaces") { AppShellRouter.shared.openWorkspaces() }
             navRow("Resolve sync conflicts") { AppShellRouter.shared.openSyncConflicts() }
@@ -796,7 +817,6 @@ struct SettingsNext: View {
             actionRow("Reset onboarding", tone: .neutral) { appSettings.hasSeenOnboarding = false }
             actionRow("Reset auth state", tone: .neutral) { resetAuthState() }
             actionRow("Reset resume tooltip", tone: .neutral) { appSettings.hasSeenResumeTooltip = false }
-            actionRow("Open log viewer", tone: .accent) { AppLogger.app.info("SettingsNext log viewer requested; no LogViewerSheet is available in this target") }
             actionRow("Dump shared store", tone: .neutral) { dumpSharedStore() }
             actionRow("Force iCloud refresh", tone: .neutral) { iCloudStatus.checkStatus() }
             navRow("Inspect theme contrast") { AppShellRouter.shared.openThemeContrast() }
@@ -808,15 +828,47 @@ struct SettingsNext: View {
             field("Version", Bundle.main.shortVersion)
             field("Build", Bundle.main.buildNumber)
             field("Channel", iosChannel)
-            field("Engine bundle", appSettings.preferredParakeetModel.huggingFaceRepo)
+            field("Engine", appSettings.preferredParakeetModel.displayName)
             field("Mac bridge protocol", "talkie-bridge-v1")
             navRow("Manage AI keys") { AppShellRouter.shared.openAICredentials() }
             navRow("Workflows hub") { AppShellRouter.shared.openWorkflows() }
+            navRow("View logs") { showingLogViewer = true }
             navRow("Send feedback") { AppShellRouter.shared.openFeedback() }
         }
     }
 
     // MARK: - Panel primitives
+
+    private enum InspectorRowMetrics {
+        static let height: CGFloat = 44
+        static let trailingValueMinWidth: CGFloat = 52
+        static let trailingControlSpacing: CGFloat = 8
+        static let trailingControlWidth: CGFloat = 14
+    }
+
+    @ViewBuilder
+    private func rowLabelColumn(label: String, hint: String?) -> some View {
+        HStack(alignment: .center, spacing: 6) {
+            Text(label)
+                .talkieType(.fieldLabel)
+                .foregroundStyle(theme.colors.textPrimary)
+
+            if let hint {
+                Text("· \(hint)")
+                    .talkieType(.hint)
+                    .foregroundStyle(theme.colors.textTertiary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+        }
+        .layoutPriority(2)
+    }
+
+    private func inspectorRowDivider() -> some View {
+        Rectangle()
+            .fill(theme.currentTheme.chrome.edgeFaint)
+            .frame(height: 1)
+    }
 
     /// Optional tappable chip placed at the trailing edge of a field
     /// row — used when the field's state implies a recovery action
@@ -853,7 +905,7 @@ struct SettingsNext: View {
         // label (truncated if it crowds the value) so the row never
         // grows beyond 44pt — gives every panel the same rhythm
         // regardless of hint presence.
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
+        HStack(alignment: .center, spacing: 6) {
             Text(label)
                 .talkieType(.fieldLabel)
                 .foregroundStyle(theme.colors.textPrimary)
@@ -870,37 +922,48 @@ struct SettingsNext: View {
 
             Spacer(minLength: 8)
 
-            Text(value)
-                .talkieType(.fieldValue)
-                .foregroundStyle(theme.currentTheme.chrome.accent)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .layoutPriority(1)
+            HStack(spacing: InspectorRowMetrics.trailingControlSpacing) {
+                Text(value)
+                    .talkieType(.fieldValue)
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(
+                        minWidth: InspectorRowMetrics.trailingValueMinWidth,
+                        alignment: .trailing
+                    )
 
-            if let inlineAction {
-                Button(action: inlineAction.action) {
-                    Text(inlineAction.label)
-                        .talkieType(.channelLabelTiny)
-                        .foregroundStyle(theme.currentTheme.chrome.accent)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .overlay(
-                            Capsule()
-                                .strokeBorder(
-                                    theme.currentTheme.chrome.accent.opacity(0.55),
-                                    lineWidth: theme.currentTheme.chrome.hairlineWidth
-                                )
+                if let inlineAction {
+                    Button(action: inlineAction.action) {
+                        Text(inlineAction.label)
+                            .talkieType(.channelLabelTiny)
+                            .foregroundStyle(theme.currentTheme.chrome.accent)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .overlay(
+                                Capsule()
+                                    .strokeBorder(
+                                        theme.currentTheme.chrome.accent.opacity(0.55),
+                                        lineWidth: theme.currentTheme.chrome.hairlineWidth
+                                    )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(inlineAction.label) \(label)")
+                } else {
+                    Color.clear
+                        .frame(
+                            width: InspectorRowMetrics.trailingControlWidth,
+                            height: InspectorRowMetrics.trailingControlWidth
                         )
+                        .accessibilityHidden(true)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(inlineAction.label) \(label)")
             }
+            .fixedSize(horizontal: true, vertical: false)
         }
-        .frame(height: 44)
+        .frame(height: InspectorRowMetrics.height)
         .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(theme.currentTheme.chrome.edgeFaint)
-                .frame(height: 1)
+            inspectorRowDivider()
         }
     }
 
@@ -923,39 +986,34 @@ struct SettingsNext: View {
             selection.wrappedValue = nextValue
             onChange?(nextValue)
         } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(label)
-                    .talkieType(.fieldLabel)
-                    .foregroundStyle(theme.colors.textPrimary)
-                    .layoutPriority(2)
-
-                if let hint {
-                    Text("· \(hint)")
-                        .talkieType(.hint)
-                        .foregroundStyle(theme.colors.textTertiary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .layoutPriority(0)
-                }
+            HStack(alignment: .center, spacing: 6) {
+                rowLabelColumn(label: label, hint: hint)
+                    .layoutPriority(0)
 
                 Spacer(minLength: 8)
 
-                Text(current.title)
-                    .talkieType(.fieldValue)
-                    .foregroundStyle(theme.currentTheme.chrome.accent)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                HStack(spacing: InspectorRowMetrics.trailingControlSpacing) {
+                    Text(current.title)
+                        .talkieType(.fieldValue)
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(
+                            minWidth: InspectorRowMetrics.trailingValueMinWidth,
+                            alignment: .trailing
+                        )
 
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(theme.colors.textTertiary)
-                    .accessibilityHidden(true)
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(theme.colors.textTertiary)
+                        .frame(width: 14, height: 14)
+                        .accessibilityHidden(true)
+                }
+                .fixedSize(horizontal: true, vertical: false)
             }
-            .frame(height: 44)
+            .frame(height: InspectorRowMetrics.height)
             .overlay(alignment: .bottom) {
-                Rectangle()
-                    .fill(theme.currentTheme.chrome.edgeFaint)
-                    .frame(height: 1)
+                inspectorRowDivider()
             }
         }
         .buttonStyle(.plain)
@@ -970,20 +1028,9 @@ struct SettingsNext: View {
         hint: String? = nil,
         secure: Bool = false
     ) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(label)
-                .talkieType(.fieldLabel)
-                .foregroundStyle(theme.colors.textPrimary)
-                .layoutPriority(2)
-
-            if let hint {
-                Text("· \(hint)")
-                    .talkieType(.hint)
-                    .foregroundStyle(theme.colors.textTertiary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .layoutPriority(0)
-            }
+        HStack(alignment: .center, spacing: 6) {
+            rowLabelColumn(label: label, hint: hint)
+                .layoutPriority(0)
 
             Spacer(minLength: 8)
 
@@ -1003,11 +1050,9 @@ struct SettingsNext: View {
             .lineLimit(1)
             .frame(maxWidth: 150)
         }
-        .frame(height: 44)
+        .frame(height: InspectorRowMetrics.height)
         .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(theme.currentTheme.chrome.edgeFaint)
-                .frame(height: 1)
+            inspectorRowDivider()
         }
     }
 
@@ -1018,38 +1063,33 @@ struct SettingsNext: View {
         valueOff: String,
         hint: String? = nil
     ) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(label)
-                .talkieType(.fieldLabel)
-                .foregroundStyle(theme.colors.textPrimary)
-                .layoutPriority(2)
-
-            if let hint {
-                Text("· \(hint)")
-                    .talkieType(.hint)
-                    .foregroundStyle(theme.colors.textTertiary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .layoutPriority(0)
-            }
+        HStack(alignment: .center, spacing: 6) {
+            rowLabelColumn(label: label, hint: hint)
+                .layoutPriority(0)
 
             Spacer(minLength: 8)
 
-            Text(isOn.wrappedValue ? valueOn : valueOff)
-                .talkieType(.fieldValue)
-                .foregroundStyle(theme.currentTheme.chrome.accent)
-                .lineLimit(1)
-                .layoutPriority(1)
+            HStack(spacing: InspectorRowMetrics.trailingControlSpacing) {
+                Text(isOn.wrappedValue ? valueOn : valueOff)
+                    .talkieType(.fieldValue)
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                    .lineLimit(1)
+                    .frame(
+                        minWidth: InspectorRowMetrics.trailingValueMinWidth,
+                        alignment: .trailing
+                    )
 
-            Toggle(label, isOn: isOn)
-                .labelsHidden()
-                .tint(theme.currentTheme.chrome.accent)
+                Toggle(label, isOn: isOn)
+                    .labelsHidden()
+                    .tint(theme.currentTheme.chrome.accent)
+                    .controlSize(.mini)
+                    .fixedSize()
+            }
+            .fixedSize(horizontal: true, vertical: false)
         }
-        .frame(height: 44)
+        .frame(height: InspectorRowMetrics.height)
         .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(theme.currentTheme.chrome.edgeFaint)
-                .frame(height: 1)
+            inspectorRowDivider()
         }
     }
 
@@ -1060,7 +1100,7 @@ struct SettingsNext: View {
     /// surface (e.g. ConnectionCenter), not rows that fire an action.
     private func navRow(_ label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack {
+            HStack(alignment: .center) {
                 Text(label)
                     .talkieType(.fieldLabel)
                     .foregroundStyle(theme.colors.textPrimary)
@@ -1068,13 +1108,12 @@ struct SettingsNext: View {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(theme.colors.textTertiary)
+                    .frame(width: 14, height: 14)
                     .accessibilityHidden(true)
             }
-            .frame(height: 44)
+            .frame(height: InspectorRowMetrics.height)
             .overlay(alignment: .bottom) {
-                Rectangle()
-                    .fill(theme.currentTheme.chrome.edgeFaint)
-                    .frame(height: 1)
+                inspectorRowDivider()
             }
         }
         .buttonStyle(.plain)
@@ -1086,7 +1125,7 @@ struct SettingsNext: View {
         Button {
             action?()
         } label: {
-            HStack {
+            HStack(alignment: .center) {
                 Text(label)
                     .talkieType(.fieldLabel)
                     .foregroundStyle(theme.colors.textPrimary)
@@ -1095,11 +1134,9 @@ struct SettingsNext: View {
                     .talkieType(.chipLabel)
                     .foregroundStyle(actionColor(tone))
             }
-            .frame(height: 44)
+            .frame(height: InspectorRowMetrics.height)
             .overlay(alignment: .bottom) {
-                Rectangle()
-                    .fill(theme.currentTheme.chrome.edgeFaint)
-                    .frame(height: 1)
+                inspectorRowDivider()
             }
         }
         .buttonStyle(.plain)

@@ -157,7 +157,7 @@ struct ProOnboardingView: View {
         case .intro:
             return colors.textSecondary
         case .prerequisites:
-            return manager.localToolingReady ? colors.accent : Color(hex: "F59E0B")
+            return manager.localToolingReady ? colors.accent : Color(hex: "C47D1C")
         case .complete:
             return colors.accent
         }
@@ -410,7 +410,7 @@ struct ProOnboardingView: View {
                         title: "REMOTE ACCESS EXTRA",
                         subtitle: "Useful when you want remote bridge networking and device access.",
                         icon: "network",
-                        accent: Color(hex: "F59E0B"),
+                        accent: Color(hex: "C47D1C"),
                         badge: optionalReadyCount > 0 ? "READY" : "OPTIONAL",
                         items: optionalToolingItems
                     )
@@ -546,7 +546,7 @@ struct ProOnboardingView: View {
 
                 headerPill(
                     title: manager.localToolingReady ? "LOCAL READY" : "OPTIONAL SETUP",
-                    tint: manager.localToolingReady ? colors.accent : Color(hex: "F59E0B")
+                    tint: manager.localToolingReady ? colors.accent : Color(hex: "C47D1C")
                 )
             }
 
@@ -568,7 +568,7 @@ struct ProOnboardingView: View {
                     message: optionalReadyCount > 0
                         ? "Tailscale is available for remote bridge access."
                         : "Only needed when you want remote device networking.",
-                    tint: Color(hex: "F59E0B")
+                    tint: Color(hex: "C47D1C")
                 )
 
                 toolingMetricCard(
@@ -875,7 +875,7 @@ struct ProOnboardingView: View {
                     prerequisiteNarrativeCard(
                         title: "IF YOU LEAVE IT FOR LATER",
                         body: prerequisiteLaterImpact(for: item),
-                        tint: Color(hex: "F59E0B")
+                        tint: Color(hex: "C47D1C")
                     )
 
                     prerequisiteActions(for: item, status: status)
@@ -1134,7 +1134,7 @@ struct ProOnboardingView: View {
         case .failed:
             return Color(hex: "F87171")
         case .optional:
-            return Color(hex: "F59E0B")
+            return Color(hex: "C47D1C")
         }
     }
 

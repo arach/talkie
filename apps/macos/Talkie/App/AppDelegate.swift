@@ -206,6 +206,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         StartupCoordinator.shared.initializeCritical()
         StartupProfiler.shared.markEarly("phase1.critical.done")
 
+        // Phase 2: Database - start from the delegate path as well as
+        // TalkieApp.init so restored windows and early view tasks never race a
+        // missing GRDB boot.
+        Task { @MainActor in
+            StartupProfiler.shared.mark("db.grdb.start.delegate")
+            let didInitialize = await StartupCoordinator.shared.initializeDatabase()
+            StartupProfiler.shared.mark(didInitialize ? "db.grdb.ready.delegate" : "db.grdb.failed.delegate")
+        }
+
         // Set notification delegate to show notifications while app is in foreground
         signposter.emitEvent("Notification Delegate")
         UNUserNotificationCenter.current().delegate = self
@@ -287,11 +296,76 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             setupShelfShortcut()
         }
 
+        // TLK-022 — Media Augmentation Pipeline
+        // Register augmenters + kick off a background catch-up sweep
+        // so captures from before this shipped get backfilled. All
+        // work is fire-and-forget; never blocks launch.
+        setupMediaAugmentation()
+
         #if DEBUG
         // Setup keyboard shortcut for Design God Mode (⌘⇧D)
         setupDesignModeShortcut()
         #endif
     }
+
+    /// TLK-022 — register augmenters with `MediaAugmentationService`
+    /// and trigger the catch-up sweep over existing on-disk assets.
+    /// Spawns a single `Task` so registration awaits cleanly, then
+    /// fires the sweep at `.background` priority.
+    private func setupMediaAugmentation() {
+        Task {
+            await MediaAugmentationService.shared.register(OCRAugmenter())
+            await MediaAugmentationService.shared.register(WindowMetaAugmenter())
+
+            // Catch-up: enumerate every primary asset we own and
+            // enqueue it. The service skips augmenter (kind, version)
+            // pairs already present in the sidecar, so this is cheap
+            // when everything's up to date and gradual when it's not.
+            // No MainActor — pure FileManager + nonisolated enqueue.
+            Task.detached(priority: .background) {
+                Self.runMediaAugmentationCatchUpSweep()
+            }
+        }
+    }
+
+    /// Walks `Audio/`, `Screenshots/`, and `Tray/screenshots/` and
+    /// enqueues each primary asset for augmentation. Idempotent —
+    /// already-augmented assets at current versions are skipped by
+    /// the service. `nonisolated` so it runs off the main actor on
+    /// the detached background task that calls it; only touches
+    /// FileManager + the nonisolated `enqueue` entry.
+    nonisolated private static func runMediaAugmentationCatchUpSweep() {
+        let fm = FileManager.default
+
+        // Audio
+        let audioDir = AudioStorage.audioDirectory
+        if let files = try? fm.contentsOfDirectory(at: audioDir, includingPropertiesForKeys: nil) {
+            for url in files where Self.audioExts.contains(url.pathExtension.lowercased()) {
+                MediaAugmentationService.shared.enqueue(
+                    AugmentationTask(assetURL: url, assetKind: .audio)
+                )
+            }
+        }
+
+        // Screenshots — both the saved-capture dir and the tray buffer
+        let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let imageDirs: [URL] = [
+            ScreenshotStorage.screenshotsDirectory,
+            appSupport.appendingPathComponent("Talkie/Tray/screenshots", isDirectory: true),
+        ]
+        for dir in imageDirs {
+            guard let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else {
+                continue
+            }
+            for url in files where url.pathExtension.lowercased() == "png" {
+                MediaAugmentationService.shared.enqueue(
+                    AugmentationTask(assetURL: url, assetKind: .image)
+                )
+            }
+        }
+    }
+
+    private static let audioExts: Set<String> = ["wav", "m4a", "mp3", "aiff", "caf"]
 
     // MARK: - Debug Commands
 
@@ -880,6 +954,110 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         }
 
         cliHandler.register(
+            "capture-markup-describe",
+            description: "Describe a screenshot for capture markup. Usage: --debug=capture-markup-describe <image-path>"
+        ) { args in
+            guard let path = args.first else {
+                print("❌ Usage: --debug=capture-markup-describe <image-path>")
+                exit(1)
+                return
+            }
+
+            let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+            do {
+                let description = try await CaptureMarkupAgentService.shared.describe(imageURL: url)
+                print(description)
+                exit(0)
+            } catch {
+                print("❌ \(error.localizedDescription)")
+                exit(1)
+            }
+        }
+
+        cliHandler.register(
+            "capture-markup-plan",
+            description: "Plan capture markup layers. Usage: --debug=capture-markup-plan <image-path> <instruction>"
+        ) { args in
+            guard args.count >= 2 else {
+                print("❌ Usage: --debug=capture-markup-plan <image-path> <instruction>")
+                exit(1)
+                return
+            }
+
+            let url = URL(fileURLWithPath: (args[0] as NSString).expandingTildeInPath)
+            let instruction = args.dropFirst().joined(separator: " ")
+            do {
+                let plan = try await CaptureMarkupAgentService.shared.plan(
+                    imageURL: url,
+                    instruction: instruction
+                )
+                let data = try JSONEncoder().encode(plan)
+                print(String(data: data, encoding: .utf8) ?? "{}")
+                exit(0)
+            } catch {
+                print("❌ \(error.localizedDescription)")
+                exit(1)
+            }
+        }
+
+        cliHandler.register(
+            "capture-markup-apply",
+            description: "Apply a capture markup plan sidecar. Usage: --debug=capture-markup-apply <image-path> <plan-json-path>"
+        ) { args in
+            guard args.count >= 2 else {
+                print("❌ Usage: --debug=capture-markup-apply <image-path> <plan-json-path>")
+                exit(1)
+                return
+            }
+
+            let url = URL(fileURLWithPath: (args[0] as NSString).expandingTildeInPath)
+            let planURL = URL(fileURLWithPath: (args[1] as NSString).expandingTildeInPath)
+            do {
+                let data = try Data(contentsOf: planURL)
+                let plan = try JSONDecoder().decode(CaptureMarkupPlan.self, from: data)
+                let document = try CaptureMarkupAgentService.shared.applyPlan(
+                    imageURL: url,
+                    plan: plan
+                )
+                let encoded = try JSONEncoder().encode(document)
+                print(String(data: encoded, encoding: .utf8) ?? "{}")
+                exit(0)
+            } catch {
+                print("❌ \(error.localizedDescription)")
+                exit(1)
+            }
+        }
+
+        cliHandler.register(
+            "capture-markup-render",
+            description: "Render capture markup to PNG. Usage: --debug=capture-markup-render <image-path> [output-path]"
+        ) { args in
+            guard let path = args.first else {
+                print("❌ Usage: --debug=capture-markup-render <image-path> [output-path]")
+                exit(1)
+                return
+            }
+
+            let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+            let output = args.dropFirst().first.map {
+                URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath)
+            }
+            do {
+                let png = try CaptureMarkupAgentService.shared.renderPNG(imageURL: url)
+                if let output {
+                    try png.write(to: output)
+                    print(output.path)
+                } else {
+                    FileHandle.standardOutput.write(png)
+                }
+                exit(0)
+            } catch {
+                print("❌ \(error.localizedDescription)")
+                exit(1)
+            }
+        }
+
+        cliHandler.register(
             "test-workflow-import",
             description: "Run ImportPayloadConverter tests to verify URL workflow import converts to core WorkflowDefinition correctly"
         ) { _ in
@@ -1422,6 +1600,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         logger.info("📬 User tapped notification: \(response.notification.request.identifier)")
+        let userInfo = response.notification.request.content.userInfo
+        if userInfo["talkieRoute"] as? String == "aiResults" {
+            Task { @MainActor in
+                var params: [String: AnyHashable] = [:]
+                if let actionRunId = userInfo["actionRunId"] as? String {
+                    params["actionRunId"] = actionRunId
+                }
+                NavigationState.shared.navigate(to: .aiResults, params: params)
+                completionHandler()
+            }
+            return
+        }
         completionHandler()
     }
 
@@ -1950,6 +2140,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             if trackCapturePerf {
                 CapturePerformanceMonitor.shared.endSession(outcome: success ? "success" : "cancelled_or_failed")
             }
+        case .screenshotRegion(let rect):
+            if trackCapturePerf {
+                CapturePerformanceMonitor.shared.updateMode(CaptureMode.region.rawValue)
+                CapturePerformanceMonitor.shared.mark("capture.route.begin")
+            }
+            let success = await executeCapture(mode: .region, preselectedRegion: rect)
+            if trackCapturePerf {
+                CapturePerformanceMonitor.shared.endSession(outcome: success ? "success" : "cancelled_or_failed")
+            }
         case .screenRecord(let mode):
             await ScreenRecordingController.shared.startRecording(mode: mode)
             if trackCapturePerf {
@@ -1992,18 +2191,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     /// Shared capture logic used by both chord flow and direct shortcuts.
     /// If recording is active, attaches screenshot to the recording (always uses built-in).
     /// Otherwise, checks the preferred launcher setting.
+    /// Internal so Home-screen CTAs can fire the same path the hotkeys take.
     @MainActor
-    private func executeCapture(mode: CaptureMode) async -> Bool {
+    func executeCapture(mode: CaptureMode, preselectedRegion: CGRect? = nil) async -> Bool {
         let recorder = MemoRecordingController.shared
 
         if recorder.state.isRecording {
             // Always use built-in capture when recording — need the image data for attachment
-            await recorder.captureScreenshot(mode: mode)
+            await recorder.captureScreenshot(mode: mode, preselectedRegion: preselectedRegion)
             Log(.system).info("Screenshot attached to active recording (mode=\(mode.rawValue))")
             return true
         }
 
-        return await captureWithBuiltin(mode: mode)
+        return await captureWithBuiltin(mode: mode, preselectedRegion: preselectedRegion)
     }
 
     @MainActor
@@ -2019,7 +2219,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             return
         }
 
-        writeScreenshotPasteboard(data: data, fileURL: durableURL)
+        writeScreenshotPasteboard(data: data, fileURL: durableURL, imageMarkdown: false)
 
         if let prev = previousApp, prev.bundleIdentifier != Bundle.main.bundleIdentifier {
             prev.activate()
@@ -2059,7 +2259,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             prev.activate()
         }
 
-        executePaste(item: result.item, format: result.format)
+        let shouldPaste = await executePaste(
+            item: result.item,
+            format: result.format,
+            targetApp: previousApp
+        )
+        guard shouldPaste else { return }
 
         // Brief delay for app activation to settle, then simulate Cmd+V
         try? await Task.sleep(for: .milliseconds(80))
@@ -2067,7 +2272,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     }
 
     @MainActor
-    private func executePaste(item: TrayItem, format: PasteFormat) {
+    private func executePaste(
+        item: TrayItem,
+        format: PasteFormat,
+        targetApp: NSRunningApplication?
+    ) async -> Bool {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
 
@@ -2076,33 +2285,65 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             if case .screenshot(let screenshot) = item,
                let data = screenshot.loadData(),
                let durableURL = durablePasteURL(for: screenshot, data: data) {
-                writeScreenshotPasteboard(data: data, fileURL: durableURL)
+                writeScreenshotPasteboard(data: data, fileURL: durableURL, imageMarkdown: true)
                 Log(.system).info("Quick Paste: screenshot image + markdown → clipboard")
-                return
+                return true
             }
 
-            guard let data = loadTrayItemData(item) else { return }
+            guard let data = loadTrayItemData(item) else { return false }
             pasteboard.setData(data, forType: .png)
             Log(.system).info("Quick Paste: image → clipboard")
+            return true
 
         case .filePath:
             let path = item.tempURL.path
             pasteboard.setString(path, forType: .string)
             Log(.system).info("Quick Paste: file path → clipboard")
+            return true
 
         case .url:
             let urlString = "http://localhost:8766/tray/\(item.id.uuidString).png"
             pasteboard.setString(urlString, forType: .string)
             Log(.system).info("Quick Paste: URL → clipboard")
+            return true
 
         case .base64:
-            guard let data = loadTrayItemData(item) else { return }
+            guard let data = loadTrayItemData(item) else { return false }
             let b64 = "data:image/png;base64," + data.base64EncodedString()
             pasteboard.setString(b64, forType: .string)
             Log(.system).info("Quick Paste: base64 → clipboard")
+            return true
+
+        case .visionDescription:
+            guard case .screenshot(let screenshot) = item else {
+                if let text = item.previewText {
+                    pasteboard.setString(text, forType: .string)
+                    Log(.system).info("Quick Paste: selection text → clipboard")
+                    return true
+                }
+                return false
+            }
+            do {
+                let description = try await ScreenshotVisionPasteService.shared.descriptionText(
+                    for: screenshot,
+                    targetAppName: targetApp?.localizedName,
+                    targetBundleID: targetApp?.bundleIdentifier
+                )
+                pasteboard.setString(description, forType: .string)
+                Log(.system).info("Quick Paste: VLM screenshot description → clipboard")
+                return true
+            } catch {
+                let fallback = await ScreenshotVisionPasteService.shared.fallbackDescriptionText(
+                    for: screenshot,
+                    targetAppName: targetApp?.localizedName
+                )
+                pasteboard.setString(fallback, forType: .string)
+                Log(.system).error("Quick Paste VLM description failed: \(error.localizedDescription)")
+                return true
+            }
 
         case .dragFile:
-            break // Handled separately via beginFileDrag
+            return false // Handled separately via beginFileDrag
         }
     }
 
@@ -2129,8 +2370,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         )
     }
 
-    private func writeScreenshotPasteboard(data: Data, fileURL: URL) {
-        let markdown = "![Talkie Capture](<\(fileURL.path)>)"
+    private func writeScreenshotPasteboard(data: Data, fileURL: URL, imageMarkdown: Bool) {
+        let markdown = "\(imageMarkdown ? "!" : "")[Talkie Capture](<\(fileURL.path)>)"
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(markdown, forType: .string)
@@ -2160,39 +2401,64 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     }
 
     @MainActor
-    private func captureWithBuiltin(mode: CaptureMode) async -> Bool {
+    private func captureWithBuiltin(mode: CaptureMode, preselectedRegion: CGRect? = nil) async -> Bool {
         CapturePerformanceMonitor.shared.mark("capture.service.begin")
-        guard let result = await ScreenshotCaptureService.shared.captureStandalone(mode: mode) else {
+        guard let result = await ScreenshotCaptureService.shared.captureStandalone(
+            mode: mode,
+            preselectedRegion: preselectedRegion
+        ) else {
             CapturePerformanceMonitor.shared.mark("capture.service.failed")
             return false
         }
         CapturePerformanceMonitor.shared.mark("capture.service.complete")
 
+        // Show preview immediately; file-backed drag/copy attaches after the tray write.
+        CapturePerformanceMonitor.shared.mark("preview.show.begin")
+        let previewID = ScreenshotPreviewPanel.shared.show(
+            thumbnail: result.previewImage,
+            sourceWidth: result.width,
+            sourceHeight: result.height
+        )
+        CapturePerformanceMonitor.shared.mark("preview.show.complete")
+        recordLiveScreenshotForActiveDictationIfNeeded(result, mode: mode)
+
         CapturePerformanceMonitor.shared.mark("tray.add.begin")
-        await ScreenshotTray.shared.add(
+        guard let latestItem = await ScreenshotTray.shared.addReturningItem(
             data: result.data,
             width: result.width,
             height: result.height,
             mode: mode,
             windowTitle: result.windowTitle,
             appName: result.appName,
+            displayName: result.displayName,
+            initialThumbnail: result.previewImage
+        ) else {
+            CapturePerformanceMonitor.shared.mark("tray.add.complete")
+            return false
+        }
+        CapturePerformanceMonitor.shared.mark("tray.add.complete")
+        ScreenshotPreviewPanel.shared.attachFileURL(latestItem.tempURL, to: previewID)
+        TrayActionService.shared.persistStandaloneScreenshotToLibrary(latestItem)
+        return true
+    }
+
+    @MainActor
+    private func recordLiveScreenshotForActiveDictationIfNeeded(
+        _ result: CaptureResult,
+        mode: CaptureMode
+    ) {
+        let live = ServiceManager.shared.live
+        guard live.isRecording else { return }
+        live.recordLiveScreenshot(
+            data: result.data,
+            capturedAt: result.capturedAt,
+            captureMode: mode.rawValue,
+            width: result.width,
+            height: result.height,
+            windowTitle: result.windowTitle,
+            appName: result.appName,
             displayName: result.displayName
         )
-        CapturePerformanceMonitor.shared.mark("tray.add.complete")
-        // Show preview with the tray item's file URL for drag support
-        if let latestItem = ScreenshotTray.shared.items.last {
-            CapturePerformanceMonitor.shared.mark("preview.show.begin")
-            let previewImage: CGImage
-            if let decodedImage = NSImage(data: result.data),
-               let decodedCG = decodedImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                previewImage = decodedCG
-            } else {
-                previewImage = result.image
-            }
-            ScreenshotPreviewPanel.shared.show(image: previewImage, fileURL: latestItem.tempURL)
-            CapturePerformanceMonitor.shared.mark("preview.show.complete")
-        }
-        return true
     }
 
     // MARK: - Direct Screenshot Shortcuts

@@ -167,6 +167,20 @@ final class WorkflowService {
         workflows.filter { $0.isEnabled }
     }
 
+    /// Workflows whose declared input contract accepts a given record/media shape.
+    func workflowsAccepting(
+        _ objectType: TalkieObjectType,
+        assetKind: WorkflowAssetKind? = nil,
+        surface: WorkflowInvocationSurface? = nil
+    ) -> [Workflow] {
+        enabledWorkflows.filter { workflow in
+            let inputs = workflow.definition.inputs
+            guard inputs.accepts(objectType, assetKind: assetKind) else { return false }
+            guard let surface else { return true }
+            return inputs.surfaces.contains(surface)
+        }
+    }
+
     // MARK: - Actions (Context-Aware Quick Actions)
 
     /// Get actions (single-step LLM workflows) for the interstitial

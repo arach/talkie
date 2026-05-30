@@ -1293,7 +1293,7 @@ extension ComposeView {
 
         do {
             try viewContext.save()
-            PersistenceController.refreshWidgetData(context: viewContext)
+            VoiceMemoStore.publishChange(context: viewContext)
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         } catch {
             viewContext.rollback()

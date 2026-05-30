@@ -1,0 +1,419 @@
+:root {
+  color-scheme: light;
+  --bg: #f9fbfb;
+  --pane: #f1f1f0;
+  --ink: #232423;
+  --ink-faint: rgba(35, 36, 35, 0.55);
+  --edge: rgba(35, 36, 35, 0.12);
+  --amber: #c47d1c;
+  --alert: #d03a1c;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); }
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.tool-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 44px;
+  padding: 0 8px;
+  background: var(--pane);
+  border-bottom: 1px solid var(--edge);
+  flex-shrink: 0;
+}
+
+.tool-toolbar.hidden {
+  display: none;
+}
+
+.toolbar-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Inline vertical rule between toolbar sections. Treated as chrome —
+   never a content element. */
+.toolbar-divider,
+.style-divider {
+  display: inline-block;
+  width: 1px;
+  height: 20px;
+  margin: 0 8px;
+  background: var(--edge);
+}
+
+.tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 0.5px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  font-family: ui-monospace, monospace;
+}
+
+.tool-btn.active {
+  color: #9a6310;
+  background: rgba(196, 125, 28, 0.12);
+  border-color: rgba(196, 125, 28, 0.35);
+}
+
+.tool-btn:disabled,
+[data-action="undo"]:disabled,
+[data-action="redo"]:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.tool-btn .glyph { font-size: 13px; line-height: 1; }
+.tool-btn .label { font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; }
+
+/* "Editing selection" affordance — a small amber pill that appears in the
+   toolbar while a layer is selected (and no create-tool is armed). Signals
+   that the shape buttons + style stack restyle the SELECTED layer in place. */
+.selection-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 8px;
+  border: 0.5px solid rgba(196, 125, 28, 0.45);
+  border-radius: 999px;
+  background: rgba(196, 125, 28, 0.12);
+  color: #9a6310;
+  font: 600 8.5px/1 ui-monospace, monospace;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.selection-mode-badge.hidden { display: none; }
+
+/* While editing a selection, the active shape button reads as amber (the
+   normal .active style); disabled conversions dim out via :disabled below. */
+.tool-toolbar.editing-selection .tool-btn:disabled {
+  opacity: 0.3;
+}
+
+/* ─── Style Stack ─────────────────────────────────────────────────────
+   Contextual editor on the right half of the toolbar. Per-tool defaults
+   today (first port pass); selected-layer live-edit is a follow-up.
+
+   Groups are visible/hidden depending on the active tool:
+     · shape tools (rect/arrow/line/blur) → stroke + color
+     · text tool → font-size + color
+     · null tool → all groups visible (defaults panel) */
+
+.style-stack {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.style-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.style-group.hidden {
+  display: none;
+}
+
+.style-label {
+  font: 8.5px/1 ui-monospace, monospace;
+  letter-spacing: 0.20em;
+  text-transform: uppercase;
+  color: rgba(35, 36, 35, 0.40);
+}
+
+.style-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.style-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 0.5px solid var(--edge);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.style-btn.active {
+  border-color: rgba(196, 125, 28, 0.55);
+  background: rgba(196, 125, 28, 0.10);
+}
+
+/* Stroke-width pip — a horizontal rule of the given thickness. Visual
+   weight changes with width; selected state recolors to amber-deep. */
+.stroke-pip {
+  display: block;
+  width: 14px;
+  background: var(--ink-faint);
+  border-radius: 1px;
+}
+.style-btn.stroke-pick.active .stroke-pip { background: #9a6310; }
+
+/* Color swatch — circular dot whose hue is set via `--c`. White is
+   special-cased so it still reads on a cream substrate. */
+.style-btn.swatch {
+  background: var(--c, var(--ink));
+  border-radius: 999px;
+  width: 16px;
+  height: 16px;
+}
+.style-btn.swatch.swatch-light {
+  border: 0.5px solid var(--edge);
+}
+.style-btn.swatch.active {
+  outline: 1.5px solid #9a6310;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px rgba(196, 125, 28, 0.18);
+}
+
+/* Font-size picker — text labels (S / M / L). Mono cap glyphs so they
+   read as controls, not body content. */
+.style-btn.font-pick {
+  font: 600 10px/1 ui-monospace, monospace;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+}
+.style-btn.font-pick.active {
+  color: #9a6310;
+}
+
+/* ─── Canvas Zoom Cluster (Hudson pattern) ────────────────────────────
+   Floats over the canvas bottom-right. Holds viewport controls (zoom
+   in/out/fit + percent badge) and history (undo/redo) so the top bar
+   can be pure drawing. */
+
+.canvas-wrap { position: relative; }
+
+.canvas-zoom-cluster {
+  position: absolute;
+  bottom: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: #ffffff;
+  border: 0.5px solid var(--edge);
+  border-radius: 5px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.55) inset,
+    0 4px 12px rgba(0, 0, 0, 0.10);
+  z-index: 10;
+}
+
+.zoom-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0.5px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  font: 12px/1 ui-monospace, monospace;
+}
+.zoom-btn:hover {
+  background: rgba(35, 36, 35, 0.04);
+  color: var(--ink);
+}
+.zoom-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.zoom-btn-label {
+  width: auto;
+  padding: 0 7px;
+  font: 600 8.5px/1 ui-monospace, monospace;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.zoom-divider {
+  display: inline-block;
+  width: 1px;
+  height: 14px;
+  margin: 0 2px;
+  background: var(--edge);
+}
+
+.zoom-badge {
+  font: 9.5px/1 ui-monospace, monospace;
+  color: rgba(35, 36, 35, 0.65);
+  padding: 0 4px;
+  min-width: 38px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.bay-body {
+  flex: 1;
+  display: grid;
+  /* layers · canvas · inspector. Layers left because it's navigation;
+     inspector right because it's the per-selection editor (still a
+     placeholder until in-place edit lands). */
+  grid-template-columns: 220px 1fr 240px;
+  min-height: 0;
+}
+
+.canvas-wrap {
+  background: repeating-conic-gradient(#e8ecef 0% 25%, #f4f7f9 0% 50%) 50% / 16px 16px;
+  position: relative;
+  overflow: hidden;
+  padding: 0;
+}
+
+#canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  box-shadow: 0 8px 28px rgba(20, 24, 30, 0.12);
+  /* Cursor is set dynamically by setActiveTool() — default in select mode,
+     crosshair while a create tool (rect / arrow / line / text / blur) is active. */
+  cursor: default;
+}
+
+.layer-rail {
+  background: var(--bg);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+.layer-rail-left { border-right: 1px solid var(--edge); }
+
+.inspector-rail {
+  border-left: 1px solid var(--edge);
+  background: var(--bg);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+.inspector-rail-head {
+  display: flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--edge);
+  background: var(--pane);
+}
+.inspector-rail-title {
+  font: 600 8.5px/1 ui-monospace, monospace;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+#inspector-body {
+  padding: 10px 12px;
+  flex: 1;
+  overflow: auto;
+  font: 11px/1.4 ui-monospace, monospace;
+  color: var(--ink);
+}
+.inspector-empty {
+  color: var(--ink-faint);
+  font-style: italic;
+  /* match the muted "nothing selected" tone used elsewhere in the chrome */
+}
+.inspector-row { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; }
+.inspector-row .k { color: var(--ink-faint); letter-spacing: 0.08em; text-transform: uppercase; font-size: 9.5px; }
+.inspector-row .v { color: var(--ink); }
+
+.layer-rail-head {
+  display: flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--edge);
+  background: var(--pane);
+}
+
+.layer-rail-title,
+.layer-rail-count {
+  font: 600 8.5px/1 ui-monospace, monospace;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.layer-rail-count { margin-left: auto; }
+
+#layer-list { padding: 8px; flex: 1; overflow: auto; }
+
+.layer-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font: 11px/1.2 ui-monospace, monospace;
+  cursor: pointer;
+}
+.layer-row.selected { background: rgba(196, 125, 28, 0.12); }
+.layer-row .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.layer-row .dot.agent { background: var(--amber); }
+.layer-row .dot.user { background: var(--ink-faint); }
+.layer-row .grip {
+  font-size: 10px;
+  color: var(--ink-faint);
+  opacity: 0.5;
+  cursor: grab;
+  flex-shrink: 0;
+}
+.layer-row:hover .grip { opacity: 0.9; }
+.layer-row-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.popover {
+  position: fixed;
+  background: white;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  z-index: 20;
+}
+.popover.hidden { display: none; }
+
+.popover button {
+  border: 1px solid var(--edge);
+  background: white;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}

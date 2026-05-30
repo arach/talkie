@@ -76,7 +76,7 @@ struct TalkieSettingsConfiguration: Codable {
         init(
             mode: AppearanceMode = .system,
             accentColor: AccentColorOption = .system,
-            currentTheme: ThemePreset = .technical,
+            currentTheme: ThemePreset = .scope,
             enableGlassEffects: Bool = false,
             uiFontStyle: FontStyleOption = .system,
             contentFontStyle: FontStyleOption = .system,
@@ -524,7 +524,7 @@ struct TalkieSettingsConfiguration: Codable {
         var screenRecordingQuality: ScreenRecordingQualityPreset
 
         init(
-            hudPosition: CaptureHUDPosition = .cursor,
+            hudPosition: CaptureHUDPosition = .fixed,
             screenshotLauncher: ScreenshotLauncher = .builtin,
             screenshotCapturePreset: ScreenshotCapturePreset = .agent,
             screenRecordingQuality: ScreenRecordingQualityPreset = .agent
@@ -544,7 +544,7 @@ struct TalkieSettingsConfiguration: Codable {
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            hudPosition = try container.decodeIfPresent(CaptureHUDPosition.self, forKey: .hudPosition) ?? .cursor
+            hudPosition = try container.decodeIfPresent(CaptureHUDPosition.self, forKey: .hudPosition) ?? .fixed
             screenshotLauncher = try container.decodeIfPresent(ScreenshotLauncher.self, forKey: .screenshotLauncher) ?? .builtin
             screenshotCapturePreset = try container.decodeIfPresent(ScreenshotCapturePreset.self, forKey: .screenshotCapturePreset) ?? .agent
             screenRecordingQuality = try container.decodeIfPresent(ScreenRecordingQualityPreset.self, forKey: .screenRecordingQuality) ?? .agent

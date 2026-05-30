@@ -292,85 +292,212 @@ final class TrayActionService {
         return true
     }
 
+    @discardableResult
+    func copyDetectedText(ids: Set<UUID>, in allItems: [TrayItem]? = nil) async -> Bool {
+        let screenshots = selectedItems(ids: ids, in: allItems).compactMap { item -> TrayScreenshot? in
+            if case .screenshot(let screenshot) = item { return screenshot }
+            return nil
+        }
+        return await copyDetectedText(from: screenshots)
+    }
+
+    @discardableResult
+    func copyDetectedText(from screenshots: [TrayScreenshot]) async -> Bool {
+        guard !screenshots.isEmpty else { return false }
+
+        var sections: [String] = []
+        for screenshot in screenshots.sorted(by: { $0.capturedAt < $1.capturedAt }) {
+            let cachedText = screenshot.ocrText?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let text: String
+
+            if let cachedText, !cachedText.isEmpty {
+                text = cachedText
+            } else {
+                let recognized = (try? await VisionOCRService.shared.recognizeText(
+                    atURL: screenshot.tempURL,
+                    quality: .accurate
+                ))?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                ScreenshotTray.shared.cacheOCRText(recognized, for: screenshot.id)
+                text = recognized
+            }
+
+            guard !text.isEmpty else { continue }
+
+            if screenshots.count == 1 {
+                sections.append(text)
+            } else {
+                sections.append("\(textSectionTitle(for: screenshot))\n\(text)")
+            }
+        }
+
+        guard !sections.isEmpty else {
+            log.info("Copy detected text: no OCR text found")
+            return false
+        }
+
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(sections.joined(separator: "\n\n"), forType: .string)
+        log.info("Copied detected text from \(screenshots.count) screenshot(s)")
+        return true
+    }
+
+    @discardableResult
+    func saveScreenshotsAsCaptures(
+        _ screenshots: [TrayScreenshot],
+        runOCR: Bool,
+        removeFromTrayOnSuccess: Bool
+    ) async -> Int {
+        var savedCount = 0
+        for screenshot in screenshots.sorted(by: { $0.capturedAt < $1.capturedAt }) {
+            if await saveTrayScreenshotAsCapture(
+                screenshot,
+                runOCR: runOCR,
+                removeFromTrayOnSuccess: removeFromTrayOnSuccess
+            ) != nil {
+                savedCount += 1
+            }
+        }
+        return savedCount
+    }
+
+    func openInPreview(_ item: TrayItem) {
+        NSWorkspace.shared.open(item.tempURL)
+    }
+
+    func revealInFinder(_ item: TrayItem) {
+        NSWorkspace.shared.activateFileViewerSelecting([item.tempURL])
+    }
+
+    private func textSectionTitle(for screenshot: TrayScreenshot) -> String {
+        let context = [screenshot.appName, screenshot.windowTitle, screenshot.displayName]
+            .compactMap { value -> String? in
+                guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !trimmed.isEmpty else { return nil }
+                return trimmed
+            }
+        var seen = Set<String>()
+        let uniqueContext = context.filter { seen.insert($0).inserted }
+        if let label = uniqueContext.first {
+            return label
+        }
+        return screenshot.filename
+    }
+
     // MARK: - Promote Tray Screenshot to Capture
+
+    /// Standalone captures (Hyper+S, HUD, agent bay) auto-save to the library
+    /// while staying available in the tray for drag/drop and island affordances.
+    ///
+    /// This is intentionally copy semantics, not promotion semantics: the tray item
+    /// remains a live handoff surface after the capture is saved to the library.
+    func persistStandaloneScreenshotToLibrary(_ ts: TrayScreenshot, runOCR: Bool = false) {
+        promoteTrayToCapture(ts, runOCR: runOCR, removeFromTrayOnSuccess: false)
+    }
 
     /// Move a tray screenshot into the library as a .capture TalkieObject.
     /// If `runOCR` is true, attach OCR text as a ProvenanceSegment.
     /// Uses pre-computed background OCR when available; falls back to on-demand accurate scan.
     func promoteTrayToCapture(_ ts: TrayScreenshot, runOCR: Bool, completion: (() -> Void)? = nil) {
-        Task { @MainActor in
-            let captureId = UUID()
-            guard let data = ts.loadData() else {
-                Log(.ui).error("promoteTrayToCapture: could not load screenshot data")
-                return
+        promoteTrayToCapture(ts, runOCR: runOCR, removeFromTrayOnSuccess: true, completion: completion)
+    }
+
+    /// Save a tray screenshot as a .capture TalkieObject and return the persisted object.
+    @discardableResult
+    func saveTrayScreenshotAsCapture(
+        _ ts: TrayScreenshot,
+        runOCR: Bool,
+        removeFromTrayOnSuccess: Bool
+    ) async -> TalkieObject? {
+        let captureId = UUID()
+        guard let data = ts.loadData() else {
+            Log(.ui).error("promoteTrayToCapture: could not load screenshot data")
+            return nil
+        }
+
+        guard let savedURL = ScreenshotStorage.save(
+            data,
+            recordingId: captureId,
+            timestampMs: 0,
+            index: 0,
+            capturedAt: ts.capturedAt,
+            captureMode: ts.mode.rawValue,
+            width: ts.width,
+            height: ts.height,
+            windowTitle: ts.windowTitle,
+            appName: ts.appName,
+            displayName: ts.displayName
+        ) else {
+            Log(.ui).error("promoteTrayToCapture: could not save screenshot")
+            return nil
+        }
+
+        let screenshot = RecordingScreenshot(
+            filename: savedURL.lastPathComponent,
+            timestampMs: 0,
+            captureMode: ts.mode.rawValue,
+            width: ts.width,
+            height: ts.height,
+            windowTitle: ts.windowTitle,
+            appName: ts.appName,
+            displayName: ts.displayName
+        )
+
+        var capture = TalkieObject.newCapture(id: captureId)
+        var assets = TalkieObjectAssets(screenshots: [screenshot])
+
+        if runOCR {
+            // Use pre-computed OCR from background scan if available
+            let ocrText: String?
+            if let precomputed = ts.ocrText, !precomputed.isEmpty {
+                ocrText = precomputed
+                Log(.ui).info("Using pre-computed OCR for tray capture")
+            } else {
+                // Fall back to on-demand accurate scan
+                let fileURL = ScreenshotStorage.screenshotsDirectory.appendingPathComponent(savedURL.lastPathComponent)
+                ocrText = try? await VisionOCRService.shared.recognizeText(atURL: fileURL, quality: .accurate)
             }
 
-            guard let savedURL = ScreenshotStorage.save(
-                data,
-                recordingId: captureId,
-                timestampMs: 0,
-                index: 0,
-                capturedAt: ts.capturedAt,
-                captureMode: ts.mode.rawValue,
-                width: ts.width,
-                height: ts.height,
-                windowTitle: ts.windowTitle,
-                appName: ts.appName,
-                displayName: ts.displayName
-            ) else {
-                Log(.ui).error("promoteTrayToCapture: could not save screenshot")
-                return
+            if let text = ocrText, !text.isEmpty {
+                assets.textProvenance = [ProvenanceSegment(
+                    source: .ocr,
+                    originalText: text,
+                    sourceAssetId: savedURL.lastPathComponent,
+                    sourceDetail: "Vision"
+                )]
+            } else {
+                Log(.ui).info("OCR: no text found for tray capture")
             }
+        }
 
-            let screenshot = RecordingScreenshot(
-                filename: savedURL.lastPathComponent,
-                timestampMs: 0,
-                captureMode: ts.mode.rawValue,
-                width: ts.width,
-                height: ts.height,
-                windowTitle: ts.windowTitle,
-                appName: ts.appName,
-                displayName: ts.displayName
-            )
+        capture.assetsJSON = assets.toJSON()
 
-            var capture = TalkieObject.newCapture(id: captureId)
-            var assets = TalkieObjectAssets(screenshots: [screenshot])
-
-            if runOCR {
-                // Use pre-computed OCR from background scan if available
-                let ocrText: String?
-                if let precomputed = ts.ocrText, !precomputed.isEmpty {
-                    ocrText = precomputed
-                    Log(.ui).info("Using pre-computed OCR for tray capture")
-                } else {
-                    // Fall back to on-demand accurate scan
-                    let fileURL = ScreenshotStorage.screenshotsDirectory.appendingPathComponent(savedURL.lastPathComponent)
-                    ocrText = try? await VisionOCRService.shared.recognizeText(atURL: fileURL, quality: .accurate)
-                }
-
-                if let text = ocrText, !text.isEmpty {
-                    assets.textProvenance = [ProvenanceSegment(
-                        source: .ocr,
-                        originalText: text,
-                        sourceAssetId: savedURL.lastPathComponent,
-                        sourceDetail: "Vision"
-                    )]
-                } else {
-                    Log(.ui).info("OCR: no text found for tray capture")
-                }
-            }
-
-            capture.assetsJSON = assets.toJSON()
-
-            do {
-                let repository = TalkieObjectRepository()
-                try await repository.saveRecording(capture)
-                await RecordingsViewModel.shared.loadRecordings()
+        do {
+            let repository = TalkieObjectRepository()
+            try await repository.saveRecording(capture)
+            await RecordingsViewModel.shared.loadRecordings()
+            if removeFromTrayOnSuccess {
                 ScreenshotTray.shared.remove(id: ts.id)
-                Log(.ui).info("Promoted tray screenshot to capture: \(captureId.uuidString.prefix(8))")
+            }
+            let action = removeFromTrayOnSuccess ? "Promoted" : "Saved"
+            Log(.ui).info("\(action) tray screenshot to capture: \(captureId.uuidString.prefix(8))")
+            return capture
+        } catch {
+            Log(.ui).error("Failed to promote tray to capture: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    private func promoteTrayToCapture(
+        _ ts: TrayScreenshot,
+        runOCR: Bool,
+        removeFromTrayOnSuccess: Bool,
+        completion: (() -> Void)? = nil
+    ) {
+        Task { @MainActor in
+            if await saveTrayScreenshotAsCapture(ts, runOCR: runOCR, removeFromTrayOnSuccess: removeFromTrayOnSuccess) != nil {
                 completion?()
-            } catch {
-                Log(.ui).error("Failed to promote tray to capture: \(error.localizedDescription)")
             }
         }
     }

@@ -92,6 +92,7 @@ logs/
 *.log
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+.claude/worktrees/
 packaging/macos/staging/
 packaging/macos/packages/
 packaging/macos/*.pkg

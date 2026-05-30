@@ -52,8 +52,16 @@ enum TalkieInternalDrag {
 extension View {
     /// Attach multi-drag support to a tray card. If the item is part of a multi-selection,
     /// drags all selected items as file URLs. Otherwise drags just this item.
-    func trayDrag(item: TrayItem) -> some View {
-        overlay(TrayDragSourceRepresentable(itemID: item.id))
+    func trayDrag(
+        item: TrayItem,
+        onClick: ((NSEvent) -> Void)? = nil,
+        onRightClick: ((NSEvent) -> Void)? = nil
+    ) -> some View {
+        overlay(TrayDragSourceRepresentable(
+            itemID: item.id,
+            onClick: onClick,
+            onRightClick: onRightClick
+        ))
     }
 }
 
@@ -61,15 +69,21 @@ extension View {
 
 private struct TrayDragSourceRepresentable: NSViewRepresentable {
     let itemID: UUID
+    let onClick: ((NSEvent) -> Void)?
+    let onRightClick: ((NSEvent) -> Void)?
 
     func makeNSView(context: Context) -> TrayDragSourceView {
         let view = TrayDragSourceView()
         view.itemID = itemID
+        view.onClick = onClick
+        view.onRightClick = onRightClick
         return view
     }
 
     func updateNSView(_ nsView: TrayDragSourceView, context: Context) {
         nsView.itemID = itemID
+        nsView.onClick = onClick
+        nsView.onRightClick = onRightClick
     }
 }
 
@@ -78,6 +92,8 @@ private struct TrayDragSourceRepresentable: NSViewRepresentable {
 @MainActor
 final class TrayDragSourceView: NSView, NSDraggingSource {
     var itemID: UUID?
+    var onClick: ((NSEvent) -> Void)?
+    var onRightClick: ((NSEvent) -> Void)?
 
     private var dragStartLocation: NSPoint?
     private let dragThreshold: CGFloat = 4
@@ -113,13 +129,19 @@ final class TrayDragSourceView: NSView, NSDraggingSource {
         isDragging = false
 
         if !wasDragging {
-            // Wasn't a drag — forward as a click to the SwiftUI layer beneath
-            super.mouseUp(with: event)
-            // Also synthesize a click by forwarding mouseDown then mouseUp to next responder
-            if let next = nextResponder {
-                next.mouseDown(with: event)
-                next.mouseUp(with: event)
+            if let onClick {
+                onClick(event)
+            } else {
+                forwardClick(event)
             }
+        }
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        if let onRightClick {
+            onRightClick(event)
+        } else {
+            super.rightMouseDown(with: event)
         }
     }
 
@@ -127,11 +149,18 @@ final class TrayDragSourceView: NSView, NSDraggingSource {
     override var isFlipped: Bool { true }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        // Only claim hits inside our bounds
-        if bounds.contains(point) {
-            return self
+        // `point` is in the SUPERVIEW's coords; `bounds` is local — comparing
+        // them silently fails when frame.origin != (0,0). Fall through to the
+        // default hitTest so clicks are intercepted reliably.
+        super.hitTest(point)
+    }
+
+    private func forwardClick(_ event: NSEvent) {
+        super.mouseUp(with: event)
+        if let next = nextResponder {
+            next.mouseDown(with: event)
+            next.mouseUp(with: event)
         }
-        return nil
     }
 
     private func startMultiDrag(with event: NSEvent) {

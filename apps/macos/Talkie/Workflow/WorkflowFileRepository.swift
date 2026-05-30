@@ -361,7 +361,12 @@ final class WorkflowFileRepository {
             throw WorkflowFileError.cannotDeleteSystemWorkflow
         }
 
-        try FileManager.default.removeItem(at: workflow.filePath)
+        let fm = FileManager.default
+        if fm.fileExists(atPath: workflow.filePath.path) {
+            try fm.removeItem(at: workflow.filePath)
+        } else {
+            log.warning("Workflow file already missing during delete: \(workflow.filePath.lastPathComponent)")
+        }
         log.info("Deleted workflow: \(workflow.definition.name)")
 
         await reloadAll()
@@ -376,6 +381,8 @@ final class WorkflowFileRepository {
             description: workflow.definition.description,
             icon: workflow.definition.icon,
             color: workflow.definition.color,
+            maintainer: workflow.definition.maintainer,
+            inputs: workflow.definition.inputs,
             steps: workflow.definition.steps,
             isEnabled: workflow.definition.isEnabled,
             isPinned: false,  // Duplicates start unpinned

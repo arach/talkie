@@ -72,6 +72,24 @@ struct RecordingOverlay: View {
                         lineWidth: 1
                     )
             )
+            // Minimize affordance — closes the overlay without
+            // touching MemoRecordingController. The controller is a
+            // singleton, so the recording continues in the background.
+            // Re-opening the overlay (via the record button) reattaches
+            // to the same in-flight session.
+            .overlay(alignment: .topTrailing) {
+                Button(action: onDismiss) {
+                    Image(systemName: "minus.circle.fill")
+                        .symbolRenderingMode(.hierarchical)
+                        .font(.system(size: 18))
+                        .foregroundStyle(Color.white.opacity(0.65))
+                        .padding(10)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut("w", modifiers: [.command])
+                .help("Minimize (recording continues)")
+            }
             .onHover { isHoveringCard = $0 }
 
             Spacer()

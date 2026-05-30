@@ -17,6 +17,7 @@ export interface InferenceRequest {
   model: string;
   messages: Message[];
   temperature?: number;
+  topP?: number;
   maxTokens?: number;
   stream?: boolean;
 }
@@ -44,4 +45,4 @@ export interface Provider {
 
 // ===== Supported Providers =====
 
-export type ProviderName = "openai" | "anthropic" | "google" | "groq";
+export type ProviderName = "openai" | "anthropic" | "google" | "groq" | "minimax";

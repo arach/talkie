@@ -21,26 +21,7 @@ private let log = Log(.ui)
 // Mirrors the helper in ScopeHomeView. Cormorant Garamond is the
 // homepage's `--font-display-modern`. Falls back to system serif if
 // the font isn't installed.
-private enum ScopeFont {
-    private static let regularCandidates = [
-        "CormorantGaramond-Regular",
-        "Cormorant Garamond",
-        "CormorantGaramond",
-    ]
-    private static let mediumCandidates = [
-        "CormorantGaramond-Medium",
-        "Cormorant Garamond Medium",
-    ]
-
-    static func display(size: CGFloat, medium: Bool = false) -> Font {
-        for name in (medium ? mediumCandidates : regularCandidates) {
-            if NSFont(name: name, size: size) != nil {
-                return .custom(name, size: size)
-            }
-        }
-        return .system(size: size, weight: medium ? .medium : .regular, design: .serif)
-    }
-}
+// Display font lookup centralized in ScopeType.display(size:weight:) — see TalkieKit/UI/ScopeDesign.swift.
 
 // MARK: - Stage disc (V2 typeset pipeline marker)
 
@@ -285,7 +266,7 @@ struct ScopeDraftsScreen: View {
                 .foregroundStyle(ScopeInk.faint)
 
             Text(monitorByline)
-                .font(ScopeFont.display(size: 13).italic())
+                .font(ScopeType.display(size: 13).italic())
                 .foregroundStyle(ScopeInk.faint)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -486,35 +467,38 @@ struct ScopeDraftsScreen: View {
     /// the typeset hint was an over-correction).
     private var editingContent: some View {
         ZStack(alignment: .bottom) {
-            HStack(alignment: .top, spacing: 18) {
-                // Brass marginal rule
+            // Bounded paper sheet. The tint now spans the FULL width so the
+            // writing area reads as one contained surface against the cream
+            // canvas, and the brass marginal rule sits ON its left edge as a
+            // true margin. (It used to float 18pt left of the sheet with
+            // bare canvas between them — which read as a stray vertical line
+            // sitting at its own placement, disconnected from everything.)
+            ZStack(alignment: .topTrailing) {
                 Rectangle()
-                    .fill(Color.hex("9A6A22").opacity(0.30))
-                    .frame(width: 0.5)
-                    .padding(.vertical, 6)
+                    .fill(ScopeCanvas.surface.opacity(0.7))
 
-                // Text column with a subtle paper background so the
-                // writing area reads as a sheet, not as unbounded canvas.
-                ZStack(alignment: .topTrailing) {
-                    Rectangle()
-                        .fill(ScopeCanvas.surface.opacity(0.55))
+                TalkieTextEditor(
+                    text: $editorState.text,
+                    selectedRange: $editorState.selectedRange,
+                    font: NSFont.systemFont(ofSize: 14 * settings.contentFontSize.scale),
+                    textColor: NSColor(ScopeInk.primary),
+                    insertionPointColor: NSColor(ScopeAmber.solid)
+                )
+                .padding(.leading, 26)
+                .padding(.trailing, 14)
+                .padding(.top, 14)
+                .padding(.bottom, 56)
+                .frame(minHeight: 240, maxHeight: .infinity)
 
-                    TalkieTextEditor(
-                        text: $editorState.text,
-                        selectedRange: $editorState.selectedRange,
-                        font: NSFont.systemFont(ofSize: 14 * settings.contentFontSize.scale),
-                        textColor: NSColor(ScopeInk.primary),
-                        insertionPointColor: NSColor(ScopeAmber.solid)
-                    )
-                    .padding(.horizontal, 14)
-                    .padding(.top, 14)
-                    .padding(.bottom, 56)
-                    .frame(minHeight: 240, maxHeight: .infinity)
-
-                    if editorState.isTransformingSelection {
-                        selectionIndicator
-                    }
+                if editorState.isTransformingSelection {
+                    selectionIndicator
                 }
+            }
+            .overlay(alignment: .leading) {
+                // Brass marginal rule — now the sheet's own left edge.
+                Rectangle()
+                    .fill(Color.hex("9A6A22").opacity(0.42))
+                    .frame(width: 1.5)
             }
             .padding(.horizontal, 4)
 
@@ -939,7 +923,7 @@ struct ScopeDraftsScreen: View {
                     .frame(height: 0.5)
 
                 Text("\(count) operations · pick one to apply")
-                    .font(ScopeFont.display(size: 13).italic())
+                    .font(ScopeType.display(size: 13).italic())
                     .foregroundStyle(ScopeInk.faint)
             }
 
@@ -992,8 +976,8 @@ struct ScopeDraftsScreen: View {
         let providerName = resolvedProviderName ?? "local"
         let modelName = resolvedModelName ?? "no model selected"
 
-        let italicFont = ScopeFont.display(size: 14).italic()
-        let mediumFont = ScopeFont.display(size: 14, medium: true)
+        let italicFont = ScopeType.display(size: 14).italic()
+        let mediumFont = ScopeType.display(size: 14, weight: .medium)
 
         // Build the line in a single AttributedString so the typography
         // flows as one editorial colophon — italic faint for connective
@@ -1342,7 +1326,7 @@ private struct ActionCell: View {
                     }
 
                     Text(action.name)
-                        .font(ScopeFont.display(size: 15))
+                        .font(ScopeType.display(size: 15))
                         .foregroundStyle(disabled ? ScopeInk.muted : ScopeInk.primary)
                         .lineLimit(1)
                         .tracking(-0.2)
@@ -1417,7 +1401,7 @@ private struct ActionListRow: View {
         Button(action: onTap) {
             HStack(alignment: .firstTextBaseline, spacing: 14) {
                 Text(action.name)
-                    .font(ScopeFont.display(size: 15))
+                    .font(ScopeType.display(size: 15))
                     .foregroundStyle(disabled ? ScopeInk.muted : ScopeInk.primary)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)

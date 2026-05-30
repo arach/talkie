@@ -21,7 +21,7 @@
  */
 
 export interface IOSTheme {
-  key: "scope" | "midnight" | "tactical" | "ghost" | "lift";
+  key: "scope" | "midnight" | "tactical" | "ghost" | "lift" | "graphite";
   name: string;
   /** One-line identity. What does it FEEL like at a glance? */
   identity: string;
@@ -146,6 +146,25 @@ export const IOS_THEMES: IOSTheme[] = [
       { label: "indigo", hex: "#6366F1" },
       { label: "screen", hex: "#1E1B4B" },
       { label: "trace", hex: "#A5B4FC" },
+    ],
+  },
+  {
+    key: "graphite",
+    name: "Graphite",
+    identity: "Sober black-family · slate accent (accent-only) · zero halo",
+    blurb:
+      "The technical theme. Neutral near-black canvas (#0B0B0C) with neutral-gray ink — no uniform tint. The slate blue-gray accent (#7B8E9E) only appears where something IS an accent: status pills, dictation state, active borders. Elsewhere the chassis is monochrome. No phosphor glow, no graticule, lightest 0.5px hairlines, quiet `·` eyebrow leader.",
+    canvasHex: "#0B0B0C",
+    accentHex: "#7B8E9E",
+    display: { weight: 500, tracking: "-0.018em", italicAccent: false },
+    behavior: { phosphorGlow: false, graticule: false, darkSurface: true },
+    preview: [
+      { label: "canvas", hex: "#0B0B0C" },
+      { label: "paper", hex: "#18181A" },
+      { label: "ink", hex: "#EDEDEE" },
+      { label: "slate", hex: "#7B8E9E" },
+      { label: "screen", hex: "#040405" },
+      { label: "edge", hex: "#EDEDEE@22" },
     ],
   },
 ];

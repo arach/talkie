@@ -26,10 +26,19 @@ function main() {
       return retranscribeMemo(args);
     case "list-workflow-runs":
       return listWorkflowRuns(args);
+    case "capture-markup-describe":
+      return captureMarkupDescribe(args);
+    case "capture-markup-plan":
+      return captureMarkupPlan(args);
+    case "capture-markup-apply":
+      return captureMarkupApply(args);
+    case "capture-markup-render":
+      return captureMarkupRender(args);
     default:
       throw new UsageError(
         "Usage: agent-tools.ts <command> [args]\n" +
-          "Commands: list-memos, search-memos, list-failed-memos, show-memo, retranscribe-memo, list-workflow-runs",
+          "Commands: list-memos, search-memos, list-failed-memos, show-memo, retranscribe-memo, list-workflow-runs, " +
+          "capture-markup-describe, capture-markup-plan, capture-markup-apply, capture-markup-render",
       );
   }
 }
@@ -441,4 +450,59 @@ function writeStdout(text: string) {
   if (text.length > 0) {
     process.stdout.write(text);
   }
+}
+
+function requireTalkieExecutablePath(): string {
+  const executablePath = process.env.TALKIE_EXECUTABLE_PATH?.trim();
+  if (!executablePath) {
+    throw new ToolError("TALKIE_EXECUTABLE_PATH is not configured.");
+  }
+  return executablePath;
+}
+
+function runTalkieDebug(command: string, args: string[]): string {
+  const executablePath = requireTalkieExecutablePath();
+  const result = spawnSync(executablePath, [`--debug=${command}`, ...args], {
+    encoding: "utf8",
+    maxBuffer: 10 * 1024 * 1024,
+  });
+
+  if (result.error) {
+    throw commandError(result.error, executablePath);
+  }
+
+  const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
+  if ((result.status ?? 1) !== 0) {
+    throw new ToolError(output.trim() || `${command} failed`);
+  }
+
+  return result.stdout ?? "";
+}
+
+function captureMarkupDescribe(commandArgs: string[]) {
+  if (commandArgs.length < 1) {
+    throw new UsageError("Usage: capture-markup-describe <image-path>");
+  }
+  writeStdout(runTalkieDebug("capture-markup-describe", commandArgs));
+}
+
+function captureMarkupPlan(commandArgs: string[]) {
+  if (commandArgs.length < 2) {
+    throw new UsageError("Usage: capture-markup-plan <image-path> <instruction>");
+  }
+  writeStdout(runTalkieDebug("capture-markup-plan", commandArgs));
+}
+
+function captureMarkupApply(commandArgs: string[]) {
+  if (commandArgs.length < 2) {
+    throw new UsageError("Usage: capture-markup-apply <image-path> <plan-json-path>");
+  }
+  writeStdout(runTalkieDebug("capture-markup-apply", commandArgs));
+}
+
+function captureMarkupRender(commandArgs: string[]) {
+  if (commandArgs.length < 1) {
+    throw new UsageError("Usage: capture-markup-render <image-path> [output-path]");
+  }
+  writeStdout(runTalkieDebug("capture-markup-render", commandArgs));
 }
