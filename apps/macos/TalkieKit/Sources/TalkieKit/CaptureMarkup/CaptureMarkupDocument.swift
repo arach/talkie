@@ -75,6 +75,10 @@ public enum CaptureMarkupLayerKind: String, Codable, Sendable {
     case label
     case guide
     case highlight
+    /// A cloned region of the source image: pixels copied from `source` and
+    /// drawn at `frame`. Non-destructive — no bitmap is stored; the pixels are
+    /// recomputed from the original image on every render.
+    case patch
 }
 
 public enum CaptureMarkupAuthor: String, Codable, Sendable {
@@ -122,6 +126,8 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
     public var id: String
     public var kind: CaptureMarkupLayerKind
     public var frame: CaptureMarkupRect?
+    /// Copy-from region for `.patch` layers (normalized, same basis as `frame`).
+    public var source: CaptureMarkupRect?
     public var from: CaptureMarkupPoint?
     public var to: CaptureMarkupPoint?
     public var text: String?
@@ -134,6 +140,15 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
     /// Relative label font size, same convention as `strokeWidth`. Only
     /// meaningful for `.label` layers.
     public var fontSize: Double?
+    /// Label typeface family: "sans" | "serif" | "mono". Optional so older
+    /// sidecars (and shape tags) keep the historical mono rendering.
+    public var fontFamily: String?
+    /// Label weight / slant. Optional → false. `.label` layers only.
+    public var bold: Bool?
+    public var italic: Bool?
+    /// When true, the label draws as plain colored text instead of the default
+    /// white-on-dark pill. `.label` layers only.
+    public var plain: Bool?
     public var label: String?
     public var orientation: String?
     public var interval: Double?
@@ -144,12 +159,17 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         case id
         case kind
         case frame
+        case source
         case from
         case to
         case text
         case color
         case strokeWidth
         case fontSize
+        case fontFamily
+        case bold
+        case italic
+        case plain
         case label
         case orientation
         case interval
@@ -161,12 +181,17 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         id: String = UUID().uuidString,
         kind: CaptureMarkupLayerKind,
         frame: CaptureMarkupRect? = nil,
+        source: CaptureMarkupRect? = nil,
         from: CaptureMarkupPoint? = nil,
         to: CaptureMarkupPoint? = nil,
         text: String? = nil,
         color: String = "#C47D1C",
         strokeWidth: Double? = nil,
         fontSize: Double? = nil,
+        fontFamily: String? = nil,
+        bold: Bool? = nil,
+        italic: Bool? = nil,
+        plain: Bool? = nil,
         label: String? = nil,
         orientation: String? = nil,
         interval: Double? = nil,
@@ -176,12 +201,17 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         self.id = id
         self.kind = kind
         self.frame = frame
+        self.source = source
         self.from = from
         self.to = to
         self.text = text
         self.color = color
         self.strokeWidth = strokeWidth
         self.fontSize = fontSize
+        self.fontFamily = fontFamily
+        self.bold = bold
+        self.italic = italic
+        self.plain = plain
         self.label = label
         self.orientation = orientation
         self.interval = interval
@@ -194,12 +224,17 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
         kind = try container.decode(CaptureMarkupLayerKind.self, forKey: .kind)
         frame = try container.decodeIfPresent(CaptureMarkupRect.self, forKey: .frame)
+        source = try container.decodeIfPresent(CaptureMarkupRect.self, forKey: .source)
         from = try container.decodeIfPresent(CaptureMarkupPoint.self, forKey: .from)
         to = try container.decodeIfPresent(CaptureMarkupPoint.self, forKey: .to)
         text = try container.decodeIfPresent(String.self, forKey: .text)
         color = try container.decodeIfPresent(String.self, forKey: .color) ?? "#C47D1C"
         strokeWidth = try container.decodeIfPresent(Double.self, forKey: .strokeWidth)
         fontSize = try container.decodeIfPresent(Double.self, forKey: .fontSize)
+        fontFamily = try container.decodeIfPresent(String.self, forKey: .fontFamily)
+        bold = try container.decodeIfPresent(Bool.self, forKey: .bold)
+        italic = try container.decodeIfPresent(Bool.self, forKey: .italic)
+        plain = try container.decodeIfPresent(Bool.self, forKey: .plain)
         label = try container.decodeIfPresent(String.self, forKey: .label)
         orientation = try container.decodeIfPresent(String.self, forKey: .orientation)
         interval = try container.decodeIfPresent(Double.self, forKey: .interval)

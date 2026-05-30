@@ -74,7 +74,60 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
         NSApp.activate(ignoringOtherApps: true)
 
         session.start(imageURL: imageURL, document: doc, instruction: instruction)
+        SettingsManager.shared.isMarkupSessionActive = true
         log.info("Capture markup session opened", detail: imageURL.lastPathComponent)
+    }
+
+    /// Build the markup chrome for hosting inside a normal in-app view
+    /// (vs. the floating `NSPanel`). The caller owns the returned view and
+    /// places it in its own hierarchy; the coordinator drives the session
+    /// exactly as the panel does (autosave on every edit, AI run, drag-out).
+    /// There is no Accept/Cancel commit gate — edits autosave; the host's
+    /// back button just calls `endEmbeddedSession()` to tear down.
+    func beginEmbeddedSession(
+        imageURL: URL,
+        document: CaptureMarkupDocument? = nil,
+        instruction: String? = nil
+    ) -> CaptureMarkupPanelRootView {
+        closeSession(discard: false)
+
+        self.imageURL = imageURL
+        self.onComplete = nil
+
+        let doc = document ?? CaptureMarkupStorage.load(forImageURL: imageURL)
+            ?? emptyDocument(for: imageURL)
+        currentDocument = doc
+
+        let root = CaptureMarkupPanelRootView(frame: NSRect(x: 0, y: 0, width: 1180, height: 720))
+        rootView = root
+        root.setDragPayloadProvider { [weak self] in
+            self?.makeDragPayload()
+        }
+        root.inputBar.delegate = self
+        if let instruction, !instruction.isEmpty {
+            root.inputBar.promptText = instruction
+        }
+        syncChrome(layerCount: doc.layers.count, selection: nil)
+
+        let session = CaptureMarkupWebSession()
+        session.onMessage = { [weak self] message in
+            self?.handleBridge(message: message)
+        }
+        session.attach(to: root.webHost)
+        webSession = session
+
+        session.start(imageURL: imageURL, document: doc, instruction: instruction)
+        SettingsManager.shared.isMarkupSessionActive = true
+        log.info("Capture markup embedded session opened", detail: imageURL.lastPathComponent)
+        return root
+    }
+
+    /// Tear down an embedded session. Idempotent — safe to call from the
+    /// host's `onDisappear` even after the session already ended. Edits are
+    /// already persisted via autosave, so this only releases the web view.
+    func endEmbeddedSession() {
+        guard webSession != nil || rootView != nil else { return }
+        closeSession(discard: false)
     }
 
     func openSessionIfNeeded(imageURL: URL, instruction: String? = nil) {
@@ -310,6 +363,7 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
     }
 
     private func closeSession(discard: Bool) {
+        SettingsManager.shared.isMarkupSessionActive = false
         if discard, let imageURL {
             CaptureMarkupStorage.deleteSidecar(forImageURL: imageURL)
         }

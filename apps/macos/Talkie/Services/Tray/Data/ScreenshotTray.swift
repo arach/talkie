@@ -34,6 +34,9 @@ struct TrayScreenshot: Identifiable, Codable {
     let filename: String
     let windowTitle: String?
     let appName: String?
+    /// Bundle identifier of the app active at capture time (region/fullscreen
+    /// captures carry the frontmost app; window captures carry the owner).
+    let appBundleID: String?
     let displayName: String?
     /// Whether this item is pinned to the tray (won't drain into the next recording)
     var pinned: Bool
@@ -55,12 +58,13 @@ struct TrayScreenshot: Identifiable, Codable {
 
     // Codable — exclude thumbnail (regenerated on restore)
     enum CodingKeys: String, CodingKey {
-        case id, capturedAt, mode, width, height, filename, windowTitle, appName, displayName, pinned, ocrText
+        case id, capturedAt, mode, width, height, filename, windowTitle, appName, appBundleID, displayName, pinned, ocrText
     }
 
     init(id: UUID, capturedAt: Date, mode: CaptureMode, width: Int, height: Int,
          filename: String, windowTitle: String? = nil, appName: String? = nil,
-         displayName: String? = nil, pinned: Bool = false, ocrText: String? = nil, thumbnail: NSImage? = nil) {
+         appBundleID: String? = nil, displayName: String? = nil, pinned: Bool = false,
+         ocrText: String? = nil, thumbnail: NSImage? = nil) {
         self.id = id
         self.capturedAt = capturedAt
         self.mode = mode
@@ -69,6 +73,7 @@ struct TrayScreenshot: Identifiable, Codable {
         self.filename = filename
         self.windowTitle = windowTitle
         self.appName = appName
+        self.appBundleID = appBundleID
         self.displayName = displayName
         self.pinned = pinned
         self.ocrText = ocrText
@@ -85,6 +90,7 @@ struct TrayScreenshot: Identifiable, Codable {
         filename = try c.decode(String.self, forKey: .filename)
         windowTitle = try c.decodeIfPresent(String.self, forKey: .windowTitle)
         appName = try c.decodeIfPresent(String.self, forKey: .appName)
+        appBundleID = try c.decodeIfPresent(String.self, forKey: .appBundleID)
         displayName = try c.decodeIfPresent(String.self, forKey: .displayName)
         pinned = try c.decodeIfPresent(Bool.self, forKey: .pinned) ?? false
         ocrText = try c.decodeIfPresent(String.self, forKey: .ocrText)
@@ -182,8 +188,8 @@ final class ScreenshotTray {
 
     /// Add a captured screenshot to the buffer.
     func add(data: Data, width: Int, height: Int, mode: CaptureMode,
-             windowTitle: String? = nil, appName: String? = nil, displayName: String? = nil,
-             initialThumbnail: CGImage? = nil) async {
+             windowTitle: String? = nil, appName: String? = nil, appBundleID: String? = nil,
+             displayName: String? = nil, initialThumbnail: CGImage? = nil) async {
         _ = await addReturningItem(
             data: data,
             width: width,
@@ -191,6 +197,7 @@ final class ScreenshotTray {
             mode: mode,
             windowTitle: windowTitle,
             appName: appName,
+            appBundleID: appBundleID,
             displayName: displayName,
             initialThumbnail: initialThumbnail
         )
@@ -198,8 +205,8 @@ final class ScreenshotTray {
 
     /// Add a captured screenshot to the tray and return the stored item.
     func addReturningItem(data: Data, width: Int, height: Int, mode: CaptureMode,
-                          windowTitle: String? = nil, appName: String? = nil, displayName: String? = nil,
-                          initialThumbnail: CGImage? = nil) async -> TrayScreenshot? {
+                          windowTitle: String? = nil, appName: String? = nil, appBundleID: String? = nil,
+                          displayName: String? = nil, initialThumbnail: CGImage? = nil) async -> TrayScreenshot? {
         let itemId = UUID()
         let capturedAt = Date()
         let filename = CaptureFilenameFormatter.screenshotFilename(
@@ -251,6 +258,7 @@ final class ScreenshotTray {
             filename: filename,
             windowTitle: windowTitle,
             appName: appName,
+            appBundleID: appBundleID,
             displayName: displayName,
             thumbnail: displayThumbnail
         )
@@ -400,6 +408,7 @@ final class ScreenshotTray {
                 height: item.height,
                 windowTitle: item.windowTitle,
                 appName: item.appName,
+                appBundleID: item.appBundleID,
                 displayName: item.displayName
             ))
 
@@ -464,6 +473,7 @@ final class ScreenshotTray {
                 height: item.height,
                 windowTitle: item.windowTitle,
                 appName: item.appName,
+                appBundleID: item.appBundleID,
                 displayName: item.displayName
             ))
 
@@ -625,9 +635,10 @@ final class ScreenshotTray {
     /// on a stable shape.
     fileprivate func contextForAugmentation(item: TrayScreenshot) -> TKAugmentationContext {
         var context = TKAugmentationContext()
-        if let title = item.windowTitle  { context["window.title"]  = title }
-        if let app   = item.appName      { context["window.app"]    = app }
-        if let disp  = item.displayName  { context["screen.name"]   = disp }
+        if let title = item.windowTitle  { context["window.title"]    = title }
+        if let app   = item.appName      { context["window.app"]      = app }
+        if let bundle = item.appBundleID { context["window.bundleId"] = bundle }
+        if let disp  = item.displayName  { context["screen.name"]     = disp }
         context["capture.mode"] = item.mode.rawValue
         context["asset.width"]  = String(item.width)
         context["asset.height"] = String(item.height)

@@ -292,7 +292,7 @@ struct DictionarySettingsContent: View {
                 if !dictionary.entries.isEmpty {
                     Text("\(dictionary.enabledEntryCount)/\(dictionary.entries.count) ACTIVE")
                         .font(.techLabelSmall)
-                        .foregroundColor(Color.blue.opacity(Opacity.prominent))
+                        .foregroundColor(Theme.current.foregroundSecondary)
                 }
             }
 
@@ -1363,12 +1363,13 @@ struct InlineEntryEditor: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .frame(width: 200)
+                    .frame(width: 248)
 
                     Text(matchType.description)
                         .font(.system(size: 10))
                         .foregroundColor(Theme.current.foregroundMuted)
                         .lineLimit(1)
+                        .padding(.leading, Spacing.xs)
                 }
 
                 Spacer()

@@ -533,6 +533,11 @@ struct ScopeLibraryView: View {
                 Text(option.label.uppercased())
                     .font(.system(size: 9, weight: .regular, design: .monospaced))
                     .tracking(1.8)
+                    // Keep the label on one line at its intrinsic width — the
+                    // HStack otherwise compresses the longest pill
+                    // ("DICTATIONS") until its trailing letter wraps.
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                     .foregroundColor(
                         isSelected
                             ? ScopeInk.primary
@@ -541,13 +546,14 @@ struct ScopeLibraryView: View {
                 Text("\(count)")
                     .font(.system(size: 9, weight: .regular, design: .monospaced))
                     .monospacedDigit()
+                    .fixedSize(horizontal: true, vertical: false)
                     .foregroundColor(
                         isSelected
                             ? ScopeAmber.solid.opacity(0.75)
                             : ScopeInk.subtle
                     )
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 7)
             .padding(.vertical, 4)
             .overlay(alignment: .bottom) {
                 Rectangle()

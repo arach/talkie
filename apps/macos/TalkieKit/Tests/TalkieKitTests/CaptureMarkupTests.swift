@@ -82,6 +82,131 @@ func captureMarkupLayerStyleRoundTrip() throws {
     #expect(decoded.layers[1].fontSize == 22)
 }
 
+@Test("Capture markup label persists font family / weight / style / plain")
+func captureMarkupLabelTypographyRoundTrip() throws {
+    let label = CaptureMarkupLayer(
+        kind: .label,
+        frame: CaptureMarkupRect(x: 0.1, y: 0.2, width: 0.3, height: 0.1),
+        text: "Note",
+        fontSize: 22,
+        fontFamily: "serif",
+        bold: true,
+        italic: true,
+        plain: true
+    )
+    let document = CaptureMarkupDocument(imageWidth: 800, imageHeight: 600, layers: [label])
+    let data = try JSONEncoder().encode(document)
+    let decoded = try JSONDecoder().decode(CaptureMarkupDocument.self, from: data)
+    #expect(decoded == document)
+    #expect(decoded.layers[0].fontFamily == "serif")
+    #expect(decoded.layers[0].bold == true)
+    #expect(decoded.layers[0].italic == true)
+    #expect(decoded.layers[0].plain == true)
+}
+
+@Test("Capture markup label decode tolerates absent typography fields")
+func captureMarkupLabelTypographyDefaults() throws {
+    let data = """
+    { "kind": "label", "frame": {"x": 0, "y": 0, "width": 0.2, "height": 0.05}, "text": "Old" }
+    """.data(using: .utf8)!
+    let layer = try JSONDecoder().decode(CaptureMarkupLayer.self, from: data)
+    // Legacy labels carry none of the new fields → all nil, renderer falls back
+    // to mono / pill / size 16.
+    #expect(layer.fontFamily == nil)
+    #expect(layer.bold == nil)
+    #expect(layer.italic == nil)
+    #expect(layer.plain == nil)
+}
+
+@Test("Capture markup patch (clone) round-trips source + frame")
+func captureMarkupPatchRoundTrip() throws {
+    let patch = CaptureMarkupLayer(
+        kind: .patch,
+        frame: CaptureMarkupRect(x: 0.5, y: 0.5, width: 0.2, height: 0.2),
+        source: CaptureMarkupRect(x: 0.1, y: 0.1, width: 0.2, height: 0.2),
+        author: .user
+    )
+    let document = CaptureMarkupDocument(imageWidth: 400, imageHeight: 300, layers: [patch])
+    let data = try JSONEncoder().encode(document)
+    let decoded = try JSONDecoder().decode(CaptureMarkupDocument.self, from: data)
+    #expect(decoded == document)
+    #expect(decoded.layers[0].kind == .patch)
+    #expect(decoded.layers[0].source == CaptureMarkupRect(x: 0.1, y: 0.1, width: 0.2, height: 0.2))
+}
+
+@Test("Capture markup renders a patch (clone) layer without error")
+func captureMarkupRenderPatch() throws {
+    let image = makeSolidImage(width: 200, height: 120)
+    let document = CaptureMarkupDocument(
+        imageWidth: 200,
+        imageHeight: 120,
+        layers: [
+            CaptureMarkupLayer(
+                kind: .patch,
+                frame: CaptureMarkupRect(x: 0.5, y: 0.1, width: 0.3, height: 0.3),
+                source: CaptureMarkupRect(x: 0.0, y: 0.0, width: 0.3, height: 0.3)
+            ),
+        ]
+    )
+    let output = CaptureMarkupRenderer.render(image: image, document: document, scale: 1)
+    #expect(output?.width == 200)
+    #expect(output?.height == 120)
+}
+
+private func makeSolidImage(width: Int, height: Int) -> CGImage {
+    let context = CGContext(
+        data: nil,
+        width: width,
+        height: height,
+        bitsPerComponent: 8,
+        bytesPerRow: 0,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    )!
+    context.setFillColor(CGColor(red: 0.2, green: 0.4, blue: 0.6, alpha: 1))
+    context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+    return context.makeImage()!
+}
+
+@Test("Markup export scale multiplies output pixel dimensions")
+func captureMarkupExportScale() throws {
+    let image = makeSolidImage(width: 200, height: 120)
+    let document = CaptureMarkupDocument(
+        imageWidth: 200,
+        imageHeight: 120,
+        layers: [
+            CaptureMarkupLayer(kind: .rect, frame: CaptureMarkupRect(x: 0.1, y: 0.1, width: 0.4, height: 0.3)),
+        ]
+    )
+    let at1x = CaptureMarkupRenderer.render(image: image, document: document, scale: 1)
+    let at2x = CaptureMarkupRenderer.render(image: image, document: document, scale: 2)
+    #expect(at1x?.width == 200)
+    #expect(at1x?.height == 120)
+    #expect(at2x?.width == 400)
+    #expect(at2x?.height == 240)
+}
+
+@Test("Markup export emits format-specific bytes")
+func captureMarkupExportFormatBytes() throws {
+    let image = makeSolidImage(width: 64, height: 64)
+    let document = CaptureMarkupDocument(imageWidth: 64, imageHeight: 64)
+    let png = try #require(CaptureMarkupRenderer.encodedData(image: image, document: document, format: .png))
+    let jpeg = try #require(CaptureMarkupRenderer.encodedData(image: image, document: document, format: .jpeg))
+    // PNG magic signature.
+    #expect(Array(png.prefix(4)) == [0x89, 0x50, 0x4E, 0x47])
+    // JPEG start-of-image marker.
+    #expect(Array(jpeg.prefix(2)) == [0xFF, 0xD8])
+}
+
+@Test("Markup export filename carries scale suffix and format extension")
+func captureMarkupExportFilename() {
+    let url = URL(fileURLWithPath: "/tmp/shot.png")
+    #expect(CaptureMarkupStorage.exportBaseName(forImageURL: url, scale: 1) == "shot")
+    #expect(CaptureMarkupStorage.exportBaseName(forImageURL: url, scale: 2) == "shot@2x")
+    #expect(CaptureMarkupExportFormat.png.fileExtension == "png")
+    #expect(CaptureMarkupExportFormat.jpeg.fileExtension == "jpg")
+}
+
 @Test("Screenshot vision description payload caches target variants")
 func screenshotVisionDescriptionPayloadCachesTargetVariants() throws {
     let generic = ScreenshotVisionDescriptionVariant(

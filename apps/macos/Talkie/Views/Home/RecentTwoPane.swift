@@ -18,6 +18,21 @@ import SwiftUI
 import AppKit
 import TalkieKit
 
+// MARK: - ⌘-hold environment
+//
+// While the user holds Command, quick-jump badges fade in over the
+// section "ALL …" links (⌘M/⌘D/⌘C/⌘N) and the recent rows (⌘1–9). The
+// held state is published from ScopeHomeView through the environment so
+// every descendant row/link can react without threading a flag through
+// each initializer.
+private struct CmdHeldKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    var cmdHeld: Bool {
+        get { self[CmdHeldKey.self] }
+        set { self[CmdHeldKey.self] = newValue }
+    }
+}
+
 // MARK: - Fonts
 //
 // Studio's `font-display` is Cormorant Garamond, `font-mono` is
@@ -63,6 +78,8 @@ struct RecentRow: Identifiable {
     let when: String
     let onTap: () -> Void
     let menuActions: [RecentMenuItem]
+    /// 1–9 quick-open number shown while ⌘ is held; nil past the 9th row.
+    let shortcutNumber: Int?
 
     init(
         id: UUID,
@@ -72,7 +89,8 @@ struct RecentRow: Identifiable {
         meta: String,
         when: String,
         onTap: @escaping () -> Void,
-        menuActions: [RecentMenuItem] = []
+        menuActions: [RecentMenuItem] = [],
+        shortcutNumber: Int? = nil
     ) {
         self.id = id
         self.glyph = glyph
@@ -82,6 +100,7 @@ struct RecentRow: Identifiable {
         self.when = when
         self.onTap = onTap
         self.menuActions = menuActions
+        self.shortcutNumber = shortcutNumber
     }
 }
 
@@ -116,6 +135,9 @@ struct RecentSection: Identifiable {
     let onSecondary: (() -> Void)?
     let rows: [RecentRow]
     let emptyCTA: RecentCTA
+    /// Letter shown in the ⌘-hold badge on the "ALL …" link (⌘+letter
+    /// jumps to this section's library). nil → no quick-jump.
+    let shortcutLetter: String?
 
     init(
         id: String,
@@ -126,7 +148,8 @@ struct RecentSection: Identifiable {
         secondaryLabel: String? = nil,
         onSecondary: (() -> Void)? = nil,
         rows: [RecentRow],
-        emptyCTA: RecentCTA
+        emptyCTA: RecentCTA,
+        shortcutLetter: String? = nil
     ) {
         self.id = id
         self.eyebrow = eyebrow
@@ -137,6 +160,7 @@ struct RecentSection: Identifiable {
         self.onSecondary = onSecondary
         self.rows = rows
         self.emptyCTA = emptyCTA
+        self.shortcutLetter = shortcutLetter
     }
 }
 
@@ -147,6 +171,36 @@ private enum RecentPaneTokens {
     static let contentTint = ScopeKind.note
     static let cardBg      = Color.white.opacity(0.40)
     static let hoverBg     = Color(red: 0.95, green: 0.95, blue: 0.94).opacity(0.5)
+}
+
+// MARK: - ⌘ glyph badge
+//
+// Small ⌘+key chip that fades in while Command is held. Mirrors the
+// library's quick-jump badge so the idiom reads identically across the
+// app. Purely visual — the actual key binding lives in ScopeHomeView.
+private struct CmdGlyphBadge: View {
+    let key: String
+
+    var body: some View {
+        HStack(spacing: 1) {
+            Text("⌘").foregroundColor(ScopeAmber.solid)
+            Text(key).foregroundColor(ScopeInk.primary)
+        }
+        .font(.system(size: 8.5, weight: .semibold, design: .monospaced))
+        .padding(.horizontal, 4)
+        .padding(.vertical, 1.5)
+        .background(
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(ScopeCanvas.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .strokeBorder(ScopeEdge.normal, lineWidth: 0.5)
+        )
+        .shadow(color: ScopeInk.primary.opacity(0.10), radius: 2, y: 1)
+        .transition(.opacity.combined(with: .scale(scale: 0.85)))
+        .allowsHitTesting(false)
+    }
 }
 
 // MARK: - TwoPane container
@@ -220,6 +274,7 @@ private struct RecentSubBand: View {
     let section: RecentSection
     let tint: Color
     let divided: Bool
+    @Environment(\.cmdHeld) private var cmdHeld
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -233,22 +288,36 @@ private struct RecentSubBand: View {
                     .tracking(1.8)
                     .foregroundStyle(ScopeInk.faint)
                 Spacer()
-                if let secondaryLabel = section.secondaryLabel, let onSecondary = section.onSecondary {
-                    Button(action: onSecondary) {
-                        Text("\(secondaryLabel) →")
+                // Trailing link cluster (optional secondary + library
+                // link). The ⌘ badge floats just left of the whole cluster
+                // into the empty Spacer gap — anchored to the cluster's
+                // leading and shifted out by its own width, so nothing
+                // reflows and it never collides with the secondary link.
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    if let secondaryLabel = section.secondaryLabel, let onSecondary = section.onSecondary {
+                        Button(action: onSecondary) {
+                            Text("\(secondaryLabel) →")
+                                .font(RecentFont.mono(size: 8, weight: .semibold))
+                                .tracking(2.0)
+                                .foregroundStyle(tint.opacity(0.86))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Button(action: section.onLibrary) {
+                        Text("\(section.libraryLabel) →")
                             .font(RecentFont.mono(size: 8, weight: .semibold))
                             .tracking(2.0)
-                            .foregroundStyle(tint.opacity(0.86))
+                            .foregroundStyle(ScopeInk.faint)
                     }
                     .buttonStyle(.plain)
                 }
-                Button(action: section.onLibrary) {
-                    Text("\(section.libraryLabel) →")
-                        .font(RecentFont.mono(size: 8, weight: .semibold))
-                        .tracking(2.0)
-                        .foregroundStyle(ScopeInk.faint)
+                .overlay(alignment: .leading) {
+                    if cmdHeld, let letter = section.shortcutLetter {
+                        CmdGlyphBadge(key: letter)
+                            .fixedSize()
+                            .alignmentGuide(.leading) { dims in dims.width + 6 }
+                    }
                 }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 14)
             .padding(.top, 10)
@@ -276,14 +345,26 @@ private struct RecentSubBand: View {
 private struct RecentRowView: View {
     let row: RecentRow
     let tint: Color
+    @Environment(\.cmdHeld) private var cmdHeld
     @State private var hovered = false
+
+    private var showBadge: Bool { cmdHeld && row.shortcutNumber != nil }
 
     var body: some View {
         Button(action: row.onTap) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
+                // ⌘ held: the ⌘N quick-open badge floats *over* the row
+                // marker as an overlay — the glyph fades under it so the
+                // row text never reflows (badge is wider than the glyph).
                 Text(row.glyph)
                     .font(RecentFont.mono(size: 11, weight: .medium))
                     .foregroundStyle(tint)
+                    .opacity(showBadge ? 0 : 1)
+                    .overlay {
+                        if showBadge, let n = row.shortcutNumber {
+                            CmdGlyphBadge(key: "\(n)").fixedSize()
+                        }
+                    }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.line)
                         .font(.system(size: 12))

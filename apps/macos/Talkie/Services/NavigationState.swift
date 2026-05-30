@@ -110,6 +110,11 @@ final class NavigationState {
     /// Go back to the previous app section.
     @discardableResult
     func goBack() -> Bool {
+        if SettingsManager.shared.isMarkupSessionActive {
+            NotificationCenter.default.post(name: .dismissCaptureMarkupHost, object: nil)
+            return true
+        }
+
         guard let previous = backStack.popLast() ?? previousSection,
               previous != selectedSection else {
             previousSection = backStack.last

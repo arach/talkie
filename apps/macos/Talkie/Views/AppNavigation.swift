@@ -696,9 +696,17 @@ struct AppNavigation: View {
     /// Visual overlay for app-wide drop zone
     private var audioDropOverlay: some View {
         ZStack {
-            // Semi-transparent background
+            // Semi-transparent background. Clicking it dismisses the overlay
+            // when no import is in flight — the escape hatch for the case
+            // where a phantom drag leaves the "Drop to import" state stuck
+            // (see handleAudioDrop's note). Mid-import, the Cancel button is
+            // the deliberate exit, so a stray backdrop click won't abort it.
             Color.black.opacity(0.7)
                 .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if dropProgress == nil { cancelDrop() }
+                }
 
             // Center content
             VStack(spacing: Spacing.md) {
@@ -794,6 +802,17 @@ struct AppNavigation: View {
                     Text("URLs, audio, video, images, PDFs, text, code")
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.7))
+                    // Explicit exit — covers the case where the overlay
+                    // gets stuck without an active drag to drop or escape.
+                    Button("Cancel", systemImage: "xmark.circle") {
+                        cancelDrop()
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.white.opacity(0.85))
+                    .padding(.top, Spacing.xs)
+                    Text("press esc or click outside")
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.4))
                 }
             }
             .padding(Spacing.xxl)
@@ -808,6 +827,9 @@ struct AppNavigation: View {
         }
         .animation(.easeInOut(duration: 0.2), value: isDropTargeted)
         .animation(.easeInOut(duration: 0.2), value: dropProgress)
+        // Esc always exits — dismisses the idle/stuck overlay or cancels an
+        // in-flight import.
+        .onExitCommand { cancelDrop() }
     }
 
     // MARK: - Sidebar

@@ -38,6 +38,11 @@ final class SessionLayoutManager {
     // MARK: - Keyboard Monitoring
 
     @ObservationIgnored private var eventMonitor: Any?
+    @ObservationIgnored private var dragHintsDismissTask: Task<Void, Never>?
+
+    /// How long drag hints linger before auto-dismissing. A safety net for
+    /// missed ⌘-up events (see `setDragHints`).
+    private let dragHintAutoDismiss: TimeInterval = 4
 
     private init() {
         startMonitoringModifiers()
@@ -102,11 +107,31 @@ final class SessionLayoutManager {
 
         if commandHeld != isCommandHeld {
             isCommandHeld = commandHeld
-            showDragHints = commandHeld && !isLayoutLocked
+            setDragHints(commandHeld && !isLayoutLocked)
 
             if commandHeld {
                 logger.debug("⌘ Command held - overlays draggable")
             }
+        }
+    }
+
+    /// Reveal or hide the drag hints, always pairing a reveal with a
+    /// self-dismiss timer. The hints are driven by a *local* `.flagsChanged`
+    /// monitor that only fires while Talkie is key — so if focus or the active
+    /// Space changes before ⌘-up, that release is never seen and the hints
+    /// would stick on indefinitely. The timer guarantees they clear after a
+    /// few seconds regardless. A clean ⌘-up cancels the timer and hides early.
+    private func setDragHints(_ show: Bool) {
+        dragHintsDismissTask?.cancel()
+        dragHintsDismissTask = nil
+        showDragHints = show
+        guard show else { return }
+        dragHintsDismissTask = Task { @MainActor [weak self] in
+            guard let seconds = self?.dragHintAutoDismiss else { return }
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled else { return }
+            self?.showDragHints = false
+            self?.dragHintsDismissTask = nil
         }
     }
 }

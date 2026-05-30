@@ -54,6 +54,14 @@ struct ScopeHomeView: View {
     @State private var screenshotTray = ScreenshotTray.shared
     @State private var clipTray = ClipTray.shared
     @State private var selectionTray = SelectionTray.shared
+    // In-window markup takeover target (vs. the old floating panel).
+    @State private var markupURL: URL?
+
+    // ⌘-hold quick-jump. While Command is held, badges fade in over the
+    // section links (⌘M/⌘D/⌘C/⌘N → that library) and recent rows (⌘1–9 →
+    // open). Mirrors the library's filter-tab / list-row idiom.
+    @State private var cmdHeld = false
+    @State private var cmdEventMonitor: Any?
 
     private var todayMemos: Int { memosStore.todayCount }
     private var todayDictations: Int { dictationStore.todayCount }
@@ -90,6 +98,11 @@ struct ScopeHomeView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(ScopeCanvas.canvas)
+        .environment(\.cmdHeld, cmdHeld)
+        .background(cmdShortcutBindings)
+        .onAppear { startCmdMonitor() }
+        .onDisappear { stopCmdMonitor() }
+        .captureMarkupHost(url: $markupURL)
         .task {
             // Home has no chrome-bar title — the TALKIE pill + the rail's
             // highlighted home icon carry identity, and word/streak chrome
@@ -223,7 +236,7 @@ struct ScopeHomeView: View {
                         count: countLabel(todayCount(recentMemos), "today"),
                         libraryLabel: "ALL MEMOS",
                         onLibrary: { NavigationState.shared.navigate(to: .recordings) },
-                        rows: recentMemos.prefix(3).map { obj in
+                        rows: recentMemos.prefix(3).enumerated().map { idx, obj in
                             RecentRow(
                                 id: obj.id,
                                 glyph: "●",
@@ -232,7 +245,8 @@ struct ScopeHomeView: View {
                                 meta: durationLabel(obj.duration),
                                 when: whenLabel(obj.createdAt),
                                 onTap: { NavigationState.shared.navigate(to: .recordings, params: ["recordingId": obj.id.uuidString]) },
-                                menuActions: memoMenuActions(for: obj)
+                                menuActions: memoMenuActions(for: obj),
+                                shortcutNumber: shortcutNumber(base: memoShortcutBase, index: idx)
                             )
                         },
                         emptyCTA: RecentCTA(
@@ -240,7 +254,8 @@ struct ScopeHomeView: View {
                             label: "Start a memo",
                             kbd: ["⌃", "⇧", "⌘", "M"],
                             onTap: onStartRecording
-                        )
+                        ),
+                        shortcutLetter: "M"
                     ),
                     RecentSection(
                         id: "dictations",
@@ -248,7 +263,7 @@ struct ScopeHomeView: View {
                         count: countLabel(todayCount(recentDictations), "today"),
                         libraryLabel: "ALL DICTATIONS",
                         onLibrary: { NavigationState.shared.navigate(to: .dictations) },
-                        rows: recentDictations.prefix(3).map { obj in
+                        rows: recentDictations.prefix(3).enumerated().map { idx, obj in
                             RecentRow(
                                 id: obj.id,
                                 glyph: "○",
@@ -257,7 +272,8 @@ struct ScopeHomeView: View {
                                 meta: wordCountLabel(obj.text),
                                 when: whenLabel(obj.createdAt),
                                 onTap: { NavigationState.shared.navigate(to: .dictations, params: ["recordingId": obj.id.uuidString]) },
-                                menuActions: dictationMenuActions(for: obj)
+                                menuActions: dictationMenuActions(for: obj),
+                                shortcutNumber: shortcutNumber(base: dictationShortcutBase, index: idx)
                             )
                         },
                         emptyCTA: RecentCTA(
@@ -265,7 +281,8 @@ struct ScopeHomeView: View {
                             label: "Dictate",
                             kbd: ["⌃", "⇧", "⌘", "D"],
                             onTap: triggerDictation
-                        )
+                        ),
+                        shortcutLetter: "D"
                     ),
                 ],
                 contentSections: [
@@ -277,7 +294,7 @@ struct ScopeHomeView: View {
                         onLibrary: { NavigationState.shared.navigate(to: .screenshots) },
                         secondaryLabel: "OPEN TRAY",
                         onSecondary: { TrayViewer.shared.show() },
-                        rows: recentCaptures.prefix(3).map { item in
+                        rows: recentCaptures.prefix(3).enumerated().map { idx, item in
                             RecentRow(
                                 id: item.id,
                                 glyph: "◫",
@@ -286,7 +303,8 @@ struct ScopeHomeView: View {
                                 meta: item.meta,
                                 when: whenLabel(item.date),
                                 onTap: { openRecentCapture(item) },
-                                menuActions: captureMenuActions(for: item)
+                                menuActions: captureMenuActions(for: item),
+                                shortcutNumber: shortcutNumber(base: captureShortcutBase, index: idx)
                             )
                         },
                         emptyCTA: RecentCTA(
@@ -294,7 +312,8 @@ struct ScopeHomeView: View {
                             label: "Capture screen",
                             kbd: ["⌃", "⇧", "⌘", "S"],
                             onTap: triggerCapture
-                        )
+                        ),
+                        shortcutLetter: "C"
                     ),
                     RecentSection(
                         id: "notes",
@@ -302,7 +321,7 @@ struct ScopeHomeView: View {
                         count: countLabel(recentNotes.count, "this week"),
                         libraryLabel: "ALL NOTES",
                         onLibrary: { NavigationState.shared.navigate(to: .notes) },
-                        rows: recentNotes.prefix(3).map { obj in
+                        rows: recentNotes.prefix(3).enumerated().map { idx, obj in
                             RecentRow(
                                 id: obj.id,
                                 glyph: "¶",
@@ -316,7 +335,8 @@ struct ScopeHomeView: View {
                                 // `.notes` lands on the Sheaf grid and
                                 // ignores recordingId.
                                 onTap: { NavigationState.shared.navigate(to: .recordings, params: ["recordingId": obj.id.uuidString]) },
-                                menuActions: noteMenuActions(for: obj)
+                                menuActions: noteMenuActions(for: obj),
+                                shortcutNumber: shortcutNumber(base: noteShortcutBase, index: idx)
                             )
                         },
                         emptyCTA: RecentCTA(
@@ -324,7 +344,8 @@ struct ScopeHomeView: View {
                             label: "Write a note",
                             kbd: ["⌃", "⇧", "⌘", "N"],
                             onTap: triggerNewNote
-                        )
+                        ),
+                        shortcutLetter: "N"
                     ),
                 ]
             )
@@ -337,6 +358,95 @@ struct ScopeHomeView: View {
     // hotkeys converge on the same code, avoiding state drift. (Audit #2:
     // these used to be `onTap: {}` — kind of the worst impression a new
     // user could get clicking around the home screen.)
+
+    // MARK: - ⌘-hold quick-jump
+    //
+    // Held-Command reveals badges (rendered in RecentTwoPane via the
+    // `cmdHeld` environment value) and the hidden buttons below bind the
+    // matching keys. Section letters jump to a library; ⌘1–9 open the Nth
+    // recent row in the same column-major order the badges number them.
+
+    /// 1-based badge offset for each section's first row. Rows past the
+    /// 9th get no badge (`shortcutNumber` returns nil).
+    private var memoShortcutBase: Int { 0 }
+    private var dictationShortcutBase: Int { min(recentMemos.count, 3) }
+    private var captureShortcutBase: Int { dictationShortcutBase + min(recentDictations.count, 3) }
+    private var noteShortcutBase: Int { captureShortcutBase + min(recentCaptures.count, 3) }
+
+    private func shortcutNumber(base: Int, index: Int) -> Int? {
+        let n = base + index + 1
+        return n <= 9 ? n : nil
+    }
+
+    /// Recent-row tap actions flattened in the same order the badges
+    /// number them (Memos → Dictations → Captures → Notes, ≤3 each),
+    /// capped at 9 so ⌘1–9 line up with what's on screen.
+    private var orderedRecentTapActions: [() -> Void] {
+        var actions: [() -> Void] = []
+        for obj in recentMemos.prefix(3) {
+            let id = obj.id
+            actions.append { NavigationState.shared.navigate(to: .recordings, params: ["recordingId": id.uuidString]) }
+        }
+        for obj in recentDictations.prefix(3) {
+            let id = obj.id
+            actions.append { NavigationState.shared.navigate(to: .dictations, params: ["recordingId": id.uuidString]) }
+        }
+        for item in recentCaptures.prefix(3) {
+            actions.append { openRecentCapture(item) }
+        }
+        for obj in recentNotes.prefix(3) {
+            let id = obj.id
+            actions.append { NavigationState.shared.navigate(to: .recordings, params: ["recordingId": id.uuidString]) }
+        }
+        return Array(actions.prefix(9))
+    }
+
+    private func openRecentItem(at position: Int) {
+        let actions = orderedRecentTapActions
+        guard position >= 1, position <= actions.count else { return }
+        actions[position - 1]()
+    }
+
+    /// Always-active hidden buttons backing the ⌘ shortcuts. The badges
+    /// are purely visual; these do the work. Mounted via `.background`.
+    @ViewBuilder
+    private var cmdShortcutBindings: some View {
+        Group {
+            Button("") { NavigationState.shared.navigate(to: .recordings) }
+                .keyboardShortcut("m", modifiers: [.command])
+            Button("") { NavigationState.shared.navigate(to: .dictations) }
+                .keyboardShortcut("d", modifiers: [.command])
+            Button("") { NavigationState.shared.navigate(to: .screenshots) }
+                .keyboardShortcut("c", modifiers: [.command])
+            Button("") { NavigationState.shared.navigate(to: .notes) }
+                .keyboardShortcut("n", modifiers: [.command])
+            ForEach(1...9, id: \.self) { n in
+                Button("") { openRecentItem(at: n) }
+                    .keyboardShortcut(KeyEquivalent(Character("\(n)")), modifiers: [.command])
+            }
+        }
+        .frame(width: 0, height: 0)
+        .opacity(0)
+        .allowsHitTesting(false)
+    }
+
+    private func startCmdMonitor() {
+        cmdEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+            let isHeld = event.modifierFlags.contains(.command)
+            if isHeld != cmdHeld {
+                withAnimation(.easeOut(duration: 0.12)) { cmdHeld = isHeld }
+            }
+            return event
+        }
+    }
+
+    private func stopCmdMonitor() {
+        if let monitor = cmdEventMonitor {
+            NSEvent.removeMonitor(monitor)
+            cmdEventMonitor = nil
+        }
+        cmdHeld = false
+    }
 
     /// Toggle the live dictation pipeline. Same path as ⌃⇧⌘D.
     private func triggerDictation() {
@@ -569,7 +679,7 @@ struct ScopeHomeView: View {
                 NSWorkspace.shared.open(url)
             },
             RecentMenuItem(label: "Annotate", systemImage: "pencil.tip.crop.circle", role: nil) {
-                CaptureMarkupCoordinator.shared.openSession(imageURL: url)
+                markupURL = url
             },
             RecentMenuItem(label: "Quick Copy", systemImage: "doc.on.doc", role: nil) {
                 Self.copyImage(at: url)

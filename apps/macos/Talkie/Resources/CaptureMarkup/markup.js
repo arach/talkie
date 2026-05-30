@@ -605,6 +605,32 @@
     };
   }
 
+  // Deep-clone a layer for Option-drag duplication. New id, lifted off the
+  // original by a small offset so the copy reads as distinct the instant it
+  // lands (mirrors the patch tool's copy-in-place lift). Handles both
+  // frame-based layers (rect/label/patch/highlight) and segment layers
+  // (arrow/line). `source` on a patch is intentionally left untouched so the
+  // clone copies the same pixels, just drawn at the offset frame.
+  function duplicateLayer(layer) {
+    const copy = JSON.parse(JSON.stringify(layer));
+    copy.id = uuid();
+    copy.author = "user";
+    const off = 0.03;
+    const clamp01 = (v) => Math.max(0, Math.min(1, v));
+    if (copy.frame) {
+      const f = copy.frame;
+      const dx = f.x + f.width + off <= 1 ? off : -off;
+      const dy = f.y + f.height + off <= 1 ? off : -off;
+      f.x = Math.max(0, Math.min(f.x + dx, 1 - f.width));
+      f.y = Math.max(0, Math.min(f.y + dy, 1 - f.height));
+    }
+    if (copy.from && copy.to) {
+      copy.from = { x: clamp01(copy.from.x + off), y: clamp01(copy.from.y + off) };
+      copy.to = { x: clamp01(copy.to.x + off), y: clamp01(copy.to.y + off) };
+    }
+    return copy;
+  }
+
   // ---------------------------------------------------------------------------
   // Selection restyle — change a selected layer's shape / color / width in
   // place. The toolbar's shape buttons + style stack act on the SELECTED layer
@@ -1663,6 +1689,89 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Inline text editor
+  //
+  // A real, focused <input> floated over the canvas at the click point. The
+  // committed value becomes the label layer's text. Replaces window.prompt,
+  // which silently no-ops inside WKWebView. While it's focused the global
+  // keydown guard (target.tagName === "INPUT") keeps tool shortcuts from
+  // firing, so typing "rect"/"text"/etc. lands as characters, not tools.
+  // ---------------------------------------------------------------------------
+  let activeTextEditor = null;
+
+  function beginTextEdit(layer, screenX, screenY, isNew) {
+    cancelTextEdit();
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = layer.text || "";
+    input.setAttribute("data-inline-text", "1");
+    const fs = typeof layer.fontSize === "number" ? layer.fontSize : 16;
+    Object.assign(input.style, {
+      position: "fixed",
+      left: Math.round(screenX) + "px",
+      top: Math.round(screenY) + "px",
+      zIndex: "9999",
+      minWidth: "120px",
+      font:
+        (layer.bold ? "600 " : "") +
+        (layer.italic ? "italic " : "") +
+        fs +
+        "px " +
+        (layer.fontFamily || "system-ui, sans-serif"),
+      color: layer.color || "#111",
+      background: "rgba(255,255,255,0.97)",
+      border: "1px solid rgba(0,0,0,0.28)",
+      borderRadius: "6px",
+      boxShadow: "0 2px 10px rgba(0,0,0,0.18)",
+      padding: "3px 7px",
+      outline: "none",
+    });
+    document.body.appendChild(input);
+    input.focus();
+    input.select();
+
+    let done = false;
+    const commit = (keep) => {
+      if (done) return;
+      done = true;
+      const val = input.value.trim();
+      input.remove();
+      activeTextEditor = null;
+      if (keep && val) {
+        layer.text = val;
+        debouncedUpdate();
+      } else {
+        // Empty / cancelled — drop the placeholder layer so a stray click
+        // with the text tool never litters the doc with empty labels.
+        const idx = state.document.layers.findIndex((l) => l.id === layer.id);
+        if (idx >= 0) state.document.layers.splice(idx, 1);
+        if (state.selectedLayerId === layer.id) state.selectedLayerId = null;
+        if (isNew) debouncedUpdate();
+      }
+      render();
+    };
+
+    input.addEventListener("keydown", (e) => {
+      // Keep keystrokes out of the canvas/global handlers entirely.
+      e.stopPropagation();
+      if (e.key === "Enter") {
+        e.preventDefault();
+        commit(true);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        commit(false);
+      }
+    });
+    input.addEventListener("blur", () => commit(true));
+    activeTextEditor = { input, commit };
+  }
+
+  function cancelTextEdit() {
+    if (activeTextEditor) activeTextEditor.commit(true);
+  }
+
+  // ---------------------------------------------------------------------------
   // Canvas interaction
   //
   // Three modes share the same mousedown→mousemove→mouseup path:
@@ -1690,20 +1799,21 @@
     // (2) Click tools
     if (state.activeTool && CLICK_TOOLS.has(state.activeTool)) {
       if (state.activeTool === "text") {
-        const text = window.prompt("Label text", "");
-        if (text && text.trim()) {
-          const w = Math.min(0.25, Math.max(0.05, text.length * 0.012));
-          const h = 0.05;
-          const layer = newLabelLayer(
-            { x: norm.nx, y: norm.ny - h, width: w, height: h },
-            text.trim(),
-          );
-          snapshotForUndo();
-          state.document.layers.push(layer);
-          state.selectedLayerId = layer.id;
-          debouncedUpdate();
-          render();
-        }
+        // Drop an empty label at the click point and open an inline,
+        // focused editor right there. (window.prompt is a no-op in
+        // WKWebView — it returns null with no dialog, which is why the
+        // text box and your typing never appeared.)
+        const h = 0.05;
+        const layer = newLabelLayer(
+          { x: norm.nx, y: norm.ny - h, width: 0.12, height: h },
+          "",
+        );
+        snapshotForUndo();
+        state.document.layers.push(layer);
+        state.selectedLayerId = layer.id;
+        render();
+        beginTextEdit(layer, e.clientX, e.clientY, /*isNew*/ true);
+        e.preventDefault();
       }
       return;
     }
@@ -1720,6 +1830,37 @@
     // For an already-selected segment (arrow / line), an endpoint handle
     // takes priority so you can grab an end even when it's right on the body.
     const size = viewportSize();
+
+    // Option/Alt + click on a layer duplicates it and drags the copy —
+    // the original stays put (standard alt-drag-to-duplicate idiom). Takes
+    // priority over endpoint/handle grabs so Option always means "clone".
+    if (e.altKey) {
+      const dupHit = hitTest(norm);
+      if (dupHit) {
+        snapshotForUndo();
+        const copy = duplicateLayer(dupHit);
+        state.document.layers.push(copy);
+        state.selectedLayerId = copy.id;
+        if (copy.frame) {
+          state.drag = {
+            layerId: copy.id,
+            startX: e.clientX,
+            startY: e.clientY,
+            orig: Object.assign({}, copy.frame),
+            zoom: state.viewport.zoom,
+            w: state.viewport.width,
+            h: state.viewport.height,
+          };
+        } else if (copy.from && copy.to) {
+          state.segDrag = makeSegDrag(copy, "both", e, size);
+        }
+        debouncedUpdate();
+        render();
+        e.preventDefault();
+        return;
+      }
+    }
+
     const already = selectedLayer();
     if (already && already.from && already.to) {
       const handle = segmentEndpointAt(norm, already);
@@ -1773,6 +1914,19 @@
       didSnapshot: false,
     };
   }
+
+  // Double-click an existing label to re-open the inline editor in place.
+  canvas.addEventListener("dblclick", (e) => {
+    const norm = eventToNorm(e);
+    const hit = hitTest(norm);
+    if (hit && hit.kind === "label") {
+      setActiveTool(null);
+      state.selectedLayerId = hit.id;
+      render();
+      beginTextEdit(hit, e.clientX, e.clientY, /*isNew*/ false);
+      e.preventDefault();
+    }
+  });
 
   canvas.addEventListener("wheel", (e) => {
     if (e.metaKey || e.ctrlKey) {
@@ -1976,6 +2130,24 @@
     if (e.code === "Space") {
       state.isSpaceDown = true;
       updateCursor();
+      e.preventDefault();
+      return;
+    }
+
+    // Tab / Shift+Tab — step selection through the layers (the list nav that
+    // used to eat Tab is suppressed in Swift while markup is active). Drops
+    // any active tool so the cycled layer reads as selected.
+    if (e.key === "Tab") {
+      const layers = state.document.layers;
+      if (layers.length) {
+        const cur = layers.findIndex((l) => l.id === state.selectedLayerId);
+        let next;
+        if (e.shiftKey) next = cur <= 0 ? layers.length - 1 : cur - 1;
+        else next = cur === -1 || cur === layers.length - 1 ? 0 : cur + 1;
+        setActiveTool(null);
+        state.selectedLayerId = layers[next].id;
+        render();
+      }
       e.preventDefault();
       return;
     }

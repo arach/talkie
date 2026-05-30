@@ -723,16 +723,6 @@ struct ScopeDraftsScreen: View {
         HStack(spacing: 6) {
             voicePromptButton
 
-            // Faint vertical separator after the primary voice button
-            Rectangle()
-                .fill(ScopeEdge.faint)
-                .frame(width: 1, height: 18)
-                .padding(.horizontal, 4)
-
-            ForEach(availableActions.prefix(3)) { action in
-                scopeActionChip(action)
-            }
-
             Spacer()
 
             if let err = editorState.error {
@@ -865,34 +855,6 @@ struct ScopeDraftsScreen: View {
         .help("Voice instruction → revise")
     }
 
-    private func scopeActionChip(_ action: SmartAction) -> some View {
-        let disabled = editorState.isProcessing || editorState.text.isEmpty
-        return Button(action: {
-            Task { await editorState.requestRevision(instruction: action.defaultPrompt) }
-        }) {
-            HStack(spacing: 5) {
-                Image(systemName: action.icon)
-                    .font(.system(size: 9, weight: .medium))
-                Text(action.name.uppercased())
-                    .font(ScopeType.channel)
-                    .tracking(ScopeType.Tracking.wide)
-            }
-            .foregroundStyle(disabled ? ScopeInk.faint : ScopeInk.muted)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(disabled ? Color.clear : ScopeCanvas.canvas)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 3)
-                    .stroke(disabled ? ScopeEdge.subtle : ScopeEdge.faint, lineWidth: 0.5)
-            )
-        }
-        .buttonStyle(.plain)
-        .disabled(disabled)
-    }
-
     // MARK: - Action list (V2 — typeset two-column, no cards)
 
     /// V2 — drops the white-card grid in favor of a typeset list. Each
@@ -927,11 +889,15 @@ struct ScopeDraftsScreen: View {
                     .foregroundStyle(ScopeInk.faint)
             }
 
-            HStack(alignment: .top, spacing: 36) {
+            HStack(alignment: .top, spacing: 28) {
                 actionColumn(actions: leftCol, disabled: disabled)
                 actionColumn(actions: rightCol, disabled: disabled)
             }
         }
+        // The columns use maxWidth:.infinity, so without a cap the rail
+        // sprawls edge-to-edge on wide windows. Bound it so the menu reads
+        // as a compact two-column list left-anchored under the editor.
+        .frame(maxWidth: 520, alignment: .leading)
     }
 
     @ViewBuilder

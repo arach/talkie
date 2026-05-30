@@ -71,12 +71,17 @@ public struct RecordingScreenshot: Codable, Sendable, Equatable {
     public let height: Int?
     public let windowTitle: String?
     public let appName: String?
+    /// Bundle identifier of the app that was active when the capture was
+    /// taken. Lets the UI disambiguate apps that share a display name and
+    /// resolve an icon. Optional so older records decode unchanged.
+    public let appBundleID: String?
     public let displayName: String?
 
     public init(
         filename: String, timestampMs: Int, captureMode: String,
         width: Int? = nil, height: Int? = nil,
-        windowTitle: String? = nil, appName: String? = nil, displayName: String? = nil
+        windowTitle: String? = nil, appName: String? = nil,
+        appBundleID: String? = nil, displayName: String? = nil
     ) {
         self.filename = filename
         self.timestampMs = timestampMs
@@ -85,6 +90,7 @@ public struct RecordingScreenshot: Codable, Sendable, Equatable {
         self.height = height
         self.windowTitle = windowTitle
         self.appName = appName
+        self.appBundleID = appBundleID
         self.displayName = displayName
     }
 

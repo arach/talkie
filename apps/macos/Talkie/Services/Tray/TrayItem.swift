@@ -97,6 +97,15 @@ enum TrayItem: Identifiable {
         }
     }
 
+    /// Bundle id of the capturing app. Only screenshots carry it today;
+    /// clips/selections have no equivalent field.
+    var appBundleID: String? {
+        switch self {
+        case .screenshot(let s): s.appBundleID
+        case .clip, .selection: nil
+        }
+    }
+
     var displayName: String? {
         switch self {
         case .screenshot(let s): s.displayName
