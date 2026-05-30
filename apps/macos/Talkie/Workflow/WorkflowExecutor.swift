@@ -1775,13 +1775,35 @@ class WorkflowExecutor {
         logger.debug("📱 [iOS Push]   Memo: \(memo.displayTitle) (ID: \(memo.id.uuidString.prefix(8))...)")
         logger.debug("📱 [iOS Push]   Sound: \(config.sound ? "enabled" : "disabled")")
 
-        // NOTE: Core Data removed from main app - iOS push notifications disabled
-        // Future: Send via TalkieGateway API or through TalkieSync XPC
-        logger.warning("📱 [iOS Push] ⚠️ Push notifications temporarily disabled - Core Data moved to TalkieSync")
-        logger.info("📱 [iOS Push]   Would send: '\(resolvedTitle)' - '\(resolvedBody.prefix(50))...'")
+        let pushResult = await queueCloudKitIPhonePush(
+            title: resolvedTitle,
+            body: resolvedBody,
+            sessionId: memo.id.uuidString,
+            source: "workflow"
+        )
 
-        // TODO: Implement push via TalkieGateway API
-        return "Push notification logged (API integration pending)"
+        return pushResult
+    }
+
+    private func queueCloudKitIPhonePush(
+        title: String,
+        body: String,
+        sessionId: String,
+        source: String
+    ) async -> String {
+        do {
+            let recordID = try await CloudKitReportNotificationSender().sendReport(
+                title: title,
+                body: body,
+                sessionId: sessionId,
+                source: source
+            )
+            logger.info("📱 [iOS Push] Queued CloudKit report notification: \(recordID.recordName)")
+            return "iPhone notification queued in iCloud"
+        } catch {
+            logger.warning("📱 [iOS Push] Failed to queue CloudKit notification: \(error.localizedDescription)")
+            return "iPhone notification unavailable: \(error.localizedDescription)"
+        }
     }
 
     // MARK: - Apple Notes Step Execution

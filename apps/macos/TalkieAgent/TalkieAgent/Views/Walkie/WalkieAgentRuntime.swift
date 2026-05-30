@@ -15,13 +15,16 @@ enum WalkieRuntimeCapability: String, Codable, Sendable {
     case longRunningJobs
 }
 
-struct WalkieAgentJob: Sendable {
+struct WalkieAgentInvocation: Codable, Sendable {
     let id: UUID
     let channel: WalkieChannel
     let transcript: String
     let instruction: String
     let topLevelModel: WalkieModelUse
     let requestedAt: Date
+    let conversationId: String?
+    let parentSessionId: String?
+    let source: String?
 }
 
 struct WalkieAgentRuntimeResult: Sendable {
@@ -39,7 +42,7 @@ protocol WalkieAgentRuntime: Sendable {
 
     var isAvailable: Bool { get async }
 
-    func start(job: WalkieAgentJob) async throws -> WalkieAgentRuntimeResult
+    func invoke(_ invocation: WalkieAgentInvocation) async throws -> WalkieAgentRuntimeResult
     func cancel(sessionId: String) async
 }
 
@@ -47,6 +50,7 @@ actor WalkieRuntimeRegistry {
     static let shared = WalkieRuntimeRegistry()
 
     private let runtimes: [any WalkieAgentRuntime] = [
+        WalkieNodeDispatcherRuntime(),
         WalkieScoutAgentSessionRuntime(),
     ]
 
@@ -69,6 +73,33 @@ actor WalkieRuntimeRegistry {
     }
 }
 
+struct WalkieNodeDispatcherRuntime: WalkieAgentRuntime {
+    let id = "walkie-node-dispatcher"
+    let name = "Walkie Runtime Dispatcher"
+    let capabilities: Set<WalkieRuntimeCapability> = [
+        .readOnlyData,
+        .longRunningJobs,
+    ]
+
+    var isAvailable: Bool {
+        get async {
+            await WalkieNodeRuntimeClient.shared.ping() != nil
+        }
+    }
+
+    func invoke(_ invocation: WalkieAgentInvocation) async throws -> WalkieAgentRuntimeResult {
+        runtimeLog.info(
+            "Walkie node dispatcher invoking agent session",
+            detail: "invocation=\(invocation.id.uuidString) channel=\(invocation.channel.code)"
+        )
+        return try await WalkieNodeRuntimeClient.shared.invoke(invocation)
+    }
+
+    func cancel(sessionId: String) async {
+        await WalkieNodeRuntimeClient.shared.cancel(sessionId: sessionId)
+    }
+}
+
 struct WalkieScoutAgentSessionRuntime: WalkieAgentRuntime {
     let id = "scout-agent-session"
     let name = "Scout Agent Session"
@@ -80,29 +111,25 @@ struct WalkieScoutAgentSessionRuntime: WalkieAgentRuntime {
 
     var isAvailable: Bool {
         get async {
-            // This runtime is the intended async executor, but the stdio
-            // bridge is not wired yet. Keeping the adapter here makes the
-            // boundary explicit without pretending the executor is live.
-            TalkieSharedSettings.bool(forKey: AgentSettingsKey.walkieScoutRuntimeEnabled)
+            guard TalkieSharedSettings.bool(forKey: AgentSettingsKey.walkieScoutRuntimeEnabled) else {
+                return false
+            }
+
+            let ping = await WalkieNodeRuntimeClient.shared.ping()
+            return ping?.scoutBridge == .configured
         }
     }
 
-    func start(job: WalkieAgentJob) async throws -> WalkieAgentRuntimeResult {
+    func invoke(_ invocation: WalkieAgentInvocation) async throws -> WalkieAgentRuntimeResult {
         runtimeLog.info(
-            "Walkie Scout runtime accepted job",
-            detail: "job=\(job.id.uuidString) channel=\(job.channel.code)"
+            "Walkie Scout runtime invoking agent session",
+            detail: "invocation=\(invocation.id.uuidString) channel=\(invocation.channel.code)"
         )
 
-        return WalkieAgentRuntimeResult(
-            ack: "On it. I handed that to Scout and will report back when it finishes.",
-            sessionId: job.id.uuidString,
-            providerId: job.channel.executorProviderId,
-            modelId: job.channel.executorModelId,
-            jobState: .working
-        )
+        return try await WalkieNodeRuntimeClient.shared.invoke(invocation)
     }
 
     func cancel(sessionId: String) async {
-        runtimeLog.info("Walkie Scout runtime cancel requested", detail: "session=\(sessionId)")
+        await WalkieNodeRuntimeClient.shared.cancel(sessionId: sessionId)
     }
 }

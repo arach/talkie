@@ -11,7 +11,7 @@ A press-and-hold agent surface on macOS, bound by default to **Hyper+T** (`⇧�
 
 Three things make this distinct from iPhone Ask AI, which is also a turn-based agent surface:
 
-1. **Live surface is ephemeral, not a panel.** The walkie is a *moment*, invoked by a hotkey, dismissed when done. The chat history of past transmissions is a Library record — a separate artifact, written by the walkie but not the live surface.
+1. **Live surface is ephemeral, not a panel.** The walkie is a *moment*, invoked by a hotkey, dismissed when done. Durable activity belongs in Agent Home, not a new Walkie-branded place.
 2. **Always-on, walkie-talkie pace.** The agent voice is conversational and brief ("Alright, we gotcha…"), not assistant-formal. The interaction is short by design.
 3. **Two transmission modes, routed automatically.** Every TALKIE turn lands as either VERBAL (immediate spoken answer) or ASYNC (long-running computer-use job that acks now and reports later via the notch). The model decides which, the user doesn't choose.
 
@@ -53,7 +53,7 @@ The whole arc of one transmission is four sequential moments. See `MacWalkieScop
 | over | hotkey released | ~500ms | none | trace decays, "OVER" badge |
 | receiving | LLM response ready | until done + idle timeout | TTS playback | scope shows TTS waveform + caption |
 
-Async mode collapses *receiving* into a brief verbal ack ("On it — back in a minute") followed by an auto-dismiss; the actual job runs in the background and surfaces through the existing notch composer when done.
+Async mode collapses *receiving* into a brief verbal ack ("On it — back in a minute") followed by an auto-dismiss; the actual agent invocation runs in the background and surfaces through the existing notch composer when done.
 
 ## Data model
 
@@ -122,6 +122,85 @@ Settings follow that boundary:
 
 If the Walkie-specific top-level provider/model is missing, v1 falls back to the global LLM provider/model settings, then to `LLMProviderRegistry.resolveProviderAndModel()`. That keeps Walkie multi-LLM by default instead of accidentally hard-coding the first prototype provider.
 
+## Executor runtime protocol
+
+The Swift side talks to executor runtimes through `WalkieAgentRuntime`.
+The first concrete bridge is a local Node stdio dispatcher at
+`TalkieAgent/Runtime/node/index.mjs`. It is deliberately small: one
+JSON request per line, one JSON response per line.
+
+Supported operations:
+
+```json
+{ "op": "ping" }
+```
+
+```json
+{
+  "op": "invoke",
+  "invocation": {
+    "id": "UUID",
+    "channel": { "code": "CH-01", "label": "NIGHTOPS" },
+    "transcript": "raw user transcript",
+    "instruction": "executor-ready instruction",
+    "topLevelModel": {
+      "providerId": "openai",
+      "providerName": "OpenAI",
+      "modelId": "gpt-5.5"
+    },
+    "requestedAt": "ISO-8601 date"
+  }
+}
+```
+
+```json
+{ "op": "activityStatus", "sessionId": "walkie-UUID" }
+{ "op": "cancelInvocation", "sessionId": "walkie-UUID" }
+```
+
+The dispatcher returns a runtime descriptor and an activity descriptor:
+
+```json
+{
+  "ok": true,
+  "runtime": {
+    "id": "walkie-node-dispatcher",
+    "name": "Walkie Runtime Dispatcher",
+    "capabilities": ["readOnlyData", "longRunningJobs"],
+    "scoutBridge": "pending"
+  },
+  "activity": {
+    "id": "UUID",
+    "sessionId": "walkie-UUID",
+    "state": "acked",
+    "ack": "spoken acknowledgement"
+  }
+}
+```
+
+`walkie-node-dispatcher` is the local contract holder. It can accept an
+invocation and preserve the executor/session shape even before Scout is live.
+`scout-agent-session` remains the intended code/computer-use executor,
+but it only advertises availability once `walkie.scoutRuntimeEnabled`
+is set and the Node dispatcher reports `scoutBridge: "configured"`.
+
+## Agent Home return path
+
+Async mode needs a durable return path. That is **Agent Home**, not the
+ephemeral Walkie scope. The scope handles the live voice moment and
+immediate acknowledgement; Agent Home owns "what is running, what
+happened, and what needs attention."
+
+Initial Agent Home sections:
+
+- **Now** — active executor work, dispatcher state, and recent activity.
+- **Activity** — executor sessions plus recent voice/dictation captures.
+- **Voice** — push-to-talk state as one input into Agent.
+- **Executor** — bridge status and open work.
+
+The notch/status pill remains a lightweight pointer back to Agent Home.
+It should not become the durable history surface.
+
 ## Routing — verbal vs async
 
 The user doesn't pick the mode. The top-level Walkie model does, on first read of the transcript.
@@ -141,7 +220,7 @@ The routing call returns:
 Execution:
 
 - If `verbal`: `reply` is the immediate answer; the panel enters *receiving*, shows it, and optionally speaks it.
-- If `async`: `reply` is a brief ack; `executorInstruction` is passed to the resolved `WalkieAgentRuntime`. The panel can show the ack immediately while the runtime owns the longer job.
+- If `async`: `reply` is a brief ack; `executorInstruction` is passed to the resolved `WalkieAgentRuntime`. The panel can show the ack immediately while the runtime owns the longer invocation.
 
 Routing heuristic (in the top-level model's system prompt, not Swift):
 - Question with a likely short factual answer → verbal
@@ -186,15 +265,16 @@ At this point the loop is closed: hold, talk, hear answer, done.
 ### Unit 4 — Async mode + notch reporting
 
 - For async routing results, play/show the ack, then hand `executorInstruction` to the selected `WalkieAgentRuntime`.
-- First runtime target is Scout Agent Session through the `TalkieAgent/Runtime/node/` stdio shim, guarded by `walkie.scoutRuntimeEnabled` until the bridge is live.
-- Record executor runtime id/name, optional provider/model id, session id, and job state on the transmission.
-- On job completion, the existing `NotchComposer` pipeline (camera bubble / status pill primitives) shows a "Walkie · CH-01 · done" affordance; tap opens the Library record.
+- Current runtime target is `walkie-node-dispatcher`, which establishes the Swift → Node invocation/session contract.
+- Scout Agent Session becomes the code/computer-use executor once the Node dispatcher can create a real Scout session; it is guarded by `walkie.scoutRuntimeEnabled` until that bridge is live.
+- Record executor runtime id/name, optional provider/model id, session id, and job state on the transmission and Agent Home activity store.
+- On completion, the existing `NotchComposer` pipeline (camera bubble / status pill primitives) shows a "Talkie Agent · done" affordance; tap opens Agent Home.
 
-This unit needs the Library record surface, which is its own follow-up (see *Open follow-ups*).
+This unit needs the Agent Home activity model, which is its own follow-up (see *Open follow-ups*).
 
 ## Open follow-ups (not v1)
 
-- **Library record view** — sessions persist as `WalkieChannel + [WalkieTransmission]`. A new Library entry kind shows past transmissions in a transcript layout. Likely repurposes the Editorial direction from the studio exploration (kept on disk under `MacWalkieEditorial.tsx`).
+- **Agent Home activity model** — sessions persist as Agent activity items. Walkie/voice is an input; executor sessions, routines, and future agent work share the same home.
 - **Multi-channel switcher** — UI to create/switch channels (each with its own system prompt). v1 ships single channel.
 - **Settings surface** — hotkey binding, default channel, idle-dismiss duration, top-level model override, executor runtime override, Scout runtime enablement.
 - **Visible HUD while holding key** — current spec assumes the modal IS the HUD. If the modal turns out to be too heavy for very-quick transmissions, we add a small notch-only "ambient" mode that bypasses the modal for sub-second presses.

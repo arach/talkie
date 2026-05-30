@@ -8,6 +8,9 @@
  *
  *   **Status**: Draft | Accepted | Implemented | Deprecated
  *   **Owner**: name | TBD
+ *   **Studio**: /eng/tlk-NNN
+ *   **Surface**: optional Studio visual study route
+ *   **Review**: optional review artifact or note
  *   **Branch context**: optional
  *
  *   ## Summary
@@ -43,6 +46,12 @@ export interface EngDocMeta {
   statusRaw: string;
   status: TlkStatus;
   owner: string;
+  /** Optional Studio review/discussion route from `**Studio**: /eng/tlk-NNN`. */
+  studioHref: string | null;
+  /** Optional visual study route from `**Surface**: /route-name`. */
+  surfaceHref: string | null;
+  /** Optional review note or artifact link from `**Review**: ...`. */
+  review: string | null;
   /** Optional one-line subtitle from a `**Subtitle**: text` header
    *  field. Surfaces in the data sheet between Title and Summary. */
   subtitle: string | null;
@@ -210,11 +219,27 @@ function parseHeader(raw: string, slug: string, number: number): EngDocMeta {
   const statusRaw = matchField(raw, "Status") ?? "Unknown";
   const owner = matchField(raw, "Owner") ?? "TBD";
   const status = normalizeStatus(statusRaw);
+  const studioHref = matchField(raw, "Studio");
+  const surfaceHref = matchField(raw, "Surface");
+  const review = matchField(raw, "Review");
   const subtitle = matchField(raw, "Subtitle");
   const tag = inferTag(title);
   const summary = extractSummary(raw);
 
-  return { slug, number, title, statusRaw, status, owner, subtitle, tag, summary };
+  return {
+    slug,
+    number,
+    title,
+    statusRaw,
+    status,
+    owner,
+    studioHref,
+    surfaceHref,
+    review,
+    subtitle,
+    tag,
+    summary,
+  };
 }
 
 function inferTag(title: string): DocTag {

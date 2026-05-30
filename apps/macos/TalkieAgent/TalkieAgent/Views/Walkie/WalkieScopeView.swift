@@ -21,16 +21,21 @@ import SwiftUI
 
 enum WalkieScopePhase {
     case ready
+    case arming
     case transmitting
     case over
     case thinking
     case receiving
+    case followUpRecording
+    case followUpOver
     case error
 }
 
 struct WalkieScopeView: View {
     @ObservedObject var session: WalkieSession
     let onDismiss: () -> Void
+
+    @State private var followUpText = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -57,8 +62,8 @@ struct WalkieScopeView: View {
 
     private var showsResponseSection: Bool {
         switch session.phase {
-        case .ready, .transmitting, .over: return false
-        case .thinking, .receiving, .error: return true
+        case .ready, .arming, .transmitting, .over: return false
+        case .thinking, .receiving, .followUpRecording, .followUpOver, .error: return true
         }
     }
 
@@ -125,12 +130,16 @@ struct WalkieScopeView: View {
 
     private var signalDot: some View {
         Circle()
-            .fill(session.phase == .transmitting ? Color(red: 0.85, green: 0.29, blue: 0.17) : inkSubtle)
+            .fill(isMicLive ? Color(red: 0.85, green: 0.29, blue: 0.17) : inkSubtle)
             .frame(width: 6, height: 6)
             .shadow(
-                color: session.phase == .transmitting ? Color(red: 0.85, green: 0.29, blue: 0.17).opacity(0.65) : .clear,
+                color: isMicLive ? Color(red: 0.85, green: 0.29, blue: 0.17).opacity(0.65) : .clear,
                 radius: 4
             )
+    }
+
+    private var isMicLive: Bool {
+        session.phase == .transmitting || session.phase == .followUpRecording
     }
 
     // MARK: - Display
@@ -204,7 +213,7 @@ struct WalkieScopeView: View {
                 for p in points.dropFirst() {
                     path.addLine(to: scaled(p, to: size))
                 }
-                let hot = phase == .transmitting || phase == .receiving
+                let hot = phase == .transmitting || phase == .followUpRecording || phase == .receiving
                 let color = hot ? amberTrace : amberTraceDim
                 context.stroke(path, with: .color(color), lineWidth: 1.4)
             }
@@ -227,15 +236,15 @@ struct WalkieScopeView: View {
             let x = Double(i) * step
             let y: Double
             switch phase {
-            case .ready:
+            case .ready, .arming:
                 y = 0.5 + sin(x * .pi * 2 + t * 0.5) * 0.005
-            case .transmitting:
+            case .transmitting, .followUpRecording:
                 let envelope = 0.4 * (1 - pow(2 * x - 1, 2))
                 let base = sin(x * .pi * 14 + t * 8)
                 let harm = sin(x * .pi * 36 + t * 5.5) * 0.35
                 let amp = max(0.08, Double(level))
                 y = 0.5 + envelope * amp * (base + harm)
-            case .over:
+            case .over, .followUpOver:
                 let decay = (1 - x) * 0.08
                 y = 0.5 + decay * sin(x * .pi * 6 + t * 4)
             case .thinking:
@@ -283,6 +292,12 @@ struct WalkieScopeView: View {
                 if let reply = session.replyText {
                     talkieBlock(reply)
                 }
+            case .followUpRecording:
+                if let reply = session.replyText {
+                    talkieBlock(reply)
+                }
+            case .followUpOver:
+                thinkingBlock
             case .error:
                 errorBlock
             default:
@@ -415,6 +430,18 @@ struct WalkieScopeView: View {
                     .font(.system(size: 9, weight: .regular, design: .monospaced))
                     .tracking(1.4)
                     .foregroundStyle(inkSubtle)
+                if session.continuationSessionId != nil {
+                    Text("· SAME SESSION")
+                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                        .tracking(1.4)
+                        .foregroundStyle(amberTrace)
+                }
+                if let branchMetaLabel {
+                    Text("· \(branchMetaLabel)")
+                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                        .tracking(1.4)
+                        .foregroundStyle(amberTrace)
+                }
             }
 
             Text(reply)
@@ -425,6 +452,8 @@ struct WalkieScopeView: View {
                 .multilineTextAlignment(.leading)
                 .textSelection(.enabled)
 
+            voiceFollowUpControl
+
             HStack(spacing: 8) {
                 actionChip(label: "PLAY", systemImage: "play.fill", action: { session.playReply() })
                 actionChip(label: "DONE", systemImage: "checkmark", action: onDismiss)
@@ -432,7 +461,133 @@ struct WalkieScopeView: View {
                 autoPlayToggle
             }
             .padding(.top, 2)
+
+            followUpComposer
         }
+    }
+
+    private var voiceFollowUpControl: some View {
+        Button(action: { session.toggleVoiceFollowUp() }) {
+            HStack(spacing: 10) {
+                Image(systemName: voiceFollowUpIcon)
+                    .font(.system(size: 12, weight: .bold))
+                    .frame(width: 16)
+                Text(voiceFollowUpLabel)
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .tracking(1.6)
+                Spacer(minLength: 8)
+                Text(voiceFollowUpBadge)
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundStyle(isRecordingFollowUp ? Color(red: 0.141, green: 0.078, blue: 0.031) : amberTrace)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .fill(isRecordingFollowUp ? amberTrace.opacity(0.78) : Color.black.opacity(0.2))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .strokeBorder(amberTrace.opacity(0.4), lineWidth: 0.5)
+                    )
+            }
+            .foregroundStyle(isRecordingFollowUp ? Color(red: 0.141, green: 0.078, blue: 0.031) : amberTrace)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(isRecordingFollowUp ? amberTrace : Color.black.opacity(0.16))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(amberTrace.opacity(isRecordingFollowUp ? 0 : 0.55), lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(executorBranchIsWorking)
+        .help(voiceFollowUpHelp)
+    }
+
+    private var isRecordingFollowUp: Bool {
+        session.phase == .followUpRecording
+    }
+
+    private var executorBranchIsWorking: Bool {
+        session.executorBranchState == .working
+    }
+
+    private var voiceFollowUpIcon: String {
+        if executorBranchIsWorking { return "hourglass" }
+        return isRecordingFollowUp ? "stop.fill" : "mic.fill"
+    }
+
+    private var voiceFollowUpLabel: String {
+        if executorBranchIsWorking { return "AGENT WORKING" }
+        return isRecordingFollowUp ? "STOP & SEND" : "SPEAK FOLLOW-UP"
+    }
+
+    private var voiceFollowUpBadge: String {
+        if executorBranchIsWorking { return "ASYNC" }
+        return isRecordingFollowUp ? session.formattedElapsed : "T"
+    }
+
+    private var voiceFollowUpHelp: String {
+        if executorBranchIsWorking { return "The agent branch is still working" }
+        return isRecordingFollowUp ? "Stop recording and send" : "Record a voice follow-up"
+    }
+
+    private var followUpComposer: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            TextField("Follow up in this session", text: $followUpText, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12, weight: .regular, design: .monospaced))
+                .foregroundStyle(ink)
+                .lineLimit(1...3)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(Color.black.opacity(0.18))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .strokeBorder(amberEdgeFaint, lineWidth: 0.5)
+                )
+                .onSubmit(sendFollowUp)
+                .disabled(isRecordingFollowUp || executorBranchIsWorking)
+
+            Button(action: sendFollowUp) {
+                Image(systemName: "paperplane.fill")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(canSendFollowUp ? Color(red: 0.141, green: 0.078, blue: 0.031) : inkSubtle)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(canSendFollowUp ? amberTrace : Color.clear)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .strokeBorder(amberTrace.opacity(canSendFollowUp ? 0 : 0.55), lineWidth: 0.5)
+                    )
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSendFollowUp)
+            .help("Send follow-up")
+        }
+        .padding(.top, 2)
+    }
+
+    private var canSendFollowUp: Bool {
+        session.phase == .receiving
+            && !executorBranchIsWorking
+            && !followUpText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func sendFollowUp() {
+        let text = followUpText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        followUpText = ""
+        session.sendFollowUp(text)
     }
 
     /// Persistent toggle for auto-speaking the reply on arrival.
@@ -474,6 +629,13 @@ struct WalkieScopeView: View {
                 .multilineTextAlignment(.leading)
 
             HStack(spacing: 8) {
+                if session.offersWalkieRetry {
+                    actionChip(
+                        label: "TALK",
+                        systemImage: "mic.circle",
+                        action: { session.startWalkieRetryFromFallback() }
+                    )
+                }
                 actionChip(label: "DISMISS", systemImage: "xmark", action: onDismiss)
                 Spacer()
             }
@@ -510,22 +672,18 @@ struct WalkieScopeView: View {
 
     private var footer: some View {
         HStack {
-            HStack(spacing: 6) {
-                ForEach(["⇧", "⌃", "⌥", "⌘"], id: \.self) { keycap($0, accent: false) }
-                keycap("T", accent: true)
-                Text(footerHint)
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .tracking(2.0)
-                    .foregroundStyle(inkSubtle)
-                    .padding(.leading, 8)
-            }
+            footerKeyCluster
 
             Spacer()
 
-            Text("auto · ♪ verbal / ⟳ async")
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .tracking(1.8)
-                .foregroundStyle(inkSubtle)
+            if session.isLatchedTransmission && session.phase == .transmitting {
+                actionChip(label: "SEND", systemImage: "paperplane.fill", action: sendLatchedTransmission)
+            } else {
+                Text("auto · ♪ verbal / ⟳ async")
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .tracking(1.8)
+                    .foregroundStyle(inkSubtle)
+            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
@@ -541,6 +699,32 @@ struct WalkieScopeView: View {
                 endPoint: .bottom
             )
         )
+    }
+
+    private var footerKeyCluster: some View {
+        HStack(spacing: 6) {
+            if usesInlineFollowUpKey {
+                keycap("T", accent: true)
+            } else {
+                ForEach(["⇧", "⌃", "⌥", "⌘"], id: \.self) { keycap($0, accent: false) }
+                keycap("T", accent: true)
+            }
+            Text(footerHint)
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .tracking(2.0)
+                .foregroundStyle(inkSubtle)
+                .padding(.leading, 8)
+        }
+    }
+
+    private var usesInlineFollowUpKey: Bool {
+        session.phase == .receiving || session.phase == .followUpRecording
+    }
+
+    private func sendLatchedTransmission() {
+        Task { @MainActor in
+            await session.endTransmission()
+        }
     }
 
     private func keycap(_ label: String, accent: Bool) -> some View {
@@ -587,27 +771,50 @@ struct WalkieScopeView: View {
     private var phaseLabel: String {
         switch session.phase {
         case .ready: return "READY"
+        case .arming: return "ARMING MIC"
         case .transmitting: return "TRANSMITTING"
         case .over: return "OVER"
         case .thinking: return "PROCESSING"
         case .receiving:
+            switch session.executorBranchState {
+            case .working:
+                return "AGENT · WORKING"
+            case .done:
+                if session.routeMode == .async {
+                    return "AGENT · RETURNED"
+                }
+            case .failed:
+                return "AGENT · FAILED"
+            case .idle:
+                break
+            }
             if session.routeMode == .async {
-                return "ACK · ASYNC"
+                return session.continuationSessionId == nil ? "ACK · ASYNC" : "AGENT · READY"
             }
             if let model = session.topLevelModelId, !model.isEmpty {
                 return "OUT · \(shortModelLabel(model))"
             }
             return "OUT"
+        case .followUpRecording: return "FOLLOW-UP"
+        case .followUpOver: return "SENDING"
         case .error: return "ERROR"
         }
     }
 
     private var badgeIsHot: Bool {
-        session.phase == .transmitting || session.phase == .receiving || session.phase == .thinking
+        session.phase == .transmitting
+            || session.phase == .arming
+            || session.phase == .followUpRecording
+            || session.phase == .receiving
+            || session.phase == .thinking
     }
 
     private var liveDot: Bool {
-        session.phase == .transmitting || session.phase == .receiving || session.phase == .thinking
+        session.phase == .transmitting
+            || session.phase == .arming
+            || session.phase == .followUpRecording
+            || session.phase == .receiving
+            || session.phase == .thinking
     }
 
     private var channelDotColor: Color {
@@ -617,18 +824,36 @@ struct WalkieScopeView: View {
     private var timecode: String {
         switch session.phase {
         case .ready: return "0:00.0"
-        case .transmitting, .over, .thinking, .receiving, .error: return session.formattedElapsed
+        case .arming, .transmitting, .over, .thinking, .receiving, .followUpRecording, .followUpOver, .error:
+            return session.formattedElapsed
         }
     }
 
     private var footerHint: String {
         switch session.phase {
         case .ready: return "HOLD TO TRANSMIT"
-        case .transmitting: return "RELEASE TO SEND"
+        case .arming: return "KEEP HOLDING"
+        case .transmitting: return session.isLatchedTransmission ? "SPEAK THEN SEND" : "RELEASE TO SEND"
         case .over: return "PROCESSING…"
         case .thinking: return "ASKING THE NET…"
-        case .receiving: return "PLAY OR DONE"
-        case .error: return "DISMISS TO RESET"
+        case .receiving:
+            return executorBranchIsWorking ? "WAITING ON AGENT" : "FOLLOW UP OR DONE"
+        case .followUpRecording: return "STOP TO SEND"
+        case .followUpOver: return "PROCESSING…"
+        case .error: return session.offersWalkieRetry ? "TALK OR DISMISS" : "DISMISS TO RESET"
+        }
+    }
+
+    private var branchMetaLabel: String? {
+        switch session.executorBranchState {
+        case .idle:
+            return nil
+        case .working:
+            return "AGENT WORKING"
+        case .done:
+            return "AGENT RETURNED"
+        case .failed:
+            return "AGENT FAILED"
         }
     }
 

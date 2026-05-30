@@ -26,7 +26,12 @@ private let log = Log(.ui)
 private enum WalkiePanelGeometry {
     static let width: CGFloat = 640
     static let compactHeight: CGFloat = 290    // scope only
-    static let expandedHeight: CGFloat = 520   // scope + response
+    static let expandedHeight: CGFloat = 590   // scope + response + follow-up controls
+}
+
+private final class WalkiePanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
 }
 
 @MainActor
@@ -55,19 +60,25 @@ final class WalkieController {
 
     /// Hyper+T pressed.
     func press() {
-        session.beginTransmission()
         let panel = ensurePanel()
+        session.prepareTransmission()
         // Reset to compact size each press; the phase sink will
         // expand it later if the pipeline produces a response.
         applyPanelSize(expanded: false, animated: false)
         centerPanel(panel, on: screenUnderCursor())
         panel.alphaValue = 0
         panel.orderFrontRegardless()
+        hostingView?.layoutSubtreeIfNeeded()
+        panel.displayIfNeeded()
         NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.12
+            ctx.duration = 0.08
             panel.animator().alphaValue = 1
         }
-        log.info("Walkie panel up", detail: "phase=transmitting")
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(20))
+            self?.session.beginTransmission()
+        }
+        log.info("Walkie panel up", detail: "phase=arming")
     }
 
     /// Hyper+T released. Session drives the rest of the lifecycle —
@@ -87,14 +98,17 @@ final class WalkieController {
         case .ready:
             stopDismissMonitors()
             fadeOut()
-        case .transmitting, .over:
+        case .arming, .transmitting, .over:
             // Hotkey is held / just released — no dismiss yet.
             stopDismissMonitors()
             applyPanelSize(expanded: false, animated: true)
-        case .thinking, .receiving, .error:
+        case .thinking, .receiving, .followUpRecording, .followUpOver, .error:
             // Reply (or error) phase — Escape / click-outside dismiss
             // become active.
             applyPanelSize(expanded: true, animated: true)
+            if phase == .receiving || phase == .followUpRecording {
+                panel?.makeKey()
+            }
             startDismissMonitors()
         }
     }
@@ -106,15 +120,23 @@ final class WalkieController {
             // Local monitor catches Escape when our app is active;
             // global monitor catches it when another app has focus.
             let handler: (NSEvent) -> Void = { [weak self] event in
-                guard event.keyCode == 53 else { return }  // 53 = Escape
+                guard event.keyCode == 53 else { return } // 53 = Escape
                 Task { @MainActor in
                     self?.session.dismiss()
                 }
             }
             escapeMonitor = [
-                NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                    handler(event)
-                    return event.keyCode == 53 ? nil : event  // swallow Escape locally
+                NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                    guard let self else { return event }
+                    if event.keyCode == 53 {
+                        handler(event)
+                        return nil
+                    }
+                    if self.shouldHandlePlainT(event) {
+                        self.session.toggleVoiceFollowUp()
+                        return nil
+                    }
+                    return event
                 },
                 NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: handler),
             ]
@@ -133,6 +155,18 @@ final class WalkieController {
                 }
             }
         }
+    }
+
+    private func shouldHandlePlainT(_ event: NSEvent) -> Bool {
+        guard event.keyCode == 17 else { return false } // 17 = T
+        let blockedModifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        guard blockedModifiers.isEmpty else { return false }
+        guard session.phase == .receiving || session.phase == .followUpRecording else { return false }
+        return !isEditingText(panel?.firstResponder)
+    }
+
+    private func isEditingText(_ responder: NSResponder?) -> Bool {
+        responder is NSTextView || responder is NSTextField
     }
 
     private func stopDismissMonitors() {
@@ -191,7 +225,7 @@ final class WalkieController {
             height: WalkiePanelGeometry.compactHeight
         )
 
-        let p = NSPanel(
+        let p = WalkiePanel(
             contentRect: hosting.frame,
             styleMask: [.nonactivatingPanel, .fullSizeContentView, .borderless],
             backing: .buffered,
@@ -206,6 +240,7 @@ final class WalkieController {
         p.isMovableByWindowBackground = false
         p.ignoresMouseEvents = false
         p.hidesOnDeactivate = false
+        p.becomesKeyOnlyIfNeeded = true
 
         panel = p
         hostingView = hosting

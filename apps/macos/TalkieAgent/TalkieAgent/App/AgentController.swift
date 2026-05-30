@@ -622,8 +622,9 @@ final class AgentController: ObservableObject {
 
         // "Recording too short" or "setup incomplete" are not errors - just nothing to transcribe
         // Handle gracefully without alarming the user
-        let isShortRecording = errorMsg.contains("too short")
-        let isCancelledSetup = errorMsg.contains("setup incomplete")
+        let isShortRecording = errorMsg.localizedCaseInsensitiveContains("too short")
+        let isCancelledSetup = errorMsg.localizedCaseInsensitiveContains("setup incomplete")
+        let isNoAudioCaptured = errorMsg.localizedCaseInsensitiveContains("no audio captured")
 
         // Check if "setup incomplete" was likely a HAL failure (user waited >1s but no audio)
         // If user cancelled within 1s, it's probably intentional. After 1s, audio should have started.
@@ -636,14 +637,22 @@ final class AgentController: ObservableObject {
         }
 
         let isLikelyHALFailure = isCancelledSetup && waitedForAudio
-        let isGracefulCancel = (isShortRecording || isCancelledSetup) && !isLikelyHALFailure
+        let isRecoverableNoAudio = isShortRecording || isCancelledSetup || isNoAudioCaptured
+        let isGracefulCancel = isRecoverableNoAudio && !isLikelyHALFailure
+        let shouldOfferRetry = isGracefulCancel && !isCancelled
 
         if isLikelyHALFailure {
             log.warning("⚠️ Audio setup failed after waiting - likely HAL corruption")
             AppLogger.shared.log(.audio, "Audio setup failed", detail: "HAL likely corrupted")
             FloatingPillController.shared.showError("Mic unavailable — another app may be using it")
         } else if isGracefulCancel {
-            let reason = isShortRecording ? "Too short to transcribe" : "Stopped before audio started"
+            let reason = if isShortRecording {
+                "Too short to transcribe"
+            } else if isNoAudioCaptured {
+                "No audio captured"
+            } else {
+                "Stopped before audio started"
+            }
             log.info("Recording discarded: \(reason)")
             AppLogger.shared.log(.audio, "Recording discarded", detail: reason)
             // Subtle feedback (dev builds only, configurable)
@@ -700,6 +709,29 @@ final class AgentController: ObservableObject {
                 }
             }
         }
+
+        if shouldOfferRetry {
+            showNoSpeechRetryPrompt()
+        }
+    }
+
+    private func showNoSpeechRetryPrompt() {
+        ToastOverlayController.shared.show(
+            ToastMessage(
+                icon: "waveform.slash",
+                text: "Didn't catch that",
+                detail: "Want to start a normal recording?",
+                actionLabel: "Record",
+                action: { [weak self] in
+                    ToastOverlayController.shared.dismiss()
+                    Task { @MainActor [weak self] in
+                        guard let self, self.state == .idle else { return }
+                        await self.start(hotkeyTimestamp: nil)
+                    }
+                }
+            ),
+            duration: 8.0
+        )
     }
 
     /// Translate raw audio error strings into concise, user-facing messages
@@ -883,6 +915,14 @@ final class AgentController: ObservableObject {
         }
         log.info("PTT recording stopped (key up)")
         stop()
+    }
+
+    func stopListening(interstitial: Bool = false) {
+        guard state == .listening else {
+            log.info("stopListening() ignored - not in listening state (current: \(self.state.rawValue))")
+            return
+        }
+        stop(interstitial: interstitial)
     }
 
     /// Cancel without processing (user pressed X)
@@ -1875,10 +1915,11 @@ final class AgentController: ObservableObject {
                 log.info("Transcription returned silence - nothing to paste")
                 AppLogger.shared.log(.transcription, "Silence detected", detail: "No text to paste\(traceSuffix)")
 
-                // Reset state and complete - no error, no retry
+                // Reset state and complete - no error; offer a user-confirmed retry.
                 await discardLiveSidecarSession(captureSessionId: captureSessionId)
                 clearRecordingState()
                 stateMachine.transition(.complete)
+                showNoSpeechRetryPrompt()
                 return
             }
 

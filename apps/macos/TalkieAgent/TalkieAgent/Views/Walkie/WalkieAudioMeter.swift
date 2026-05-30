@@ -25,6 +25,8 @@ final class WalkieAudioMeter {
     private var audioFile: AVAudioFile?
     private var fileURL: URL?
     private var isRunning = false
+    private var capturedFrameCount: AVAudioFramePosition = 0
+    private let minimumCapturedFileSize = 1000
 
     /// Set after `stop()`. Caller owns cleanup once consumed.
     private(set) var recordedFileURL: URL?
@@ -50,13 +52,17 @@ final class WalkieAudioMeter {
         fileURL = url
         audioFile = nil
         recordedFileURL = nil
+        capturedFrameCount = 0
 
         input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
             guard let self else { return }
+            let frameLength = Int(buffer.frameLength)
+            if frameLength > 0 {
+                self.capturedFrameCount += AVAudioFramePosition(frameLength)
+            }
 
             // Level (RMS) — drives the scope trace.
             if let channelData = buffer.floatChannelData?[0] {
-                let frameLength = Int(buffer.frameLength)
                 if frameLength > 0 {
                     var sumSquares: Float = 0
                     for i in 0..<frameLength {
@@ -119,9 +125,24 @@ final class WalkieAudioMeter {
         // Flush by dropping the AVAudioFile reference — its deinit
         // closes the file. Promote the captured URL so the caller
         // can transcribe.
+        let capturedURL = fileURL
+        let capturedFrames = capturedFrameCount
         audioFile = nil
-        recordedFileURL = fileURL
         fileURL = nil
+        capturedFrameCount = 0
+
+        if let capturedURL {
+            let fileSize = ((try? FileManager.default.attributesOfItem(atPath: capturedURL.path))?[.size] as? NSNumber)?.intValue ?? 0
+            if capturedFrames > 0 && fileSize > minimumCapturedFileSize {
+                recordedFileURL = capturedURL
+            } else {
+                try? FileManager.default.removeItem(at: capturedURL)
+                recordedFileURL = nil
+                log.info("Walkie meter stopped without usable audio", detail: "frames=\(capturedFrames) bytes=\(fileSize)")
+            }
+        } else {
+            recordedFileURL = nil
+        }
 
         Task { @MainActor in
             self.onLevel(0)

@@ -100,6 +100,28 @@ final class TalkieNotifier {
         sendSilent("queue.updated", userInfo: ["count": String(count)])
     }
 
+    /// Notify Talkie that a background Walkie executor finished and has a user-facing report.
+    func walkieReport(
+        sessionId: String,
+        title: String,
+        body: String,
+        spokenSummary: String?,
+        source: String?
+    ) {
+        var info: [String: String] = [
+            "sessionId": sessionId,
+            "title": Self.truncateForNotificationField(title, maxLength: 120),
+            "body": Self.truncateForNotificationField(body, maxLength: 1_200),
+        ]
+        if let spokenSummary, !spokenSummary.isEmpty {
+            info["spokenSummary"] = Self.truncateForNotificationField(spokenSummary, maxLength: 600)
+        }
+        if let source, !source.isEmpty {
+            info["source"] = Self.truncateForNotificationField(source, maxLength: 80)
+        }
+        sendSilent("walkie.report", userInfo: info)
+    }
+
     // MARK: - Lifecycle
 
     /// Notify Talkie that Live is ready
@@ -206,5 +228,18 @@ final class TalkieNotifier {
         notificationCounts = [:]
         failureCount = 0
         skippedCount = 0
+    }
+
+    private static func truncateForNotificationField(_ text: String, maxLength: Int) -> String {
+        let clean = text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard clean.count > maxLength else { return clean }
+        return String(clean.prefix(maxLength)).trimmingCharacters(in: .whitespacesAndNewlines) + "..."
     }
 }
