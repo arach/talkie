@@ -97,6 +97,7 @@ struct AboutSettingsView: View {
         }
         .onAppear {
             log.debug("AboutSettingsView appeared")
+            permissionsManager.refreshAllPermissions()
         }
     }
 
@@ -273,10 +274,11 @@ struct AboutSettingsView: View {
                     Circle()
                         .fill(grantedPermissionsCount == totalPermissionsCount ? Color.green : Color.orange)
                         .frame(width: 6, height: 6)
-                    Text("\(grantedPermissionsCount)/\(totalPermissionsCount) GRANTED")
+                    Text("\(grantedPermissionsCount)/\(totalPermissionsCount) REQUIRED")
                         .font(.techLabelSmall)
                         .foregroundColor(grantedPermissionsCount == totalPermissionsCount ? .green : .orange)
                 }
+                .help("Required permissions granted. Screen Recording is optional.")
             }
 
             VStack(spacing: Spacing.sm) {
@@ -304,6 +306,19 @@ struct AboutSettingsView: View {
                     }
                 )
 
+                SettingsPermissionRow(
+                    icon: "rectangle.dashed.badge.record",
+                    name: "Screen Recording",
+                    description: "Optional — enables screen context capture",
+                    status: permissionsManager.screenRecordingStatus,
+                    onRequest: {
+                        if permissionsManager.screenRecordingStatus == .granted {
+                            permissionsManager.openScreenRecordingSettings()
+                        } else {
+                            permissionsManager.requestScreenRecordingPermission()
+                        }
+                    }
+                )
             }
         }
         .settingsSectionCard(padding: Spacing.md)

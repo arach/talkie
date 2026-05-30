@@ -106,6 +106,10 @@ final class ScreenshotCaptureService {
         CapturePerformanceMonitor.shared.mark("permission.check.begin")
         guard await hasScreenRecordingPermission() else {
             CapturePerformanceMonitor.shared.mark("permission.check.denied")
+            log.warning(
+                "Screenshot capture blocked: Screen Recording permission missing",
+                detail: "mode=\(mode.rawValue), recordingId=\(recordingId.uuidString)"
+            )
             showPermissionAlert()
             return nil
         }
@@ -217,6 +221,10 @@ final class ScreenshotCaptureService {
         CapturePerformanceMonitor.shared.mark("permission.check.begin")
         guard await hasScreenRecordingPermission() else {
             CapturePerformanceMonitor.shared.mark("permission.check.denied")
+            log.warning(
+                "Standalone screenshot blocked: Screen Recording permission missing",
+                detail: "mode=\(mode.rawValue)"
+            )
             showPermissionAlert()
             return nil
         }

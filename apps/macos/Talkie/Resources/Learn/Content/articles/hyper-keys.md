@@ -44,9 +44,8 @@ a safe namespace for Talkie's chords.
 ## Rebinding
 
 Every chord above is owned by `HotkeyRegistry` and is rebindable in
-**Surface settings**. The macOS-native `⌘⇧3` / `⌘⇧4` / `⌘⇧5` / `⌘⇧6`
-captures are not rebindable — they're system bindings Talkie observes
-rather than registers.
+**Surface settings**. Direct capture defaults use Hyper+3 / Hyper+4 /
+Hyper+5 / Hyper+6 so Talkie does not claim macOS screenshot shortcuts.
 
 ## When a chord doesn't fire
 

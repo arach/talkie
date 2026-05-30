@@ -274,6 +274,32 @@ struct HotkeyConfig: Codable, Equatable {
         modifiers: UInt32(cmdKey | optionKey | controlKey | shiftKey)  // Hyper
     )
 
+    /// Direct capture defaults intentionally avoid macOS screenshot shortcuts.
+    static let defaultCaptureFullscreen = HotkeyConfig(
+        keyCode: 20,  // 3
+        modifiers: UInt32(cmdKey | optionKey | controlKey | shiftKey)  // Hyper
+    )
+
+    static let defaultCaptureRegion = HotkeyConfig(
+        keyCode: 21,  // 4
+        modifiers: UInt32(cmdKey | optionKey | controlKey | shiftKey)  // Hyper
+    )
+
+    static let defaultOpenTrayViewer = HotkeyConfig(
+        keyCode: 23,  // 5
+        modifiers: UInt32(cmdKey | optionKey | controlKey | shiftKey)  // Hyper
+    )
+
+    static let defaultCaptureWindow = HotkeyConfig(
+        keyCode: 22,  // 6
+        modifiers: UInt32(cmdKey | optionKey | controlKey | shiftKey)  // Hyper
+    )
+
+    static let defaultPasteLastScreenshot = HotkeyConfig(
+        keyCode: 35,  // P
+        modifiers: UInt32(cmdKey | optionKey | controlKey | shiftKey)  // Hyper
+    )
+
     /// Load a hotkey config directly from TalkieSharedSettings (no actor isolation needed)
     static func fromSharedSettings(key: String, `default` fallback: HotkeyConfig) -> HotkeyConfig {
         guard let data = TalkieSharedSettings.data(forKey: key),

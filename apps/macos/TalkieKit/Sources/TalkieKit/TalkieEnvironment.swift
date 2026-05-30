@@ -232,9 +232,19 @@ public enum TalkieEnvironment: String, CaseIterable, Sendable {
     /// and runtime manifests all point at one path instead of whichever DerivedData
     /// build happened to be newest.
     public var userInstalledApplicationsDirectory: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Applications", isDirectory: true)
-            .appendingPathComponent(appSupportDirectoryName, isDirectory: true)
+        let home = FileManager.default.homeDirectoryForCurrentUser
+
+        switch self {
+        case .production:
+            return home
+                .appendingPathComponent("Applications", isDirectory: true)
+                .appendingPathComponent(appSupportDirectoryName, isDirectory: true)
+        case .dev:
+            return home
+                .appendingPathComponent("Applications", isDirectory: true)
+                .appendingPathComponent("dev", isDirectory: true)
+                .appendingPathComponent("Talkie", isDirectory: true)
+        }
     }
 
     public func userInstalledAppURL(named appName: String) -> URL {

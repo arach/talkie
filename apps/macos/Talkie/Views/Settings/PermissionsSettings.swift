@@ -124,6 +124,8 @@ class PermissionsManager {
     private var accessibilityPollingDeadline: Date?
     private var agentAccessibilityCheckTimer: Timer?
     private var agentAccessibilityPollingDeadline: Date?
+    private var screenRecordingCheckTimer: Timer?
+    private var screenRecordingPollingDeadline: Date?
     private var automationTargetStatuses: [AutomationTarget: PermissionStatus] =
         Dictionary(uniqueKeysWithValues: AutomationTarget.allCases.map { ($0, .unknown) })
 
@@ -329,6 +331,16 @@ class PermissionsManager {
                 screenRecordingStatus = .denied
             }
         }
+    }
+
+    func requestScreenRecordingPermission() {
+        logger.info(
+            "Requesting Screen Recording permission",
+            detail: "bundle=\(TalkieEnvironment.current.talkieBundleId)"
+        )
+
+        AccessibilityInstallAssistant.shared.present(target: .talkie, permission: .screenRecording)
+        startScreenRecordingPermissionPolling()
     }
 
     // MARK: - Open System Settings
@@ -557,6 +569,34 @@ class PermissionsManager {
         agentAccessibilityCheckTimer = nil
         agentAccessibilityPollingDeadline = nil
     }
+
+    private func startScreenRecordingPermissionPolling() {
+        screenRecordingCheckTimer?.invalidate()
+        screenRecordingPollingDeadline = Date().addingTimeInterval(90)
+        screenRecordingCheckTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.pollScreenRecordingPermission()
+            }
+        }
+
+        if let screenRecordingCheckTimer {
+            RunLoop.main.add(screenRecordingCheckTimer, forMode: .common)
+        }
+    }
+
+    private func pollScreenRecordingPermission() {
+        checkScreenRecordingPermission()
+
+        if screenRecordingStatus == .granted || Date() >= (screenRecordingPollingDeadline ?? .distantPast) {
+            stopScreenRecordingPermissionPolling()
+        }
+    }
+
+    private func stopScreenRecordingPermissionPolling() {
+        screenRecordingCheckTimer?.invalidate()
+        screenRecordingCheckTimer = nil
+        screenRecordingPollingDeadline = nil
+    }
 }
 
 // MARK: - Permissions Settings View
@@ -590,7 +630,7 @@ struct PermissionsSettingsView: View {
                         .fill(grantedCount == totalPermissionCount ? SemanticColor.success : SemanticColor.warning)
                         .frame(width: 3, height: 14)
 
-                    Text("REQUIRED PERMISSIONS")
+                    Text("APP PERMISSIONS")
                         .font(Theme.current.fontXSBold)
                         .foregroundColor(Theme.current.foregroundSecondary)
 
@@ -600,10 +640,11 @@ struct PermissionsSettingsView: View {
                         Circle()
                             .fill(grantedCount == totalPermissionCount ? SemanticColor.success : SemanticColor.warning)
                             .frame(width: 6, height: 6)
-                        Text("\(grantedCount)/\(totalPermissionCount) GRANTED")
+                        Text("\(grantedCount)/\(totalPermissionCount) REQUIRED")
                             .font(.techLabelSmall)
                             .foregroundColor(grantedCount == totalPermissionCount ? SemanticColor.success : SemanticColor.warning)
                     }
+                    .help("Required permissions granted. Screen Recording is optional.")
                 }
 
                 VStack(spacing: Spacing.sm) {
@@ -640,7 +681,11 @@ struct PermissionsSettingsView: View {
                         description: "Optional — enables screen context capture",
                         status: permissionsManager.screenRecordingStatus,
                         onRequest: {
-                            permissionsManager.openScreenRecordingSettings()
+                            if permissionsManager.screenRecordingStatus == .granted {
+                                permissionsManager.openScreenRecordingSettings()
+                            } else {
+                                permissionsManager.requestScreenRecordingPermission()
+                            }
                         }
                     )
 

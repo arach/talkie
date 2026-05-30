@@ -52,7 +52,7 @@ Optional, but recommended:
   URLs** below.
 - `shortcuts[]` — list of `{ chord, action }` pairs. The KB renders these
   as kbd badges in a side rail. `chord` follows the format the
-  `HotkeyConfig.displayString` produces (`⌃⌥⇧⌘S`, `⌘⇧4`, etc).
+  `HotkeyConfig.displayString` produces (`⌃⌥⇧⌘S`, `⌃⌥⇧⌘4`, etc).
 - `related[]` — list of article ids. The KB renders these as "Related"
   cards at the bottom of the article.
 - `agent_facts[]` — short, high-signal sentences the Ask Talkie box can
@@ -85,7 +85,7 @@ for both content authors and the bridge implementation:
 | `talkie://settings/helpers`     | `SettingsSection.helpers`                           | proposed |
 | `talkie://settings/context`     | `SettingsSection.context`                           | proposed |
 | `talkie://tray`                 | open Tray Shelf (`Hyper+T` equivalent)              | proposed |
-| `talkie://tray/viewer`          | open Tray Viewer (`⌘⇧5` equivalent)                 | proposed |
+| `talkie://tray/viewer`          | open Tray Viewer (`Hyper+5` equivalent)             | proposed |
 | `talkie://workflows/run?id=…`   | trigger a workflow by id                            | proposed |
 
 "Proposed" URLs are written into article front matter today. The native

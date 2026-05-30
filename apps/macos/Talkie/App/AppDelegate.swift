@@ -2372,7 +2372,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
     // MARK: - Direct Screenshot Shortcuts
 
-    /// Listen for Cmd+Shift+3/4/5/6 forwarded from TalkieAgent.
+    /// Listen for direct capture shortcuts forwarded from TalkieAgent.
     /// These bypass the chord HUD and execute the capture mode directly.
     private var isDirectScreenshotCaptureActive = false
     private var lastDirectScreenshotMode: String?
