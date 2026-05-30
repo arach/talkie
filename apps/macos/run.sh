@@ -19,7 +19,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 WORKSPACE="$ROOT_DIR/TalkieSuite.xcworkspace"
 BUILD_BASE="$ROOT_DIR/build/macos"
-DEV_APPS_DIR="${TALKIE_DEV_APPS_DIR:-$HOME/Applications/dev}"
+DEV_APPS_DIR="${TALKIE_DEV_APPS_DIR:-$HOME/Applications/dev/Talkie}"
+LEGACY_DEV_APPS_DIR="$HOME/Applications/Talkie.dev"
 ALLOW_DERIVEDDATA_FALLBACK="${TALKIE_ALLOW_DERIVEDDATA_FALLBACK:-0}"
 RUN_ENV="${TALKIE_RUN_ENV:-dev}"
 SIGNING_ENV_FILE="${TALKIE_SIGNING_ENV_FILE:-$ROOT_DIR/Config/signing.env}"
@@ -200,6 +201,16 @@ stable_dev_app() {
     echo "$DEV_APPS_DIR/$product.app"
 }
 
+cleanup_legacy_dev_app() {
+    local product=$1
+
+    [ "$DEV_APPS_DIR" != "$LEGACY_DEV_APPS_DIR" ] || return 0
+
+    rm -rf "$LEGACY_DEV_APPS_DIR/$product.app"
+    rm -f "$LEGACY_DEV_APPS_DIR/.DS_Store"
+    rmdir "$LEGACY_DEV_APPS_DIR" 2>/dev/null || true
+}
+
 is_nonprod_bundle_id() {
     local bundle_id=$1
     [[ "$bundle_id" == *.dev || "$bundle_id" == *.staging ]]
@@ -235,6 +246,8 @@ install_dev_app_if_needed() {
     is_nonprod_bundle_id "$bundle_id" || return 0
 
     dest=$(stable_dev_app "$product")
+    cleanup_legacy_dev_app "$product"
+
     if [ "$app_path" = "$dest" ]; then
         RUNNABLE_APP_PATH="$dest"
         return 0
@@ -289,20 +302,26 @@ stop_talkie_app_family() {
     local product=$1
     local app_id=$2
     local bundle_id
-    local xpc_service
+    local xpc_label
     local dev_executable
+    local legacy_dev_executable
     local build_executable
     local derived_executable_pattern
     bundle_id=$(talkie_bundle_id "$app_id" "$RUN_ENV")
-    xpc_service=$(get_xpc_service_name "$bundle_id")
+    xpc_label=$(get_xpc_service_name "$bundle_id")
     dev_executable="$DEV_APPS_DIR/$product.app/Contents/MacOS/$product"
+    legacy_dev_executable="$LEGACY_DEV_APPS_DIR/$product.app/Contents/MacOS/$product"
     build_executable="$BUILD_BASE/$product/Build/Products/Debug/$product.app/Contents/MacOS/$product"
     derived_executable_pattern="$HOME/Library/Developer/Xcode/DerivedData/.*/Build/Products/Debug/$product.app/Contents/MacOS/$product"
 
     echo -n "  Stopping $product ($RUN_ENV)... "
-    stop_bundle_ids "$bundle_id"
-    bootout_label "$xpc_service"
+    stop_bundle_ids "$bundle_id" "$xpc_label"
+    rm -f "$HOME/Library/LaunchAgents/$bundle_id.plist" \
+        "$HOME/Library/LaunchAgents/$xpc_label.plist" \
+        "/private/tmp/$xpc_label.plist" \
+        "/tmp/$xpc_label.plist"
     pkill -f "$dev_executable" 2>/dev/null || true
+    pkill -f "$legacy_dev_executable" 2>/dev/null || true
     pkill -f "$build_executable" 2>/dev/null || true
     pkill -f "$derived_executable_pattern" 2>/dev/null || true
     echo -e "${GREEN}done${NC}"

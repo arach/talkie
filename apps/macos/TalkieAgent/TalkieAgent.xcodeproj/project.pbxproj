@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		53GRDB0012EE70000004EEAF4 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 53GRDB0022EE70000004EEAF4 /* GRDB */; };
+		B4C2F59B3E6D4A1190C7E202 /* TalkieAgent/Runtime in Resources */ = {isa = PBXBuildFile; fileRef = B4C2F59A3E6D4A1190C7E201 /* TalkieAgent/Runtime */; };
 		E3D8B2A1F7C5409B6A1E8D23 /* DebugKit in Frameworks */ = {isa = PBXBuildFile; productRef = A1F7C5E3D8B2409B6A1E8D24 /* DebugKit */; };
 		E4A9C672D1B24D7AA9F25C11 /* TalkieEngineCore in Frameworks */ = {isa = PBXBuildFile; productRef = E4A9C672D1B24D7AA9F25C12 /* TalkieEngineCore */; };
 		F8D3B2A1E7C5409B6A2E9D31 /* TalkieKit in Frameworks */ = {isa = PBXBuildFile; productRef = D9F3A5E1C8B74026A2D8E9F2 /* TalkieKit */; };
@@ -35,6 +36,7 @@
 		539FB5B92EE6785C004EEAF4 /* TalkieAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TalkieAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		539FB5CC2EE6785D004EEAF4 /* TalkieAgentTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TalkieAgentTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		539FB5D62EE6785D004EEAF4 /* TalkieAgentUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TalkieAgentUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B4C2F59A3E6D4A1190C7E201 /* TalkieAgent/Runtime */ = {isa = PBXFileReference; lastKnownFileType = folder; path = TalkieAgent/Runtime; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -83,12 +85,21 @@
 			path = ../../../Config;
 			sourceTree = "<group>";
 		};
+		530D797A2FC5173200A3F3FC /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				B4C2F59A3E6D4A1190C7E201 /* TalkieAgent/Runtime */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
 		539FB5B02EE6785C004EEAF4 = {
 			isa = PBXGroup;
 			children = (
 				539FB5BB2EE6785C004EEAF4 /* TalkieAgent */,
 				539FB5BA2EE6785C004EEAF4 /* Products */,
 				36203AE2C9E864F13282C30F /* Config */,
+				530D797A2FC5173200A3F3FC /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -112,6 +123,7 @@
 				539FB5B52EE6785C004EEAF4 /* Sources */,
 				539FB5B62EE6785C004EEAF4 /* Frameworks */,
 				539FB5B72EE6785C004EEAF4 /* Resources */,
+				B4C2F59C3E6D4A1190C7E203 /* Install Runtime Node Dependencies */,
 				53LSREG0012EE80000004EEAF4 /* Register URL Scheme */,
 			);
 			buildRules = (
@@ -222,6 +234,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B4C2F59B3E6D4A1190C7E202 /* TalkieAgent/Runtime in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -242,6 +255,31 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		B4C2F59C3E6D4A1190C7E203 /* Install Runtime Node Dependencies */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Runtime/node/package.json",
+				"$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Runtime/node/package-lock.json",
+			);
+			name = "Install Runtime Node Dependencies";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Runtime/node/node_modules",
+				"$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Runtime/node/node_modules/.package-lock.json",
+				"$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Runtime/node/node_modules/@openscout",
+				"$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Runtime/node/node_modules/@openscout/agent-sessions",
+				"$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Runtime/node/node_modules/@openscout/agent-sessions/package.json",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "# Install production dependencies into the copied app resource runtime.\n# The source tree keeps node_modules ignored; the app bundle becomes self-contained.\nset -euo pipefail\n\nRUNTIME_DIR=\"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Runtime/node\"\n\nif [ ! -f \"${RUNTIME_DIR}/package.json\" ]; then\n    echo \"TalkieAgent runtime package.json not found at ${RUNTIME_DIR}/package.json\"\n    exit 1\nfi\n\nif [ ! -f \"${RUNTIME_DIR}/package-lock.json\" ]; then\n    echo \"TalkieAgent runtime package-lock.json not found at ${RUNTIME_DIR}/package-lock.json\"\n    exit 1\nfi\n\nif command -v npm >/dev/null 2>&1; then\n    NPM_BIN=\"$(command -v npm)\"\nelif [ -x \"/opt/homebrew/bin/npm\" ]; then\n    NPM_BIN=\"/opt/homebrew/bin/npm\"\nelif [ -x \"/usr/local/bin/npm\" ]; then\n    NPM_BIN=\"/usr/local/bin/npm\"\nelse\n    echo \"npm is required to install TalkieAgent runtime dependencies.\"\n    exit 1\nfi\n\n\"${NPM_BIN}\" ci --omit=dev --no-audit --no-fund --prefix \"${RUNTIME_DIR}\"\n";
+		};
 		53LSREG0012EE80000004EEAF4 /* Register URL Scheme */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -429,15 +467,18 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGNING_ALLOWED = "$(TALKIE_AGENT_CODE_SIGNING_ALLOWED)";
+				CODE_SIGNING_REQUIRED = "$(TALKIE_AGENT_CODE_SIGNING_REQUIRED)";
 				CODE_SIGN_ENTITLEMENTS = TalkieAgent/TalkieAgent.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "$(TALKIE_CODE_SIGN_IDENTITY)";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "$(TALKIE_CODE_SIGN_IDENTITY)";
+				CODE_SIGN_STYLE = "$(TALKIE_CODE_SIGN_STYLE)";
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TalkieAgent/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Talkie Agent Dev";
@@ -449,7 +490,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2.5.22;
+				MARKETING_VERSION = 2.5.23;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_BUNDLE_ID_DEBUG)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -472,10 +513,11 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TalkieAgent/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Talkie Agent";
@@ -487,7 +529,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2.5.22;
+				MARKETING_VERSION = 2.5.23;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -504,11 +546,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 2.5.22;
+				MARKETING_VERSION = 2.5.23;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_TESTS_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -523,11 +565,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 2.5.22;
+				MARKETING_VERSION = 2.5.23;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_TESTS_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -541,10 +583,10 @@
 			baseConfigurationReference = 084FDC674076926357ED425D /* Signing.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 2.5.22;
+				MARKETING_VERSION = 2.5.23;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_UITESTS_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -558,10 +600,10 @@
 			baseConfigurationReference = 084FDC674076926357ED425D /* Signing.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 2.5.22;
+				MARKETING_VERSION = 2.5.23;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_UITESTS_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;

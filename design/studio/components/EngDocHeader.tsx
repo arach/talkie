@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { EngMarkdown } from "@/components/EngMarkdown";
 import { statusPalette, type EngDoc } from "@/lib/eng-docs";
 
@@ -5,13 +7,15 @@ import { statusPalette, type EngDoc } from "@/lib/eng-docs";
  * Unified data-sheet header for an engineering doc.
  *
  * One bordered container. Every line — identifier, target system,
- * status, owner, title, subtitle, summary, goal, decision — is a row
+ * status, owner, Studio route, visual surface, review, title, subtitle,
+ * summary, goal, decision — is a row
  * in the same two-column grid. The label column has a fixed width so
  * the eye runs straight down it; the value column types each kind of
  * data as appropriate (identifier mono, title display, summary prose).
  *
- * Rows that depend on optional fields (owner, subtitle, goal,
- * decision) render only when the underlying value is present.
+ * Rows that depend on optional fields (owner, Studio route, visual surface,
+ * review, subtitle, goal, decision) render only when the underlying value is
+ * present.
  */
 export function EngDocHeader({ doc }: { doc: EngDoc }) {
   const tone = statusPalette(doc.status);
@@ -45,6 +49,21 @@ export function EngDocHeader({ doc }: { doc: EngDoc }) {
             </span>
           </DataRow>
         ) : null}
+        {doc.studioHref ? (
+          <DataRow label="Studio">
+            <StudioRouteLink href={doc.studioHref} />
+          </DataRow>
+        ) : null}
+        {doc.surfaceHref ? (
+          <DataRow label="Surface">
+            <StudioRouteLink href={doc.surfaceHref} />
+          </DataRow>
+        ) : null}
+        {doc.review ? (
+          <DataRow label="Review">
+            <EngMarkdown body={doc.review} fromSlug={doc.slug} compact />
+          </DataRow>
+        ) : null}
         <DataRow label="Title">
           <h1 className="m-0 font-display text-[22px] font-medium leading-tight tracking-tight text-studio-ink">
             {doc.title}
@@ -64,6 +83,25 @@ export function EngDocHeader({ doc }: { doc: EngDoc }) {
         ))}
       </div>
     </div>
+  );
+}
+
+function StudioRouteLink({ href }: { href: string }) {
+  const className =
+    "font-mono text-[12.5px] text-studio-ink underline decoration-studio-edge underline-offset-2 hover:decoration-studio-ink";
+
+  if (/^https?:\/\//i.test(href)) {
+    return (
+      <a href={href} className={className}>
+        {href}
+      </a>
+    );
+  }
+
+  return (
+    <Link href={href} className={className}>
+      {href}
+    </Link>
   );
 }
 

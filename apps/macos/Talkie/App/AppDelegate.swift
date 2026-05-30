@@ -38,6 +38,13 @@ private func captureSettingsScreenshots(to directory: URL) async -> Int {
     }
 }
 
+private extension String {
+    var trimmedNonEmpty: String? {
+        let value = trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
+    }
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUserNotificationCenterDelegate {
 
@@ -211,6 +218,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         // Set notification delegate to show notifications while app is in foreground
         signposter.emitEvent("Notification Delegate")
         UNUserNotificationCenter.current().delegate = self
+        setupWalkieReportNotifications()
 
         // Phase 3: Deferred - CloudKit, remote notifications (after UI visible)
         // These run with 300ms delay to let UI settle first
@@ -1478,6 +1486,89 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         }
     }
 
+    private func setupWalkieReportNotifications() {
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(walkieReportReceived(_:)),
+            name: NSNotification.Name("to.talkie.app.agent.walkie.report"),
+            object: nil
+        )
+    }
+
+    @objc private func walkieReportReceived(_ notification: Notification) {
+        guard let userInfo = notification.userInfo else { return }
+        let title = (userInfo["title"] as? String)?.trimmedNonEmpty ?? "Talkie report back"
+        let body = (userInfo["body"] as? String)?.trimmedNonEmpty
+            ?? (userInfo["spokenSummary"] as? String)?.trimmedNonEmpty
+            ?? "The background task is ready."
+        let sessionId = (userInfo["sessionId"] as? String)?.trimmedNonEmpty ?? UUID().uuidString
+        let source = (userInfo["source"] as? String)?.trimmedNonEmpty
+
+        let content = UNMutableNotificationContent()
+        content.title = Self.notificationText(title, maxLength: 90)
+        content.body = Self.notificationText(body, maxLength: 360)
+        content.sound = .default
+        content.threadIdentifier = "talkie-walkie-\(sessionId)"
+        content.categoryIdentifier = "talkie-walkie-report"
+        content.userInfo = [
+            "sessionId": sessionId,
+            "source": source ?? "",
+            "body": body,
+        ]
+
+        let request = UNNotificationRequest(
+            identifier: "talkie-walkie-report-\(sessionId)-\(Int(Date().timeIntervalSince1970))",
+            content: content,
+            trigger: nil
+        )
+
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error {
+                logger.warning("Failed to show Walkie report notification: \(error.localizedDescription)")
+            }
+        }
+
+        Task {
+            await Self.queueWalkieReportForIPhone(
+                title: title,
+                body: body,
+                sessionId: sessionId,
+                source: source
+            )
+        }
+    }
+
+    private static func queueWalkieReportForIPhone(
+        title: String,
+        body: String,
+        sessionId: String,
+        source: String?
+    ) async {
+        do {
+            let recordID = try await CloudKitReportNotificationSender().sendReport(
+                title: title,
+                body: body,
+                sessionId: sessionId,
+                source: source
+            )
+            logger.info("Queued iPhone Walkie report notification in CloudKit: \(recordID.recordName)")
+        } catch {
+            logger.warning("Failed to queue iPhone Walkie report notification in CloudKit: \(error.localizedDescription)")
+        }
+    }
+
+    private static func notificationText(_ text: String, maxLength: Int) -> String {
+        let clean = text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard clean.count > maxLength else { return clean }
+        return String(clean.prefix(maxLength)).trimmingCharacters(in: .whitespacesAndNewlines) + "..."
+    }
+
     // MARK: - UNUserNotificationCenterDelegate
 
     /// Show notifications even when app is in foreground
@@ -2382,7 +2473,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
 
     // MARK: - Direct Screenshot Shortcuts
 
-    /// Listen for Cmd+Shift+3/4/5/6 forwarded from TalkieAgent.
+    /// Listen for direct capture shortcuts forwarded from TalkieAgent.
     /// These bypass the chord HUD and execute the capture mode directly.
     private var isDirectScreenshotCaptureActive = false
     private var lastDirectScreenshotMode: String?

@@ -381,7 +381,7 @@ struct SystemStatusHUD: View {
                 status: permissions.screenRecordingStatus == .granted ? .ok : .pending,
                 value: permissions.screenRecordingStatus.displayName,
                 action: permissions.screenRecordingStatus != .granted ? StatusAction(label: "Grant", handler: {
-                    permissions.openScreenRecordingSettings()
+                    permissions.requestScreenRecordingPermission()
                 }) : nil
             )
         ]

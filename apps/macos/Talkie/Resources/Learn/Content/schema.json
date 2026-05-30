@@ -81,7 +81,7 @@
         "properties": {
           "chord": {
             "type": "string",
-            "description": "Chord display string — e.g. '⌃⌥⇧⌘S' (Hyper+S), '⌘⇧4', '⌥⌘L'."
+            "description": "Chord display string — e.g. '⌃⌥⇧⌘S' (Hyper+S), '⌃⌥⇧⌘4', '⌥⌘L'."
           },
           "action": {
             "type": "string",
@@ -89,7 +89,7 @@
           },
           "default": {
             "type": "boolean",
-            "description": "Optional. False if the chord is configurable and the user may have rebound it. Authors should leave true for hard-coded chords (⌘⇧3 etc) and false for HotkeyAction bindings."
+            "description": "Optional. False if the chord is configurable and the user may have rebound it. Authors should leave true for hard-coded chords and false for HotkeyAction bindings."
           }
         }
       }

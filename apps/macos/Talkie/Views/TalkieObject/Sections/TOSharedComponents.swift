@@ -997,6 +997,10 @@ struct RecordingTranscriptCard: View {
             }
             .buttonStyle(.plain)
             .help("Return to editorial text view")
+
+            Spacer(minLength: 8)
+
+            studioCopyButton
         }
         .padding(.horizontal, documentMode ? 0 : Spacing.md)
         .padding(.vertical, documentMode ? 6 : Spacing.sm)
@@ -1009,19 +1013,31 @@ struct RecordingTranscriptCard: View {
 
     private var studioCopyButton: some View {
         Button(action: copyContent) {
-            Text(copied ? "COPIED" : "COPY")
-                .font(.system(size: 10, weight: .regular, design: .monospaced))
-                .tracking(1.8)
-                .foregroundColor(
-                    copied
-                        ? Color.green.opacity(0.75)
-                        : Theme.current.foregroundSecondary.opacity(0.65)
-                )
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+            HStack(spacing: 5) {
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 10, weight: .regular))
+                Text(copied ? "COPIED" : "COPY JSON")
+                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                    .tracking(1.6)
+            }
+            .foregroundStyle(
+                copied
+                    ? Color.green.opacity(0.78)
+                    : Theme.current.foregroundSecondary.opacity(0.68)
+            )
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Theme.current.foreground.opacity(0.04))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 3)
+                            .stroke(Theme.current.foreground.opacity(0.12), lineWidth: 0.5)
+                    )
+            )
         }
         .buttonStyle(.plain)
-        .help("Copy to clipboard")
+        .help("Copy JSON to clipboard")
     }
 
     // MARK: - Content Area
@@ -1211,9 +1227,10 @@ struct RecordingTranscriptCard: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(currentContent, forType: .string)
 
-        withAnimation { copied = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            withAnimation { copied = false }
+        withAnimation(.easeOut(duration: 0.12)) { copied = true }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1500))
+            withAnimation(.easeOut(duration: 0.18)) { copied = false }
         }
     }
 

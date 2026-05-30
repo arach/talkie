@@ -53,6 +53,14 @@ const STUDIES: Study[] = [
       "Committed shape for the macOS Skills surface. One tab, one page, the whole loop — starters below, editor bay (chat ↔ markup) above, console under it, your skills at the foot. Semantic skill syntax (WHEN / WITH / DO / THEN). Pre-Swift.",
   },
   {
+    slug: "mac-actor-hud",
+    name: "Actor HUD",
+    kind: "Surface study",
+    platform: "macOS",
+    blurb:
+      "Flat 2D WebView dashboard for app-icon actors — icon-only hover target, compact status metrics, activity list, waveform strip, and passive action footer.",
+  },
+  {
     slug: "mac-skill-forge",
     name: "Skill Forge",
     kind: "Framing study (archive)",

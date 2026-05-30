@@ -24,6 +24,28 @@ Voice memos recorded on iOS sync via CloudKit to macOS, where workflows process 
 
 ---
 
+## Engineering Docs and Studio Review
+
+Numbered engineering docs live in `docs/specs/tlk-NNN-*.md`. They are the
+source of truth; Studio can provide the review and discussion surface for them.
+
+When creating or substantially updating a TLK doc:
+
+- Add `**Studio**: /eng/tlk-NNN` in the metadata block so dev agents know where
+  to bring the document back for review.
+- If the doc has a concrete Studio visual study, add `**Surface**: /route-name`
+  beside the Studio doc route.
+- Treat the Studio route as the place to discuss architecture and product
+  implications, instead of leaving that context only in chat.
+- If the doc drives a new visual surface, link or create the relevant Studio
+  route before Swift polish when practical. If the work is code-first, call out
+  the Studio follow-up explicitly.
+- For architecture-significant docs, consider asking a Scout sibling for review
+  and write useful review artifacts beside the doc, for example
+  `docs/specs/tlk-NNN-review-<reviewer>.md`.
+
+---
+
 ## Build Commands
 
 ### iOS
