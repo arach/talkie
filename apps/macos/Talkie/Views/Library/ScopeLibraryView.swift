@@ -15,32 +15,14 @@
 
 import SwiftUI
 import TalkieKit
+import AppKit
 
 // MARK: - Scope display fonts
 
-/// Cormorant Garamond is the homepage's `--font-display-modern`.
-/// Tries a few PostScript name variants because the font ships with
-/// slight naming differences across builds; falls back to system serif.
-private enum ScopeFont {
-    private static let regularCandidates = [
-        "CormorantGaramond-Regular",
-        "Cormorant Garamond",
-        "CormorantGaramond",
-    ]
-    private static let mediumCandidates = [
-        "CormorantGaramond-Medium",
-        "Cormorant Garamond Medium",
-    ]
-
-    static func display(size: CGFloat, medium: Bool = false) -> Font {
-        for name in (medium ? mediumCandidates : regularCandidates) {
-            if NSFont(name: name, size: size) != nil {
-                return .custom(name, size: size)
-            }
-        }
-        return .system(size: size, weight: medium ? .medium : .regular, design: .serif)
-    }
-}
+// (Removed local `ScopeFont` enum — unused, and Cormorant lookup is
+// now centralized in `ScopeType.display(size:weight:)` (TalkieKit).
+// Other Scope surfaces that still defined their own copies have been
+// migrated to the same single source so resolution doesn't drift.)
 
 // MARK: - Date bucket
 
@@ -101,6 +83,7 @@ struct ScopeLibraryView: View {
     @State private var typeFilter: RecordingTypeFilter = .all
     @State private var suppressFilterReload = false
     @State private var pendingScrollID: UUID?
+    @FocusState private var searchFieldFocused: Bool
 
     /// Show the recording overlay (start a new memo).
     @State private var showingRecordingView = false
@@ -111,6 +94,27 @@ struct ScopeLibraryView: View {
     @AppStorage("scopeLibrary.listColumnWidth")
     private var listColumnWidth: Double = 520
 
+    /// Last picked type filter. Survives relaunch so coming back to
+    /// the library lands on whatever the user was last looking at.
+    /// `initialTypeFilter` (set by deep-link navigation) overrides
+    /// this on appearance, since the caller is asking for a specific tab.
+    @AppStorage("scopeLibrary.lastTypeFilter")
+    private var persistedTypeFilterRaw: String = RecordingTypeFilter.all.rawValue
+
+    // MARK: Cmd-hold shortcut overlay
+    //
+    // Holding ⌘ while the library is on screen fades in glyph badges on
+    // the filter chips (⌘M / ⌘D / ⌘C / ⌘N) and on the first nine list
+    // rows (⌘1-⌘9). The bindings themselves are always live — ⌘ is
+    // purely the revealer. Releasing ⌘ hides the badges.
+
+    /// True while the ⌘ key is held. Driven by a local NSEvent monitor
+    /// installed on view appear.
+    @State private var cmdHeld: Bool = false
+
+    /// The NSEvent monitor token, retained so it can be torn down when
+    /// the library is no longer on screen.
+    @State private var cmdEventMonitor: Any?
 
     private var selectedRecording: TalkieObject? {
         guard selectedRecordingIDs.count == 1, let id = selectedRecordingIDs.first else { return nil }
@@ -161,10 +165,16 @@ struct ScopeLibraryView: View {
         .background(ScopeCanvas.canvas)
         .animation(.easeInOut(duration: 0.2), value: showingRecordingView)
         .task {
-            if initialTypeFilter != .all {
+            // Pick the initial filter:
+            //   1. Explicit deep-link (`initialTypeFilter != .all`) wins
+            //   2. Otherwise restore the user's last picked filter
+            //   3. Otherwise `.all`
+            let restored = RecordingTypeFilter(rawValue: persistedTypeFilterRaw) ?? .all
+            let desired = initialTypeFilter != .all ? initialTypeFilter : restored
+            if desired != .all {
                 suppressFilterReload = true
-                typeFilter = initialTypeFilter
-                viewModel.filterState.select(initialTypeFilter.semanticFilter)
+                typeFilter = desired
+                viewModel.filterState.select(desired.semanticFilter)
             }
             await viewModel.loadWithSemanticFilters()
             // Consume pending navigation params — when the home (or
@@ -181,11 +191,15 @@ struct ScopeLibraryView: View {
             consumePendingNavigationParams()
         }
         .onChange(of: typeFilter) { _, newValue in
+            persistedTypeFilterRaw = newValue.rawValue
             if suppressFilterReload {
                 suppressFilterReload = false
                 return
             }
             Task { await viewModel.toggleSemanticFilter(newValue.semanticFilter) }
+        }
+        .onChange(of: viewModel.recordings.map(\.id)) { _, _ in
+            reconcileSelectionWithVisibleRecordings()
         }
         .onChange(of: searchText) { _, newValue in
             searchTask?.cancel()
@@ -200,6 +214,80 @@ struct ScopeLibraryView: View {
         .onReceive(NotificationCenter.default.publisher(for: .init("ShowRecordingView"))) { _ in
             withAnimation(.easeInOut(duration: 0.2)) { showingRecordingView = true }
         }
+        .background(cmdShortcutBindings)
+        .onAppear { startCmdMonitor() }
+        .onDisappear { stopCmdMonitor() }
+    }
+
+    // MARK: - Cmd-hold shortcuts
+
+    /// Hidden ⌘+key buttons. The bindings are always live while the
+    /// library is on screen; the `cmdHeld` overlay just makes them
+    /// discoverable. Mirrors the pattern used by `deleteHotkey`.
+    @ViewBuilder
+    private var cmdShortcutBindings: some View {
+        Group {
+            Button("") { typeFilter = .memos }
+                .keyboardShortcut("m", modifiers: [.command])
+            Button("") { typeFilter = .dictations }
+                .keyboardShortcut("d", modifiers: [.command])
+            Button("") { typeFilter = .captures }
+                .keyboardShortcut("c", modifiers: [.command])
+            // ⌘N is now File > New Window globally; the Notes filter
+            // loses its cmd-hold shortcut (it's still reachable via
+            // the chip itself or the bare-letter N nav binding).
+            ForEach(1...9, id: \.self) { n in
+                Button("") { openItemAtPosition(n) }
+                    .keyboardShortcut(KeyEquivalent(Character("\(n)")), modifiers: [.command])
+            }
+        }
+        .frame(width: 0, height: 0)
+        .opacity(0)
+        .allowsHitTesting(false)
+    }
+
+    /// Map of recording id → 1-based position for the first nine items
+    /// in the currently-displayed list. Used both for badge rendering
+    /// (`shortcutBadge` on rows) and to resolve ⌘N → recording.
+    private var firstNineShortcuts: [UUID: Int] {
+        var map: [UUID: Int] = [:]
+        for (idx, recording) in viewModel.recordings.prefix(9).enumerated() {
+            map[recording.id] = idx + 1
+        }
+        return map
+    }
+
+    /// ⌘N action — selects the Nth visible item so the inspector opens
+    /// straight to it.
+    private func openItemAtPosition(_ n: Int) {
+        let items = Array(viewModel.recordings.prefix(9))
+        guard items.indices.contains(n - 1) else { return }
+        let recording = items[n - 1]
+        selectedRecordingIDs = [recording.id]
+        pendingScrollID = recording.id
+    }
+
+    private func startCmdMonitor() {
+        // `addLocalMonitorForEvents` fires for events delivered to our
+        // own app, so we don't track ⌘ presses while the user is in
+        // another window. Lightweight enough to leave installed.
+        cmdEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+            let isHeld = event.modifierFlags.contains(.command)
+            if isHeld != cmdHeld {
+                withAnimation(.easeOut(duration: 0.12)) {
+                    cmdHeld = isHeld
+                }
+            }
+            return event
+        }
+    }
+
+    private func stopCmdMonitor() {
+        if let monitor = cmdEventMonitor {
+            NSEvent.removeMonitor(monitor)
+            cmdEventMonitor = nil
+        }
+        cmdHeld = false
     }
 
     // MARK: - List column
@@ -217,6 +305,28 @@ struct ScopeLibraryView: View {
             footerBar
         }
         .frame(maxHeight: .infinity, alignment: .top)
+        .background(deleteHotkey)
+    }
+
+    /// Invisible button bound to ⌘⌫. macOS expects Cmd+Backspace to
+    /// delete the selected list item; everywhere else we lean on the
+    /// rail/menu Delete, but for keyboard-driven users this is the
+    /// missing affordance. Soft delete + undo toast is wired by
+    /// RecordingsViewModel.deleteRecording.
+    private var deleteHotkey: some View {
+        Button {
+            for id in selectedRecordingIDs {
+                if let record = viewModel.recordings.first(where: { $0.id == id }) {
+                    Task { await viewModel.deleteRecording(record) }
+                }
+            }
+            selectedRecordingIDs.removeAll()
+        } label: {
+            EmptyView()
+        }
+        .keyboardShortcut(.delete, modifiers: .command)
+        .disabled(selectedRecordingIDs.isEmpty)
+        .hidden()
     }
 
     private var newRecordingButton: some View {
@@ -298,6 +408,22 @@ struct ScopeLibraryView: View {
         }
     }
 
+    /// Keep the inspector attached to a visible row after async GRDB
+    /// observation updates land. Filter/search changes install the
+    /// observation first; the actual row list arrives later.
+    private func reconcileSelectionWithVisibleRecordings() {
+        guard !selectedRecordingIDs.isEmpty else { return }
+
+        let visibleIds = Set(viewModel.recordings.map(\.id))
+        let stillVisible = selectedRecordingIDs.intersection(visibleIds)
+
+        if stillVisible.isEmpty, let first = viewModel.recordings.first {
+            selectedRecordingIDs = [first.id]
+        } else if stillVisible.count != selectedRecordingIDs.count {
+            selectedRecordingIDs = stillVisible
+        }
+    }
+
     private func filterCounts() -> FilterCounts {
         var memos = 0, dictations = 0, notes = 0, captures = 0
         for r in viewModel.recordings {
@@ -318,39 +444,61 @@ struct ScopeLibraryView: View {
         )
     }
 
-    /// Library list header — title row + filter pills + search row.
-    /// Sits below the chrome-bar zone: the centered Talkie pill occupies
-    /// the top ~38pt of the window, so we offset the list header further
-    /// down to keep the two from competing for the same vertical slot.
+    /// Library list header — the universal `ScopeTopBand` (serif title
+    /// baseline-locked to the sidebar wordmark, mono count chrome, and a
+    /// trailing controls slot holding the search field + new-recording
+    /// mic) with the full-width filter-pill row docked beneath it.
+    ///
+    /// This replaces the old bespoke masthead so the Dictations / Library
+    /// screen matches every other Scope surface (Models, Screenshots).
+    /// The filter pills stay as their own full-width row because they
+    /// carry the ⌘-hold glyph badges and an underline-selected treatment
+    /// that doesn't compress into the inline trailing slot — same call
+    /// ScreenshotsScreen makes for controls that don't fit inline.
     @ViewBuilder
     private var topComponent: some View {
         VStack(spacing: 8) {
-            titleRow
+            ScopeTopBand(
+                title: titleForCurrentFilter,
+                chrome: headerChromeLine,
+                trailing: { headerControls }
+            )
             filterRow
-            searchRow
+                .padding(.horizontal, 32)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 36)
         .padding(.bottom, 10)
         .overlay(alignment: .bottom) {
             ScopeRule(.section)
         }
     }
 
-    private var titleRow: some View {
+    /// Count + recency line shown as mono caps in the band's chrome slot
+    /// (e.g. "33 MEMOS · 7D"). Mirrors the old `metaForCurrentFilter`
+    /// but names the active type so the band reads on its own.
+    private var headerChromeLine: String {
         let counts = filterCounts()
-        return HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(titleForCurrentFilter)
-                .font(.system(size: 15, weight: .medium, design: .serif))
-                .foregroundStyle(ScopeInk.primary)
-                .tracking(-0.2)
+        let n = counts.count(for: typeFilter)
+        let noun = typeFilter == .all ? "ITEMS" : titleForCurrentFilter.uppercased()
+        return "\(n) \(noun) · 7D"
+    }
 
-            Spacer(minLength: 8)
-
-            Text(metaForCurrentFilter(counts: counts))
-                .font(.system(size: 9, weight: .regular, design: .monospaced))
-                .tracking(1.6)
-                .foregroundStyle(ScopeInk.faint)
+    /// Band trailing slot — the search field and the new-recording mic,
+    /// the two controls that read fine inline next to the title.
+    private var headerControls: some View {
+        HStack(spacing: 8) {
+            searchField
+                .frame(maxWidth: 200)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.white)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(ScopeEdge.faint, lineWidth: 0.5)
+                )
+            newRecordingButton
         }
     }
 
@@ -364,12 +512,6 @@ struct ScopeLibraryView: View {
         case .notes:      return "Notes"
         case .captures:   return "Captures"
         }
-    }
-
-    /// "{n} · 7D" — total count for the active filter, with the studio's
-    /// "7d" recency hint. Mono caps, faint.
-    private func metaForCurrentFilter(counts: FilterCounts) -> String {
-        "\(counts.count(for: typeFilter)) · 7D"
     }
 
     private var filterRow: some View {
@@ -412,26 +554,21 @@ struct ScopeLibraryView: View {
                     .fill(isSelected ? ScopeAmber.solid : Color.clear)
                     .frame(height: 1)
             }
+            .overlay(alignment: .topTrailing) {
+                // ⌘-hold badge. `All` deliberately has no shortcut (⌘A
+                // is the standard Select All binding); everywhere else
+                // the chip gets a ⌘+letter glyph that fades in while
+                // the user holds the command key.
+                if cmdHeld, let letter = option.cmdShortcutLetter {
+                    CmdGlyphBadge(letter: letter)
+                        .offset(x: 8, y: -6)
+                        .transition(.opacity.combined(with: .scale(scale: 0.85)))
+                        .allowsHitTesting(false)
+                }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-
-    private var searchRow: some View {
-        HStack(spacing: 8) {
-            searchField
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(Color.white)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 3)
-                        .stroke(ScopeEdge.faint, lineWidth: 0.5)
-                )
-            newRecordingButton
-        }
     }
 
     /// The text-field + magnifier + clear-button — shared by every
@@ -448,6 +585,17 @@ struct ScopeLibraryView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 11))
                 .foregroundStyle(ScopeInk.dim)
+                .focused($searchFieldFocused)
+                .onReceive(NotificationCenter.default.publisher(for: .focusLibrarySearch)) { _ in
+                    searchFieldFocused = true
+                }
+                .onKeyPress(.escape) {
+                    if !searchText.isEmpty {
+                        searchText = ""
+                        return .handled
+                    }
+                    return .ignored
+                }
             if !searchText.isEmpty {
                 Button {
                     searchText = ""
@@ -478,6 +626,7 @@ struct ScopeLibraryView: View {
                             ScopeLibraryRow(
                                 recording: recording,
                                 isSelected: selectedRecordingIDs.contains(recording.id),
+                                shortcutNumber: cmdHeld ? firstNineShortcuts[recording.id] : nil,
                                 onSelect: { selectedRecordingIDs = [recording.id] }
                             )
                             .id(recording.id)
@@ -581,14 +730,19 @@ struct ScopeLibraryView: View {
     // MARK: - States
 
     private var loadingState: some View {
-        HStack(spacing: 10) {
-            PhosphorDot(color: ScopeAmber.solid.opacity(0.5), size: 5)
-            Text("· LOADING")
-                .font(ScopeType.eyebrow)
-                .tracking(ScopeType.Tracking.wide)
-                .foregroundStyle(ScopeInk.faint)
+        // Skeleton rows that mirror the real list layout (channel
+        // letter, title slug, meta block). Reads as "library is
+        // arriving" rather than the blank slate it used to be.
+        VStack(spacing: 0) {
+            ForEach(0..<8, id: \.self) { _ in
+                ScopeLibraryRowSkeleton()
+                ThemedScopeRule(.row)
+            }
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Loading library")
     }
 
     private var emptyState: some View {
@@ -666,13 +820,19 @@ struct ScopeLibraryView: View {
                 Group {
                     switch recording.type {
                     case .note:
-                        ScopeNoteDetailView(note: recording)
+                        ScopeNoteDetailView(
+                            note: recording,
+                            onDelete: { selectedRecordingIDs.remove(recording.id) }
+                        )
                     case .capture, .selection:
                         // Selections are text-content captures (Quick
                         // Selection grabs a passage). Same chrome as a
                         // screenshot capture; the hero branches on
                         // content.
-                        ScopeCaptureDetailView(capture: recording)
+                        ScopeCaptureDetailView(
+                            capture: recording,
+                            onDelete: { selectedRecordingIDs.remove(recording.id) }
+                        )
                     default:
                         TalkieView(recording: recording, onDelete: {
                             Task { await viewModel.deleteRecording(recording) }
@@ -702,6 +862,9 @@ struct ScopeLibraryView: View {
 private struct ScopeLibraryRow: View {
     let recording: TalkieObject
     let isSelected: Bool
+    /// 1-9 while ⌘ is held and this row is in the first nine slots.
+    /// Nil otherwise — no badge is rendered.
+    let shortcutNumber: Int?
     let onSelect: () -> Void
 
     @State private var isHovered = false
@@ -729,8 +892,68 @@ private struct ScopeLibraryRow: View {
 
     private var rowTitle: String {
         if let title = recording.title, !title.isEmpty { return title }
-        if let preview = recording.transcriptPreview { return preview }
+
+        // Captures: name the source app or capture mode rather than
+        // falling through to a generic "(untitled)".
+        if recording.type == .capture {
+            if let app = recording.appContext?.name, !app.isEmpty {
+                return "\(app) capture"
+            }
+            if let shot = recording.screenshots.first {
+                let mode = shot.captureMode.capitalized
+                return "\(mode) capture"
+            }
+        }
+
+        // Text-bearing items: first sentence reads better than the dumb
+        // 80-char prefix from `transcriptPreview`.
+        if let text = recording.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !text.isEmpty {
+            return Self.firstSentence(of: text, limit: 80)
+        }
+
+        // Recording without a transcript yet — type + duration is more
+        // informative than the literal "(untitled)".
+        if recording.duration > 0 {
+            let kind = recording.type.rawValue.capitalized
+            return "\(kind) · \(formatDuration(recording.duration))"
+        }
+
         return "(untitled)"
+    }
+
+    /// Returns the first sentence of `text`, or a soft-truncated prefix
+    /// when no sentence boundary lands within `limit` characters. A
+    /// sentence ends at `.`, `!`, or `?` followed by whitespace.
+    private static func firstSentence(of text: String, limit: Int) -> String {
+        let cleaned = text
+            .components(separatedBy: .newlines)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let enders: Set<Character> = [".", "!", "?"]
+        var end: String.Index? = nil
+        for i in cleaned.indices {
+            if enders.contains(cleaned[i]) {
+                let next = cleaned.index(after: i)
+                if next == cleaned.endIndex || cleaned[next].isWhitespace {
+                    end = next
+                    break
+                }
+            }
+        }
+
+        if let e = end {
+            let s = String(cleaned[..<e]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !s.isEmpty && s.count <= limit { return s }
+        }
+
+        if cleaned.count <= limit { return cleaned }
+        let truncated = String(cleaned.prefix(limit))
+        if let lastSpace = truncated.lastIndex(of: " ") {
+            return String(truncated[..<lastSpace]) + "…"
+        }
+        return truncated + "…"
     }
 
     /// Chrome metadata — date · source · duration · word count.
@@ -838,14 +1061,51 @@ private struct ScopeLibraryRow: View {
                         .frame(width: 2)
                 }
             }
+            .overlay(alignment: .trailing) {
+                // ⌘-hold position badge. Lives in the right margin so
+                // it doesn't fight the channel label on the left or
+                // overlap the time-ago / sparkline in the trailing
+                // slot. Fades with the parent `cmdHeld` animation.
+                if let n = shortcutNumber {
+                    CmdGlyphBadge(letter: "\(n)")
+                        .padding(.trailing, 10)
+                        .transition(.opacity.combined(with: .scale(scale: 0.85)))
+                        .allowsHitTesting(false)
+                }
+            }
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .contentShape(Rectangle())
+        .modifier(CaptureRowDragModifier(fileURL: primaryScreenshotURL))
     }
 
     private var timeAgo: String {
         RelativeTimeFormatter.format(recording.createdAt).uppercased()
+    }
+
+    /// First screenshot file on disk, if any. Captures (and notes / memos
+    /// with an image attached) drag as the file URL so the receiver sees
+    /// a real image, not bitmap data. nil for audio-only rows.
+    private var primaryScreenshotURL: URL? {
+        guard let filename = recording.screenshots.first?.filename else { return nil }
+        return ScreenshotStorage.screenshotsDirectory.appendingPathComponent(filename)
+    }
+}
+
+/// Conditionally adds `.onDrag` to a row when a file URL is available.
+/// Avoids starting a drag gesture on rows that have no payload (audio-
+/// only memos, dictations) — those drag visually but drop nothing,
+/// which feels broken.
+struct CaptureRowDragModifier: ViewModifier {
+    let fileURL: URL?
+
+    func body(content: Content) -> some View {
+        if let url = fileURL {
+            content.onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
+        } else {
+            content
+        }
     }
 }
 
@@ -993,5 +1253,106 @@ private extension Int {
         let f = NumberFormatter()
         f.numberStyle = .decimal
         return f.string(from: NSNumber(value: self)) ?? "\(self)"
+    }
+}
+
+// MARK: - Loading skeleton
+//
+// Single row mock that matches the real row layout so the
+// transition from skeleton → real list is a fade rather than a
+// reshuffle. Pulses subtly to read as "live".
+
+private struct ScopeLibraryRowSkeleton: View {
+    @State private var phase: Double = 0.0
+
+    var body: some View {
+        HStack(spacing: 14) {
+            // Channel column (one letter wide)
+            RoundedRectangle(cornerRadius: 2)
+                .fill(ScopeEdge.subtle)
+                .frame(width: 14, height: 12)
+
+            // Title + meta column
+            VStack(alignment: .leading, spacing: 6) {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(ScopeEdge.subtle)
+                    .frame(width: titleWidth, height: 11)
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(ScopeEdge.faint)
+                    .frame(width: 110, height: 8)
+            }
+
+            Spacer(minLength: 12)
+
+            // Right-side detail block (sparkline-or-meta width)
+            RoundedRectangle(cornerRadius: 2)
+                .fill(ScopeEdge.faint)
+                .frame(width: 48, height: 10)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .opacity(0.6 + 0.25 * abs(sin(phase)))
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
+                phase = .pi
+            }
+        }
+    }
+
+    /// Vary the title width subtly across rows so the skeleton block
+    /// doesn't read as eight identical bars.
+    private var titleWidth: CGFloat {
+        let widths: [CGFloat] = [180, 220, 150, 240, 200, 130, 210, 170]
+        return widths.randomElement() ?? 200
+    }
+}
+
+// MARK: - Cmd-hold glyph badge
+
+/// Editorial cmd-hint chip rendered next to navigation targets while
+/// the user holds ⌘. Reads as a small printer's tag on the Scope page:
+/// cream substrate, ink letterform, amber ⌘ glyph as the accent dot.
+/// Sits on top of whatever surface it's overlaid on; allowsHitTesting
+/// is the caller's responsibility.
+private struct CmdGlyphBadge: View {
+    let letter: String
+
+    var body: some View {
+        HStack(spacing: 1) {
+            Text("⌘")
+                .foregroundColor(ScopeAmber.solid)
+            Text(letter)
+                .foregroundColor(ScopeInk.primary)
+        }
+        .font(.system(size: 8.5, weight: .semibold, design: .monospaced))
+        .padding(.horizontal, 4)
+        .padding(.vertical, 1.5)
+        .background(
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(ScopeCanvas.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .strokeBorder(ScopeEdge.normal, lineWidth: 0.5)
+        )
+        .shadow(color: ScopeInk.primary.opacity(0.10), radius: 2, y: 1)
+    }
+}
+
+// MARK: - RecordingTypeFilter cmd binding
+
+private extension RecordingTypeFilter {
+    /// Letter shown inside the ⌘-hold badge for this filter. `All` is
+    /// intentionally nil — ⌘A is the standard Select All binding and
+    /// we don't override it.
+    var cmdShortcutLetter: String? {
+        switch self {
+        case .all: return nil
+        case .memos: return "M"
+        case .dictations: return "D"
+        case .captures: return "C"
+        // ⌘N is reserved for File > New Window globally.
+        case .notes: return nil
+        }
     }
 }

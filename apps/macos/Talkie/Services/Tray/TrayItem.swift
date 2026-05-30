@@ -418,20 +418,21 @@ struct AdaptiveCardView: View {
             .strokeBorder(borderColor, style: StrokeStyle(lineWidth: borderWidth, dash: borderDash))
     }
 
+    // Note: selected-state styling intentionally omitted here — callers draw
+    // the prominent selection ring as an outer overlay, so an inner accent
+    // stroke would produce a faint double-ring.
     private var borderColor: Color {
         if isFocused { return .accentColor.opacity(0.95) }
-        if isSelected { return .accentColor.opacity(0.65) }
         return TrayCardPalette.border
     }
 
     private var borderWidth: CGFloat {
         if isFocused { return 1.6 }
-        if isSelected { return 1.2 }
         return 0.5
     }
 
     private var borderDash: [CGFloat] {
-        isFocused && !isSelected ? [3, 2] : []
+        isFocused ? [3, 2] : []
     }
 
     private func compactTimeAgo(_ date: Date) -> String {
@@ -497,14 +498,16 @@ private func writePanelCapture(_ cgImage: CGImage, window: NSWindow, metadataLin
     // Add to tray (not Desktop — we are the screenshot tool)
     if let png = pngData(from: finalImage) {
         Task { @MainActor in
-            await ScreenshotTray.shared.add(
+            if let item = await ScreenshotTray.shared.addReturningItem(
                 data: png,
                 width: cgImage.width,
                 height: cgImage.height,
                 mode: .fullscreen,
                 windowTitle: "Tray",
                 appName: "Talkie"
-            )
+            ) {
+                TrayActionService.shared.persistStandaloneScreenshotToLibrary(item)
+            }
         }
         Log(.system).info("Panel captured → tray + clipboard")
     }

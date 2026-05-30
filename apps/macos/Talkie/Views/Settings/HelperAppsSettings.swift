@@ -39,12 +39,14 @@ enum HelperAppsTab: String, CaseIterable {
     case services = "SERVICES"
     case settings = "SETTINGS"
     case performance = "PERFORMANCE"
+    case apps = "APPS"          // Folded in from the retired top-level Apps page
 
     var icon: String {
         switch self {
         case .services: return "app.connected.to.app.below.fill"
         case .settings: return "gearshape"
         case .performance: return "gauge.with.dots.needle.bottom.50percent"
+        case .apps: return "square.stack.3d.up"
         }
     }
 
@@ -53,6 +55,7 @@ enum HelperAppsTab: String, CaseIterable {
         case .services: return .green
         case .settings: return .blue
         case .performance: return .purple
+        case .apps: return .orange
         }
     }
 }
@@ -137,6 +140,9 @@ struct HelperAppsSettingsView: View {
                     settingsContent
                 case .performance:
                     PerformanceSettingsView()
+                case .apps:
+                    AppsSettingsContent()
+                        .padding(.top, Spacing.md)
                 }
             }
             .id(selectedTab)
@@ -1076,27 +1082,24 @@ private enum HelperControlTone {
         }
     }
 
+    /// All tones share the theme-neutral surface fill — the colored
+    /// tinted backgrounds (`Color.orange.opacity(0.12)` etc.) read as
+    /// candy on light cream paper. Color signal now lives in the icon
+    /// foreground and a thin border, not the fill.
     @MainActor
     var background: Color {
-        switch self {
-        case .neutral: return Theme.current.surface1
-        case .success: return Color.green.opacity(0.12)
-        case .info: return Color.cyan.opacity(0.12)
-        case .warning: return Color.orange.opacity(0.12)
-        case .accent: return Color.blue.opacity(0.12)
-        case .danger: return Color.red.opacity(0.12)
-        }
+        Theme.current.surface1
     }
 
     @MainActor
     var border: Color {
         switch self {
         case .neutral: return Theme.current.divider
-        case .success: return Color.green.opacity(0.25)
-        case .info: return Color.cyan.opacity(0.25)
-        case .warning: return Color.orange.opacity(0.25)
-        case .accent: return Color.blue.opacity(0.25)
-        case .danger: return Color.red.opacity(0.25)
+        case .success: return Color.green.opacity(0.18)
+        case .info:    return Color.cyan.opacity(0.18)
+        case .warning: return Color.orange.opacity(0.20)
+        case .accent:  return Color.blue.opacity(0.20)
+        case .danger:  return Color.red.opacity(0.22)
         }
     }
 }

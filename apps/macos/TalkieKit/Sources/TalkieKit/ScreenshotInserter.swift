@@ -41,16 +41,30 @@ public enum ScreenshotInserter {
     ) -> String {
         guard !screenshots.isEmpty else { return text }
 
-        let timed = TimedTranscription(
-            text: text,
-            words: timedTranscription?.words ?? []
-        )
+        if let timedTranscription,
+           !timedTranscription.words.isEmpty,
+           deliveryTextMatchesTimedTranscript(text, timedTranscription.text) {
+            return interleave(
+                timedTranscription: TimedTranscription(
+                    text: text,
+                    words: timedTranscription.words
+                ),
+                screenshots: screenshots,
+                screenshotDirectory: screenshotDirectory
+            ).markdown
+        }
 
-        return interleave(
-            timedTranscription: timed,
-            screenshots: screenshots,
-            screenshotDirectory: screenshotDirectory
-        ).markdown
+        let links = screenshots
+            .sorted { $0.timestampMs < $1.timestampMs }
+            .enumerated()
+            .map { index, screenshot in
+                "[Screenshot \(index + 1)](\(markdownDestination(screenshotRef(screenshot, directory: screenshotDirectory))))"
+            }
+            .joined(separator: "\n")
+
+        return [text.trimmingCharacters(in: .whitespacesAndNewlines), links]
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
     }
 
     /// Interleave screenshots into a timed transcription by timestamp.
@@ -123,10 +137,10 @@ public enum ScreenshotInserter {
             }
 
             blocks.append(.screenshot(ss))
-            markdownParts.append(" [\(refNum)]")
+            markdownParts.append("[\(refNum)]")
 
             let ref = screenshotRef(ss, directory: screenshotDirectory)
-            references.append("[\(refNum)](\(ref))")
+            references.append("[\(refNum)](\(markdownDestination(ref)))")
 
             lastPos = clampedPos
         }
@@ -141,15 +155,14 @@ public enum ScreenshotInserter {
             }
         }
 
-        // Append references at the end (stacked, one per line)
-        if !references.isEmpty {
-            markdownParts.append("\n\n")
-            markdownParts.append(references.joined(separator: "\n"))
-        }
+        let body = markdownParts.joined(separator: " ")
+        let markdown = [body, references.joined(separator: "\n")]
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
 
         return InterleaveResult(
             blocks: blocks,
-            markdown: markdownParts.joined()
+            markdown: markdown
         )
     }
 
@@ -255,6 +268,18 @@ public enum ScreenshotInserter {
             return dir.appendingPathComponent(ss.filename).path
         }
         return ss.filename
+    }
+
+    private static func deliveryTextMatchesTimedTranscript(_ deliveryText: String, _ timedText: String) -> Bool {
+        deliveryText.trimmingCharacters(in: .whitespacesAndNewlines) == timedText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func markdownDestination(_ value: String) -> String {
+        let needsAngleBrackets = value.contains { char in
+            char.isWhitespace || char == "(" || char == ")"
+        }
+        guard needsAngleBrackets else { return value }
+        return "<\(value.replacing(">", with: "%3E"))>"
     }
 
     private static func formatTimestamp(_ ms: Int) -> String {

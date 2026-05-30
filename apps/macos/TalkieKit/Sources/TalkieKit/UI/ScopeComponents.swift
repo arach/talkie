@@ -536,7 +536,9 @@ public struct ScopeTopBand<Trailing: View>: View {
 
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(title)
-                    .font(ScopeTopBand.display(size: 24))
+                    // 21 (was 24): a touch smaller across every band-screen at
+                    // once — the /top-band studio spec. One knob for the system.
+                    .font(ScopeTopBand.display(size: 21))
                     .foregroundColor(ScopeInk.primary)
                     .tracking(-0.3)
                     .lineLimit(1)
@@ -588,6 +590,18 @@ public struct ScopeTopBand<Trailing: View>: View {
         // sidebar column. Without this inset the page title sits 18pt
         // above the wordmark — visible as the title "flying too high".
         .padding(.top, ScopeTopBandLayout.topInset)
+        // Structural header rule. No surface fill (gray slab read wrong) —
+        // the header is defined by a single hairline capping its bottom,
+        // edge-to-edge. The sidebar's top zone draws the same rule at the
+        // same Y, so together they form one continuous line under the
+        // header across the window, and the rail|content divider drops
+        // from it as a clean T. Structure from a rule, not a surface.
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(ScopeEdge.faint)
+                .frame(height: 0.5)
+        }
     }
 }
 

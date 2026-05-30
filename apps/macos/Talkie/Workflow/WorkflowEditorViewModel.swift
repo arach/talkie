@@ -122,6 +122,8 @@ final class WorkflowEditorViewModel {
             description: draft.description,
             icon: draft.icon,
             color: draft.color,
+            maintainer: draft.maintainer,
+            inputs: draft.inputs,
             steps: draft.steps,
             isEnabled: draft.isEnabled,
             isPinned: draft.isPinned,
@@ -141,6 +143,8 @@ final class WorkflowEditorViewModel {
             description: description,
             icon: draft.icon,
             color: draft.color,
+            maintainer: draft.maintainer,
+            inputs: draft.inputs,
             steps: draft.steps,
             isEnabled: draft.isEnabled,
             isPinned: draft.isPinned,
@@ -160,6 +164,8 @@ final class WorkflowEditorViewModel {
             description: draft.description,
             icon: icon,
             color: draft.color,
+            maintainer: draft.maintainer,
+            inputs: draft.inputs,
             steps: draft.steps,
             isEnabled: draft.isEnabled,
             isPinned: draft.isPinned,
@@ -179,6 +185,8 @@ final class WorkflowEditorViewModel {
             description: draft.description,
             icon: draft.icon,
             color: color,
+            maintainer: draft.maintainer,
+            inputs: draft.inputs,
             steps: draft.steps,
             isEnabled: draft.isEnabled,
             isPinned: draft.isPinned,
@@ -221,6 +229,8 @@ final class WorkflowEditorViewModel {
             description: draft.description,
             icon: draft.icon,
             color: draft.color,
+            maintainer: draft.maintainer,
+            inputs: draft.inputs,
             steps: draft.steps,
             isEnabled: draft.isEnabled,
             isPinned: draft.isPinned,
@@ -247,9 +257,9 @@ final class WorkflowEditorViewModel {
             return
         }
 
-        try await workflowService.delete(workflow)
-        editingDraft = nil
         selectedWorkflowID = nil
+        editingDraft = nil
+        try await workflowService.delete(workflow)
         log.info("Deleted workflow: \(workflow.name)")
     }
 
@@ -299,6 +309,8 @@ final class WorkflowEditorViewModel {
             description: draft.description,
             icon: draft.icon,
             color: draft.color,
+            maintainer: draft.maintainer,
+            inputs: draft.inputs,
             steps: steps,
             isEnabled: draft.isEnabled,
             isPinned: draft.isPinned,
@@ -322,6 +334,8 @@ final class WorkflowEditorViewModel {
             description: draft.description,
             icon: draft.icon,
             color: draft.color,
+            maintainer: draft.maintainer,
+            inputs: draft.inputs,
             steps: steps,
             isEnabled: draft.isEnabled,
             isPinned: draft.isPinned,
@@ -344,6 +358,8 @@ final class WorkflowEditorViewModel {
             description: draft.description,
             icon: draft.icon,
             color: draft.color,
+            maintainer: draft.maintainer,
+            inputs: draft.inputs,
             steps: steps,
             isEnabled: draft.isEnabled,
             isPinned: draft.isPinned,
@@ -368,6 +384,8 @@ final class WorkflowEditorViewModel {
             description: draft.description,
             icon: draft.icon,
             color: draft.color,
+            maintainer: draft.maintainer,
+            inputs: draft.inputs,
             steps: steps,
             isEnabled: draft.isEnabled,
             isPinned: draft.isPinned,
@@ -403,6 +421,8 @@ final class WorkflowEditorViewModel {
             description: draft.description,
             icon: draft.icon,
             color: draft.color,
+            maintainer: draft.maintainer,
+            inputs: draft.inputs,
             steps: steps,
             isEnabled: draft.isEnabled,
             isPinned: draft.isPinned,

@@ -601,6 +601,39 @@ private let liftChrome: ChromeTokens = {
     )
 }()
 
+// Graphite: sober black-family. Slate blue-gray accent, near-zero
+// halo, lightest hairlines, quiet `·` eyebrow. The accent at ~10%
+// chroma vs Midnight's 100%-saturated `#0084FF` — visible enough to
+// register as "the accent" without competing with the layout.
+private let graphiteChrome: ChromeTokens = {
+    let accent = Color(hex: "7B8E9E")
+    let ink = Color(hex: "EDEDEE")
+    return ChromeTokens(
+        accent: accent,
+        accentTint: accent.opacity(0.10),
+        accentGlow: accent.opacity(0.20),
+        accentStrong: accent.opacity(0.40),
+        action: ink.opacity(0.65),
+        actionTint: ink.opacity(0.05),
+        panel: Color(hex: "18181A"),
+        panelAlt: Color(hex: "1C1C1E"),
+        panelInk: Color(hex: "EDEDEE"),
+        panelInkFaint: Color(hex: "7E7E80"),
+        panelAccent: accent,
+        panelEdge: accent.opacity(0.18),
+        trace: ink.opacity(0.70),
+        traceFaint: ink.opacity(0.07),
+        edgeStrong: ink.opacity(0.28),
+        edge: ink.opacity(0.18),
+        edgeFaint: ink.opacity(0.10),
+        edgeSubtle: ink.opacity(0.05),
+        glowRadius: 0,       // no halo
+        chromeCorner: 4,
+        eyebrowLeader: "·",
+        hairlineWidth: 0.5
+    )
+}()
+
 extension AppTheme {
     var chrome: ChromeTokens {
         switch self {
@@ -609,6 +642,7 @@ extension AppTheme {
         case .tactical: return tacticalChrome
         case .ghost:    return ghostChrome
         case .lift:     return liftChrome
+        case .graphite: return graphiteChrome
         }
     }
 }

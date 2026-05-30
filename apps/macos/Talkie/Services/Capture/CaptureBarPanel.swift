@@ -48,13 +48,13 @@ extension NSEvent {
 enum CaptureHUDPosition: String, CaseIterable, Codable {
     /// Anchor the HUD near the mouse cursor (default — smart edge flip).
     case cursor
-    /// Always pin the HUD to the top-center of the main display, near the notch / tray.
+    /// Pin the HUD to the top-center preview lane, near the tray.
     case fixed
 
     var label: String {
         switch self {
         case .cursor: return "Near cursor"
-        case .fixed:  return "Fixed (notch)"
+        case .fixed:  return "Top preview"
         }
     }
 
@@ -205,6 +205,7 @@ struct CaptureChordOptions: Equatable {
 
 enum CaptureBarResult {
     case screenshot(CaptureMode)     // A/S/D in screenshot mode
+    case screenshotRegion(CGRect)    // Region was selected by the armed overlay
     case screenRecord(CaptureMode)   // A/S/D in video mode
     case toggleCamera                // C key
     case saveSelection               // N key
@@ -215,7 +216,7 @@ enum CaptureBarResult {
     /// Screenshot/record/camera are background ops; tray viewer needs Talkie foreground.
     var isBackground: Bool {
         switch self {
-        case .screenshot, .screenRecord, .toggleCamera, .pasteLastTray, .saveSelection: return true
+        case .screenshot, .screenshotRegion, .screenRecord, .toggleCamera, .pasteLastTray, .saveSelection: return true
         case .viewTray: return false
         }
     }
@@ -231,6 +232,12 @@ final class CaptureBarState {
     var showTrayOption: Bool = false
     var showSelectionOption: Bool = false
     var trayCount: Int = 0
+    /// Currently armed capture mode. Region is the preselected default
+    /// when the HUD opens — the picker visual highlights this cell, and
+    /// ↵ commits it. A/S/D keep their existing single-press fire
+    /// behavior so muscle memory holds; the preselection is for users
+    /// who want to see what's default and confirm with ↵.
+    var selectedCaptureMode: CaptureMode = .region
     /// Click callback from the SwiftUI view.
     /// `nil` result = interaction only (e.g. mode toggle), resets timeout but doesn't dismiss.
     var onAction: ((CaptureBarResult?) -> Void)?

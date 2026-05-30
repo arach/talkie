@@ -15,50 +15,7 @@
 import SwiftUI
 import TalkieKit
 
-// MARK: - Scope display fonts
-// Cormorant Garamond is the homepage's `--font-display-modern`. We mirror
-// the same weights/sizes here. Tries a few PostScript name variants
-// because Catharsis fonts ship slight naming differences across builds;
-// falls back to system serif if none resolve.
-private enum ScopeFont {
-    private static let regularCandidates = [
-        "CormorantGaramond-Regular",
-        "Cormorant Garamond",
-        "CormorantGaramond",
-    ]
-    private static let mediumCandidates = [
-        "CormorantGaramond-Medium",
-        "Cormorant Garamond Medium",
-    ]
-
-    static func display(size: CGFloat, medium: Bool = false) -> Font {
-        for name in (medium ? mediumCandidates : regularCandidates) {
-            if NSFont(name: name, size: size) != nil {
-                return .custom(name, size: size)
-            }
-        }
-        return .system(size: size, weight: medium ? .medium : .regular, design: .serif)
-    }
-
-    /// JetBrains Mono with system fallback. Studio's `font-mono`
-    /// renders as JetBrains Mono; matching it here so SwiftUI surfaces
-    /// don't drop to SF Mono.
-    static func mono(size: CGFloat, weight: Font.Weight = .semibold) -> Font {
-        let candidates: [String]
-        switch weight {
-        case .semibold, .bold:
-            candidates = ["JetBrainsMono-SemiBold", "JetBrainsMono-Medium"]
-        default:
-            candidates = ["JetBrainsMono-Medium", "JetBrainsMono-Regular"]
-        }
-        for name in candidates {
-            if NSFont(name: name, size: size) != nil {
-                return .custom(name, size: size)
-            }
-        }
-        return .system(size: size, weight: weight, design: .monospaced)
-    }
-}
+// Display + mono font lookups centralized in `ScopeType` (TalkieKit/UI/ScopeDesign.swift).
 
 struct ScopeHomeView: View {
     let unifiedActivity: [UnifiedActivityItem]
@@ -214,7 +171,7 @@ struct ScopeHomeView: View {
                     state: captureStateDictation,
                     action: "DICTATE",
                     hint: "⌃⇧⌘ D",
-                    onTap: {}
+                    onTap: triggerDictation
                 )
                 CaptureModeCard(
                     glyph: .crosshair,
@@ -223,7 +180,7 @@ struct ScopeHomeView: View {
                     state: captureStateTray,
                     action: "CAPTURE",
                     hint: "⌃⇧⌘ S",
-                    onTap: {}
+                    onTap: triggerCapture
                 )
             }
         }
@@ -274,7 +231,8 @@ struct ScopeHomeView: View {
                                 body: nil,
                                 meta: durationLabel(obj.duration),
                                 when: whenLabel(obj.createdAt),
-                                onTap: { NavigationState.shared.navigate(to: .recordings, params: ["recordingId": obj.id.uuidString]) }
+                                onTap: { NavigationState.shared.navigate(to: .recordings, params: ["recordingId": obj.id.uuidString]) },
+                                menuActions: memoMenuActions(for: obj)
                             )
                         },
                         emptyCTA: RecentCTA(
@@ -298,14 +256,15 @@ struct ScopeHomeView: View {
                                 body: nil,
                                 meta: wordCountLabel(obj.text),
                                 when: whenLabel(obj.createdAt),
-                                onTap: { NavigationState.shared.navigate(to: .dictations, params: ["recordingId": obj.id.uuidString]) }
+                                onTap: { NavigationState.shared.navigate(to: .dictations, params: ["recordingId": obj.id.uuidString]) },
+                                menuActions: dictationMenuActions(for: obj)
                             )
                         },
                         emptyCTA: RecentCTA(
                             glyph: "○",
                             label: "Dictate",
                             kbd: ["⌃", "⇧", "⌘", "D"],
-                            onTap: {}
+                            onTap: triggerDictation
                         )
                     ),
                 ],
@@ -326,14 +285,15 @@ struct ScopeHomeView: View {
                                 body: nil,
                                 meta: item.meta,
                                 when: whenLabel(item.date),
-                                onTap: { openRecentCapture(item) }
+                                onTap: { openRecentCapture(item) },
+                                menuActions: captureMenuActions(for: item)
                             )
                         },
                         emptyCTA: RecentCTA(
                             glyph: "◫",
                             label: "Capture screen",
                             kbd: ["⌃", "⇧", "⌘", "S"],
-                            onTap: {}
+                            onTap: triggerCapture
                         )
                     ),
                     RecentSection(
@@ -355,18 +315,57 @@ struct ScopeHomeView: View {
                                 // ScopeNoteDetailView) actually fires.
                                 // `.notes` lands on the Sheaf grid and
                                 // ignores recordingId.
-                                onTap: { NavigationState.shared.navigate(to: .recordings, params: ["recordingId": obj.id.uuidString]) }
+                                onTap: { NavigationState.shared.navigate(to: .recordings, params: ["recordingId": obj.id.uuidString]) },
+                                menuActions: noteMenuActions(for: obj)
                             )
                         },
                         emptyCTA: RecentCTA(
                             glyph: "¶",
                             label: "Write a note",
                             kbd: ["⌃", "⇧", "⌘", "N"],
-                            onTap: {}
+                            onTap: triggerNewNote
                         )
                     ),
                 ]
             )
+        }
+    }
+
+    // MARK: - Capture / dictation / note triggers
+    //
+    // These mirror the keyboard-shortcut path so home-screen CTAs and
+    // hotkeys converge on the same code, avoiding state drift. (Audit #2:
+    // these used to be `onTap: {}` — kind of the worst impression a new
+    // user could get clicking around the home screen.)
+
+    /// Toggle the live dictation pipeline. Same path as ⌃⇧⌘D.
+    private func triggerDictation() {
+        ServiceManager.shared.live.toggleRecording()
+    }
+
+    /// Fire a region-mode standalone capture via AppDelegate's executeCapture,
+    /// which is the same pipeline used by the hotkey-driven shortcut.
+    private func triggerCapture() {
+        Task { @MainActor in
+            guard let delegate = NSApp.delegate as? AppDelegate else { return }
+            _ = await delegate.executeCapture(mode: .region)
+        }
+    }
+
+    /// Create a blank note row, save it, then deep-link into the library
+    /// detail (which mounts ScopeNoteDetailView in edit-ready state).
+    private func triggerNewNote() {
+        Task { @MainActor in
+            let id = UUID()
+            let note = TalkieObject.newNote(id: id, text: "")
+            do {
+                let repository = TalkieObjectRepository()
+                try await repository.saveRecording(note)
+                await RecordingsViewModel.shared.loadRecordings()
+                NavigationState.shared.navigate(to: .recordings, params: ["recordingId": id.uuidString])
+            } catch {
+                print("⚠️ ScopeHomeView: failed to create note: \(error)")
+            }
         }
     }
 
@@ -422,6 +421,10 @@ struct ScopeHomeView: View {
         let meta: String
         let date: Date
         let source: Source
+        /// On-disk PNG path — tray.tempURL for in-flight tray items,
+        /// the ScreenshotStorage path for saved captures. Drives the
+        /// preview / annotate / quick-copy actions for both sources.
+        let fileURL: URL?
     }
 
     private var recentCaptures: [RecentCapture] {
@@ -436,7 +439,8 @@ struct ScopeHomeView: View {
                 line: trayLine(for: item),
                 meta: screenshotMeta(width: item.width, height: item.height),
                 date: item.capturedAt,
-                source: .tray
+                source: .tray,
+                fileURL: item.tempURL
             ))
         }
 
@@ -446,12 +450,15 @@ struct ScopeHomeView: View {
         for obj in recordingsVM.recordings where obj.type == .capture && obj.deletedAt == nil && !obj.screenshots.isEmpty {
             for ss in obj.screenshots {
                 let label = ss.windowTitle ?? ss.appName ?? obj.title ?? "Screenshot"
+                let url = ScreenshotStorage.screenshotsDirectory
+                    .appendingPathComponent(ss.filename)
                 out.append(RecentCapture(
                     id: stableUUID(from: "rec-\(ss.filename)"),
                     line: label,
                     meta: screenshotMeta(width: ss.width, height: ss.height),
                     date: obj.createdAt,
-                    source: .savedCapture
+                    source: .savedCapture,
+                    fileURL: url
                 ))
             }
         }
@@ -484,6 +491,113 @@ struct ScopeHomeView: View {
     private func todayCount(_ items: [RecentCapture]) -> Int {
         let cal = Calendar.current
         return items.filter { cal.isDateInToday($0.date) }.count
+    }
+
+    // MARK: Right-click menus
+    //
+    // Each builder returns the actions for a Recent row's context menu.
+    // Kept close to the data-binding call sites so the available actions
+    // stay obvious next to where the row is constructed. Mirrors the
+    // existing context menus in `HomeScreen.swift` (MemoActivityRow /
+    // DictationActivityRow) so behavior is identical when the standard
+    // theme home is showing the same items.
+
+    private func memoMenuActions(for obj: TalkieObject) -> [RecentMenuItem] {
+        [
+            RecentMenuItem(label: "Open", systemImage: "arrow.up.right.square", role: nil) {
+                NavigationState.shared.navigate(to: .recordings, params: ["recordingId": obj.id.uuidString])
+            },
+            RecentMenuItem(label: "Copy Text", systemImage: "doc.on.doc", role: nil) {
+                Self.copyToPasteboard(obj.text)
+            },
+            RecentMenuItem(label: "Share…", systemImage: "square.and.arrow.up", role: nil) {
+                Self.share(string: obj.text)
+            },
+            .divider,
+            RecentMenuItem(label: "Delete", systemImage: "trash", role: .destructive) {
+                Task { await RecordingsViewModel.shared.softDeleteRecording(obj) }
+            },
+        ]
+    }
+
+    private func dictationMenuActions(for obj: TalkieObject) -> [RecentMenuItem] {
+        [
+            RecentMenuItem(label: "Open", systemImage: "arrow.up.right.square", role: nil) {
+                NavigationState.shared.navigate(to: .dictations, params: ["recordingId": obj.id.uuidString])
+            },
+            RecentMenuItem(label: "Copy Text", systemImage: "doc.on.doc", role: nil) {
+                Self.copyToPasteboard(obj.text)
+            },
+            RecentMenuItem(label: "Promote to Memo", systemImage: "arrow.up.doc", role: nil) {
+                Task {
+                    try? await TalkieObjectRepository().promoteToMemo(id: obj.id)
+                    DictationStore.shared.refresh()
+                }
+            },
+            RecentMenuItem(label: "Share…", systemImage: "square.and.arrow.up", role: nil) {
+                Self.share(string: obj.text)
+            },
+            .divider,
+            RecentMenuItem(label: "Delete", systemImage: "trash", role: .destructive) {
+                Task { await RecordingsViewModel.shared.hardDeleteRecording(obj) }
+            },
+        ]
+    }
+
+    private func noteMenuActions(for obj: TalkieObject) -> [RecentMenuItem] {
+        [
+            RecentMenuItem(label: "Open", systemImage: "arrow.up.right.square", role: nil) {
+                NavigationState.shared.navigate(to: .recordings, params: ["recordingId": obj.id.uuidString])
+            },
+            RecentMenuItem(label: "Copy Text", systemImage: "doc.on.doc", role: nil) {
+                Self.copyToPasteboard(obj.text)
+            },
+            .divider,
+            RecentMenuItem(label: "Delete", systemImage: "trash", role: .destructive) {
+                Task { await RecordingsViewModel.shared.softDeleteRecording(obj) }
+            },
+        ]
+    }
+
+    private func captureMenuActions(for item: RecentCapture) -> [RecentMenuItem] {
+        guard let url = item.fileURL else { return [] }
+        return [
+            RecentMenuItem(label: "Open in Screenshots", systemImage: "photo.on.rectangle", role: nil) {
+                NavigationState.shared.navigate(to: .screenshots)
+            },
+            RecentMenuItem(label: "Preview", systemImage: "eye", role: nil) {
+                NSWorkspace.shared.open(url)
+            },
+            RecentMenuItem(label: "Annotate", systemImage: "pencil.tip.crop.circle", role: nil) {
+                CaptureMarkupCoordinator.shared.openSession(imageURL: url)
+            },
+            RecentMenuItem(label: "Quick Copy", systemImage: "doc.on.doc", role: nil) {
+                Self.copyImage(at: url)
+            },
+        ]
+    }
+
+    private static func copyToPasteboard(_ text: String?) {
+        let value = text ?? ""
+        guard !value.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
+    }
+
+    private static func share(string: String?) {
+        let value = string ?? ""
+        guard !value.isEmpty else { return }
+        let picker = NSSharingServicePicker(items: [value])
+        if let window = NSApp.keyWindow, let contentView = window.contentView {
+            picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
+        }
+    }
+
+    private static func copyImage(at url: URL) {
+        guard let data = try? Data(contentsOf: url),
+              let image = NSImage(data: data) else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.writeObjects([image])
     }
 
     // MARK: Recent row helpers
@@ -559,26 +673,24 @@ struct ScopeHomeView: View {
     private var routinesStrip: some View {
         VStack(alignment: .leading, spacing: 14) {
             Eyebrow("Routines")
-            HStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 0) {
                 RoutinesPanel(
                     title: "Workflows",
                     trailing: workflowRunsTodayText,
                     rows: workflowRunRows,
                     footer: "MANAGE WORKFLOWS",
-                    accent: ScopeBrass.solid
+                    accent: ScopeBrass.solid,
+                    onTitleTap: { NavigationState.shared.navigate(to: .workflows) }
                 )
                 ScopeRule(.subtle, axis: .vertical)
                     .padding(.vertical, 14)
                 RoutinesPanel(
                     title: "Console",
                     trailing: "2 tabs",
-                    rows: [
-                        .init(leading: .filled, label: "iTerm2", trailing: "ACTIVE"),
-                        .init(leading: .filled, label: "Codex",  trailing: "IDLE"),
-                        .init(leading: .hollow, label: "Claude", trailing: "OFF"),
-                    ],
+                    rows: consoleRows,
                     footer: "OPEN CONSOLE",
-                    accent: ScopeAmber.solid
+                    accent: ScopeAmber.solid,
+                    onTitleTap: { NavigationState.shared.navigate(to: .systemConsole) }
                 )
             }
             .background(
@@ -618,15 +730,43 @@ struct ScopeHomeView: View {
             RoutinesPanel.Row(
                 leading: .filled,
                 label: run.workflowName,
-                trailing: workflowRunTimeText(run.runDate)
+                trailing: workflowRunTimeText(run.runDate),
+                onSelect: {
+                    NavigationState.shared.navigate(
+                        to: .workflows,
+                        params: ["workflowId": run.workflowId.uuidString]
+                    )
+                }
             )
         }
 
         if rows.isEmpty {
-            return [.init(leading: .hollow, label: "Ready", trailing: "")]
+            return [.init(
+                leading: .hollow,
+                label: "Ready",
+                trailing: "",
+                onSelect: { NavigationState.shared.navigate(to: .workflows) }
+            )]
         }
 
         return rows
+    }
+
+    private var consoleRows: [RoutinesPanel.Row] {
+        [
+            .init(
+                leading: .filled, label: "iTerm2", trailing: "ACTIVE",
+                onSelect: { NavigationState.shared.navigate(to: .systemConsole) }
+            ),
+            .init(
+                leading: .filled, label: "Codex",  trailing: "IDLE",
+                onSelect: { NavigationState.shared.navigate(to: .systemConsole) }
+            ),
+            .init(
+                leading: .hollow, label: "Claude", trailing: "OFF",
+                onSelect: { NavigationState.shared.navigate(to: .systemConsole) }
+            ),
+        ]
     }
 
     private func workflowRunTimeText(_ date: Date) -> String {
@@ -652,10 +792,16 @@ struct ScopeHomeView: View {
     // real today (HotkeyManager registrations).
 
     // Tips row — compact borderless instrument labels for common actions.
+    //
+    // Same outer shape as the Recent panes and Routines strip
+    // (`scopeCardBorder` + cornerRadius 6) so the column reads as a
+    // coherent stack of card-shaped sections. Interior stays flat — no
+    // gradient, no top rule — to match the "knowledge bay" tone rather
+    // than the active "instrument bay" treatment used above.
     private var discoveryRow: some View {
         VStack(alignment: .leading, spacing: 14) {
             Eyebrow("Tips")
-            HStack(alignment: .top, spacing: 16) {
+            HStack(alignment: .top, spacing: 0) {
                 DidYouKnowCard(
                     glyph: .voiceEdit,
                     marker: "01",
@@ -664,7 +810,7 @@ struct ScopeHomeView: View {
                     action: "Open"
                 )
                 ScopeRule(.section, axis: .vertical)
-                    .padding(.vertical, 2)
+                    .padding(.vertical, 14)
                 DidYouKnowCard(
                     glyph: .smartActions,
                     marker: "02",
@@ -673,7 +819,7 @@ struct ScopeHomeView: View {
                     action: "Compose"
                 )
                 ScopeRule(.section, axis: .vertical)
-                    .padding(.vertical, 2)
+                    .padding(.vertical, 14)
                 DidYouKnowCard(
                     glyph: .tray,
                     marker: "03",
@@ -682,6 +828,11 @@ struct ScopeHomeView: View {
                     action: "Details"
                 )
             }
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.white.opacity(0.30))
+            )
+            .scopeCardBorder(cornerRadius: 6, emphasis: .muted)
         }
     }
 
@@ -862,7 +1013,7 @@ struct ScopeHomeView: View {
     private func statTile(scheme: BayScheme, seed: Int, value: String, label: String, extra: AnyView? = nil) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(value)
-                .font(ScopeFont.display(size: bayCompact ? 26 : 34))
+                .font(ScopeType.display(size: bayCompact ? 26 : 34))
                 .foregroundStyle(scheme.statInk)
                 .tracking(-0.5)
                 .shadow(color: scheme.traceGlow, radius: 4)
@@ -1851,34 +2002,50 @@ struct BayCornerBrackets: View {
 
 private struct RoutinesPanel: View {
     enum Dot { case filled, hollow }
-    struct Row { let leading: Dot; let label: String; let trailing: String }
+    struct Row {
+        let leading: Dot
+        let label: String
+        let trailing: String
+        var onSelect: (() -> Void)? = nil
+    }
 
     let title: String
     let trailing: String
     let rows: [Row]
     let footer: String
     let accent: Color
+    var onTitleTap: (() -> Void)? = nil
 
     @State private var footerHovered = false
+    @State private var hoveredRowIndex: Int? = nil
+    @State private var titleHovered = false
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    PhosphorDot(color: accent.opacity(0.72), size: 4)
-                    Text(title)
-                        .font(ScopeFont.display(size: 15, medium: true))
-                        .foregroundStyle(ScopeInk.primary)
+            Button {
+                onTitleTap?()
+            } label: {
+                HStack(alignment: .firstTextBaseline) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        PhosphorDot(color: accent.opacity(0.72), size: 4)
+                        Text(title)
+                            .font(ScopeType.display(size: 15, weight: .medium))
+                            .foregroundStyle(titleHovered ? accent : ScopeInk.primary)
+                    }
+                    Spacer()
+                    Text(trailing.uppercased())
+                        .font(ScopeType.chrome)
+                        .tracking(ScopeType.Tracking.wide)
+                        .foregroundStyle(ScopeInk.faint)
                 }
-                Spacer()
-                Text(trailing.uppercased())
-                    .font(ScopeType.chrome)
-                    .tracking(ScopeType.Tracking.wide)
-                    .foregroundStyle(ScopeInk.faint)
+                .padding(.horizontal, 16)
+                .padding(.top, 13)
+                .padding(.bottom, 10)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 13)
-            .padding(.bottom, 10)
+            .buttonStyle(.plain)
+            .disabled(onTitleTap == nil)
+            .onHover { titleHovered = $0 && onTitleTap != nil }
             .overlay(alignment: .bottom) {
                 ScopeRule(.section)
                     .padding(.horizontal, 16)
@@ -1889,25 +2056,42 @@ private struct RoutinesPanel: View {
                     // Row + trailing rule wrapped in a VStack so the
                     // conditional view has a stable layout slot.
                     VStack(spacing: 0) {
-                        HStack(spacing: 10) {
-                            Circle()
-                                .fill(row.leading == .filled ? accent : Color.clear)
-                                .overlay(
-                                    Circle().stroke(accent.opacity(0.88), lineWidth: row.leading == .hollow ? 1 : 0)
-                                )
-                                .shadow(color: row.leading == .filled ? accent.opacity(0.22) : .clear, radius: 2)
-                                .frame(width: 5, height: 5)
-                            Text(row.label)
-                                .font(.system(size: 12, weight: .regular))
-                                .foregroundStyle(ScopeInk.primary)
-                            Spacer()
-                            Text(row.trailing.uppercased())
-                                .font(ScopeType.chrome)
-                                .tracking(ScopeType.Tracking.wide)
-                                .foregroundStyle(ScopeInk.subtle)
+                        Button {
+                            row.onSelect?()
+                        } label: {
+                            HStack(spacing: 10) {
+                                Circle()
+                                    .fill(row.leading == .filled ? accent : Color.clear)
+                                    .overlay(
+                                        Circle().stroke(accent.opacity(0.88), lineWidth: row.leading == .hollow ? 1 : 0)
+                                    )
+                                    .shadow(color: row.leading == .filled ? accent.opacity(0.22) : .clear, radius: 2)
+                                    .frame(width: 5, height: 5)
+                                Text(row.label)
+                                    .font(.system(size: 12, weight: .regular))
+                                    .foregroundStyle(hoveredRowIndex == idx ? accent : ScopeInk.primary)
+                                Spacer()
+                                Text(row.trailing.uppercased())
+                                    .font(ScopeType.chrome)
+                                    .tracking(ScopeType.Tracking.wide)
+                                    .foregroundStyle(ScopeInk.subtle)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 7.5)
+                            .background(
+                                hoveredRowIndex == idx
+                                ? accent.opacity(0.05)
+                                : Color.clear
+                            )
+                            .contentShape(Rectangle())
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 7.5)
+                        .buttonStyle(.plain)
+                        .disabled(row.onSelect == nil)
+                        .onHover { hover in
+                            if row.onSelect != nil {
+                                hoveredRowIndex = hover ? idx : (hoveredRowIndex == idx ? nil : hoveredRowIndex)
+                            }
+                        }
 
                         if idx < rows.count - 1 {
                             ScopeRule(.row)
@@ -1980,7 +2164,7 @@ private struct DidYouKnowCard: View {
 
                 VStack(alignment: .leading, spacing: 7) {
                     Text(hook)
-                        .font(ScopeFont.display(size: 17, medium: true))
+                        .font(ScopeType.display(size: 17, weight: .medium))
                         .foregroundStyle(ScopeInk.primary)
                         .lineLimit(1)
                     Text(detail)
@@ -2227,7 +2411,7 @@ private struct DiscoveryWidgetCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 Text(title)
-                    .font(ScopeFont.display(size: 13, medium: true))
+                    .font(ScopeType.display(size: 13, weight: .medium))
                     .foregroundStyle(ScopeInk.primary)
                 Spacer()
                 Text(eyebrow.uppercased())

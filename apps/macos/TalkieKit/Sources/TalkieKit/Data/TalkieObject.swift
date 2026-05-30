@@ -34,6 +34,8 @@ public struct TalkieObject: Identifiable, Codable, Hashable, Sendable {
     public var createdAt: Date
     public var lastModified: Date?
     public var deletedAt: Date?        // Soft delete (memos only)
+    public var pinnedAt: Date?         // Pin timestamp (presence = pinned)
+    public var starredAt: Date?        // Star timestamp (presence = starred)
 
     // MARK: - Origin (immutable after creation)
 
@@ -94,6 +96,8 @@ public struct TalkieObject: Identifiable, Codable, Hashable, Sendable {
         createdAt: Date = Date(),
         lastModified: Date? = nil,
         deletedAt: Date? = nil,
+        pinnedAt: Date? = nil,
+        starredAt: Date? = nil,
         source: RecordingSource = .mac,
         sourceDeviceId: String? = nil,
         promotedAt: Date? = nil,
@@ -124,6 +128,8 @@ public struct TalkieObject: Identifiable, Codable, Hashable, Sendable {
         self.createdAt = createdAt
         self.lastModified = lastModified
         self.deletedAt = deletedAt
+        self.pinnedAt = pinnedAt
+        self.starredAt = starredAt
         self.source = source
         self.sourceDeviceId = sourceDeviceId
         self.promotedAt = promotedAt
@@ -168,6 +174,8 @@ extension TalkieObject: FetchableRecord, PersistableRecord {
         public static let createdAt = Column(CodingKeys.createdAt)
         public static let lastModified = Column(CodingKeys.lastModified)
         public static let deletedAt = Column(CodingKeys.deletedAt)
+        public static let pinnedAt = Column(CodingKeys.pinnedAt)
+        public static let starredAt = Column(CodingKeys.starredAt)
         public static let source = Column(CodingKeys.source)
         public static let sourceDeviceId = Column(CodingKeys.sourceDeviceId)
         public static let promotedAt = Column(CodingKeys.promotedAt)
@@ -201,6 +209,8 @@ extension TalkieObject {
     public var isNote: Bool { type == .note }
     public var isSegment: Bool { type == .segment }
     public var isSelection: Bool { type == .selection }
+    public var isPinned: Bool { pinnedAt != nil }
+    public var isStarred: Bool { starredAt != nil }
     public var wasPromoted: Bool { promotedAt != nil }
     public var isDeleted: Bool { deletedAt != nil }
 

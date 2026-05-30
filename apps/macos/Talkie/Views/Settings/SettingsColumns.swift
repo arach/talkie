@@ -572,20 +572,21 @@ struct SettingsSidebarColumn: View {
                         sidebarItem(.selection, icon: "text.cursor", title: "Selection")
                     }
 
-                    // PROCESSING (context, AI, data & workflows)
-                    SettingsSidebarSection(title: "PROCESSING", isActive: activeSection == .context || activeSection == .aiProviders || activeSection == .models || activeSection == .storage || activeSection == .sync || activeSection == .automations, iconsOnly: compact) {
+                    // PROCESSING (context, AI, data)
+                    // Automations moved out of Settings — they're per-workflow
+                    // triggers and live on the Workflows surface.
+                    SettingsSidebarSection(title: "PROCESSING", isActive: activeSection == .context || activeSection == .aiProviders || activeSection == .models || activeSection == .storage || activeSection == .sync, iconsOnly: compact) {
                         sidebarItem(.context, icon: "square.stack.3d.forward.dottedline", title: "Context")
                         sidebarItem(.aiProviders, icon: "key", title: "Providers")
                         sidebarItem(.models, icon: "cpu", title: "Models")
                         sidebarItem(.storage, icon: "internaldrive", title: "Storage")
                         sidebarItem(.sync, icon: "iphone.gen3.radiowaves.left.and.right", title: "Devices")
-                        sidebarItem(.automations, icon: "play.circle", title: "Automations")
                     }
 
-                    // SYSTEM (meta/admin - technical settings)
-                    SettingsSidebarSection(title: "SYSTEM", isActive: activeSection == .helpers || activeSection == .extensions || activeSection == .feedback || activeSection == .devControl, iconsOnly: compact) {
+                    // SYSTEM (meta/admin - technical settings).
+                    // Apps is now a tab inside Helpers; no standalone entry.
+                    SettingsSidebarSection(title: "SYSTEM", isActive: activeSection == .helpers || activeSection == .feedback || activeSection == .devControl, iconsOnly: compact) {
                         sidebarItem(.helpers, icon: "app.connected.to.app.below.fill", title: "Helpers")
-                        sidebarItem(.extensions, icon: "square.stack.3d.up", title: "Apps")
                         sidebarItem(.feedback, icon: "bubble.left.and.text.bubble.right", title: "Feedback")
                         #if DEBUG
                         sidebarItem(.devControl, icon: "hammer.fill", title: "Dev Control")

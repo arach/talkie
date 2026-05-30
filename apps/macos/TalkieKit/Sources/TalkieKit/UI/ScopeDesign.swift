@@ -337,6 +337,41 @@ public enum ScopePanel {
     )
 }
 
+// MARK: - Command Palette (PORCELAIN — light, sharp, instrument)
+
+/// Light cool-gray tokens for the macOS command palette. PORCELAIN family
+/// substrate — lifted enough to read as a panel above the (dimmed) app
+/// behind it, with crisp dark hairlines and deep-amber accents that pop
+/// against the light. Additive to the broader Scope token ladder; stays
+/// scoped to the palette so global app theming is untouched.
+public enum ScopePalette {
+    // Substrate ladder — PORCELAIN base, PEARL lift, STEEL sink.
+    public static let bg = Color.hex("EAEEF1")          // base panel
+    public static let bgRaised = Color.hex("F2F5F7")    // search field, footer
+    public static let bgSunk = Color.hex("DFE3E8")      // section header strip
+
+    // Ink ladder — cool dark, matches SCOPE.ink family.
+    public static let ink = Color.hex("232423")
+    public static let inkFaint = Color.hex("232423").opacity(0.62)
+    public static let inkFainter = Color.hex("232423").opacity(0.40)
+    public static let inkSubtle = Color.hex("232423").opacity(0.24)
+
+    // Amber accent — slightly deeper than the dark-mode amber so it
+    // carries against a light substrate without washing out.
+    public static let amber = Color.hex("C47D1C")
+    public static let amberFaint = Color.hex("C47D1C").opacity(0.10)
+    public static let amberSoft = Color.hex("C47D1C").opacity(0.28)
+    public static let amberDeep = Color.hex("7A521A")
+    public static let glyphOnAmber = Color.white
+
+    // Rules + edges — sharper than the dark-glass era. Dark hairlines
+    // on light substrate read as crisp lines, not glow.
+    public static let edge = Color.hex("232423").opacity(0.10)
+    public static let edgeStrong = Color.hex("232423").opacity(0.22)
+    public static let rule = Color.hex("232423").opacity(0.10)
+    public static let ruleStrong = Color.hex("232423").opacity(0.18)
+}
+
 // MARK: - Typography presets
 
 /// Caption / instrument-label typography. Mirrors the homepage's
@@ -346,20 +381,82 @@ public enum ScopePanel {
 /// at the typical 10pt size. Tracking scales with font size in
 /// SwiftUI, which is fine — the visual ratio stays close.
 public enum ScopeType {
-    /// Studio's `font-mono` is JetBrains Mono. We mirror that here
-    /// so the SwiftUI surfaces don't drop to SF Mono (which reads
-    /// noticeably differently — wider, rounder digits). Falls back
-    /// to system monospaced if the font isn't loaded.
-    private static func mono(size: CGFloat) -> Font {
+    // MARK: Display (Cormorant Garamond)
+    //
+    // Cormorant Garamond is the homepage's `--font-display-modern`.
+    // Ships with slight PostScript naming differences across builds,
+    // so we try several candidates before falling back to system serif.
+    // Single source of truth: don't redefine in view files.
+
+    private static let cormorantRegularCandidates = [
+        "CormorantGaramond-Regular",
+        "Cormorant Garamond",
+        "CormorantGaramond",
+    ]
+    private static let cormorantMediumCandidates = [
+        "CormorantGaramond-Medium",
+        "Cormorant Garamond Medium",
+    ]
+    private static let cormorantItalicCandidates = [
+        "CormorantGaramond-Italic",
+        "Cormorant Garamond Italic",
+    ]
+
+    /// Cormorant Garamond at any size + weight. Falls back to system
+    /// serif when the family is missing.
+    public static func display(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        let candidates = (weight == .medium || weight == .semibold || weight == .bold)
+            ? cormorantMediumCandidates
+            : cormorantRegularCandidates
         #if canImport(AppKit)
-        for name in ["JetBrainsMono-SemiBold", "JetBrainsMono-Medium"] {
+        for name in candidates {
             if NSFont(name: name, size: size) != nil {
                 return .custom(name, size: size)
             }
         }
         #endif
-        return .system(size: size, weight: .semibold, design: .monospaced)
+        return .system(size: size, weight: weight, design: .serif)
     }
+
+    /// Italic display. Cormorant Italic when present, else system serif italic.
+    public static func displayItalic(size: CGFloat) -> Font {
+        #if canImport(AppKit)
+        for name in cormorantItalicCandidates {
+            if NSFont(name: name, size: size) != nil {
+                return .custom(name, size: size)
+            }
+        }
+        #endif
+        return .system(size: size, weight: .regular, design: .serif).italic()
+    }
+
+    // MARK: Mono (JetBrains Mono)
+
+    /// Studio's `font-mono` is JetBrains Mono. We mirror that here
+    /// so the SwiftUI surfaces don't drop to SF Mono (which reads
+    /// noticeably differently — wider, rounder digits). Falls back
+    /// to system monospaced if the font isn't loaded.
+    public static func mono(size: CGFloat, weight: Font.Weight = .semibold) -> Font {
+        let candidates: [String]
+        switch weight {
+        case .semibold, .bold:
+            candidates = ["JetBrainsMono-SemiBold", "JetBrainsMono-Medium"]
+        default:
+            candidates = ["JetBrainsMono-Medium", "JetBrainsMono-Regular"]
+        }
+        #if canImport(AppKit)
+        for name in candidates {
+            if NSFont(name: name, size: size) != nil {
+                return .custom(name, size: size)
+            }
+        }
+        #endif
+        return .system(size: size, weight: weight, design: .monospaced)
+    }
+
+    /// Backwards-compatible mono(size:) — calls the weighted variant
+    /// with the historical `.semibold` default.
+    private static func mono(size: CGFloat) -> Font { mono(size: size, weight: .semibold) }
 
     /// 10pt monospaced bold caps, wide tracking — eyebrow / section label.
     public static var eyebrow: Font { mono(size: 10) }

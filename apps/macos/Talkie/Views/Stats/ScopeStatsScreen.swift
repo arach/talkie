@@ -19,26 +19,7 @@ import TalkieKit
 // MARK: - Scope display fonts
 // Cormorant Garamond is the homepage's `--font-display-modern`. Falls
 // back to system serif if the font isn't installed.
-private enum ScopeFont {
-    private static let regularCandidates = [
-        "CormorantGaramond-Regular",
-        "Cormorant Garamond",
-        "CormorantGaramond",
-    ]
-    private static let mediumCandidates = [
-        "CormorantGaramond-Medium",
-        "Cormorant Garamond Medium",
-    ]
-
-    static func display(size: CGFloat, medium: Bool = false) -> Font {
-        for name in (medium ? mediumCandidates : regularCandidates) {
-            if NSFont(name: name, size: size) != nil {
-                return .custom(name, size: size)
-            }
-        }
-        return .system(size: size, weight: medium ? .medium : .regular, design: .serif)
-    }
-}
+// Display font lookup centralized in ScopeType.display(size:weight:) — see TalkieKit/UI/ScopeDesign.swift.
 
 // MARK: - ScopeStatsScreen
 
@@ -272,7 +253,7 @@ struct ScopeStatsScreen: View {
                 Spacer()
             }
             Text(value)
-                .font(ScopeFont.display(size: 50))
+                .font(ScopeType.display(size: 50))
                 .foregroundStyle(ScopePanel.trace)
                 .tracking(-0.8)
                 .shadow(color: ScopePanel.traceGlow, radius: 5)

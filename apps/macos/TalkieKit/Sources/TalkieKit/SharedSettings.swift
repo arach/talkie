@@ -156,6 +156,7 @@ public enum AgentSettingsKey {
     public static let anthropicApiKey = "anthropic_api_key"
     public static let geminiApiKey = "gemini_api_key"
     public static let groqApiKey = "groq_api_key"
+    public static let minimaxApiKey = "minimax_api_key"
     public static let elevenLabsApiKey = "elevenlabs_api_key"
 
     // MARK: Interstitial Settings

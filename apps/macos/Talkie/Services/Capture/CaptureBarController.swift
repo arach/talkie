@@ -151,6 +151,18 @@ final class CaptureBarController {
                     resetTimeout()
                 }
 
+                // Return / Enter commits the preselected capture mode
+                // (REGION by default). Mirrors the HUD controller so
+                // both surfaces share the picker affordance.
+                if event.keyCode == 36 || event.keyCode == 76 {
+                    timeout.cancel()
+                    let selected = self.panel.state.selectedCaptureMode
+                    switch self.panel.state.mode {
+                    case .screenshot: resume(.screenshot(selected))
+                    case .video:      resume(.screenRecord(selected))
+                    }
+                }
+
                 // Escape cancels
                 if event.keyCode == 53 {
                     timeout.cancel()

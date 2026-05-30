@@ -8,6 +8,7 @@
 
 import Foundation
 import AppKit
+import TalkieKit
 
 @MainActor
 class DebugCommandHandler {
@@ -67,6 +68,18 @@ class DebugCommandHandler {
 
         case "retranscribe-memo":
             await retranscribeMemo(args: args)
+
+        case "capture-markup-describe":
+            await captureMarkupDescribe(args: args)
+
+        case "capture-markup-plan":
+            await captureMarkupPlan(args: args)
+
+        case "capture-markup-apply":
+            await captureMarkupApply(args: args)
+
+        case "capture-markup-render":
+            await captureMarkupRender(args: args)
 
         case "test-workflow-import":
             testWorkflowImport()
@@ -287,6 +300,90 @@ class DebugCommandHandler {
         } else {
             print("⚠️ Audio catch-up sample incomplete")
             exit(2)
+        }
+    }
+
+    private func captureMarkupDescribe(args: [String]) async {
+        guard let path = args.first else {
+            print("❌ Usage: --debug=capture-markup-describe <image-path>")
+            exit(1)
+        }
+        let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+        do {
+            let description = try await CaptureMarkupAgentService.shared.describe(imageURL: url)
+            print(description)
+            exit(0)
+        } catch {
+            print("❌ \(error.localizedDescription)")
+            exit(1)
+        }
+    }
+
+    private func captureMarkupPlan(args: [String]) async {
+        guard args.count >= 2 else {
+            print("❌ Usage: --debug=capture-markup-plan <image-path> <instruction>")
+            exit(1)
+        }
+        let url = URL(fileURLWithPath: (args[0] as NSString).expandingTildeInPath)
+        let instruction = args.dropFirst().joined(separator: " ")
+        do {
+            let plan = try await CaptureMarkupAgentService.shared.plan(
+                imageURL: url,
+                instruction: instruction
+            )
+            let data = try JSONEncoder().encode(plan)
+            print(String(data: data, encoding: .utf8) ?? "{}")
+            exit(0)
+        } catch {
+            print("❌ \(error.localizedDescription)")
+            exit(1)
+        }
+    }
+
+    private func captureMarkupApply(args: [String]) async {
+        guard args.count >= 2 else {
+            print("❌ Usage: --debug=capture-markup-apply <image-path> <plan-json-path>")
+            exit(1)
+        }
+        let url = URL(fileURLWithPath: (args[0] as NSString).expandingTildeInPath)
+        let planURL = URL(fileURLWithPath: (args[1] as NSString).expandingTildeInPath)
+        do {
+            let data = try Data(contentsOf: planURL)
+            let plan = try JSONDecoder().decode(CaptureMarkupPlan.self, from: data)
+            let document = try CaptureMarkupAgentService.shared.applyPlan(
+                imageURL: url,
+                plan: plan
+            )
+            let encoded = try JSONEncoder().encode(document)
+            print(String(data: encoded, encoding: .utf8) ?? "{}")
+            exit(0)
+        } catch {
+            print("❌ \(error.localizedDescription)")
+            exit(1)
+        }
+    }
+
+    private func captureMarkupRender(args: [String]) async {
+        guard let path = args.first else {
+            print("❌ Usage: --debug=capture-markup-render <image-path> [output-path]")
+            exit(1)
+        }
+        let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+        let output = args.dropFirst().first.map {
+            URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath)
+        }
+        do {
+            let png = try CaptureMarkupAgentService.shared.renderPNG(imageURL: url)
+            if let output {
+                try png.write(to: output)
+                print(output.path)
+            } else {
+                FileHandle.standardOutput.write(png)
+            }
+            exit(0)
+        } catch {
+            print("❌ \(error.localizedDescription)")
+            exit(1)
         }
     }
 

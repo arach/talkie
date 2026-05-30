@@ -1366,11 +1366,39 @@ struct NotchComposerView: View {
         if isHovered {
             IdleNotchButton(icon: "camera.viewfinder") {
                 Task {
-                    _ = await ScreenshotCaptureService.shared.captureStandalone(mode: .region)
+                    await captureRegionToTrayFromNotch()
                 }
             }
             .transition(.opacity)
         }
+    }
+
+    private func captureRegionToTrayFromNotch() async {
+        guard let result = await ScreenshotCaptureService.shared.captureStandalone(mode: .region) else {
+            return
+        }
+
+        let previewID = ScreenshotPreviewPanel.shared.show(
+            thumbnail: result.previewImage,
+            sourceWidth: result.width,
+            sourceHeight: result.height
+        )
+
+        guard let item = await ScreenshotTray.shared.addReturningItem(
+            data: result.data,
+            width: result.width,
+            height: result.height,
+            mode: .region,
+            windowTitle: result.windowTitle,
+            appName: result.appName,
+            displayName: result.displayName,
+            initialThumbnail: result.previewImage
+        ) else {
+            return
+        }
+
+        ScreenshotPreviewPanel.shared.attachFileURL(item.tempURL, to: previewID)
+        TrayActionService.shared.persistStandaloneScreenshotToLibrary(item)
     }
 
     private var idleLayout: some View {

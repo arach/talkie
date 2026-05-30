@@ -58,7 +58,7 @@ private let chromeNavSlots: [ChromeNavSlot] = [
 // MARK: - Tuning constants
 
 private enum ChromeMetrics {
-    static let pillHeight: CGFloat = 26
+    static let pillHeight: CGFloat = 24
     static let slotWidth: CGFloat = 112       // Matches studio Shape A
     static let stripChipSize: CGFloat = 22
     static let barRadius: CGFloat = 10
@@ -263,15 +263,18 @@ private struct TalkieChromePill: View {
                     .frame(width: 70, height: 16)
                 } else {
                     Text("TALKIE")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .tracking(2.0)
+                        // 9.5pt / 0.24em tracking / #F3EEE6 — the studio
+                        // TopBandSystem pill spec. A touch smaller + warmer
+                        // than before so it sits quietly at band center.
+                        .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                        .tracking(2.3)
                         .foregroundStyle(ChromeTone.pillForeground)
                     // No shortcut hint in the idle label — the brand
                     // word IS the affordance. If we later want a hint,
                     // ⌘T (record) is more honest than ⌘K (search).
                 }
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 12)
             .frame(height: ChromeMetrics.pillHeight)
             .background(
                 Capsule()
@@ -313,30 +316,27 @@ private struct TalkieChromePill: View {
     }
 }
 
-// MARK: - Talkie mark (amber concentric ring + dot)
+// MARK: - Talkie mark (single amber dot — the shared band motif)
 
 private struct TalkieMark: View {
     let glow: Bool
     let isActive: Bool
 
     var body: some View {
-        ZStack {
-            Circle()
-                .strokeBorder(ChromeTone.accent.opacity(0.45), lineWidth: 1)
-                .frame(width: 11, height: 11)
-
-            Circle()
-                .fill(ChromeTone.accent)
-                .frame(width: 6, height: 6)
-                .shadow(
-                    // Amber glow only on hover. During recording, the
-                    // REC label + waveform carry the signal — adding
-                    // an amber light reads as noise alongside the red
-                    // recording cue.
-                    color: glow ? ChromeTone.markGlow : .clear,
-                    radius: glow ? 4 : 0
-                )
-        }
+        // One 5pt amber dot, matching the studio TopBandSystem pill and
+        // the title-cluster leading marks. The earlier concentric ring
+        // was dropped so the amber dot reads as a single, consistent
+        // signal across every band slot (logo · title · pill).
+        Circle()
+            .fill(ChromeTone.accent)
+            .frame(width: 5, height: 5)
+            .shadow(
+                // Amber glow only on hover. During recording, the REC
+                // label + waveform carry the signal — adding an amber
+                // light reads as noise alongside the red recording cue.
+                color: glow ? ChromeTone.markGlow : .clear,
+                radius: glow ? 4 : 0
+            )
     }
 }
 

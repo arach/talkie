@@ -761,6 +761,12 @@ struct RecordingTranscriptCard: View {
     let isRetranscribing: Bool
     let onTranscriptChange: () -> Void
     let onRetranscribe: (String) -> Void
+    /// Optional seek hook fired when a paragraph timestamp is clicked.
+    /// Takes absolute seconds from audio start.
+    var onTimestampSeek: ((Double) -> Void)? = nil
+    /// Current playback time, threaded through to DocumentBody so the
+    /// "now playing" paragraph gets a subtle reading highlight.
+    var currentTime: TimeInterval = 0
 
     private let settings = SettingsManager.shared
     private let quickOpenService = QuickOpenService.shared
@@ -1054,12 +1060,15 @@ struct RecordingTranscriptCard: View {
                     DocumentBody(
                         text: text,
                         duration: recording.duration,
-                        wordCount: recording.wordCount
+                        wordCount: recording.wordCount,
                         // metadataGroups intentionally omitted — TOMarginRail
                         // (rendered at TalkieView.scrollContent level) now
                         // owns the right-margin metadata aside. Passing
                         // groups here would produce a second right column
                         // alongside the rail.
+                        segments: recording.assets?.segments,
+                        onSeek: onTimestampSeek,
+                        currentTime: currentTime
                     )
                 }
             }
@@ -1135,12 +1144,27 @@ struct RecordingTranscriptCard: View {
         // could collapse to zero inside a `.fixedSize`-free VStack and
         // looked like clicking the toggle did nothing). Tall payloads
         // get a scrollable cap.
-        ScrollView {
+        let isScope = SettingsManager.shared.isScopeTheme
+        return ScrollView {
             SyntaxHighlightedJSON(json: renderJSON())
                 .padding(Spacing.md)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(minHeight: 280, maxHeight: 520)
+        .background {
+            // In Scope mode, give the JSON panel its own surface lift
+            // (a cool-cream card) with a subtle ink hairline. Reads as
+            // an editorial code panel sitting on the page instead of a
+            // dark slab dropped in from a different theme.
+            if isScope {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(ScopeCanvas.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .strokeBorder(ScopeEdge.faint, lineWidth: 0.5)
+                    )
+            }
+        }
     }
 
     // MARK: - Tool Tray
@@ -1363,24 +1387,168 @@ struct DocumentBody: View {
     /// Optional opener cue rendered before the lead paragraph (e.g.
     /// "0:00 ·"). Renders in brass mono caps, inline with the lead.
     var leadCue: String? = nil
+    /// Word-level timing data (from WhisperKit / Parakeet). When
+    /// present we chunk the transcript by speech pauses and stamp each
+    /// paragraph with its start time. When nil we fall back to text-
+    /// based splitting (double newline → single newline → one blob).
+    var segments: TimedTranscription? = nil
+    /// Tap-the-timestamp seek hook. Takes absolute seconds from audio
+    /// start. When nil, paragraph timestamps render as static labels.
+    var onSeek: ((Double) -> Void)? = nil
+    /// Current playback time (seconds from audio start). When > 0 and
+    /// timings are available, the paragraph containing this time is
+    /// rendered with a subtle "now playing" treatment so the reader
+    /// can follow along with audio.
+    var currentTime: TimeInterval = 0
 
-    /// Split the transcript into paragraphs. Double-newline wins; if
-    /// the model gave us one block (common for short dictations), we
-    /// fall back to single newlines, then to one paragraph.
-    private var paragraphs: [String] {
+    @State private var hoveredParagraphIndex: Int? = nil
+
+    /// A single paragraph with its optional start timestamp (seconds
+    /// from audio start) for stamping the margin.
+    struct Paragraph {
+        let text: String
+        let startSeconds: Double?
+    }
+
+    /// Chunk the transcript into paragraphs. Strategy ladder:
+    ///   1. Honor explicit `\n\n` breaks if the source already has them.
+    ///   2. Use word-level timings (`segments.words`) to detect pauses
+    ///      and break on them. Enforces min/max word counts so we don't
+    ///      get either choppy fragments or wall-of-text blocks.
+    ///   3. Fall back to `\n` splits or one paragraph.
+    /// Chunk the transcript into paragraphs. We chunk against the
+    /// canonical `text` field (which always reads cleanly) and never
+    /// reconstruct prose from `segments.words` — engines can emit
+    /// sub-word BPE tokens (`"Br"` `"oad"` `"ly"`) that shatter into
+    /// `"Br oad ly"` when joined naïvely. `words` is used solely to
+    /// stamp paragraph start times.
+    private var paragraphs: [Paragraph] {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // 1. Explicit double-newline breaks
         let byDouble = trimmed
             .components(separatedBy: "\n\n")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        if byDouble.count > 1 { return byDouble }
+        if byDouble.count > 1 {
+            return attachTimings(to: byDouble)
+        }
 
+        // 2. Single-newline split
         let bySingle = trimmed
             .components(separatedBy: "\n")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        return bySingle.isEmpty ? [trimmed] : bySingle
+        if bySingle.count > 1 {
+            return attachTimings(to: bySingle)
+        }
+
+        // 3. Sentence-count chunking on the canonical text
+        if wordCount >= Self.minWordCountForChunking {
+            return attachTimings(to: sentenceChunkTexts(trimmed))
+        }
+        return [Paragraph(text: trimmed, startSeconds: nil)]
     }
+
+    /// Split text into paragraph-sized chunks at sentence boundaries.
+    /// softTarget / hardCap are tuned by total wordCount so long memos
+    /// don't fragment into 100+ thin paragraphs.
+    private func sentenceChunkTexts(_ text: String) -> [String] {
+        let tokens = text
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+        guard tokens.count >= Self.minWordCountForChunking else { return [text] }
+
+        let enders: Set<Character> = [".", "!", "?"]
+        var out: [String] = []
+        var buffer: [String] = []
+
+        for token in tokens {
+            buffer.append(token)
+            let endsSentence = token.last.map { enders.contains($0) } ?? false
+            let count = buffer.count
+
+            if (count >= softTarget && endsSentence) || count >= hardCap {
+                out.append(buffer.joined(separator: " "))
+                buffer.removeAll(keepingCapacity: true)
+            }
+        }
+        if !buffer.isEmpty {
+            out.append(buffer.joined(separator: " "))
+        }
+        return out.isEmpty ? [text] : out
+    }
+
+    /// Given paragraph texts, attach a `startSeconds` to each.
+    /// Strategy:
+    ///   - When `segments.words` is available, map cumulative text-
+    ///     tokens → word index → words[idx].start. Engine word arrays
+    ///     may emit sub-word fragments, so the index can drift; we
+    ///     proportionally rescale via `words.count / textTokenCount`
+    ///     to stay aligned in aggregate.
+    ///   - Else estimate proportionally against `duration`.
+    ///   - Else nil (no timing knowable).
+    private func attachTimings(to texts: [String]) -> [Paragraph] {
+        guard !texts.isEmpty else { return [] }
+
+        let words = segments?.words ?? []
+        let totalTextTokens = max(wordCount, 1)
+        let scale: Double = words.isEmpty
+            ? 0
+            : Double(words.count) / Double(totalTextTokens)
+
+        var cumulativeTokens = 0
+        var out: [Paragraph] = []
+
+        for chunk in texts {
+            var start: Double? = nil
+            if !words.isEmpty {
+                let mappedIdx = min(Int(Double(cumulativeTokens) * scale), words.count - 1)
+                start = words[max(mappedIdx, 0)].start
+            } else if duration > 0, wordCount > 0 {
+                start = Double(cumulativeTokens) / Double(wordCount) * duration
+            }
+            out.append(Paragraph(text: chunk, startSeconds: start))
+            cumulativeTokens += chunk
+                .components(separatedBy: .whitespacesAndNewlines)
+                .filter { !$0.isEmpty }
+                .count
+        }
+        return out
+    }
+
+    // Heuristic constants. Targets scale with total word count so long
+    // memos don't fragment into 100+ thin paragraphs; targets are
+    // computed lazily based on `wordCount` rather than fixed.
+    private static let minWordCountForChunking = 60
+    private static let pauseThreshold: Double = 1.2      // seconds
+
+    private var softTarget: Int {
+        switch wordCount {
+        case ..<200:      return 60
+        case 200..<1000:  return 90
+        case 1000..<5000: return 160
+        default:          return 240
+        }
+    }
+
+    private var hardCap: Int {
+        switch wordCount {
+        case ..<200:      return 120
+        case 200..<1000:  return 200
+        case 1000..<5000: return 320
+        default:          return 480
+        }
+    }
+
+    // Compact rendering threshold — long transcripts get a smaller body
+    // font so the wall of text reads as a scannable column rather than
+    // a flood. Lead paragraph (in masthead) keeps its larger size for
+    // the editorial hierarchy.
+    private var isCompact: Bool { wordCount > 400 }
+    private var bodyFontSize: CGFloat { isCompact ? 12 : 14 }
+    private var bodyLineSpacing: CGFloat { isCompact ? 5 : 8 }
+    private var paragraphSpacing: CGFloat { isCompact ? 14 : 20 }
 
     private var formattedDuration: String {
         let total = max(Int(duration.rounded()), 0)
@@ -1400,11 +1568,18 @@ struct DocumentBody: View {
         return .system(size: size, weight: weight, design: .serif)
     }
 
-    /// Whether the body has visible content (paragraphs beyond the
-    /// masthead standfirst). Single-paragraph recordings have their
-    /// whole transcript in the standfirst — the body is silent.
+    /// Whether the masthead is rendering a standfirst that consumes
+    /// paragraphs[0]. Mirrors TOHeaderSection.leadParagraph's threshold
+    /// — long memos skip the standfirst so the body owns the whole
+    /// transcript. Keep this in sync with TOHeaderSection.
+    private var leadInMasthead: Bool { wordCount <= 400 }
+
+    /// Whether the body has visible content. For short memos, body
+    /// renders paragraphs 2…n (masthead has paragraph 1). For long
+    /// memos, body renders all paragraphs.
     private var hasBodyContent: Bool {
-        paragraphs.count > 1
+        if leadInMasthead { return paragraphs.count > 1 }
+        return !paragraphs.isEmpty
     }
 
     var body: some View {
@@ -1443,31 +1618,184 @@ struct DocumentBody: View {
     }
 
     private var documentColumn: some View {
-        // Lead paragraph has been promoted to the masthead (TOHeaderSection
-        // standfirst). The body renders only paragraphs 2…n and the end
-        // slug.
-        let rest = Array(paragraphs.dropFirst())
+        // Short memos: lead lives in the masthead's standfirst, body
+        // renders paragraphs 2…n.
+        // Long memos: masthead skips the standfirst, body owns every
+        // paragraph including the first.
+        let rest = leadInMasthead ? Array(paragraphs.dropFirst()) : paragraphs
+        let seconds = computedDisplaySeconds(for: rest)
+        let boundaries = boundaryIndices(seconds: seconds)
 
-        return HStack(alignment: .top, spacing: 20) {
-            // Marginal rule — printed-page gutter.
+        let nowPlayingIdx = currentParagraphIndex(seconds: seconds)
+        return VStack(alignment: .leading, spacing: paragraphSpacing) {
+            ForEach(Array(rest.enumerated()), id: \.offset) { idx, p in
+                paragraphRow(
+                    index: idx,
+                    paragraph: p,
+                    seconds: seconds[idx],
+                    isBoundary: boundaries.contains(idx),
+                    isNowPlaying: nowPlayingIdx == idx
+                )
+            }
+            endSlug
+                .padding(.top, 12)
+                .padding(.leading, 56) // align with paragraph text
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // One continuous marginal rule for the whole document, rather
+        // than per-paragraph segments — the old per-row stroke read as
+        // a series of dashes once paragraph density rose. Positioned
+        // just after the 36pt timestamp gutter (+ 12pt gap = 48pt).
+        .overlay(alignment: .leading) {
             ThemedScopeRule(.action, axis: .vertical)
                 .opacity(0.35)
-                .padding(.vertical, 4)
-
-            VStack(alignment: .leading, spacing: 20) {
-                ForEach(Array(rest.enumerated()), id: \.offset) { _, p in
-                    Text(p)
-                        .font(.system(size: 14, weight: .regular))
-                        .lineSpacing(8)
-                        .foregroundColor(Theme.current.foreground.opacity(0.78))
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                endSlug
-                    .padding(.top, 12)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(width: 1)
+                .padding(.leading, 48)
         }
+    }
+
+    /// One paragraph row: [timestamp gutter | spacer for rule | body].
+    /// The marginal rule itself is rendered as a single continuous
+    /// overlay by the parent `documentColumn`; this row just leaves
+    /// the gutter+rule space empty. Timestamp is shown when (a) the
+    /// paragraph crosses a 5-minute bucket boundary, or (b) the row
+    /// is hovered, or (c) it's the currently-playing paragraph.
+    /// Click → seek.
+    @ViewBuilder
+    private func paragraphRow(
+        index: Int,
+        paragraph p: Paragraph,
+        seconds: Double?,
+        isBoundary: Bool,
+        isNowPlaying: Bool
+    ) -> some View {
+        let isHovered = hoveredParagraphIndex == index
+        let shouldShowStamp = isBoundary || isHovered || isNowPlaying
+
+        HStack(alignment: .top, spacing: 12) {
+            timestampSlot(
+                seconds: seconds,
+                visible: shouldShowStamp,
+                prominent: isBoundary || isNowPlaying
+            )
+            .frame(width: 36, alignment: .trailing)
+            .padding(.top, 4)
+
+            // Spacer column where the continuous rule lives. Same
+            // width (1pt) as the rule so layout matches what we'd get
+            // with per-row rules.
+            Color.clear.frame(width: 1)
+
+            Text(p.text)
+                .font(.system(size: bodyFontSize, weight: .regular))
+                .lineSpacing(bodyLineSpacing)
+                .foregroundColor(Theme.current.foreground.opacity(isNowPlaying ? 0.98 : 0.78))
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            if hovering {
+                hoveredParagraphIndex = index
+            } else if hoveredParagraphIndex == index {
+                hoveredParagraphIndex = nil
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: isNowPlaying)
+    }
+
+    /// Which paragraph contains `currentTime`. The paragraph at index
+    /// i owns the half-open range `[seconds[i], seconds[i+1])`; the
+    /// last paragraph owns everything from its start to the end of
+    /// the audio. Returns nil when we don't have usable timings.
+    private func currentParagraphIndex(seconds: [Double?]) -> Int? {
+        guard currentTime > 0 else { return nil }
+        var lastValidIdx: Int? = nil
+        for (idx, s) in seconds.enumerated() {
+            guard let s else { continue }
+            if currentTime >= s {
+                lastValidIdx = idx
+            } else {
+                break
+            }
+        }
+        return lastValidIdx
+    }
+
+    /// The gutter timestamp. When seek is wired, renders as a button;
+    /// otherwise a plain label. Invisible when not boundary + not
+    /// hovered (keeps row alignment via a clear placeholder).
+    @ViewBuilder
+    private func timestampSlot(seconds: Double?, visible: Bool, prominent: Bool) -> some View {
+        if let seconds, visible {
+            let label = Text(Self.formatTimestamp(seconds))
+                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                .tracking(1.4)
+                .foregroundStyle(
+                    ScopeBrass.solid.opacity(prominent ? 0.85 : 0.55)
+                )
+                .monospacedDigit()
+            if let onSeek {
+                Button { onSeek(seconds) } label: { label }
+                    .buttonStyle(.plain)
+                    .help("Seek to \(Self.formatTimestamp(seconds))")
+            } else {
+                label
+            }
+        } else {
+            // Invisible spacer — keeps the rule and body in a stable
+            // column position even when the timestamp is hidden.
+            Text("0:00")
+                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                .tracking(1.4)
+                .opacity(0)
+        }
+    }
+
+    /// Per-paragraph seconds. Uses real `startSeconds` when timings are
+    /// available; otherwise estimates from cumulative word count vs.
+    /// total wordCount × duration.
+    private func computedDisplaySeconds(for paragraphs: [Paragraph]) -> [Double?] {
+        if paragraphs.contains(where: { $0.startSeconds != nil }) {
+            return paragraphs.map { $0.startSeconds }
+        }
+        guard duration > 0, wordCount > 0 else {
+            return Array(repeating: nil, count: paragraphs.count)
+        }
+        var cumulative = 0
+        var out: [Double?] = []
+        for p in paragraphs {
+            out.append(Double(cumulative) / Double(wordCount) * duration)
+            cumulative += p.text
+                .components(separatedBy: .whitespacesAndNewlines)
+                .filter { !$0.isEmpty }
+                .count
+        }
+        return out
+    }
+
+    /// Indices that cross a 5-minute boundary. First paragraph always
+    /// counts as a boundary so the document starts with an anchor.
+    private func boundaryIndices(seconds: [Double?]) -> Set<Int> {
+        var lastBucket: Int = -1
+        var out: Set<Int> = []
+        for (i, sec) in seconds.enumerated() {
+            guard let s = sec else { continue }
+            let bucket = Int(s / 300)  // 300 s = 5 min
+            if bucket != lastBucket {
+                out.insert(i)
+                lastBucket = bucket
+            }
+        }
+        return out
+    }
+
+    private static func formatTimestamp(_ seconds: Double) -> String {
+        let total = max(Int(seconds), 0)
+        let m = total / 60
+        let s = total % 60
+        return String(format: "%d:%02d", m, s)
     }
 
     private var endSlug: some View {
@@ -1531,16 +1859,35 @@ struct DocumentBody: View {
 struct SyntaxHighlightedJSON: View {
     let json: String
 
-    private let keyColor = Color(red: 0.6, green: 0.8, blue: 1.0)
-    private let stringColor = Color(red: 0.8, green: 0.9, blue: 0.7)
-    private let numberColor = Color(red: 1.0, green: 0.8, blue: 0.6)
-    private let boolColor = Color(red: 0.9, green: 0.7, blue: 0.9)
-    private let nullColor = Color(red: 0.7, green: 0.7, blue: 0.7)
-    private let bracketColor = Theme.current.foregroundSecondary
+    private var isScope: Bool { SettingsManager.shared.isScopeTheme }
+
+    /// Light-Scope palette: dark inks + amber/brass accents on cream
+    /// canvas. The pastels used in the dark-theme branch wash out on a
+    /// cream surface, so we swap to high-contrast editorial colors that
+    /// pair with the rest of the Scope substrate (ink ladder + amber
+    /// accent + brass for warmer values).
+    private var keyColor: Color {
+        isScope ? ScopeAmber.solid : Color(red: 0.6, green: 0.8, blue: 1.0)
+    }
+    private var stringColor: Color {
+        isScope ? ScopeInk.dim : Color(red: 0.8, green: 0.9, blue: 0.7)
+    }
+    private var numberColor: Color {
+        isScope ? ScopeBrass.solid : Color(red: 1.0, green: 0.8, blue: 0.6)
+    }
+    private var boolColor: Color {
+        isScope ? ScopeBrass.deep : Color(red: 0.9, green: 0.7, blue: 0.9)
+    }
+    private var nullColor: Color {
+        isScope ? ScopeInk.subtle : Color(red: 0.7, green: 0.7, blue: 0.7)
+    }
+    private var bracketColor: Color {
+        isScope ? ScopeInk.subtle : Theme.current.foregroundSecondary
+    }
 
     var body: some View {
         Text(attributedJSON)
-            .font(.system(size: 11, weight: .light, design: .monospaced))
+            .font(.system(size: 11, weight: isScope ? .regular : .light, design: .monospaced))
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
     }

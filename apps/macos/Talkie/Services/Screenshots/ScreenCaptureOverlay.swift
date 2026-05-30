@@ -9,6 +9,7 @@
 //
 
 import AppKit
+import ScreenCaptureKit
 
 enum OverlayMode {
     case region
@@ -20,9 +21,24 @@ final class ScreenCaptureOverlay {
     private var overlayWindow: NSWindow?
     private var overlayView: OverlayView?
 
-    func selectRegion() async -> CGRect? {
-        await withCheckedContinuation { continuation in
+    func selectRegion(freezesDesktop: Bool = true) async -> CGRect? {
+        OverlayView.cursor(for: .region).set()
+
+        // Freeze-the-desktop: snapshot the screen BEFORE the overlay shows
+        // so the user crops a still image, not a live target. The actual
+        // capture on mouseUp still goes through SCScreenshotManager fresh
+        // (caller's path) — this snapshot is for visual stability only,
+        // so the short window between snapshot and mouseUp keeps WYSIWYG
+        // honest enough.
+        let mouse = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) })
+            ?? NSScreen.main
+            ?? NSScreen.screens[0]
+        let snapshot = freezesDesktop ? await Self.captureDesktopSnapshot(for: screen) : nil
+
+        return await withCheckedContinuation { continuation in
             let view = OverlayView(mode: .region)
+            view.frozenSnapshot = snapshot
             var didResume = false
             let resume: (CGRect?) -> Void = { result in
                 guard !didResume else { return }
@@ -35,8 +51,47 @@ final class ScreenCaptureOverlay {
         }
     }
 
+    func cancel() {
+        overlayView?.cancel()
+    }
+
+    /// Captures a still of the given screen via SCScreenshotManager. Used
+    /// to freeze the desktop for region selection. Returns nil on
+    /// permission error or display lookup failure — caller falls back to
+    /// the live-desktop behavior in that case.
+    private static func captureDesktopSnapshot(for screen: NSScreen) async -> NSImage? {
+        guard let directDisplayIDValue = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
+            return nil
+        }
+        let directDisplayID = CGDirectDisplayID(directDisplayIDValue.uint32Value)
+        do {
+            let content = try await SCShareableContent.current
+            guard let display = content.displays.first(where: { $0.displayID == directDisplayID })
+                  ?? content.displays.first else {
+                return nil
+            }
+            let filter = SCContentFilter(display: display, excludingWindows: [])
+            let config = SCStreamConfiguration()
+            let scale = screen.backingScaleFactor
+            config.width = max(1, Int((screen.frame.width * scale).rounded(.toNearestOrAwayFromZero)))
+            config.height = max(1, Int((screen.frame.height * scale).rounded(.toNearestOrAwayFromZero)))
+            config.scalesToFit = false
+            config.showsCursor = false
+            config.capturesAudio = false
+            let cg = try await SCScreenshotManager.captureImage(
+                contentFilter: filter,
+                configuration: config
+            )
+            return NSImage(cgImage: cg, size: screen.frame.size)
+        } catch {
+            return nil
+        }
+    }
+
     func selectWindow() async -> CGWindowID? {
-        await withCheckedContinuation { continuation in
+        OverlayView.cursor(for: .window).set()
+
+        return await withCheckedContinuation { continuation in
             let view = OverlayView(mode: .window)
             var didResume = false
             let resume: (CGWindowID?) -> Void = { result in
@@ -119,6 +174,13 @@ private final class OverlayView: NSView {
 
     var screenOrigin: CGPoint = .zero
 
+    /// Pre-captured still of the desktop the overlay is sitting on. When
+    /// present (region mode), it's painted as the view background so the
+    /// user crops a frozen image — windows can't reflow under them, the
+    /// menu bar clock can't tick mid-drag. Captured by the parent before
+    /// `showOverlay`; nil falls back to live-desktop behavior.
+    var frozenSnapshot: NSImage?
+
     private var dragStart: NSPoint?
     private var dragCurrent: NSPoint?
     private var lastDragDrawRect: NSRect = .zero
@@ -136,8 +198,13 @@ private final class OverlayView: NSView {
     private let windowCacheRefreshIntervalNs: UInt64 = 1_200_000_000 // 1.2s
     private var richCaptureUIEnabled: Bool { FeatureFlags.shared.enableCaptureRichUI }
     private var overlayCursor: NSCursor {
-        mode == .region ? .crosshair : Self.cameraCursor
+        Self.cursor(for: mode)
     }
+
+    fileprivate static func cursor(for mode: OverlayMode) -> NSCursor {
+        mode == .region ? .crosshair : cameraCursor
+    }
+
     private static let cameraCursor: NSCursor = {
         let size = NSSize(width: 24, height: 24)
         let image = NSImage(size: size)
@@ -194,12 +261,25 @@ private final class OverlayView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        paintFrozenSnapshot()
         switch mode {
         case .region:
             drawRegionSelection()
         case .window:
             drawWindowHighlight()
         }
+    }
+
+    /// Paints the frozen desktop snapshot as the view background for
+    /// the entire region-selection session. The moment the overlay
+    /// appears, the desktop visually freezes; animations stop scrubbing,
+    /// the clock stops ticking, windows can't reflow underneath. The
+    /// user crops against a still image and never has to time the
+    /// motion. (Window-mode keeps the live behaviour — it relies on
+    /// hovering real windows, not cropping pixels.)
+    private func paintFrozenSnapshot() {
+        guard mode == .region, let snapshot = frozenSnapshot else { return }
+        snapshot.draw(in: bounds, from: .zero, operation: .copy, fraction: 1.0)
     }
 
     private func drawRegionSelection() {
@@ -297,7 +377,10 @@ private final class OverlayView: NSView {
         dragStart = point
         dragCurrent = point
         lastDragDrawRect = dragInvalidationRect(for: point, current: point)
-        invalidateDragRegion(previous: .zero, current: lastDragDrawRect)
+        // Full-view invalidate so the frozen snapshot paints across the
+        // whole desktop on the first draw of the drag. Without this the
+        // snapshot would only paint inside the small drag-region rect.
+        needsDisplay = true
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -482,9 +565,13 @@ private final class OverlayView: NSView {
 
     override func keyDown(with event: NSEvent) {
         if event.keyCode == 53 {
-            complete()
-            onCancelled?()
+            cancel()
         }
+    }
+
+    func cancel() {
+        complete()
+        onCancelled?()
     }
 
     private func setupTrackingArea() {
@@ -500,12 +587,12 @@ private final class OverlayView: NSView {
     func activateCursor() {
         guard window != nil, !completed else { return }
         window?.invalidateCursorRects(for: self)
+        overlayCursor.set()
         if didPushCursor {
-            overlayCursor.set()
-        } else {
-            overlayCursor.push()
-            didPushCursor = true
+            return
         }
+        overlayCursor.push()
+        didPushCursor = true
     }
 
     func deactivateCursor() {

@@ -46,10 +46,56 @@ final class VoiceMemoStore {
 
         do {
             try context.save()
-            NotificationCenter.default.post(name: .voiceMemosDidChange, object: nil)
+            Self.publishChange(context: context)
         } catch {
             context.rollback()
             AppLogger.persistence.error("Failed to delete voice memo: \(error.localizedDescription)")
+        }
+    }
+
+    @discardableResult
+    func createTextMemo(
+        text: String,
+        title: String? = nil,
+        createdAt: Date = Date(),
+        engine: String = "text_memo"
+    ) -> VoiceMemo? {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else { return nil }
+
+        let memo = VoiceMemo(context: context)
+        memo.id = UUID()
+        if let trimmedTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !trimmedTitle.isEmpty {
+            memo.title = trimmedTitle
+        } else {
+            memo.title = Self.deriveMemoTitle(from: trimmedText)
+        }
+        memo.createdAt = createdAt
+        memo.lastModified = Date()
+        memo.duration = 0
+        memo.isTranscribing = false
+        memo.sortOrder = Int32(createdAt.timeIntervalSince1970 * -1)
+        memo.originDeviceId = PersistenceController.deviceId
+        memo.autoProcessed = false
+        memo.timezone = TimeZone.current.identifier
+        memo.deviceModel = UIDevice.modelIdentifier
+
+        memo.addSystemTranscript(
+            content: trimmedText,
+            fromMacOS: false,
+            engine: engine
+        )
+
+        do {
+            try context.save()
+            Self.publishChange(context: context)
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            return memo
+        } catch {
+            context.rollback()
+            AppLogger.persistence.error("Failed to create text memo: \(error.localizedDescription)")
+            return nil
         }
     }
 
@@ -74,9 +120,8 @@ final class VoiceMemoStore {
 
         do {
             try context.save()
-            PersistenceController.refreshWidgetData(context: context)
             KeyboardDictationStore.shared.delete(dictation.id)
-            NotificationCenter.default.post(name: .voiceMemosDidChange, object: nil)
+            Self.publishChange(context: context)
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             return true
         } catch {
@@ -96,6 +141,11 @@ final class VoiceMemoStore {
         let words = text.split(separator: " ").prefix(6)
         let title = words.joined(separator: " ")
         return title.count < text.count ? title + "…" : title
+    }
+
+    static func publishChange(context: NSManagedObjectContext) {
+        PersistenceController.refreshWidgetData(context: context)
+        NotificationCenter.default.post(name: .voiceMemosDidChange, object: nil)
     }
 }
 

@@ -62,6 +62,13 @@ struct RecordingCompanionSurface: View {
     /// the emergent transcript has room to play out before dismissal.
     @State private var holdAfterComplete: Bool = false
 
+    /// PiP mode: while recording, the user can collapse the full canvas
+    /// surface into a floating pill in the bottom-right so they can keep
+    /// working. Only meaningful while `controller.state.isRecording` —
+    /// the surface auto-expands when the transition starts so the user
+    /// sees the wave → memo emergence.
+    @State private var minimized: Bool = false
+
     private var isVisible: Bool {
         let state = controller.state
         if state.isRecording || state.isPreparing || state.isProcessing { return true }
@@ -69,17 +76,71 @@ struct RecordingCompanionSurface: View {
         return false
     }
 
+    /// PiP only shows while we're actively recording. As soon as the
+    /// transition kicks off (.processing → .complete), force the full
+    /// surface back so the user sees the wave settle and transcript emerge.
+    private var shouldShowPip: Bool {
+        minimized && controller.state.isRecording
+    }
+
     var body: some View {
         Group {
             if isVisible {
-                content
-                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .center)))
+                if shouldShowPip {
+                    pipMount
+                        .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .bottomTrailing)))
+                } else {
+                    content
+                        .overlay(alignment: .topLeading) { minimizeButton }
+                        .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .center)))
+                }
             }
         }
         .animation(.easeInOut(duration: 0.36), value: isVisible)
+        .animation(.easeInOut(duration: 0.28), value: shouldShowPip)
         .onChange(of: controller.state.signalToken) { _, newValue in
             handleStateChange(token: newValue)
+            // Any phase that isn't .recording snaps us back to the full
+            // surface — the wave-settles-into-transcript moment is the
+            // whole point of the surface; never hide it behind a pill.
+            if newValue != "recording" {
+                minimized = false
+            }
         }
+    }
+
+    /// Bottom-right pinned PiP capsule. Wraps in a full-size frame so
+    /// the parent's `.overlay(alignment: .center)` mount point doesn't
+    /// strand the capsule in the middle of the canvas.
+    private var pipMount: some View {
+        RecordingPipCapsule(
+            controller: controller,
+            onExpand: { minimized = false }
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        .padding(.trailing, Spacing.md)
+        .padding(.bottom, Spacing.xl)
+        .allowsHitTesting(true)
+    }
+
+    /// Quiet minimize affordance on the full surface — sits top-left so
+    /// it can't be mistaken for the top-right cancel cluster.
+    private var minimizeButton: some View {
+        Button {
+            minimized = true
+        } label: {
+            Image(systemName: "arrow.down.right.and.arrow.up.left")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(RecordingCompanionTokens.inkFaint)
+                .frame(width: 20, height: 20)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .opacity(0.45)
+        .padding(.leading, 18)
+        .padding(.top, 14)
+        .help("Minimize (recording continues)")
     }
 
     private func handleStateChange(token: String) {
@@ -143,20 +204,77 @@ private struct WaveOnlyContent: View {
     // Transcript captured from `.complete(MemoModel)`.
     @State private var transcript: String = ""
 
-    /// Card hover state. Cancel + Stop only render while the pointer
-    /// is over the recording surface so the canvas stays quiet between
-    /// glances. Space-bar + ⌘. keyboard paths still work either way.
+    /// Card hover state. The corner clusters (top-right detail cluster
+    /// + bottom-right STOP) sit near-invisible at rest (`restOpacity`)
+    /// and sharpen to full opacity when the pointer enters the surface.
+    /// Space-bar + ⌘. keyboard paths still work either way.
     @State private var isHoveringCard: Bool = false
 
+    /// Studio source of truth: `design/studio/app/mac-recording-state/light-instrument.tsx`.
+    /// Decorations rest near-invisible — the surface IS the wave — and
+    /// only the cursor brings them out.
+    private let restOpacity: Double = 0.06
+
     var body: some View {
-        VStack(spacing: 28) {
-            eyebrow
+        ZStack {
             waveAndTranscript
-            captionRow
+
+            // Top-right: REC dot + label + timer + cancel (×).
+            // Rest near-invisible; full on hover.
+            VStack {
+                HStack {
+                    Spacer()
+                    HStack(spacing: 8) {
+                        DiscDetails(phase: phase, timeString: timeString)
+                        DiscClose(action: cancelRecording)
+                    }
+                    .padding(.trailing, 18)
+                    .padding(.top, 14)
+                }
+                Spacer()
+            }
+            .opacity(detailsOpacity)
+            .allowsHitTesting(phase == .recording && isHoveringCard)
+            .animation(.easeOut(duration: 0.20), value: isHoveringCard)
+            .animation(.easeOut(duration: 0.24), value: phase)
+
+            // Bottom-right: STOP pill. Same hover-reveal.
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    DiscStop(action: stopRecording)
+                        .padding(.trailing, 18)
+                        .padding(.bottom, 14)
+                }
+            }
+            .opacity(stopOpacity)
+            .allowsHitTesting(phase == .recording && isHoveringCard)
+            .animation(.easeOut(duration: 0.20), value: isHoveringCard)
+            .animation(.easeOut(duration: 0.24), value: phase)
+
+            // Bottom-left: quiet phase caption — survives across all
+            // phases at marginalia weight so the surface never reads
+            // as "is it still alive?".
+            VStack {
+                Spacer()
+                HStack {
+                    Text(captionText)
+                        .font(RecordingCompanionFonts.mono(size: 9))
+                        .tracking(2.8)
+                        .foregroundColor(RecordingCompanionTokens.inkFaint)
+                        .opacity(0.55)
+                        .padding(.leading, 18)
+                        .padding(.bottom, 14)
+                        .animation(.easeOut(duration: 0.24), value: captionText)
+                    Spacer()
+                }
+            }
+            .allowsHitTesting(false)
         }
-        .padding(.horizontal, 80)
-        .padding(.vertical, 36)
-        .frame(maxWidth: 980)
+        .padding(.horizontal, 64)
+        .padding(.vertical, 44)
+        .frame(maxWidth: 980, minHeight: 220)
         // Glass card: ultraThinMaterial blur underneath, paper tint on
         // top at low opacity so the recording surface sits on the
         // canvas with depth, instead of floating as a transparent
@@ -192,41 +310,25 @@ private struct WaveOnlyContent: View {
         .onAppear { syncPhase() }
     }
 
+    // MARK: - Opacity ramps
+
+    /// Top-right details cluster visibility. Visible only while we are
+    /// actively recording; rest near-invisible until the pointer enters
+    /// the card. Once the transition starts the wave owns the canvas.
+    private var detailsOpacity: Double {
+        guard phase == .recording else { return 0 }
+        return isHoveringCard ? 1.0 : restOpacity
+    }
+
+    /// STOP pill visibility. Same gating as details — we only show STOP
+    /// while .recording (after that the user can't stop something that
+    /// is already on its way to becoming a memo).
+    private var stopOpacity: Double {
+        guard phase == .recording else { return 0 }
+        return isHoveringCard ? 1.0 : restOpacity
+    }
+
     // MARK: - Pieces
-
-    private var eyebrow: some View {
-        HStack(spacing: 12) {
-            RecDot(active: phase == .recording)
-            Text(eyebrowVerb)
-                .font(RecordingCompanionFonts.mono(size: 10))
-                .tracking(3.6)
-                .foregroundColor(RecordingCompanionTokens.inkFaint)
-                .animation(.easeOut(duration: 0.24), value: eyebrowVerb)
-            Text("·")
-                .font(RecordingCompanionFonts.mono(size: 10))
-                .foregroundColor(RecordingCompanionTokens.inkFainter)
-            Text("LIBRARY")
-                .font(RecordingCompanionFonts.mono(size: 10))
-                .tracking(3.6)
-                .foregroundColor(RecordingCompanionTokens.inkFaint)
-            Text("·")
-                .font(RecordingCompanionFonts.mono(size: 10))
-                .foregroundColor(RecordingCompanionTokens.inkFainter)
-            Text("SCOPE")
-                .font(RecordingCompanionFonts.mono(size: 10))
-                .tracking(3.6)
-                .foregroundColor(RecordingCompanionTokens.inkFaint)
-        }
-        .allowsHitTesting(false)
-    }
-
-    private var eyebrowVerb: String {
-        switch phase {
-        case .recording: return "RECORDING"
-        case .stopping, .settling, .emerging: return "TRANSCRIBING"
-        case .complete: return "MEMO"
-        }
-    }
 
     /// The wave and the emerging transcript share the same vertical slot,
     /// so as the wave collapses into a baseline the text appears in the
@@ -300,34 +402,6 @@ private struct WaveOnlyContent: View {
                         )
                 }
             )
-    }
-
-    private var captionRow: some View {
-        HStack(spacing: 14) {
-            Text(captionText)
-                .font(RecordingCompanionFonts.mono(size: 10))
-                .tracking(2.8)
-                .foregroundColor(RecordingCompanionTokens.inkFaint)
-                .animation(.easeOut(duration: 0.24), value: captionText)
-                .allowsHitTesting(false)
-            Spacer()
-            if phase == .recording {
-                // Buttons quietly fade in only while the pointer is
-                // over the glass card; eyebrow + caption stay visible
-                // so the recording state never reads as missing.
-                // Keyboard shortcuts (⌘. stop, Esc cancel) still work
-                // regardless of pointer position.
-                HStack(spacing: 14) {
-                    CancelButton(action: cancelRecording)
-                    StopButton(action: stopRecording)
-                }
-                .opacity(isHoveringCard ? 1.0 : 0.0)
-                .allowsHitTesting(isHoveringCard)
-                .animation(.easeOut(duration: 0.18), value: isHoveringCard)
-                .transition(.opacity)
-            }
-        }
-        .animation(.easeOut(duration: 0.24), value: phase == .recording)
     }
 
     private var captionText: String {
@@ -459,6 +533,130 @@ private struct WaveOnlyContent: View {
             let raw = CGFloat(min(max(controller.audioLevel, 0), 1))
             let shaped = pow(raw, 0.85)
             let desired = 0.22 + shaped * 0.73
+            let blend: CGFloat = desired > amplitude ? 0.28 : 0.08
+            amplitude = amplitude * (1 - blend) + desired * blend
+        }
+    }
+}
+
+// MARK: - PiP capsule (minimized recording)
+
+/// Floating recording capsule. Lives in the bottom-right corner while
+/// the full surface is minimized so the user can keep working without
+/// losing the "you're still recording" signal.
+///
+/// Studio source of truth:
+///   design/studio/app/mac-record-to-memo/page.tsx — PipCapsule + PipMiniWave.
+///
+/// Persistent (always visible at full opacity): red REC dot + timer.
+/// Affordances (expand · STOP) ghost at 40% rest, snap to full on hover —
+/// same contract as the full surface's corner clusters.
+private struct RecordingPipCapsule: View {
+    let controller: MemoRecordingController
+    let onExpand: () -> Void
+
+    @State private var amplitude: CGFloat = 0.32
+    @State private var hovered: Bool = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            // Persistent — these never fade. Without them the user
+            // can't tell at a glance whether recording is still live.
+            HStack(spacing: 6) {
+                RecDot()
+                Text(timeString)
+                    .font(RecordingCompanionFonts.mono(size: 10))
+                    .monospacedDigit()
+                    .foregroundColor(RecordingCompanionTokens.ink)
+                    .allowsHitTesting(false)
+            }
+
+            // Mini wave — supporting voice signal, kept at low opacity
+            // so it doesn't shout.
+            TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { context in
+                let t = context.date.timeIntervalSinceReferenceDate
+                InkFlourishShape(
+                    amplitude: amplitude,
+                    phase: CGFloat(t) * -2.6
+                )
+                .stroke(
+                    RecordingCompanionTokens.amber.opacity(0.85),
+                    lineWidth: 1.4
+                )
+            }
+            .frame(width: 80, height: 18)
+            .opacity(0.55)
+            .allowsHitTesting(false)
+
+            // Hover-revealed cluster: expand + STOP.
+            HStack(spacing: 4) {
+                Button(action: onExpand) {
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(RecordingCompanionTokens.inkFaint)
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .focusEffectDisabled()
+                .help("Expand recording surface")
+
+                Button(action: { controller.stopRecording() }) {
+                    Text("STOP")
+                        .font(RecordingCompanionFonts.mono(size: 9))
+                        .tracking(1.8)
+                        .foregroundColor(Color(red: 1.0, green: 0.969, blue: 0.961))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(Color(red: 0.753, green: 0.227, blue: 0.165))
+                        )
+                        .contentShape(Capsule(style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .focusEffectDisabled()
+                .keyboardShortcut(".", modifiers: [.command])
+                .help("Stop recording (⌘.)")
+            }
+            .opacity(hovered ? 1.0 : 0.4)
+            .animation(.easeOut(duration: 0.18), value: hovered)
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, 6)
+        .padding(.vertical, 6)
+        .background(
+            Capsule(style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    Capsule(style: .continuous)
+                        .fill(Color.white.opacity(0.45))
+                )
+                .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .strokeBorder(Color.white.opacity(0.30), lineWidth: 0.5)
+        )
+        .onHover { hovered = $0 }
+        .task { await runSmoothing() }
+    }
+
+    private var timeString: String {
+        let total = max(0, Int(controller.elapsedTime))
+        return String(format: "%d:%02d", total / 60, total % 60)
+    }
+
+    /// Same smoothing contract as `WaveOnlyContent.runSmoothing` — quiet
+    /// floor, generous headroom for peaks, asymmetric attack/release.
+    @MainActor
+    private func runSmoothing() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(16))
+            guard controller.state.isRecording else { continue }
+            let raw = CGFloat(min(max(controller.audioLevel, 0), 1))
+            let shaped = pow(raw, 0.85)
+            let desired = 0.22 + shaped * 0.55
             let blend: CGFloat = desired > amplitude ? 0.28 : 0.08
             amplitude = amplitude * (1 - blend) + desired * blend
         }
@@ -613,6 +811,106 @@ private struct FrontispieceContent: View {
             let target = CGFloat(min(max(controller.audioLevel, 0), 1))
             smoothedLevel = smoothedLevel * 0.90 + target * 0.10
         }
+    }
+}
+
+// MARK: - Corner cluster (light-instrument)
+
+/// Top-right details cluster: REC dot + REC + timer. Pure marginalia —
+/// rests near-invisible and sharpens on hover. Mirrors the studio's
+/// `DiscDetails` helper.
+private struct DiscDetails: View {
+    let phase: TransitionPhase
+    let timeString: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(Color(red: 0.753, green: 0.227, blue: 0.165))
+                .frame(width: 6, height: 6)
+            Text("REC")
+                .font(RecordingCompanionFonts.mono(size: 9))
+                .tracking(2.2)
+                .foregroundColor(RecordingCompanionTokens.ink)
+            Text("·")
+                .font(RecordingCompanionFonts.mono(size: 9))
+                .foregroundColor(RecordingCompanionTokens.inkFainter)
+            Text(timeString)
+                .font(RecordingCompanionFonts.mono(size: 9))
+                .tracking(1.6)
+                .monospacedDigit()
+                .foregroundColor(RecordingCompanionTokens.ink)
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+/// Cancel button — circular `×`. Mirrors the studio's `DiscClose`.
+private struct DiscClose: View {
+    let action: () -> Void
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(hovered ? RecordingCompanionTokens.ink : RecordingCompanionTokens.inkFaint)
+                .frame(width: 20, height: 20)
+                .overlay(
+                    Circle()
+                        .strokeBorder(
+                            hovered
+                                ? RecordingCompanionTokens.ink
+                                : RecordingCompanionTokens.ink.opacity(0.20),
+                            lineWidth: 1
+                        )
+                )
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .onHover { hovered = $0 }
+        .help("Discard recording (Esc)")
+        .animation(.easeOut(duration: 0.12), value: hovered)
+    }
+}
+
+/// Bottom-right STOP pill — red surface with `⌘.` keybinding hint.
+/// Mirrors the studio's `DiscStop`.
+private struct DiscStop: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Rectangle()
+                    .fill(Color(red: 1.0, green: 0.969, blue: 0.961))
+                    .frame(width: 6, height: 6)
+                Text("STOP")
+                    .font(RecordingCompanionFonts.mono(size: 9))
+                    .tracking(2.0)
+                    .foregroundColor(Color(red: 1.0, green: 0.969, blue: 0.961))
+                Text("⌘.")
+                    .font(RecordingCompanionFonts.mono(size: 9))
+                    .foregroundColor(Color(red: 1.0, green: 0.969, blue: 0.961).opacity(0.65))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color(red: 0.753, green: 0.227, blue: 0.165))
+                    .shadow(color: Color(red: 0.753, green: 0.227, blue: 0.165).opacity(0.22), radius: 6, y: 2)
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5)
+                    .blendMode(.plusLighter)
+            )
+            .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .help("Stop recording (⌘.)")
     }
 }
 

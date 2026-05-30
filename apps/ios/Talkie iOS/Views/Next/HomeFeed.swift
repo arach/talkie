@@ -48,8 +48,6 @@ final class HomeFeed: ObservableObject {
         }
     }
 
-    @Published var lastDocument: PickUp?
-    @Published var recentTally: Tally
     @Published var recentItems: [RecentItem]
     @Published private(set) var totalRecentCount: Int
     @Published private(set) var isLoading: Bool
@@ -80,23 +78,6 @@ final class HomeFeed: ObservableObject {
 
     @Published private(set) var displayLimit: Int
 
-    struct PickUp {
-        let title: String
-        let meta: String   // pre-formatted: "Compose · 31 words · 4m ago"
-        let continueAction: () -> Void
-    }
-
-    struct Tally {
-        let eyebrow: String      // "Last 24h · 9 captures" or "Quiet · long-press to capture"
-        let cta: String?         // Optional right-side chip text ("Week ›")
-        let cells: [Cell]        // typically 3; empty if no signal
-
-        struct Cell {
-            let value: String    // pre-formatted ("6", "1.2k")
-            let label: String    // "Memos", "Type", "Grab"
-        }
-    }
-
     struct RecentItem: Identifiable {
         let id: String
         let source: Source
@@ -119,8 +100,6 @@ final class HomeFeed: ObservableObject {
     private var entries: [Entry] = []
 
     init() {
-        self.lastDocument = nil
-        self.recentTally = Tally(eyebrow: "Quiet · long-press to capture", cta: nil, cells: [])
         self.recentItems = []
         self.totalRecentCount = 0
         self.isLoading = false
@@ -146,12 +125,6 @@ final class HomeFeed: ObservableObject {
             let dictations = KeyboardDictationStore.shared.all()
             let captures = CaptureStore.shared.all()
 
-            let allEntries = Self.makeEntries(
-                memos: unfilteredMemos,
-                notes: unfilteredNotes,
-                dictations: dictations,
-                captures: captures
-            )
             let matchingDictations = Self.filter(dictations: dictations, matching: normalizedSearchText)
             let matchingCaptures = Self.filter(captures: captures, matching: normalizedSearchText)
 
@@ -162,12 +135,6 @@ final class HomeFeed: ObservableObject {
                 captures: matchingCaptures
             )
 
-            refreshPickUp(from: allEntries)
-            recentTally = Self.makeTally(
-                memos: unfilteredMemos,
-                dictations: dictations,
-                captures: captures
-            )
             errorMessage = nil
             refreshRecentItems()
         } catch {
@@ -213,23 +180,6 @@ final class HomeFeed: ObservableObject {
         if VoiceMemoStore.shared.promoteKeyboardDictation(dictation) {
             reload()
         }
-    }
-
-    private func refreshPickUp(from allEntries: [Entry]) {
-        let pickUpEntry = allEntries
-            .filter { $0.origin == .composeNote }
-            .sorted { $0.updatedAt > $1.updatedAt }
-            .first
-            ?? allEntries.sorted { $0.updatedAt > $1.updatedAt }.first
-
-        lastDocument = pickUpEntry
-            .map { entry in
-                PickUp(
-                    title: entry.title,
-                    meta: "\(entry.kind) · \(Self.formatWordCount(entry.wordCount)) · \(Self.relativeAge(from: entry.updatedAt))",
-                    continueAction: { AppShellRouter.shared.openCompose(documentID: entry.id) }
-                )
-            }
     }
 
     private func refreshRecentItems() {
@@ -417,41 +367,6 @@ private extension HomeFeed {
         }
 
         return memoEntries + noteEntries + dictationEntries + captureEntries
-    }
-
-    static func makeTally(memos: [VoiceMemo], dictations: [KeyboardDictation], captures: [Capture]) -> Tally {
-        let windows: [(label: String, interval: TimeInterval, cta: String?)] = [
-            ("Last 24h", 24 * 60 * 60, "Week ›"),
-            ("Last 7 days", 7 * 24 * 60 * 60, "Month ›"),
-            ("Last 30 days", 30 * 24 * 60 * 60, nil),
-        ]
-        let now = Date()
-
-        for window in windows {
-            let cutoff = now.addingTimeInterval(-window.interval)
-            let memoCount = memos.filter { ($0.createdAt ?? .distantPast) >= cutoff }.count
-            let typeCount = dictations.filter { $0.timestamp >= cutoff }.count
-            let grabCount = captures.filter { $0.timestamp >= cutoff }.count
-            let total = memoCount + typeCount + grabCount
-
-            if total > 0 {
-                return Tally(
-                    eyebrow: "\(window.label) · \(total) \(total == 1 ? "capture" : "captures")",
-                    cta: window.cta,
-                    cells: [
-                        Tally.Cell(value: compactCount(memoCount), label: "Memos"),
-                        Tally.Cell(value: compactCount(typeCount), label: "Type"),
-                        Tally.Cell(value: compactCount(grabCount), label: "Grab"),
-                    ]
-                )
-            }
-        }
-
-        return Tally(
-            eyebrow: "Quiet · long-press to capture",
-            cta: nil,
-            cells: []
-        )
     }
 
     static func filter(dictations: [KeyboardDictation], matching query: String) -> [KeyboardDictation] {

@@ -27,13 +27,18 @@ enum ScreenshotCapturePreset: String, CaseIterable, Codable {
     }
 
     var detail: String {
+        // Note: the saved screenshot is always full-resolution (for markup /
+        // preview). This preset only governs the downscaled copy sent to AI
+        // workflows (VLM description, OCR, markup agent).
         switch self {
-        case .agent: return "Smallest files. Downscales aggressively for AI workflows."
-        case .balanced: return "Readable captures with moderate storage use."
-        case .archive: return "Full-size lossless captures for human review."
+        case .agent: return "Smallest AI payloads. Sends a 1280px copy to models."
+        case .balanced: return "Sharper AI input (2200px). Larger model payloads."
+        case .archive: return "Full-resolution AI input. Largest model payloads."
         }
     }
 
+    /// Max edge of the image handed to AI workflows. `nil` = send full size.
+    /// The stored canonical screenshot is unaffected (always full-res).
     var maxPixelLength: CGFloat? {
         switch self {
         case .agent: return 1280
@@ -44,9 +49,9 @@ enum ScreenshotCapturePreset: String, CaseIterable, Codable {
 
     var sizeSummary: String {
         switch self {
-        case .agent: return "Max edge 1280 px"
-        case .balanced: return "Max edge 2200 px"
-        case .archive: return "Full size PNG"
+        case .agent: return "AI image ≤ 1280 px"
+        case .balanced: return "AI image ≤ 2200 px"
+        case .archive: return "AI image full size"
         }
     }
 }
@@ -61,6 +66,8 @@ enum CaptureMode: String {
 struct CaptureResult {
     let data: Data
     let image: CGImage
+    let previewImage: CGImage
+    let capturedAt: Date
     let width: Int
     let height: Int
     let windowTitle: String?
@@ -92,10 +99,9 @@ final class ScreenshotCaptureService {
     func capture(
         mode: CaptureMode,
         recordingId: UUID,
-        recordingStartTime: Date
+        recordingStartTime: Date,
+        preselectedRegion: CGRect? = nil
     ) async -> RecordingScreenshot? {
-        let timestampMs = Int(Date().timeIntervalSince(recordingStartTime) * 1000)
-
         // Check permission first
         CapturePerformanceMonitor.shared.mark("permission.check.begin")
         guard await hasScreenRecordingPermission() else {
@@ -126,7 +132,7 @@ final class ScreenshotCaptureService {
             image = result.image
             displayName = result.displayName
         case .region:
-            guard let result = await captureRegion() else {
+            guard let result = await captureRegion(preselectedRect: preselectedRegion) else {
                 if captureHotPathLoggingEnabled {
                     log.info("Screenshot capture cancelled or failed")
                 }
@@ -146,14 +152,23 @@ final class ScreenshotCaptureService {
             windowTitle = result.windowTitle
             appName = result.appName
         }
+        let capturedAt = Date()
+        let timestampMs = Int(capturedAt.timeIntervalSince(recordingStartTime) * 1000)
         CapturePerformanceMonitor.shared.mark("capture.image.complete")
+
+        // Canonical screenshot is stored at full resolution so markup /
+        // preview stay crisp. Downscaling now happens only on the AI path.
+        let storedImage = image
+        let previewImage = await previewThumbnail(for: image)
 
         // Show floating preview
         CapturePerformanceMonitor.shared.mark("preview.show.begin")
-        ScreenshotPreviewPanel.shared.show(image: image)
+        let previewID = ScreenshotPreviewPanel.shared.show(
+            thumbnail: previewImage,
+            sourceWidth: image.width,
+            sourceHeight: image.height
+        )
         CapturePerformanceMonitor.shared.mark("preview.show.complete")
-
-        let storedImage = await processedImageForStorage(image)
 
         // Convert to PNG data
         CapturePerformanceMonitor.shared.mark("encode.begin")
@@ -181,6 +196,7 @@ final class ScreenshotCaptureService {
             return nil
         }
         CapturePerformanceMonitor.shared.mark("storage.save.complete")
+        ScreenshotPreviewPanel.shared.attachFileURL(savedURL, to: previewID)
 
         let filename = savedURL.lastPathComponent
         if captureHotPathLoggingEnabled {
@@ -201,7 +217,7 @@ final class ScreenshotCaptureService {
 
     /// Capture a standalone screenshot (not tied to a recording).
     /// Returns CaptureResult with PNG data, dimensions, and contextual metadata, or nil if cancelled/failed.
-    func captureStandalone(mode: CaptureMode) async -> CaptureResult? {
+    func captureStandalone(mode: CaptureMode, preselectedRegion: CGRect? = nil) async -> CaptureResult? {
         CapturePerformanceMonitor.shared.mark("permission.check.begin")
         guard await hasScreenRecordingPermission() else {
             CapturePerformanceMonitor.shared.mark("permission.check.denied")
@@ -231,7 +247,7 @@ final class ScreenshotCaptureService {
             image = result.image
             displayName = result.displayName
         case .region:
-            guard let result = await captureRegion() else {
+            guard let result = await captureRegion(preselectedRect: preselectedRegion) else {
                 if captureHotPathLoggingEnabled {
                     log.info("Standalone screenshot capture cancelled or failed")
                 }
@@ -251,16 +267,22 @@ final class ScreenshotCaptureService {
             windowTitle = result.windowTitle
             appName = result.appName
         }
+        let capturedAt = Date()
         CapturePerformanceMonitor.shared.mark("capture.image.complete")
 
-        CapturePerformanceMonitor.shared.mark("encode.begin")
-        let storedImage = await processedImageForStorage(image)
+        // Canonical screenshot stored full-resolution; AI downscale is separate.
+        let storedImage = image
 
-        guard let data = await encodePNG(storedImage) else {
+        CapturePerformanceMonitor.shared.mark("encode.begin")
+        async let encodedData = encodePNG(storedImage)
+        async let previewImage = previewThumbnail(for: storedImage)
+
+        guard let data = await encodedData else {
             CapturePerformanceMonitor.shared.mark("encode.failed")
             log.error("Failed to encode standalone screenshot as PNG")
             return nil
         }
+        let thumbnail = await previewImage
         CapturePerformanceMonitor.shared.mark("encode.complete")
 
         if captureHotPathLoggingEnabled {
@@ -269,6 +291,8 @@ final class ScreenshotCaptureService {
         return CaptureResult(
             data: data,
             image: image,
+            previewImage: thumbnail,
+            capturedAt: capturedAt,
             width: storedImage.width,
             height: storedImage.height,
             windowTitle: windowTitle,
@@ -325,12 +349,18 @@ final class ScreenshotCaptureService {
     // MARK: - Region Capture
 
     /// Show overlay for region selection, then crop the full display capture.
-    private func captureRegion() async -> CGImage? {
-        let overlay = ScreenCaptureOverlay()
-        CapturePerformanceMonitor.shared.mark("overlay.region.begin")
-        guard let selectedRect = await overlay.selectRegion() else {
-            CapturePerformanceMonitor.shared.mark("overlay.region.cancelled")
-            return nil
+    private func captureRegion(preselectedRect: CGRect? = nil) async -> CGImage? {
+        let selectedRect: CGRect
+        if let preselectedRect {
+            selectedRect = preselectedRect
+        } else {
+            let overlay = ScreenCaptureOverlay()
+            CapturePerformanceMonitor.shared.mark("overlay.region.begin")
+            guard let rect = await overlay.selectRegion() else {
+                CapturePerformanceMonitor.shared.mark("overlay.region.cancelled")
+                return nil
+            }
+            selectedRect = rect
         }
         CapturePerformanceMonitor.shared.mark("overlay.region.selected")
 
@@ -500,16 +530,59 @@ final class ScreenshotCaptureService {
         }.value
     }
 
-    private func processedImageForStorage(_ image: CGImage) async -> CGImage {
-        guard let maxPixelLength = capturePreset.maxPixelLength else {
-            return image
+    /// Max edge for the AI-bound copy of a screenshot, from the current
+    /// capture preset (default `.agent` → 1280). `nil` means send full size.
+    /// Reads UserDefaults directly so it's safe to call off the main actor
+    /// from the various AI encoders.
+    nonisolated static var aiMaxPixelLength: CGFloat? {
+        let raw = UserDefaults.standard.string(forKey: "screenshotCapturePreset")
+        let preset = raw.flatMap(ScreenshotCapturePreset.init(rawValue:)) ?? .agent
+        return preset.maxPixelLength
+    }
+
+    /// Load a screenshot file and JPEG-encode it for an AI workflow,
+    /// downscaling to `maxEdge` (long edge) first when the source is larger.
+    /// The canonical on-disk PNG is untouched — this is the derived copy.
+    nonisolated static func aiJPEGData(
+        for url: URL,
+        maxEdge: CGFloat? = ScreenshotCaptureService.aiMaxPixelLength,
+        quality: CGFloat = 0.85
+    ) -> Data? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+
+        let image: CGImage?
+        if let maxEdge {
+            let options: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: Int(maxEdge.rounded())
+            ]
+            image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+                ?? CGImageSourceCreateImageAtIndex(source, 0, nil)
+        } else {
+            image = CGImageSourceCreateImageAtIndex(source, 0, nil)
         }
-        let longestEdge = max(image.width, image.height)
-        guard CGFloat(longestEdge) > maxPixelLength else {
-            return image
-        }
-        return await Task.detached(priority: .userInitiated) {
-            Self.downscaledImage(from: image, maxPixelLength: maxPixelLength) ?? image
+        guard let cgImage = image else { return nil }
+
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            data as CFMutableData,
+            UTType.jpeg.identifier as CFString,
+            1,
+            nil
+        ) else { return nil }
+        CGImageDestinationAddImage(
+            destination,
+            cgImage,
+            [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary
+        )
+        guard CGImageDestinationFinalize(destination) else { return nil }
+        return data as Data
+    }
+
+    private func previewThumbnail(for image: CGImage) async -> CGImage {
+        await Task.detached(priority: .userInitiated) {
+            Self.downscaledImage(from: image, maxPixelLength: 440) ?? image
         }.value
     }
 

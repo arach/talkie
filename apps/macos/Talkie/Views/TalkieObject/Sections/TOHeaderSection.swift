@@ -43,6 +43,7 @@ struct TOHeaderSection: View {
     /// which was clipping the label and leaving a stranded red dot.
     var onContinueMemo: (() -> Void)? = nil
     var isDirty: Bool = false
+    var showSavedBadge: Bool = false
     var onTitleChange: (() -> Void)? = nil
 
     private let repository = TalkieObjectRepository()
@@ -182,7 +183,13 @@ struct TOHeaderSection: View {
     /// body and into the masthead area, so the page has a magazine deck
     /// reading between headline and byline. Studio mock's body lead
     /// becomes the masthead's standfirst here.
+    ///
+    /// For long memos (>400 words) the standfirst is skipped entirely:
+    /// the body will chunk and render the full transcript with proper
+    /// paragraph breaks, and we don't want the masthead to swallow the
+    /// whole wall of text via the "no-newline → whole-blob" fallback.
     private var leadParagraph: String? {
+        guard recording.wordCount <= 400 else { return nil }
         guard let text = recording.text else { return nil }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -248,6 +255,42 @@ struct TOHeaderSection: View {
             Text(eyebrowDate(recording.createdAt))
                 .font(eyebrowItalicFont)
                 .foregroundColor(Theme.current.foregroundSecondary.opacity(0.70))
+
+            saveStatusChip
+                .animation(.easeInOut(duration: 0.2), value: isDirty)
+                .animation(.easeInOut(duration: 0.2), value: showSavedBadge)
+        }
+    }
+
+    /// Tiny save-state chip near the title. `Saving…` while there are
+    /// unsaved local edits; flips to `✓ Saved` for ~1.5s after a write
+    /// commits, then clears. Empty otherwise — so the eyebrow only grows
+    /// in length when there's actual saving activity to surface.
+    @ViewBuilder
+    private var saveStatusChip: some View {
+        if isDirty {
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(Theme.current.foregroundMuted)
+                    .frame(width: 5, height: 5)
+                Text("SAVING…")
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .tracking(1.6)
+                    .foregroundColor(Theme.current.foregroundMuted)
+            }
+            .transition(.opacity)
+        } else if showSavedBadge {
+            HStack(spacing: 5) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 9, weight: .semibold))
+                Text("SAVED")
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .tracking(1.6)
+            }
+            .foregroundColor(Color.green.opacity(0.82))
+            .transition(.opacity)
+        } else {
+            EmptyView()
         }
     }
 

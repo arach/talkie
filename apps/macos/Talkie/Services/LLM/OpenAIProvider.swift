@@ -305,6 +305,9 @@ class OpenAIProvider: LLMProvider {
             body["max_tokens"] = options.maxTokens
             body["top_p"] = options.topP
         }
+        if options.jsonMode {
+            body["response_format"] = ["type": "json_object"]
+        }
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -375,13 +378,16 @@ class OpenAIProvider: LLMProvider {
         }
         messages.append(["role": "user", "content": prompt])
 
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "provider": "openai",
             "model": model,
             "messages": messages,
             "temperature": options.temperature,
             "maxTokens": options.maxTokens
         ]
+        if options.jsonMode {
+            body["response_format"] = ["type": "json_object"]
+        }
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -468,6 +474,9 @@ class OpenAIProvider: LLMProvider {
                     } else {
                         body["temperature"] = options.temperature
                         body["max_tokens"] = options.maxTokens
+                    }
+                    if options.jsonMode {
+                        body["response_format"] = ["type": "json_object"]
                     }
 
                     request.httpBody = try JSONSerialization.data(withJSONObject: body)

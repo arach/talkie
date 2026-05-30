@@ -487,13 +487,7 @@ struct RecordingSheetNext: View {
 
         do {
             try context.save()
-            // Broadcast the new memo so home/library lists pick it up
-            // without a view switch. VoiceMemoStore fires this on
-            // delete/promote but the record-and-save path here was
-            // silent — list views only refreshed via .onAppear, so a
-            // freshly-saved memo only appeared after navigating away
-            // and back.
-            NotificationCenter.default.post(name: .voiceMemosDidChange, object: nil)
+            VoiceMemoStore.publishChange(context: context)
 
             if let memoID = memo.id {
                 persistQueuedContext(for: memoID, memoTitle: memo.title ?? defaultTitle)
@@ -515,7 +509,7 @@ struct RecordingSheetNext: View {
 
             phase = .saved
             Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 700_000_000)
+                try? await Task.sleep(for: .milliseconds(700))
                 controller.isPresented = false
             }
         } catch {

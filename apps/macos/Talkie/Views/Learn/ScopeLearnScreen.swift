@@ -164,12 +164,11 @@ struct ScopeLearnScreen: View {
 
     // MARK: - Hero
 
+    // The ScopeTopBand already owns the "Learn" identity (top rail). The hero
+    // no longer repeats a 44px "Learn" title — that was the doubled-up header.
+    // It keeps only the eyebrow as a lead-in to the Ask surface below.
     private var hero: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Learn")
-                .font(LearnFont.display(size: 44, medium: true))
-                .foregroundStyle(ScopeInk.primary)
-                .tracking(-0.5)
             Text("ASK · EXPLORE · REVISIT FEATURES")
                 .font(ScopeType.chrome)
                 .tracking(ScopeType.Tracking.wide)

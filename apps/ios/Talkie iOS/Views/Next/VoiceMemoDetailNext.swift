@@ -672,6 +672,9 @@ struct VoiceMemoDetailNext: View {
                     transcriptSection
                         .padding(.horizontal, 12)
 
+                    memoActionsSection
+                        .padding(.horizontal, 12)
+
                     // Memo-scoped workflow triggers — only render
                     // when there are memo-prefixed templates defined.
                     // Empty list = no value in showing the header.
@@ -689,12 +692,10 @@ struct VoiceMemoDetailNext: View {
                             .padding(.horizontal, 12)
                     }
 
-                    attachmentsSection
-                        .padding(.horizontal, 12)
-
-                    actionBar
-                        .padding(.horizontal, 12)
-                        .padding(.top, 4)
+                    if shouldShowAttachmentsSection {
+                        attachmentsSection
+                            .padding(.horizontal, 12)
+                    }
 
                     Spacer(minLength: 120)   // breathing room above the chrome tray
                 }
@@ -1086,14 +1087,51 @@ struct VoiceMemoDetailNext: View {
             }
             .padding(.horizontal, 4)
 
-            Text(store.memo.transcript)
-                .talkieType(.listTitle)
-                .lineSpacing(5)
-                .foregroundStyle(theme.colors.textPrimary)
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 10).fill(theme.colors.cardBackground).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: theme.currentTheme.chrome.hairlineWidth)))
-                .contextMenu {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(store.memo.transcript)
+                    .talkieType(.listTitle)
+                    .lineSpacing(5)
+                    .foregroundStyle(theme.colors.textPrimary)
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Rectangle()
+                    .fill(theme.currentTheme.chrome.edgeFaint)
+                    .frame(height: theme.currentTheme.chrome.hairlineWidth)
+                    .padding(.horizontal, 14)
+
+                Button(action: openMemoInCompose) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "square.and.pencil")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("Refine in Compose")
+                            .talkieType(.fieldLabel)
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(theme.colors.textTertiary)
+                    }
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(!canRefineMemo)
+                .opacity(canRefineMemo ? 1 : 0.45)
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(theme.colors.cardBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .strokeBorder(
+                                theme.currentTheme.chrome.edgeFaint,
+                                lineWidth: theme.currentTheme.chrome.hairlineWidth
+                            )
+                    )
+            )
+            .contextMenu {
                     if store.hasTranscriptVersionHistory {
                         Button("Version History", systemImage: "clock.arrow.circlepath") {
                             showingVersionHistory = true
@@ -1102,8 +1140,106 @@ struct VoiceMemoDetailNext: View {
                     Button("Copy", systemImage: "doc.on.doc") {
                         UIPasteboard.general.string = store.memo.transcript
                     }
-                }
+            }
         }
+    }
+
+    private var memoActionsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button(action: { showingShareSheet = true }) {
+                HStack(spacing: 10) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(width: 30, height: 30)
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                        .background(
+                            RoundedRectangle(cornerRadius: 7)
+                                .fill(theme.currentTheme.chrome.accent.opacity(0.12))
+                        )
+                    Text("Share Memo")
+                        .talkieType(.fieldLabel)
+                        .foregroundStyle(theme.colors.textPrimary)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(theme.colors.textTertiary)
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(theme.colors.cardBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .strokeBorder(
+                                    theme.currentTheme.chrome.edgeFaint,
+                                    lineWidth: theme.currentTheme.chrome.hairlineWidth
+                                )
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Share memo")
+
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 8),
+                    GridItem(.flexible(), spacing: 8),
+                ],
+                spacing: 8
+            ) {
+                memoUtilityAction(
+                    label: "Listen",
+                    systemImage: "speaker.wave.2",
+                    action: openMemoReadAloud
+                )
+                memoUtilityAction(
+                    label: "Ask Agent",
+                    systemImage: "brain.head.profile",
+                    action: { showingAgentSheet = true }
+                )
+                memoUtilityAction(
+                    label: "Run CLI",
+                    systemImage: "terminal",
+                    action: { showingCLISheet = true }
+                )
+                memoUtilityAction(
+                    label: "Attach",
+                    systemImage: "paperclip",
+                    action: { showingAttachmentPickerSheet = true }
+                )
+            }
+        }
+    }
+
+    private func memoUtilityAction(label: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                    .frame(height: 16)
+                Text(label)
+                    .talkieType(.channelLabelTiny)
+                    .foregroundStyle(theme.colors.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 58)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(theme.colors.cardBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .strokeBorder(
+                                theme.currentTheme.chrome.edgeFaint,
+                                lineWidth: theme.currentTheme.chrome.hairlineWidth
+                            )
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 
     private var workflowRunsSection: some View {
@@ -1516,39 +1652,6 @@ struct VoiceMemoDetailNext: View {
         }
     }
 
-    private var emptyAttachmentsTile: some View {
-        Button(action: { showingAttachmentPickerSheet = true }) {
-            VStack(spacing: 8) {
-                Image(systemName: "photo.on.rectangle.angled")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(theme.currentTheme.chrome.accent)
-                Text("Add screenshots or photos")
-                    .talkieType(.preview)
-                    .foregroundStyle(theme.colors.textPrimary)
-                Text("Keep visual context with the memo.")
-                    .talkieType(.channelLabelTiny)
-                    .foregroundStyle(theme.colors.textTertiary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 22)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(theme.colors.cardBackground.opacity(0.6))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .strokeBorder(
-                                theme.currentTheme.chrome.edgeFaint,
-                                style: StrokeStyle(
-                                    lineWidth: theme.currentTheme.chrome.hairlineWidth,
-                                    dash: [5, 3]
-                                )
-                            )
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
     private func attachmentTile(_ attachment: MemoImageAttachment) -> some View {
         ZStack(alignment: .topTrailing) {
             Button(action: { previewAttachment = attachment }) {
@@ -1632,84 +1735,67 @@ struct VoiceMemoDetailNext: View {
         }
     }
 
-    /// Inline action row — lives at the foot of the scrollable content
-    /// rather than pinned to the screen bottom. Short memos: chips
-    /// sit right under the transcript card. Long memos: chips scroll
-    /// to the bottom of the content. Either way they never start
-    /// stacked on top of the chrome tray.
-    private var actionBar: some View {
-        // Compact action bar: two prominent actions (Share + Refine)
-        // with a More menu folding the less-frequent Listen / Agent /
-        // CLI behind a "..." chip. Refine stays primary (filled accent)
-        // since it's the principal forward path from a memo.
-        HStack(spacing: 8) {
-            actionChip(label: "Share", isPrimary: false) {
-                showingShareSheet = true
-            }
-
-            Menu {
-                Button {
-                    AppShellRouter.shared.openReadAloud(source: ReadAloudSource(
-                        title: store.memo.title,
-                        text: store.memo.transcript,
-                        meta: "MEMO · \(wordCount) WORDS · \(store.memo.durationLabel)",
-                        sourceURL: nil
-                    ))
-                } label: {
-                    Label("Listen", systemImage: "speaker.wave.2")
-                }
-                Button {
-                    showingAgentSheet = true
-                } label: {
-                    Label("Ask Agent", systemImage: "brain.head.profile")
-                }
-                Button {
-                    showingCLISheet = true
-                } label: {
-                    Label("Run CLI", systemImage: "terminal")
-                }
-            } label: {
-                Text("…")
-                    .talkieType(.fieldLabel)
-                    .foregroundStyle(theme.colors.textSecondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 11)
-                    .background(
-                        Capsule()
-                            .fill(Color.clear)
-                            .overlay(
-                                Capsule()
-                                    .strokeBorder(theme.currentTheme.chrome.edgeFaint, lineWidth: theme.currentTheme.chrome.hairlineWidth)
-                            )
-                    )
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("More actions")
-
-            actionChip(label: "Refine ›", isPrimary: true) {
-                AppShellRouter.shared.openCompose(documentID: store.memo.id)
-            }
-        }
+    private func openMemoReadAloud() {
+        AppShellRouter.shared.openReadAloud(source: ReadAloudSource(
+            title: store.memo.title,
+            text: primaryMemoText,
+            meta: "MEMO · \(wordCount) WORDS · \(store.memo.durationLabel)",
+            sourceURL: nil
+        ))
     }
 
-    private func actionChip(label: String, isPrimary: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label)
-                .talkieType(.fieldLabel)
-                .foregroundStyle(isPrimary ? theme.colors.cardBackground : theme.colors.textSecondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 11)
-                .background(Capsule().fill(isPrimary ? theme.currentTheme.chrome.accent : Color.clear).overlay(Capsule().strokeBorder(isPrimary ? Color.clear : theme.currentTheme.chrome.edgeFaint, lineWidth: theme.currentTheme.chrome.hairlineWidth)))
+    private func openMemoInCompose() {
+        AppShellRouter.shared.openComposeSeeded(text: memoComposeSeedText)
+    }
+
+    private var canRefineMemo: Bool {
+        !memoComposeSeedText.isEmpty
+    }
+
+    private var memoComposeSeedText: String {
+        var parts: [String] = []
+        let title = store.memo.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let summary = store.memo.summary?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let transcript = normalizedTranscript
+
+        if !title.isEmpty {
+            parts.append(title)
         }
-        .buttonStyle(.plain)
+        if let summary, !summary.isEmpty {
+            parts.append("Summary\n\(summary)")
+        }
+        if !transcript.isEmpty {
+            parts.append(transcript)
+        }
+
+        return parts.joined(separator: "\n\n")
+    }
+
+    private var primaryMemoText: String {
+        let transcript = normalizedTranscript
+        if !transcript.isEmpty { return transcript }
+        if let summary = store.memo.summary?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !summary.isEmpty {
+            return summary
+        }
+        return store.memo.title
+    }
+
+    private var normalizedTranscript: String {
+        let transcript = store.memo.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        return transcript == "No transcript yet." ? "" : transcript
     }
 
     private var wordCount: Int {
-        store.memo.transcript.split { $0.isWhitespace || $0.isNewline }.count
+        normalizedTranscript.split { $0.isWhitespace || $0.isNewline }.count
     }
 
     private var hasSentCurrentAttachmentsToMac: Bool {
         !store.attachmentFingerprint.isEmpty && lastSentAttachmentFingerprint == store.attachmentFingerprint
+    }
+
+    private var shouldShowAttachmentsSection: Bool {
+        !store.attachments.isEmpty || isImportingAttachments || isRunningOCR || isSendingAttachmentsToMac || attachmentError != nil
     }
 
     private var attachmentBusyLabel: String {

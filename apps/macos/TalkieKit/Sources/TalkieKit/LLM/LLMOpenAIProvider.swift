@@ -10,7 +10,7 @@ import os
 
 private let logger = Logger(subsystem: "to.talkie.app.kit", category: "OpenAI")
 
-public final class LLMOpenAIProvider: LLMProvider, @unchecked Sendable {
+public final class LLMOpenAIProvider: LLMProvider, LLMVisionProvider, @unchecked Sendable {
     public let id = "openai"
     public let name = "OpenAI"
 
@@ -287,5 +287,76 @@ public final class LLMOpenAIProvider: LLMProvider, @unchecked Sendable {
                 }
             }
         }
+    }
+
+    public func generateVision(
+        request: LLMVisionRequest,
+        model: String
+    ) async throws -> String {
+        guard let apiKey = LLMAPIKeyStore.shared.get(.openai) else {
+            throw LLMError.configurationError("OpenAI API key not configured")
+        }
+
+        var contentParts: [[String: Any]] = []
+        for part in request.parts {
+            switch part {
+            case .text(let text):
+                contentParts.append(["type": "text", "text": text])
+            case .imageJPEG(let data), .imagePNG(let data):
+                let mime = part.isJPEG ? "image/jpeg" : "image/png"
+                let b64 = data.base64EncodedString()
+                contentParts.append([
+                    "type": "image_url",
+                    "image_url": ["url": "data:\(mime);base64,\(b64)"],
+                ])
+            }
+        }
+
+        var messages: [[String: Any]] = []
+        if let systemPrompt = request.options.systemPrompt {
+            let role = isReasoningModel(model) ? "developer" : "system"
+            messages.append(["role": role, "content": systemPrompt])
+        }
+        messages.append(["role": "user", "content": contentParts])
+
+        let url = URL(string: "https://api.openai.com/v1/chat/completions")!
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        var body: [String: Any] = [
+            "model": model,
+            "messages": messages,
+        ]
+        if isReasoningModel(model) {
+            body["max_completion_tokens"] = request.options.maxTokens
+        } else {
+            body["temperature"] = request.options.temperature
+            body["max_tokens"] = request.options.maxTokens
+        }
+        urlRequest.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: urlRequest)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw LLMError.generationFailed("OpenAI vision request failed")
+        }
+
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let choices = json?["choices"] as? [[String: Any]],
+              let firstChoice = choices.first,
+              let message = firstChoice["message"] as? [String: Any],
+              let content = message["content"] as? String else {
+            throw LLMError.generationFailed("Failed to parse OpenAI vision response")
+        }
+        return content
+    }
+}
+
+private extension LLMContentPart {
+    var isJPEG: Bool {
+        if case .imageJPEG = self { return true }
+        return false
     }
 }

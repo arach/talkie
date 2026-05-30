@@ -54,6 +54,7 @@ import {
 } from "./routes/companion";
 import { companionEventsSocket } from "./routes/companion-events";
 import { companionScreenStreamSocket } from "./routes/screen-stream";
+import { terminalAccessRoute } from "./routes/terminal";
 import {
   matchRoute,
   matchScanRoute,
@@ -446,6 +447,9 @@ export const bridge = new Elysia({ name: "bridge" })
   })
   .ws("/companion/events", companionEventsSocket)
   .ws("/companion/screen", companionScreenStreamSocket)
+
+  // ===== Terminal =====
+  .post("/terminal/access", () => terminalAccessRoute())
 
   // ===== Stats =====
   .get("/stats", () => statsRoute());

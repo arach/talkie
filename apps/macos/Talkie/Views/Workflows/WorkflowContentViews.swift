@@ -81,13 +81,14 @@ struct WorkflowsContentView: View {
                 .opacity(0.5)
 
             // Right: Inline Editor - expands to fill
-            if let binding = Binding($editingWorkflow) {
+            if let workflow = editingWorkflow {
                 WorkflowInlineEditor(
-                    workflow: binding,
+                    workflow: editableWorkflowBinding(fallback: workflow),
                     onSave: saveWorkflow,
                     onDelete: deleteCurrentWorkflow,
                     onDuplicate: duplicateCurrentWorkflow,
-                    onRun: { showingMemoSelector = true }
+                    onRun: { showingMemoSelector = true },
+                    onBack: clearWorkflowSelection
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -169,6 +170,8 @@ struct WorkflowsContentView: View {
                 description: template.description,
                 icon: template.icon,
                 color: template.color,
+                maintainer: template.maintainer,
+                inputs: template.inputs,
                 steps: template.steps.map { step in
                     // Give each step a fresh UUID too
                     WorkflowStep(
@@ -225,18 +228,34 @@ struct WorkflowsContentView: View {
 
     private func deleteCurrentWorkflow() {
         guard let workflow = currentWorkflow else { return }
+        let deletedID = workflow.id
+
+        if selectedWorkflowID == deletedID {
+            clearWorkflowSelection()
+        }
 
         Task {
             do {
                 try await workflowService.delete(workflow)
-                await MainActor.run {
-                    editingWorkflow = nil
-                    selectedWorkflowID = nil
-                }
             } catch {
                 logger.error("Failed to delete workflow: \(error)")
             }
         }
+    }
+
+    private func clearWorkflowSelection() {
+        editingWorkflow = nil
+        selectedWorkflowID = nil
+    }
+
+    private func editableWorkflowBinding(fallback workflow: WorkflowDefinition) -> Binding<WorkflowDefinition> {
+        Binding(
+            get: { editingWorkflow ?? workflow },
+            set: { updated in
+                editingWorkflow = updated
+                selectedWorkflowID = updated.id
+            }
+        )
     }
 
     private func duplicateCurrentWorkflow() {

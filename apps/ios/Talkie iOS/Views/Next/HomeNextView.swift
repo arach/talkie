@@ -5,10 +5,9 @@
 //  M1 — Talkie's canonical iPhone home, painted to match the
 //  studio mock at http://localhost:3000/home.
 //
-//  Composition: TALKIE wordmark · PICK UP card (continue last
-//  document) · smart Action Bus (auto-rolling 24h→7d→30d) ·
-//  Recent list (2-line iOS-Notes style). The ambient voice
-//  button lives in AppShellNext, not here.
+//  Composition: TALKIE wordmark · frequent-action strip · Recent
+//  list (2-line iOS-Notes style) · contextual suggestions strip.
+//  The ambient voice button lives in AppShellNext, not here.
 //
 //  Spec: design/studio/app/home/SWIFT_PORT.md
 //  Visual reference: design/studio/app/home/page.tsx
@@ -19,12 +18,14 @@
 //
 
 import SwiftUI
+import TalkieMobileKit
 import UIKit
 
 struct HomeNextView: View {
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var deepLinkManager = DeepLinkManager.shared
     @ObservedObject private var iCloudStatus = iCloudStatusManager.shared
+    @ObservedObject private var recordingSheet = RecordingSheetController.shared
     @StateObject private var feed: HomeFeed
     @State private var isSearchPresented = false
 
@@ -37,7 +38,7 @@ struct HomeNextView: View {
             VStack(spacing: 12) {
                 HomeHeader()
 
-                StationCard(pickUp: feed.lastDocument)
+                HomeFrequentActionsStrip()
                     .padding(.horizontal, 12)
 
                 RecentSection(
@@ -63,6 +64,9 @@ struct HomeNextView: View {
                 )
                 .padding(.horizontal, 12)
 
+                HomeSuggestionsStrip()
+                    .padding(.horizontal, 12)
+
                 Spacer(minLength: 80)   // breathing room for the shell voice button
             }
         }
@@ -76,10 +80,15 @@ struct HomeNextView: View {
         .onReceive(NotificationCenter.default.publisher(for: .voiceMemosDidChange)) { _ in feed.reload() }
         .onReceive(NotificationCenter.default.publisher(for: .capturesDidChange)) { _ in feed.reload() }
         .onReceive(NotificationCenter.default.publisher(for: .composeNotesDidChange)) { _ in feed.reload() }
+        .onChange(of: recordingSheet.isPresented) { wasPresented, isPresented in
+            guard wasPresented && !isPresented else { return }
+            feed.reload()
+        }
         .onChange(of: deepLinkManager.pendingAction) { _, action in
             handleDeepLinkAction(action)
         }
         .onAppear {
+            feed.reload()
             handleDeepLinkAction(deepLinkManager.pendingAction)
         }
     }
@@ -107,28 +116,167 @@ struct HomeNextView: View {
     }
 }
 
+enum SharedCaptureIngress {
+    static func importURLContent(
+        from url: URL,
+        suggestedTitle: String? = nil,
+        ingestionMethod: String,
+        onCapture: @escaping @MainActor (Capture) -> Void
+    ) {
+        Task {
+            let result = await URLBookmarkMetadataService.buildCapture(
+                from: url,
+                suggestedTitle: suggestedTitle,
+                sourceDevice: "iPhone",
+                ingestionMethod: ingestionMethod
+            )
+
+            var capture = result.capture
+            if let imageData = result.imageData {
+                let filename = CaptureStore.shared.saveImage(imageData, id: capture.id)
+                capture = capture.copyWithImage(filename: filename)
+            }
+
+            await MainActor.run {
+                onCapture(capture)
+            }
+        }
+    }
+
+    static func processQueuedShare(
+        id: String,
+        onCapture: @escaping @MainActor (Capture) -> Void
+    ) {
+        guard let containerURL = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: TalkieMobileRuntimeIdentifiers.appGroupIdentifier
+        ) else {
+            AppLogger.app.warning("Share queue: app group unavailable")
+            return
+        }
+
+        let fileURL = containerURL
+            .appending(path: "Library/Application Support/Talkie/share-queue")
+            .appending(path: "\(id).json")
+
+        guard let data = try? Data(contentsOf: fileURL) else {
+            AppLogger.app.warning("Share queue: file not found for \(id)")
+            return
+        }
+
+        let payload: QueuedSharePayload
+        do {
+            payload = try JSONDecoder().decode(QueuedSharePayload.self, from: data)
+        } catch {
+            AppLogger.app.error("Share queue: failed to decode \(id): \(error.localizedDescription)")
+            try? FileManager.default.removeItem(at: fileURL)
+            return
+        }
+
+        try? FileManager.default.removeItem(at: fileURL)
+
+        switch payload.sourceType {
+        case "url":
+            guard let urlString = payload.sourceURL, let url = URL(string: urlString) else { return }
+            importURLContent(
+                from: url,
+                suggestedTitle: payload.title,
+                ingestionMethod: "share-extension",
+                onCapture: onCapture
+            )
+        case "photo":
+            Task {
+                await processSharedPhoto(imageBase64: payload.imageBase64, onCapture: onCapture)
+            }
+        case "text":
+            let text = payload.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { return }
+            Task { @MainActor in
+                onCapture(Capture(sourceType: "text", text: text, title: payload.title))
+            }
+        default:
+            AppLogger.app.warning("Share queue: unknown source type \(payload.sourceType)")
+        }
+    }
+
+    private static func processSharedPhoto(
+        imageBase64: String?,
+        onCapture: @escaping @MainActor (Capture) -> Void
+    ) async {
+        guard let imageBase64,
+              let imageData = Data(base64Encoded: imageBase64),
+              let image = UIImage(data: imageData) else {
+            AppLogger.app.warning("Share queue: could not decode image payload")
+            return
+        }
+
+        let ocrText: String
+        do {
+            let result = try await ScreenshotOCRService.extractText(from: image)
+            ocrText = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            AppLogger.ai.info("Share OCR extracted \(ocrText.count) characters")
+        } catch {
+            ocrText = ""
+            AppLogger.ai.info("Share OCR found no text in image")
+        }
+
+        let captureID = UUID()
+        let imageFilename = CaptureStore.shared.saveImage(imageData, id: captureID)
+        let capture = Capture(
+            id: captureID,
+            sourceType: "photo",
+            text: ocrText.isEmpty ? "Image shared from iPhone" : ocrText,
+            title: "Image · \(Date().formatted(.dateTime.month().day().hour().minute()))",
+            imageFilename: imageFilename
+        )
+
+        await MainActor.run {
+            onCapture(capture)
+        }
+    }
+}
+
+private struct QueuedSharePayload: Codable {
+    let sourceType: String
+    let text: String
+    let title: String?
+    let sourceURL: String?
+    let imageBase64: String?
+}
+
+private extension Capture {
+    func copyWithImage(filename: String?) -> Capture {
+        Capture(
+            id: id,
+            sourceType: sourceType,
+            text: text,
+            title: title,
+            sourceURL: sourceURL,
+            bookmark: bookmark,
+            imageFilename: filename,
+            deferredPageFilenames: deferredPageFilenames,
+            totalPageCount: totalPageCount,
+            timestamp: timestamp,
+            syncedToMac: syncedToMac
+        )
+    }
+}
+
 // MARK: - Header
 
 private struct HomeHeader: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        // Gear is 40×40 with the same chrome as the corner Settings
-        // complication (`ChromeOverlay.CornerSlot`) so when the shell
-        // summons, the gear stays visually in place — it doesn't shift
-        // size or move. Right-edge inset matches the corner slot
-        // padding (20pt) so x-coordinates line up. Left side mirrors
-        // that 40pt footprint with a row of three ambient status
-        // pixels (Mac · iCloud · Account) so the wordmark stays
-        // centered while the chrome carries live system state.
+        // Gear and Deck share a 40pt footprint so the wordmark stays
+        // centered while the chrome carries the two persistent home
+        // destinations: remote control on the left, settings on the
+        // right.
         HStack {
-            // Single Mac connection complication on the left.
-            // 32pt circular icon — same footprint as the gear on the
-            // right so the wordmark stays centered. Hidden entirely
-            // when no Mac is paired; an invisible spacer keeps the
-            // wordmark centered in that case too.
+            // Command Deck rests in the top-left slot. It keeps the
+            // same 40pt footprint as the settings gear so the wordmark
+            // stays centered while the remote remains discoverable.
             ZStack {
-                MacConnectionChip()
+                DeckComplication()
             }
             .frame(width: 40, height: 40)
             Spacer()
@@ -159,47 +307,51 @@ private struct HomeHeader: View {
     }
 }
 
-// MARK: - Ambient status row (Mac · iCloud · Account)
+// MARK: - Deck complication
 
-/// Single Mac connection complication at the top-left of Home.
-/// Replaces the prior four-pixel AmbientStatusRow — fingers can't
-/// reliably hit 6pt dots, and the row was visually noisy without
-/// being useful. This chip uses the `point.3.connected.trianglepath`
-/// SF Symbol (same one ConnectionCenterNext uses as its hero) and
-/// adapts based on bridge + deck state:
-///
-///   - Connected + deck snapshot available → tap opens DeckMirrorNext
-///   - Any other paired state                → tap opens ConnectionCenter
-///   - Not paired                            → chip hidden entirely
-///
-/// Account sign-in and iCloud sync pixels were removed from the
-/// home header — both live in Settings → CONNECT where they can be
-/// acted on. They didn't earn the home real estate.
-private struct MacConnectionChip: View {
+/// Resting Command Deck complication at the top-left of Home.
+/// It opens the remote even before pairing so the empty state can
+/// explain what is needed, while color and the tiny status bead carry
+/// the Mac bridge/deck state without turning the header into a status
+/// dashboard.
+private struct DeckComplication: View {
     @State private var bridgeManager = BridgeManager.shared
     @ObservedObject private var deck = DeckMirrorStore.shared
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        if bridgeManager.isPaired {
-            Button(action: handleTap) {
+        Button(action: openDeck) {
+            ZStack(alignment: .bottomTrailing) {
                 ZStack {
                     Circle().fill(theme.colors.cardBackground)
                     Circle().strokeBorder(
                         borderColor,
                         lineWidth: theme.currentTheme.chrome.hairlineWidth
                     )
-                    Image(systemName: "point.3.connected.trianglepath.dotted")
+                    Image(systemName: "square.grid.3x3")
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(iconColor)
                 }
                 .frame(width: 40, height: 40)
-                .shadow(color: .black.opacity(0.10), radius: 4, y: 2)
+
+                if let statusColor {
+                    Circle()
+                        .fill(statusColor)
+                        .frame(width: 8, height: 8)
+                        .overlay(
+                            Circle()
+                                .stroke(theme.colors.background, lineWidth: 2)
+                        )
+                        .offset(x: -6, y: -6)
+                        .accessibilityHidden(true)
+                }
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(accessibilityLabel)
-            .accessibilityHint(accessibilityHint)
+            .frame(width: 40, height: 40)
+            .shadow(color: .black.opacity(0.10), radius: 4, y: 2)
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint("Opens Deck remote")
     }
 
     // MARK: - State derivation
@@ -213,37 +365,11 @@ private struct MacConnectionChip: View {
         bridgeManager.status == .connected
     }
 
-    private func handleTap() {
-        if isConnected && hasDeckBoard {
-            AppShellRouter.shared.openDeck()
-        } else {
-            AppShellRouter.shared.openConnectionCenter()
-        }
-    }
-
-    private var showsChevron: Bool {
-        isConnected && hasDeckBoard
+    private func openDeck() {
+        AppShellRouter.shared.openDeck()
     }
 
     // MARK: - Visual treatment per state
-
-    private var chipLabel: String {
-        if bridgeManager.awaitingPairingApproval {
-            return "PENDING APPROVAL"
-        }
-        switch bridgeManager.status {
-        case .connected:
-            if hasDeckBoard { return "DECK" }
-            let name = bridgeManager.pairedMacDisplayName ?? "MAC"
-            return name.uppercased()
-        case .connecting:
-            return "CONNECTING…"
-        case .disconnected:
-            return "MAC · OFFLINE"
-        case .error:
-            return "MAC · ERROR"
-        }
-    }
 
     private var iconColor: Color {
         if bridgeManager.status == .error {
@@ -257,16 +383,6 @@ private struct MacConnectionChip: View {
         return theme.colors.textTertiary
     }
 
-    private var labelColor: Color {
-        if bridgeManager.status == .error {
-            return Color(red: 0.85, green: 0.46, blue: 0.34)
-        }
-        if isConnected && hasDeckBoard {
-            return theme.colors.textPrimary
-        }
-        return theme.colors.textSecondary
-    }
-
     private var borderColor: Color {
         if bridgeManager.status == .error {
             return Color(red: 0.85, green: 0.46, blue: 0.34).opacity(0.5)
@@ -274,23 +390,46 @@ private struct MacConnectionChip: View {
         if isConnected && hasDeckBoard {
             return theme.currentTheme.chrome.accent.opacity(0.55)
         }
+        if isConnected {
+            return Color(red: 0.36, green: 0.74, blue: 0.50).opacity(0.45)
+        }
         return theme.currentTheme.chrome.edgeFaint
+    }
+
+    private var statusColor: Color? {
+        if !bridgeManager.isPaired {
+            return nil
+        }
+        if bridgeManager.status == .error {
+            return Color(red: 0.85, green: 0.46, blue: 0.34)
+        }
+        if hasDeckBoard {
+            return theme.currentTheme.chrome.accent
+        }
+        if isConnected {
+            return Color(red: 0.36, green: 0.74, blue: 0.50)
+        }
+        if bridgeManager.awaitingPairingApproval || bridgeManager.status == .connecting {
+            return theme.currentTheme.chrome.accent.opacity(0.75)
+        }
+        return theme.colors.textTertiary.opacity(0.7)
     }
 
     private var accessibilityLabel: String {
         let mac = bridgeManager.pairedMacDisplayName ?? "Mac"
-        if bridgeManager.awaitingPairingApproval { return "\(mac), pending approval" }
+        if !bridgeManager.isPaired {
+            return "Command Deck, not paired"
+        }
+        if bridgeManager.awaitingPairingApproval {
+            return "Command Deck, \(mac) pending approval"
+        }
         switch bridgeManager.status {
         case .connected:
-            return hasDeckBoard ? "\(mac) deck" : "\(mac) connected"
-        case .connecting: return "\(mac) connecting"
-        case .disconnected: return "\(mac) offline"
-        case .error: return "\(mac) error"
+            return hasDeckBoard ? "Command Deck on \(mac)" : "Command Deck, waiting for \(mac)"
+        case .connecting: return "Command Deck, \(mac) connecting"
+        case .disconnected: return "Command Deck, \(mac) offline"
+        case .error: return "Command Deck, \(mac) error"
         }
-    }
-
-    private var accessibilityHint: String {
-        isConnected && hasDeckBoard ? "Opens deck" : "Opens connection center"
     }
 }
 
@@ -428,101 +567,50 @@ private struct StatusPixel: View {
     }
 }
 
-// MARK: - STATION (PICK UP + Action Bus)
+// MARK: - Frequent actions (above recents)
 
-private struct StationCard: View {
-    let pickUp: HomeFeed.PickUp?
-
+private struct HomeFrequentActionsStrip: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("PICK UP")
-                        .talkieType(.channelLabel)
-                        .foregroundStyle(theme.currentTheme.chrome.accent)
+        VStack(alignment: .leading, spacing: 8) {
+            Text("· QUICK")
+                .talkieType(.channelLabelTiny)
+                .foregroundStyle(theme.colors.textTertiary)
+                .padding(.leading, 4)
 
-                    if let pickUp {
-                        Text(pickUp.title)
-                            .talkieType(.headline)
-                            .foregroundStyle(theme.colors.textPrimary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-
-                        Text(pickUp.meta)
-                            .talkieType(.metaMono)
-                            .foregroundStyle(theme.colors.textTertiary)
-                    } else {
-                        Text("Nothing recent")
-                            .talkieType(.headlineSecondary)
-                            .foregroundStyle(theme.colors.textSecondary)
-                    }
+            HStack(spacing: 0) {
+                actionCell(label: "RECORD", icon: "waveform") {
+                    RecordingSheetController.shared.isPresented = true
                 }
-
-                Spacer()
-
-                if let pickUp {
-                    Button(action: pickUp.continueAction) {
-                        Text("CONTINUE ›")
-                            .talkieType(.chipLabel)
-                            .foregroundStyle(theme.colors.cardBackground)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .background(Capsule().fill(theme.currentTheme.chrome.accent))
-                    }
-                    .buttonStyle(.plain)
+                divider
+                actionCell(label: "COMPOSE", icon: "square.and.pencil") {
+                    AppShellRouter.shared.openCompose(
+                        documentID: "blank-\(UUID().uuidString.prefix(8))"
+                    )
+                }
+                divider
+                actionCell(label: "SCAN", icon: "camera") {
+                    AppShellRouter.shared.openCameraCapture()
+                }
+                divider
+                actionCell(label: "ASK AI", icon: "sparkles") {
+                    AppShellRouter.shared.openAskAI()
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-
-            QuickEntriesBar()
+            .frame(height: 56)
+            .background(theme.colors.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                  lineWidth: theme.currentTheme.chrome.hairlineWidth)
+            )
+            .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
         }
-        .background(theme.colors.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(theme.currentTheme.chrome.edgeFaint,
-                              lineWidth: theme.currentTheme.chrome.hairlineWidth)
-        )
-        .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
-    }
-}
-
-/// Bottom band of the PICK UP card. Originally the stat tally
-/// (LAST 7 DAYS · 3 CAPTURES + 3-cell readout), removed because it
-/// was decoration not action. This band keeps the same visual
-/// composition — full-width strip, hairline above, divided cells —
-/// but each cell is a quick-entry verb (Compose · Ask AI · Scan).
-private struct QuickEntriesBar: View {
-    @ObservedObject private var theme = ThemeManager.shared
-
-    var body: some View {
-        HStack(spacing: 0) {
-            entryCell(label: "COMPOSE", icon: "square.and.pencil") {
-                AppShellRouter.shared.openCompose(documentID: "blank-\(UUID().uuidString.prefix(8))")
-            }
-            divider
-            entryCell(label: "ASK AI", icon: "sparkles") {
-                AppShellRouter.shared.openAskAI()
-            }
-            divider
-            entryCell(label: "SCAN", icon: "camera") {
-                AppShellRouter.shared.openCameraCapture()
-            }
-        }
-        .frame(height: 56)
-        .background(theme.colors.background)
-        .overlay(
-            Rectangle()
-                .fill(theme.currentTheme.chrome.edgeFaint)
-                .frame(height: theme.currentTheme.chrome.hairlineWidth),
-            alignment: .top
-        )
     }
 
-    private func entryCell(label: String, icon: String, action: @escaping () -> Void) -> some View {
+    private func actionCell(label: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 4) {
                 Image(systemName: icon)
@@ -531,13 +619,14 @@ private struct QuickEntriesBar: View {
                 Text(label)
                     .talkieType(.channelLabelTiny)
                     .foregroundStyle(theme.colors.textTertiary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label.capitalized)
-        .accessibilityHint("Opens \(label.lowercased())")
     }
 
     private var divider: some View {
@@ -546,6 +635,109 @@ private struct QuickEntriesBar: View {
             .frame(width: theme.currentTheme.chrome.hairlineWidth)
             .padding(.vertical, 10)
     }
+}
+
+// MARK: - Suggestions (below recents)
+
+private struct HomeSuggestionsStrip: View {
+    @State private var bridgeManager = BridgeManager.shared
+    @ObservedObject private var theme = ThemeManager.shared
+
+    private var suggestions: [HomeSuggestion] {
+        var items: [HomeSuggestion] = []
+
+        if !bridgeManager.isPaired {
+            items.append(HomeSuggestion(
+                title: "Pair Mac",
+                icon: "qrcode.viewfinder",
+                action: { AppShellRouter.shared.openBridgeDetail() }
+            ))
+        } else if bridgeManager.status != .connected {
+            items.append(HomeSuggestion(
+                title: "Connections",
+                icon: "link",
+                action: { AppShellRouter.shared.openConnectionCenter() }
+            ))
+        } else {
+            items.append(HomeSuggestion(
+                title: "Deck",
+                icon: "square.grid.3x3",
+                action: { AppShellRouter.shared.openDeck() }
+            ))
+        }
+
+        items.append(HomeSuggestion(
+            title: "Library",
+            icon: "books.vertical",
+            action: { AppShellRouter.shared.openLibrary() }
+        ))
+        items.append(HomeSuggestion(
+            title: "Workflows",
+            icon: "point.3.connected.trianglepath.dotted",
+            action: { AppShellRouter.shared.openWorkflows() }
+        ))
+        items.append(HomeSuggestion(
+            title: "Terminal",
+            icon: "terminal",
+            action: { AppShellRouter.shared.openTerminal() }
+        ))
+        items.append(HomeSuggestion(
+            title: "Keyboard",
+            icon: "keyboard",
+            action: { AppShellRouter.shared.openKeyboardActivation() }
+        ))
+
+        return items
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("· EXPLORE")
+                .talkieType(.channelLabelTiny)
+                .foregroundStyle(theme.colors.textTertiary)
+                .padding(.leading, 4)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(suggestions) { suggestion in
+                        Button(action: suggestion.action) {
+                            HStack(spacing: 6) {
+                                Image(systemName: suggestion.icon)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                                Text(suggestion.title)
+                                    .talkieType(.fieldLabel)
+                                    .foregroundStyle(theme.colors.textSecondary)
+                                    .lineLimit(1)
+                                    .fixedSize(horizontal: true, vertical: false)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule()
+                                    .fill(theme.colors.cardBackground)
+                                    .overlay(
+                                        Capsule()
+                                            .strokeBorder(
+                                                theme.currentTheme.chrome.edgeFaint,
+                                                lineWidth: theme.currentTheme.chrome.hairlineWidth
+                                            )
+                                    )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct HomeSuggestion: Identifiable {
+    let id = UUID()
+    let title: String
+    let icon: String
+    let action: () -> Void
 }
 
 // MARK: - RECENT

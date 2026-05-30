@@ -9,6 +9,7 @@
 //
 
 import AppKit
+import ImageIO
 import TalkieKit
 
 extension CaptureMode: Codable {}
@@ -137,12 +138,19 @@ final class ScreenshotTray {
         saveManifest()
     }
 
+    func cacheOCRText(_ text: String, for id: UUID) {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        items[index].ocrText = text
+        saveManifest()
+    }
+
     /// Remove unpinned items from disk and array after successful delivery.
     /// Pinned items remain in the tray.
     func clearUnpinned() {
         let unpinned = items.filter { !$0.pinned }
         for item in unpinned {
             try? FileManager.default.removeItem(at: item.tempURL)
+            TKSidecarStore.delete(forAsset: item.tempURL)
         }
         items.removeAll { !$0.pinned }
         saveManifest()
@@ -154,6 +162,7 @@ final class ScreenshotTray {
         let toRemove = items.filter { ids.contains($0.id) }
         for item in toRemove {
             try? FileManager.default.removeItem(at: item.tempURL)
+            TKSidecarStore.delete(forAsset: item.tempURL)
         }
         items.removeAll { ids.contains($0.id) }
         saveManifest()
@@ -173,7 +182,8 @@ final class ScreenshotTray {
 
     /// Add a captured screenshot to the buffer.
     func add(data: Data, width: Int, height: Int, mode: CaptureMode,
-             windowTitle: String? = nil, appName: String? = nil, displayName: String? = nil) async {
+             windowTitle: String? = nil, appName: String? = nil, displayName: String? = nil,
+             initialThumbnail: CGImage? = nil) async {
         _ = await addReturningItem(
             data: data,
             width: width,
@@ -181,13 +191,15 @@ final class ScreenshotTray {
             mode: mode,
             windowTitle: windowTitle,
             appName: appName,
-            displayName: displayName
+            displayName: displayName,
+            initialThumbnail: initialThumbnail
         )
     }
 
     /// Add a captured screenshot to the tray and return the stored item.
     func addReturningItem(data: Data, width: Int, height: Int, mode: CaptureMode,
-                          windowTitle: String? = nil, appName: String? = nil, displayName: String? = nil) async -> TrayScreenshot? {
+                          windowTitle: String? = nil, appName: String? = nil, displayName: String? = nil,
+                          initialThumbnail: CGImage? = nil) async -> TrayScreenshot? {
         let itemId = UUID()
         let capturedAt = Date()
         let filename = CaptureFilenameFormatter.screenshotFilename(
@@ -201,6 +213,14 @@ final class ScreenshotTray {
             displayName: displayName
         )
         let fileURL = screenshotTrayDir.appendingPathComponent(filename)
+        let providedThumbnail = initialThumbnail.map(Self.nsImage(from:))
+        let thumbnailTask: Task<NSImage?, Never>? = if providedThumbnail == nil {
+            Task.detached(priority: .userInitiated) {
+                Self.generateThumbnail(from: data)
+            }
+        } else {
+            nil
+        }
 
         let writeError = await Task.detached(priority: .userInitiated) { () -> Error? in
             do {
@@ -215,6 +235,13 @@ final class ScreenshotTray {
             return nil
         }
 
+        let displayThumbnail: NSImage?
+        if let providedThumbnail {
+            displayThumbnail = providedThumbnail
+        } else {
+            displayThumbnail = await thumbnailTask?.value
+        }
+
         let item = TrayScreenshot(
             id: itemId,
             capturedAt: capturedAt,
@@ -224,7 +251,8 @@ final class ScreenshotTray {
             filename: filename,
             windowTitle: windowTitle,
             appName: appName,
-            displayName: displayName
+            displayName: displayName,
+            thumbnail: displayThumbnail
         )
 
         items.append(item)
@@ -233,18 +261,31 @@ final class ScreenshotTray {
             Log(.system).info("Screenshot added to tray (\(count) total), \(width)x\(height) mode=\(mode.rawValue)")
         }
 
-        // Generate display thumbnail async (not full-res PNG in memory)
-        Task {
-            let thumb = await Task.detached(priority: .utility) {
-                Self.generateThumbnail(for: fileURL)
-            }.value
-            if let idx = self.items.firstIndex(where: { $0.id == itemId }) {
-                self.items[idx].thumbnail = thumb
+        // Fallback only: fresh captures should publish with a thumbnail already set.
+        if displayThumbnail == nil {
+            Task {
+                let thumb = await Task.detached(priority: .utility) {
+                    Self.generateThumbnail(for: fileURL)
+                }.value
+                if let idx = self.items.firstIndex(where: { $0.id == itemId }) {
+                    self.items[idx].thumbnail = thumb
+                }
             }
         }
 
         // Background OCR: fast scan → accurate upgrade
         runBackgroundOCR(for: itemId)
+
+        // Fire-and-forget augmentation pipeline. Writes a TKSidecar to
+        // `<dir>/.tk/<basename>.json` once registered augmenters
+        // complete. Never blocks the drag-handle / tray-publish path.
+        MediaAugmentationService.shared.enqueue(
+            AugmentationTask(
+                assetURL: fileURL,
+                assetKind: .image,
+                context: contextForAugmentation(item: item)
+            )
+        )
 
         return item
     }
@@ -292,12 +333,26 @@ final class ScreenshotTray {
     /// Scale down an image from disk for display. Thread-safe (no lockFocus).
     nonisolated static func generateThumbnail(for url: URL, maxSize: CGFloat = 400) -> NSImage? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        return generateThumbnail(from: source, maxSize: maxSize)
+    }
+
+    /// Scale down PNG data for display. Thread-safe (no lockFocus).
+    nonisolated static func generateThumbnail(from data: Data, maxSize: CGFloat = 400) -> NSImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        return generateThumbnail(from: source, maxSize: maxSize)
+    }
+
+    nonisolated private static func generateThumbnail(from source: CGImageSource, maxSize: CGFloat) -> NSImage? {
         let options: [CFString: Any] = [
             kCGImageSourceThumbnailMaxPixelSize: maxSize,
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
         ]
         guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        return nsImage(from: cgImage)
+    }
+
+    nonisolated private static func nsImage(from cgImage: CGImage) -> NSImage {
         return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
     }
 
@@ -347,6 +402,18 @@ final class ScreenshotTray {
                 appName: item.appName,
                 displayName: item.displayName
             ))
+
+            // Augmentation for the canonical saved URL (the
+            // permanent Screenshots/ location, not the tray temp).
+            // The tray sidecar is dropped by cleanBufferFiles
+            // below — the recording-attached copy gets its own.
+            MediaAugmentationService.shared.enqueue(
+                AugmentationTask(
+                    assetURL: savedURL,
+                    assetKind: .image,
+                    context: contextForAugmentation(item: item)
+                )
+            )
         }
 
         let drained = items.count
@@ -399,6 +466,16 @@ final class ScreenshotTray {
                 appName: item.appName,
                 displayName: item.displayName
             ))
+
+            // Augment the canonical saved URL — tray-side sidecar
+            // (if any) gets cleaned by cleanBufferFiles below.
+            MediaAugmentationService.shared.enqueue(
+                AugmentationTask(
+                    assetURL: savedURL,
+                    assetKind: .image,
+                    context: contextForAugmentation(item: item)
+                )
+            )
         }
 
         guard !screenshots.isEmpty else { return nil }
@@ -434,6 +511,9 @@ final class ScreenshotTray {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         let item = items.remove(at: index)
         try? FileManager.default.removeItem(at: item.tempURL)
+        // Clean up the TK sidecar so `.tk/` doesn't accumulate orphans
+        // every time the user removes a capture from the tray.
+        TKSidecarStore.delete(forAsset: item.tempURL)
         saveManifest()
         Log(.system).info("Removed tray screenshot, \(count) remaining")
     }
@@ -535,6 +615,22 @@ final class ScreenshotTray {
     private func cleanBufferFiles() {
         for item in items {
             try? FileManager.default.removeItem(at: item.tempURL)
+            TKSidecarStore.delete(forAsset: item.tempURL)
         }
+    }
+
+    /// Build the augmentation context for a tray item. Pulled out so
+    /// every enqueue site (initial capture, drain-to-recording,
+    /// drain-to-capture) stuffs the same keys — augmenters can rely
+    /// on a stable shape.
+    fileprivate func contextForAugmentation(item: TrayScreenshot) -> TKAugmentationContext {
+        var context = TKAugmentationContext()
+        if let title = item.windowTitle  { context["window.title"]  = title }
+        if let app   = item.appName      { context["window.app"]    = app }
+        if let disp  = item.displayName  { context["screen.name"]   = disp }
+        context["capture.mode"] = item.mode.rawValue
+        context["asset.width"]  = String(item.width)
+        context["asset.height"] = String(item.height)
+        return context
     }
 }

@@ -96,7 +96,7 @@ class AnthropicProvider: LLMProvider {
             "max_tokens": options.maxTokens,
             "top_p": options.topP
         ]
-        if let systemPrompt = options.systemPrompt {
+        if let systemPrompt = Self.resolvedSystemPrompt(from: options) {
             body["system"] = systemPrompt
         }
         
@@ -147,7 +147,7 @@ class AnthropicProvider: LLMProvider {
                         "max_tokens": options.maxTokens,
                         "stream": true
                     ]
-                    if let systemPrompt = options.systemPrompt {
+                    if let systemPrompt = Self.resolvedSystemPrompt(from: options) {
                         body["system"] = systemPrompt
                     }
                     
@@ -173,5 +173,16 @@ class AnthropicProvider: LLMProvider {
                 }
             }
         }
+    }
+
+    private static func resolvedSystemPrompt(from options: GenerationOptions) -> String? {
+        var parts: [String] = []
+        if let systemPrompt = options.systemPrompt, !systemPrompt.isEmpty {
+            parts.append(systemPrompt)
+        }
+        if options.jsonMode {
+            parts.append("Output JSON only.")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: "\n")
     }
 }

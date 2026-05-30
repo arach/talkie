@@ -28,6 +28,7 @@
 //
 
 import SwiftUI
+import TalkieKit
 
 // MARK: - Public types
 
@@ -226,6 +227,28 @@ public struct Sidebar<Selection: Hashable, RailHeader: View, LabelHeader: View, 
             // Single shared accent bar for compact mode. Slides between
             // selected rows instead of per-row fade-swap.
             compactAccentBar
+        }
+        .background(alignment: .top) { scopeHeaderStrip }
+    }
+
+    /// Scope only: the sidebar's TOP zone (logo + wordmark) is capped by the
+    /// same hairline at the same Y as the content header band, so the two
+    /// rules align into ONE continuous line under the header across the
+    /// window — even when the rail is collapsed to icons. No surface fill
+    /// (the gray strip read wrong); structure comes from the rule alone.
+    @ViewBuilder
+    private var scopeHeaderStrip: some View {
+        if SettingsManager.shared.isScopeTheme {
+            VStack(spacing: 0) {
+                Color.clear
+                    .frame(height: SidebarLayout.headerHeight + SidebarLayout.headerTopPadding)
+                    .overlay(alignment: .bottom) {
+                        Rectangle()
+                            .fill(ScopeEdge.faint)
+                            .frame(height: 0.5)
+                    }
+                Spacer(minLength: 0)
+            }
         }
     }
 
@@ -583,25 +606,34 @@ struct SidebarSurfaceBackground: View {
             //
             // Gradient (top brighter, bottom slightly darker) preserves
             // the existing depth feel.
-            ZStack {
-                LinearGradient(
-                    colors: [
-                        Color.primary.opacity(0.055),
-                        Color.primary.opacity(0.040),
-                        Color.primary.opacity(0.030)
-                    ],
-                    startPoint: .top, endPoint: .bottom
-                )
-                VStack(spacing: 0) {
-                    // Top hairline — sits under the title bar, defines the
-                    // surface boundary without being loud.
-                    Rectangle()
-                        .fill(Color.primary.opacity(0.08))
-                        .frame(height: 0.5)
-                    Spacer(minLength: 0)
+            if SettingsManager.shared.isScopeTheme {
+                // Scope: the rail is the SAME white canvas as the content —
+                // no gray surface. The rail is usually collapsed, and a
+                // distinct gray panel read wrong; structure comes from the
+                // header rule + the rail|content divider, not a fill.
+                ScopeCanvas.canvas
+                    .allowsHitTesting(false)
+            } else {
+                ZStack {
+                    LinearGradient(
+                        colors: [
+                            Color.primary.opacity(0.055),
+                            Color.primary.opacity(0.040),
+                            Color.primary.opacity(0.030)
+                        ],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                    VStack(spacing: 0) {
+                        // Top hairline — sits under the title bar, defines the
+                        // surface boundary without being loud.
+                        Rectangle()
+                            .fill(Color.primary.opacity(0.08))
+                            .frame(height: 0.5)
+                        Spacer(minLength: 0)
+                    }
                 }
+                .allowsHitTesting(false)
             }
-            .allowsHitTesting(false)
         case .glass:
             ZStack {
                 Rectangle().fill(.ultraThinMaterial).opacity(0.55)

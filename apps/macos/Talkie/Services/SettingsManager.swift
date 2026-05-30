@@ -810,25 +810,33 @@ enum SettingsAudience: String, CaseIterable, Codable {
 }
 
 // MARK: - Curated Theme Presets
+//
+// Three deliberate identities. Earlier experimental presets
+// (technical / terminal / darkMatte / classic / warm / liquidGlass)
+// were retired in favor of focused brand directions; their
+// rawValues are migrated in init(from:) so existing user settings
+// don't wipe on load.
 enum ThemePreset: String, CaseIterable, Codable {
-    case talkiePro = "talkiePro"    // Professional dark theme (default)
-    case technical = "linear"        // Technical, Vercel-inspired (raw value kept for compat)
-    case terminal = "terminal"      // Ghostty-style: clean, monospace, sharp
-    case darkMatte = "darkMatte"    // Deterministic dark + warm hue-65 undertones
-    case classic = "classic"        // Comfortable defaults with blue accents
-    case warm = "warm"              // Cozy dark mode with orange tones
-    case light = "light"            // Deterministic light mode, designed palette
-    case liquidGlass = "liquidGlass" // Experimental glass effects
-    case scope = "scope"            // Cream-phosphor oscilloscope (homepage parity)
+    case scope = "scope"            // Cream-paper canvas, brass amber chrome — the direction
+    case talkiePro = "talkiePro"    // Pro dark — default fallback for dark-mode users
+    case light = "light"            // Clean light mode — neutral surfaces
 
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
-        // Migrate retired rawValues so existing user settings don't wipe on load
+        // Migrate retired rawValues to the closest living preset.
         switch raw {
-        case "minimal": self = .light
+        case "minimal":
+            self = .light
+        case "linear",         // technical (dark)
+             "terminal",
+             "darkMatte",
+             "classic",
+             "warm",
+             "liquidGlass":
+            self = .talkiePro
         default:
             guard let preset = ThemePreset(rawValue: raw) else {
-                self = .talkiePro
+                self = .scope
                 return
             }
             self = preset
@@ -837,224 +845,118 @@ enum ThemePreset: String, CaseIterable, Codable {
 
     var displayName: String {
         switch self {
-        case .talkiePro: return "Pro"
-        case .technical: return "Technical"
-        case .terminal: return "Terminal"
-        case .darkMatte: return "Dark Matte"
-        case .classic: return "Classic"
-        case .warm: return "Warm"
-        case .light: return "Light"
-        case .liquidGlass: return "Liquid Glass"
         case .scope: return "Scope"
+        case .talkiePro: return "Pro"
+        case .light: return "Light"
         }
     }
 
     var description: String {
         switch self {
-        case .talkiePro: return "Professional dark theme with balanced contrast"
-        case .technical: return "Technical, dense, V0-inspired"
-        case .terminal: return "Clean monospace, sharp corners, no frills"
-        case .darkMatte: return "Dark with warm matte undertones and amber accents"
-        case .classic: return "Comfortable defaults with blue accents"
-        case .warm: return "Cozy dark mode with orange tones"
-        case .light: return "Clean light mode with neutral surfaces"
-        case .liquidGlass: return "Experimental: maximum glass effects"
         case .scope: return "Cream-paper canvas with brass amber chrome — instrument panel"
+        case .talkiePro: return "Professional dark theme with balanced contrast"
+        case .light: return "Clean light mode with neutral surfaces"
         }
     }
 
     var icon: String {
         switch self {
-        case .talkiePro: return "waveform"
-        case .technical: return "square.stack.3d.up"
-        case .terminal: return "terminal"
-        case .darkMatte: return "moon.stars"
-        case .classic: return "star"
-        case .warm: return "flame"
-        case .light: return "sun.max"
-        case .liquidGlass: return "drop.fill"
         case .scope: return "waveform.path.ecg"
+        case .talkiePro: return "waveform"
+        case .light: return "sun.max"
         }
     }
 
     @MainActor
     var previewColors: (bg: Color, fg: Color, accent: Color) {
         switch self {
+        case .scope:
+            return (ScopeCanvas.canvas, ScopeInk.primary, ScopeAmber.solid)
         case .talkiePro:
             return (Color(white: 0.08), Color(white: 0.85), Color(red: 0.4, green: 0.7, blue: 1.0))
-        case .technical:
-            // Vercel/Linear style — adapts to appearance
-            let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            return isDark
-                ? (Color.black, Color.white, Color(red: 0.0, green: 0.83, blue: 1.0))
-                : (Color.white, Color.black, Color(red: 0.0, green: 0.55, blue: 0.85))
-        case .terminal:
-            // Ghostty-style: black bg, light gray text, subtle gray accent
-            return (Color.black, Color(white: 0.85), Color(white: 0.5))
-        case .darkMatte:
-            // Dark warm: oklch(0.14 0.008 65) bg, oklch(0.88 0.01 75) fg, oklch(0.72 0.12 70) amber
-            return (
-                Color(red: 0.0449, green: 0.0333, blue: 0.0242),
-                Color(red: 0.8603, green: 0.8416, blue: 0.8171),
-                Color(red: 0.8326, green: 0.5895, blue: 0.2837)
-            )
-        case .classic:
-            return (Color(white: 0.15), Color(white: 0.9), Color.blue)
-        case .warm:
-            return (Color(red: 0.1, green: 0.08, blue: 0.06), Color(white: 0.9), Color.orange)
         case .light:
-            // Clean light: oklch(0.98 0 0) bg, oklch(0.18 0.005 250) fg, oklch(0.7 0.16 60) accent
             return (
                 Color(red: 0.9737, green: 0.9737, blue: 0.9737),
                 Color(red: 0.0625, green: 0.0697, blue: 0.0774),
                 Color(red: 0.8961, green: 0.5104, blue: 0.0706)
             )
-        case .liquidGlass:
-            return (Color(white: 0.05), Color.white, Color.cyan)
-        case .scope:
-            return (ScopeCanvas.canvas, ScopeInk.primary, ScopeAmber.solid)
         }
     }
 
-    // Theme preset values — each preset is deterministic (no .system)
     var appearanceMode: AppearanceMode {
         switch self {
-        case .talkiePro: return .dark
-        case .technical: return .dark
-        case .terminal: return .dark
-        case .darkMatte: return .dark
-        case .classic: return .dark
-        case .warm: return .dark
-        case .light: return .light
-        case .liquidGlass: return .dark
         case .scope: return .light          // Cream-phosphor — forced light
+        case .talkiePro: return .dark
+        case .light: return .light
         }
     }
 
     /// UI chrome font style (labels, headers, buttons, badges)
     var uiFontStyle: FontStyleOption {
         switch self {
+        case .scope: return .monospace      // Instrument-panel labels — mono chrome
         case .talkiePro: return .system
-        case .technical: return .system            // Technical, but smoother than full mono
-        case .terminal: return .jetbrainsMono   // JetBrains Mono throughout
-        case .darkMatte: return .system
-        case .classic: return .system
-        case .warm: return .system
         case .light: return .system
-        case .liquidGlass: return .system
-        case .scope: return .monospace          // Instrument-panel labels — mono chrome
         }
     }
 
     /// Content font style (transcripts, notes, markdown)
     var contentFontStyle: FontStyleOption {
         switch self {
-        case .talkiePro: return .system
-        case .technical: return .system            // Keep readable/elegant in Technical theme
-        case .terminal: return .jetbrainsMono   // JetBrains Mono throughout
-        case .darkMatte: return .system
-        case .classic: return .system
-        case .warm: return .monospace           // Monospace content for warm theme
-        case .light: return .system
-        case .liquidGlass: return .system
         case .scope: return .system
+        case .talkiePro: return .system
+        case .light: return .system
         }
     }
 
     var accentColor: AccentColorOption {
         switch self {
-        case .talkiePro: return .blue
-        case .technical: return .blue
-        case .terminal: return .gray        // No gimmicks, just gray
-        case .darkMatte: return .orange     // Amber accent from designed palette
-        case .classic: return .blue
-        case .warm: return .orange
-        case .light: return .orange         // Warm amber accent
-        case .liquidGlass: return .blue
         case .scope: return .orange         // Closest stock match for amber/brass
+        case .talkiePro: return .blue
+        case .light: return .orange         // Warm amber accent
         }
     }
 
     /// Font size option for this theme
     var fontSize: FontSizeOption {
         switch self {
-        case .talkiePro: return .medium
-        case .technical: return .small         // Dense, information-rich
-        case .terminal: return .small       // Condensed, information-dense
-        case .darkMatte: return .medium
-        case .classic: return .medium
-        case .warm: return .medium
-        case .light: return .medium
-        case .liquidGlass: return .medium
-        case .scope: return .medium
+        case .scope, .talkiePro, .light: return .medium
         }
     }
 
     /// Whether this theme uses true black backgrounds
-    var usesTrueBlack: Bool {
-        switch self {
-        case .technical, .terminal, .liquidGlass: return true
-        default: return false
-        }
-    }
+    var usesTrueBlack: Bool { false }
 
     /// Glass depth level for this theme
     var glassDepth: GlassDepth {
         switch self {
-        case .talkiePro: return .standard
-        case .classic: return .standard
-        case .warm: return .standard
-        case .darkMatte: return .subtle        // Matte: minimal glass, deliberate surfaces
-        case .light: return .subtle            // Light: minimal glass for clarity
-        case .technical: return .subtle        // Flat, technical aesthetic
-        case .terminal: return .subtle      // Flat, minimal glass
-        case .liquidGlass: return .extreme
         case .scope: return .subtle         // Flat — instrument aesthetic
+        case .talkiePro: return .standard
+        case .light: return .subtle
         }
     }
 
     /// Corner radius style for this theme
     var cornerRadiusMultiplier: CGFloat {
         switch self {
-        case .terminal: return 0            // Sharp corners - no rounding
-        case .technical: return 0.5            // Tight corners - technical aesthetic
-        case .scope: return 0.5             // Sharper instrument feel — md=6pt, sm=4pt, xs=2pt
+        case .scope: return 0.5             // Sharper instrument feel
         case .light: return 0.75            // Slightly reduced
-        default: return 1.0                 // Standard
+        case .talkiePro: return 1.0
         }
     }
 
     /// Whether to use light font weights
-    var usesLightFonts: Bool {
-        switch self {
-        case .terminal: return true         // Thin, clean lines
-        case .technical: return false          // Crisper system rendering on true-black surfaces
-        case .liquidGlass: return true      // Light, ethereal feel
-        default: return false
-        }
-    }
+    var usesLightFonts: Bool { false }
 
     /// Border width for this theme
-    var borderWidth: CGFloat {
-        switch self {
-        case .technical: return 0.33           // Ultra-thin hairline borders
-        case .terminal: return 0.5          // Thin 1px borders
-        default: return 1.0
-        }
-    }
+    var borderWidth: CGFloat { 1.0 }
 
     /// Whether this theme prefers lowercase UI labels
-    var prefersLowercase: Bool {
-        switch self {
-        case .technical: return true           // Technical aesthetic: all lowercase
-        default: return false
-        }
-    }
+    var prefersLowercase: Bool { false }
 
     /// Text case for UI labels based on theme preference
     var uiTextCase: Text.Case? {
-        if prefersLowercase { return .lowercase }
-        return nil
+        prefersLowercase ? .lowercase : nil
     }
 }
 
@@ -1240,34 +1142,18 @@ final class SettingsManager {
         currentTheme == .talkiePro
     }
 
-    /// Check if linear theme is active (Vercel/Linear-inspired)
-    var isTechnicalTheme: Bool {
-        currentTheme == .technical
-    }
-
-    /// Check if terminal theme is active
-    var isTerminalTheme: Bool {
-        currentTheme == .terminal
-    }
-
-    /// Check if dark-matte theme is active
-    var isDarkMatteTheme: Bool {
-        currentTheme == .darkMatte
-    }
+    // Retired preset accessors — always false. Kept as API surface so
+    // existing call sites compile; the gated branches become dead code
+    // and can be pruned in a follow-up.
+    var isTechnicalTheme: Bool { false }
+    var isTerminalTheme: Bool { false }
+    var isDarkMatteTheme: Bool { false }
+    var isClassicTheme: Bool { false }
+    var isWarmTheme: Bool { false }
 
     /// Check if light theme is active
     var isLightTheme: Bool {
         currentTheme == .light
-    }
-
-    /// Check if classic theme is active
-    var isClassicTheme: Bool {
-        currentTheme == .classic
-    }
-
-    /// Check if warm theme is active
-    var isWarmTheme: Bool {
-        currentTheme == .warm
     }
 
     /// Check if scope (cream-phosphor) theme is active
@@ -2670,6 +2556,21 @@ final class SettingsManager {
         }
     }
 
+    func removeDeviceSettingsOverride(for deviceID: String) {
+        let trimmedDeviceID = deviceID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedDeviceID.isEmpty else { return }
+        guard TalkieSettingsConfigurationStore.shared.configuration.devices.overrides[trimmedDeviceID] != nil else {
+            return
+        }
+
+        let publishedAt = ISO8601DateFormatter().string(from: Date())
+        persistDeclarativeSettings { configuration in
+            configuration.devices.overrides.removeValue(forKey: trimmedDeviceID)
+            configuration.devices.publishRevision += 1
+            configuration.devices.lastPublishedAt = publishedAt
+        }
+    }
+
     func resetDefaultDeviceShortcutBoardToStarterKit() {
         setDefaultDeviceShortcutBoardSlots(TalkieSettingsConfiguration.defaultLegacyShortcutSlots)
     }
@@ -2850,6 +2751,7 @@ final class SettingsManager {
     private var _openaiApiKey: String?
     private var _anthropicApiKey: String?
     private var _groqApiKey: String?
+    private(set) var apiKeyRevision: Int = 0
     // Model settings - stored in UserDefaults (no Core Data dependency)
     private static let selectedModelKey = "selectedModel"
     private static let liveTranscriptionModelIdKey = "liveTranscriptionModelId"
@@ -2871,6 +2773,7 @@ final class SettingsManager {
             apiKeys.set(newValue.isEmpty ? nil : newValue, for: .gemini)
             // Sync to shared settings for TalkieAgent interstitial
             TalkieSharedSettings.set(newValue.isEmpty ? nil : newValue, forKey: AgentSettingsKey.geminiApiKey)
+            apiKeyRevision += 1
         }
     }
 
@@ -2881,6 +2784,7 @@ final class SettingsManager {
             apiKeys.set(newValue, for: .openai)
             // Sync to shared settings for TalkieAgent interstitial
             TalkieSharedSettings.set(newValue, forKey: AgentSettingsKey.openaiApiKey)
+            apiKeyRevision += 1
         }
     }
 
@@ -2891,6 +2795,7 @@ final class SettingsManager {
             apiKeys.set(newValue, for: .anthropic)
             // Sync to shared settings for TalkieAgent interstitial
             TalkieSharedSettings.set(newValue, forKey: AgentSettingsKey.anthropicApiKey)
+            apiKeyRevision += 1
         }
     }
 
@@ -2901,6 +2806,7 @@ final class SettingsManager {
             apiKeys.set(newValue, for: .groq)
             // Sync to shared settings for TalkieAgent interstitial
             TalkieSharedSettings.set(newValue, forKey: AgentSettingsKey.groqApiKey)
+            apiKeyRevision += 1
         }
     }
 
@@ -2909,6 +2815,7 @@ final class SettingsManager {
         set {
             apiKeys.set(newValue, for: .elevenLabs)
             TalkieSharedSettings.set(newValue, forKey: AgentSettingsKey.elevenLabsApiKey)
+            apiKeyRevision += 1
         }
     }
 
@@ -2930,6 +2837,10 @@ final class SettingsManager {
         apiKeys.hasKey(for: .elevenLabs)
     }
 
+    func hasAPIKey(forProviderId providerId: String) -> Bool {
+        apiKeys.hasKey(forProviderId: providerId)
+    }
+
     /// Fetch API key (now instant, no keychain prompt)
     func fetchOpenAIKey() -> String? {
         apiKeys.get(.openai)
@@ -2947,6 +2858,38 @@ final class SettingsManager {
         apiKeys.get(.elevenLabs)
     }
 
+    func fetchAPIKey(forProviderId providerId: String) -> String? {
+        apiKeys.get(providerId: providerId)
+    }
+
+    func setAPIKey(_ value: String?, forProviderId providerId: String) {
+        let normalizedProviderId = APIKeyStore.normalizeProviderId(providerId)
+        let cleanedValue = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let storedValue = cleanedValue?.isEmpty == false ? cleanedValue : nil
+
+        apiKeys.set(storedValue, forProviderId: normalizedProviderId)
+
+        switch normalizedProviderId {
+        case APIKeyStore.Provider.gemini.rawValue:
+            _geminiApiKey = storedValue ?? ""
+        case APIKeyStore.Provider.openai.rawValue:
+            _openaiApiKey = storedValue
+        case APIKeyStore.Provider.anthropic.rawValue:
+            _anthropicApiKey = storedValue
+        case APIKeyStore.Provider.groq.rawValue:
+            _groqApiKey = storedValue
+        default:
+            break
+        }
+
+        apiKeyRevision += 1
+    }
+
+    func apiKeySlots(additionalProviderIDs: [String] = []) -> [APIKeyStore.ProviderSlot] {
+        _ = apiKeyRevision
+        return apiKeys.providerSlots(additionalProviderIDs: additionalProviderIDs)
+    }
+
     /// Sync API keys to TalkieSharedSettings for TalkieAgent interstitial access
     /// Called on app launch and whenever keys change
     private func syncAPIKeysToSharedSettings() {
@@ -2954,6 +2897,7 @@ final class SettingsManager {
         TalkieSharedSettings.set(_openaiApiKey, forKey: AgentSettingsKey.openaiApiKey)
         TalkieSharedSettings.set(_anthropicApiKey, forKey: AgentSettingsKey.anthropicApiKey)
         TalkieSharedSettings.set(_groqApiKey, forKey: AgentSettingsKey.groqApiKey)
+        TalkieSharedSettings.set(apiKeys.get(.minimax), forKey: AgentSettingsKey.minimaxApiKey)
         TalkieSharedSettings.set(apiKeys.get(.elevenLabs), forKey: AgentSettingsKey.elevenLabsApiKey)
     }
 
@@ -3087,20 +3031,9 @@ final class SettingsManager {
             }
         }
 
-        // One-time migration: older Technical defaults were mono-heavy.
-        // Normalize Linear/Technical to system fonts for cleaner rendering.
-        let linearFontMigrationKey = "settingsManager.linearFontMigration.v2"
-        if !UserDefaults.standard.bool(forKey: linearFontMigrationKey),
-           self.currentTheme == .technical {
-            let monoStyles: Set<FontStyleOption> = [.monospace, .jetbrainsMono, .geistMono]
-            if monoStyles.contains(self.uiFontStyle) || monoStyles.contains(self.contentFontStyle) {
-                self.uiFontStyle = .system
-                self.contentFontStyle = .system
-                UserDefaults.standard.set(FontStyleOption.system.rawValue, forKey: uiFontStyleKey)
-                UserDefaults.standard.set(FontStyleOption.system.rawValue, forKey: contentFontStyleKey)
-            }
-            UserDefaults.standard.set(true, forKey: linearFontMigrationKey)
-        }
+        // Retired-Technical font migration removed alongside the
+        // Technical preset — anyone still on that rawValue is now
+        // migrated to .talkiePro at decode time.
 
         // Sync API keys to TalkieSharedSettings for TalkieAgent interstitial
         syncAPIKeysToSharedSettings()

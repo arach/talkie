@@ -70,6 +70,8 @@ final class PasteChordController {
                 let cleaned = mods.intersection(.deviceIndependentFlagsMask)
                 if cleaned.contains(.command) && !cleaned.contains(.shift) && !cleaned.contains(.option) && !cleaned.contains(.control) {
                     return .dragFile
+                } else if cleaned.contains(.shift) && cleaned.contains(.option) && !cleaned.contains(.control) && !cleaned.contains(.command) {
+                    return .visionDescription
                 } else if cleaned.contains(.shift) && !cleaned.contains(.option) && !cleaned.contains(.control) && !cleaned.contains(.command) {
                     return .filePath
                 } else if cleaned.contains(.option) && !cleaned.contains(.shift) && !cleaned.contains(.control) && !cleaned.contains(.command) {
@@ -81,8 +83,7 @@ final class PasteChordController {
             }
 
             // Key handler
-            let handleKey: (NSEvent) -> Void = { [weak self] event in
-                guard let self else { return }
+            let handleKey: (NSEvent) -> Void = { event in
                 let key = event.charactersIgnoringModifiers
 
                 // Escape

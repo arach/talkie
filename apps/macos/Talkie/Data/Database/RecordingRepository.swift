@@ -286,7 +286,7 @@ actor TalkieObjectRepository {
                 INSERT INTO recordings (
                     id, type, text, title, notes,
                     duration, hasAudio,
-                    createdAt, lastModified, deletedAt,
+                    createdAt, lastModified, deletedAt, pinnedAt, starredAt,
                     source, sourceDeviceId,
                     promotedAt,
                     transcriptionStatus, transcriptionError, transcriptionModel,
@@ -305,6 +305,8 @@ actor TalkieObjectRepository {
                     createdAt,
                     lastModified,
                     deletedAt,
+                    pinnedAt,
+                    starredAt,
                     CASE
                         WHEN originDeviceId LIKE 'mac-%' THEN 'mac'
                         WHEN originDeviceId LIKE 'watch-%' THEN 'watch'
@@ -354,7 +356,7 @@ actor TalkieObjectRepository {
                 INSERT INTO recordings (
                     id, type, text, title, notes,
                     duration, hasAudio,
-                    createdAt, lastModified, deletedAt,
+                    createdAt, lastModified, deletedAt, pinnedAt, starredAt,
                     source, sourceDeviceId,
                     promotedAt,
                     transcriptionStatus, transcriptionError, transcriptionModel,
@@ -373,6 +375,8 @@ actor TalkieObjectRepository {
                     vm.createdAt,
                     vm.lastModified,
                     vm.deletedAt,
+                    vm.pinnedAt,
+                    vm.starredAt,
                     CASE
                         WHEN vm.originDeviceId LIKE 'mac-%' THEN 'mac'
                         WHEN vm.originDeviceId LIKE 'watch-%' THEN 'watch'
@@ -455,6 +459,8 @@ actor TalkieObjectRepository {
                     autoProcessed = COALESCE((SELECT vm.autoProcessed FROM voice_memos vm WHERE vm.id = recordings.id), 0),
                     cloudSyncedAt = (SELECT vm.cloudSyncedAt FROM voice_memos vm WHERE vm.id = recordings.id),
                     pendingWorkflowIds = (SELECT vm.pendingWorkflowIds FROM voice_memos vm WHERE vm.id = recordings.id),
+                    pinnedAt = (SELECT vm.pinnedAt FROM voice_memos vm WHERE vm.id = recordings.id),
+                    starredAt = (SELECT vm.starredAt FROM voice_memos vm WHERE vm.id = recordings.id),
                     metadataJSON = NULL,
                     audioFilename = (SELECT vm.audioFilePath FROM voice_memos vm WHERE vm.id = recordings.id)
                 WHERE type = 'memo'
@@ -577,6 +583,56 @@ actor TalkieObjectRepository {
             )
         }
         log.info("📎 Updated assets for id=\(id.uuidString.prefix(8))")
+    }
+
+    // MARK: - Pin / Star
+
+    /// Toggle pinned state on a recording. For memos the change is mirrored
+    /// to `voice_memos` so a later mirror-refresh doesn't overwrite it.
+    /// Returns the updated record (or nil if not found).
+    @discardableResult
+    func setRecordingPinned(id: UUID, pinned: Bool) async throws -> TalkieObject? {
+        let db = try await db()
+        return try await db.write { db -> TalkieObject? in
+            guard var recording = try TalkieObject.fetchOne(db, key: id) else {
+                log.warning("📌 Pin id=\(id.uuidString.prefix(8)) — recording not found")
+                return nil
+            }
+            let timestamp = pinned ? Date() : nil
+            recording.pinnedAt = timestamp
+            recording.lastModified = Date()
+            try recording.update(db)
+            if recording.isMemo {
+                try db.execute(
+                    sql: "UPDATE voice_memos SET pinnedAt = ?, lastModified = ? WHERE id = ?",
+                    arguments: [timestamp, Date(), id]
+                )
+            }
+            return recording
+        }
+    }
+
+    /// Toggle starred state on a recording. Memo writes mirror to `voice_memos`.
+    @discardableResult
+    func setRecordingStarred(id: UUID, starred: Bool) async throws -> TalkieObject? {
+        let db = try await db()
+        return try await db.write { db -> TalkieObject? in
+            guard var recording = try TalkieObject.fetchOne(db, key: id) else {
+                log.warning("⭐ Star id=\(id.uuidString.prefix(8)) — recording not found")
+                return nil
+            }
+            let timestamp = starred ? Date() : nil
+            recording.starredAt = timestamp
+            recording.lastModified = Date()
+            try recording.update(db)
+            if recording.isMemo {
+                try db.execute(
+                    sql: "UPDATE voice_memos SET starredAt = ?, lastModified = ? WHERE id = ?",
+                    arguments: [timestamp, Date(), id]
+                )
+            }
+            return recording
+        }
     }
 
     // MARK: - Delete Operations
@@ -1366,19 +1422,31 @@ extension TalkieObjectRepository {
 
     /// Sum of all word counts for dictations (computed from text)
     func totalDictationWords() async throws -> Int {
+        try await totalTranscribedWords(types: [.dictation])
+    }
+
+    /// Sum of all word counts for transcribed recordings of the requested types.
+    func totalTranscribedWords(types: [TalkieObjectType]) async throws -> Int {
+        guard !types.isEmpty else { return 0 }
         let db = try await db()
 
+        let placeholders = Array(repeating: "?", count: types.count).joined(separator: ", ")
+        let arguments = StatementArguments(types.map(\.rawValue))
         return try await db.read { db in
-            // Fetch only text column as strings (not full TalkieObject structs)
-            let request = TalkieObject
-                .filter(TalkieObject.Columns.type == TalkieObjectType.dictation.rawValue)
-                .filter(TalkieObject.Columns.deletedAt == nil)
-                .select(TalkieObject.Columns.text)
-
-            let texts = try String.fetchAll(db, request)
+            let texts = try String.fetchAll(
+                db,
+                sql: """
+                    SELECT COALESCE(text, '')
+                    FROM recordings
+                    WHERE deletedAt IS NULL
+                      AND type IN (\(placeholders))
+                      AND COALESCE(text, '') != ''
+                    """,
+                arguments: arguments
+            )
 
             return texts.reduce(0) { total, text in
-                total + text.split(separator: " ").count
+                total + text.split { $0.isWhitespace }.count
             }
         }
     }

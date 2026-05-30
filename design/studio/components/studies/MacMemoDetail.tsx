@@ -388,6 +388,8 @@ function Toolbar() {
       className="flex items-center gap-3 px-9 py-3"
       style={{ borderBottom: "0.5px solid rgba(26,22,18,0.10)" }}
     >
+      <BackToLibrary />
+      <span className="h-3 w-px" style={{ background: "rgba(26,22,18,0.16)" }} />
       <div className="text-[9px] font-mono uppercase tracking-[0.22em] text-studio-ink-faint">
         {MEMO.sequence}
       </div>
@@ -404,6 +406,26 @@ function Toolbar() {
         <ToolButton label="More" trailing="⋯" />
       </div>
     </div>
+  );
+}
+
+/**
+ * Back-to-Library affordance — the only thing in the detail toolbar
+ * that points outward. Lives at the toolbar's leading edge so the
+ * hierarchy reads "you are inside Library → this memo" without
+ * needing a breadcrumb row. Compact arrow + label, monospace to match
+ * the printer's-slug line it sits next to.
+ */
+function BackToLibrary() {
+  return (
+    <button
+      type="button"
+      className="-ml-1 inline-flex items-center gap-1 rounded-[3px] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-studio-ink-faint transition-colors hover:bg-[rgba(26,22,18,0.05)] hover:text-studio-ink"
+      aria-label="Back to Library"
+    >
+      <span aria-hidden className="text-[12px] leading-none">‹</span>
+      <span>Library</span>
+    </button>
   );
 }
 

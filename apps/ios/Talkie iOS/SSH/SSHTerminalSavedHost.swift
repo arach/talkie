@@ -33,14 +33,32 @@ struct SSHTerminalSavedHost: Codable, Equatable, Identifiable, Sendable {
     }
 
     var resolvedStartupCommand: String {
+        resolvedStartupCommand(
+            for: connectionStartupProfile,
+            startupCommandOverride: startupCommandOverride
+        )
+    }
+
+    var connectionStartupProfile: SSHTerminalStartupProfile {
+        shouldUseNativeLauncher(for: startupProfile) ? .standardShell : startupProfile
+    }
+
+    func resolvedStartupCommand(
+        for profile: SSHTerminalStartupProfile,
+        startupCommandOverride: String? = nil
+    ) -> String {
         if let override = SSHTerminalStartupProfile.normalizedStartupCommandOverride(
             startupCommandOverride,
-            for: startupProfile
+            for: profile
         ) {
             return override
         }
 
-        return startupProfile.startupCommand
+        if shouldUseNativeLauncher(for: profile) {
+            return SSHTerminalStartupProfile.nativeLauncherCommand()
+        }
+
+        return profile.startupCommand
     }
 
     var title: String {
@@ -70,6 +88,33 @@ struct SSHTerminalSavedHost: Codable, Equatable, Identifiable, Sendable {
     var trimmedDeviceLabel: String? {
         let trimmedLabel = deviceLabel?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmedLabel.isEmpty ? nil : trimmedLabel
+    }
+
+    var isTalkieManagedTerminalHost: Bool {
+        guard let trimmedDeviceLabel else {
+            return false
+        }
+
+        return trimmedDeviceLabel.hasPrefix("Talkie SSH for ")
+            || trimmedDeviceLabel.hasPrefix("Talkie Shell for ")
+            || trimmedDeviceLabel.hasPrefix("Talkie Session for ")
+            || trimmedDeviceLabel.hasPrefix("Talkie Terminal for ")
+    }
+
+    func shouldUseNativeLauncher(for profile: SSHTerminalStartupProfile) -> Bool {
+        guard let trimmedDeviceLabel else {
+            return false
+        }
+
+        switch profile {
+        case .standardShell:
+            return isTalkieManagedTerminalHost
+        case .talkieShell:
+            return trimmedDeviceLabel.hasPrefix("Talkie SSH for ")
+                || trimmedDeviceLabel.hasPrefix("Talkie Terminal for ")
+        case .talkieSession:
+            return false
+        }
     }
 
     private var cleanedDeviceLabel: String? {

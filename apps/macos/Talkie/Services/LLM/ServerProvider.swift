@@ -19,6 +19,15 @@ class ServerProvider: LLMProvider {
 
     private let serverURL: URL
     private let timeout: TimeInterval
+    private var gatewayTokenURL: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library")
+            .appendingPathComponent("Application Support")
+            .appendingPathComponent("Talkie")
+            .appendingPathComponent("Bridge")
+            .appendingPathComponent(".config")
+            .appendingPathComponent(".local-auth-token")
+    }
 
     init(port: Int = 8765, timeout: TimeInterval = 60.0) {
         self.serverURL = URL(string: "http://localhost:\(port)")!
@@ -47,6 +56,21 @@ class ServerProvider: LLMProvider {
             let id: String
             let name: String
             let available: Bool
+
+            init(from decoder: Decoder) throws {
+                if let container = try? decoder.singleValueContainer(),
+                   let id = try? container.decode(String.self) {
+                    self.id = id
+                    self.name = id.capitalized
+                    self.available = true
+                    return
+                }
+
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decode(String.self, forKey: .id)
+                self.name = try container.decodeIfPresent(String.self, forKey: .name) ?? id.capitalized
+                self.available = try container.decodeIfPresent(Bool.self, forKey: .available) ?? true
+            }
         }
     }
 
@@ -57,6 +81,7 @@ class ServerProvider: LLMProvider {
 
     private struct ErrorResponse: Codable {
         let error: String
+        let details: String?
     }
 
     // MARK: - LLMProvider Protocol
@@ -70,6 +95,9 @@ class ServerProvider: LLMProvider {
             let providersURL = serverURL.appendingPathComponent("inference/providers")
             var request = URLRequest(url: providersURL)
             request.timeoutInterval = 10
+            guard applyGatewayAuthorization(to: &request) else {
+                return []
+            }
 
             do {
                 let (data, response) = try await URLSession.shared.data(for: request)
@@ -101,6 +129,9 @@ class ServerProvider: LLMProvider {
 
         var request = URLRequest(url: components.url!)
         request.timeoutInterval = 10
+        guard applyGatewayAuthorization(to: &request) else {
+            return []
+        }
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -112,8 +143,9 @@ class ServerProvider: LLMProvider {
         let modelsResp = try JSONDecoder().decode(ModelsResponse.self, from: data)
 
         return modelsResp.models.map { modelId in
-            LLMModel(
-                id: modelId,
+            let routedModelId = "server:\(providerId):\(modelId)"
+            return LLMModel(
+                id: routedModelId,
                 name: modelId,
                 displayName: formatDisplayName(modelId, provider: providerId),
                 size: "Cloud",
@@ -167,6 +199,7 @@ class ServerProvider: LLMProvider {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = timeout
+        try requireGatewayAuthorization(on: &request)
 
         // Build messages array
         var messages: [[String: String]] = []
@@ -180,6 +213,7 @@ class ServerProvider: LLMProvider {
             "model": actualModel,
             "messages": messages,
             "temperature": options.temperature,
+            "topP": options.topP,
             "maxTokens": options.maxTokens
         ]
 
@@ -195,10 +229,18 @@ class ServerProvider: LLMProvider {
             var errorMessage = "Server error (HTTP \(httpResponse.statusCode))"
 
             if let errorResp = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
-                errorMessage = "Server: \(errorResp.error)"
+                let details = errorResp.details?.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let details, !details.isEmpty {
+                    errorMessage = "Server: \(errorResp.error) — \(details)"
+                } else {
+                    errorMessage = "Server: \(errorResp.error)"
+                }
             }
 
             log.error("Server inference failed: \(errorMessage)")
+            if httpResponse.statusCode == 401 {
+                throw LLMError.configurationError("TalkieServer gateway authentication failed. Restart TalkieServer.")
+            }
             throw LLMError.generationFailed(errorMessage)
         }
 
@@ -231,6 +273,32 @@ class ServerProvider: LLMProvider {
 
     // MARK: - Helpers
 
+    private func readGatewayToken() -> String? {
+        guard let token = try? String(contentsOf: gatewayTokenURL, encoding: .utf8) else {
+            log.warning("Could not read TalkieServer gateway token from \(gatewayTokenURL.path)")
+            return nil
+        }
+
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    @discardableResult
+    private func applyGatewayAuthorization(to request: inout URLRequest) -> Bool {
+        guard let token = readGatewayToken() else {
+            return false
+        }
+
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        return true
+    }
+
+    private func requireGatewayAuthorization(on request: inout URLRequest) throws {
+        guard applyGatewayAuthorization(to: &request) else {
+            throw LLMError.configurationError("TalkieServer gateway auth token not found. Is TalkieServer running?")
+        }
+    }
+
     /// Parse model ID that might include provider prefix (e.g., "server:openai:gpt-4o" -> ("openai", "gpt-4o"))
     private func parseModelId(_ modelId: String) -> (provider: String, model: String) {
         // Check if model has provider prefix from our listing (e.g., "server:openai")
@@ -252,6 +320,8 @@ class ServerProvider: LLMProvider {
             return ("google", modelId)
         } else if modelId.hasPrefix("llama-") || modelId.hasPrefix("mixtral-") {
             return ("groq", modelId)
+        } else if modelId.hasPrefix("MiniMax-") || modelId.hasPrefix("minimax-") {
+            return ("minimax", modelId)
         }
 
         // Fallback to openai

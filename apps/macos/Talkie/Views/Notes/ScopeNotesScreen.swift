@@ -21,28 +21,7 @@ private let log = Log(.ui)
 // MARK: - Scope display fonts
 // Mirrors the helper used by other Scope surfaces. Cormorant Garamond
 // is the studio's `--font-display-modern`; falls back to system serif.
-private enum ScopeFont {
-    private static let regularCandidates = [
-        "CormorantGaramond-Regular",
-        "Cormorant Garamond",
-        "CormorantGaramond",
-    ]
-    private static let mediumCandidates = [
-        "CormorantGaramond-Medium",
-        "Cormorant Garamond Medium",
-    ]
-
-    static func display(size: CGFloat, medium: Bool = false) -> Font {
-        for name in (medium ? mediumCandidates : regularCandidates) {
-            #if os(macOS)
-            if NSFont(name: name, size: size) != nil {
-                return .custom(name, size: size)
-            }
-            #endif
-        }
-        return .system(size: size, weight: medium ? .medium : .regular, design: .serif)
-    }
-}
+// Display font lookup centralized in ScopeType.display(size:weight:) — see TalkieKit/UI/ScopeDesign.swift.
 
 // MARK: - ScopeNotesScreen
 
@@ -112,7 +91,7 @@ struct ScopeNotesScreen: View {
                 .frame(height: 0.5)
 
             Text(headerByline)
-                .font(ScopeFont.display(size: 13).italic())
+                .font(ScopeType.display(size: 13).italic())
                 .foregroundStyle(ScopeInk.faint)
         }
     }
@@ -211,7 +190,7 @@ struct ScopeNotesScreen: View {
                 .frame(width: 20, alignment: .leading)
 
             Text(label)
-                .font(ScopeFont.display(size: 15, medium: true))
+                .font(ScopeType.display(size: 15, weight: .medium))
                 .foregroundStyle(ScopeInk.primary)
                 .frame(width: 160, alignment: .leading)
 
@@ -307,7 +286,7 @@ private struct PlaceholderSheafCard: View {
 
             // Title
             Text(note.title)
-                .font(ScopeFont.display(size: 17, medium: true))
+                .font(ScopeType.display(size: 17, weight: .medium))
                 .foregroundStyle(ScopeInk.primary)
                 .tracking(-0.2)
                 .lineLimit(2)
@@ -461,7 +440,7 @@ private struct SheafCard: View {
 
     private var title: some View {
         Text(displayTitle)
-            .font(ScopeFont.display(size: 17, medium: true))
+            .font(ScopeType.display(size: 17, weight: .medium))
             .foregroundStyle(ScopeInk.primary)
             .tracking(-0.2)
             .lineLimit(2)

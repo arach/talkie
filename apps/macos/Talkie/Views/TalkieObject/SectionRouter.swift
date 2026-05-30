@@ -91,7 +91,17 @@ struct SectionRouter: View {
                 onImmediateSave: onImmediateSave,
                 onRetranscribe: onRetranscribe,
                 onCopy: onCopy,
-                onContinueMemo: recording.isMemo && recording.hasAudio ? onContinueMemo : nil
+                onContinueMemo: recording.isMemo && recording.hasAudio ? onContinueMemo : nil,
+                // Convert absolute seconds → progress (0..1) so the
+                // shared playback onSeek handler can stay
+                // progress-based. Use `recording.duration` (metadata,
+                // always present) rather than the live-player duration
+                // — that's 0 until the audio actually loads, which
+                // would dead-disable seek before first play.
+                onTimestampSeek: (recording.hasAudio && recording.duration > 0)
+                    ? { seconds in onSeek(seconds / recording.duration) }
+                    : nil,
+                currentTime: currentTime
             )
 
         case .playback:

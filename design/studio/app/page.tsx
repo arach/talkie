@@ -60,6 +60,54 @@ const STUDIES: Study[] = [
     blurb:
       "Earlier framing comparison that produced mac-skills — markup-primary, chat-driven, and trifold layouts. Kept as a record of the alternatives considered.",
   },
+  {
+    slug: "mac-workflows",
+    name: "Workflows",
+    kind: "Composition study",
+    platform: "macOS",
+    blurb:
+      "Three-column workflows surface — list · step sheet · run inspector. Theme-aware (dark amber + light bone). v0 strips the donor's embellishment (prompt bodies, cost meter, multi-tab inspector) for a readable skeleton; embellishments earn their way back in. Pre-Swift.",
+  },
+  {
+    slug: "mac-capture-flow",
+    name: "Capture Flow",
+    kind: "Storyboard study",
+    platform: "macOS",
+    blurb:
+      "End-to-end journey for a screenshot: Library (filtered to captures) → Screenshots gallery → Markup window. Three small panels + transition verbs so the path is arguable without re-rendering each surface in full.",
+  },
+  {
+    slug: "mac-screenshots",
+    name: "Screenshots",
+    kind: "Composition study",
+    platform: "macOS",
+    blurb:
+      "Focused gallery for captures. Grid + selection semantics (anchor · ⌘-toggle · shift-range) + bulk action bar + resizable inspector pane. Donor: ScreenshotsScreen.swift.",
+  },
+  {
+    slug: "mac-capture-markup",
+    name: "Capture Markup",
+    kind: "Composition study",
+    platform: "macOS",
+    blurb:
+      "Annotation surface for a single capture — drawing tools on the left, contextual style stack on the right, floating zoom cluster bottom-right, speak strip at the foot. Lives in a WKWebView panel; the studio mock leads the port.",
+  },
+  {
+    slug: "mac-capture-detail",
+    name: "Capture Detail",
+    kind: "Composition study",
+    platform: "macOS",
+    blurb:
+      "Image-first surface for a standalone screenshot. Cool PEARL-on-FROST palette; filename + caption + image hero, metadata in the margin, reveal/delete at the foot.",
+  },
+  {
+    slug: "mac-capture-hud",
+    name: "Capture HUD",
+    kind: "Treatment study",
+    platform: "macOS",
+    blurb:
+      "Capture-moment HUD — PEARL · SLATE · AMBER treatments. Adapts to wallpaper luminance rather than picking a single tone.",
+  },
 
   // — iOS —
   {
@@ -117,14 +165,6 @@ const STUDIES: Study[] = [
     platform: "iOS",
     blurb:
       "Multi-theme iPhone mock shell with empty PhoneFrame slots. Use this when scaffolding a new iOS screen study before promoting it to its own route.",
-  },
-  {
-    slug: "agent-bay",
-    name: "Agent Bay",
-    kind: "Scheme study (macOS)",
-    platform: "macOS",
-    blurb:
-      "Color schemes and treatment toggles for the macOS Home agent bay. 9 schemes × 6 treatments.",
   },
   {
     slug: "settings",

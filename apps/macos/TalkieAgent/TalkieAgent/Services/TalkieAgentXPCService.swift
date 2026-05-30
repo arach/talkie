@@ -128,8 +128,7 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         broadcastDictationAdded()
     }
 
-    /// Notify observers that tray assets were attached to a stored dictation.
-    /// Talkie can now clear consumed unpinned tray items.
+    /// Legacy paste callback retained for older observers. Dictation does not mutate tray items.
     func notifyDictationPasted(recordingId: UUID) {
         let idString = recordingId.uuidString
         for connection in observers {
@@ -160,10 +159,13 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         }
     }
 
-    /// Pull all pending tray media from Talkie for attachment to an existing DB record.
-    /// Prefer the newer assets callback so screen clips are included, but fall
-    /// back to screenshots for older observers during development.
-    func fetchTrayAssets(recordingId: UUID, recordingStartedAt: Date?) async -> String? {
+    /// Pull pending tray media captured during the recording window.
+    func fetchTrayAssets(
+        recordingId: UUID,
+        recordingStartedAt: Date?,
+        recordingEndedAt: Date?,
+        includeScreenshots: Bool
+    ) async -> String? {
         let idString = recordingId.uuidString
         guard let connection = observers.first,
               let observer = connection.remoteObjectProxyWithErrorHandler({ error in
@@ -174,23 +176,48 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
         }
 
         let startedAt = recordingStartedAt?.timeIntervalSince1970 ?? 0
+        let endedAt = recordingEndedAt?.timeIntervalSince1970 ?? 0
         if observer.fetchTrayAssets != nil {
-            return await withCheckedContinuation { continuation in
-                observer.fetchTrayAssets?(recordingId: idString, recordingStartedAt: startedAt) { json in
+            return await withTimeout(seconds: 2.0) { finish in
+                observer.fetchTrayAssets?(
+                    recordingId: idString,
+                    recordingStartedAt: startedAt,
+                    recordingEndedAt: endedAt,
+                    includeScreenshots: includeScreenshots
+                ) { json in
                     NSLog("[TalkieAgentXPC] Fetched tray assets: \(json != nil ? "✓ got JSON" : "nil (no tray assets)")")
-                    continuation.resume(returning: json)
+                    finish(json)
                 }
             }
         }
 
-        return await withCheckedContinuation { continuation in
-            observer.fetchTrayScreenshots(recordingId: idString) { json in
-                let screenshots = RecordingScreenshot.fromArray(json: json)
-                let assetsJSON = screenshots.isEmpty
-                    ? nil
-                    : TalkieObjectAssets(screenshots: screenshots).toJSON()
-                NSLog("[TalkieAgentXPC] Fetched legacy tray screenshots: \(assetsJSON != nil ? "✓ got assets JSON" : "nil")")
-                continuation.resume(returning: assetsJSON)
+        NSLog("[TalkieAgentXPC] Observer does not support exact-window tray assets")
+        return nil
+    }
+
+    private func withTimeout<T>(
+        seconds: TimeInterval,
+        operation: (@escaping (T?) -> Void) -> Void
+    ) async -> T? {
+        await withCheckedContinuation { continuation in
+            let lock = NSLock()
+            var didResume = false
+
+            func resume(_ value: T?) {
+                lock.lock()
+                defer { lock.unlock() }
+                guard !didResume else { return }
+                didResume = true
+                continuation.resume(returning: value)
+            }
+
+            operation { value in
+                resume(value)
+            }
+
+            Task {
+                try? await Task.sleep(for: .milliseconds(Int(max(0, seconds) * 1000)))
+                resume(nil)
             }
         }
     }
@@ -1034,6 +1061,33 @@ final class TalkieAgentXPCService: NSObject, TalkieAgentXPCServiceProtocol, Obse
             // Merge screenshots into the dictation record
             let success = UnifiedDatabase.mergeScreenshots(id: uuid, screenshotsJSON: screenshotsJSON)
             NSLog("[TalkieAgentXPC] attachScreenshots(\(dictationId.prefix(8))): \(success ? "merged" : "failed")")
+            reply(success)
+        }
+    }
+
+    nonisolated func recordLiveScreenshot(
+        imageData: Data,
+        capturedAt: TimeInterval,
+        captureMode: String,
+        width: Int,
+        height: Int,
+        windowTitle: String?,
+        appName: String?,
+        displayName: String?,
+        reply: @escaping (Bool) -> Void
+    ) {
+        Task { @MainActor in
+            let success = self.agentController?.recordLiveScreenshot(
+                imageData: imageData,
+                capturedAt: Date(timeIntervalSince1970: capturedAt),
+                captureMode: captureMode,
+                width: width,
+                height: height,
+                windowTitle: windowTitle,
+                appName: appName,
+                displayName: displayName
+            ) ?? false
+            NSLog("[TalkieAgentXPC] recordLiveScreenshot: \(success ? "recorded" : "ignored")")
             reply(success)
         }
     }

@@ -59,13 +59,16 @@ struct ComposeNextView: View {
             )
 
             DocumentBody(
-                document: compose.document,
                 state: compose.state,
                 dictationPreview: compose.livePartialTranscript,
                 voiceCommand: compose.lastCommandTranscript,
                 generatingETA: compose.generatingETA,
                 diff: compose.pendingDiff,
-                cursorParagraphIndex: compose.cursorParagraphIndex,
+                documentText: Binding(
+                    get: { compose.documentBodyText },
+                    set: { compose.updateDocumentBodyText($0) }
+                ),
+                isKeyboardFocused: $isTalkieKeyboardFocused,
                 onMic: { compose.toggleDictation() }
             )
             .padding(.horizontal, 12)
@@ -93,7 +96,13 @@ struct ComposeNextView: View {
                 onDiscard: { compose.discardDiff() },
                 onRefine: { compose.discardDiff() },
                 onVoice: { compose.toggleVoiceCommand() },
-                onKeyboard: { compose.toggleKeyboard() },
+                onKeyboard: {
+                    if isTalkieKeyboardFocused {
+                        NotificationCenter.default.post(name: .composeRequestEditorBlur, object: nil)
+                    } else {
+                        NotificationCenter.default.post(name: .composeRequestEditorFocus, object: nil)
+                    }
+                },
                 cursorParagraphIndex: Binding(
                     get: { compose.cursorParagraphIndex },
                     set: { compose.cursorParagraphIndex = $0 }
@@ -101,32 +110,18 @@ struct ComposeNextView: View {
                 paragraphCount: compose.document.paragraphs.count
             )
         }
-        .overlay(alignment: .bottomTrailing) {
-            // Bridge that hosts the in-app Talkie keyboard
-            // (HostedTalkieKeyboardView). Keep UIKit's responder view
-            // non-zero sized and fully opaque at the UIView level; a
-            // nearly-transparent SwiftUI wrapper can make UITextField
-            // first-responder activation flaky, so the field itself hides
-            // its visuals with clear colors instead.
-            TalkieKeyboardBridge(
-                isFocused: $isTalkieKeyboardFocused,
-                onInsert: { fragment in
-                    compose.applyKeyboardInsert(fragment)
-                },
-                onDeleteBackward: {
-                    compose.applyKeyboardDelete()
-                }
-            )
-            .frame(width: 44, height: 44)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-        }
-        .onChange(of: compose.keyboardFocusRequested) { _, _ in
-            isTalkieKeyboardFocused = true
-        }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .inactive || newPhase == .background else { return }
             compose.autosave()
+        }
+        .onAppear {
+            // Bottom-right keyboard complication routes here with this
+            // flag set — give the editor first-responder so the embedded
+            // Talkie keyboard slides up immediately.
+            if AppShellRouter.shared.pendingComposeFocus {
+                AppShellRouter.shared.pendingComposeFocus = false
+                isTalkieKeyboardFocused = true
+            }
         }
         .sheet(isPresented: $showingNotesList) {
             ComposeNotesListSheet(activeID: documentID)
@@ -134,163 +129,366 @@ struct ComposeNextView: View {
     }
 }
 
-// MARK: - Talkie keyboard bridge
+// MARK: - Document editor (UITextView + Talkie keyboard)
 
-/// Hidden UITextField whose `inputView` is `HostedTalkieKeyboardView`.
-/// When `isFocused` flips true the field becomes first responder, which
-/// slides the in-app Talkie keyboard up. The keyboard's own collapse
-/// button calls `resignFirstResponder` to slide it back down; we mirror
-/// that back into the binding via the editing-did-end target so the
-/// next button tap re-opens cleanly.
-///
-/// Text input doesn't accumulate in the field — every keystroke fans
-/// out through `onInsert` / `onDeleteBackward` so the owning store can
-/// drop the fragment at the document's tail. Keeping the field's own
-/// `text` empty avoids the system "selection moved" notifications that
-/// would otherwise spam the host.
-private struct TalkieKeyboardBridge: UIViewRepresentable {
-    @Binding var isFocused: Bool
-    let onInsert: (String) -> Void
-    let onDeleteBackward: () -> Void
+extension Notification.Name {
+    static let composeNextEditorPaste = Notification.Name("composeNextEditorPaste")
+    static let composeNextEditorCut = Notification.Name("composeNextEditorCut")
+}
+
+/// Full-document editor backed by UITextView so the system caret,
+/// double-tap word selection, and drag handles behave natively.
+/// The in-app Talkie keyboard mounts as `inputView`.
+private struct ComposeNextDocumentEditor: UIViewRepresentable {
+    @Binding var text: String
+    @Binding var isKeyboardFocused: Bool
+    let isEditable: Bool
+    let textColor: UIColor
+    let accentColor: UIColor
+    let contentBottomInset: CGFloat
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onInsert: onInsert, onDeleteBackward: onDeleteBackward)
+        Coordinator(text: $text, isKeyboardFocused: $isKeyboardFocused)
     }
 
-    func makeUIView(context: Context) -> _TalkieKeyboardBridgeField {
-        let field = _TalkieKeyboardBridgeField(frame: .zero)
-        field.isAccessibilityElement = false
-        field.autocorrectionType = .no
-        field.spellCheckingType = .no
-        field.autocapitalizationType = .none
-        field.smartDashesType = .no
-        field.smartQuotesType = .no
-        field.borderStyle = .none
-        field.backgroundColor = .clear
-        field.textColor = .clear
-        field.tintColor = .clear   // hide caret on the invisible bridge
-        field.inputAssistantItem.leadingBarButtonGroups = []
-        field.inputAssistantItem.trailingBarButtonGroups = []
-
-        let keyboard = HostedTalkieKeyboardView()
-        keyboard.preferredInitialLayout = .compact
-        keyboard.inputHost = context.coordinator
-        keyboard.onRequestCollapse = { [weak field] in
-            field?.resignFirstResponder()
-        }
-        keyboard.onLayoutHeightChange = { [weak field] in
-            field?.reloadInputViews()
-        }
-
-        field.inputView = keyboard
-        context.coordinator.field = field
-        context.coordinator.keyboard = keyboard
-
-        field.addTarget(
-            context.coordinator,
-            action: #selector(Coordinator.editingDidEnd),
-            for: .editingDidEnd
+    func makeUIView(context: Context) -> UITextView {
+        let textView = UITextView()
+        context.coordinator.configure(
+            textView,
+            textColor: textColor,
+            accentColor: accentColor,
+            bottomInset: contentBottomInset
         )
-
-        return field
+        return textView
     }
 
-    func updateUIView(_ uiView: _TalkieKeyboardBridgeField, context: Context) {
-        context.coordinator.onInsert = onInsert
-        context.coordinator.onDeleteBackward = onDeleteBackward
-        context.coordinator.onResign = {
-            // Bounce the binding flip out of UIKit's responder callback
-            // so SwiftUI's update pass picks it up cleanly.
-            DispatchQueue.main.async { isFocused = false }
+    func updateUIView(_ textView: UITextView, context: Context) {
+        context.coordinator.text = $text
+        context.coordinator.isKeyboardFocused = $isKeyboardFocused
+        textView.isEditable = isEditable
+        textView.isSelectable = true
+        textView.tintColor = accentColor
+        textView.textColor = textColor
+
+        if !context.coordinator.isUpdatingFromTextView, textView.text != text {
+            let selectedRange = textView.selectedRange
+            context.coordinator.setDocumentText(text, on: textView)
+            let maxLocation = (text as NSString).length
+            let clampedLocation = min(selectedRange.location, maxLocation)
+            let clampedLength = min(selectedRange.length, maxLocation - clampedLocation)
+            textView.selectedRange = NSRange(location: clampedLocation, length: clampedLength)
+            context.coordinator.updatePlaceholderVisibility(in: textView)
         }
 
-        if isFocused {
-            context.coordinator.requestFocus(for: uiView)
-        } else if uiView.isFirstResponder {
-            uiView.resignFirstResponder()
+        if isKeyboardFocused {
+            context.coordinator.requestFocus(for: textView)
+        } else if textView.isFirstResponder {
+            textView.resignFirstResponder()
         }
     }
 
-    static func dismantleUIView(_ uiView: _TalkieKeyboardBridgeField, coordinator: Coordinator) {
+    static func dismantleUIView(_ uiView: UITextView, coordinator: Coordinator) {
+        coordinator.teardown()
+        uiView.delegate = nil
         uiView.inputView = nil
         if uiView.isFirstResponder {
             uiView.resignFirstResponder()
         }
-        coordinator.field = nil
-        coordinator.keyboard?.inputHost = nil
-        coordinator.keyboard?.onRequestCollapse = nil
-        coordinator.keyboard?.onLayoutHeightChange = nil
-        coordinator.keyboard = nil
     }
 
     @MainActor
-    final class Coordinator: NSObject, KeyboardInputHost {
-        var onInsert: (String) -> Void
-        var onDeleteBackward: () -> Void
-        var onResign: (() -> Void)?
-        weak var field: _TalkieKeyboardBridgeField?
+    final class Coordinator: NSObject, UITextViewDelegate, KeyboardInputHost {
+        private enum Constants {
+            static let placeholderTag = 7_002
+        }
+
+        var text: Binding<String>
+        var isKeyboardFocused: Binding<Bool>
+        var isUpdatingFromTextView = false
+        weak var textView: UITextView?
         weak var keyboard: HostedTalkieKeyboardView?
 
-        init(onInsert: @escaping (String) -> Void, onDeleteBackward: @escaping () -> Void) {
-            self.onInsert = onInsert
-            self.onDeleteBackward = onDeleteBackward
+        init(text: Binding<String>, isKeyboardFocused: Binding<Bool>) {
+            self.text = text
+            self.isKeyboardFocused = isKeyboardFocused
+            super.init()
+
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handleFocusRequest),
+                name: .composeRequestEditorFocus,
+                object: nil
+            )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handleBlurRequest),
+                name: .composeRequestEditorBlur,
+                object: nil
+            )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handlePasteRequest),
+                name: .composeNextEditorPaste,
+                object: nil
+            )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handleCutRequest),
+                name: .composeNextEditorCut,
+                object: nil
+            )
         }
 
-        @objc func editingDidEnd() {
-            onResign?()
+        deinit {
+            NotificationCenter.default.removeObserver(self)
         }
 
-        func requestFocus(for field: _TalkieKeyboardBridgeField) {
-            guard !field.isFirstResponder else { return }
-            guard field.window != nil else {
-                Task { @MainActor [weak field] in
-                    guard let field, !field.isFirstResponder else { return }
-                    _ = field.becomeFirstResponder()
+        func configure(
+            _ textView: UITextView,
+            textColor: UIColor,
+            accentColor: UIColor,
+            bottomInset: CGFloat
+        ) {
+            let keyboard = HostedTalkieKeyboardView()
+            keyboard.preferredInitialLayout = .compact
+            keyboard.preferredInitialModeId = KeyboardMode.abc.id
+            keyboard.inputHost = self
+            keyboard.onLayoutHeightChange = { [weak textView] in
+                textView?.reloadInputViews()
+            }
+            keyboard.onRequestCollapse = { [weak textView] in
+                textView?.resignFirstResponder()
+            }
+
+            textView.inputView = keyboard
+            self.keyboard = keyboard
+
+            textView.delegate = self
+            textView.backgroundColor = .clear
+            textView.textColor = textColor
+            textView.tintColor = accentColor
+            textView.font = Self.bodyFont
+            textView.textContainerInset = UIEdgeInsets(top: 0, left: 0, bottom: bottomInset, right: 0)
+            textView.textContainer.lineFragmentPadding = 0
+            textView.isEditable = true
+            textView.isSelectable = true
+            textView.isScrollEnabled = true
+            textView.alwaysBounceVertical = false
+            textView.keyboardDismissMode = .none
+            textView.autocapitalizationType = .sentences
+            textView.autocorrectionType = .yes
+            textView.spellCheckingType = .yes
+            textView.smartDashesType = .yes
+            textView.smartQuotesType = .yes
+            textView.inputAssistantItem.leadingBarButtonGroups = []
+            textView.inputAssistantItem.trailingBarButtonGroups = []
+            applyTypingAttributes(to: textView)
+            setDocumentText(text.wrappedValue, on: textView)
+
+            self.textView = textView
+            updatePlaceholder(in: textView)
+        }
+
+        func setDocumentText(_ value: String, on textView: UITextView) {
+            textView.attributedText = NSAttributedString(
+                string: value,
+                attributes: Self.typingAttributes(
+                    textColor: textView.textColor ?? .label,
+                    font: Self.bodyFont
+                )
+            )
+            applyTypingAttributes(to: textView)
+        }
+
+        func teardown() {
+            keyboard?.inputHost = nil
+            keyboard?.onRequestCollapse = nil
+            keyboard?.onLayoutHeightChange = nil
+            keyboard = nil
+            textView = nil
+        }
+
+        @objc private func handleFocusRequest() {
+            guard let textView else { return }
+            requestFocus(for: textView)
+        }
+
+        @objc private func handleBlurRequest() {
+            textView?.resignFirstResponder()
+        }
+
+        @objc private func handlePasteRequest() {
+            performKeyboardAction(.paste)
+        }
+
+        @objc private func handleCutRequest() {
+            guard let textView else { return }
+            guard textView.selectedRange.length > 0 else { return }
+            UIPasteboard.general.string = (textView.text as NSString).substring(with: textView.selectedRange)
+            replaceSelection(with: "")
+        }
+
+        func requestFocus(for textView: UITextView) {
+            guard !textView.isFirstResponder else { return }
+            guard textView.window != nil else {
+                Task { @MainActor [weak textView] in
+                    guard let textView, !textView.isFirstResponder else { return }
+                    _ = textView.becomeFirstResponder()
                 }
                 return
             }
-
-            if !field.becomeFirstResponder() {
-                Task { @MainActor [weak field] in
-                    guard let field, !field.isFirstResponder else { return }
-                    _ = field.becomeFirstResponder()
+            if !textView.becomeFirstResponder() {
+                Task { @MainActor [weak textView] in
+                    guard let textView, !textView.isFirstResponder else { return }
+                    _ = textView.becomeFirstResponder()
                 }
             }
+        }
+
+        func textViewDidBeginEditing(_ textView: UITextView) {
+            keyboard?.resetToPreferredInitialLayout()
+            isKeyboardFocused.wrappedValue = true
+        }
+
+        func textViewDidEndEditing(_ textView: UITextView) {
+            isKeyboardFocused.wrappedValue = false
+        }
+
+        func textViewDidChange(_ textView: UITextView) {
+            isUpdatingFromTextView = true
+            text.wrappedValue = textView.text
+            isUpdatingFromTextView = false
+            updatePlaceholderVisibility(in: textView)
         }
 
         func performKeyboardAction(_ action: KeyboardAction) {
+            guard let textView else { return }
+
             switch action {
-            case .insert(let fragment):
-                guard !fragment.isEmpty else { return }
-                onInsert(fragment)
+            case .insert(let insertedText):
+                replaceSelection(with: insertedText)
             case .deleteBackward:
-                onDeleteBackward()
-            case .enter:
-                onInsert("\n")
-            case .tab:
-                onInsert("\t")
-            case .escape, .dismissKeyboard:
-                field?.resignFirstResponder()
+                textView.deleteBackward()
+                isUpdatingFromTextView = true
+                text.wrappedValue = textView.text
+                isUpdatingFromTextView = false
+                updatePlaceholderVisibility(in: textView)
+            case .copy:
+                copySelection(from: textView)
             case .paste:
-                if let clipboard = UIPasteboard.general.string, !clipboard.isEmpty {
-                    onInsert(clipboard)
-                }
-            case .copy, .toggleShift, .toggleControl, .interrupt, .moveCursor:
+                guard let clipboardText = UIPasteboard.general.string, !clipboardText.isEmpty else { return }
+                replaceSelection(with: clipboardText)
+            case .toggleShift, .toggleControl, .interrupt:
                 break
+            case .tab:
+                replaceSelection(with: "\t")
+            case .escape, .dismissKeyboard:
+                textView.resignFirstResponder()
+            case .enter:
+                replaceSelection(with: "\n")
+            case .moveCursor(let movement):
+                moveCursor(movement, in: textView)
             }
         }
-    }
-}
 
-/// Custom UITextField subclass that suppresses the iOS edit menu and
-/// keeps its own text buffer empty — input is routed through
-/// `KeyboardInputHost` rather than accumulated locally.
-fileprivate final class _TalkieKeyboardBridgeField: UITextField {
-    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
-        false
-    }
+        private func replaceSelection(with replacement: String) {
+            guard let textView else { return }
+            let selectedRange = textView.selectedRange
+            let current = textView.text ?? ""
+            let next = (current as NSString).replacingCharacters(in: selectedRange, with: replacement)
+            setDocumentText(next, on: textView)
+            textView.selectedRange = NSRange(
+                location: selectedRange.location + (replacement as NSString).length,
+                length: 0
+            )
+            isUpdatingFromTextView = true
+            text.wrappedValue = next
+            isUpdatingFromTextView = false
+            updatePlaceholderVisibility(in: textView)
+        }
 
-    override var canBecomeFirstResponder: Bool { true }
+        private func copySelection(from textView: UITextView) {
+            guard textView.selectedRange.length > 0 else { return }
+            UIPasteboard.general.string = (textView.text as NSString).substring(with: textView.selectedRange)
+        }
+
+        private func moveCursor(_ movement: KeyboardCursorMovement, in textView: UITextView) {
+            guard let selectedRange = textView.selectedTextRange else { return }
+            let anchor = selectedRange.start
+
+            let nextPosition: UITextPosition?
+            switch movement {
+            case .left:
+                nextPosition = textView.position(from: anchor, offset: -1)
+            case .right:
+                nextPosition = textView.position(from: anchor, offset: 1)
+            case .up:
+                nextPosition = textView.position(from: anchor, in: .up, offset: 1)
+            case .down:
+                nextPosition = textView.position(from: anchor, in: .down, offset: 1)
+            case .wordLeft:
+                nextPosition = textView.position(from: anchor, offset: -5)
+            case .wordRight:
+                nextPosition = textView.position(from: anchor, offset: 5)
+            }
+
+            guard let nextPosition,
+                  let collapsedRange = textView.textRange(from: nextPosition, to: nextPosition) else {
+                return
+            }
+
+            textView.selectedTextRange = collapsedRange
+        }
+
+        func applyTypingAttributes(to textView: UITextView) {
+            textView.typingAttributes = Self.typingAttributes(
+                textColor: textView.textColor ?? .label,
+                font: Self.bodyFont
+            )
+        }
+
+        func updatePlaceholder(in textView: UITextView) {
+            if let existing = textView.viewWithTag(Constants.placeholderTag) {
+                existing.removeFromSuperview()
+            }
+
+            let label = UILabel()
+            label.tag = Constants.placeholderTag
+            label.text = "Tap to write…"
+            label.font = Self.bodyFont
+            label.textColor = textView.textColor?.withAlphaComponent(0.35)
+            label.numberOfLines = 0
+            label.isUserInteractionEnabled = false
+            label.translatesAutoresizingMaskIntoConstraints = false
+            textView.addSubview(label)
+
+            NSLayoutConstraint.activate([
+                label.topAnchor.constraint(equalTo: textView.topAnchor),
+                label.leadingAnchor.constraint(equalTo: textView.leadingAnchor),
+                label.trailingAnchor.constraint(lessThanOrEqualTo: textView.trailingAnchor),
+            ])
+
+            updatePlaceholderVisibility(in: textView)
+        }
+
+        func updatePlaceholderVisibility(in textView: UITextView) {
+            textView.viewWithTag(Constants.placeholderTag)?.isHidden = !(textView.text ?? "").isEmpty
+        }
+
+        private static var bodyFont: UIFont {
+            UIFont.preferredFont(forTextStyle: .body)
+        }
+
+        private static func typingAttributes(textColor: UIColor, font: UIFont) -> [NSAttributedString.Key: Any] {
+            let style = NSMutableParagraphStyle()
+            style.lineSpacing = 4
+            return [
+                .font: font,
+                .foregroundColor: textColor,
+                .paragraphStyle: style,
+            ]
+        }
+    }
 }
 
 // MARK: - Header
@@ -552,13 +750,13 @@ private struct ComposeModelGlyph: View {
 // MARK: - Document body (state-driven)
 
 private struct DocumentBody: View {
-    let document: ComposeStore.Document
     let state: ComposeState
     let dictationPreview: String?
     let voiceCommand: String?
     let generatingETA: String?
     let diff: ComposeStore.Diff?
-    let cursorParagraphIndex: Int
+    @Binding var documentText: String
+    @Binding var isKeyboardFocused: Bool
     let onMic: () -> Void
 
     @ObservedObject private var theme = ThemeManager.shared
@@ -574,28 +772,35 @@ private struct DocumentBody: View {
                     }
                     DiffInline(diff: diff)
                 } else {
-                    ForEach(Array(document.paragraphs.enumerated()), id: \.offset) { idx, para in
-                        ParagraphView(
-                            text: para,
-                            isLast: idx == document.paragraphs.count - 1,
-                            dictationPreview: idx == cursorParagraphIndex ? dictationPreview : nil,
-                            showCaret: state == .idle && idx == cursorParagraphIndex,
-                            accent: theme.currentTheme.chrome.accent
-                        )
+                    ComposeNextDocumentEditor(
+                        text: $documentText,
+                        isKeyboardFocused: $isKeyboardFocused,
+                        isEditable: state == .idle || state == .dictating,
+                        textColor: UIColor(theme.colors.textPrimary),
+                        accentColor: UIColor(theme.currentTheme.chrome.accent),
+                        contentBottomInset: 56
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding(16)
+
+                    if state == .dictating, let dictationPreview {
+                        DictationPreviewStrip(preview: dictationPreview)
+                            .padding(.horizontal, 16)
                     }
 
                     if state == .listening, let voiceCommand {
                         ListeningStrip(commandText: voiceCommand)
+                            .padding(.horizontal, 16)
                     }
                     if state == .generating {
                         GeneratingStrip(eta: generatingETA ?? "~3s")
+                            .padding(.horizontal, 16)
                     }
                 }
 
                 Spacer(minLength: 0)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
             // Inline mic — floats over the bottom of the card; only
             // active outside of the AI loop (idle/diff states).
@@ -617,49 +822,28 @@ private struct DocumentBody: View {
     }
 }
 
-private struct ParagraphView: View {
-    let text: String
-    let isLast: Bool
-    let dictationPreview: String?
-    let showCaret: Bool
-    let accent: Color
-
+private struct DictationPreviewStrip: View {
+    let preview: String
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 0) {
-            (
-                Text(text)
-                    .foregroundStyle(theme.colors.textPrimary)
-                + (dictationPreview.map { preview in
-                    Text(" \(preview)")
-                        .foregroundStyle(accent)
-                        .italic()
-                } ?? Text(""))
-            )
-            .talkieType(.listTitle)
-            .lineSpacing(4)
-
-            if showCaret {
-                BlinkingCaret(color: accent)
-                    .padding(.leading, 1)
-            }
+        HStack(spacing: 8) {
+            Image(systemName: "waveform")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(theme.currentTheme.chrome.accent)
+            Text(preview)
+                .talkieType(.preview)
+                .italic()
+                .foregroundStyle(theme.currentTheme.chrome.accent)
+                .lineLimit(2)
+            Spacer(minLength: 0)
         }
-    }
-}
-
-private struct BlinkingCaret: View {
-    let color: Color
-    @State private var visible = true
-
-    var body: some View {
-        Rectangle()
-            .fill(color)
-            .frame(width: 1.5, height: 14)
-            .opacity(visible ? 1 : 0)
-            .animation(.easeInOut(duration: 0.55).repeatForever(autoreverses: true),
-                       value: visible)
-            .onAppear { visible = false }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(theme.currentTheme.chrome.accentTint)
+        )
     }
 }
 
@@ -869,32 +1053,37 @@ private struct QuickTransforms: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(alignment: .center, spacing: 8) {
             Text("· QUICK")
                 .talkieType(.channelLabelTiny)
                 .foregroundStyle(theme.colors.textTertiary)
+                .fixedSize()
 
-            ForEach(ComposeStore.QuickTransform.allCases, id: \.self) { transform in
-                Button(action: { onTap(transform) }) {
-                    Text(transform.label)
-                        .talkieType(.fieldLabel)
-                        .foregroundStyle(theme.colors.textSecondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(
-                            Capsule()
-                                .fill(theme.colors.cardBackground)
-                                .overlay(
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(ComposeStore.QuickTransform.allCases, id: \.self) { transform in
+                        Button(action: { onTap(transform) }) {
+                            Text(transform.label)
+                                .talkieType(.fieldLabel)
+                                .foregroundStyle(theme.colors.textSecondary)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(
                                     Capsule()
-                                        .strokeBorder(theme.currentTheme.chrome.edgeFaint,
-                                                      lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                                        .fill(theme.colors.cardBackground)
+                                        .overlay(
+                                            Capsule()
+                                                .strokeBorder(theme.currentTheme.chrome.edgeFaint,
+                                                              lineWidth: theme.currentTheme.chrome.hairlineWidth)
+                                        )
                                 )
-                        )
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-                .buttonStyle(.plain)
             }
-
-            Spacer()
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -1177,7 +1366,9 @@ private struct ActionTray: View {
                 // still useful for jumping around the doc; cut/paste
                 // are the real wins on mobile edits.
                 HStack(spacing: 14) {
-                    trayButton(systemImage: "scissors", accessibilityLabel: "Cut") { /* TODO M3: cut */ }
+                    trayButton(systemImage: "scissors", accessibilityLabel: "Cut") {
+                        NotificationCenter.default.post(name: .composeNextEditorCut, object: nil)
+                    }
                     trayButton(systemImage: "arrow.up.and.down.and.arrow.left.and.right", accessibilityLabel: "Cursor") {
                         showJoystick = true
                     }
@@ -1187,7 +1378,9 @@ private struct ActionTray: View {
                             paragraphCount: paragraphCount
                         )
                     }
-                    trayButton(systemImage: "doc.on.clipboard", accessibilityLabel: "Paste") { /* TODO M3: paste */ }
+                    trayButton(systemImage: "doc.on.clipboard", accessibilityLabel: "Paste") {
+                        NotificationCenter.default.post(name: .composeNextEditorPaste, object: nil)
+                    }
                 }
                 Spacer()
                 trayButton(systemImage: "keyboard", accessibilityLabel: "Keyboard", action: onKeyboard)

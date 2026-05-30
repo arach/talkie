@@ -24,6 +24,7 @@ final class StartupCoordinator {
 
     private var hasInitialized = false
     private var databaseInitialized = false
+    private var databaseInitializationTask: Task<Bool, Never>?
     private var didRunStartupMemoryRelief = false
     private var didScheduleDeferredMaintenance = false
     private var didScheduleWorkflowInitialization = false
@@ -97,23 +98,36 @@ final class StartupCoordinator {
     /// Returns true if already initialized (to avoid duplicate calls)
     func initializeDatabase() async -> Bool {
         guard !databaseInitialized else { return true }
-
-        let startTime = CFAbsoluteTimeGetCurrent()
-        let state = signposter.beginInterval("Phase 2: Database")
-
-        do {
-            try await DatabaseManager.shared.initialize()
-            databaseInitialized = true
-            let elapsed = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
-            logger.info("⏱️ Startup[2]: Database \(String(format: "%.0f", elapsed))ms (GRDB)")
-            signposter.endInterval("Phase 2: Database", state)
-            return true
-        } catch {
-            let elapsed = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
-            logger.error("⏱️ Startup[2]: Database FAILED \(String(format: "%.0f", elapsed))ms - \(error.localizedDescription)")
-            signposter.endInterval("Phase 2: Database", state)
-            return false
+        if let databaseInitializationTask {
+            return await databaseInitializationTask.value
         }
+
+        let task = Task { @MainActor [weak self] () -> Bool in
+            guard let self else { return false }
+            guard !self.databaseInitialized else { return true }
+
+            let startTime = CFAbsoluteTimeGetCurrent()
+            let state = signposter.beginInterval("Phase 2: Database")
+
+            do {
+                try await DatabaseManager.shared.initialize()
+                self.databaseInitialized = true
+                self.databaseInitializationTask = nil
+                let elapsed = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
+                logger.info("⏱️ Startup[2]: Database \(String(format: "%.0f", elapsed))ms (GRDB)")
+                signposter.endInterval("Phase 2: Database", state)
+                return true
+            } catch {
+                self.databaseInitializationTask = nil
+                let elapsed = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
+                logger.error("⏱️ Startup[2]: Database FAILED \(String(format: "%.0f", elapsed))ms - \(error.localizedDescription)")
+                signposter.endInterval("Phase 2: Database", state)
+                return false
+            }
+        }
+
+        databaseInitializationTask = task
+        return await task.value
     }
 
     // MARK: - Phase 3: Deferred (after UI is visible)

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Talkie Capture Markup</title>
+  <link rel="stylesheet" href="markup.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="tool-toolbar" id="tool-toolbar">
+      <!-- Left: tool selection -->
+      <div class="toolbar-tools">
+        <button type="button" class="tool-btn" data-tool="rect" title="Rect (R)"><span class="glyph">▢</span><span class="label">Rect</span></button>
+        <button type="button" class="tool-btn" data-tool="arrow" title="Arrow (A)"><span class="glyph">↗</span><span class="label">Arrow</span></button>
+        <button type="button" class="tool-btn" data-tool="line" title="Line (L)"><span class="glyph">—</span><span class="label">Line</span></button>
+        <button type="button" class="tool-btn" data-tool="text" title="Text (T)"><span class="glyph">T</span><span class="label">Text</span></button>
+        <button type="button" class="tool-btn" data-tool="blur" title="Blur (B)"><span class="glyph">▒</span><span class="label">Blur</span></button>
+      </div>
+
+      <!-- "Editing selection" affordance. Shown only while a layer is selected
+           and no create-tool is armed; makes it clear the shape buttons +
+           style stack are restyling the SELECTED layer, not new-draw defaults. -->
+      <span class="selection-mode-badge hidden" id="selection-mode-badge" aria-hidden="true">Editing selection</span>
+
+      <span class="toolbar-divider" aria-hidden="true"></span>
+
+      <!-- Right: contextual style stack (per-tool defaults; selected-layer
+           live-edit is a follow-up). The DOM is static so the toolbar
+           height never jumps; JS hides whichever group doesn't apply to
+           the current tool. -->
+      <div class="style-stack" id="style-stack">
+        <div class="style-group" data-group="stroke">
+          <span class="style-label">width</span>
+          <div class="style-row">
+            <button type="button" class="style-btn stroke-pick" data-style="stroke" data-value="1" title="1 px"><span class="stroke-pip" style="height: 1px"></span></button>
+            <button type="button" class="style-btn stroke-pick active" data-style="stroke" data-value="2" title="2 px"><span class="stroke-pip" style="height: 2px"></span></button>
+            <button type="button" class="style-btn stroke-pick" data-style="stroke" data-value="3" title="3 px"><span class="stroke-pip" style="height: 3px"></span></button>
+            <button type="button" class="style-btn stroke-pick" data-style="stroke" data-value="5" title="5 px"><span class="stroke-pip" style="height: 5px"></span></button>
+          </div>
+        </div>
+
+        <span class="style-divider" aria-hidden="true"></span>
+
+        <div class="style-group" data-group="color">
+          <span class="style-label">color</span>
+          <div class="style-row">
+            <button type="button" class="style-btn swatch" data-style="color" data-value="#232423" title="Ink" style="--c: #232423"></button>
+            <button type="button" class="style-btn swatch" data-style="color" data-value="#D03A1C" title="Alert" style="--c: #D03A1C"></button>
+            <button type="button" class="style-btn swatch active" data-style="color" data-value="#C47D1C" title="Amber" style="--c: #C47D1C"></button>
+            <button type="button" class="style-btn swatch" data-style="color" data-value="#9A6A22" title="Brass" style="--c: #9A6A22"></button>
+            <button type="button" class="style-btn swatch swatch-light" data-style="color" data-value="#FFFFFF" title="White" style="--c: #FFFFFF"></button>
+          </div>
+        </div>
+
+        <span class="style-divider" data-group="font-divider" aria-hidden="true"></span>
+
+        <div class="style-group" data-group="font-size">
+          <span class="style-label">size</span>
+          <div class="style-row">
+            <button type="button" class="style-btn font-pick" data-style="font-size" data-value="12" title="Small">S</button>
+            <button type="button" class="style-btn font-pick active" data-style="font-size" data-value="16" title="Medium">M</button>
+            <button type="button" class="style-btn font-pick" data-style="font-size" data-value="22" title="Large">L</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="bay-body">
+      <aside class="layer-rail layer-rail-left" id="layer-rail">
+        <div class="layer-rail-head">
+          <span class="layer-rail-title">· LAYERS</span>
+          <span class="layer-rail-count" id="layer-count">0</span>
+        </div>
+        <div id="layer-list"></div>
+      </aside>
+      <section class="canvas-wrap">
+        <canvas id="canvas"></canvas>
+
+        <!-- Floating canvas zoom cluster (Hudson pattern). Lives over the
+             canvas, not in the toolbar — viewport controls are a different
+             category from drawing. Undo/redo ride along here too so the
+             accessible bindings stay reachable without polluting the top bar. -->
+        <div class="canvas-zoom-cluster" id="canvas-zoom-cluster">
+          <button type="button" class="zoom-btn" data-action="undo" title="Undo (⌘Z)">↶</button>
+          <button type="button" class="zoom-btn" data-action="redo" title="Redo (⌘⇧Z)">↷</button>
+          <span class="zoom-divider" aria-hidden="true"></span>
+          <button type="button" class="zoom-btn" data-action="zoom-out" title="Zoom out">−</button>
+          <span class="zoom-badge" id="zoom-display">100%</span>
+          <button type="button" class="zoom-btn" data-action="zoom-in" title="Zoom in">+</button>
+          <span class="zoom-divider" aria-hidden="true"></span>
+          <button type="button" class="zoom-btn zoom-btn-label" data-action="zoom-fit" title="Fit (F)">FIT</button>
+        </div>
+      </section>
+      <aside class="inspector-rail" id="inspector-rail">
+        <div class="inspector-rail-head">
+          <span class="inspector-rail-title">· INSPECTOR</span>
+        </div>
+        <div id="inspector-body" class="inspector-empty">
+          Select a layer to inspect.
+        </div>
+      </aside>
+    </main>
+    <div id="popover" class="popover hidden">
+      <button type="button" data-action="delete">Delete layer</button>
+      <button type="button" data-action="toggle">Hide / Show</button>
+    </div>
+  </div>
+  <script src="markup.js"></script>
+</body>
+</html>

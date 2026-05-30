@@ -243,6 +243,10 @@ struct ManagedAgentWorkspaceStore: Sendable {
         let showMemoURL = directoryURL.appending(path: "show-memo.sh")
         let retranscribeMemoURL = directoryURL.appending(path: "retranscribe-memo.sh")
         let listWorkflowRunsURL = directoryURL.appending(path: "list-workflow-runs.sh")
+        let captureMarkupDescribeURL = directoryURL.appending(path: "capture-markup-describe.sh")
+        let captureMarkupPlanURL = directoryURL.appending(path: "capture-markup-plan.sh")
+        let captureMarkupApplyURL = directoryURL.appending(path: "capture-markup-apply.sh")
+        let captureMarkupRenderURL = directoryURL.appending(path: "capture-markup-render.sh")
 
         try writeExecutableText(commonScript(), to: commonURL)
         try writeExecutableText(listMemosScript(), to: listMemosURL)
@@ -251,6 +255,10 @@ struct ManagedAgentWorkspaceStore: Sendable {
         try writeExecutableText(showMemoScript(), to: showMemoURL)
         try writeExecutableText(retranscribeMemoScript(), to: retranscribeMemoURL)
         try writeExecutableText(listWorkflowRunsScript(), to: listWorkflowRunsURL)
+        try writeExecutableText(captureMarkupDescribeScript(), to: captureMarkupDescribeURL)
+        try writeExecutableText(captureMarkupPlanScript(), to: captureMarkupPlanURL)
+        try writeExecutableText(captureMarkupApplyScript(), to: captureMarkupApplyURL)
+        try writeExecutableText(captureMarkupRenderScript(), to: captureMarkupRenderURL)
     }
 
     private func resetDirectory(at directoryURL: URL) throws {
@@ -778,6 +786,12 @@ struct ManagedAgentWorkspaceStore: Sendable {
         Recovery:
         - `retranscribe-memo.sh <uuid-or-prefix> [model-id]`
 
+        Capture markup (screenshot annotation):
+        - `capture-markup-describe.sh <image-path>`
+        - `capture-markup-plan.sh <image-path> <instruction>`
+        - `capture-markup-apply.sh <image-path> <plan-json-path>`
+        - `capture-markup-render.sh <image-path> [output-path]`
+
         The shared runtime uses `sqlite3 -readonly` for inspection against `\(displayPath(memoDatabaseURL))`.
         The retranscription helper launches the current Talkie executable in headless debug mode so memo recovery goes through the app's own repositories instead of direct SQL writes.
 
@@ -1089,6 +1103,54 @@ struct ManagedAgentWorkspaceStore: Sendable {
         source "$SCRIPT_DIR/_common.sh"
 
         exec_agentkit_tool list-workflow-runs "$@"
+        """
+    }
+
+    private func captureMarkupDescribeScript() -> String {
+        """
+        #!/bin/zsh
+        set -euo pipefail
+
+        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+        source "$SCRIPT_DIR/_common.sh"
+
+        exec_agentkit_tool capture-markup-describe "$@"
+        """
+    }
+
+    private func captureMarkupPlanScript() -> String {
+        """
+        #!/bin/zsh
+        set -euo pipefail
+
+        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+        source "$SCRIPT_DIR/_common.sh"
+
+        exec_agentkit_tool capture-markup-plan "$@"
+        """
+    }
+
+    private func captureMarkupApplyScript() -> String {
+        """
+        #!/bin/zsh
+        set -euo pipefail
+
+        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+        source "$SCRIPT_DIR/_common.sh"
+
+        exec_agentkit_tool capture-markup-apply "$@"
+        """
+    }
+
+    private func captureMarkupRenderScript() -> String {
+        """
+        #!/bin/zsh
+        set -euo pipefail
+
+        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+        source "$SCRIPT_DIR/_common.sh"
+
+        exec_agentkit_tool capture-markup-render "$@"
         """
     }
 

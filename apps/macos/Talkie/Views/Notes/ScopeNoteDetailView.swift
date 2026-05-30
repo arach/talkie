@@ -23,23 +23,30 @@ import SwiftUI
 import TalkieKit
 
 // MARK: - Typography helpers
-
-private enum NoteFont {
-    static func display(size: CGFloat, weight: Font.Weight = .medium) -> Font {
-        Font.system(size: size, weight: weight, design: .serif)
-    }
-    static func displayItalic(size: CGFloat) -> Font {
-        Font.system(size: size, weight: .regular, design: .serif).italic()
-    }
-    static func mono(size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        Font.system(size: size, weight: weight, design: .monospaced)
-    }
-}
+//
+// Note + Capture detail typography used to live here as a private
+// `NoteFont` (and a parallel `CapFont` next door), both with system
+// serif/mono — bypassing the Cormorant Garamond + JetBrains Mono
+// lookup the rest of Scope uses. That's the resolution drift the
+// design-system audit flagged. Both now route through `ScopeType`.
 
 // MARK: - View
 
 struct ScopeNoteDetailView: View {
     let note: TalkieObject
+    /// Library passes through so Delete from the rail/menu can clear selection.
+    var onDelete: (() -> Void)? = nil
+
+    @State private var isEditing = false
+    @State private var editedText: String = ""
+    @State private var editedTitle: String = ""
+    @State private var saveTask: Task<Void, Never>? = nil
+    @State private var showShareSheet = false
+    @FocusState private var bodyFieldFocused: Bool
+    @FocusState private var titleFieldFocused: Bool
+
+    private var viewModel: RecordingsViewModel { .shared }
+    private var repository: TalkieObjectRepository { TalkieObjectRepository() }
 
     var body: some View {
         GeometryReader { proxy in
@@ -120,30 +127,44 @@ struct ScopeNoteDetailView: View {
             HStack(spacing: 10) {
                 if let sourceEyebrow {
                     Text(sourceEyebrow)
-                        .font(NoteFont.mono(size: 9, weight: .semibold))
+                        .font(ScopeType.mono(size: 9, weight: .semibold))
                         .tracking(2.2)
                         .foregroundStyle(ThemedScopeInk.faint)
                 }
                 ThemedScopeRule(.subtle)
                 Text("\(dateLabel) · \(timeLabel)")
-                    .font(NoteFont.mono(size: 9))
+                    .font(ScopeType.mono(size: 9, weight: .regular))
                     .tracking(1.8)
                     .foregroundStyle(ThemedScopeInk.faint)
             }
 
-            // Title
-            Text(note.displayTitle)
-                .font(NoteFont.display(size: 26, weight: .medium))
-                .tracking(-0.3)
-                .foregroundStyle(ThemedScopeInk.primary)
-                .lineLimit(3)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 10)
+            // Title — TextField while editing so the user can set a
+            // real title (otherwise displayTitle stays a heuristic);
+            // plain Text otherwise. Same font + tracking either way
+            // so the swap reads as the field "wanting input" without
+            // shifting layout.
+            if isEditing {
+                TextField("Untitled", text: $editedTitle, prompt: Text("Untitled"))
+                    .textFieldStyle(.plain)
+                    .font(ScopeType.display(size: 26, weight: .medium))
+                    .tracking(-0.3)
+                    .foregroundStyle(ThemedScopeInk.primary)
+                    .focused($titleFieldFocused)
+                    .padding(.top, 10)
+            } else {
+                Text(note.displayTitle)
+                    .font(ScopeType.display(size: 26, weight: .medium))
+                    .tracking(-0.3)
+                    .foregroundStyle(ThemedScopeInk.primary)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 10)
+            }
 
             // Byline
             Text(bylineText)
-                .font(NoteFont.mono(size: 10))
+                .font(ScopeType.mono(size: 10, weight: .regular))
                 .tracking(1.6)
                 .foregroundStyle(ThemedScopeInk.faint)
                 .padding(.top, 6)
@@ -153,14 +174,28 @@ struct ScopeNoteDetailView: View {
             // macOS rendering; switching to sans with more line spacing
             // gives the note body the airier feel intentional notes
             // want — closer to a notebook page than a printed article.
-            VStack(alignment: .leading, spacing: 14) {
-                ForEach(Array(bodyParagraphs.enumerated()), id: \.offset) { _, paragraph in
-                    Text(paragraph)
+            Group {
+                if isEditing {
+                    TextEditor(text: $editedText)
                         .font(.system(size: 13.5, weight: .regular, design: .default))
-                        .foregroundStyle(ThemedScopeInk.dim)
+                        .foregroundStyle(ThemedScopeInk.primary)
                         .lineSpacing(7)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .scrollContentBackground(.hidden)
+                        .background(Color.clear)
+                        .frame(minHeight: 220, idealHeight: 320, alignment: .topLeading)
+                        .padding(.leading, -5)  // counter TextEditor's insets
+                        .focused($bodyFieldFocused)
+                } else {
+                    VStack(alignment: .leading, spacing: 14) {
+                        ForEach(Array(bodyParagraphs.enumerated()), id: \.offset) { _, paragraph in
+                            Text(paragraph)
+                                .font(.system(size: 13.5, weight: .regular, design: .default))
+                                .foregroundStyle(ThemedScopeInk.dim)
+                                .lineSpacing(7)
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                 }
             }
             .frame(maxWidth: proseMax, alignment: .leading)
@@ -218,18 +253,151 @@ struct ScopeNoteDetailView: View {
     private var actionsBlock: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("· ACTIONS")
-                .font(NoteFont.mono(size: 8.5, weight: .semibold))
+                .font(ScopeType.mono(size: 8.5, weight: .semibold))
                 .tracking(2.8)
                 .foregroundStyle(ThemedScopeInk.faint)
                 .padding(.bottom, 4)
-            NoteRailAction(label: "Edit",   icon: "pencil",                 isPrimary: true, action: {})
-            NoteRailAction(label: "Star",   icon: "star",                   action: {})
-            NoteRailAction(label: "Pin",    icon: "pin",                    action: {})
-            NoteRailAction(label: "Share",  icon: "square.and.arrow.up",    action: {})
-            NoteRailAction(label: "Export", icon: "arrow.down.doc",         action: {})
+            NoteRailAction(
+                label: isEditing ? "Done" : "Edit",
+                icon:  isEditing ? "checkmark" : "pencil",
+                isPrimary: true,
+                action: { toggleEdit() }
+            )
+            .background(editKeyboardShortcut)
+            NoteRailAction(
+                label: note.isStarred ? "Starred" : "Star",
+                icon:  note.isStarred ? "star.fill" : "star",
+                isActive: note.isStarred,
+                action: { Task { await viewModel.toggleStar(note) } }
+            )
+            NoteRailAction(
+                label: note.isPinned ? "Pinned" : "Pin",
+                icon:  note.isPinned ? "pin.fill" : "pin",
+                isActive: note.isPinned,
+                action: { Task { await viewModel.togglePin(note) } }
+            )
+            NoteRailAction(label: "Share",  icon: "square.and.arrow.up", action: { shareNote() })
+            NoteRailAction(label: "Export", icon: "arrow.down.doc",      action: { exportNote() })
             ThemedScopeRule(.subtle)
                 .padding(.vertical, 4)
-            NoteRailAction(label: "More",   icon: "ellipsis",               action: {})
+            Menu {
+                Button {
+                    copyNote()
+                } label: {
+                    Label("Copy text", systemImage: "doc.on.doc")
+                }
+                if onDelete != nil {
+                    Divider()
+                    Button(role: .destructive) {
+                        Task {
+                            await viewModel.deleteRecording(note)
+                            onDelete?()
+                        }
+                    } label: {
+                        Label("Delete note", systemImage: "trash")
+                    }
+                }
+            } label: {
+                NoteRailAction.menuLabel
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// Hidden Buttons that bind ⌘E and ⌘Return so keyboard-driven users
+    /// can toggle edit / save without reaching for the rail. Lives in a
+    /// `.background` of the Edit row so the buttons are mounted but
+    /// invisible. Each branch on `isEditing` so the wrong shortcut
+    /// doesn't fire in the wrong state.
+    @ViewBuilder
+    private var editKeyboardShortcut: some View {
+        if isEditing {
+            Button("Save & close edit") { toggleEdit() }
+                .keyboardShortcut(.return, modifiers: .command)
+                .hidden()
+        } else {
+            Button("Edit note") { toggleEdit() }
+                .keyboardShortcut("e", modifiers: .command)
+                .hidden()
+        }
+    }
+
+    // MARK: - Action handlers
+
+    private func toggleEdit() {
+        if isEditing {
+            persistEdits()
+            isEditing = false
+            bodyFieldFocused = false
+            titleFieldFocused = false
+        } else {
+            editedText = note.text ?? ""
+            editedTitle = note.title ?? ""
+            isEditing = true
+            // Focus on the next runloop — the TextEditor isn't in the
+            // hierarchy yet on this tick.
+            DispatchQueue.main.async { bodyFieldFocused = true }
+        }
+    }
+
+    private func persistEdits() {
+        let trimmedTitle = editedTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let titleChanged = trimmedTitle != (note.title ?? "")
+        let bodyChanged = editedText != (note.text ?? "")
+        guard titleChanged || bodyChanged else { return }
+        saveTask?.cancel()
+        saveTask = Task {
+            do {
+                var updated = note
+                if bodyChanged { updated.text = editedText }
+                if titleChanged { updated.title = trimmedTitle.isEmpty ? nil : trimmedTitle }
+                updated.lastModified = Date()
+                try await repository.saveRecording(updated)
+            } catch {
+                await MainActor.run {
+                    ToastService.shared.showError("Couldn't save note: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func shareNote() {
+        let text = note.text ?? ""
+        guard !text.isEmpty else { return }
+        let picker = NSSharingServicePicker(items: [text])
+        if let window = NSApp.keyWindow,
+           let content = window.contentView {
+            picker.show(relativeTo: .zero, of: content, preferredEdge: .minY)
+        }
+    }
+
+    private func copyNote() {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(note.text ?? "", forType: .string)
+    }
+
+    private func exportNote() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.plainText]
+        panel.canCreateDirectories = true
+        let base = note.displayTitle
+            .components(separatedBy: CharacterSet(charactersIn: "/:\\"))
+            .joined(separator: "-")
+        panel.nameFieldStringValue = "\(base).md"
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            let header = "# \(note.displayTitle)\n\n"
+            let body = note.text ?? ""
+            let content = header + body + "\n"
+            do {
+                try content.write(to: url, atomically: true, encoding: .utf8)
+                ToastService.shared.showSuccess("Exported to \(url.lastPathComponent)")
+            } catch {
+                ToastService.shared.showError("Export failed: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -237,19 +405,19 @@ struct ScopeNoteDetailView: View {
     private func metaBlock(title: String, rows: [(String, String, Bool)]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("· \(title.uppercased())")
-                .font(NoteFont.mono(size: 8.5, weight: .semibold))
+                .font(ScopeType.mono(size: 8.5, weight: .semibold))
                 .tracking(2.8)
                 .foregroundStyle(ThemedScopeInk.faint)
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                     HStack(alignment: .firstTextBaseline) {
                         Text(row.0)
-                            .font(NoteFont.mono(size: 9))
+                            .font(ScopeType.mono(size: 9, weight: .regular))
                             .tracking(1.4)
                             .foregroundStyle(ThemedScopeInk.faint)
                         Spacer()
                         Text(row.1)
-                            .font(NoteFont.mono(size: 10))
+                            .font(ScopeType.mono(size: 10, weight: .regular))
                             .tracking(0.6)
                             .foregroundStyle(row.2 ? ThemedScopeAccent.brass : ThemedScopeInk.primary)
                     }
@@ -263,16 +431,16 @@ struct ScopeNoteDetailView: View {
         HStack(alignment: .center, spacing: 12) {
             HStack(spacing: 8) {
                 Text("· ATTACHMENTS")
-                    .font(NoteFont.mono(size: 9, weight: .semibold))
+                    .font(ScopeType.mono(size: 9, weight: .semibold))
                     .tracking(2.8)
                     .foregroundStyle(ThemedScopeInk.faint)
                 Text("\(note.screenshots.count)")
-                    .font(NoteFont.mono(size: 9))
+                    .font(ScopeType.mono(size: 9, weight: .regular))
                     .foregroundStyle(ThemedScopeInk.faint)
             }
             if note.screenshots.isEmpty {
                 Text("none yet")
-                    .font(NoteFont.mono(size: 9))
+                    .font(ScopeType.mono(size: 9, weight: .regular))
                     .tracking(1.6)
                     .foregroundStyle(ThemedScopeInk.faint)
             } else {
@@ -281,9 +449,9 @@ struct ScopeNoteDetailView: View {
                 }
             }
             Spacer()
-            Button(action: {}) {
+            Button(action: pickAttachment) {
                 Text("+ ADD")
-                    .font(NoteFont.mono(size: 9, weight: .semibold))
+                    .font(ScopeType.mono(size: 9, weight: .semibold))
                     .tracking(2.2)
                     .foregroundStyle(ThemedScopeAccent.note)
                     .padding(.horizontal, 8)
@@ -307,11 +475,63 @@ struct ScopeNoteDetailView: View {
         )
     }
 
+    // MARK: - Attachment picker
+
+    private func pickAttachment() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.message = "Attach files to this note"
+        panel.begin { response in
+            guard response == .OK else { return }
+            for url in panel.urls {
+                addAttachment(from: url)
+            }
+        }
+    }
+
+    private func addAttachment(from url: URL) {
+        guard let result = AttachmentStorage.save(from: url, recordingId: note.id) else { return }
+        let kind = AttachmentKind.from(extension: url.pathExtension)
+        var width: Int?
+        var height: Int?
+        if kind == .image, let image = NSImage(contentsOf: url) {
+            width = Int(image.size.width)
+            height = Int(image.size.height)
+        }
+        let attachment = RecordingAttachment(
+            filename: result.filename,
+            originalName: url.lastPathComponent,
+            kind: kind,
+            fileSizeBytes: result.size,
+            width: width,
+            height: height
+        )
+        Task {
+            do {
+                let fresh = try await repository.fetchRecording(id: note.id)
+                var assets = fresh?.assets ?? TalkieObjectAssets()
+                var list = assets.attachments ?? []
+                list.append(attachment)
+                assets.attachments = list
+                try await repository.updateAssets(id: note.id, assetsJSON: assets.toJSON())
+                await MainActor.run {
+                    ToastService.shared.showSuccess("Attached \(attachment.originalName)")
+                }
+            } catch {
+                await MainActor.run {
+                    ToastService.shared.showError("Couldn't attach: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
     @ViewBuilder
     private func attachmentChip(filename: String, meta: String) -> some View {
         HStack(spacing: 8) {
             Text("▢")
-                .font(NoteFont.mono(size: 11))
+                .font(ScopeType.mono(size: 11, weight: .regular))
                 .foregroundStyle(ThemedScopeAccent.capture)
             VStack(alignment: .leading, spacing: 1) {
                 Text(filename)
@@ -320,7 +540,7 @@ struct ScopeNoteDetailView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Text(meta.uppercased())
-                    .font(NoteFont.mono(size: 8.5))
+                    .font(ScopeType.mono(size: 8.5, weight: .regular))
                     .tracking(1.4)
                     .foregroundStyle(ThemedScopeInk.faint)
             }
@@ -349,40 +569,68 @@ private struct NoteRailAction: View {
     let label: String
     let icon: String
     var isPrimary: Bool = false
+    /// When true, render the row as a sticky toggled state (used for
+    /// Pin/Star when the value is set). Distinct from `isPrimary`,
+    /// which signals the most-common action regardless of state.
+    var isActive: Bool = false
     let action: () -> Void
 
     @State private var hovered = false
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 9) {
-                Image(systemName: icon)
-                    .font(.system(size: 12, weight: isPrimary ? .semibold : .regular))
-                    .frame(width: 14, alignment: .center)
-                Text(label)
-                    .font(.system(size: 12, weight: isPrimary ? .medium : .regular))
-                Spacer(minLength: 0)
-            }
-            .foregroundStyle(foregroundColor)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(backgroundFill)
-            )
+            content
         }
         .buttonStyle(.plain)
         .onHover { hovered = $0; if hovered { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() } }
         .animation(.easeOut(duration: 0.12), value: hovered)
+        .animation(.easeOut(duration: 0.12), value: isActive)
+    }
+
+    private var content: some View {
+        HStack(spacing: 9) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: (isPrimary || isActive) ? .semibold : .regular))
+                .frame(width: 14, alignment: .center)
+            Text(label)
+                .font(.system(size: 12, weight: (isPrimary || isActive) ? .medium : .regular))
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(foregroundColor)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 3)
+                .fill(backgroundFill)
+        )
+    }
+
+    /// Reusable label for the rail's "More" menu button so the visual
+    /// rhythm matches the rest of the rail rows.
+    static var menuLabel: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 12, weight: .regular))
+                .frame(width: 14, alignment: .center)
+            Text("More")
+                .font(.system(size: 12, weight: .regular))
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(ThemedScopeInk.faint)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .contentShape(Rectangle())
     }
 
     private var foregroundColor: Color {
+        if isActive { return ThemedScopeAccent.amber }
         if isPrimary { return hovered ? ThemedScopeAccent.amber : ThemedScopeAccent.brass }
         if hovered { return ThemedScopeInk.primary }
         return ThemedScopeInk.faint
     }
 
     private var backgroundFill: Color {
+        if isActive { return ThemedScopeAccent.amber.opacity(hovered ? 0.18 : 0.1) }
         if isPrimary {
             return hovered ? ThemedScopeAccent.amber.opacity(0.14) : ThemedScopeAccent.amber.opacity(0.07)
         }

@@ -14,6 +14,7 @@
 //
 
 import Foundation
+import AppKit
 import TalkieKit
 
 private let log = Log(.workflow)
@@ -85,7 +86,13 @@ enum WalkieToolCatalog {
     /// OpenAI tool definitions (Chat Completions tools API).
     static func toolDefinitions() -> [[String: Any]] {
         return [
-            [
+            talkieCliTool(),
+            captureMarkupTool(),
+        ]
+    }
+
+    private static func talkieCliTool() -> [String: Any] {
+        [
                 "type": "function",
                 "function": [
                     "name": "talkie_cli",
@@ -112,7 +119,34 @@ enum WalkieToolCatalog {
                         "additionalProperties": false,
                     ],
                 ],
-            ]
+        ]
+    }
+
+    private static func captureMarkupTool() -> [String: Any] {
+        [
+            "type": "function",
+            "function": [
+                "name": "capture_markup_open",
+                "description": """
+                Open Talkie's agentic screenshot markup bay for an image file on disk. \
+                Optionally pass a natural-language instruction for the agent to apply markup.
+                """,
+                "parameters": [
+                    "type": "object",
+                    "properties": [
+                        "path": [
+                            "type": "string",
+                            "description": "Absolute path to a PNG/JPEG screenshot file.",
+                        ],
+                        "instruction": [
+                            "type": "string",
+                            "description": "Optional markup instruction, e.g. highlight the error line.",
+                        ],
+                    ],
+                    "required": ["path"],
+                    "additionalProperties": false,
+                ],
+            ],
         ]
     }
 }
@@ -126,9 +160,54 @@ enum WalkieToolExecutor {
         switch name {
         case "talkie_cli":
             return try await runTalkieCLI(arguments: arguments)
+        case "capture_markup_open":
+            return try await runCaptureMarkupOpen(arguments: arguments)
         default:
             throw WalkieToolError.unknownTool(name)
         }
+    }
+
+    // MARK: - capture_markup_open
+
+    private static func runCaptureMarkupOpen(arguments: [String: Any]) async throws -> WalkieToolInvocation {
+        guard let path = arguments["path"] as? String, !path.isEmpty else {
+            throw WalkieToolError.missingArgs
+        }
+        let instruction = arguments["instruction"] as? String
+        var components = URLComponents()
+        components.scheme = "talkie"
+        components.host = "capture"
+        components.path = "/markup"
+        var query: [URLQueryItem] = [
+            URLQueryItem(name: "path", value: path),
+        ]
+        if let instruction, !instruction.isEmpty {
+            query.append(URLQueryItem(name: "instruction", value: instruction))
+        }
+        components.queryItems = query
+        guard let url = components.url else {
+            throw WalkieToolError.execFailed("Invalid capture markup URL")
+        }
+
+        let display = "talkie://capture/markup path=\(path)"
+        var invocation = WalkieToolInvocation(
+            toolName: "capture_markup_open",
+            displayCommand: display,
+            args: [path]
+        )
+
+        let started = Date()
+        let opened = await MainActor.run {
+            NSWorkspace.shared.open(url)
+        }
+        invocation.durationMs = Int(Date().timeIntervalSince(started) * 1000)
+        if opened {
+            invocation.status = .done
+            invocation.output = "{\"ok\":true,\"url\":\"\(url.absoluteString)\"}"
+        } else {
+            invocation.status = .failed("Talkie did not open the markup URL")
+        }
+        return invocation
     }
 
     // MARK: - talkie_cli

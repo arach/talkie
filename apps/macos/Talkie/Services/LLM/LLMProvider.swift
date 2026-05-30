@@ -67,7 +67,10 @@ extension LLMProvider {
 
     /// Default model ID from config file
     var defaultModelId: String {
-        LLMConfig.shared.defaultModel(for: id) ?? ""
+        if id == "apple-local" {
+            return "apple-on-device"
+        }
+        return LLMConfig.shared.defaultModel(for: id) ?? ""
     }
 
     /// Provider display name from config (falls back to protocol property)
@@ -110,6 +113,7 @@ struct GenerationOptions {
     var maxTokens: Int = 512
     var stopSequences: [String] = []
     var systemPrompt: String?
+    var jsonMode: Bool = false
 
     static let `default` = GenerationOptions()
 }
@@ -123,8 +127,32 @@ class LLMProviderRegistry {
 
     private(set) var providers: [LLMProvider] = []
     private(set) var allModels: [LLMModel] = []
-    var selectedProviderId: String?
-    var selectedModelId: String?
+
+    // Persisted across launches via UserDefaults so the user's last pick
+    // sticks instead of falling back to first-available (Apple Local).
+    private static let providerKey = "LLMRegistry.selectedProviderId"
+    private static let modelKey = "LLMRegistry.selectedModelId"
+
+    var selectedProviderId: String? {
+        didSet { persistSelection() }
+    }
+    var selectedModelId: String? {
+        didSet { persistSelection() }
+    }
+
+    private func persistSelection() {
+        let defaults = UserDefaults.standard
+        if let id = selectedProviderId {
+            defaults.set(id, forKey: Self.providerKey)
+        } else {
+            defaults.removeObject(forKey: Self.providerKey)
+        }
+        if let id = selectedModelId {
+            defaults.set(id, forKey: Self.modelKey)
+        } else {
+            defaults.removeObject(forKey: Self.modelKey)
+        }
+    }
 
     /// Get recommended models for a specific provider
     func recommendedModels(for providerId: String) -> [LLMModel] {
@@ -142,6 +170,11 @@ class LLMProviderRegistry {
     }
 
     private init() {
+        // Restore the last picked provider/model before any UI binds.
+        let defaults = UserDefaults.standard
+        selectedProviderId = defaults.string(forKey: Self.providerKey)
+        selectedModelId = defaults.string(forKey: Self.modelKey)
+
         // Register providers synchronously so they're available immediately
         registerProvidersSync()
 
@@ -167,6 +200,7 @@ class LLMProviderRegistry {
         providers.append(AnthropicProvider())
         providers.append(GeminiProvider())
         providers.append(GroqProvider())
+        providers.append(ServerProvider())
 
     }
 
@@ -217,7 +251,7 @@ class LLMProviderRegistry {
     /// Get the first available provider with its default model
     /// Returns (provider, modelId) tuple or nil if no providers available
     func firstAvailableProvider() async -> (provider: LLMProvider, modelId: String)? {
-        let preferredOrder = LLMConfig.shared.preferredProviderOrder
+        let preferredOrder = orderedProviderIds()
 
         for providerId in preferredOrder {
             if let provider = provider(for: providerId),
@@ -232,12 +266,30 @@ class LLMProviderRegistry {
     func resolveProviderAndModel() async -> (provider: LLMProvider, modelId: String)? {
         // First try user's selection
         if let provider = selectedProvider,
-           let model = selectedModel {
-            return (provider, model.id)
+           await provider.isAvailable {
+            if let model = selectedModel {
+                return (provider, model.id)
+            }
+            let fallbackModelId = provider.defaultModelId
+            if !fallbackModelId.isEmpty {
+                return (provider, fallbackModelId)
+            }
         }
 
         // Fall back to first available
         return await firstAvailableProvider()
+    }
+
+    private func orderedProviderIds() -> [String] {
+        var ids: [String] = []
+        var seen = Set<String>()
+
+        for providerId in LLMConfig.shared.preferredProviderOrder + providers.map(\.id) {
+            guard seen.insert(providerId).inserted else { continue }
+            ids.append(providerId)
+        }
+
+        return ids
     }
 }
 

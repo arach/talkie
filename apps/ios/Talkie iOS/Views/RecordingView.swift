@@ -655,8 +655,7 @@ struct RecordingView: View {
                 )
             }
 
-            // Update widget with new memo
-            PersistenceController.refreshWidgetData(context: viewContext)
+            VoiceMemoStore.publishChange(context: viewContext)
 
             let memoObjectID = newMemo.objectID
 

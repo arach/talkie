@@ -12,6 +12,113 @@ import Observation
 import TalkieKit
 
 private let logger = Logger(subsystem: "to.talkie.app.mac", category: "Workflow")
+
+// MARK: - Workflow Input Contract
+
+struct WorkflowInputContract: Codable, Hashable {
+    var acceptedRecordTypes: [WorkflowRecordType]
+    var requiredAssets: [WorkflowAssetKind]
+    var surfaces: [WorkflowInvocationSurface]
+    var parameters: [WorkflowParameterSpec]
+
+    init(
+        acceptedRecordTypes: [WorkflowRecordType] = [.memo],
+        requiredAssets: [WorkflowAssetKind] = [.transcript],
+        surfaces: [WorkflowInvocationSurface] = [.library, .memoDetail, .manual],
+        parameters: [WorkflowParameterSpec] = []
+    ) {
+        self.acceptedRecordTypes = acceptedRecordTypes
+        self.requiredAssets = requiredAssets
+        self.surfaces = surfaces
+        self.parameters = parameters
+    }
+
+    static let memoTranscript = WorkflowInputContract()
+
+    static let captureImages = WorkflowInputContract(
+        acceptedRecordTypes: [.capture, .memo, .note],
+        requiredAssets: [.screenshot],
+        surfaces: [.captureContextMenu, .library, .memoDetail, .manual, .automation],
+        parameters: [
+            WorkflowParameterSpec(
+                key: "screenshots",
+                label: "Screenshots",
+                valueType: .imageSet,
+                required: true,
+                templateKey: "SCREENSHOT_CONTEXT",
+                help: "Screenshots and capture metadata supplied by the selected memo, note, or capture."
+            )
+        ]
+    )
+
+    var requiresTranscript: Bool {
+        requiredAssets.contains(.transcript)
+    }
+
+    func accepts(recordType: WorkflowRecordType, assetKind: WorkflowAssetKind? = nil) -> Bool {
+        guard acceptedRecordTypes.contains(recordType) else { return false }
+        guard let assetKind else { return true }
+        return requiredAssets.contains(assetKind) || requiredAssets.isEmpty
+    }
+
+    func accepts(_ objectType: TalkieObjectType, assetKind: WorkflowAssetKind? = nil) -> Bool {
+        guard let recordType = WorkflowRecordType(objectType) else { return false }
+        return accepts(recordType: recordType, assetKind: assetKind)
+    }
+}
+
+enum WorkflowRecordType: String, Codable, CaseIterable, Hashable {
+    case memo
+    case dictation
+    case note
+    case selection
+    case capture
+
+    init?(_ objectType: TalkieObjectType) {
+        self.init(rawValue: objectType.rawValue)
+    }
+}
+
+enum WorkflowAssetKind: String, Codable, CaseIterable, Hashable {
+    case transcript
+    case audio
+    case screenshot
+    case clip
+    case image
+    case text
+}
+
+enum WorkflowInvocationSurface: String, Codable, CaseIterable, Hashable {
+    case manual
+    case library
+    case memoDetail
+    case captureContextMenu
+    case compose
+    case voice
+    case automation
+}
+
+struct WorkflowParameterSpec: Codable, Hashable, Identifiable {
+    var id: String { key }
+    var key: String
+    var label: String
+    var valueType: WorkflowParameterValueType
+    var required: Bool
+    var defaultValue: String?
+    var templateKey: String?
+    var help: String?
+}
+
+enum WorkflowParameterValueType: String, Codable, CaseIterable, Hashable {
+    case string
+    case boolean
+    case number
+    case text
+    case image
+    case imageSet
+    case recordReference
+}
+
 // MARK: - Workflow Definition
 
 struct WorkflowDefinition: Identifiable, Codable, Hashable {
@@ -28,6 +135,7 @@ struct WorkflowDefinition: Identifiable, Codable, Hashable {
     var icon: String
     var color: WorkflowColor
     var maintainer: String?  // e.g., "talkie" for official starter pack, "@username" for community
+    var inputs: WorkflowInputContract
     var steps: [WorkflowStep]
     var isEnabled: Bool
     var isPinned: Bool  // Pinned workflows appear in iOS MAC ACTIONS section
@@ -67,6 +175,7 @@ struct WorkflowDefinition: Identifiable, Codable, Hashable {
         icon: String = "wand.and.stars",
         color: WorkflowColor = .blue,
         maintainer: String? = nil,
+        inputs: WorkflowInputContract = .memoTranscript,
         steps: [WorkflowStep] = [],
         isEnabled: Bool = true,
         isPinned: Bool = false,
@@ -82,6 +191,7 @@ struct WorkflowDefinition: Identifiable, Codable, Hashable {
         self.icon = icon
         self.color = color
         self.maintainer = maintainer
+        self.inputs = inputs
         self.steps = steps
         self.isEnabled = isEnabled
         self.isPinned = isPinned
@@ -101,6 +211,7 @@ struct WorkflowDefinition: Identifiable, Codable, Hashable {
         icon = try container.decode(String.self, forKey: .icon)
         color = try container.decode(WorkflowColor.self, forKey: .color)
         maintainer = try container.decodeIfPresent(String.self, forKey: .maintainer)
+        inputs = try container.decodeIfPresent(WorkflowInputContract.self, forKey: .inputs) ?? .memoTranscript
         steps = try container.decode([WorkflowStep].self, forKey: .steps)
         isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
         isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
@@ -112,7 +223,7 @@ struct WorkflowDefinition: Identifiable, Codable, Hashable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, description, icon, color, maintainer, steps, isEnabled, isPinned, autoRun, autoRunOrder, source, createdAt, modifiedAt
+        case id, name, description, icon, color, maintainer, inputs, steps, isEnabled, isPinned, autoRun, autoRunOrder, source, createdAt, modifiedAt
     }
 
     private static var defaultGeminiModelId: String {
@@ -831,11 +942,12 @@ enum WorkflowLLMProvider: String, Codable, CaseIterable {
     case anthropic
     case groq
     case grok
+    case minimax
     // Retained for decode compatibility with older workflows.
     case mlx
 
     static var allCases: [WorkflowLLMProvider] {
-        [.gemini, .openai, .anthropic, .groq, .grok]
+        [.gemini, .openai, .anthropic, .groq, .grok, .minimax]
     }
 
     var displayName: String {
@@ -845,6 +957,7 @@ enum WorkflowLLMProvider: String, Codable, CaseIterable {
         case .anthropic: return "Anthropic"
         case .groq: return "Groq"
         case .grok: return "Grok"
+        case .minimax: return "MiniMax"
         case .mlx: return "MLX (Legacy)"
         }
     }
@@ -856,7 +969,10 @@ enum WorkflowLLMProvider: String, Codable, CaseIterable {
 
     /// Provider ID used by the LLMProviderRegistry
     var registryId: String {
-        rawValue
+        if self == .minimax {
+            return "server"
+        }
+        return rawValue
     }
 
     var models: [WorkflowModelOption] {
@@ -866,7 +982,7 @@ enum WorkflowLLMProvider: String, Codable, CaseIterable {
             if !configuredModels.isEmpty {
                 return configuredModels
             }
-        case .grok, .mlx:
+        case .grok, .minimax, .mlx:
             break
         }
 
@@ -919,6 +1035,21 @@ enum WorkflowLLMProvider: String, Codable, CaseIterable {
                                    costTier: .balanced, inputCostPer1M: 0.30, outputCostPer1M: 0.50),
                 WorkflowModelOption(id: "grok-3", name: "Grok 3", contextWindow: 131072,
                                    costTier: .capable, inputCostPer1M: 3.00, outputCostPer1M: 15.00),
+            ]
+        case .minimax:
+            return [
+                WorkflowModelOption(id: "server:minimax:MiniMax-M2.7", name: "MiniMax M2.7", contextWindow: 204800,
+                                   costTier: .capable, inputCostPer1M: 0.50, outputCostPer1M: 1.50, maxOutputTokens: 8192),
+                WorkflowModelOption(id: "server:minimax:MiniMax-M2.7-highspeed", name: "MiniMax M2.7 Highspeed", contextWindow: 204800,
+                                   costTier: .capable, inputCostPer1M: 0.50, outputCostPer1M: 1.50, maxOutputTokens: 8192),
+                WorkflowModelOption(id: "server:minimax:MiniMax-M2", name: "MiniMax M2", contextWindow: 204800,
+                                   costTier: .budget, inputCostPer1M: 0.50, outputCostPer1M: 1.50, maxOutputTokens: 8192),
+                WorkflowModelOption(id: "server:minimax:MiniMax-M2.1", name: "MiniMax M2.1", contextWindow: 204800,
+                                   costTier: .balanced, inputCostPer1M: 0.50, outputCostPer1M: 1.50, maxOutputTokens: 8192),
+                WorkflowModelOption(id: "server:minimax:MiniMax-M2.5", name: "MiniMax M2.5", contextWindow: 204800,
+                                   costTier: .capable, inputCostPer1M: 0.50, outputCostPer1M: 1.50, maxOutputTokens: 8192),
+                WorkflowModelOption(id: "server:minimax:MiniMax-M2.5-highspeed", name: "MiniMax M2.5 Highspeed", contextWindow: 204800,
+                                   costTier: .capable, inputCostPer1M: 0.50, outputCostPer1M: 1.50, maxOutputTokens: 8192),
             ]
         case .mlx:
             return []
@@ -1059,6 +1190,31 @@ struct LLMStepConfig: Codable {
         }
     }
 
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        provider = try container.decodeIfPresent(WorkflowLLMProvider.self, forKey: .provider)
+        modelId = try container.decodeIfPresent(String.self, forKey: .modelId)
+        costTier = try container.decodeIfPresent(LLMCostTier.self, forKey: .costTier)
+        autoRoute = try container.decodeIfPresent(Bool.self, forKey: .autoRoute) ?? true
+        prompt = try container.decode(String.self, forKey: .prompt)
+        systemPrompt = try container.decodeIfPresent(String.self, forKey: .systemPrompt)
+        temperature = try container.decodeIfPresent(Double.self, forKey: .temperature) ?? 0.7
+        maxTokens = try container.decodeIfPresent(Int.self, forKey: .maxTokens) ?? 1024
+        topP = try container.decodeIfPresent(Double.self, forKey: .topP) ?? 0.9
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case provider
+        case modelId
+        case costTier
+        case autoRoute
+        case prompt
+        case systemPrompt
+        case temperature
+        case maxTokens
+        case topP
+    }
+
     /// Resolve the effective provider and model for execution
     /// - Parameters:
     ///   - availableProviders: Providers that have API keys configured
@@ -1079,7 +1235,7 @@ struct LLMStepConfig: Codable {
 
         // Auto-route: pick best available provider for this tier
         // Priority: Groq (free) > Gemini (cheap) > OpenAI > Anthropic
-        let priorityOrder: [WorkflowLLMProvider] = [.groq, .gemini, .openai, .anthropic]
+        let priorityOrder: [WorkflowLLMProvider] = [.groq, .gemini, .openai, .anthropic, .minimax]
 
         for candidate in priorityOrder {
             if availableProviders.contains(candidate) {
@@ -2449,6 +2605,8 @@ class WorkflowManager {
             description: workflow.description,
             icon: workflow.icon,
             color: workflow.color,
+            maintainer: workflow.maintainer,
+            inputs: workflow.inputs,
             steps: workflow.steps,
             isEnabled: workflow.isEnabled,
             isPinned: false, // Duplicates start unpinned
@@ -2595,6 +2753,8 @@ class WorkflowManager {
                     description: starter.description,
                     icon: starter.icon,
                     color: starter.color,
+                    maintainer: starter.maintainer,
+                    inputs: starter.inputs,
                     steps: starter.steps,
                     isEnabled: workflows[index].isEnabled,  // Preserve
                     isPinned: workflows[index].isPinned,    // Preserve
