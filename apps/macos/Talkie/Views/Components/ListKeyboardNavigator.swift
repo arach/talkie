@@ -98,6 +98,11 @@ final class ListKeyboardNavigator<ItemID: Hashable> {
     }
 
     private func handleKeyEvent(_ event: NSEvent) -> NSEvent? {
+        // Yield entirely while a markup session owns the keyboard. Otherwise
+        // arrows / Tab / Enter / Escape silently drive the underlying list and
+        // swap the detail pane out from under the markup canvas.
+        if SettingsManager.shared.isMarkupSessionActive { return event }
+
         let hasShift = event.modifierFlags.contains(.shift)
         let hasCmd = event.modifierFlags.contains(.command)
 

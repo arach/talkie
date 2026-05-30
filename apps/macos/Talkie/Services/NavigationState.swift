@@ -51,30 +51,34 @@ final class NavigationState {
     /// Replaced on every `navigate(to:params:)` call (not merged).
     var params: [String: AnyHashable] = [:]
 
+    private var backStack: [NavigationSection] = []
+    private let maxBackStackCount = 50
+    private var isRestoringHistory = false
+
     // MARK: - Navigation Methods
 
     /// Navigate to a section with optional params dictionary
     func navigate(to section: NavigationSection, params: [String: AnyHashable] = [:]) {
-        previousSection = selectedSection
+        rememberCurrentSection(beforeNavigatingTo: section)
         // Set params BEFORE selectedSection — the destination view reads params
         // in onAppear, which fires as soon as selectedSection changes.
         self.params = params
         selectedSection = section
 
-        // Clear item selections when navigating away from recording screens
-        let recordingSections: Set<NavigationSection> = [.allMemos, .recordings, .dictations]
-        if !recordingSections.contains(section) {
-            selectedMemoID = nil
-            selectedDictationID = nil
-            dictationFilter = .all
-        }
+        applySectionSideEffects(for: section)
+    }
+
+    /// Mirror sidebar/chrome selections into the central state while preserving history.
+    func navigateFromUI(to section: NavigationSection) {
+        navigate(to: section)
     }
 
     /// Navigate to settings with a specific subsection
     func navigateToSettings(_ section: SettingsSection) {
-        previousSection = selectedSection
+        rememberCurrentSection(beforeNavigatingTo: .settings)
         selectedSection = .settings
         settingsSection = section
+        applySectionSideEffects(for: .settings)
     }
 
     /// Navigate to a specific memo — opens unified Recordings with selection + detail
@@ -103,11 +107,54 @@ final class NavigationState {
         ])
     }
 
-    /// Go back to previous section
-    func goBack() {
-        if let previous = previousSection {
-            selectedSection = previous
-            previousSection = nil
+    /// Go back to the previous app section.
+    @discardableResult
+    func goBack() -> Bool {
+        if SettingsManager.shared.isMarkupSessionActive {
+            NotificationCenter.default.post(name: .dismissCaptureMarkupHost, object: nil)
+            return true
+        }
+
+        guard let previous = backStack.popLast() ?? previousSection,
+              previous != selectedSection else {
+            previousSection = backStack.last
+            return false
+        }
+
+        isRestoringHistory = true
+        defer { isRestoringHistory = false }
+
+        params = [:]
+        selectedSection = previous
+        previousSection = backStack.last
+        applySectionSideEffects(for: previous)
+
+        return true
+    }
+
+    private func rememberCurrentSection(beforeNavigatingTo destination: NavigationSection) {
+        guard !isRestoringHistory,
+              let current = selectedSection,
+              current != destination else {
+            return
+        }
+
+        if backStack.last != current {
+            backStack.append(current)
+            if backStack.count > maxBackStackCount {
+                backStack.removeFirst(backStack.count - maxBackStackCount)
+            }
+        }
+
+        previousSection = current
+    }
+
+    private func applySectionSideEffects(for section: NavigationSection) {
+        let recordingSections: Set<NavigationSection> = [.allMemos, .recordings, .dictations]
+        if !recordingSections.contains(section) {
+            selectedMemoID = nil
+            selectedDictationID = nil
+            dictationFilter = .all
         }
     }
 
@@ -119,6 +166,14 @@ final class NavigationState {
 
     func navigateToAgent() {
         navigate(to: .liveDashboard)
+    }
+
+    func navigateToLearn(articleID: String? = nil) {
+        var params: [String: AnyHashable] = [:]
+        if let articleID, !articleID.isEmpty {
+            params["learnArticleId"] = articleID
+        }
+        navigate(to: .liveDashboard, params: params)
     }
 
     func navigateToDictations() {

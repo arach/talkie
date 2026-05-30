@@ -345,31 +345,39 @@ public enum ScopePanel {
 /// against the light. Additive to the broader Scope token ladder; stays
 /// scoped to the palette so global app theming is untouched.
 public enum ScopePalette {
-    // Substrate ladder — PORCELAIN base, PEARL lift, STEEL sink.
-    public static let bg = Color.hex("EAEEF1")          // base panel
-    public static let bgRaised = Color.hex("F2F5F7")    // search field, footer
-    public static let bgSunk = Color.hex("DFE3E8")      // section header strip
+    // Substrate ladder — reconciled to the canonical cool-neutral Scope
+    // canvas. The earlier PORCELAIN/PEARL/STEEL hexes carried a faint blue
+    // cast that read as a separate surface next to the neutral lists and
+    // chrome; these now map 1:1 onto `ScopeCanvas` so the inspector /
+    // command palette sit in the same paper as everything else.
+    //   bg      → ScopeCanvas.surface  (pane / base panel)
+    //   bgRaised→ ScopeCanvas.canvas   (search field, footer, raised lift)
+    //   bgSunk  → ScopeCanvas.canvasAlt (section-header sink)
+    public static let bg = Color.hex("EFEFEE")          // base panel
+    public static let bgRaised = Color.hex("F8F8F7")    // search field, footer
+    public static let bgSunk = Color.hex("ECECEB")      // section header strip
 
-    // Ink ladder — cool dark, matches SCOPE.ink family.
-    public static let ink = Color.hex("232423")
-    public static let inkFaint = Color.hex("232423").opacity(0.62)
-    public static let inkFainter = Color.hex("232423").opacity(0.40)
-    public static let inkSubtle = Color.hex("232423").opacity(0.24)
+    // Ink ladder — cool-neutral 0F1112 base, matches the `ScopeInk` family
+    // (no warm undertone). Same opacity steps as before.
+    public static let ink = Color.hex("0F1112")
+    public static let inkFaint = Color.hex("0F1112").opacity(0.62)
+    public static let inkFainter = Color.hex("0F1112").opacity(0.40)
+    public static let inkSubtle = Color.hex("0F1112").opacity(0.24)
 
-    // Amber accent — slightly deeper than the dark-mode amber so it
-    // carries against a light substrate without washing out.
+    // Amber accent — canonical website copper (identical to
+    // `ScopeAmber.solid`; `amberDeep` matches `ScopeBrass.deep`).
     public static let amber = Color.hex("C47D1C")
     public static let amberFaint = Color.hex("C47D1C").opacity(0.10)
     public static let amberSoft = Color.hex("C47D1C").opacity(0.28)
     public static let amberDeep = Color.hex("7A521A")
     public static let glyphOnAmber = Color.white
 
-    // Rules + edges — sharper than the dark-glass era. Dark hairlines
-    // on light substrate read as crisp lines, not glow.
-    public static let edge = Color.hex("232423").opacity(0.10)
-    public static let edgeStrong = Color.hex("232423").opacity(0.22)
-    public static let rule = Color.hex("232423").opacity(0.10)
-    public static let ruleStrong = Color.hex("232423").opacity(0.18)
+    // Rules + edges — cool-neutral 0F1112 base (matches `ScopeEdge`), so
+    // hairlines read as the same crisp neutral lines used elsewhere.
+    public static let edge = Color.hex("0F1112").opacity(0.10)
+    public static let edgeStrong = Color.hex("0F1112").opacity(0.22)
+    public static let rule = Color.hex("0F1112").opacity(0.10)
+    public static let ruleStrong = Color.hex("0F1112").opacity(0.18)
 }
 
 // MARK: - Typography presets

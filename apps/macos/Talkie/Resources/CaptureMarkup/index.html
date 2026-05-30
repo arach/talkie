@@ -9,13 +9,21 @@
 <body>
   <div id="app">
     <header class="tool-toolbar" id="tool-toolbar">
-      <!-- Left: tool selection -->
-      <div class="toolbar-tools">
+      <!-- Left: canvas modes, then drawing tools. -->
+      <div class="toolbar-tools viewport-tools" aria-label="Canvas modes">
+        <button type="button" class="tool-btn mode-tool" data-tool="select" title="Select (V)"><span class="glyph">↖</span><span class="label">Select</span></button>
+        <button type="button" class="tool-btn mode-tool" data-tool="hand" title="Hand · pan (H / Space)"><span class="glyph">✋</span><span class="label">Hand</span></button>
+      </div>
+
+      <span class="toolbar-divider" aria-hidden="true"></span>
+
+      <div class="toolbar-tools drawing-tools" aria-label="Drawing tools">
         <button type="button" class="tool-btn" data-tool="rect" title="Rect (R)"><span class="glyph">▢</span><span class="label">Rect</span></button>
         <button type="button" class="tool-btn" data-tool="arrow" title="Arrow (A)"><span class="glyph">↗</span><span class="label">Arrow</span></button>
         <button type="button" class="tool-btn" data-tool="line" title="Line (L)"><span class="glyph">—</span><span class="label">Line</span></button>
         <button type="button" class="tool-btn" data-tool="text" title="Text (T)"><span class="glyph">T</span><span class="label">Text</span></button>
         <button type="button" class="tool-btn" data-tool="blur" title="Blur (B)"><span class="glyph">▒</span><span class="label">Blur</span></button>
+        <button type="button" class="tool-btn" data-tool="clone" title="Clone a region (C)"><span class="glyph">⧉</span><span class="label">Clone</span></button>
       </div>
 
       <!-- "Editing selection" affordance. Shown only while a layer is selected
@@ -53,14 +61,45 @@
           </div>
         </div>
 
-        <span class="style-divider" data-group="font-divider" aria-hidden="true"></span>
+        <span class="style-divider text-only" data-group="font-divider" aria-hidden="true"></span>
 
-        <div class="style-group" data-group="font-size">
+        <div class="style-group text-only" data-group="font-size">
           <span class="style-label">size</span>
           <div class="style-row">
             <button type="button" class="style-btn font-pick" data-style="font-size" data-value="12" title="Small">S</button>
             <button type="button" class="style-btn font-pick active" data-style="font-size" data-value="16" title="Medium">M</button>
             <button type="button" class="style-btn font-pick" data-style="font-size" data-value="22" title="Large">L</button>
+          </div>
+        </div>
+
+        <span class="style-divider text-only" aria-hidden="true"></span>
+
+        <div class="style-group text-only" data-group="font-family">
+          <span class="style-label">font</span>
+          <div class="style-row">
+            <button type="button" class="style-btn font-fam" data-style="font-family" data-value="sans" title="Sans" style="font-family: -apple-system, system-ui, sans-serif">Aa</button>
+            <button type="button" class="style-btn font-fam" data-style="font-family" data-value="serif" title="Serif" style="font-family: ui-serif, Georgia, serif">Aa</button>
+            <button type="button" class="style-btn font-fam active" data-style="font-family" data-value="mono" title="Mono" style="font-family: ui-monospace, monospace">Aa</button>
+          </div>
+        </div>
+
+        <span class="style-divider text-only" aria-hidden="true"></span>
+
+        <div class="style-group text-only" data-group="decoration">
+          <span class="style-label">style</span>
+          <div class="style-row">
+            <button type="button" class="style-btn deco" data-style="bold" data-toggle title="Bold" style="font-weight: 700">B</button>
+            <button type="button" class="style-btn deco" data-style="italic" data-toggle title="Italic" style="font-style: italic; font-family: ui-serif, Georgia, serif">I</button>
+          </div>
+        </div>
+
+        <span class="style-divider text-only" aria-hidden="true"></span>
+
+        <div class="style-group text-only" data-group="label-style">
+          <span class="style-label">bg</span>
+          <div class="style-row">
+            <button type="button" class="style-btn labelbg active" data-style="plain" data-value="0" title="Pill background">▭</button>
+            <button type="button" class="style-btn labelbg" data-style="plain" data-value="1" title="Plain text">T</button>
           </div>
         </div>
       </div>
@@ -74,13 +113,13 @@
         </div>
         <div id="layer-list"></div>
       </aside>
+      <div class="rail-resizer" data-resize="layers" title="Drag to resize"></div>
       <section class="canvas-wrap">
         <canvas id="canvas"></canvas>
 
         <!-- Floating canvas zoom cluster (Hudson pattern). Lives over the
-             canvas, not in the toolbar — viewport controls are a different
-             category from drawing. Undo/redo ride along here too so the
-             accessible bindings stay reachable without polluting the top bar. -->
+             canvas, not in the toolbar. Undo/redo ride along here so the
+             accessible bindings stay reachable without widening the top bar. -->
         <div class="canvas-zoom-cluster" id="canvas-zoom-cluster">
           <button type="button" class="zoom-btn" data-action="undo" title="Undo (⌘Z)">↶</button>
           <button type="button" class="zoom-btn" data-action="redo" title="Redo (⌘⇧Z)">↷</button>
@@ -92,7 +131,23 @@
           <button type="button" class="zoom-btn zoom-btn-label" data-action="zoom-fit" title="Fit (F)">FIT</button>
         </div>
       </section>
+      <div class="rail-resizer" data-resize="inspector" title="Drag to resize"></div>
       <aside class="inspector-rail" id="inspector-rail">
+        <!-- Work Thread — the streamed run log. Lives in the right rail
+             alongside the inspector; the rail is contextual (thread while/
+             after a run, inspector on selection). Driven entirely by Swift
+             via window.talkieMarkup.thread(); hidden until the first run. -->
+        <div id="work-thread" class="work-thread hidden">
+          <div class="wt-head">
+            <span class="wt-title">· WORK THREAD</span>
+            <span class="wt-status">
+              <span class="wt-dot"></span>
+              <span class="wt-state">live</span>
+            </span>
+          </div>
+          <div id="wt-body" class="wt-body"></div>
+          <div id="wt-foot" class="wt-foot"></div>
+        </div>
         <div class="inspector-rail-head">
           <span class="inspector-rail-title">· INSPECTOR</span>
         </div>

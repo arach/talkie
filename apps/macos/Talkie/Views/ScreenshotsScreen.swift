@@ -62,6 +62,13 @@ struct ScreenshotsScreen: View {
     // Mirrors macOS Quick Look → Markup; see the /mac-screenshots studio.
     @State private var previewItemID: String?
 
+    // ── Markup takeover ──────────────────────────────────────────
+    // Set to a screenshot's file URL to swap the screen for the
+    // in-window markup editor (vs. the old floating panel). Cleared by
+    // the editor's back button, which then reloads to refresh layer
+    // counts / thumbnails.
+    @State private var markupURL: URL?
+
     // ── Visible window ───────────────────────────────────────────
     // Render only the first `visibleCount` items so 200+ thumbnails
     // don't all decode at once on view-appear. The bottom sentinel
@@ -78,6 +85,14 @@ struct ScreenshotsScreen: View {
     private let detailMinWidth: CGFloat = 300
     private let detailMaxWidth: CGFloat = 600
     private let compactThreshold: CGFloat = 800
+
+    // Capture-pill keep-out. `pillKeepoutHalf` is half the resting pill's
+    // footprint (≈114pt wide) plus margin; `fullHeaderControlsWidth` is the
+    // rough span of the expanded header cluster (count + view toggle + search
+    // + tray + markup + folder). Used to decide when the header must collapse
+    // so its controls never slide under the centered pill.
+    private static let pillKeepoutHalf: CGFloat = 65
+    private static let fullHeaderControlsWidth: CGFloat = 470
 
     // MARK: - Derived
 
@@ -167,6 +182,10 @@ struct ScreenshotsScreen: View {
         }
         .animation(.easeInOut(duration: 0.18), value: previewItemID)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .captureMarkupHost(url: $markupURL) {
+            // Refresh layer counts / annotated thumbnails on return.
+            Task { await loadLibrary() }
+        }
         .task { await loadLibrary() }
         .onChange(of: allItems.map(\.id)) { _, visibleIDs in
             pruneSelection(visibleIDs: visibleIDs)
@@ -182,8 +201,19 @@ struct ScreenshotsScreen: View {
             let inspectorSpace: CGFloat = showInspector ? CGFloat(detailWidth) + 9 : 0
             let gridWidth = max(geometry.size.width - inspectorSpace, 1)
 
+            // The capture pill (TalkieChromeBar) floats at the content-area's
+            // horizontal center — geometry.size.width / 2 — offset only by the
+            // sidebar. When the inspector opens, the grid pane narrows and its
+            // right-aligned header controls slide left, sliding under that
+            // still-centered pill. Treat the pill as a keep-out: collapse the
+            // header to its compact cluster the moment the full controls would
+            // reach the pill's right edge, so nothing ever hides behind it.
+            let pillKeepoutRight = geometry.size.width / 2 + Self.pillKeepoutHalf
+            let fullControlsLeft = gridWidth - Self.fullHeaderControlsWidth - PageLayout.horizontalPadding
+            let headerCompact = gridWidth < 820 || fullControlsLeft < pillKeepoutRight
+
             HStack(spacing: 0) {
-                gridPane(width: gridWidth)
+                gridPane(width: gridWidth, compact: headerCompact)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 if showInspector, let item = selectedItem {
@@ -219,8 +249,7 @@ struct ScreenshotsScreen: View {
 
     // MARK: - Grid Pane
 
-    private func gridPane(width: CGFloat) -> some View {
-        let headerCompact = width < 820
+    private func gridPane(width: CGFloat, compact headerCompact: Bool) -> some View {
         return VStack(alignment: .leading, spacing: 0) {
             // Canonical header — baseline-locked to the sidebar wordmark and
             // the TALKIE pill, same as Models. Controls ride the trailing slot;
@@ -248,7 +277,7 @@ struct ScreenshotsScreen: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(TalkieTheme.surface)
+        .background(ScopeCanvas.canvas)
     }
 
 
@@ -279,7 +308,7 @@ struct ScreenshotsScreen: View {
             .padding(.vertical, 4)
             .background(Theme.current.foreground.opacity(0.06))
             .clipShape(RoundedRectangle(cornerRadius: 6))
-            .frame(maxWidth: compact ? 120 : 180)
+            .frame(maxWidth: compact ? 100 : 180)
 
             if !trayScreenshotItems.isEmpty {
                 Button {
@@ -373,7 +402,7 @@ struct ScreenshotsScreen: View {
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .background {
-            TalkieTheme.surface
+            ScopeCanvas.canvas
                 .contentShape(Rectangle())
                 .onTapGesture { selectAllVisibleItems() }
         }
@@ -395,7 +424,7 @@ struct ScreenshotsScreen: View {
             }
         }
         .background {
-            TalkieTheme.surface
+            ScopeCanvas.canvas
                 .contentShape(Rectangle())
                 .onTapGesture { selectAllVisibleItems() }
         }
@@ -470,6 +499,7 @@ struct ScreenshotsScreen: View {
             ageLabel: relativeAge(item.date),
             absoluteDate: absoluteDate(item.date),
             appName: appBundleLine(item),
+            appBundleID: appBundleIDLine(item),
             windowTitle: windowTitleLine(item),
             displayName: displayLine(item),
             recordingOffset: recordingOffsetLine(item),
@@ -547,6 +577,10 @@ struct ScreenshotsScreen: View {
     }
 
     /// Title for a list row — prefers the human label, else the app name.
+    /// Untitled captures (no label, no app) fall back to the capture
+    /// time-of-day rather than a generic "Screenshot" repeated down the
+    /// whole list — each row gets a unique, scannable identity and stops
+    /// duplicating the SOURCE column.
     private func rowTitle(_ item: ScreenshotItem) -> String {
         if let label = item.label?.trimmingCharacters(in: .whitespacesAndNewlines), !label.isEmpty {
             return label
@@ -554,7 +588,7 @@ struct ScreenshotsScreen: View {
         if let app = item.screenshot?.appName, !app.isEmpty {
             return app
         }
-        return "Screenshot"
+        return item.date.formatted(date: .omitted, time: .shortened)
     }
 
     /// Aligned column values for a list row. STRICTLY in-memory metadata —
@@ -750,7 +784,9 @@ struct ScreenshotsScreen: View {
 
     private func annotateItem(_ item: ScreenshotItem) {
         guard canAnnotate(item) else { return }
-        CaptureMarkupCoordinator.shared.openSession(imageURL: item.fileURL)
+        // Leaving Quick Look (if open) for the markup takeover.
+        previewItemID = nil
+        markupURL = item.fileURL
     }
 
     private func shareFile(_ url: URL) {
@@ -906,6 +942,13 @@ struct ScreenshotsScreen: View {
     /// which already carries the `RecordingScreenshot`.
     private func appBundleLine(_ item: ScreenshotItem) -> String? {
         item.screenshot?.appName ?? item.trayItem?.appName
+    }
+
+    /// Bundle id carried on the record (set at capture time). The inspector
+    /// prefers the augmenter sidecar but falls back to this so the bundle row
+    /// shows immediately, before the async augmentation pass completes.
+    private func appBundleIDLine(_ item: ScreenshotItem) -> String? {
+        item.screenshot?.appBundleID ?? item.trayItem?.appBundleID
     }
 
     private func windowTitleLine(_ item: ScreenshotItem) -> String? {
@@ -1538,6 +1581,10 @@ private struct ScreenshotImageView: View {
     /// downscaled thumbnail. Used by the Quick Look preview so zooming
     /// reveals real pixels, not an upscaled thumbnail.
     var fullResolution: Bool = false
+    /// Crop-to-fill the cell instead of letterboxing. Used by the list row
+    /// so thumbnails read as a tidy gallery column rather than tiny images
+    /// floating in empty boxes.
+    var fill: Bool = false
     @State private var image: NSImage?
 
     var body: some View {
@@ -1546,7 +1593,7 @@ private struct ScreenshotImageView: View {
                 Image(nsImage: image)
                     .resizable()
                     .interpolation(.high)
-                    .aspectRatio(contentMode: .fit)
+                    .aspectRatio(contentMode: fill ? .fill : .fit)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 Image(systemName: "photo")
@@ -1593,7 +1640,7 @@ private struct ScreenshotRowColumns {
 /// column is flexible (`.infinity`); the rest are right- or left-aligned
 /// fixed columns.
 private enum ScreenshotListLayout {
-    static let thumb: CGFloat = 48
+    static let thumb: CGFloat = 56
     static let source: CGFloat = 96
     static let dimensions: CGFloat = 84
     static let age: CGFloat = 60
@@ -1641,11 +1688,11 @@ private struct ScreenshotRowView: View {
 
     var body: some View {
         HStack(spacing: ScreenshotListLayout.columnSpacing) {
-            ScreenshotImageView(item: item, maxSize: 120)
-                .frame(width: ScreenshotListLayout.thumb, height: 34)
+            ScreenshotImageView(item: item, maxSize: 120, fill: true)
+                .frame(width: ScreenshotListLayout.thumb, height: 38)
                 .background(ScopePalette.bg)
-                .clipShape(RoundedRectangle(cornerRadius: 3))
-                .overlay(RoundedRectangle(cornerRadius: 3).stroke(ScopeEdge.subtle, lineWidth: 0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .overlay(RoundedRectangle(cornerRadius: 4).stroke(ScopeEdge.subtle, lineWidth: 0.5))
 
             // Name + app (flexible column)
             VStack(alignment: .leading, spacing: 2) {
@@ -1685,7 +1732,7 @@ private struct ScreenshotRowView: View {
                 .frame(width: ScreenshotListLayout.age, alignment: .trailing)
         }
         .padding(.horizontal, PageLayout.horizontalPadding)
-        .padding(.vertical, 7)
+        .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             if isSelected {
@@ -1828,6 +1875,7 @@ private struct ScreenshotInspector: View {
     let ageLabel: String
     let absoluteDate: String
     let appName: String?
+    let appBundleID: String?
     let windowTitle: String?
     let displayName: String?
     let recordingOffset: String?
@@ -1843,6 +1891,7 @@ private struct ScreenshotInspector: View {
     /// Disk-loaded extras (file header + sidecar). Loaded async per selection.
     @State private var disk: InspectorDiskMetadata?
     @State private var showDetectedText = false
+    @State private var ocrCopied = false
 
     private var appLabel: String { appName ?? sourceLabel }
 
@@ -1863,9 +1912,13 @@ private struct ScreenshotInspector: View {
                 }
             }
             .padding(.horizontal, 12)
-            .frame(height: 28)
-            .background(ScopePalette.bgSunk)
-            .overlay(alignment: .bottom) { ScopeRule(.subtle) }
+            // Match the page band height so the inspector's header lines up
+            // with the "Screenshots" title band across the divider — the two
+            // panes open on the same horizontal, and content starts level.
+            // No fill or bottom rule: the header rides the same canvas as the
+            // grid header, so the top reads as one continuous band broken only
+            // by the divider rather than a separate gray block.
+            .frame(height: ScopeTopBandLayout.height)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -1888,7 +1941,7 @@ private struct ScreenshotInspector: View {
                     MetaGroup(title: "source") {
                         MetaRow(label: "capture", value: sourceLabel)
                         if let appName { MetaRow(label: "app", value: appName) }
-                        if let bundle = disk?.appBundleID { MetaRow(label: "bundle", value: bundle) }
+                        if let bundle = disk?.appBundleID ?? appBundleID { MetaRow(label: "bundle", value: bundle) }
                         if let windowTitle { MetaRow(label: "window", value: windowTitle) }
                         if let displayName { MetaRow(label: "display", value: displayName) }
                     }
@@ -1926,7 +1979,11 @@ private struct ScreenshotInspector: View {
                                 value: disk.ocrPresent
                                     ? (disk.ocrCharacterCount > 0 ? "\(disk.ocrCharacterCount) chars" : "no text")
                                     : "—",
-                                accent: disk.ocrCharacterCount > 0
+                                accent: disk.ocrCharacterCount > 0,
+                                actionSystemImage: "doc.on.clipboard",
+                                actionHelp: "Copy OCR text",
+                                actionFeedback: ocrCopied,
+                                action: disk.ocrCharacterCount > 0 ? copyOCRText : nil
                             )
                             if disk.visionDescribed {
                                 MetaRow(label: "vision", value: "described", accent: true)
@@ -1997,12 +2054,25 @@ private struct ScreenshotInspector: View {
                 // list rows never hit this path.
                 disk = nil
                 showDetectedText = false
+                ocrCopied = false
                 let url = item.fileURL
                 let trayText = trayOCRText
                 disk = await Task.detached {
                     InspectorDiskMetadata.load(for: url, trayOCRText: trayText)
                 }.value
             }
+        }
+    }
+
+    private func copyOCRText() {
+        guard let text = fullOCRText?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        ocrCopied = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1))
+            ocrCopied = false
         }
     }
 
@@ -2045,6 +2115,10 @@ private struct MetaRow: View {
     let label: String
     let value: String
     var accent: Bool = false
+    var actionSystemImage: String = "doc.on.clipboard"
+    var actionHelp: String = "Copy"
+    var actionFeedback: Bool = false
+    var action: (() -> Void)?
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
@@ -2053,6 +2127,22 @@ private struct MetaRow: View {
                 .tracking(ScopeType.Tracking.wide)
                 .foregroundStyle(ScopePalette.inkFainter)
             Spacer()
+            if let action {
+                Button(action: action) {
+                    Image(systemName: actionFeedback ? "checkmark" : actionSystemImage)
+                        .font(.system(size: 9, weight: .semibold))
+                        .frame(width: 18, height: 18)
+                        .foregroundStyle(actionFeedback ? ScopePalette.amberDeep : ScopePalette.inkFainter)
+                        .background(
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(actionFeedback ? ScopePalette.amberFaint : Color.clear)
+                        )
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(actionFeedback ? "Copied" : actionHelp)
+                .accessibilityLabel(actionFeedback ? "Copied" : actionHelp)
+            }
             Text(value)
                 .font(ScopeType.mono(size: 11))
                 .foregroundStyle(accent ? ScopePalette.amberDeep : ScopePalette.ink)
@@ -2655,3 +2745,125 @@ private extension String {
 }
 
 // Uses View.cursor(_:) extension from WaveformViews.swift
+
+// MARK: - In-window Markup Host
+//
+// The markup chrome (`CaptureMarkupPanelRootView`) is the same AppKit view
+// the floating panel uses — here it's embedded in a normal SwiftUI screen
+// with an editorial header + back affordance, so in-app launches
+// (Screenshots / Home / Notes) annotate inline instead of spawning a
+// floating panel. Edits autosave continuously (see CaptureMarkupCoordinator);
+// there's no Accept/Cancel commit gate — "back" just ends the session.
+
+/// Full-bleed in-window markup editor. Present via the
+/// `captureMarkupHost(url:onClose:)` modifier below.
+struct CaptureMarkupHostView: View {
+    let imageURL: URL
+    var document: CaptureMarkupDocument? = nil
+    var instruction: String? = nil
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            ScopeRule(.subtle)
+            CaptureMarkupEmbeddedView(
+                imageURL: imageURL,
+                document: document,
+                instruction: instruction
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(ScopePalette.bgRaised)
+        // The AppKit web session is torn down when this view leaves the
+        // hierarchy — covers both the back button and any external nav away.
+        .onDisappear { CaptureMarkupCoordinator.shared.endEmbeddedSession() }
+    }
+
+    // Mirrors the Preview takeover top bar (back chevron + title, sunk band).
+    private var header: some View {
+        HStack(spacing: 8) {
+            Button(action: onClose) {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.left").font(.system(size: 9, weight: .semibold))
+                    Text("back")
+                        .font(ScopeType.mono(size: 9))
+                        .tracking(ScopeType.Tracking.normal)
+                        .textCase(.uppercase)
+                }
+                .foregroundStyle(ScopePalette.inkFaint)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .overlay(RoundedRectangle(cornerRadius: 3).stroke(ScopePalette.rule, lineWidth: 0.5))
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut(.cancelAction)
+
+            Text("Markup · \(imageURL.lastPathComponent)")
+                .font(ScopeType.mono(size: 9, weight: .semibold))
+                .tracking(ScopeType.Tracking.normal)
+                .foregroundStyle(ScopePalette.ink)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 30)
+        .background(ScopePalette.bgSunk)
+    }
+}
+
+/// AppKit bridge: hosts the coordinator's markup chrome inside SwiftUI.
+private struct CaptureMarkupEmbeddedView: NSViewRepresentable {
+    let imageURL: URL
+    let document: CaptureMarkupDocument?
+    let instruction: String?
+
+    func makeNSView(context: Context) -> NSView {
+        let container = NSView()
+        container.wantsLayer = true
+        let root = CaptureMarkupCoordinator.shared.beginEmbeddedSession(
+            imageURL: imageURL,
+            document: document,
+            instruction: instruction
+        )
+        root.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(root)
+        NSLayoutConstraint.activate([
+            root.topAnchor.constraint(equalTo: container.topAnchor),
+            root.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            root.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            root.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
+        return container
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+extension View {
+    /// Presents the in-window markup editor as a full-bleed overlay while
+    /// `url` is non-nil. The back button sets `url` to nil (→ `onClose`),
+    /// which dismisses it. Use `onClose` to refresh layer counts / thumbnails.
+    func captureMarkupHost(url: Binding<URL?>, onClose: (() -> Void)? = nil) -> some View {
+        let dismiss = {
+            guard url.wrappedValue != nil else { return }
+            url.wrappedValue = nil
+            onClose?()
+        }
+
+        return overlay {
+            if let target = url.wrappedValue {
+                CaptureMarkupHostView(imageURL: target) {
+                    dismiss()
+                }
+                .transition(.opacity)
+                .zIndex(20)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .dismissCaptureMarkupHost)) { _ in
+            dismiss()
+        }
+        .animation(.easeInOut(duration: 0.18), value: url.wrappedValue)
+    }
+}

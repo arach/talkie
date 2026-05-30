@@ -774,7 +774,7 @@ struct RecordingTranscriptCard: View {
 
     @State private var copied = false
     @State private var toolTrayHovered = false
-    @State private var jsonChipHovered = false
+    @State private var copyChipHovered = false
 
     private var hasTranscriptionData: Bool {
         recording.timedTranscription != nil || recording.isMemo || recording.isDictation || recording.isSelection
@@ -874,10 +874,12 @@ struct RecordingTranscriptCard: View {
             //    affordance lives on the card whose body it changes
             //    (was previously in the masthead's action row, which read
             //    as detached chrome).
+            // JSON entry now lives in the top action row (it's a
+            // whole-payload view, not a transcript-section affordance).
+            // In document mode the transcript shows no top strip; JSON
+            // mode still gets its dismissal row with the easy copy.
             if !isEditing && showJSON {
                 jsonDismissalRow
-            } else if !isEditing {
-                cardModeStrip
             }
 
             contentArea
@@ -914,68 +916,55 @@ struct RecordingTranscriptCard: View {
     // the user has actively flipped to JSON via the overflow menu;
     // gives them a one-tap path back to the editorial text view.
 
-    /// Top strip in document mode — flush-right TEXT/JSON toggle.
-    /// Sits over the transparent paper (no background) so it reads as
-    /// editorial chrome on the document, not a control bar.
-    private var cardModeStrip: some View {
-        HStack(spacing: 0) {
-            Spacer(minLength: 8)
-            cardJSONToggleButton
-        }
-        .padding(.horizontal, documentMode ? 0 : Spacing.sm)
-        .padding(.vertical, documentMode ? 2 : Spacing.xs)
-        .background(
-            documentMode
-                ? Color.clear
-                : (isTechnical ? TechnicalStyle.surface1 : Theme.current.foreground.opacity(0.02))
-        )
-    }
-
-    /// JSON entry chip — only shown in document mode. Mirrors the studio
-    /// `JSON` mono pill: subtle by default, lights up to brass on hover.
-    /// Tapping flips the card to JSON mode and the dismissal row takes
-    /// over from there.
-    private var cardJSONToggleButton: some View {
-        Button {
-            withAnimation(.easeOut(duration: 0.12)) { showJSON = true }
-        } label: {
+    /// Reusable affordance chip for the section-rule treatment — a mono label
+    /// + glyph that's subtle by default and lights up to brass on hover (or a
+    /// custom tint, e.g. green for a "copied" confirm). The shared look keeps
+    /// COPY · JSON a matched pair and makes the rule read as structure.
+    private func sectionRuleChip(
+        icon: String,
+        label: String,
+        hovered: Bool,
+        tint: Color?,
+        action: @escaping () -> Void,
+        hover: @escaping (Bool) -> Void,
+        help: String
+    ) -> some View {
+        Button(action: action) {
             HStack(spacing: 5) {
-                Image(systemName: "curlybraces")
+                Image(systemName: icon)
                     .font(.system(size: 10, weight: .regular))
-                Text("JSON")
+                Text(label)
                     .font(.system(size: 9.5, weight: .medium, design: .monospaced))
                     .tracking(1.6)
             }
             .foregroundColor(
-                jsonChipHovered
+                tint ?? (hovered
                     ? ThemedScopeAccent.brass
-                    : Theme.current.foregroundSecondary.opacity(0.62)
+                    : Theme.current.foregroundSecondary.opacity(0.62))
             )
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
             .background(
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(jsonChipHovered
-                        ? ThemedScopeAccent.brass.opacity(0.08)
-                        : Color.clear)
+                    .fill(hovered ? ThemedScopeAccent.brass.opacity(0.08) : Color.clear)
                     .overlay(
                         RoundedRectangle(cornerRadius: 3)
                             .stroke(
-                                jsonChipHovered
+                                hovered
                                     ? ThemedScopeAccent.brass.opacity(0.35)
                                     : Theme.current.foreground.opacity(0.10),
                                 lineWidth: 0.5
                             )
                     )
             )
-            .animation(.easeOut(duration: 0.12), value: jsonChipHovered)
+            .animation(.easeOut(duration: 0.12), value: hovered)
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            jsonChipHovered = hovering
+            hover(hovering)
             if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
         }
-        .help("View as JSON")
+        .help(help)
     }
 
     private var jsonDismissalRow: some View {
@@ -985,6 +974,17 @@ struct RecordingTranscriptCard: View {
                 .tracking(2.8)
                 .foregroundColor(Theme.current.foregroundSecondary.opacity(0.62))
             ThemedScopeRule(.subtle)
+            // Easy copy lives here, inside JSON mode — copyContent() copies
+            // renderJSON() while showJSON is true, so this grabs the JSON.
+            sectionRuleChip(
+                icon: copied ? "checkmark" : "doc.on.doc",
+                label: copied ? "COPIED" : "COPY",
+                hovered: copyChipHovered,
+                tint: copied ? Color.green.opacity(0.8) : nil,
+                action: copyContent,
+                hover: { copyChipHovered = $0 },
+                help: "Copy JSON"
+            )
             Button {
                 withAnimation(.easeOut(duration: 0.12)) { showJSON = false }
             } label: {

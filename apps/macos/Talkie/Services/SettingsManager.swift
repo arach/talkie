@@ -203,6 +203,7 @@ extension SettingsManager {
 extension Notification.Name {
     static let iCloudSyncSettingChanged = Notification.Name("iCloudSyncSettingChanged")
     static let helperLifecycleModeChanged = Notification.Name("helperLifecycleModeChanged")
+    static let dismissCaptureMarkupHost = Notification.Name("dismissCaptureMarkupHost")
 }
 
 // MARK: - Helper Lifecycle Settings
@@ -984,6 +985,12 @@ final class SettingsManager {
 
     /// Whether the voice command overlay is currently shown
     var isVoiceCommandPresented: Bool = false
+
+    /// Whether a capture-markup session (floating panel or embedded editor)
+    /// is currently active. List keyboard navigation yields to this so the
+    /// markup canvas owns arrows / Tab / Enter / Escape instead of the
+    /// underlying list quietly changing selection and yanking the user away.
+    var isMarkupSessionActive: Bool = false
 
     /// Whether the keyboard shortcuts help sheet is presented
     var isKeyboardHelpPresented: Bool = false

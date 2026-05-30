@@ -76,6 +76,121 @@ final class CaptureMarkupWebSession: NSObject {
         webView?.evaluateJavaScript("window.talkieMarkup && window.talkieMarkup.clearSelection();")
     }
 
+    // MARK: - Work Thread (streamed run log → webview right rail)
+    //
+    // The right rail is contextual: it shows the Work Thread while/after a
+    // run, the layer Inspector on selection. Swift owns the thread state and
+    // pushes whole snapshots; the JS side is a dumb renderer. Each meta step
+    // fills its detail in as the agent learns it (region count, plan summary);
+    // the resulting marks are revealed one at a time so the pass streams.
+
+    private var threadInstruction = ""
+    private var threadModel = ""
+    private var threadRows: [(verb: String, detail: String, status: String)] = []
+    private var threadMarks: [(verb: String, detail: String)] = []
+
+    /// First frame of a run — the three meta steps pending, the instruction
+    /// pinned at the head.
+    func beginThread(instruction: String) {
+        threadInstruction = instruction
+        threadModel = ""
+        threadRows = [
+            ("read", "the capture", "pending"),
+            ("describe", "the scene", "pending"),
+            ("plan", "the marks", "pending"),
+        ]
+        threadMarks = []
+        pushThread(live: true, statusText: "starting the pass…", elapsed: 0, summary: nil)
+    }
+
+    /// Fold a phase event into the row state, filling in detail as it arrives.
+    func handlePhase(_ phase: CaptureMarkupRunPhase, elapsed: Double) {
+        func activate(_ i: Int) {
+            for j in threadRows.indices where j < i && threadRows[j].status != "done" {
+                threadRows[j].status = "done"
+            }
+            if threadRows.indices.contains(i) { threadRows[i].status = "active" }
+        }
+        func finish(_ i: Int, _ detail: String?) {
+            guard threadRows.indices.contains(i) else { return }
+            threadRows[i].status = "done"
+            if let detail, !detail.isEmpty { threadRows[i].detail = detail }
+        }
+
+        let status: String
+        switch phase {
+        case .reading: activate(0); status = "reading the capture…"
+        case .read(let d): finish(0, d); status = "read the capture"
+        case .describing: activate(1); status = "describing the scene…"
+        case .described: finish(1, nil); status = "described the scene"
+        case .planning(let model): threadModel = model; activate(2); status = "planning the marks…"
+        case .planned(let d): finish(2, d); status = "planned the marks"
+        case .applying:
+            for j in threadRows.indices { threadRows[j].status = "done" }
+            status = "drawing the marks…"
+        }
+        pushThread(live: true, statusText: status, elapsed: elapsed, summary: nil)
+    }
+
+    /// Settle the thread into its record. Marks are appended one at a time so
+    /// the pass visibly streams onto the thread, then the footer summary lands.
+    func finishThread(added: [CaptureMarkupLayer], elapsed: Double, pass: Int) async {
+        for j in threadRows.indices { threadRows[j].status = "done" }
+        threadMarks = []
+        for layer in added {
+            threadMarks.append((layer.kind.rawValue, Self.markDetail(layer)))
+            pushThread(live: true, statusText: "drawing the marks…", elapsed: elapsed, summary: nil)
+            try? await Task.sleep(nanoseconds: 110_000_000)
+        }
+        let count = added.count
+        let summary = "pass \(pass) · \(count) mark\(count == 1 ? "" : "s") · \(Self.elapsedLabel(elapsed))"
+        pushThread(live: false, statusText: nil, elapsed: elapsed, summary: summary)
+    }
+
+    func failThread(elapsed: Double) {
+        pushThread(live: false, statusText: nil, elapsed: elapsed, summary: "run failed · nothing applied")
+    }
+
+    private func pushThread(live: Bool, statusText: String?, elapsed: Double, summary: String?) {
+        var entries: [[String: Any]] = []
+        for row in threadRows {
+            entries.append(["verb": row.verb, "detail": row.detail, "kind": "meta", "status": row.status])
+        }
+        for mark in threadMarks {
+            entries.append(["verb": mark.verb, "detail": mark.detail, "kind": "mark", "status": "done"])
+        }
+        var payload: [String: Any] = [
+            "entries": entries,
+            "live": live,
+            "elapsed": Self.elapsedLabel(elapsed),
+        ]
+        if !threadInstruction.isEmpty { payload["instruction"] = threadInstruction }
+        if !threadModel.isEmpty { payload["model"] = threadModel }
+        if let statusText { payload["statusText"] = statusText }
+        if let summary { payload["summary"] = summary }
+        guard let webView,
+              let data = try? JSONSerialization.data(withJSONObject: payload),
+              let json = String(data: data, encoding: .utf8) else { return }
+        webView.evaluateJavaScript("window.talkieMarkup && window.talkieMarkup.thread(\(json));")
+    }
+
+    private static func markDetail(_ layer: CaptureMarkupLayer) -> String {
+        if let label = layer.label, !label.isEmpty { return label }
+        if let text = layer.text, !text.isEmpty { return text }
+        switch layer.kind {
+        case .rect: return "box"
+        case .highlight: return "highlight"
+        case .arrow: return "arrow"
+        case .label: return "label"
+        case .guide: return "guide grid"
+        default: return "mark"
+        }
+    }
+
+    private static func elapsedLabel(_ seconds: Double) -> String {
+        String(format: "%.1fs", max(0, seconds))
+    }
+
     func undo() {
         webView?.evaluateJavaScript("window.talkieMarkup && window.talkieMarkup.undo();")
     }

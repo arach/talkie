@@ -225,6 +225,7 @@ struct ScopeContextView: View {
             ownershipNode(pin: "P2", label: "Your rules", detail: "\(activeProcessingItems) ACTIVE · \(enabledDictionaryCount) DICTIONAR\(enabledDictionaryCount == 1 ? "Y" : "IES")")
             SignalPath(color: ScopeAmber.solid, width: 28)
             ownershipNode(pin: "P3", label: "Your text", detail: "LOCAL · NO TELEMETRY")
+            Spacer(minLength: 0)
         }
         .padding(.top, 6)
     }
@@ -243,7 +244,7 @@ struct ScopeContextView: View {
                     .lineLimit(1)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     // MARK: - Helpers

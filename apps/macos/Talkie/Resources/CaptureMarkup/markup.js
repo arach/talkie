@@ -11,8 +11,11 @@
     selectedLayerId: null,
     activeTool: null,
     image: null,
-    /** Existing-layer move drag (the original behaviour) */
+    /** Existing-layer move drag (the original behaviour) — frame-based layers */
     drag: null,
+    /** Segment (arrow / line) edit drag — move an endpoint or the whole thing.
+     *  `handle` is "from" | "to" (reshape one end) or "both" (move the segment). */
+    segDrag: null,
     /** New-layer creation drag started with rect / arrow / line / blur */
     creating: null,
     /** Space+drag pan state. */
@@ -32,6 +35,10 @@
       color: "#C47D1C",
       strokeWidth: 2,
       fontSize: 16,
+      fontFamily: "mono", // sans | serif | mono — mono preserves the legacy tag look
+      bold: false,
+      italic: false,
+      plain: false, // false = white-on-dark pill (default); true = plain colored text
     },
   };
 
@@ -47,9 +54,9 @@
   const styleStack = document.getElementById("style-stack");
   const zoomCluster = document.getElementById("canvas-zoom-cluster");
   const zoomDisplay = document.getElementById("zoom-display");
-  // Undo / redo live in the floating canvas zoom cluster now (the top bar
-  // is pure drawing). Query both surfaces so a future relocation doesn't
-  // silently lose the enabled-state wiring.
+  // Undo / redo live in the floating canvas zoom cluster now. Query both
+  // surfaces so a future relocation doesn't silently lose the enabled-state
+  // wiring.
   const undoButton =
     (zoomCluster && zoomCluster.querySelector('[data-action="undo"]')) ||
     toolToolbar.querySelector('[data-action="undo"]');
@@ -59,7 +66,7 @@
 
   const DEFAULT_COLOR = "#C47D1C";
   // Tools that create a new layer by click-dragging on the canvas
-  const DRAG_TOOLS = new Set(["rect", "arrow", "line", "blur"]);
+  const DRAG_TOOLS = new Set(["rect", "arrow", "line", "blur", "clone"]);
   // Tools that fire on a single click instead of a drag
   const CLICK_TOOLS = new Set(["text"]);
   // Minimum pixel distance before a mousedown→mousemove counts as a drag
@@ -190,6 +197,19 @@
     return { x: f.x * w, y: f.y * h, w: f.width * w, h: f.height * h };
   }
 
+  // Label typography. `fontFamily` maps to a CSS stack; mono is the default so
+  // legacy labels (no family) keep their tag look. Mirrors the Swift renderer.
+  function fontFamilyCSS(family) {
+    if (family === "sans") return "-apple-system, system-ui, sans-serif";
+    if (family === "serif") return "ui-serif, Georgia, 'Times New Roman', serif";
+    return "ui-monospace, SFMono-Regular, monospace";
+  }
+  function labelFontString(layer, px) {
+    const ital = layer.italic ? "italic " : "";
+    const weight = layer.bold ? "700 " : "";
+    return `${ital}${weight}${px}px ${fontFamilyCSS(layer.fontFamily)}`;
+  }
+
   function viewportSize() {
     return {
       w: Math.max(1, state.viewport.width || 1),
@@ -273,6 +293,46 @@
       }
     }
     return null;
+  }
+
+  // Endpoint grab radius for segment (arrow / line) editing, in viewport
+  // pixels — a touch larger than the rendered handle so the target is easy
+  // to land on. Independent of zoom (viewport px are pre-zoom), so the
+  // on-screen grab area scales with the visible handle.
+  const SEGMENT_HANDLE_GRAB = 10;
+
+  /** Which endpoint of a segment layer is under the cursor, if any.
+   *  Returns "from" | "to" | null. Works in viewport-pixel space (norm.px/py). */
+  function segmentEndpointAt(norm, layer) {
+    if (!layer || !layer.from || !layer.to) return null;
+    const size = viewportSize();
+    const fx = layer.from.x * size.w, fy = layer.from.y * size.h;
+    const tx = layer.to.x * size.w, ty = layer.to.y * size.h;
+    if (Math.hypot(norm.px - fx, norm.py - fy) <= SEGMENT_HANDLE_GRAB) return "from";
+    if (Math.hypot(norm.px - tx, norm.py - ty) <= SEGMENT_HANDLE_GRAB) return "to";
+    return null;
+  }
+
+  /** Is the cursor over the body of a segment layer (near the line, but not
+   *  on an endpoint handle)? Mirrors hitTest's segment distance check. */
+  function segmentBodyHit(norm, layer) {
+    if (!layer || !layer.from || !layer.to) return false;
+    const x1 = layer.from.x, y1 = layer.from.y, x2 = layer.to.x, y2 = layer.to.y;
+    const dx = x2 - x1, dy = y2 - y1;
+    const len2 = dx * dx + dy * dy;
+    if (len2 === 0) return false;
+    const t = Math.max(0, Math.min(1, ((norm.nx - x1) * dx + (norm.ny - y1) * dy) / len2));
+    const cx = x1 + t * dx, cy = y1 + t * dy;
+    return Math.hypot(norm.nx - cx, norm.ny - cy) < 0.018;
+  }
+
+  /** Snap a moving endpoint to a horizontal or vertical line through the
+   *  fixed anchor endpoint (Shift while dragging). Normalized coords. */
+  function snapPointToAxis(anchor, moving) {
+    const dx = moving.x - anchor.x;
+    const dy = moving.y - anchor.y;
+    if (Math.abs(dx) >= Math.abs(dy)) return { x: moving.x, y: anchor.y };
+    return { x: anchor.x, y: moving.y };
   }
 
   function uuid() {
@@ -430,11 +490,31 @@
   function updateCursor() {
     if (state.panDrag) {
       canvas.style.cursor = "grabbing";
-    } else if (state.isSpaceDown) {
+    } else if (state.isSpaceDown || state.activeTool === "hand") {
       canvas.style.cursor = "grab";
     } else {
       canvas.style.cursor = state.activeTool == null ? "default" : "crosshair";
     }
+  }
+
+  /** Idle hover cursor in select mode: "grab" over a selected segment's
+   *  endpoint handle, "move" over its body, default otherwise. Only runs
+   *  when no tool is armed and we're not panning. */
+  function updateSelectionHoverCursor(e) {
+    if (state.activeTool != null || state.isSpaceDown) return;
+    const sel = selectedLayer();
+    if (sel && sel.from && sel.to) {
+      const norm = eventToNorm(e);
+      if (segmentEndpointAt(norm, sel)) {
+        canvas.style.cursor = "grab";
+        return;
+      }
+      if (segmentBodyHit(norm, sel)) {
+        canvas.style.cursor = "move";
+        return;
+      }
+    }
+    canvas.style.cursor = "default";
   }
 
   // ---------------------------------------------------------------------------
@@ -476,6 +556,35 @@
       text,
       color: state.style.color,
       fontSize: state.style.fontSize,
+      fontFamily: state.style.fontFamily,
+      bold: state.style.bold,
+      italic: state.style.italic,
+      plain: state.style.plain,
+      visible: true,
+      author: "user",
+    };
+  }
+
+  // Clone — a `patch` layer. `source` is the copy-from region, `frame` is where
+  // it's drawn. Both start identical (copy in place); dragging the frame moves
+  // the clone while the source stays put. Non-destructive: no pixels stored,
+  // the region is recomputed from the original image on render.
+  function newPatchLayer(frame) {
+    // Lift the copy off the source by a small offset so the clone reads as a
+    // separate, movable cutout the instant it's drawn. (Landing it exactly on
+    // the original looks like nothing happened — the #1 reason the tool felt
+    // missing.) Clamp so it stays on-canvas; flip the offset near an edge.
+    const off = 0.04;
+    const dx = frame.x + frame.width + off <= 1 ? off : -off;
+    const dy = frame.y + frame.height + off <= 1 ? off : -off;
+    const dest = Object.assign({}, frame);
+    dest.x = Math.max(0, Math.min(frame.x + dx, 1 - frame.width));
+    dest.y = Math.max(0, Math.min(frame.y + dy, 1 - frame.height));
+    return {
+      id: uuid(),
+      kind: "patch",
+      source: Object.assign({}, frame),
+      frame: dest,
       visible: true,
       author: "user",
     };
@@ -494,6 +603,32 @@
       visible: true,
       author: "user",
     };
+  }
+
+  // Deep-clone a layer for Option-drag duplication. New id, lifted off the
+  // original by a small offset so the copy reads as distinct the instant it
+  // lands (mirrors the patch tool's copy-in-place lift). Handles both
+  // frame-based layers (rect/label/patch/highlight) and segment layers
+  // (arrow/line). `source` on a patch is intentionally left untouched so the
+  // clone copies the same pixels, just drawn at the offset frame.
+  function duplicateLayer(layer) {
+    const copy = JSON.parse(JSON.stringify(layer));
+    copy.id = uuid();
+    copy.author = "user";
+    const off = 0.03;
+    const clamp01 = (v) => Math.max(0, Math.min(1, v));
+    if (copy.frame) {
+      const f = copy.frame;
+      const dx = f.x + f.width + off <= 1 ? off : -off;
+      const dy = f.y + f.height + off <= 1 ? off : -off;
+      f.x = Math.max(0, Math.min(f.x + dx, 1 - f.width));
+      f.y = Math.max(0, Math.min(f.y + dy, 1 - f.height));
+    }
+    if (copy.from && copy.to) {
+      copy.from = { x: clamp01(copy.from.x + off), y: clamp01(copy.from.y + off) };
+      copy.to = { x: clamp01(copy.to.x + off), y: clamp01(copy.to.y + off) };
+    }
+    return copy;
   }
 
   // ---------------------------------------------------------------------------
@@ -585,6 +720,19 @@
       layer.strokeWidth = Number(value) || 2;
     } else if (kind === "font-size") {
       layer.fontSize = Number(value) || 16;
+    } else if (kind === "font-family") {
+      layer.fontFamily = value;
+    } else if (kind === "bold") {
+      layer.bold = !!value;
+    } else if (kind === "italic") {
+      layer.italic = !!value;
+    } else if (kind === "plain") {
+      layer.plain = value === "1" || value === true;
+    } else if (kind === "text") {
+      layer.text = typeof value === "string" ? value : String(value ?? "");
+    } else if (kind === "label") {
+      const next = typeof value === "string" ? value : String(value ?? "");
+      layer.label = next.length ? next : undefined;
     } else {
       state.history.past.pop(); // nothing changed; drop the speculative snapshot
       updateHistoryButtons();
@@ -622,6 +770,37 @@
     const strokeUnits = typeof layer.strokeWidth === "number" ? layer.strokeWidth : 2;
     ctx.lineWidth = strokeUnits * baseUnit;
     switch (layer.kind) {
+      case "patch": {
+        const r = framePx(layer, w, h);
+        const s = layer.source;
+        if (!r || !s || !state.image) break;
+        const v = state.viewport;
+        const scale = v.imageScale || 1;
+        // Source region → original-image pixels.
+        const sx = (s.x * v.width - v.imageX) / scale;
+        const sy = (s.y * v.height - v.imageY) / scale;
+        const sw = (s.width * v.width) / scale;
+        const sh = (s.height * v.height) / scale;
+        if (sw >= 1 && sh >= 1) {
+          try {
+            ctx.drawImage(state.image, sx, sy, sw, sh, r.x, r.y, r.w, r.h);
+          } catch (e) { /* source outside image bounds — skip */ }
+        }
+        // Thin neutral edge so the clone reads as a distinct object.
+        ctx.strokeStyle = "rgba(35,36,35,0.30)";
+        ctx.lineWidth = baseUnit;
+        ctx.strokeRect(r.x, r.y, r.w, r.h);
+        // When selected, show where the pixels came from.
+        if (state.selectedLayerId === layer.id) {
+          ctx.save();
+          ctx.setLineDash([4, 3]);
+          ctx.strokeStyle = "rgba(196,125,28,0.7)";
+          ctx.lineWidth = baseUnit;
+          ctx.strokeRect(s.x * w, s.y * h, s.width * w, s.height * h);
+          ctx.restore();
+        }
+        break;
+      }
       case "rect":
       case "highlight": {
         const r = framePx(layer, w, h);
@@ -665,11 +844,23 @@
         const r = framePx(layer, w, h);
         const text = layer.text || layer.label || "";
         if (!r || !text) break;
-        ctx.fillStyle = "rgba(20,24,30,0.84)";
-        ctx.fillRect(r.x, r.y, r.w, r.h);
-        ctx.fillStyle = "#fff";
-        ctx.font = `${Math.max(11, w / 140)}px ui-monospace, monospace`;
-        ctx.fillText(text, r.x + 6, r.y + r.h - 6);
+        const scale = (typeof layer.fontSize === "number" ? layer.fontSize : 16) / 16;
+        const px = Math.max(11, (w / 140) * scale);
+        ctx.font = labelFontString(layer, px);
+        ctx.textBaseline = "alphabetic";
+        if (layer.plain) {
+          // Plain mode: colored text, no background chip.
+          ctx.fillStyle = hexColor(layer.color);
+          ctx.fillText(text, r.x + 2, r.y + r.h - 6);
+        } else {
+          // Pill mode: white text on a dark chip, widened to fit the text.
+          const textW = ctx.measureText(text).width;
+          const bgW = Math.max(r.w, textW + 12);
+          ctx.fillStyle = "rgba(20,24,30,0.84)";
+          ctx.fillRect(r.x, r.y, bgW, r.h);
+          ctx.fillStyle = "#fff";
+          ctx.fillText(text, r.x + 6, r.y + r.h - 6);
+        }
         break;
       }
       case "guide": {
@@ -704,14 +895,21 @@
         ctx.strokeRect(r.x - 2, r.y - 2, r.w + 4, r.h + 4);
         ctx.setLineDash([]);
       } else if (layer.from && layer.to) {
-        // Selection marker for line/arrow: bracket the endpoints.
+        // Selection markers for line/arrow: filled round grab handles at each
+        // endpoint. Drag a handle to reshape that end; drag the body to move
+        // the whole segment.
         const x1 = layer.from.x * w, y1 = layer.from.y * h;
         const x2 = layer.to.x * w, y2 = layer.to.y * h;
-        ctx.strokeStyle = "#C47D1C";
-        ctx.setLineDash([4, 3]);
-        ctx.strokeRect(x1 - 4, y1 - 4, 8, 8);
-        ctx.strokeRect(x2 - 4, y2 - 4, 8, 8);
         ctx.setLineDash([]);
+        ctx.lineWidth = 1.5;
+        ctx.fillStyle = "#fff";
+        ctx.strokeStyle = "#C47D1C";
+        [[x1, y1], [x2, y2]].forEach(([hx, hy]) => {
+          ctx.beginPath();
+          ctx.arc(hx, hy, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        });
       }
     }
     ctx.restore();
@@ -724,7 +922,7 @@
     ctx.lineWidth = Math.max(2, w / 600);
     ctx.setLineDash([6, 4]);
     ctx.strokeStyle = hexColor(DEFAULT_COLOR, 0.85);
-    if (c.tool === "rect" || c.tool === "blur") {
+    if (c.tool === "rect" || c.tool === "blur" || c.tool === "clone") {
       const f = normalizedFrame(c.start, c.current);
       ctx.strokeRect(f.x * w, f.y * h, f.width * w, f.height * h);
       if (c.tool === "blur") {
@@ -805,6 +1003,7 @@
     drawCreatingPreview(w, h);
     ctx.restore();
     renderRail();
+    updateRailMode();
     // Keep the toolbar in sync with the current selection (edit-mode shape
     // highlight, disabled conversions, style-stack mirror). render() is the
     // common path for every selection change (canvas/sidebar select, undo,
@@ -848,40 +1047,158 @@
     renderInspector();
   }
 
+  function escHtml(value) {
+    return String(value == null ? "" : value).replace(/[&<>"]/g, (c) => (
+      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]
+    ));
+  }
+
+  // Convert a layer's viewport-normalized geometry into SOURCE-IMAGE pixels —
+  // the meaningful "where on the screenshot." Mirrors the renderer's
+  // image-basis math: imagePx = (norm * viewportDim - imageOrigin) / imageScale.
+  function frameImagePx(frame) {
+    const v = state.viewport;
+    const scale = v.imageScale || 1;
+    return {
+      x: (frame.x * v.width - v.imageX) / scale,
+      y: (frame.y * v.height - v.imageY) / scale,
+      w: (frame.width * v.width) / scale,
+      h: (frame.height * v.height) / scale,
+    };
+  }
+  function pointImagePx(point) {
+    const v = state.viewport;
+    const scale = v.imageScale || 1;
+    return {
+      x: (point.x * v.width - v.imageX) / scale,
+      y: (point.y * v.height - v.imageY) / scale,
+    };
+  }
+
   function renderInspector() {
     const body = document.getElementById("inspector-body");
     if (!body) return;
-    const selected = state.document.layers.find((l) => l.id === state.selectedLayerId);
-    if (!selected) {
+    const sel = state.document.layers.find((l) => l.id === state.selectedLayerId);
+    if (!sel) {
       body.className = "inspector-empty";
       body.textContent = "Select a layer to inspect.";
       return;
     }
     body.className = "";
-    const shape = layerShape(selected);
-    const rows = [
-      ["shape", shape || selected.kind],
-      ["author", selected.author || "agent"],
-      ["color", selected.color || "—"],
-    ];
-    if (shape && shape !== "blur") {
-      rows.push(["width", String(typeof selected.strokeWidth === "number" ? selected.strokeWidth : 2)]);
+
+    const shape = layerShape(sel) || sel.kind;
+    const author = sel.author || "agent";
+    const color = sel.color || "#C47D1C";
+    const sections = [];
+
+    // Identity — author chip + shape name.
+    sections.push(
+      `<div class="insp-head">` +
+        `<span class="insp-chip insp-chip-${author === "user" ? "user" : "agent"}">${escHtml(author)}</span>` +
+        `<span class="insp-title">${escHtml(shape)}</span>` +
+      `</div>`
+    );
+
+    // Geometry — image pixels, in a small card grid. Frame layers get X/Y/W/H;
+    // segment layers (arrow/line) get start/end points + length.
+    let geo = "";
+    if (sel.frame) {
+      const p = frameImagePx(sel.frame);
+      const cell = (k, v) => `<div class="insp-cell"><span class="ck">${k}</span><span class="cv">${v}</span></div>`;
+      geo =
+        `<div class="insp-geo">` +
+          cell("X", Math.round(p.x)) +
+          cell("Y", Math.round(p.y)) +
+          cell("W", Math.round(p.w)) +
+          cell("H", Math.round(p.h)) +
+        `</div>`;
+    } else if (sel.from && sel.to) {
+      const a = pointImagePx(sel.from);
+      const b = pointImagePx(sel.to);
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      const cell = (k, v) => `<div class="insp-cell"><span class="ck">${k}</span><span class="cv">${v}</span></div>`;
+      geo =
+        `<div class="insp-geo insp-geo-seg">` +
+          cell("START", `${Math.round(a.x)}, ${Math.round(a.y)}`) +
+          cell("END", `${Math.round(b.x)}, ${Math.round(b.y)}`) +
+          cell("LENGTH", `${Math.round(len)}<span class="cu">px</span>`) +
+        `</div>`;
     }
-    if (selected.kind === "label") {
-      rows.push(["size", String(typeof selected.fontSize === "number" ? selected.fontSize : 16)]);
+    if (geo) {
+      sections.push(`<div class="insp-section"><div class="insp-kicker">geometry · px</div>${geo}</div>`);
     }
-    if (selected.label && selected.label !== "line" && selected.label !== "BLUR") {
-      rows.push(["label", selected.label]);
+
+    // Clone (patch): show where the pixels were copied from instead of style.
+    if (sel.kind === "patch" && sel.source) {
+      const s = pointImagePx({ x: sel.source.x, y: sel.source.y });
+      sections.push(
+        `<div class="insp-section"><div class="insp-kicker">source · px</div>` +
+        `<div class="insp-geo insp-geo-seg">` +
+          `<div class="insp-cell"><span class="ck">FROM</span><span class="cv">${Math.round(s.x)}, ${Math.round(s.y)}</span></div>` +
+        `</div></div>`
+      );
+      body.innerHTML = sections.join("");
+      return;
     }
-    if (selected.frame) {
-      rows.push(["x", selected.frame.x.toFixed(3)]);
-      rows.push(["y", selected.frame.y.toFixed(3)]);
-      rows.push(["w", selected.frame.width.toFixed(3)]);
-      rows.push(["h", selected.frame.height.toFixed(3)]);
+
+    // Style — INTERACTIVE controls. The inspector is the per-layer editor now
+    // (the toolbar is new-draw defaults only). Each control carries
+    // data-insp-style / data-insp-value; a delegated handler on #inspector-body
+    // applies it to the selected layer via applyStyleToSelection.
+    const escAttr = (s) => escHtml(String(s == null ? "" : s)).replace(/"/g, "&quot;");
+    const sameHex = (a, b) => String(a || "").toUpperCase() === String(b || "").toUpperCase();
+    const COLORS = [["#232423", "Ink"], ["#D03A1C", "Alert"], ["#C47D1C", "Amber"], ["#9A6A22", "Brass"], ["#FFFFFF", "White"]];
+    const ctrl = (label, inner) => `<div class="insp-ctrl"><span class="insp-ctrl-k">${label}</span><div class="insp-ctrl-row">${inner}</div></div>`;
+    const ctrlText = (label, inner) => `<div class="insp-ctrl insp-ctrl-text"><span class="insp-ctrl-k">${label}</span>${inner}</div>`;
+    const ctrls = [];
+
+    // Color — every layer kind.
+    ctrls.push(ctrl("color", COLORS.map(([hex, name]) =>
+      `<button type="button" class="style-btn swatch${hex === "#FFFFFF" ? " swatch-light" : ""}${sameHex(color, hex) ? " active" : ""}" data-insp-style="color" data-insp-value="${hex}" title="${name}" style="--c: ${hex}"></button>`
+    ).join("")));
+
+    // Stroke — shapes (not labels / blur).
+    if (sel.kind !== "label" && shape !== "blur") {
+      const w = typeof sel.strokeWidth === "number" ? sel.strokeWidth : 2;
+      ctrls.push(ctrl("stroke", [1, 2, 3, 5].map((v) =>
+        `<button type="button" class="style-btn stroke-pick${v === w ? " active" : ""}" data-insp-style="stroke" data-insp-value="${v}" title="${v} px"><span class="stroke-pip" style="height: ${v}px"></span></button>`
+      ).join("")));
     }
-    body.innerHTML = rows
-      .map(([k, v]) => `<div class="inspector-row"><span class="k">${k}</span><span class="v">${v}</span></div>`)
-      .join("");
+
+    // Text typography — labels only.
+    if (sel.kind === "label") {
+      const fs = typeof sel.fontSize === "number" ? sel.fontSize : 16;
+      ctrls.push(ctrl("size", [[12, "S"], [16, "M"], [22, "L"]].map(([v, l]) =>
+        `<button type="button" class="style-btn font-pick${v === fs ? " active" : ""}" data-insp-style="font-size" data-insp-value="${v}" title="${l}">${l}</button>`
+      ).join("")));
+      const fam = sel.fontFamily || "mono";
+      const FAMS = [["sans", "-apple-system, system-ui, sans-serif"], ["serif", "ui-serif, Georgia, serif"], ["mono", "ui-monospace, monospace"]];
+      ctrls.push(ctrl("font", FAMS.map(([v, css]) =>
+        `<button type="button" class="style-btn font-fam${v === fam ? " active" : ""}" data-insp-style="font-family" data-insp-value="${v}" style="font-family: ${css}">Aa</button>`
+      ).join("")));
+      ctrls.push(ctrl("style",
+        `<button type="button" class="style-btn deco${sel.bold ? " active" : ""}" data-insp-style="bold" data-insp-toggle style="font-weight: 700">B</button>` +
+        `<button type="button" class="style-btn deco${sel.italic ? " active" : ""}" data-insp-style="italic" data-insp-toggle style="font-style: italic; font-family: ui-serif, Georgia, serif">I</button>`
+      ));
+      ctrls.push(ctrl("bg",
+        `<button type="button" class="style-btn labelbg${!sel.plain ? " active" : ""}" data-insp-style="plain" data-insp-value="0" title="Pill background">▭</button>` +
+        `<button type="button" class="style-btn labelbg${sel.plain ? " active" : ""}" data-insp-style="plain" data-insp-value="1" title="Plain text">T</button>`
+      ));
+      ctrls.push(ctrlText("text",
+        `<input type="text" class="insp-text-input" data-insp-text data-insp-style="text" value="${escAttr(sel.text)}" placeholder="label text" />`
+      ));
+    }
+
+    // Optional callout label — shapes that can carry one (arrow / rect / line).
+    if (sel.kind !== "label" && sel.kind !== "patch" && shape !== "blur" && sel.label !== "line" && sel.label !== "BLUR") {
+      ctrls.push(ctrlText("label",
+        `<input type="text" class="insp-text-input" data-insp-text data-insp-style="label" value="${escAttr(sel.label)}" placeholder="callout label" />`
+      ));
+    }
+
+    sections.push(`<div class="insp-section"><div class="insp-kicker">style</div>${ctrls.join("")}</div>`);
+
+    body.innerHTML = sections.join("");
   }
 
   function loadImage(url) {
@@ -908,7 +1225,10 @@
   // mirrors the layer's color / width / font.
   // ---------------------------------------------------------------------------
   function isEditingSelection() {
-    return state.activeTool == null && !!selectedLayer();
+    // Selected-layer editing now lives in the inspector (see renderInspector).
+    // The top toolbar stays purely tool-selection + new-draw defaults and never
+    // morphs into a live "editing selection" restyle panel.
+    return false;
   }
 
   function syncToolbarState() {
@@ -919,8 +1239,20 @@
     // Shape buttons: in edit mode highlight the layer's shape and disable
     // conversions that don't map cleanly. In draw mode highlight the active
     // create-tool as before.
-    toolToolbar.querySelectorAll(".tool-btn[data-tool]").forEach((btn) => {
+    // Document scope keeps every tool button in sync if a future surface
+    // mirrors the primary toolbar controls.
+    document.querySelectorAll(".tool-btn[data-tool]").forEach((btn) => {
       const tool = btn.getAttribute("data-tool");
+      // Viewport / cursor tools are always enabled and reflect the current
+      // mode: Select is on whenever no create-tool is armed; Hand when panning.
+      if (tool === "select" || tool === "hand") {
+        btn.disabled = false;
+        btn.classList.toggle(
+          "active",
+          tool === "select" ? state.activeTool == null : state.activeTool === "hand"
+        );
+        return;
+      }
       if (editing) {
         btn.classList.toggle("active", tool === selShape);
         // Text + the layer's own shape stay enabled; cross-family shape
@@ -965,6 +1297,22 @@
     setGroupActiveByValue("color", color, true);
     setGroupActiveByValue("stroke", String(stroke), false);
     setGroupActiveByValue("font-size", String(font), false);
+
+    // Text typography — family + pill/plain are single-select groups; bold and
+    // italic are independent toggles.
+    const family = layer ? (layer.fontFamily || "mono") : state.style.fontFamily;
+    const plain = layer ? !!layer.plain : !!state.style.plain;
+    setGroupActiveByValue("font-family", family, false);
+    setGroupActiveByValue("plain", plain ? "1" : "0", false);
+    setToggleActive("bold", layer ? !!layer.bold : !!state.style.bold);
+    setToggleActive("italic", layer ? !!layer.italic : !!state.style.italic);
+  }
+
+  /** Reflect a boolean toggle's state onto its button. */
+  function setToggleActive(kind, on) {
+    if (!styleStack) return;
+    const btn = styleStack.querySelector(`.style-btn[data-style="${kind}"][data-toggle]`);
+    if (btn) btn.classList.toggle("active", on);
   }
 
   /** Mark the button in `kind`'s group whose data-value matches `value`.
@@ -995,30 +1343,54 @@
   function updateStyleStackVisibility() {
     if (!styleStack) return;
 
-    // In "editing selection" mode the relevant groups follow the selected
-    // layer's kind; otherwise they follow the active create-tool.
-    let isText;
-    let isShape;
-    if (isEditingSelection()) {
-      const layer = selectedLayer();
-      isText = layer && layer.kind === "label";
-      isShape = !!layerShape(layer); // rect / arrow / line / blur
-    } else {
-      const tool = state.activeTool;
-      isText = tool === "text";
-      isShape = tool === "rect" || tool === "arrow" || tool === "line" || tool === "blur";
+    // The toolbar style stack is the NEW-DRAW defaults panel — it follows the
+    // active create-tool. (Selected-layer editing lives in the inspector now.)
+    const tool = state.activeTool;
+    const isText = tool === "text";
+    const isShape = tool === "rect" || tool === "arrow" || tool === "line" || tool === "blur";
+
+    // Clone tool has no style controls — hide the whole stack.
+    if (tool === "clone") {
+      styleStack.querySelectorAll(".style-group, .style-divider").forEach((el) => el.classList.add("hidden"));
+      return;
     }
 
     const strokeGroup = styleStack.querySelector('[data-group="stroke"]');
-    const fontDivider = styleStack.querySelector('[data-group="font-divider"]');
-    const fontGroup = styleStack.querySelector('[data-group="font-size"]');
+    const colorGroup = styleStack.querySelector('[data-group="color"]');
+    // Stroke is meaningless for text; text-only groups (font/deco/bg) are
+    // meaningless for shapes. Null tool (defaults panel) shows everything.
+    if (strokeGroup) strokeGroup.classList.toggle("hidden", isText);
+    if (colorGroup) colorGroup.classList.remove("hidden");
+    styleStack.querySelectorAll(".style-group.text-only").forEach((el) => {
+      el.classList.toggle("hidden", isShape);
+    });
 
-    // Stroke width is meaningless for text labels; hide it for text.
-    if (strokeGroup) strokeGroup.classList.toggle("hidden", !!isText);
-    // Font size only applies to text labels; hide it for shapes. The null /
-    // nothing-selected defaults panel keeps everything visible.
-    if (fontGroup) fontGroup.classList.toggle("hidden", !!isShape);
-    if (fontDivider) fontDivider.classList.toggle("hidden", !!isShape);
+    collapseDividers();
+  }
+
+  // Hide dividers so none ever stack up empty: show exactly one divider
+  // between each pair of consecutive VISIBLE groups, and none leading or
+  // trailing. Operates only on the style-stack's own dividers.
+  function collapseDividers() {
+    if (!styleStack) return;
+    const kids = Array.from(styleStack.children);
+    kids.forEach((el) => {
+      if (el.classList.contains("style-divider")) el.classList.add("hidden");
+    });
+    let prevGroupIdx = -1;
+    for (let i = 0; i < kids.length; i++) {
+      const el = kids[i];
+      if (!el.classList.contains("style-group") || el.classList.contains("hidden")) continue;
+      if (prevGroupIdx >= 0) {
+        for (let j = prevGroupIdx + 1; j < i; j++) {
+          if (kids[j].classList.contains("style-divider")) {
+            kids[j].classList.remove("hidden");
+            break;
+          }
+        }
+      }
+      prevGroupIdx = i;
+    }
   }
 
   function applyStylePick(kind, value) {
@@ -1028,6 +1400,14 @@
       state.style.color = value;
     } else if (kind === "font-size") {
       state.style.fontSize = Number(value) || 16;
+    } else if (kind === "font-family") {
+      state.style.fontFamily = value;
+    } else if (kind === "bold") {
+      state.style.bold = !!value;
+    } else if (kind === "italic") {
+      state.style.italic = !!value;
+    } else if (kind === "plain") {
+      state.style.plain = value === "1" || value === true;
     }
   }
 
@@ -1048,8 +1428,21 @@
       const btn = e.target.closest(".style-btn");
       if (!btn) return;
       const kind = btn.getAttribute("data-style");
+      if (!kind) return;
+
+      // Toggles (bold / italic) flip independently; single-select groups
+      // (color / stroke / font-size / font-family / plain) pick one of a set.
+      if (btn.hasAttribute("data-toggle")) {
+        const on = !btn.classList.contains("active");
+        btn.classList.toggle("active", on);
+        applyStylePick(kind, on);
+        if (isEditingSelection()) applyStyleToSelection(kind, on);
+        e.preventDefault();
+        return;
+      }
+
       const value = btn.getAttribute("data-value");
-      if (!kind || value === null) return;
+      if (value === null) return;
       // Always update the per-tool default so the next new shape inherits the
       // pick too. When a layer is selected (no create-tool active), also apply
       // it live to that layer and autosave.
@@ -1065,7 +1458,117 @@
   // ---------------------------------------------------------------------------
   // External API used by native code via WKWebView
   // ---------------------------------------------------------------------------
+  // ─── Work Thread (right rail · streamed run log) ───────────────────
+  //
+  // Swift owns the thread state and pushes whole snapshots via
+  // window.talkieMarkup.thread(payload). This side is a dumb renderer +
+  // a contextual-rail toggle: thread shows while/after a run, the layer
+  // inspector takes over the moment something is selected.
+
+  function updateRailMode() {
+    const rail = document.getElementById("inspector-rail");
+    const wt = document.getElementById("work-thread");
+    if (!rail || !wt) return;
+    const showThread = !!state.thread && !state.selectedLayerId;
+    rail.classList.toggle("thread-active", showThread);
+    wt.classList.toggle("hidden", !showThread);
+  }
+
+  function renderWorkThread() {
+    const t = state.thread;
+    const body = document.getElementById("wt-body");
+    const foot = document.getElementById("wt-foot");
+    if (!t || !body || !foot) { updateRailMode(); return; }
+
+    const dot = document.querySelector("#work-thread .wt-dot");
+    const stateLabel = document.querySelector("#work-thread .wt-state");
+    if (dot) dot.className = "wt-dot" + (t.live ? " live" : "");
+    if (stateLabel) stateLabel.textContent = t.live ? "live" : "done";
+
+    const entries = t.entries || [];
+    body.innerHTML = "";
+    // Which model is doing this — pinned at the top of the thread.
+    if (t.model) {
+      const model = document.createElement("div");
+      model.className = "wt-model";
+      model.innerHTML =
+        '<span class="wt-model-k">model</span>' +
+        '<span class="wt-model-v">' + escHtml(t.model) + "</span>";
+      body.appendChild(model);
+    }
+    if (t.instruction) {
+      const prompt = document.createElement("div");
+      prompt.className = "wt-prompt";
+      prompt.innerHTML =
+        '<span class="wt-prompt-mark">»</span>' +
+        '<span class="wt-prompt-text">' + escHtml(t.instruction) + "</span>";
+      body.appendChild(prompt);
+    }
+    // First meta row is the spine's top; first mark row gets an "· actions"
+    // kicker so the model's actions read as a distinct section.
+    const firstMeta = entries.findIndex((e) => e.kind !== "mark");
+    const firstMark = entries.findIndex((e) => e.kind === "mark");
+    entries.forEach((e, i) => {
+      if (i === firstMark) {
+        const kicker = document.createElement("div");
+        kicker.className = "wt-kicker";
+        kicker.textContent = "· actions";
+        body.appendChild(kicker);
+      }
+      const row = document.createElement("div");
+      const isLast = i === entries.length - 1;
+      const classes = ["wt-row", e.kind || "meta", e.status || "pending"];
+      if (i === firstMeta || i === firstMark) classes.push("first");
+      if (isLast && !t.live) classes.push("last");
+      // Only the newest mark (added on the current streamed push) animates
+      // in — re-rendering the whole list shouldn't re-animate prior rows.
+      if (isLast && t.live && e.kind === "mark") classes.push("enter");
+      row.className = classes.join(" ");
+      row.innerHTML =
+        '<span class="wt-spine"></span>' +
+        '<span class="wt-node"></span>' +
+        '<span class="wt-verb">' + escHtml(e.verb || "") + "</span>" +
+        '<span class="wt-detail">' + escHtml(e.detail || "") + "</span>";
+      body.appendChild(row);
+    });
+    if (t.live) {
+      const caret = document.createElement("div");
+      caret.className = "wt-row caret";
+      caret.innerHTML = '<span class="wt-spine half"></span><span class="wt-caret"></span>';
+      body.appendChild(caret);
+    }
+
+    if (t.live) {
+      foot.innerHTML =
+        '<span class="wt-dot live"></span>' +
+        '<span class="wt-foot-live">' + escHtml(t.statusText || "working…") + "</span>" +
+        '<span class="wt-foot-elapsed">' + escHtml(t.elapsed || "") + "</span>";
+    } else {
+      const summary = t.summary || "";
+      const dashIndex = summary.indexOf(" · ");
+      const pass = dashIndex > 0 ? summary.slice(0, dashIndex) : summary;
+      const rest = dashIndex > 0 ? summary.slice(dashIndex + 3) : "";
+      foot.innerHTML =
+        '<span class="wt-foot-pass">' + escHtml(pass) + "</span>" +
+        (rest ? '<span class="wt-foot-summary">' + escHtml(rest) + "</span>" : "") +
+        '<button type="button" class="wt-undo" data-action="undo">↶ undo <span class="kbd">⌘Z</span></button>';
+    }
+    updateRailMode();
+  }
+
+  // Undo from the thread footer reuses the universal pass undo.
+  const wtFootEl = document.getElementById("wt-foot");
+  if (wtFootEl) {
+    wtFootEl.addEventListener("click", (e) => {
+      if (e.target.closest('[data-action="undo"]')) undo();
+    });
+  }
+
   window.talkieMarkup = {
+    thread(payload) {
+      state.thread = payload || null;
+      renderWorkThread();
+    },
     init(payload) {
       state.sessionId = payload.sessionId;
       state.imageURL = payload.imageURL;
@@ -1098,6 +1601,30 @@
     redo() { return redo(); },
   };
 
+  // Inspector editing — the inspector is the per-layer editor. Its controls
+  // carry data-insp-style / data-insp-value; apply them to the selected layer.
+  // Delegated on the body element so it survives renderInspector() rebuilds.
+  const inspectorBodyEl = document.getElementById("inspector-body");
+  if (inspectorBodyEl) {
+    inspectorBodyEl.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-insp-style]");
+      if (!btn) return;
+      const kind = btn.getAttribute("data-insp-style");
+      let value = btn.getAttribute("data-insp-value");
+      if (btn.hasAttribute("data-insp-toggle")) {
+        value = !btn.classList.contains("active");
+      }
+      if (applyStyleToSelection(kind, value)) renderInspector();
+    });
+    // Text fields commit on change (blur / enter) so editing doesn't snapshot
+    // per keystroke or steal focus on every character.
+    inspectorBodyEl.addEventListener("change", (e) => {
+      const input = e.target.closest("input[data-insp-text]");
+      if (!input) return;
+      applyStyleToSelection(input.getAttribute("data-insp-style") || "text", input.value);
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // Toolbar — tool selection
   // ---------------------------------------------------------------------------
@@ -1106,6 +1633,16 @@
     if (!btn || btn.disabled) return;
     const tool = btn.getAttribute("data-tool");
     if (tool === null) return;
+
+    // Viewport / cursor tools — always available, never shape conversions.
+    if (tool === "select") {
+      setActiveTool(null);
+      return;
+    }
+    if (tool === "hand") {
+      setActiveTool(state.activeTool === "hand" ? null : "hand");
+      return;
+    }
 
     // Editing-selection mode: a shape button restyles the SELECTED layer's
     // shape in place (rect⇄blur, arrow⇄line) instead of arming a draw tool.
@@ -1130,8 +1667,8 @@
   // ---------------------------------------------------------------------------
   // Canvas zoom cluster — viewport + history actions
   //
-  // Lives over the canvas (floating bottom-right) so the top toolbar
-  // stays pure drawing. Handles zoom in / out / fit + undo + redo.
+  // Lives over the canvas (floating bottom-right). Handles zoom in / out /
+  // fit + undo + redo.
   // ---------------------------------------------------------------------------
   if (zoomCluster) {
     zoomCluster.addEventListener("click", (e) => {
@@ -1152,6 +1689,89 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Inline text editor
+  //
+  // A real, focused <input> floated over the canvas at the click point. The
+  // committed value becomes the label layer's text. Replaces window.prompt,
+  // which silently no-ops inside WKWebView. While it's focused the global
+  // keydown guard (target.tagName === "INPUT") keeps tool shortcuts from
+  // firing, so typing "rect"/"text"/etc. lands as characters, not tools.
+  // ---------------------------------------------------------------------------
+  let activeTextEditor = null;
+
+  function beginTextEdit(layer, screenX, screenY, isNew) {
+    cancelTextEdit();
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = layer.text || "";
+    input.setAttribute("data-inline-text", "1");
+    const fs = typeof layer.fontSize === "number" ? layer.fontSize : 16;
+    Object.assign(input.style, {
+      position: "fixed",
+      left: Math.round(screenX) + "px",
+      top: Math.round(screenY) + "px",
+      zIndex: "9999",
+      minWidth: "120px",
+      font:
+        (layer.bold ? "600 " : "") +
+        (layer.italic ? "italic " : "") +
+        fs +
+        "px " +
+        (layer.fontFamily || "system-ui, sans-serif"),
+      color: layer.color || "#111",
+      background: "rgba(255,255,255,0.97)",
+      border: "1px solid rgba(0,0,0,0.28)",
+      borderRadius: "6px",
+      boxShadow: "0 2px 10px rgba(0,0,0,0.18)",
+      padding: "3px 7px",
+      outline: "none",
+    });
+    document.body.appendChild(input);
+    input.focus();
+    input.select();
+
+    let done = false;
+    const commit = (keep) => {
+      if (done) return;
+      done = true;
+      const val = input.value.trim();
+      input.remove();
+      activeTextEditor = null;
+      if (keep && val) {
+        layer.text = val;
+        debouncedUpdate();
+      } else {
+        // Empty / cancelled — drop the placeholder layer so a stray click
+        // with the text tool never litters the doc with empty labels.
+        const idx = state.document.layers.findIndex((l) => l.id === layer.id);
+        if (idx >= 0) state.document.layers.splice(idx, 1);
+        if (state.selectedLayerId === layer.id) state.selectedLayerId = null;
+        if (isNew) debouncedUpdate();
+      }
+      render();
+    };
+
+    input.addEventListener("keydown", (e) => {
+      // Keep keystrokes out of the canvas/global handlers entirely.
+      e.stopPropagation();
+      if (e.key === "Enter") {
+        e.preventDefault();
+        commit(true);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        commit(false);
+      }
+    });
+    input.addEventListener("blur", () => commit(true));
+    activeTextEditor = { input, commit };
+  }
+
+  function cancelTextEdit() {
+    if (activeTextEditor) activeTextEditor.commit(true);
+  }
+
+  // ---------------------------------------------------------------------------
   // Canvas interaction
   //
   // Three modes share the same mousedown→mousemove→mouseup path:
@@ -1163,7 +1783,8 @@
     if (e.button !== 0) return;
     const norm = eventToNorm(e);
 
-    if (state.isSpaceDown) {
+    // Pan on Space-drag (any tool) or with the Hand tool armed.
+    if (state.isSpaceDown || state.activeTool === "hand") {
       state.panDrag = {
         startX: e.clientX,
         startY: e.clientY,
@@ -1178,20 +1799,21 @@
     // (2) Click tools
     if (state.activeTool && CLICK_TOOLS.has(state.activeTool)) {
       if (state.activeTool === "text") {
-        const text = window.prompt("Label text", "");
-        if (text && text.trim()) {
-          const w = Math.min(0.25, Math.max(0.05, text.length * 0.012));
-          const h = 0.05;
-          const layer = newLabelLayer(
-            { x: norm.nx, y: norm.ny - h, width: w, height: h },
-            text.trim(),
-          );
-          snapshotForUndo();
-          state.document.layers.push(layer);
-          state.selectedLayerId = layer.id;
-          debouncedUpdate();
-          render();
-        }
+        // Drop an empty label at the click point and open an inline,
+        // focused editor right there. (window.prompt is a no-op in
+        // WKWebView — it returns null with no dialog, which is why the
+        // text box and your typing never appeared.)
+        const h = 0.05;
+        const layer = newLabelLayer(
+          { x: norm.nx, y: norm.ny - h, width: 0.12, height: h },
+          "",
+        );
+        snapshotForUndo();
+        state.document.layers.push(layer);
+        state.selectedLayerId = layer.id;
+        render();
+        beginTextEdit(layer, e.clientX, e.clientY, /*isNew*/ true);
+        e.preventDefault();
       }
       return;
     }
@@ -1204,6 +1826,51 @@
     }
 
     // (3) Select / drag existing layer
+    //
+    // For an already-selected segment (arrow / line), an endpoint handle
+    // takes priority so you can grab an end even when it's right on the body.
+    const size = viewportSize();
+
+    // Option/Alt + click on a layer duplicates it and drags the copy —
+    // the original stays put (standard alt-drag-to-duplicate idiom). Takes
+    // priority over endpoint/handle grabs so Option always means "clone".
+    if (e.altKey) {
+      const dupHit = hitTest(norm);
+      if (dupHit) {
+        snapshotForUndo();
+        const copy = duplicateLayer(dupHit);
+        state.document.layers.push(copy);
+        state.selectedLayerId = copy.id;
+        if (copy.frame) {
+          state.drag = {
+            layerId: copy.id,
+            startX: e.clientX,
+            startY: e.clientY,
+            orig: Object.assign({}, copy.frame),
+            zoom: state.viewport.zoom,
+            w: state.viewport.width,
+            h: state.viewport.height,
+          };
+        } else if (copy.from && copy.to) {
+          state.segDrag = makeSegDrag(copy, "both", e, size);
+        }
+        debouncedUpdate();
+        render();
+        e.preventDefault();
+        return;
+      }
+    }
+
+    const already = selectedLayer();
+    if (already && already.from && already.to) {
+      const handle = segmentEndpointAt(norm, already);
+      if (handle) {
+        state.segDrag = makeSegDrag(already, handle, e, size);
+        e.preventDefault();
+        return;
+      }
+    }
+
     const hit = hitTest(norm);
     state.selectedLayerId = hit ? hit.id : null;
     if (hit && hit.frame) {
@@ -1220,8 +1887,45 @@
         w: state.viewport.width,
         h: state.viewport.height,
       };
+    } else if (hit && hit.from && hit.to) {
+      // Whole-segment move — drag the body to translate both endpoints.
+      // (An endpoint grab on the freshly-selected segment is also possible
+      //  on this same press: prefer the handle if the cursor is on one.)
+      const handle = segmentEndpointAt(norm, hit) || "both";
+      state.segDrag = makeSegDrag(hit, handle, e, size);
     }
     render();
+  });
+
+  /** Build the segment-edit drag descriptor. Snapshot is taken lazily on the
+   *  first actual move (see mousemove) so a plain select-click on a segment
+   *  doesn't push an undo state. */
+  function makeSegDrag(layer, handle, e, size) {
+    return {
+      layerId: layer.id,
+      handle, // "from" | "to" | "both"
+      startX: e.clientX,
+      startY: e.clientY,
+      zoom: state.viewport.zoom,
+      w: size.w,
+      h: size.h,
+      origFrom: Object.assign({}, layer.from),
+      origTo: Object.assign({}, layer.to),
+      didSnapshot: false,
+    };
+  }
+
+  // Double-click an existing label to re-open the inline editor in place.
+  canvas.addEventListener("dblclick", (e) => {
+    const norm = eventToNorm(e);
+    const hit = hitTest(norm);
+    if (hit && hit.kind === "label") {
+      setActiveTool(null);
+      state.selectedLayerId = hit.id;
+      render();
+      beginTextEdit(hit, e.clientX, e.clientY, /*isNew*/ false);
+      e.preventDefault();
+    }
   });
 
   canvas.addEventListener("wheel", (e) => {
@@ -1259,7 +1963,38 @@
       render();
       return;
     }
-    if (!state.drag) return;
+    if (state.segDrag) {
+      const seg = state.segDrag;
+      const layer = state.document.layers.find((l) => l.id === seg.layerId);
+      if (!layer || !layer.from || !layer.to) return;
+      // Lazy snapshot — only once movement actually begins, so selecting a
+      // segment without dragging it doesn't pollute the undo stack.
+      if (!seg.didSnapshot) {
+        snapshotForUndo();
+        seg.didSnapshot = true;
+      }
+      const dx = (e.clientX - seg.startX) / seg.zoom / seg.w;
+      const dy = (e.clientY - seg.startY) / seg.zoom / seg.h;
+      if (seg.handle === "from") {
+        let pt = { x: seg.origFrom.x + dx, y: seg.origFrom.y + dy };
+        if (e.shiftKey) pt = snapPointToAxis(seg.origTo, pt);
+        layer.from = pt;
+      } else if (seg.handle === "to") {
+        let pt = { x: seg.origTo.x + dx, y: seg.origTo.y + dy };
+        if (e.shiftKey) pt = snapPointToAxis(seg.origFrom, pt);
+        layer.to = pt;
+      } else {
+        layer.from = { x: seg.origFrom.x + dx, y: seg.origFrom.y + dy };
+        layer.to = { x: seg.origTo.x + dx, y: seg.origTo.y + dy };
+      }
+      layer.author = "user";
+      render();
+      return;
+    }
+    if (!state.drag) {
+      updateSelectionHoverCursor(e);
+      return;
+    }
     const layer = state.document.layers.find((l) => l.id === state.drag.layerId);
     if (!layer || !layer.frame) return;
     const dx = (e.clientX - state.drag.startX) / state.drag.zoom / state.drag.w;
@@ -1298,6 +2033,8 @@
         );
       } else if (c.tool === "blur") {
         layer = newBlurPlaceholderLayer(normalizedFrame(c.start, c.current));
+      } else if (c.tool === "clone") {
+        layer = newPatchLayer(normalizedFrame(c.start, c.current));
       }
       if (layer) {
         snapshotForUndo();
@@ -1311,6 +2048,12 @@
         debouncedUpdate();
         render();
       }
+      return;
+    }
+    if (state.segDrag) {
+      const moved = state.segDrag.didSnapshot;
+      state.segDrag = null;
+      if (moved) debouncedUpdate(); // only persist if the segment actually changed
       return;
     }
     if (state.drag) {
@@ -1391,8 +2134,29 @@
       return;
     }
 
+    // Tab / Shift+Tab — step selection through the layers (the list nav that
+    // used to eat Tab is suppressed in Swift while markup is active). Drops
+    // any active tool so the cycled layer reads as selected.
+    if (e.key === "Tab") {
+      const layers = state.document.layers;
+      if (layers.length) {
+        const cur = layers.findIndex((l) => l.id === state.selectedLayerId);
+        let next;
+        if (e.shiftKey) next = cur <= 0 ? layers.length - 1 : cur - 1;
+        else next = cur === -1 || cur === layers.length - 1 ? 0 : cur + 1;
+        setActiveTool(null);
+        state.selectedLayerId = layers[next].id;
+        render();
+      }
+      e.preventDefault();
+      return;
+    }
+
     if (e.key === "v" || e.key === "V") {
       setActiveTool(null);
+      e.preventDefault();
+    } else if (e.key === "h" || e.key === "H") {
+      setActiveTool(state.activeTool === "hand" ? null : "hand");
       e.preventDefault();
     } else if (e.key === "r" || e.key === "R") {
       setActiveTool("rect");
@@ -1408,6 +2172,9 @@
       e.preventDefault();
     } else if (e.key === "b" || e.key === "B") {
       setActiveTool("blur");
+      e.preventDefault();
+    } else if (e.key === "c" || e.key === "C") {
+      setActiveTool("clone");
       e.preventDefault();
     } else if (e.key === "m" || e.key === "M") {
       toolToolbar.classList.toggle("hidden");
@@ -1442,6 +2209,81 @@
     updateCursor();
     e.preventDefault();
   });
+
+  // ---------------------------------------------------------------------------
+  // Resizable rails — drag the splitter columns to size the Layers / Inspector
+  // panels. Widths live in CSS vars on .bay-body and persist to localStorage so
+  // the layout you tune sticks across sessions.
+  // ---------------------------------------------------------------------------
+  const bayBody = document.querySelector(".bay-body");
+  const RAIL_VARS = { layers: "--layer-w", inspector: "--inspector-w" };
+  const RAIL_LIMITS = { layers: [150, 380], inspector: [180, 460] };
+  const RAIL_DEFAULT = { layers: 220, inspector: 240 };
+  const RAIL_STORAGE_KEY = "talkie.markup.railWidths";
+  let railResize = null;
+
+  function railWidth(which) {
+    const raw = getComputedStyle(bayBody).getPropertyValue(RAIL_VARS[which]);
+    return parseInt(raw, 10) || RAIL_DEFAULT[which];
+  }
+
+  function clampRail(which, value) {
+    const [min, max] = RAIL_LIMITS[which];
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function loadRailWidths() {
+    try {
+      const raw = localStorage.getItem(RAIL_STORAGE_KEY);
+      if (!raw) return;
+      const stored = JSON.parse(raw);
+      ["layers", "inspector"].forEach((which) => {
+        if (typeof stored[which] === "number") {
+          bayBody.style.setProperty(RAIL_VARS[which], clampRail(which, stored[which]) + "px");
+        }
+      });
+    } catch (e) { /* ignore corrupt prefs */ }
+  }
+
+  function persistRailWidths() {
+    try {
+      localStorage.setItem(RAIL_STORAGE_KEY, JSON.stringify({
+        layers: railWidth("layers"),
+        inspector: railWidth("inspector"),
+      }));
+    } catch (e) { /* storage may be unavailable */ }
+  }
+
+  if (bayBody) {
+    document.querySelectorAll(".rail-resizer").forEach((el) => {
+      el.addEventListener("mousedown", (e) => {
+        const which = el.getAttribute("data-resize");
+        railResize = { which, startX: e.clientX, startW: railWidth(which), el };
+        el.classList.add("dragging");
+        document.body.style.cursor = "col-resize";
+        e.preventDefault();
+      });
+    });
+
+    window.addEventListener("mousemove", (e) => {
+      if (!railResize) return;
+      const { which, startX, startW } = railResize;
+      // Layers grows as you drag right; the inspector grows as you drag left.
+      const delta = which === "layers" ? (e.clientX - startX) : (startX - e.clientX);
+      bayBody.style.setProperty(RAIL_VARS[which], clampRail(which, startW + delta) + "px");
+      render(); // re-fit the canvas to the new column width
+    });
+
+    window.addEventListener("mouseup", () => {
+      if (!railResize) return;
+      railResize.el.classList.remove("dragging");
+      document.body.style.cursor = "";
+      railResize = null;
+      persistRailWidths();
+    });
+
+    loadRailWidths();
+  }
 
   // Initial paint of the style-stack visibility + zoom badge. Both are
   // safe to call before init() — they read live state but write only

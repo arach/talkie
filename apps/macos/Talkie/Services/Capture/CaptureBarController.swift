@@ -11,6 +11,15 @@
 import AppKit
 import TalkieKit
 
+/// Shared flag: true while a capture chord (the Hyper+S / Hyper+R bar) is on
+/// screen and owns the keyboard. The app's single-key navigation reads this
+/// and stands down — otherwise the chord's letter keys (A/S/D = region /
+/// fullscreen / window) would *also* fire single-key nav (S → Screenshots,
+/// D → Dictations) and change the screen behind the bar. Main-thread only.
+enum CaptureChord {
+    nonisolated(unsafe) static var isActive = false
+}
+
 @MainActor
 final class CaptureBarController {
 
@@ -23,6 +32,7 @@ final class CaptureBarController {
     /// Shows the bar in the given mode and waits for user input.
     /// Returns the chosen result, or nil if cancelled/timed out.
     func beginChord(initialMode: CaptureBarMode, options: CaptureChordOptions = .captureOnly) async -> CaptureBarResult? {
+        CaptureChord.isActive = true
         let allItems = TrayItem.allItems()
         let showCameraOption = options.showCameraOption && FeatureFlags.shared.enableCameraBubble
         let hasTrayItems = options.showTrayOption && !allItems.isEmpty
@@ -186,6 +196,7 @@ final class CaptureBarController {
     // MARK: - Private
 
     private func tearDown() {
+        CaptureChord.isActive = false
         panel.dismiss()
         if let monitor = globalMonitor {
             NSEvent.removeMonitor(monitor)

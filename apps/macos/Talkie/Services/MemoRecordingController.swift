@@ -860,6 +860,7 @@ final class MemoRecordingController {
                 mode: captureMode,
                 windowTitle: screenshot.windowTitle,
                 appName: screenshot.appName,
+                appBundleID: screenshot.appBundleID,
                 displayName: screenshot.displayName
             )
         }

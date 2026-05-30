@@ -23,6 +23,7 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
     private var imageURL: URL?
     private var onComplete: ((Result<CaptureMarkupDocument?, Error>) -> Void)?
     private var layerCount = 0
+    private var passCount = 0
     private var currentSelection: CaptureMarkupLayerSelection?
     private var currentDocument: CaptureMarkupDocument?
     private var dragExportURLs: [URL] = []
@@ -73,7 +74,60 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
         NSApp.activate(ignoringOtherApps: true)
 
         session.start(imageURL: imageURL, document: doc, instruction: instruction)
+        SettingsManager.shared.isMarkupSessionActive = true
         log.info("Capture markup session opened", detail: imageURL.lastPathComponent)
+    }
+
+    /// Build the markup chrome for hosting inside a normal in-app view
+    /// (vs. the floating `NSPanel`). The caller owns the returned view and
+    /// places it in its own hierarchy; the coordinator drives the session
+    /// exactly as the panel does (autosave on every edit, AI run, drag-out).
+    /// There is no Accept/Cancel commit gate — edits autosave; the host's
+    /// back button just calls `endEmbeddedSession()` to tear down.
+    func beginEmbeddedSession(
+        imageURL: URL,
+        document: CaptureMarkupDocument? = nil,
+        instruction: String? = nil
+    ) -> CaptureMarkupPanelRootView {
+        closeSession(discard: false)
+
+        self.imageURL = imageURL
+        self.onComplete = nil
+
+        let doc = document ?? CaptureMarkupStorage.load(forImageURL: imageURL)
+            ?? emptyDocument(for: imageURL)
+        currentDocument = doc
+
+        let root = CaptureMarkupPanelRootView(frame: NSRect(x: 0, y: 0, width: 1180, height: 720))
+        rootView = root
+        root.setDragPayloadProvider { [weak self] in
+            self?.makeDragPayload()
+        }
+        root.inputBar.delegate = self
+        if let instruction, !instruction.isEmpty {
+            root.inputBar.promptText = instruction
+        }
+        syncChrome(layerCount: doc.layers.count, selection: nil)
+
+        let session = CaptureMarkupWebSession()
+        session.onMessage = { [weak self] message in
+            self?.handleBridge(message: message)
+        }
+        session.attach(to: root.webHost)
+        webSession = session
+
+        session.start(imageURL: imageURL, document: doc, instruction: instruction)
+        SettingsManager.shared.isMarkupSessionActive = true
+        log.info("Capture markup embedded session opened", detail: imageURL.lastPathComponent)
+        return root
+    }
+
+    /// Tear down an embedded session. Idempotent — safe to call from the
+    /// host's `onDisappear` even after the session already ended. Edits are
+    /// already persisted via autosave, so this only releases the web view.
+    func endEmbeddedSession() {
+        guard webSession != nil || rootView != nil else { return }
+        closeSession(discard: false)
     }
 
     func openSessionIfNeeded(imageURL: URL, instruction: String? = nil) {
@@ -143,23 +197,41 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
     func captureMarkupPanelDidRun(instruction: String) {
         guard let imageURL else { return }
         rootView?.inputBar.setRunning(true)
+        let started = Date()
+        passCount += 1
+        let pass = passCount
+        webSession?.beginThread(instruction: instruction)
         Task {
             defer {
                 rootView?.inputBar.setRunning(false)
             }
             do {
                 let existing = await webSession?.fetchDocument()
+                let beforeIDs = Set(existing?.layers.map(\.id) ?? [])
                 let doc = try await CaptureMarkupAgentService.shared.runInstruction(
                     imageURL: imageURL,
                     instruction: instruction,
                     existing: existing,
-                    openWebBay: false
+                    openWebBay: false,
+                    onPhase: { [weak self] phase in
+                        self?.webSession?.handlePhase(
+                            phase,
+                            elapsed: Date().timeIntervalSince(started)
+                        )
+                    }
                 )
                 currentDocument = doc
                 webSession?.push(document: doc)
+                let added = doc.layers.filter { !beforeIDs.contains($0.id) }
+                await webSession?.finishThread(
+                    added: added,
+                    elapsed: Date().timeIntervalSince(started),
+                    pass: pass
+                )
                 syncChrome(layerCount: doc.layers.count, selection: nil)
                 rootView?.inputBar.clearPrompt()
             } catch {
+                webSession?.failThread(elapsed: Date().timeIntervalSince(started))
                 log.error("Markup run failed", detail: error.localizedDescription)
                 presentAgentError(error)
             }
@@ -270,7 +342,11 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
         self.layerCount = layerCount
         currentSelection = selection
         let touchUp = layerCount > 0
-        rootView?.setDragOutAvailable(touchUp)
+        // Drag-out is always offered while a session is open — the payload
+        // renders the current PNG (annotated or not), so there's always
+        // something to drag. Keeps the centered handle present at the
+        // bottom instead of only appearing after the first annotation.
+        rootView?.setDragOutAvailable(true)
         rootView?.inputBar.setTouchUpMode(touchUp)
         // Selection no longer auto-attaches — the attachments row only
         // populates from an explicit user gesture (drag from the
@@ -287,6 +363,7 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
     }
 
     private func closeSession(discard: Bool) {
+        SettingsManager.shared.isMarkupSessionActive = false
         if discard, let imageURL {
             CaptureMarkupStorage.deleteSidecar(forImageURL: imageURL)
         }
@@ -298,6 +375,7 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
         imageURL = nil
         onComplete = nil
         layerCount = 0
+        passCount = 0
         currentSelection = nil
         currentDocument = nil
         cleanupDragExports()

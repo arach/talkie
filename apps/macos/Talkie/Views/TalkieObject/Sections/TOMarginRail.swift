@@ -41,8 +41,16 @@ struct TOMarginRail: View {
                 groupView(group: group, isLast: gi == groups.count - 1)
             }
         }
-        .padding(.top, 8)
+        .padding(.top, Self.eyebrowAlignmentInset)
     }
+
+    /// Drop the rail so its first `· SOURCE` kicker lines up with the
+    /// masthead eyebrow (`· DICTATION`) rather than the catalog slug at
+    /// the very top of the content column — the two `· LABEL` mono
+    /// kickers share a baseline and read as one register. Derived from
+    /// TOHeaderSection.MastheadLayout: toolbarTop(16) + slug line(~13) +
+    /// toolbarBottom(6) + hairline(1) + masthead top(28).
+    static let eyebrowAlignmentInset: CGFloat = 64
 
     /// Whether the rail has any groups to render for this recording.
     /// `TalkieView.scrollContent` reads this to skip reserving the

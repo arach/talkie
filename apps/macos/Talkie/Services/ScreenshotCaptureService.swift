@@ -72,6 +72,7 @@ struct CaptureResult {
     let height: Int
     let windowTitle: String?
     let appName: String?
+    let appBundleID: String?
     let displayName: String?
 }
 
@@ -115,9 +116,14 @@ final class ScreenshotCaptureService {
         }
         CapturePerformanceMonitor.shared.mark("permission.check.complete")
 
+        // Snapshot the active app before any selection overlay steals focus —
+        // region/fullscreen captures otherwise carry no app context at all.
+        let contextApp = Self.frontmostContextApp()
+
         let image: CGImage
         var windowTitle: String?
         var appName: String?
+        var appBundleID: String?
         var displayName: String?
 
         switch mode {
@@ -151,7 +157,12 @@ final class ScreenshotCaptureService {
             image = result.image
             windowTitle = result.windowTitle
             appName = result.appName
+            appBundleID = result.appBundleID
         }
+        // Region/fullscreen (and window captures missing owner info) fall back
+        // to the frontmost app captured before the overlay appeared.
+        if appName == nil { appName = contextApp.name }
+        if appBundleID == nil { appBundleID = contextApp.bundleID }
         let capturedAt = Date()
         let timestampMs = Int(capturedAt.timeIntervalSince(recordingStartTime) * 1000)
         CapturePerformanceMonitor.shared.mark("capture.image.complete")
@@ -211,6 +222,7 @@ final class ScreenshotCaptureService {
             height: storedImage.height,
             windowTitle: windowTitle,
             appName: appName,
+            appBundleID: appBundleID,
             displayName: displayName
         )
     }
@@ -230,9 +242,14 @@ final class ScreenshotCaptureService {
         }
         CapturePerformanceMonitor.shared.mark("permission.check.complete")
 
+        // Snapshot the active app before any selection overlay steals focus —
+        // region/fullscreen captures otherwise carry no app context at all.
+        let contextApp = Self.frontmostContextApp()
+
         let image: CGImage
         var windowTitle: String?
         var appName: String?
+        var appBundleID: String?
         var displayName: String?
 
         switch mode {
@@ -266,7 +283,12 @@ final class ScreenshotCaptureService {
             image = result.image
             windowTitle = result.windowTitle
             appName = result.appName
+            appBundleID = result.appBundleID
         }
+        // Region/fullscreen (and window captures missing owner info) fall back
+        // to the frontmost app captured before the overlay appeared.
+        if appName == nil { appName = contextApp.name }
+        if appBundleID == nil { appBundleID = contextApp.bundleID }
         let capturedAt = Date()
         CapturePerformanceMonitor.shared.mark("capture.image.complete")
 
@@ -297,6 +319,7 @@ final class ScreenshotCaptureService {
             height: storedImage.height,
             windowTitle: windowTitle,
             appName: appName,
+            appBundleID: appBundleID,
             displayName: displayName
         )
     }
@@ -379,7 +402,7 @@ final class ScreenshotCaptureService {
     // MARK: - Window Capture
 
     /// Show overlay for window selection, then capture that window.
-    private func captureWindow() async -> (image: CGImage, windowTitle: String?, appName: String?)? {
+    private func captureWindow() async -> (image: CGImage, windowTitle: String?, appName: String?, appBundleID: String?)? {
         let overlay = ScreenCaptureOverlay()
         CapturePerformanceMonitor.shared.mark("overlay.window.begin")
         guard let windowID = await overlay.selectWindow() else {
@@ -400,7 +423,7 @@ final class ScreenshotCaptureService {
         }
         CapturePerformanceMonitor.shared.mark("capture.window.read.complete")
 
-        return (image: image, windowTitle: meta.title, appName: meta.appName)
+        return (image: image, windowTitle: meta.title, appName: meta.appName, appBundleID: meta.appBundleID)
     }
 
     // MARK: - Permission
@@ -512,15 +535,34 @@ final class ScreenshotCaptureService {
 
     // MARK: - Helpers
 
-    /// Query window title and app name from a CGWindowID.
-    private func windowMetadata(for windowID: CGWindowID) -> (title: String?, appName: String?) {
+    /// Query window title, app name, and owning app's bundle id from a
+    /// CGWindowID. The bundle id is resolved from the window's owner PID so
+    /// the UI can disambiguate same-named apps and resolve an icon.
+    private func windowMetadata(for windowID: CGWindowID) -> (title: String?, appName: String?, appBundleID: String?) {
         guard let infoList = CGWindowListCreateDescriptionFromArray([windowID] as CFArray) as? [[String: Any]],
               let info = infoList.first else {
-            return (nil, nil)
+            return (nil, nil, nil)
         }
         let title = info[kCGWindowName as String] as? String
         let appName = info[kCGWindowOwnerName as String] as? String
-        return (title, appName)
+        var bundleID: String?
+        if let pid = info[kCGWindowOwnerPID as String] as? pid_t {
+            bundleID = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier
+        }
+        return (title, appName, bundleID)
+    }
+
+    /// The app the user was working in when capture was invoked, resolved
+    /// from the frontmost application. Region/fullscreen captures have no
+    /// window owner, so this is the only "what was on screen" signal. Talkie's
+    /// own agent is excluded so a capture triggered from Talkie's UI doesn't
+    /// record Talkie as the source.
+    private static func frontmostContextApp() -> (name: String?, bundleID: String?) {
+        guard let app = NSWorkspace.shared.frontmostApplication,
+              app.bundleIdentifier != Bundle.main.bundleIdentifier else {
+            return (nil, nil)
+        }
+        return (app.localizedName, app.bundleIdentifier)
     }
 
     /// Encode a CGImage as PNG off-main to avoid UI hitches during direct hotkey captures.

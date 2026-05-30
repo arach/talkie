@@ -32,6 +32,9 @@ struct ScopeCaptureDetailView: View {
 
     private var viewModel: RecordingsViewModel { .shared }
 
+    // In-window markup takeover target (vs. the old floating panel).
+    @State private var markupURL: URL?
+
     var body: some View {
         GeometryReader { proxy in
             let width = proxy.size.width
@@ -50,6 +53,7 @@ struct ScopeCaptureDetailView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(ThemedScopeCanvas.canvas)
         }
+        .captureMarkupHost(url: $markupURL)
     }
 
     // MARK: - Derived data
@@ -475,7 +479,7 @@ struct ScopeCaptureDetailView: View {
 
     private func openMarkup() {
         guard let url = imageURL else { return }
-        CaptureMarkupCoordinator.shared.openSession(imageURL: url)
+        markupURL = url
     }
 
     private func copyCapture() {

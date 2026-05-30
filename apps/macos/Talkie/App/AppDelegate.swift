@@ -1784,6 +1784,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 return event
             }
 
+            // A capture chord (Hyper+S / Hyper+R bar) owns the keyboard while
+            // it's on screen — its A/S/D keys pick the capture target. Stand
+            // down so they don't also fire single-key nav (S → Screenshots,
+            // D → Dictations) and change the screen behind the bar. The
+            // chord's own local monitor consumes the event.
+            if CaptureChord.isActive {
+                return event
+            }
+
             // Check if we're in a text input context - if so, pass through
             if let responder = NSApp.keyWindow?.firstResponder {
                 // NSTextView = rich text editors, field editor, multi-line text
@@ -2430,6 +2439,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             mode: mode,
             windowTitle: result.windowTitle,
             appName: result.appName,
+            appBundleID: result.appBundleID,
             displayName: result.displayName,
             initialThumbnail: result.previewImage
         ) else {
