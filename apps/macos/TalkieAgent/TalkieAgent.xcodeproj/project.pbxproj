@@ -123,6 +123,7 @@
 				539FB5B52EE6785C004EEAF4 /* Sources */,
 				539FB5B62EE6785C004EEAF4 /* Frameworks */,
 				539FB5B72EE6785C004EEAF4 /* Resources */,
+				B4C2F59C3E6D4A1190C7E203 /* Install Runtime Node Dependencies */,
 				53LSREG0012EE80000004EEAF4 /* Register URL Scheme */,
 			);
 			buildRules = (
@@ -254,6 +255,31 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		B4C2F59C3E6D4A1190C7E203 /* Install Runtime Node Dependencies */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Runtime/node/package.json",
+				"$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Runtime/node/package-lock.json",
+			);
+			name = "Install Runtime Node Dependencies";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Runtime/node/node_modules",
+				"$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Runtime/node/node_modules/.package-lock.json",
+				"$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Runtime/node/node_modules/@openscout",
+				"$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Runtime/node/node_modules/@openscout/agent-sessions",
+				"$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Runtime/node/node_modules/@openscout/agent-sessions/package.json",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "# Install production dependencies into the copied app resource runtime.\n# The source tree keeps node_modules ignored; the app bundle becomes self-contained.\nset -euo pipefail\n\nRUNTIME_DIR=\"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Runtime/node\"\n\nif [ ! -f \"${RUNTIME_DIR}/package.json\" ]; then\n    echo \"TalkieAgent runtime package.json not found at ${RUNTIME_DIR}/package.json\"\n    exit 1\nfi\n\nif [ ! -f \"${RUNTIME_DIR}/package-lock.json\" ]; then\n    echo \"TalkieAgent runtime package-lock.json not found at ${RUNTIME_DIR}/package-lock.json\"\n    exit 1\nfi\n\nif command -v npm >/dev/null 2>&1; then\n    NPM_BIN=\"$(command -v npm)\"\nelif [ -x \"/opt/homebrew/bin/npm\" ]; then\n    NPM_BIN=\"/opt/homebrew/bin/npm\"\nelif [ -x \"/usr/local/bin/npm\" ]; then\n    NPM_BIN=\"/usr/local/bin/npm\"\nelse\n    echo \"npm is required to install TalkieAgent runtime dependencies.\"\n    exit 1\nfi\n\n\"${NPM_BIN}\" ci --omit=dev --no-audit --no-fund --prefix \"${RUNTIME_DIR}\"\n";
+		};
 		53LSREG0012EE80000004EEAF4 /* Register URL Scheme */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -452,6 +478,7 @@
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TalkieAgent/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Talkie Agent Dev";
@@ -490,6 +517,7 @@
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TalkieAgent/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Talkie Agent";
