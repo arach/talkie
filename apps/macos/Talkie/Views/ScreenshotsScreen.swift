@@ -1843,6 +1843,7 @@ private struct ScreenshotInspector: View {
     /// Disk-loaded extras (file header + sidecar). Loaded async per selection.
     @State private var disk: InspectorDiskMetadata?
     @State private var showDetectedText = false
+    @State private var ocrCopied = false
 
     private var appLabel: String { appName ?? sourceLabel }
 
@@ -1926,7 +1927,11 @@ private struct ScreenshotInspector: View {
                                 value: disk.ocrPresent
                                     ? (disk.ocrCharacterCount > 0 ? "\(disk.ocrCharacterCount) chars" : "no text")
                                     : "—",
-                                accent: disk.ocrCharacterCount > 0
+                                accent: disk.ocrCharacterCount > 0,
+                                actionSystemImage: "doc.on.clipboard",
+                                actionHelp: "Copy OCR text",
+                                actionFeedback: ocrCopied,
+                                action: disk.ocrCharacterCount > 0 ? copyOCRText : nil
                             )
                             if disk.visionDescribed {
                                 MetaRow(label: "vision", value: "described", accent: true)
@@ -1997,12 +2002,25 @@ private struct ScreenshotInspector: View {
                 // list rows never hit this path.
                 disk = nil
                 showDetectedText = false
+                ocrCopied = false
                 let url = item.fileURL
                 let trayText = trayOCRText
                 disk = await Task.detached {
                     InspectorDiskMetadata.load(for: url, trayOCRText: trayText)
                 }.value
             }
+        }
+    }
+
+    private func copyOCRText() {
+        guard let text = fullOCRText?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        ocrCopied = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1))
+            ocrCopied = false
         }
     }
 
@@ -2045,6 +2063,10 @@ private struct MetaRow: View {
     let label: String
     let value: String
     var accent: Bool = false
+    var actionSystemImage: String = "doc.on.clipboard"
+    var actionHelp: String = "Copy"
+    var actionFeedback: Bool = false
+    var action: (() -> Void)?
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
@@ -2053,6 +2075,22 @@ private struct MetaRow: View {
                 .tracking(ScopeType.Tracking.wide)
                 .foregroundStyle(ScopePalette.inkFainter)
             Spacer()
+            if let action {
+                Button(action: action) {
+                    Image(systemName: actionFeedback ? "checkmark" : actionSystemImage)
+                        .font(.system(size: 9, weight: .semibold))
+                        .frame(width: 18, height: 18)
+                        .foregroundStyle(actionFeedback ? ScopePalette.amberDeep : ScopePalette.inkFainter)
+                        .background(
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(actionFeedback ? ScopePalette.amberFaint : Color.clear)
+                        )
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(actionFeedback ? "Copied" : actionHelp)
+                .accessibilityLabel(actionFeedback ? "Copied" : actionHelp)
+            }
             Text(value)
                 .font(ScopeType.mono(size: 11))
                 .foregroundStyle(accent ? ScopePalette.amberDeep : ScopePalette.ink)

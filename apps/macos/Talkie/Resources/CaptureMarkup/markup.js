@@ -54,9 +54,9 @@
   const styleStack = document.getElementById("style-stack");
   const zoomCluster = document.getElementById("canvas-zoom-cluster");
   const zoomDisplay = document.getElementById("zoom-display");
-  // Undo / redo live in the floating canvas zoom cluster now (the top bar
-  // is pure drawing). Query both surfaces so a future relocation doesn't
-  // silently lose the enabled-state wiring.
+  // Undo / redo live in the floating canvas zoom cluster now. Query both
+  // surfaces so a future relocation doesn't silently lose the enabled-state
+  // wiring.
   const undoButton =
     (zoomCluster && zoomCluster.querySelector('[data-action="undo"]')) ||
     toolToolbar.querySelector('[data-action="undo"]');
@@ -1213,8 +1213,8 @@
     // Shape buttons: in edit mode highlight the layer's shape and disable
     // conversions that don't map cleanly. In draw mode highlight the active
     // create-tool as before.
-    // Document scope (not just the toolbar) so the floating Select/Hand
-    // cluster over the canvas reflects the active mode too.
+    // Document scope keeps every tool button in sync if a future surface
+    // mirrors the primary toolbar controls.
     document.querySelectorAll(".tool-btn[data-tool]").forEach((btn) => {
       const tool = btn.getAttribute("data-tool");
       // Viewport / cursor tools are always enabled and reflect the current
@@ -1575,20 +1575,6 @@
     redo() { return redo(); },
   };
 
-  // Floating tool selector (Select + Hand) — lives over the canvas, outside
-  // the top toolbar, so it carries its own click handler. Same mode logic as
-  // the toolbar's select/hand branch below.
-  const toolCluster = document.getElementById("canvas-tool-cluster");
-  if (toolCluster) {
-    toolCluster.addEventListener("click", (e) => {
-      const btn = e.target.closest(".tool-btn");
-      if (!btn || btn.disabled) return;
-      const tool = btn.getAttribute("data-tool");
-      if (tool === "select") { setActiveTool(null); return; }
-      if (tool === "hand") { setActiveTool(state.activeTool === "hand" ? null : "hand"); }
-    });
-  }
-
   // Inspector editing — the inspector is the per-layer editor. Its controls
   // carry data-insp-style / data-insp-value; apply them to the selected layer.
   // Delegated on the body element so it survives renderInspector() rebuilds.
@@ -1655,8 +1641,8 @@
   // ---------------------------------------------------------------------------
   // Canvas zoom cluster — viewport + history actions
   //
-  // Lives over the canvas (floating bottom-right) so the top toolbar
-  // stays pure drawing. Handles zoom in / out / fit + undo + redo.
+  // Lives over the canvas (floating bottom-right). Handles zoom in / out /
+  // fit + undo + redo.
   // ---------------------------------------------------------------------------
   if (zoomCluster) {
     zoomCluster.addEventListener("click", (e) => {

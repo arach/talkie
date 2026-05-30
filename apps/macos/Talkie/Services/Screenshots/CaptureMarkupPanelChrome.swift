@@ -331,22 +331,34 @@ private final class CaptureMarkupDragHandleView: NSView, NSDraggingSource {
         didSet {
             alphaValue = isEnabledForDrag ? 1 : 0
             isHidden = !isEnabledForDrag
+            needsDisplay = true
         }
     }
     var makeDragPayload: (() -> (fileURL: URL, dragImage: NSImage)?)?
 
     private let dragThreshold: CGFloat = 4
     private var dragStartLocation: NSPoint?
+    private var trackingArea: NSTrackingArea?
+    private var isHovering = false { didSet { needsDisplay = true } }
+    private var isPressed = false { didSet { needsDisplay = true } }
+
+    private static let amber = NSColor(red: 0.77, green: 0.49, blue: 0.11, alpha: 1)
+    private static let amberDeep = NSColor(red: 0.62, green: 0.38, blue: 0.08, alpha: 1)
+    private static let amberFaint = NSColor(red: 0.98, green: 0.94, blue: 0.88, alpha: 0.98)
+    private static let amberSoft = NSColor(red: 0.90, green: 0.78, blue: 0.55, alpha: 1)
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        layer?.cornerRadius = 5
+        layer?.cornerRadius = 17
         layer?.shadowColor = NSColor.black.cgColor
         layer?.shadowOpacity = 0.14
-        layer?.shadowRadius = 8
+        layer?.shadowRadius = 10
         layer?.shadowOffset = CGSize(width: 0, height: -2)
-        toolTip = "Drag annotated PNG"
+        toolTip = "Drag a copy of the annotated PNG"
+        setAccessibilityRole(.button)
+        setAccessibilityLabel("Drag Copy")
+        setAccessibilityHelp("Drag a copy of the annotated screenshot to another app.")
         isEnabledForDrag = false
         isHidden = true
     }
@@ -358,23 +370,48 @@ private final class CaptureMarkupDragHandleView: NSView, NSDraggingSource {
 
     override var isFlipped: Bool { true }
 
+    override func layout() {
+        super.layout()
+        layer?.cornerRadius = bounds.height / 2
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea {
+            removeTrackingArea(trackingArea)
+        }
+        let next = NSTrackingArea(
+            rect: bounds,
+            options: [.activeInActiveApp, .inVisibleRect, .mouseEnteredAndExited],
+            owner: self
+        )
+        addTrackingArea(next)
+        trackingArea = next
+    }
+
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
         true
     }
 
     override func draw(_ dirtyRect: NSRect) {
         let rect = bounds.insetBy(dx: 0.5, dy: 0.5)
-        let path = NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5)
-        NSColor(red: 0.98, green: 0.94, blue: 0.88, alpha: 0.96).setFill()
+        let pill = rect.height / 2
+        let path = NSBezierPath(roundedRect: rect, xRadius: pill, yRadius: pill)
+        let fill = isPressed
+            ? Self.amberSoft.withAlphaComponent(0.98)
+            : (isHovering ? NSColor.white.withAlphaComponent(0.98) : Self.amberFaint)
+        fill.setFill()
         path.fill()
-        NSColor(red: 0.90, green: 0.78, blue: 0.55, alpha: 1).setStroke()
+        let stroke = isHovering || isPressed ? Self.amber : Self.amberSoft
+        stroke.setStroke()
         path.lineWidth = 0.75
         path.stroke()
 
-        let text = "⇱ DRAG PNG"
+        let text = "⧉ DRAG COPY"
         let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold),
-            .foregroundColor: NSColor(red: 0.62, green: 0.38, blue: 0.08, alpha: 1),
+            .foregroundColor: Self.amberDeep,
+            .kern: 0.7,
         ]
         let size = (text as NSString).size(withAttributes: attrs)
         let point = NSPoint(
@@ -384,8 +421,19 @@ private final class CaptureMarkupDragHandleView: NSView, NSDraggingSource {
         (text as NSString).draw(at: point, withAttributes: attrs)
     }
 
+    override func mouseEntered(with event: NSEvent) {
+        guard isEnabledForDrag else { return }
+        isHovering = true
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovering = false
+        isPressed = false
+    }
+
     override func mouseDown(with event: NSEvent) {
         guard isEnabledForDrag else { return }
+        isPressed = true
         dragStartLocation = convert(event.locationInWindow, from: nil)
     }
 
@@ -396,12 +444,14 @@ private final class CaptureMarkupDragHandleView: NSView, NSDraggingSource {
         dragStartLocation = nil
 
         guard let payload = makeDragPayload?() else { return }
+        isPressed = false
         let item = NSDraggingItem(pasteboardWriter: TalkieInternalDrag.pasteboardItem(for: payload.fileURL))
         item.setDraggingFrame(bounds, contents: payload.dragImage)
         beginDraggingSession(with: [item], event: event, source: self)
     }
 
     override func mouseUp(with event: NSEvent) {
+        isPressed = false
         dragStartLocation = nil
     }
 
@@ -445,12 +495,12 @@ final class CaptureMarkupPanelRootView: NSView {
             webHost.bottomAnchor.constraint(equalTo: inputBar.topAnchor),
 
             // Native file drags must start in AppKit, not inside WKWebView.
-            // Keep the affordance tiny and outside the normal layer hit-test
+            // Keep the centered affordance outside the normal layer hit-test
             // path so canvas layer-move drags continue to belong to markup.js.
-            dragHandle.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 236),
-            dragHandle.bottomAnchor.constraint(equalTo: inputBar.topAnchor, constant: -14),
-            dragHandle.widthAnchor.constraint(equalToConstant: 112),
-            dragHandle.heightAnchor.constraint(equalToConstant: 28),
+            dragHandle.centerXAnchor.constraint(equalTo: centerXAnchor),
+            dragHandle.bottomAnchor.constraint(equalTo: inputBar.topAnchor, constant: -12),
+            dragHandle.widthAnchor.constraint(equalToConstant: 152),
+            dragHandle.heightAnchor.constraint(equalToConstant: 34),
         ])
     }
 
@@ -645,7 +695,9 @@ final class CaptureMarkupInputBarView: NSView {
         promptContainer.layer?.backgroundColor = NSColor.white.cgColor
         promptContainer.layer?.borderColor = Self.fieldBorder.cgColor
         promptContainer.layer?.borderWidth = 0.5
-        promptContainer.layer?.cornerRadius = 7
+        // Rounder field harmonizes with the circular mic sitting beside it —
+        // a boxy r7 lane read square next to the round tap-target.
+        promptContainer.layer?.cornerRadius = 12
 
         // Mic affordance is the shape. Glyph + colors swap with state.
         voiceButton.toolTip = "Tap to record · tap again to stop"

@@ -289,7 +289,11 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
         self.layerCount = layerCount
         currentSelection = selection
         let touchUp = layerCount > 0
-        rootView?.setDragOutAvailable(touchUp)
+        // Drag-out is always offered while a session is open — the payload
+        // renders the current PNG (annotated or not), so there's always
+        // something to drag. Keeps the centered handle present at the
+        // bottom instead of only appearing after the first annotation.
+        rootView?.setDragOutAvailable(true)
         rootView?.inputBar.setTouchUpMode(touchUp)
         // Selection no longer auto-attaches — the attachments row only
         // populates from an explicit user gesture (drag from the

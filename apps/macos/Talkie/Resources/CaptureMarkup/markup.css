@@ -40,6 +40,23 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   gap: 4px;
 }
 
+.viewport-tools {
+  gap: 2px;
+  padding: 2px;
+  border: 0.5px solid var(--edge);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.viewport-tools .tool-btn {
+  height: 24px;
+  padding: 0 8px;
+}
+
+.drawing-tools {
+  gap: 4px;
+}
+
 /* Inline vertical rule between toolbar sections. Treated as chrome —
    never a content element. */
 .toolbar-divider,
@@ -231,31 +248,9 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
 
 /* ─── Canvas Zoom Cluster (Hudson pattern) ────────────────────────────
    Floats over the canvas bottom-right. Holds viewport controls (zoom
-   in/out/fit + percent badge) and history (undo/redo) so the top bar
-   can be pure drawing. */
+   in/out/fit + percent badge) and history (undo/redo). */
 
 .canvas-wrap { position: relative; }
-
-/* Floating tool selector — Select + Hand viewport modes, floating over the
-   canvas top (Excalidraw pattern). Mirrors the zoom cluster's pill chrome. */
-.canvas-tool-cluster {
-  position: absolute;
-  top: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 3px;
-  background: #ffffff;
-  border: 0.5px solid var(--edge);
-  border-radius: 5px;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.55) inset,
-    0 4px 12px rgba(0, 0, 0, 0.10);
-  z-index: 10;
-}
-.canvas-tool-cluster .tool-btn { height: 26px; }
 
 .canvas-zoom-cluster {
   position: absolute;

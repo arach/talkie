@@ -9,11 +9,15 @@
 <body>
   <div id="app">
     <header class="tool-toolbar" id="tool-toolbar">
-      <!-- Left: tool selection -->
-      <div class="toolbar-tools">
-        <!-- Select + Hand moved out to a floating selector over the canvas
-             (see #canvas-tool-cluster). They're viewport/cursor modes, a
-             different category from the drawing tools that stay here. -->
+      <!-- Left: canvas modes, then drawing tools. -->
+      <div class="toolbar-tools viewport-tools" aria-label="Canvas modes">
+        <button type="button" class="tool-btn mode-tool" data-tool="select" title="Select (V)"><span class="glyph">↖</span><span class="label">Select</span></button>
+        <button type="button" class="tool-btn mode-tool" data-tool="hand" title="Hand · pan (H / Space)"><span class="glyph">✋</span><span class="label">Hand</span></button>
+      </div>
+
+      <span class="toolbar-divider" aria-hidden="true"></span>
+
+      <div class="toolbar-tools drawing-tools" aria-label="Drawing tools">
         <button type="button" class="tool-btn" data-tool="rect" title="Rect (R)"><span class="glyph">▢</span><span class="label">Rect</span></button>
         <button type="button" class="tool-btn" data-tool="arrow" title="Arrow (A)"><span class="glyph">↗</span><span class="label">Arrow</span></button>
         <button type="button" class="tool-btn" data-tool="line" title="Line (L)"><span class="glyph">—</span><span class="label">Line</span></button>
@@ -113,18 +117,9 @@
       <section class="canvas-wrap">
         <canvas id="canvas"></canvas>
 
-        <!-- Floating tool selector. Select + Hand are viewport/cursor modes,
-             distinct from the drawing tools in the top bar — they float over
-             the canvas top so the mode switch sits right where you're working. -->
-        <div class="canvas-tool-cluster" id="canvas-tool-cluster">
-          <button type="button" class="tool-btn" data-tool="select" title="Select (V)"><span class="glyph">↖</span><span class="label">Select</span></button>
-          <button type="button" class="tool-btn" data-tool="hand" title="Hand · pan (H)"><span class="glyph">✋</span><span class="label">Hand</span></button>
-        </div>
-
         <!-- Floating canvas zoom cluster (Hudson pattern). Lives over the
-             canvas, not in the toolbar — viewport controls are a different
-             category from drawing. Undo/redo ride along here too so the
-             accessible bindings stay reachable without polluting the top bar. -->
+             canvas, not in the toolbar. Undo/redo ride along here so the
+             accessible bindings stay reachable without widening the top bar. -->
         <div class="canvas-zoom-cluster" id="canvas-zoom-cluster">
           <button type="button" class="zoom-btn" data-action="undo" title="Undo (⌘Z)">↶</button>
           <button type="button" class="zoom-btn" data-action="redo" title="Redo (⌘⇧Z)">↷</button>
