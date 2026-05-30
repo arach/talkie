@@ -454,6 +454,9 @@ struct AppNavigation: View {
                 sectionName: sectionName,
                 usesTwoColumns: usesTwoColumns
             ))
+            .modifier(MouseBackNavigationModifier {
+                nav.goBack()
+            })
             .alertObservers()
             .onAppear {
                 StartupProfiler.shared.mark("nav.onAppear")
@@ -1586,6 +1589,41 @@ struct SidebarButtonOverlayModifier: ViewModifier {
     }
 }
 
+private struct MouseBackNavigationModifier: ViewModifier {
+    private static let backButtonNumber = 3
+
+    let navigateBack: () -> Bool
+    @State private var monitor: Any?
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear {
+                installMonitorIfNeeded()
+            }
+            .onDisappear {
+                removeMonitor()
+            }
+    }
+
+    private func installMonitorIfNeeded() {
+        guard monitor == nil else { return }
+
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .otherMouseDown) { event in
+            guard event.buttonNumber == Self.backButtonNumber else {
+                return event
+            }
+
+            return navigateBack() ? nil : event
+        }
+    }
+
+    private func removeMonitor() {
+        guard let monitor else { return }
+        NSEvent.removeMonitor(monitor)
+        self.monitor = nil
+    }
+}
+
 /// Debug overlays (only in DEBUG builds)
 struct DebugOverlaysModifier: ViewModifier {
     func body(content: Content) -> some View {
@@ -1689,7 +1727,11 @@ struct NavigationChangeHandlersModifier: ViewModifier {
                 }
                 #endif
                 if newSection != nav.selectedSection {
-                    nav.selectedSection = newSection
+                    if let newSection {
+                        nav.navigateFromUI(to: newSection)
+                    } else {
+                        nav.selectedSection = nil
+                    }
                 }
                 // Scope-only: Console is terminal-first. Collapse the outer
                 // app sidebar so the rail + tab content fill the canvas;

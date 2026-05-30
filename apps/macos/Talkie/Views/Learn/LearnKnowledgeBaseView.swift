@@ -64,12 +64,13 @@ struct LearnKnowledgeBaseView: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .onAppear {
-            if selectedArticleID == nil {
-                selectedArticleID = articles.first?.id
-            }
+            selectRequestedArticleIfNeeded()
         }
         .onChange(of: query) {
             keepSelectionVisible()
+        }
+        .onChange(of: NavigationState.shared.params) { _, _ in
+            selectRequestedArticleIfNeeded()
         }
     }
 
@@ -174,6 +175,19 @@ struct LearnKnowledgeBaseView: View {
             return
         }
         selectedArticleID = filteredArticles.first?.id
+    }
+
+    private func selectRequestedArticleIfNeeded() {
+        guard let requestedArticleID = NavigationState.shared.params["learnArticleId"] as? String,
+              articles.contains(where: { $0.id == requestedArticleID }) else {
+            if selectedArticleID == nil {
+                selectedArticleID = articles.first?.id
+            }
+            return
+        }
+
+        query = ""
+        selectedArticleID = requestedArticleID
     }
 }
 

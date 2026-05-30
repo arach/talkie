@@ -805,27 +805,30 @@ struct ScopeHomeView: View {
                 DidYouKnowCard(
                     glyph: .voiceEdit,
                     marker: "01",
-                    hook: "Memo edit",
-                    detail: "Use ⌃⇧⌘ E during playback to dictate an edit.",
-                    action: "Open"
+                    hook: "Compose edits",
+                    detail: "Voice instructions revise text and show inline diffs before you accept.",
+                    action: "Learn",
+                    onOpen: { NavigationState.shared.navigateToLearn(articleID: "compose-diffs") }
                 )
                 ScopeRule(.section, axis: .vertical)
                     .padding(.vertical, 14)
                 DidYouKnowCard(
                     glyph: .smartActions,
                     marker: "02",
-                    hook: "Compose chips",
-                    detail: "Grammar, concise, and tone chips are available in Compose.",
-                    action: "Compose"
+                    hook: "Hyper keys",
+                    detail: "Talkie's chord layer opens capture, tray, paste, and recording tools.",
+                    action: "Learn",
+                    onOpen: { NavigationState.shared.navigateToLearn(articleID: "hyper-keys") }
                 )
                 ScopeRule(.section, axis: .vertical)
                     .padding(.vertical, 14)
                 DidYouKnowCard(
                     glyph: .tray,
                     marker: "03",
-                    hook: "Screen capture",
-                    detail: "Use Hyper+S to add a screenshot to the capture tray.",
-                    action: "Details"
+                    hook: "Tray Shelf",
+                    detail: "Screenshots and clips collect beside the current recording for reuse.",
+                    action: "Learn",
+                    onOpen: { NavigationState.shared.navigateToLearn(articleID: "tray-shelf") }
                 )
             }
             .background(
@@ -2147,11 +2150,12 @@ private struct DidYouKnowCard: View {
     let hook: String
     let detail: String
     let action: String
+    let onOpen: () -> Void
 
     @State private var isHovered: Bool = false
 
     var body: some View {
-        Button(action: { NavigationState.shared.navigate(to: .liveDashboard) }) {
+        Button(action: onOpen) {
             VStack(alignment: .leading, spacing: 11) {
                 HStack(alignment: .center, spacing: 10) {
                     glyphMark

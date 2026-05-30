@@ -38,6 +38,8 @@ struct TOHeaderSection: View {
     var onSaveEdit: () -> Void = {}
     var onDelete: () -> Void = {}
     var onOpenInCompose: (() -> Void)? = nil
+    var onShare: (() -> Void)? = nil
+    var onExport: (() -> Void)? = nil
     /// Memo-only — when set, surfaces a "Continue" chip in the inline
     /// action row. Migrated out of the transcript-card's bottom overlay,
     /// which was clipping the label and leaving a stranded red dot.
@@ -427,12 +429,8 @@ struct TOHeaderSection: View {
                                icon: "doc.on.doc",
                                isPrimary: true,
                                action: copyTranscript)
-            inlineActionButton(label: "Share",
-                               icon: "square.and.arrow.up",
-                               action: shareRecording)
-            inlineActionButton(label: "Export",
-                               icon: "arrow.down.doc",
-                               action: exportRecording)
+            toolButton(label: "Share", action: onShare ?? shareRecording)
+            toolButton(label: "Export", action: onExport ?? exportRecording)
             // JSON lives here in the top action row — it's a view of the
             // whole payload (a peer of Copy/Share/Export), not a
             // transcript-section affordance.

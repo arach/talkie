@@ -347,6 +347,8 @@ struct TalkieView: View {
             onSaveEdit: { saveChanges() },
             onDelete: { showDeleteConfirmation = true },
             onOpenInCompose: openInComposeAction,
+            onShare: shareTranscript,
+            onExport: exportTranscriptAsMarkdown,
             onContinueMemo: continueMemoAction,
             isDirty: isDirty,
             showSavedBadge: showSavedBadge,
@@ -518,18 +520,14 @@ struct TalkieView: View {
     // MARK: - Export
 
     /// ⌘P export: writes the memo as a small Markdown document
-    /// (`# Title` + transcript) via NSSavePanel. Mirrors the existing
-    /// `.txt` export in the masthead, but produces a `.md` file with a
-    /// title header so the document round-trips into editors that
-    /// understand Markdown.
+    /// (`# Title` + transcript) via NSSavePanel so the document
+    /// round-trips into editors that understand Markdown.
     private func exportTranscriptAsMarkdown() {
-        let title = recording.displayTitle
-        let text = recording.text ?? ""
-        let markdown = "# \(title)\n\n\(text)\n"
+        let markdown = markdownDocument()
 
         let panel = NSSavePanel()
         panel.allowedContentTypes = [UTType(filenameExtension: "md") ?? .plainText]
-        panel.nameFieldStringValue = "\(safeExportFilename(for: title)).md"
+        panel.nameFieldStringValue = defaultExportFilename()
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
             do {
@@ -542,6 +540,35 @@ struct TalkieView: View {
                 }
             }
         }
+    }
+
+    private func shareTranscript() {
+        let markdown = markdownDocument()
+        let picker = NSSharingServicePicker(items: [markdown])
+        if let window = NSApp.keyWindow, let contentView = window.contentView {
+            picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
+        }
+    }
+
+    private func markdownDocument() -> String {
+        let title = recording.displayTitle
+        let text = recording.text ?? ""
+        return "# \(title)\n\n\(text)\n"
+    }
+
+    private func defaultExportFilename() -> String {
+        let kind = safeExportFilename(for: recording.type.displayName)
+        let title = safeExportFilename(for: recording.displayTitle)
+        let lowercasedTitle = title.localizedLowercase
+        let lowercasedKind = kind.localizedLowercase
+
+        if lowercasedTitle == lowercasedKind
+            || lowercasedTitle == "untitled \(lowercasedKind)"
+            || lowercasedTitle.hasPrefix("\(lowercasedKind) -") {
+            return "\(title).md"
+        }
+
+        return "\(kind) - \(title).md"
     }
 
     private func safeExportFilename(for title: String) -> String {
