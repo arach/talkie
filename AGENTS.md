@@ -114,6 +114,27 @@ A weekly `~/bin/tmp-janitor.sh` (launchd: `com.user.tmp-janitor`) cleans up forg
 
 ---
 
+## Video Clip Context
+
+When inspecting Talkie tray clips, screen recordings, recently shared videos, or
+visual context captured during dictation, prefer the repo skill in
+`skills/video-context/`. Default to:
+
+1. `ffprobe` for duration, size, dimensions, frame rate, and codec.
+2. A 4x4 `ffmpeg` contact sheet.
+3. Visual inspection of the contact sheet before making claims about the clip.
+
+Talkie tray clips usually live under:
+
+```text
+~/Library/Application Support/Talkie/Tray/clips/
+```
+
+Use temporary contact-sheet outputs unless preserving the artifact is useful for
+review.
+
+---
+
 ## Code Style
 
 ### Swift 6.2 Concurrency
