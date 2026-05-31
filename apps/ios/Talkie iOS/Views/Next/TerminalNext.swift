@@ -162,6 +162,20 @@ struct TerminalNext: View {
 
             Spacer()
 
+            if let bridgeLogHost {
+                Button(action: { openBridgeLog(for: bridgeLogHost) }) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "doc.text.magnifyingglass")
+                            .font(.system(size: 10, weight: .medium))
+                            .accessibilityHidden(true)
+                        Text("LOGS")
+                            .talkieType(.chipLabel)
+                    }
+                    .foregroundStyle(theme.currentTheme.chrome.accent)
+                }
+                .buttonStyle(.plain)
+            }
+
             if bridgeManager.hasPairedMacs {
                 Button(action: importFromPairedMac) {
                     Text(isImportingFromMac ? "CONNECTING" : "FROM MAC")
@@ -317,6 +331,12 @@ struct TerminalNext: View {
                 Label("Classic Cascade", systemImage: "arrow.triangle.branch")
             }
 
+            Button {
+                openBridgeLog(for: host)
+            } label: {
+                Label("Tail Bridge + Agent Logs", systemImage: "doc.text.magnifyingglass")
+            }
+
             ForEach(routeOptions(for: host)) { option in
                 Button {
                     openHost(host, preferredRoute: option.route)
@@ -409,6 +429,10 @@ struct TerminalNext: View {
         }
 
         return "Scan the SSH access QR from Talkie for Mac to add a terminal destination."
+    }
+
+    private var bridgeLogHost: SSHTerminalSavedHost? {
+        savedHosts.first(where: \.isTalkieManagedTerminalHost) ?? savedHosts.first
     }
 
     // MARK: - Data
@@ -512,7 +536,19 @@ struct TerminalNext: View {
     ) {
         activeSession = TerminalNextSessionSelection(
             host: host,
-            preferredRoute: preferredRoute
+            preferredRoute: preferredRoute,
+            oneShotStartupCommand: nil
+        )
+    }
+
+    private func openBridgeLog(
+        for host: SSHTerminalSavedHost,
+        preferredRoute: TalkieNetworkRoute? = nil
+    ) {
+        activeSession = TerminalNextSessionSelection(
+            host: host,
+            preferredRoute: preferredRoute,
+            oneShotStartupCommand: SSHTerminalStartupProfile.bridgeLogTailCommand()
         )
     }
 
@@ -572,6 +608,7 @@ private struct TerminalNextSessionSelection: Identifiable, Equatable {
     let id = UUID()
     let host: SSHTerminalSavedHost
     let preferredRoute: TalkieNetworkRoute?
+    let oneShotStartupCommand: String?
 }
 
 private struct TerminalNextRouteOption: Identifiable {
@@ -601,6 +638,7 @@ private struct TerminalNextSessionPane: View {
         SSHTerminalView(
             initialSavedHost: selection.host,
             initialRoutePreference: selection.preferredRoute,
+            initialOneShotStartupCommand: selection.oneShotStartupCommand,
             onClose: onClose
         )
     }
