@@ -3048,6 +3048,9 @@ struct ComposeKeyboardTextView: UIViewRepresentable {
             case .paste:
                 guard let clipboardText = UIPasteboard.general.string, !clipboardText.isEmpty else { return }
                 replaceSelection(with: clipboardText)
+            case .selectAll:
+                if !textView.isFirstResponder { textView.becomeFirstResponder() }
+                textView.selectAll(nil)
             case .toggleShift, .toggleControl, .interrupt:
                 break
             case .tab:

@@ -692,8 +692,6 @@ public final class HostedTalkieKeyboardView: UIView, UIGestureRecognizerDelegate
 
     private func perform(_ config: SlotConfig) {
         switch config.label {
-        case "SELECT":
-            break
         case "Aa":
             activateMode(KeyboardMode.abc.id)
         case "PUNC":
