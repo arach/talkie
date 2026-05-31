@@ -59,34 +59,34 @@ extension TalkieTypeStyle {
     /// "TALKIE" wordmark in the header. Medium weight reads light
     /// at 10pt; tracking carries the band feel.
     static let wordmark = TalkieTypeStyle(
-        font: .system(size: 10, weight: .medium, design: .monospaced),
-        tracking: 2.8
+        font: .system(size: 12, weight: .bold, design: .monospaced),
+        tracking: 2.6
     )
 
     /// Section eyebrows: "PICK UP", "· RECENT · 4", "INSPECTOR · VOICE".
     static let channelLabel = TalkieTypeStyle(
-        font: .system(size: 10, weight: .medium, design: .monospaced),
+        font: .system(size: 10, weight: .semibold, design: .monospaced),
         tracking: 2.4,
         textCase: .uppercase
     )
 
     /// Smaller eyebrow for nested context.
     static let channelLabelSmall = TalkieTypeStyle(
-        font: .system(size: 9, weight: .medium, design: .monospaced),
-        tracking: 2.0,
+        font: .system(size: 10, weight: .semibold, design: .monospaced),
+        tracking: 1.8,
         textCase: .uppercase
     )
 
     /// Tiny eyebrow under instrument readouts. Smallest mono size.
     static let channelLabelTiny = TalkieTypeStyle(
-        font: .system(size: 9, weight: .medium, design: .monospaced),
-        tracking: 2.0,
+        font: .system(size: 10, weight: .semibold, design: .monospaced),
+        tracking: 1.8,
         textCase: .uppercase
     )
 
     /// Mono uppercase pill / chip text — "CONTINUE ›", "ALL ›", "RUN".
     static let chipLabel = TalkieTypeStyle(
-        font: .system(size: 10, weight: .medium, design: .monospaced),
+        font: .system(size: 10, weight: .semibold, design: .monospaced),
         tracking: 2.0,
         textCase: .uppercase
     )
@@ -95,14 +95,14 @@ extension TalkieTypeStyle {
     /// Regular weight (not medium) — meta should sit *behind* the
     /// headline visually, not parallel to channel labels.
     static let metaMono = TalkieTypeStyle(
-        font: .system(size: 10, weight: .regular, design: .monospaced),
+        font: .system(size: 10, weight: .medium, design: .monospaced),
         tracking: 2.0,
         textCase: .uppercase
     )
 
     /// Relative time stamp in list rows ("Sun", "9:34 AM", "Yesterday").
     static let timestamp = TalkieTypeStyle(
-        font: Font.system(size: 10, weight: .regular, design: .monospaced).monospacedDigit(),
+        font: Font.system(size: 10, weight: .medium, design: .monospaced).monospacedDigit(),
         tracking: 0
     )
 
@@ -181,7 +181,7 @@ extension TalkieTypeStyle {
 
     /// Helper / hint text beneath a field label.
     static let hint = TalkieTypeStyle(
-        font: .system(size: 10, weight: .light, design: .default),
+        font: .system(size: 10, weight: .regular, design: .default),
         tracking: 0
     )
 }

@@ -82,6 +82,12 @@ struct SettingsNext: View {
         SettingsChoice(id: "48000", title: "48 kHz")
     ]
 
+    private static let appearanceModeChoices: [SettingsChoice] = [
+        SettingsChoice(id: "light", title: "Light"),
+        SettingsChoice(id: "dark", title: "Dark"),
+        SettingsChoice(id: "system", title: "Auto")
+    ]
+
     private static let appearanceDensityChoices: [SettingsChoice] = [
         SettingsChoice(id: "standard", title: "Standard"),
         SettingsChoice(id: "compact", title: "Compact"),
@@ -160,18 +166,23 @@ struct SettingsNext: View {
         HStack {
             Text("TALKIE · SETTINGS")
                 .talkieType(.wordmark)
-                .foregroundStyle(theme.colors.textPrimary.opacity(0.78))
+                .foregroundStyle(theme.colors.textPrimary)
 
             Spacer()
 
             Button(action: { AppShellRouter.shared.openHome() }) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 13))
-                    .foregroundStyle(theme.colors.textTertiary)
+                    .font(.system(size: 13, weight: .medium))
+                    // A dismiss control, not passive meta — reads at secondary
+                    // ink on a real chip surface (matches the home top-bar
+                    // buttons), so it stays legible on true-black Carbon.
+                    .foregroundStyle(theme.colors.textSecondary)
                     .frame(width: 28, height: 28)
-                    .background(
+                    .background(Circle().fill(theme.colors.cardBackground))
+                    .overlay(
                         Circle()
-                            .fill(theme.currentTheme.chrome.edgeFaint.opacity(0.5))
+                            .stroke(theme.currentTheme.chrome.edge,
+                                    lineWidth: theme.currentTheme.chrome.hairlineWidth)
                     )
             }
             .buttonStyle(.plain)
@@ -222,9 +233,11 @@ struct SettingsNext: View {
                                   design: .monospaced))
                     .tracking(3.2)
                     .foregroundStyle(
+                        // Inactive tabs are still navigation controls — secondary
+                        // ink, not tertiary, so the rail stays readable.
                         isActive
                             ? theme.colors.textPrimary
-                            : theme.colors.textTertiary
+                            : theme.colors.textSecondary
                     )
                     .fixedSize()
                     .rotationEffect(.degrees(-90))
@@ -572,6 +585,15 @@ struct SettingsNext: View {
         VStack(alignment: .leading, spacing: 0) {
             field("Theme", theme.currentTheme.displayName)
             cycleRow(
+                "Appearance",
+                selection: Binding(
+                    get: { theme.appearanceMode.rawValue },
+                    set: { theme.appearanceMode = AppearanceMode(rawValue: $0) ?? .system }
+                ),
+                choices: Self.appearanceModeChoices,
+                hint: "Light · Dark · Auto"
+            )
+            cycleRow(
                 "Density",
                 selection: Binding(
                     get: { appSettings.appearanceDensity },
@@ -606,7 +628,7 @@ struct SettingsNext: View {
                 ),
                 valueOn: "Reduced",
                 valueOff: "Standard",
-                hint: theme.appearanceMode.displayName
+                hint: "Trim animations"
             )
 
             // Theme picker — labeled chip swatches under a THEMES eyebrow.
