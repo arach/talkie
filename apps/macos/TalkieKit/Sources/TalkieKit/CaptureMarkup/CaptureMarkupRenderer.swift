@@ -170,16 +170,14 @@ public enum CaptureMarkupRenderer {
             guard let from = layer.from, let to = layer.to else { return }
             let start = from.pixelPoint(in: size)
             let end = to.pixelPoint(in: size)
+            let lineWidth = strokeLineWidth(layer, size: size)
             context.setStrokeColor(color)
-            context.setLineWidth(strokeLineWidth(layer, size: size))
+            context.setLineWidth(lineWidth)
             context.move(to: start)
             context.addLine(to: end)
             context.strokePath()
-            // `label == "line"` is the sentinel for a plain line (no arrowhead),
-            // matching the web canvas. Other labels are rendered as a tag.
-            if layer.label != "line" {
-                drawArrowHead(at: end, from: start, color: color, in: context, size: size)
-            }
+            drawPointer(pointer(for: layer, endpoint: .start), at: start, from: end, color: color, in: context, size: size, lineWidth: lineWidth)
+            drawPointer(pointer(for: layer, endpoint: .end), at: end, from: start, color: color, in: context, size: size, lineWidth: lineWidth)
             if let label = layer.label, label != "line" {
                 drawLabel(label, near: CGRect(origin: end, size: .zero), in: context, size: size)
             }
@@ -196,6 +194,12 @@ public enum CaptureMarkupRenderer {
                 plain: layer.plain ?? false,
                 sizeScale: CGFloat((layer.fontSize ?? 16) / 16),
                 textColorHex: layer.color,
+                textPreset: layer.textPreset,
+                explicitTextColorHex: layer.textColor,
+                backgroundColorHex: layer.backgroundColor,
+                backgroundAlpha: layer.backgroundAlpha,
+                borderColorHex: layer.borderColor,
+                borderAlpha: layer.borderAlpha,
                 inPlace: true
             )
         case .guide:
@@ -270,14 +274,46 @@ public enum CaptureMarkupRenderer {
         context.strokePath()
     }
 
-    private static func drawArrowHead(
+    private enum PointerEndpoint {
+        case start
+        case end
+    }
+
+    private static func normalizedPointerStyle(_ value: String?) -> String {
+        guard let value else { return "open" }
+        switch value {
+        case "none", "open", "filled", "dot", "bar":
+            return value
+        default:
+            return "open"
+        }
+    }
+
+    private static func pointer(for layer: CaptureMarkupLayer, endpoint: PointerEndpoint) -> String {
+        let raw = endpoint == .start ? layer.pointerStart : layer.pointerEnd
+        if let raw {
+            return normalizedPointerStyle(raw)
+        }
+        if layer.pointerStart != nil || layer.pointerEnd != nil {
+            return "none"
+        }
+        if layer.label == "line" {
+            return "none"
+        }
+        return endpoint == .end ? normalizedPointerStyle(layer.pointerStyle) : "none"
+    }
+
+    private static func drawPointer(
+        _ style: String,
         at tip: CGPoint,
-        from start: CGPoint,
+        from tail: CGPoint,
         color: CGColor,
         in context: CGContext,
-        size: CGSize
+        size: CGSize,
+        lineWidth: CGFloat
     ) {
-        let angle = atan2(tip.y - start.y, tip.x - start.x)
+        guard style != "none" else { return }
+        let angle = atan2(tip.y - tail.y, tip.x - tail.x)
         let headLength = max(8, size.width / 120)
         let left = CGPoint(
             x: tip.x - headLength * cos(angle - .pi / 6),
@@ -287,12 +323,118 @@ public enum CaptureMarkupRenderer {
             x: tip.x - headLength * cos(angle + .pi / 6),
             y: tip.y - headLength * sin(angle + .pi / 6)
         )
+
+        context.saveGState()
+        context.setStrokeColor(color)
         context.setFillColor(color)
-        context.move(to: tip)
-        context.addLine(to: left)
-        context.addLine(to: right)
-        context.closePath()
-        context.fillPath()
+        context.setLineWidth(lineWidth)
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+
+        switch style {
+        case "filled":
+            context.move(to: tip)
+            context.addLine(to: left)
+            context.addLine(to: right)
+            context.closePath()
+            context.fillPath()
+        case "dot":
+            let radius = max(3.5, headLength * 0.32)
+            context.fillEllipse(in: CGRect(x: tip.x - radius, y: tip.y - radius, width: radius * 2, height: radius * 2))
+        case "bar":
+            let length = headLength * 0.74
+            let px = cos(angle + .pi / 2) * length
+            let py = sin(angle + .pi / 2) * length
+            context.move(to: CGPoint(x: tip.x - px, y: tip.y - py))
+            context.addLine(to: CGPoint(x: tip.x + px, y: tip.y + py))
+            context.strokePath()
+        default:
+            context.move(to: tip)
+            context.addLine(to: left)
+            context.move(to: tip)
+            context.addLine(to: right)
+            context.strokePath()
+        }
+
+        context.restoreGState()
+    }
+
+    private struct LabelStyle {
+        var plain: Bool
+        var textColorHex: String
+        var backgroundColorHex: String
+        var backgroundAlpha: CGFloat
+        var borderColorHex: String
+        var borderAlpha: CGFloat
+    }
+
+    private static func labelPreset(_ value: String?) -> LabelStyle {
+        switch value {
+        case "on-dark":
+            return LabelStyle(
+                plain: false,
+                textColorHex: "#232423",
+                backgroundColorHex: "#F4E8D4",
+                backgroundAlpha: 0.94,
+                borderColorHex: "#4F7DFF",
+                borderAlpha: 0.34
+            )
+        case "accent":
+            return LabelStyle(
+                plain: false,
+                textColorHex: "#101A33",
+                backgroundColorHex: "#AFC5FF",
+                backgroundAlpha: 0.96,
+                borderColorHex: "#2D5BDB",
+                borderAlpha: 0.34
+            )
+        case "plain":
+            return LabelStyle(
+                plain: true,
+                textColorHex: "#4F7DFF",
+                backgroundColorHex: "#FFFFFF",
+                backgroundAlpha: 0,
+                borderColorHex: "#4F7DFF",
+                borderAlpha: 0
+            )
+        default:
+            return LabelStyle(
+                plain: false,
+                textColorHex: "#FFFFFF",
+                backgroundColorHex: "#14181E",
+                backgroundAlpha: 0.86,
+                borderColorHex: "#FFFFFF",
+                borderAlpha: 0.22
+            )
+        }
+    }
+
+    private static func labelStyle(
+        preset: String?,
+        plain: Bool,
+        fallbackTextColorHex: String?,
+        explicitTextColorHex: String?,
+        backgroundColorHex: String?,
+        backgroundAlpha: Double?,
+        borderColorHex: String?,
+        borderAlpha: Double?
+    ) -> LabelStyle {
+        var style = labelPreset(plain ? "plain" : preset)
+        style.plain = plain || style.plain
+        style.textColorHex = explicitTextColorHex ?? (style.plain ? (fallbackTextColorHex ?? style.textColorHex) : style.textColorHex)
+        if let backgroundColorHex {
+            style.backgroundColorHex = backgroundColorHex
+        }
+        if let backgroundAlpha {
+            style.backgroundAlpha = CGFloat(backgroundAlpha)
+        }
+        if let borderColorHex {
+            style.borderColorHex = borderColorHex
+        }
+        if let borderAlpha {
+            style.borderAlpha = CGFloat(borderAlpha)
+        }
+        return style
     }
 
     /// Draw a label. Defaults reproduce the historical shape-tag look (mono
@@ -310,9 +452,25 @@ public enum CaptureMarkupRenderer {
         plain: Bool = false,
         sizeScale: CGFloat = 1,
         textColorHex: String? = nil,
+        textPreset: String? = nil,
+        explicitTextColorHex: String? = nil,
+        backgroundColorHex: String? = nil,
+        backgroundAlpha: Double? = nil,
+        borderColorHex: String? = nil,
+        borderAlpha: Double? = nil,
         inPlace: Bool = false
     ) {
         #if canImport(AppKit)
+        let style = labelStyle(
+            preset: textPreset,
+            plain: plain,
+            fallbackTextColorHex: textColorHex,
+            explicitTextColorHex: explicitTextColorHex,
+            backgroundColorHex: backgroundColorHex,
+            backgroundAlpha: backgroundAlpha,
+            borderColorHex: borderColorHex,
+            borderAlpha: borderAlpha
+        )
         let fontSize = max(11, size.width / 140) * sizeScale
         let weight: NSFont.Weight = bold ? .bold : (family == nil ? .semibold : .regular)
         var font: NSFont
@@ -333,9 +491,7 @@ public enum CaptureMarkupRenderer {
             }
         }
 
-        let textColor: NSColor = plain
-            ? (NSColor(cgColor: parseColor(textColorHex ?? "#C47D1C")) ?? .white)
-            : .white
+        let textColor = NSColor(cgColor: parseColor(style.textColorHex)) ?? .white
         let attrs: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: textColor,
@@ -362,12 +518,20 @@ public enum CaptureMarkupRenderer {
             )
         )
 
-        if !plain {
-            context.setFillColor(CGColor(red: 0.08, green: 0.09, blue: 0.12, alpha: 0.84))
+        if !style.plain {
+            context.setFillColor(parseColor(style.backgroundColorHex).copy(alpha: style.backgroundAlpha) ?? parseColor(style.backgroundColorHex))
             context.addPath(
                 CGPath(roundedRect: labelRect, cornerWidth: 6, cornerHeight: 6, transform: nil)
             )
             context.fillPath()
+            if style.borderAlpha > 0 {
+                context.setStrokeColor(parseColor(style.borderColorHex).copy(alpha: style.borderAlpha) ?? parseColor(style.borderColorHex))
+                context.setLineWidth(max(1, size.width / 1200))
+                context.addPath(
+                    CGPath(roundedRect: labelRect, cornerWidth: 6, cornerHeight: 6, transform: nil)
+                )
+                context.strokePath()
+            }
         }
 
         // Context is y-flipped; flip the text matrix so glyphs read upright and
@@ -389,7 +553,7 @@ public enum CaptureMarkupRenderer {
         var cleaned = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         if cleaned.hasPrefix("#") { cleaned.removeFirst() }
         guard cleaned.count == 6, let value = UInt64(cleaned, radix: 16) else {
-            return CGColor(red: 0.77, green: 0.49, blue: 0.11, alpha: 1)
+            return CGColor(red: 0.31, green: 0.49, blue: 1.0, alpha: 1)
         }
         let r = CGFloat((value >> 16) & 0xFF) / 255
         let g = CGFloat((value >> 8) & 0xFF) / 255
