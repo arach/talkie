@@ -338,14 +338,16 @@ final class NotchPanel {
         let atRest = composer.isAtRest
         let isVirtual = notchInfo.isVirtual
 
-        // At rest on external/virtual: use per-monitor hover zone config.
+        // At rest on external/virtual: use per-monitor hover zone config,
+        // but only when the composer is truly idle. Active pills below the
+        // notch, such as screen-recording stop, must keep their full hit area.
         // At rest on laptop: always use full notch width (hardware landmark).
         // When expanded (any display): use measured SwiftUI content size.
         let width: CGFloat
         let height: CGFloat
         let padX: CGFloat
         let padY: CGFloat
-        if atRest && isVirtual {
+        if atRest && isVirtual && composer.resolvedIntent == .idle {
             let config = ns.hoverZoneConfig(for: notchInfo.displayID)
             width = min(panelSize.width, CGFloat(config.width))
             height = min(panelSize.height, CGFloat(config.height))

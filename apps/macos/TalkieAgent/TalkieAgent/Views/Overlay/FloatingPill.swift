@@ -13,6 +13,19 @@ import os
 
 private let pillLogger = Logger(subsystem: "to.talkie.app.agent", category: "FloatingPill")
 
+/// Hosting view that lets clicks pass through the transparent parts of the
+/// oversized pill window used for hover/dev-info headroom.
+private final class ClickThroughPillHostingView<Content: View>: NSHostingView<Content> {
+    var interactiveRectProvider: (() -> NSRect)?
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        if let interactiveRectProvider, !interactiveRectProvider().contains(point) {
+            return nil
+        }
+        return super.hitTest(point)
+    }
+}
+
 // Notification for showing permissions window
 extension Notification.Name {
     static let showPermissionsWindow = Notification.Name("showPermissionsWindow")
@@ -328,14 +341,23 @@ final class FloatingPillController: ObservableObject {
 
     private func createPill(on screen: NSScreen) {
         let pillOverrides = OverlayIndicatorOverridesStore.shared
+        enum HitAlignment {
+            case leading
+            case center
+            case trailing
+        }
         let contentAlignment: Alignment
+        let hitAlignment: HitAlignment
         switch LiveSettings.shared.pillPosition {
         case .bottomLeft:
             contentAlignment = .leading
+            hitAlignment = .leading
         case .bottomRight:
             contentAlignment = .trailing
+            hitAlignment = .trailing
         case .bottomCenter, .topCenter:
             contentAlignment = .center
+            hitAlignment = .center
         }
 
         // Keep enough headroom for expanded/pulsing states without creating an
@@ -347,8 +369,23 @@ final class FloatingPillController: ObservableObject {
         let hostingWidth = max(maxPillHitWidth, max(pillWidth, developerWidth))
         let pillView = FloatingPillView()
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: contentAlignment)
-        let hostingView = NSHostingView(rootView: pillView.environmentObject(self))
+        let hostingView = ClickThroughPillHostingView(rootView: pillView.environmentObject(self))
         hostingView.frame = NSRect(x: 0, y: 0, width: hostingWidth, height: pillHeight)
+        let regularHitWidth = min(hostingWidth, max(maxPillHitWidth, pillWidth))
+        let developerHitWidth = min(hostingWidth, max(regularHitWidth, developerWidth))
+        hostingView.interactiveRectProvider = {
+            let hitWidth = NSEvent.modifierFlags.contains(.command) ? developerHitWidth : regularHitWidth
+            let originX: CGFloat
+            switch hitAlignment {
+            case .leading:
+                originX = 0
+            case .trailing:
+                originX = hostingWidth - hitWidth
+            case .center:
+                originX = (hostingWidth - hitWidth) / 2
+            }
+            return NSRect(x: originX, y: 0, width: hitWidth, height: pillHeight)
+        }
 
         let panel = NSPanel(
             contentRect: hostingView.frame,
