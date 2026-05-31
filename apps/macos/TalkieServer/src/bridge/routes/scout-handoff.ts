@@ -70,7 +70,7 @@ export async function scoutHandoffRoute(
   }
 
   log.info(
-    `Scout handoff: memo="${memoTitle}", ${turns.length} turns, sessionId=${claudeSessionId ?? "(none)"}`
+    `Scout handoff: memo="${memoTitle}", ${turns.length} turns, agentSessionId=${claudeSessionId ?? "(none)"}`
   );
 
   try {
@@ -134,7 +134,7 @@ export async function scoutHandoffRoute(
         "**Transcript:**",
         memoTranscript,
         ...(claudeSessionId
-          ? ["", `**Claude Session:** \`${claudeSessionId}\``]
+          ? ["", `**Agent Session:** \`${claudeSessionId}\``]
           : []),
       ].join("\n"),
       visibility: "private",
