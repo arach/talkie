@@ -5,6 +5,7 @@ This directory contains optional local agent guidance for working on Talkie. It 
 ## Contents
 
 - `talkie/SKILL.md`: Codex/agent context for the Talkie repo, including architecture, command, and review hints.
+- `video-context/SKILL.md`: ffprobe/ffmpeg workflow for turning Talkie clips and shared video into inspectable context sheets.
 
 ## Public Use
 
