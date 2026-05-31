@@ -1601,11 +1601,12 @@ struct NotchComposerView: View {
     }
 
     /// Shape for the hover content area.
-    /// At rest on virtual displays: a small centered rect matching the hover zone settings.
+    /// At rest on idle virtual displays: a small centered rect matching the hover zone settings.
+    /// Active below-notch pills need the full content shape so their controls receive clicks.
     /// Otherwise: full rectangle.
     private var hoverContentShape: HoverZoneShape {
         let atRest = !isHovered && !isRecordingExpanded && wingRenderWidth < 1
-        if atRest && unified {
+        if atRest && unified && composer.resolvedIntent == .idle {
             let config = NotchSettings.shared.hoverZoneConfig(for: notchInfo.displayID)
             let w = CGFloat(config.width) + CGFloat(config.paddingX) * 2
             let h = CGFloat(config.height) + CGFloat(config.paddingY) * 2
