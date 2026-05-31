@@ -456,9 +456,9 @@ private struct ConsoleEmptyState: View {
     }
 }
 
-// MARK: - Scope 3-card starter
+// MARK: - Scope starter
 
-/// Three hero-style cards (Claude / Pi / Shell) shown when the user
+/// Hero-style cards (Claude / Pi / Shell / Logs) shown when the user
 /// enters the Console without a running session. Each card calls
 /// `onLaunch` with the matching seeded preset; the parent switches the
 /// active tab and launches it.
@@ -475,6 +475,7 @@ private struct ScopeConsoleStarter: View {
             (TabPresets.claude,       "Persistent Claude Code runtime with shared workspace + tools.", "CH-01"),
             (TabPresets.pi,           "Persistent Pi session with mounted workspace and prompt context.", "CH-02"),
             (TabPresets.talkieShell,  "Interactive zsh session in this Console workspace.", "CH-03"),
+            (TabPresets.bridgeLogs,   "Live bridge, Talkie, and TalkieAgent logs in one terminal.", "CH-04"),
         ]
     }
 
@@ -510,7 +511,11 @@ private struct ScopeConsoleStarter: View {
                             .foregroundStyle(ScopeInk.primary)
                     }
 
-                    HStack(alignment: .top, spacing: 14) {
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 180, maximum: 210), spacing: 14)],
+                        alignment: .center,
+                        spacing: 14
+                    ) {
                         ForEach(presets, id: \.0.id) { tab, blurb, channel in
                             ScopeStarterCard(
                                 tab: tab,
