@@ -221,9 +221,7 @@ struct RecordingView: View {
             Spacer(minLength: Spacing.sm)
 
             // Stop button — theme-aware accent ring + glow
-            Button(action: {
-                recorder.stopRecording()
-            }) {
+            Button(action: stopRecording) {
                 ZStack {
                     Circle()
                         .fill(theme.chrome.accentGlow)
@@ -239,7 +237,12 @@ struct RecordingView: View {
                         .fill(theme.chrome.accent)
                         .frame(width: 22, height: 22)
                 }
+                .frame(width: 88, height: 88)
+                .contentShape(Circle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Stop recording")
+            .accessibilityHint("Stops the current recording and opens save options.")
             .accessibilityIdentifier("recording.stop")
             .padding(.top, Spacing.xs)
             .padding(.bottom, 20) // Match ActionDock bottom padding
@@ -581,6 +584,10 @@ struct RecordingView: View {
             try? FileManager.default.removeItem(at: url)
             AppLogger.recording.info("Deleted unsaved recording: \(url.lastPathComponent)")
         }
+    }
+
+    private func stopRecording() {
+        recorder.stopRecording()
     }
 
     private func saveRecording() {

@@ -647,8 +647,11 @@ struct RecordingSheetNext: View {
                     .foregroundStyle(theme.colors.textTertiary)
                     .textCase(.uppercase)
             }
+            .frame(width: isPrimary ? 76 : 56, height: 82)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }
 
