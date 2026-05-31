@@ -89,7 +89,7 @@ private final class CaptureMarkupMicButton: NSButton {
 // MARK: - Mag-tape waveform (recording state of the prompt lane)
 //
 // While the mic is hot the prompt lane becomes a magnetic-tape transport —
-// VU bars riding an amber centerline, newest sample at the right under a
+// VU bars riding an accent centerline, newest sample at the right under a
 // tape-head marker, an elapsed readout on the left. Bars are sampled from
 // EphemeralTranscriber.shared.audioLevel (live RMS) on a ~24fps timer.
 
@@ -100,8 +100,8 @@ private final class CaptureMarkupWaveformView: NSView {
     private var startedAt: Date?
     private let maxBars = 56
 
-    private static let amber = NSColor(red: 0.77, green: 0.49, blue: 0.11, alpha: 1)
-    private static let amberDeep = NSColor(red: 0.62, green: 0.38, blue: 0.08, alpha: 1)
+    private static let amber = NSColor(red: 0.31, green: 0.49, blue: 1.0, alpha: 1)
+    private static let amberDeep = NSColor(red: 0.14, green: 0.29, blue: 0.65, alpha: 1)
     private static let ink = NSColor(white: 0.14, alpha: 0.55)
     private static let alert = NSColor(red: 0.82, green: 0.23, blue: 0.11, alpha: 1)
 
@@ -159,7 +159,7 @@ private final class CaptureMarkupWaveformView: NSView {
         let track = NSRect(x: b.minX + leftInset, y: b.minY + 4, width: b.width - leftInset - rightInset, height: b.height - 8)
         guard track.width > 8 else { return }
 
-        // amber centerline
+        // accent centerline
         Self.amber.withAlphaComponent(0.5).setStroke()
         let center = NSBezierPath()
         center.move(to: NSPoint(x: track.minX, y: track.midY))
@@ -215,7 +215,7 @@ private final class CaptureMarkupExampleChip: NSView {
 
     private static let pane = NSColor(red: 0.945, green: 0.945, blue: 0.937, alpha: 1)
     private static let strokeColor = NSColor(white: 0.10, alpha: 0.22).cgColor
-    private static let hoverStrokeColor = NSColor(red: 0.62, green: 0.38, blue: 0.08, alpha: 0.55).cgColor
+    private static let hoverStrokeColor = NSColor(red: 0.14, green: 0.29, blue: 0.65, alpha: 0.55).cgColor
 
     init(text: String) {
         super.init(frame: .zero)
@@ -342,10 +342,10 @@ private final class CaptureMarkupDragHandleView: NSView, NSDraggingSource {
     private var isHovering = false { didSet { needsDisplay = true } }
     private var isPressed = false { didSet { needsDisplay = true } }
 
-    private static let amber = NSColor(red: 0.77, green: 0.49, blue: 0.11, alpha: 1)
-    private static let amberDeep = NSColor(red: 0.62, green: 0.38, blue: 0.08, alpha: 1)
-    private static let amberFaint = NSColor(red: 0.98, green: 0.94, blue: 0.88, alpha: 0.98)
-    private static let amberSoft = NSColor(red: 0.90, green: 0.78, blue: 0.55, alpha: 1)
+    private static let amber = NSColor(red: 0.31, green: 0.49, blue: 1.0, alpha: 1)
+    private static let amberDeep = NSColor(red: 0.14, green: 0.29, blue: 0.65, alpha: 1)
+    private static let amberFaint = NSColor(red: 0.93, green: 0.95, blue: 1.0, alpha: 0.98)
+    private static let amberSoft = NSColor(red: 0.72, green: 0.80, blue: 1.0, alpha: 1)
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -537,10 +537,10 @@ private final class CaptureMarkupPillButton: NSView {
     private let keycapField = NSTextField(labelWithString: "")
     private var enabledForClick = true
 
-    private static let amber = NSColor(red: 0.77, green: 0.49, blue: 0.11, alpha: 1)
-    private static let amberDeep = NSColor(red: 0.62, green: 0.38, blue: 0.08, alpha: 1)
-    private static let amberFaint = NSColor(red: 0.98, green: 0.94, blue: 0.88, alpha: 1)
-    private static let amberSoft = NSColor(red: 0.90, green: 0.78, blue: 0.55, alpha: 1)
+    private static let amber = NSColor(red: 0.31, green: 0.49, blue: 1.0, alpha: 1)
+    private static let amberDeep = NSColor(red: 0.14, green: 0.29, blue: 0.65, alpha: 1)
+    private static let amberFaint = NSColor(red: 0.93, green: 0.95, blue: 1.0, alpha: 1)
+    private static let amberSoft = NSColor(red: 0.72, green: 0.80, blue: 1.0, alpha: 1)
 
     init(kind: Kind) {
         self.kind = kind
@@ -628,10 +628,10 @@ final class CaptureMarkupInputBarView: NSView {
 
     private static let chrome = NSColor(red: 0.945, green: 0.945, blue: 0.941, alpha: 1)
     private static let pane = NSColor(red: 0.945, green: 0.945, blue: 0.937, alpha: 1)
-    private static let amber = NSColor(red: 0.77, green: 0.49, blue: 0.11, alpha: 1)
-    private static let amberDeep = NSColor(red: 0.62, green: 0.38, blue: 0.08, alpha: 1)
-    private static let amberFaint = NSColor(red: 0.98, green: 0.94, blue: 0.88, alpha: 1)
-    private static let amberSoft = NSColor(red: 0.90, green: 0.78, blue: 0.55, alpha: 1)
+    private static let amber = NSColor(red: 0.31, green: 0.49, blue: 1.0, alpha: 1)
+    private static let amberDeep = NSColor(red: 0.14, green: 0.29, blue: 0.65, alpha: 1)
+    private static let amberFaint = NSColor(red: 0.93, green: 0.95, blue: 1.0, alpha: 1)
+    private static let amberSoft = NSColor(red: 0.72, green: 0.80, blue: 1.0, alpha: 1)
     private static let fieldBorder = NSColor(white: 0.10, alpha: 0.20)
     private static let fieldBorderActive = NSColor(red: 0.82, green: 0.23, blue: 0.11, alpha: 0.45)
 
@@ -712,8 +712,8 @@ final class CaptureMarkupInputBarView: NSView {
         promptField.target = self
         promptField.action = #selector(runTapped)
 
-        // Save / Run — custom pill buttons. Save is the quieter amber-faint
-        // pill; Run the filled amber primary. Keyboard shortcuts (⌘S / ⌘↵)
+        // Save / Run — custom pill buttons. Save is the quieter accent-faint
+        // pill; Run the filled accent primary. Keyboard shortcuts (⌘S / ⌘↵)
         // are handled in performKeyEquivalent below; the pills carry the
         // keycaps as visible hints.
         saveButton.onClick = { [weak self] in self?.saveTapped() }
@@ -1018,7 +1018,7 @@ final class CaptureMarkupInputBarView: NSView {
     }
 
     private func updateSaveButtonAppearance() {
-        // Quieter than Run: amber-faint pill. While a run is in flight it's
+        // Quieter than Run: accent-faint pill. While a run is in flight it's
         // disabled; when a save just landed it flashes a confirmed check.
         if isSaveConfirming {
             saveButton.configure(label: "SAVED", keycap: "✓")
@@ -1073,15 +1073,15 @@ final class CaptureMarkupSelectionChipView: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        layer?.backgroundColor = NSColor(red: 0.98, green: 0.94, blue: 0.88, alpha: 1).cgColor
-        layer?.borderColor = NSColor(red: 0.90, green: 0.78, blue: 0.55, alpha: 1).cgColor
+        layer?.backgroundColor = NSColor(red: 0.93, green: 0.95, blue: 1.0, alpha: 1).cgColor
+        layer?.borderColor = NSColor(red: 0.72, green: 0.80, blue: 1.0, alpha: 1).cgColor
         layer?.borderWidth = 0.5
         layer?.cornerRadius = 3
 
         idLabel.font = NSFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
-        idLabel.textColor = NSColor(red: 0.62, green: 0.38, blue: 0.08, alpha: 1)
+        idLabel.textColor = NSColor(red: 0.14, green: 0.29, blue: 0.65, alpha: 1)
         nameLabel.font = NSFont.systemFont(ofSize: 11)
-        nameLabel.textColor = NSColor(red: 0.62, green: 0.38, blue: 0.08, alpha: 1)
+        nameLabel.textColor = NSColor(red: 0.14, green: 0.29, blue: 0.65, alpha: 1)
 
         dismissButton.isBordered = false
         dismissButton.bezelStyle = .inline
