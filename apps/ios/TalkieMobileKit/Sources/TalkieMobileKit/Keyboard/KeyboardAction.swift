@@ -21,6 +21,7 @@ public enum KeyboardAction: Sendable, Equatable {
     case deleteBackward
     case copy
     case paste
+    case selectAll
     case toggleShift
     case toggleControl
     case tab
@@ -51,6 +52,8 @@ public enum KeyboardActionResolver {
                 return .copy
             case "PASTE":
                 return .paste
+            case "SELECT":
+                return .selectAll
             case "SHIFT":
                 return .toggleShift
             case "CONTROL":

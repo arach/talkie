@@ -3271,6 +3271,10 @@ final class KeyboardViewController: UIInputViewController, KeyboardInputHost {
             copyTapped()
         case .paste:
             pasteTapped()
+        case .selectAll:
+            // No reliable select-all across arbitrary host apps from a
+            // keyboard extension; handled only in the in-app editors.
+            break
         case .toggleShift:
             capitalizeTapped()
         case .toggleControl:

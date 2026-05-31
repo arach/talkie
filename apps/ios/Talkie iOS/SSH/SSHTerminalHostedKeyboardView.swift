@@ -133,6 +133,8 @@ extension SSHTerminalHostedKeyboardView {
                 session.send("\u{7F}")
             case .copy:
                 break
+            case .selectAll:
+                break
             case .paste:
                 guard let clipboardText = UIPasteboard.general.string, !clipboardText.isEmpty else { return }
                 sendTranslatedInput(clipboardText)
