@@ -118,8 +118,8 @@ targets:
       - package: WFKit
     settings:
       base:
-        MARKETING_VERSION: "2.5.23"
-        CURRENT_PROJECT_VERSION: "16"
+        MARKETING_VERSION: "2.5.25"
+        CURRENT_PROJECT_VERSION: "18"
         INFOPLIST_KEY_CFBundleDisplayName: "Talkie"
         INFOPLIST_KEY_NSHumanReadableCopyright: ""
         CODE_SIGN_ENTITLEMENTS: Talkie.entitlements

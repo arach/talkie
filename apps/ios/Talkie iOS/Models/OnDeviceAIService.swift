@@ -55,7 +55,8 @@ class OnDeviceAIService: ObservableObject {
 
     /// Generate a smart title for a voice memo based on its transcript
     func generateSmartTitle(for transcript: String) async throws -> String {
-        try await generateTitle(
+        guard FeatureFlags.aiMemoTitlesEnabled else { throw OnDeviceAIError.notAvailable }
+        return try await generateTitle(
             from: transcript,
             systemPrompt: Self.memoTitleSystemPrompt,
             maxInputLength: 2000
@@ -65,6 +66,7 @@ class OnDeviceAIService: ObservableObject {
     /// Generate a smart title for a capture based on its content and source type.
     /// Content-aware: detects social media posts, articles, emails, code, etc.
     func generateCaptureTitle(text: String, sourceType: String, sourceURL: String? = nil) async throws -> String {
+        guard FeatureFlags.aiCaptureTitlesEnabled else { throw OnDeviceAIError.notAvailable }
         var input = text
         if let url = sourceURL {
             input = "Source URL: \(url)\n\n\(text)"
@@ -148,6 +150,7 @@ class OnDeviceAIService: ObservableObject {
 
     /// Generate a brief summary of a voice memo
     func generateSummary(for transcript: String) async throws -> String {
+        guard FeatureFlags.aiMemoSummariesEnabled else { throw OnDeviceAIError.notAvailable }
         #if canImport(FoundationModels)
         guard isAvailable else {
             throw OnDeviceAIError.notAvailable
@@ -174,6 +177,7 @@ class OnDeviceAIService: ObservableObject {
 
     /// Answer a short Apple Watch voice request in speech-friendly prose.
     func answerWatchQuestion(_ question: String) async throws -> String {
+        guard FeatureFlags.aiWatchAssistantEnabled else { throw OnDeviceAIError.notAvailable }
         #if canImport(FoundationModels)
         if !isAvailable {
             await checkAvailability()
@@ -222,6 +226,7 @@ class OnDeviceAIService: ObservableObject {
         note: String,
         queuedAtOffset: TimeInterval
     ) async throws -> String {
+        guard FeatureFlags.aiRecordingSidecarEnabled else { throw OnDeviceAIError.notAvailable }
         #if canImport(FoundationModels)
         guard isAvailable else {
             throw OnDeviceAIError.notAvailable
@@ -255,6 +260,7 @@ class OnDeviceAIService: ObservableObject {
 
     /// Summarize Claude Code session messages into a brief description
     func summarizeSession(messages: [SessionMessage]) async throws -> String {
+        guard FeatureFlags.aiSessionSummariesEnabled else { throw OnDeviceAIError.notAvailable }
         #if canImport(FoundationModels)
         guard isAvailable else {
             throw OnDeviceAIError.notAvailable
@@ -302,6 +308,7 @@ class OnDeviceAIService: ObservableObject {
 
     /// Extract action items/tasks from a voice memo
     func extractTasks(from transcript: String) async throws -> String {
+        guard FeatureFlags.aiTaskExtractionEnabled else { throw OnDeviceAIError.notAvailable }
         #if canImport(FoundationModels)
         guard isAvailable else {
             throw OnDeviceAIError.notAvailable

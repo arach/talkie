@@ -113,6 +113,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         Self.parseAndSetThemeEarly()
     }
 
+    private static let shortcutModifierMask: NSEvent.ModifierFlags = [
+        .command, .option, .control, .shift
+    ]
+
+    private static func keyEvent(
+        _ event: NSEvent,
+        matches keyCode: UInt32,
+        modifiers expectedModifiers: NSEvent.ModifierFlags
+    ) -> Bool {
+        let activeModifiers = event.modifierFlags.intersection(shortcutModifierMask)
+        let expectedModifiers = expectedModifiers.intersection(shortcutModifierMask)
+        return event.keyCode == UInt16(keyCode) && activeModifiers == expectedModifiers
+    }
+
     // MARK: - Window Lifecycle
 
     /// Prevent macOS from creating untitled windows on launch
@@ -1838,8 +1852,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             }
 
             // For other shortcuts, require no modifiers
-            let significantModifiers: NSEvent.ModifierFlags = [.command, .option, .control, .shift]
-            guard event.modifierFlags.intersection(significantModifiers).isEmpty else {
+            guard event.modifierFlags.intersection(Self.shortcutModifierMask).isEmpty else {
                 return event
             }
 
@@ -1974,10 +1987,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 return event
             }
 
-            let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-
             // Check screenshot chord
-            if mods.contains(captureMods), event.keyCode == captureKeyCode {
+            if Self.keyEvent(event, matches: captureKeyCode, modifiers: captureMods) {
                 if self?.capturePerfLoggingEnabled == true {
                     Log(.system).info("Screenshot chord detected (local) — entering capture bar")
                 }
@@ -1989,7 +2000,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             }
 
             // Check screen record chord
-            if mods.contains(recordMods), event.keyCode == recordKeyCode {
+            if Self.keyEvent(event, matches: recordKeyCode, modifiers: recordMods) {
                 if self?.capturePerfLoggingEnabled == true {
                     Log(.system).info("Screen record chord detected (local) — entering capture bar")
                 }
@@ -2001,7 +2012,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             }
 
             // Check paste chord
-            if mods.contains(pasteMods), event.keyCode == pasteKeyCode {
+            if Self.keyEvent(event, matches: pasteKeyCode, modifiers: pasteMods) {
                 if self?.capturePerfLoggingEnabled == true {
                     Log(.system).info("Paste chord detected (local) — entering paste bar")
                 }
@@ -2129,7 +2140,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             CapturePerformanceMonitor.shared.beginSession(trigger: "capture-chord", mode: "pending")
             CapturePerformanceMonitor.shared.mark("chord.panel.begin")
         }
-        guard let result = await chord.beginChord(initialMode: initialMode, options: chordOptions) else {
+
+        var hudInitialMode = initialMode
+        if initialMode == .video {
+            switch await ScreenRecordingController.shared.startReusableRecordingWithCountdown() {
+            case .started:
+                return
+            case .cancelled:
+                return
+            case .needsSelection:
+                break
+            case .needsSelectionInMode(let mode):
+                hudInitialMode = mode
+            }
+        }
+
+        guard let result = await chord.beginChord(initialMode: hudInitialMode, options: chordOptions) else {
             if trackCapturePerf {
                 CapturePerformanceMonitor.shared.endSession(outcome: "cancelled")
             }
@@ -2531,8 +2557,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 if cfg == captureChord || cfg == screenRecordChord {
                     continue
                 }
-                let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-                if event.keyCode == UInt16(cfg.keyCode) && mods == cfg.nsModifierFlags {
+                if Self.keyEvent(event, matches: cfg.keyCode, modifiers: cfg.nsModifierFlags) {
                     Task { @MainActor in
                         await self?.handleDirectScreenshot(mode: mode)
                     }
@@ -2619,9 +2644,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 return event
             }
 
-            let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             // keyCode 8 = C key
-            if mods.contains([.command, .shift]) && event.keyCode == 8 {
+            if Self.keyEvent(event, matches: 8, modifiers: [.command, .shift]) {
                 Task { @MainActor in
                     guard FeatureFlags.shared.enableCameraBubble else { return }
                     CameraBubbleController.shared.toggle()
@@ -2692,14 +2716,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 return event
             }
 
-            let hasCommand = event.modifierFlags.contains(.command)
-            let hasShift = event.modifierFlags.contains(.shift)
-            let hasOption = event.modifierFlags.contains(.option)
+            let activeModifiers = event.modifierFlags.intersection(Self.shortcutModifierMask)
             let key = event.charactersIgnoringModifiers?.lowercased() ?? ""
-            let noModifiers = !hasCommand && !hasShift && !hasOption
+            let noModifiers = activeModifiers.isEmpty
 
             // ⌘⇧⌥D = Screenshot (with Option)
-            if hasCommand && hasShift && hasOption && key == "d" {
+            if activeModifiers == [.command, .shift, .option] && key == "d" {
                 Task { @MainActor [weak self] in
                     if let path = await DesignModeManager.shared.captureScreenshot() {
                         self?.showToast(message: "📸 Screenshot saved!\n\(path)")
@@ -2709,7 +2731,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             }
 
             // ⌘⇧D = Toggle Design Mode (auto-enables guides on activation)
-            if hasCommand && hasShift && key == "d" && !hasOption {
+            if activeModifiers == [.command, .shift] && key == "d" {
                 let dm = DesignModeManager.shared
                 dm.isEnabled.toggle()
 

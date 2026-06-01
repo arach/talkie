@@ -207,6 +207,7 @@ private struct ConsolePopoutContent: View {
 final class ConsoleTerminalCaptureController {
     let dictation = EphemeralTranscriber.shared
 
+    var copyStatus: TerminalCopyStatus?
     var dictationError: String?
     var isCapturingScreenshot = false
     var screenshotError: String?
@@ -214,6 +215,17 @@ final class ConsoleTerminalCaptureController {
     @ObservationIgnored private var dictationStartedAt: Date?
     @ObservationIgnored private var dictationBaselineScreenshotIDs: Set<UUID> = []
     @ObservationIgnored private var dictationBaselineClipIDs: Set<UUID> = []
+
+    func copyTerminalOutput(from session: ManagedAgentConsoleSession) {
+        let status: TerminalCopyStatus = session.copyTranscriptToClipboard() ? .copied : .empty
+        copyStatus = status
+
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(1_200))
+            guard self?.copyStatus == status else { return }
+            self?.copyStatus = nil
+        }
+    }
 
     func toggleDictation(sendTo session: ManagedAgentConsoleSession) {
         dictationError = nil
@@ -399,12 +411,22 @@ final class ConsoleTerminalCaptureController {
     }
 }
 
+enum TerminalCopyStatus: Equatable {
+    case copied
+    case empty
+}
+
 struct ConsoleTerminalCaptureControls: View {
     let controller: ConsoleTerminalCaptureController
     let session: ManagedAgentConsoleSession
 
     var body: some View {
         HStack(spacing: 8) {
+            ConsolePopoutCopyButton(
+                status: controller.copyStatus,
+                action: { controller.copyTerminalOutput(from: session) }
+            )
+
             ConsolePopoutScreenshotButton(
                 isCapturing: controller.isCapturingScreenshot,
                 error: controller.screenshotError,
@@ -417,6 +439,108 @@ struct ConsoleTerminalCaptureControls: View {
                 error: controller.dictationError,
                 action: { controller.toggleDictation(sendTo: session) }
             )
+        }
+    }
+}
+
+private struct ConsolePopoutCopyButton: View {
+    let status: TerminalCopyStatus?
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                Image(systemName: iconName)
+                    .font(.system(size: 12, weight: .semibold))
+
+                if status != nil {
+                    Text(label)
+                        .font(.geistMono(size: 10, weight: .semibold))
+                        .lineLimit(1)
+                }
+            }
+            .foregroundStyle(foregroundStyle)
+            .padding(.horizontal, status == nil ? 0 : 10)
+            .frame(width: status == nil ? 28 : nil, height: 28)
+            .frame(minHeight: 28)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(backgroundStyle)
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .strokeBorder(borderStyle, lineWidth: 1)
+                    )
+            )
+            .shadow(color: .black.opacity(0.22), radius: 10, y: 5)
+        }
+        .buttonStyle(.plain)
+        .keyboardShortcut("c", modifiers: .command)
+        .onHover { isHovered = $0 }
+        .help(helpText)
+    }
+
+    private var iconName: String {
+        switch status {
+        case .copied:
+            "checkmark"
+        case .empty, .none:
+            "doc.on.doc"
+        }
+    }
+
+    private var label: String {
+        switch status {
+        case .copied:
+            "COPIED"
+        case .empty:
+            "EMPTY"
+        case nil:
+            "COPY"
+        }
+    }
+
+    private var helpText: String {
+        switch status {
+        case .copied:
+            "Copied terminal output"
+        case .empty:
+            "No terminal output to copy"
+        case nil:
+            "Copy terminal output"
+        }
+    }
+
+    private var foregroundStyle: Color {
+        switch status {
+        case .copied:
+            .green
+        case .empty:
+            .orange
+        case nil:
+            isHovered ? Theme.current.foreground : Theme.current.foregroundSecondary
+        }
+    }
+
+    private var backgroundStyle: Color {
+        switch status {
+        case .copied:
+            .green.opacity(0.16)
+        case .empty:
+            .orange.opacity(0.18)
+        case nil:
+            isHovered ? Theme.current.surfaceHover : Theme.current.surface1.opacity(0.9)
+        }
+    }
+
+    private var borderStyle: Color {
+        switch status {
+        case .copied:
+            .green.opacity(0.35)
+        case .empty:
+            .orange.opacity(0.35)
+        case nil:
+            Theme.current.border.opacity(0.78)
         }
     }
 }

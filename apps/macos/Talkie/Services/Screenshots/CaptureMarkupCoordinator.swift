@@ -194,40 +194,84 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
         finish(with: .success(nil))
     }
 
-    func captureMarkupPanelDidRun(instruction: String) {
+    func captureMarkupPanelDidRun(instruction: String, providerId: String?, modelId: String?) {
         guard let imageURL else { return }
         rootView?.inputBar.setRunning(true)
         let started = Date()
         passCount += 1
         let pass = passCount
-        webSession?.beginThread(instruction: instruction)
         Task {
             defer {
                 rootView?.inputBar.setRunning(false)
             }
+            let includedLayers = await webSession?.fetchMessageLayers() ?? []
+            webSession?.clearSelection()
+            webSession?.beginThread(
+                instruction: instruction,
+                pass: pass,
+                attachmentCount: includedLayers.count
+            )
+            var runModelLabel = await CaptureMarkupAgentService.shared.currentModelLabel(
+                providerId: providerId,
+                modelId: modelId
+            )
+            if let runModelLabel {
+                webSession?.updateThreadModel(
+                    runModelLabel,
+                    elapsed: Date().timeIntervalSince(started)
+                )
+            }
+            var planSummary: String?
             do {
                 let existing = await webSession?.fetchDocument()
-                let beforeIDs = Set(existing?.layers.map(\.id) ?? [])
-                let doc = try await CaptureMarkupAgentService.shared.runInstruction(
+                let beforeLayers = Dictionary(
+                    uniqueKeysWithValues: (existing?.layers ?? []).map { ($0.id, $0) }
+                )
+                let beforeIDs = Set(beforeLayers.keys)
+                var doc = try await CaptureMarkupAgentService.shared.runInstruction(
                     imageURL: imageURL,
                     instruction: instruction,
+                    includedLayers: includedLayers,
                     existing: existing,
                     openWebBay: false,
+                    providerId: providerId,
+                    modelId: modelId,
                     onPhase: { [weak self] phase in
+                        if case .planning(let model) = phase {
+                            runModelLabel = model
+                        }
+                        if case .planned(let detail) = phase {
+                            planSummary = detail
+                        }
                         self?.webSession?.handlePhase(
                             phase,
                             elapsed: Date().timeIntervalSince(started)
                         )
                     }
                 )
+                let elapsed = Date().timeIntervalSince(started)
+                let changedIDs = Set(doc.layers.filter { beforeLayers[$0.id] != $0 }.map(\.id))
+                annotateTurn(
+                    in: &doc,
+                    changedLayerIDs: changedIDs,
+                    pass: pass,
+                    instruction: instruction,
+                    model: runModelLabel,
+                    summary: planSummary,
+                    elapsed: elapsed
+                )
                 currentDocument = doc
+                if !changedIDs.isEmpty {
+                    try? CaptureMarkupStorage.save(doc, forImageURL: imageURL)
+                }
                 webSession?.push(document: doc)
                 let added = doc.layers.filter { !beforeIDs.contains($0.id) }
                 await webSession?.finishThread(
                     added: added,
-                    elapsed: Date().timeIntervalSince(started),
+                    elapsed: elapsed,
                     pass: pass
                 )
+                webSession?.clearMessageLayers()
                 syncChrome(layerCount: doc.layers.count, selection: nil)
                 rootView?.inputBar.clearPrompt()
             } catch {
@@ -240,6 +284,10 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
 
     func captureMarkupPanelDidClearSelection() {
         webSession?.clearSelection()
+    }
+
+    func captureMarkupPanelDidRemoveAttachment(id: String) {
+        webSession?.removeMessageLayer(id: id)
     }
 
     func captureMarkupPanelTryExampleSelected(_ text: String) {
@@ -321,17 +369,15 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
                 layerCount: message.layerCount ?? layerCount,
                 selection: message.selection
             )
+        case "markup.attachments":
+            rootView?.inputBar.setAttachments(message.selections)
         case "markup.attach":
             // Explicit user gesture from the layers sidebar (clicked
             // the ⠿ grip on a layer row). This is the ONLY path that
             // populates the attachments row — selection alone no
             // longer auto-attaches. See TLK-022 / markup chrome notes.
             if let selection = message.selection {
-                rootView?.inputBar.setSelection(
-                    id: selection.id,
-                    label: selection.label,
-                    kind: selection.kind
-                )
+                rootView?.inputBar.setAttachments([selection])
             }
         default:
             break
@@ -350,10 +396,30 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
         rootView?.inputBar.setTouchUpMode(touchUp)
         // Selection no longer auto-attaches — the attachments row only
         // populates from an explicit user gesture (drag from the
-        // layers sidebar). Selection still updates the canvas
-        // highlight + inspector panel on the JS side; Swift just
-        // doesn't drag the chip into the composer anymore.
-        rootView?.inputBar.setSelection(id: nil, label: nil, kind: nil)
+            // layers sidebar). Selection still updates the canvas
+            // highlight + inspector panel on the JS side; Swift just
+            // doesn't drag the chip into the composer anymore.
+    }
+
+    private func annotateTurn(
+        in document: inout CaptureMarkupDocument,
+        changedLayerIDs: Set<String>,
+        pass: Int,
+        instruction: String,
+        model: String?,
+        summary: String?,
+        elapsed: TimeInterval
+    ) {
+        guard !changedLayerIDs.isEmpty else { return }
+        let cleanModel = model?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanSummary = summary?.trimmingCharacters(in: .whitespacesAndNewlines)
+        for index in document.layers.indices where changedLayerIDs.contains(document.layers[index].id) {
+            document.layers[index].turnPass = pass
+            document.layers[index].turnInstruction = instruction
+            document.layers[index].turnModel = cleanModel?.isEmpty == false ? cleanModel : nil
+            document.layers[index].turnSummary = cleanSummary?.isEmpty == false ? cleanSummary : nil
+            document.layers[index].turnElapsed = elapsed
+        }
     }
 
     private func finish(with result: Result<CaptureMarkupDocument?, Error>) {
@@ -479,7 +545,7 @@ final class CaptureMarkupCoordinator: NSObject, CaptureMarkupPanelChromeDelegate
     }
 }
 
-struct CaptureMarkupLayerSelection {
+struct CaptureMarkupLayerSelection: Equatable {
     let id: String
     let label: String
     let kind: String
@@ -492,6 +558,7 @@ struct CaptureMarkupBridgeMessage {
     let instruction: String?
     let layerCount: Int?
     let selection: CaptureMarkupLayerSelection?
+    let selections: [CaptureMarkupLayerSelection]
     let error: String?
 
     static func parse(_ body: Any) -> CaptureMarkupBridgeMessage? {
@@ -520,6 +587,23 @@ struct CaptureMarkupBridgeMessage {
             )
         }
 
+        let selections: [CaptureMarkupLayerSelection]
+        if let array = dict["selections"] as? [[String: Any]] {
+            selections = array.compactMap { item in
+                guard let id = item["id"] as? String,
+                      let kind = item["kind"] as? String else { return nil }
+                return CaptureMarkupLayerSelection(
+                    id: id,
+                    label: item["label"] as? String ?? kind,
+                    kind: kind
+                )
+            }
+        } else if let selection {
+            selections = [selection]
+        } else {
+            selections = []
+        }
+
         return CaptureMarkupBridgeMessage(
             type: type,
             sessionId: dict["sessionId"] as? String,
@@ -527,6 +611,7 @@ struct CaptureMarkupBridgeMessage {
             instruction: dict["instruction"] as? String,
             layerCount: intValue(dict["layerCount"]),
             selection: selection,
+            selections: selections,
             error: dict["error"] as? String
         )
     }

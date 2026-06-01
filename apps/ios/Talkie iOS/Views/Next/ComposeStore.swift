@@ -70,6 +70,50 @@ final class ComposeStore: ObservableObject {
         }
     }
 
+    /// A pickable model — one per provider that has an API key saved on
+    /// this device and is supported by the direct resolver. Backs the
+    /// header's model menu so it lists "what you can actually run" rather
+    /// than abstract routes.
+    struct ModelOption: Identifiable, Equatable {
+        let providerId: String
+        let modelId: String
+
+        var id: String { providerId }
+        var providerName: String { TalkieAIProviderCredentialPayload.displayName(for: providerId) }
+        /// e.g. "OpenAI · gpt-5.5"
+        var menuLabel: String { "\(providerName) · \(modelId)" }
+    }
+
+    /// Configured direct models — credentials that are both saved in the
+    /// Keychain and resolvable by the direct path. Empty when the user
+    /// hasn't added a key yet (header routes them to AI Keys).
+    var configuredModelOptions: [ModelOption] {
+        let supported = TalkieAIProviderCredentialPayload.supportedProviderIds
+        return AICredentialStore.shared.setProviderIDs
+            .filter { supported.contains($0) }
+            .sorted()
+            .map { ModelOption(providerId: $0, modelId: TalkieAIProviderCredentialPayload.defaultModel(for: $0)) }
+    }
+
+    /// The provider id the direct path currently resolves to — used to
+    /// mark the active row in the model menu.
+    var activeDirectProviderId: String {
+        TalkieAppSettings.shared.composeDirectProviderId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+    }
+
+    /// Pick a specific direct model. Pins the provider/model in settings
+    /// and snaps the revision path back to `.direct` so the header glyph
+    /// refreshes immediately.
+    func selectDirectModel(_ option: ModelOption) {
+        TalkieAppSettings.shared.composeDirectProviderId = option.providerId
+        TalkieAppSettings.shared.composeDirectModelId = option.modelId
+        revisionPath = .direct
+        TalkieAppSettings.shared.composeRevisionPath = RevisionPath.direct.rawValue
+        objectWillChange.send()
+    }
+
     private let context: NSManagedObjectContext
     private let inlineDictationController = InlineDictationController()
     private let voiceCommandController = InlineDictationController()
@@ -708,11 +752,17 @@ final class ComposeStore: ObservableObject {
     }
 
     private static func paragraphs(from content: String) -> [String] {
-        let paragraphs = content
-            .components(separatedBy: "\n\n")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        return paragraphs.isEmpty ? [""] : paragraphs
+        // MUST be lossless: this round-trips through the editor binding on
+        // every keystroke (documentBodyText get = joined("\n\n"), set =
+        // paragraphs(from:)), so it has to satisfy
+        //   paragraphs(from: t).joined(separator: "\n\n") == t
+        // The old version trimmed each paragraph and dropped empties, which
+        // silently ate trailing spaces and newlines as they were typed — the
+        // "can't type space/enter in Compose" bug. `components(separatedBy:)`
+        // is the exact inverse of `joined(separator:)`, so this is identity.
+        // Any cosmetic normalization belongs at an explicit commit boundary,
+        // not on the live editing path.
+        content.components(separatedBy: "\n\n")
     }
 
     private static func makeDiff(original: String, proposed: String) -> Diff {

@@ -477,9 +477,9 @@ struct DeckMirrorNext: View {
             columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4),
             spacing: 6
         ) {
-            ForEach(Array(tiles.enumerated()), id: \.element.id) { index, tile in
-                if index == 0 {
-                    dictationTile
+            ForEach(tiles) { tile in
+                if tile.slotID == dictationSlotID {
+                    dictationTile(tile)
                 } else {
                     tileView(tile)
                 }
@@ -491,7 +491,7 @@ struct DeckMirrorNext: View {
     /// idle to start; tap again (in the same physical position) to
     /// commit. Visual matches the studio mock: mic glyph in idle,
     /// amber-armed enter glyph while dictating.
-    private var dictationTile: some View {
+    private func dictationTile(_ tile: DeckTile) -> some View {
         Button {
             toggleDictation()
         } label: {
@@ -506,7 +506,7 @@ struct DeckMirrorNext: View {
                     )
                     .frame(height: 24)
 
-                Text(isDictating ? "Stop" : "Dictate")
+                Text(isDictating ? "Stop" : tile.label)
                     .talkieType(.fieldValue)
                     .foregroundStyle(
                         isDictating
@@ -542,6 +542,7 @@ struct DeckMirrorNext: View {
             .animation(.easeOut(duration: 0.18), value: isDictating)
         }
         .buttonStyle(.plain)
+        .disabled(deck.firingSlotID != nil)
         .accessibilityLabel(isDictating ? "Stop dictation" : "Start dictation")
     }
 

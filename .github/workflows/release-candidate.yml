@@ -1,20 +1,10 @@
-name: App Build Smoke
+name: Release Candidate
 
 on:
-  workflow_dispatch:
-    inputs:
-      scope:
-        description: 'Build scope'
-        required: true
-        default: all
-        type: choice
-        options:
-          - all
-          - macos
-          - ios
   push:
     tags:
-      - 'build-smoke-*'
+      - 'candidate-v*'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -23,11 +13,32 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  npm:
+    name: Package npm
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/npm/cli
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build
+        run: bun run build
+
+      - name: Package dry run
+        run: npm publish --dry-run --access public
+
   macos:
     name: Build macOS apps
     runs-on: macos-26
     timeout-minutes: 75
-    if: ${{ github.event_name == 'push' || inputs.scope == 'all' || inputs.scope == 'macos' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2
@@ -52,7 +63,6 @@ jobs:
     name: Build iOS/watchOS simulator apps
     runs-on: macos-26
     timeout-minutes: 75
-    if: ${{ github.event_name == 'push' || inputs.scope == 'all' || inputs.scope == 'ios' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2

@@ -123,7 +123,7 @@
 				539FB5B52EE6785C004EEAF4 /* Sources */,
 				539FB5B62EE6785C004EEAF4 /* Frameworks */,
 				539FB5B72EE6785C004EEAF4 /* Resources */,
-				B4C2F59C3E6D4A1190C7E203 /* Install Runtime Node Dependencies */,
+				B4C2F59C3E6D4A1190C7E203 /* Verify Runtime Node Dispatcher */,
 				53LSREG0012EE80000004EEAF4 /* Register URL Scheme */,
 			);
 			buildRules = (
@@ -255,7 +255,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		B4C2F59C3E6D4A1190C7E203 /* Install Runtime Node Dependencies */ = {
+		B4C2F59C3E6D4A1190C7E203 /* Verify Runtime Node Dispatcher */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -263,22 +263,16 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
-				"$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Runtime/node/package.json",
-				"$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Runtime/node/package-lock.json",
+				"$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Runtime/node/index.mjs",
 			);
-			name = "Install Runtime Node Dependencies";
+			name = "Verify Runtime Node Dispatcher";
 			outputFileListPaths = (
 			);
 			outputPaths = (
-				"$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Runtime/node/node_modules",
-				"$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Runtime/node/node_modules/.package-lock.json",
-				"$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Runtime/node/node_modules/@openscout",
-				"$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Runtime/node/node_modules/@openscout/agent-sessions",
-				"$(BUILT_PRODUCTS_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Runtime/node/node_modules/@openscout/agent-sessions/package.json",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/bash;
-			shellScript = "# Install production dependencies into the copied app resource runtime.\n# The source tree keeps node_modules ignored; the app bundle becomes self-contained.\nset -euo pipefail\n\nRUNTIME_DIR=\"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Runtime/node\"\n\nif [ ! -f \"${RUNTIME_DIR}/package.json\" ]; then\n    echo \"TalkieAgent runtime package.json not found at ${RUNTIME_DIR}/package.json\"\n    exit 1\nfi\n\nif [ ! -f \"${RUNTIME_DIR}/package-lock.json\" ]; then\n    echo \"TalkieAgent runtime package-lock.json not found at ${RUNTIME_DIR}/package-lock.json\"\n    exit 1\nfi\n\nif command -v npm >/dev/null 2>&1; then\n    NPM_BIN=\"$(command -v npm)\"\nelif [ -x \"/opt/homebrew/bin/npm\" ]; then\n    NPM_BIN=\"/opt/homebrew/bin/npm\"\nelif [ -x \"/usr/local/bin/npm\" ]; then\n    NPM_BIN=\"/usr/local/bin/npm\"\nelse\n    echo \"npm is required to install TalkieAgent runtime dependencies.\"\n    exit 1\nfi\n\n\"${NPM_BIN}\" ci --omit=dev --no-audit --no-fund --prefix \"${RUNTIME_DIR}\"\n";
+			shellScript = "# TalkieAgent ships only the tiny Node dispatcher in the app bundle.\n# Agent-session packages are CLI-managed under ~/.talkie/agent-runtime after install.\nset -euo pipefail\n\nRUNTIME_SCRIPT=\"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Runtime/node/index.mjs\"\n\nif [ ! -f \"${RUNTIME_SCRIPT}\" ]; then\n    echo \"TalkieAgent runtime dispatcher not found at ${RUNTIME_SCRIPT}\"\n    exit 1\nfi\n\necho \"TalkieAgent runtime dispatcher present; external Node agent tooling is installed post-install.\"\n";
 		};
 		53LSREG0012EE80000004EEAF4 /* Register URL Scheme */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -474,7 +468,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "$(TALKIE_CODE_SIGN_IDENTITY)";
 				CODE_SIGN_STYLE = "$(TALKIE_CODE_SIGN_STYLE)";
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 18;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -490,7 +484,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2.5.23;
+				MARKETING_VERSION = 2.5.25;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_BUNDLE_ID_DEBUG)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -513,7 +507,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 18;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -529,7 +523,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2.5.23;
+				MARKETING_VERSION = 2.5.25;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -546,11 +540,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 18;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 2.5.23;
+				MARKETING_VERSION = 2.5.25;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_TESTS_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -565,11 +559,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 18;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 2.5.23;
+				MARKETING_VERSION = 2.5.25;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_TESTS_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -583,10 +577,10 @@
 			baseConfigurationReference = 084FDC674076926357ED425D /* Signing.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 18;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 2.5.23;
+				MARKETING_VERSION = 2.5.25;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_UITESTS_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -600,10 +594,10 @@
 			baseConfigurationReference = 084FDC674076926357ED425D /* Signing.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 18;
 				DEVELOPMENT_TEAM = "$(TALKIE_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 2.5.23;
+				MARKETING_VERSION = 2.5.25;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TALKIE_MAC_AGENT_UITESTS_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;

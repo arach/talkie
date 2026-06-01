@@ -282,7 +282,7 @@ private struct HomeHeader: View {
             Spacer()
             Text("TALKIE")
                 .talkieType(.wordmark)
-                .foregroundStyle(theme.colors.textPrimary.opacity(0.78))
+                .foregroundStyle(theme.colors.textPrimary)
             Spacer()
             Button(action: { AppShellRouter.shared.openSettings() }) {
                 ZStack {
@@ -618,7 +618,8 @@ private struct HomeFrequentActionsStrip: View {
                     .foregroundStyle(theme.currentTheme.chrome.accent)
                 Text(label)
                     .talkieType(.channelLabelTiny)
-                    .foregroundStyle(theme.colors.textTertiary)
+                    // Primary action labels — secondary ink, not the quietest tier.
+                    .foregroundStyle(theme.colors.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
             }

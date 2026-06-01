@@ -20,7 +20,7 @@ struct MemoAgentSheetNext: View {
     @State private var streamingResponse: String = ""
     @State private var agentError: String?
     @State private var turns: [AgentTurn] = []
-    @State private var claudeSessionId: String?
+    @State private var agentSessionId: String?
     @State private var handoffState: HandoffState = .idle
     @State private var didConsumeSeed = false
 
@@ -64,7 +64,7 @@ struct MemoAgentSheetNext: View {
                                 errorCard(agentError)
                             }
 
-                            if !turns.isEmpty && agentState == .idle {
+                            if hasAssistantTurn && agentState == .idle {
                                 scoutHandoffCard
                             }
 
@@ -106,7 +106,7 @@ struct MemoAgentSheetNext: View {
             Spacer()
 
             VStack(spacing: 2) {
-                Text("Memo Agent")
+                Text("Codex Agent")
                     .talkieType(.headlineSecondary)
                     .foregroundStyle(theme.colors.textPrimary)
                 Text(connectionLabel)
@@ -240,14 +240,26 @@ struct MemoAgentSheetNext: View {
     }
 
     private func errorCard(_ text: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.orange)
-            Text(text)
-                .talkieType(.preview)
-                .foregroundStyle(theme.colors.textSecondary)
-            Spacer()
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.orange)
+                Text(text)
+                    .talkieType(.preview)
+                    .foregroundStyle(theme.colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer()
+            }
+
+            if canRetryAgentRequest {
+                Button(action: retryLastAgentRequest) {
+                    Label("Retry", systemImage: "arrow.clockwise")
+                        .talkieType(.fieldLabel)
+                        .foregroundStyle(theme.currentTheme.chrome.accent)
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 12).fill(theme.colors.cardBackground))
@@ -398,6 +410,16 @@ struct MemoAgentSheetNext: View {
         && !instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private var canRetryAgentRequest: Bool {
+        agentState == .idle
+        && agentError != nil
+        && turns.last?.role == "user"
+    }
+
+    private var hasAssistantTurn: Bool {
+        turns.contains { $0.role == "assistant" }
+    }
+
     private var connectionLabel: String {
         if BridgeManager.shared.status == .connected { return "MAC CONNECTED" }
         if BridgeManager.shared.isPaired { return "MAC PAIRED" }
@@ -417,8 +439,10 @@ struct MemoAgentSheetNext: View {
 
     private func loadSession() {
         guard let session = AgentSessionStore.shared.existingSession(forMemoId: memo.id) else { return }
-        turns = session.turns
-        claudeSessionId = session.claudeSessionId
+        turns = session.turns.filter { turn in
+            !(turn.role == "assistant" && isInterruptedAgentResponse(turn.content))
+        }
+        agentSessionId = session.claudeSessionId
     }
 
     private func setupDictation() {
@@ -459,6 +483,19 @@ struct MemoAgentSheetNext: View {
     }
 
     private func sendToAgent(_ overrideInstruction: String? = nil) {
+        sendToAgent(overrideInstruction, shouldRecordUserTurn: true)
+    }
+
+    private func retryLastAgentRequest() {
+        guard canRetryAgentRequest,
+              let lastUserTurn = turns.last,
+              lastUserTurn.role == "user"
+        else { return }
+
+        sendToAgent(lastUserTurn.content, shouldRecordUserTurn: false)
+    }
+
+    private func sendToAgent(_ overrideInstruction: String? = nil, shouldRecordUserTurn: Bool) {
         let trimmed = (overrideInstruction ?? instruction).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
@@ -467,17 +504,21 @@ struct MemoAgentSheetNext: View {
             return
         }
 
-        let userTurn = AgentTurn(role: "user", content: trimmed)
-        turns.append(userTurn)
         _ = AgentSessionStore.shared.session(forMemoId: memo.id, memoTitle: memo.title)
-        AgentSessionStore.shared.addUserTurn(memoId: memo.id, content: trimmed)
+        if shouldRecordUserTurn {
+            let userTurn = AgentTurn(role: "user", content: trimmed)
+            turns.append(userTurn)
+            AgentSessionStore.shared.addUserTurn(memoId: memo.id, content: trimmed)
+        }
 
         let sentInstruction = trimmed
         let memoID = memo.id
         let memoTitle = memo.title
         let memoTranscript = memo.transcript
-        let existingSessionID = claudeSessionId
-        instruction = ""
+        let existingSessionID = agentSessionId
+        if shouldRecordUserTurn {
+            instruction = ""
+        }
         agentState = .sending
         agentError = nil
         streamingResponse = ""
@@ -510,14 +551,16 @@ struct MemoAgentSheetNext: View {
 
                 if streamingResponse.isEmpty {
                     agentError = "No response from agent."
+                } else if isInterruptedAgentResponse(streamingResponse) {
+                    agentError = "Codex was interrupted before it finished."
                 } else {
                     let assistantText = streamingResponse
                     let assistantTurn = AgentTurn(role: "assistant", content: assistantText)
                     turns.append(assistantTurn)
                     AgentSessionStore.shared.addAssistantTurn(memoId: memoID, content: assistantText)
 
-                    if let sessionID = result.sessionId, claudeSessionId == nil {
-                        claudeSessionId = sessionID
+                    if let sessionID = result.sessionId, agentSessionId == nil {
+                        agentSessionId = sessionID
                         AgentSessionStore.shared.setClaudeSessionId(sessionID, forMemoId: memoID)
                     }
                 }
@@ -525,11 +568,29 @@ struct MemoAgentSheetNext: View {
                 streamingResponse = ""
                 agentState = .idle
             } catch {
-                agentError = error.localizedDescription
+                agentError = friendlyAgentError(error)
                 streamingResponse = ""
                 agentState = .idle
             }
         }
+    }
+
+    private func isInterruptedAgentResponse(_ text: String) -> Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines) == "[Request interrupted by user]"
+    }
+
+    private func friendlyAgentError(_ error: Error) -> String {
+        if case BridgeError.messageFailed(let reason) = error,
+           reason.localizedCaseInsensitiveContains("interrupted") {
+            return "Codex was interrupted before it finished."
+        }
+
+        let description = error.localizedDescription
+        if description.localizedCaseInsensitiveContains("interrupted") {
+            return "Codex was interrupted before it finished."
+        }
+
+        return description
     }
 
     private func promptForAgent(
@@ -568,7 +629,7 @@ struct MemoAgentSheetNext: View {
         let memoTitle = memo.title
         let memoTranscript = memo.transcript
         let conversationTurns = turns
-        let sessionID = claudeSessionId
+        let sessionID = agentSessionId
         handoffState = .sending
 
         Task { @MainActor in

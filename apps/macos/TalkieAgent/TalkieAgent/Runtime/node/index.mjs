@@ -19,11 +19,13 @@ const version = readPackageVersion();
 const jobStorePath = process.env.TALKIE_AGENT_ACTIVITY_STORE
   ?? process.env.TALKIE_WALKIE_JOB_STORE
   ?? join(homedir(), 'Library', 'Application Support', 'Talkie', 'Walkie', 'jobs.json');
+const agentRuntimeHome = process.env.TALKIE_AGENT_RUNTIME_HOME
+  ?? join(homedir(), '.talkie', 'agent-runtime');
 const runtimeBase = {
   id: 'walkie-node-dispatcher',
   name: 'Walkie Runtime Dispatcher',
   version,
-  capabilities: ['readOnlyData', 'longRunningJobs', 'codeExecution'],
+  capabilities: ['readOnlyData', 'longRunningJobs', 'codeExecution', 'externalNodeTools'],
 };
 const jobs = loadJobs();
 let pending = '';
@@ -155,45 +157,97 @@ async function handleLine(line) {
 }
 
 async function runtimeInfo() {
+  const agentRuntime = await agentRuntimeStatus();
   return {
     ...runtimeBase,
-    scoutBridge: await agentSessionsAvailable() ? 'configured' : 'pending',
+    scoutBridge: agentRuntime.available ? 'configured' : 'pending',
+    agentRuntimeHome,
+    agentRuntimeModule: agentRuntime.modulePath,
   };
 }
 
 async function agentSessionsAvailable() {
+  return (await agentRuntimeStatus()).available;
+}
+
+async function agentRuntimeStatus() {
   try {
-    await loadAgentSessionsPackage();
-    return true;
+    const result = await resolveAgentRuntimePackage();
+    return { available: true, modulePath: result.modulePath };
   } catch {
-    return false;
+    return { available: false, modulePath: null };
   }
 }
 
 async function loadAgentSessionsPackage() {
-  const configuredModule = process.env.TALKIE_AGENT_SESSIONS_MODULE;
+  return (await resolveAgentRuntimePackage()).packageModule;
+}
+
+async function resolveAgentRuntimePackage() {
+  const configuredRuntimeModule = process.env.TALKIE_AGENT_RUNTIME_MODULE;
+  const configuredAgentSessionsModule = process.env.TALKIE_AGENT_SESSIONS_MODULE;
   const workspace = workspaceCwd();
   const workspaceParent = dirname(workspace);
-  const candidates = [
-    configuredModule,
+  const talkieCandidates = [
+    configuredRuntimeModule,
+    join(agentRuntimeHome, 'node_modules', '@talkie', 'agent-runtime', 'index.mjs'),
+    join(homedir(), '.talkie-shell', 'runtime', 'lib', 'node_modules', '@talkie', 'agent-runtime', 'index.mjs'),
+    join(workspace, 'packages', 'npm', 'agent-runtime', 'index.mjs'),
+  ].filter(Boolean);
+  const compatibilityCandidates = [
+    configuredAgentSessionsModule,
+    join(agentRuntimeHome, 'node_modules', '@openscout', 'agent-sessions', 'dist', 'index.js'),
+    join(homedir(), '.talkie-shell', 'runtime', 'lib', 'node_modules', '@openscout', 'agent-sessions', 'dist', 'index.js'),
     join(workspace, 'node_modules', '@openscout', 'agent-sessions', 'dist', 'index.js'),
     join(workspaceParent, 'openscout', 'packages', 'agent-sessions', 'dist', 'index.js'),
     join(workspaceParent, 'openscout', 'packages', 'agent-sessions', 'src', 'index.ts'),
   ].filter(Boolean);
 
   try {
-    return await import('@openscout/agent-sessions');
+    return {
+      packageModule: await import('@talkie/agent-runtime'),
+      modulePath: '@talkie/agent-runtime',
+    };
   } catch {
     // Fall through to explicit local candidates.
   }
 
-  for (const candidate of candidates) {
+  for (const candidate of talkieCandidates) {
     if (typeof candidate === 'string' && existsSync(candidate)) {
-      return import(pathToFileURL(candidate).href);
+      try {
+        return {
+          packageModule: await import(pathToFileURL(candidate).href),
+          modulePath: candidate,
+        };
+      } catch {
+        // Keep probing; a local wrapper checkout may exist before npm install.
+      }
     }
   }
 
-  throw new Error('Could not load @openscout/agent-sessions.');
+  try {
+    return {
+      packageModule: await import('@openscout/agent-sessions'),
+      modulePath: '@openscout/agent-sessions',
+    };
+  } catch {
+    // Compatibility only: local OpenScout checkouts can still satisfy the adapter.
+  }
+
+  for (const candidate of compatibilityCandidates) {
+    if (typeof candidate === 'string' && existsSync(candidate)) {
+      try {
+        return {
+          packageModule: await import(pathToFileURL(candidate).href),
+          modulePath: candidate,
+        };
+      } catch {
+        // Keep probing other compatibility paths.
+      }
+    }
+  }
+
+  throw new Error(`Could not load @talkie/agent-runtime. Run install-agent-runtime.sh or set TALKIE_AGENT_RUNTIME_MODULE. Runtime home: ${agentRuntimeHome}`);
 }
 
 function writeResponse(response) {
@@ -223,7 +277,7 @@ async function invoke(invocation, runtime) {
       ? isContinuation
         ? 'Continuing in the same Agent Session. I will report back here.'
         : 'On it. I sent that to an Agent Session and will report back here.'
-      : 'I captured that executor request, but the Scout agent session package is not installed for this runtime.',
+      : 'I captured that executor request, but the Talkie Agent Runtime CLI package is not installed yet.',
     providerId: invocation.channel?.executorProviderId ?? adapterType,
     modelId: invocation.channel?.executorModelId ?? null,
     channelCode: invocation.channel?.code ?? null,
@@ -239,7 +293,7 @@ async function invoke(invocation, runtime) {
     bridgeStatus: runtime.scoutBridge,
     createdAt: now,
     updatedAt: now,
-    error: bridgeReady ? null : 'Missing @openscout/agent-sessions dependency.',
+    error: bridgeReady ? null : 'Talkie Agent Runtime CLI package is not installed.',
   };
 
   jobs.set(sessionId, record);
@@ -261,12 +315,12 @@ async function retryInvocation(sessionId, runtime) {
   record.runtimeName = runtime.name;
   record.bridgeStatus = runtime.scoutBridge;
   record.updatedAt = new Date().toISOString();
-  record.error = bridgeReady ? null : 'Missing @openscout/agent-sessions dependency.';
+  record.error = bridgeReady ? null : 'Talkie Agent Runtime CLI package is not installed.';
   record.output = null;
   record.state = bridgeReady ? 'working' : 'failed';
   record.ack = bridgeReady
     ? 'On it. I restarted this in an Agent Session.'
-    : 'I could not restart this because the Scout agent session package is not installed for this runtime.';
+    : 'I could not restart this because the Talkie Agent Runtime CLI package is not installed yet.';
   persistRecord(record);
 
   if (bridgeReady) {

@@ -197,6 +197,13 @@ struct NotchComposerView: View {
         return false
     }
 
+    private var screenRecordingStartTime: Date? {
+        if case .screenRecording(let startTime) = composer.activeIntents[.screenRecording] {
+            return startTime
+        }
+        return nil
+    }
+
     // Only recording drives the "active" expansion. Pills don't expand wings.
     private var desiredExpansionState: ExpansionState {
         if recordingDismissedByGesture {
@@ -666,6 +673,19 @@ struct NotchComposerView: View {
                         // Unified: wings + optional tray, one continuous background
                         recordingUnit
                             .zIndex(2)
+
+                        if let screenRecordingStartTime {
+                            ScreenRecordingNotchPillView(
+                                startTime: screenRecordingStartTime,
+                                onStop: {
+                                    Task { @MainActor in
+                                        await ScreenRecordingController.shared.stopRecording()
+                                    }
+                                }
+                            )
+                            .padding(.top, 4)
+                            .zIndex(1)
+                        }
 
                         if shouldShowCommunicationFramework && recordingCommunicationPresentationVisible {
                             communicationPresentation
@@ -1601,11 +1621,12 @@ struct NotchComposerView: View {
     }
 
     /// Shape for the hover content area.
-    /// At rest on virtual displays: a small centered rect matching the hover zone settings.
+    /// At rest on idle virtual displays: a small centered rect matching the hover zone settings.
+    /// Active below-notch pills need the full content shape so their controls receive clicks.
     /// Otherwise: full rectangle.
     private var hoverContentShape: HoverZoneShape {
         let atRest = !isHovered && !isRecordingExpanded && wingRenderWidth < 1
-        if atRest && unified {
+        if atRest && unified && composer.resolvedIntent == .idle {
             let config = NotchSettings.shared.hoverZoneConfig(for: notchInfo.displayID)
             let w = CGFloat(config.width) + CGFloat(config.paddingX) * 2
             let h = CGFloat(config.height) + CGFloat(config.paddingY) * 2

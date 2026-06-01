@@ -9,7 +9,14 @@
 <body>
   <div id="app">
     <header class="tool-toolbar" id="tool-toolbar">
-      <!-- Left: canvas modes, then drawing tools. -->
+      <!-- Global edit commands, then canvas modes and drawing tools. -->
+      <div class="toolbar-tools history-tools" aria-label="Edit history">
+        <button type="button" class="history-btn" data-action="undo" title="Undo (⌘Z)" aria-label="Undo">↶</button>
+        <button type="button" class="history-btn" data-action="redo" title="Redo (⇧⌘Z)" aria-label="Redo">↷</button>
+      </div>
+
+      <span class="toolbar-divider" aria-hidden="true"></span>
+
       <div class="toolbar-tools viewport-tools" aria-label="Canvas modes">
         <button type="button" class="tool-btn mode-tool" data-tool="select" title="Select (V)"><span class="glyph">↖</span><span class="label">Select</span></button>
         <button type="button" class="tool-btn mode-tool" data-tool="hand" title="Hand · pan (H / Space)"><span class="glyph">✋</span><span class="label">Hand</span></button>
@@ -50,18 +57,54 @@
 
         <span class="style-divider" aria-hidden="true"></span>
 
+        <div class="style-group arrow-only" data-group="arrow-heads">
+          <span class="style-label">heads</span>
+          <div class="style-row">
+            <button type="button" class="style-btn arrow-head" data-style="arrow-heads" data-value="none" title="No pointers">--</button>
+            <button type="button" class="style-btn arrow-head" data-style="arrow-heads" data-value="start" title="Pointer at start">&lt;-</button>
+            <button type="button" class="style-btn arrow-head active" data-style="arrow-heads" data-value="end" title="Pointer at end">-&gt;</button>
+            <button type="button" class="style-btn arrow-head" data-style="arrow-heads" data-value="both" title="Pointers at both ends">&lt;&gt;</button>
+          </div>
+        </div>
+
+        <span class="style-divider arrow-only" aria-hidden="true"></span>
+
+        <div class="style-group arrow-only" data-group="pointer-style">
+          <span class="style-label">tip</span>
+          <div class="style-row">
+            <button type="button" class="style-btn pointer-pick active" data-style="pointer-style" data-value="open" title="Open arrow">V</button>
+            <button type="button" class="style-btn pointer-pick" data-style="pointer-style" data-value="filled" title="Filled arrow">F</button>
+            <button type="button" class="style-btn pointer-pick" data-style="pointer-style" data-value="dot" title="Dot pointer">O</button>
+            <button type="button" class="style-btn pointer-pick" data-style="pointer-style" data-value="bar" title="Bar pointer">|</button>
+          </div>
+        </div>
+
+        <span class="style-divider" aria-hidden="true"></span>
+
         <div class="style-group" data-group="color">
           <span class="style-label">color</span>
           <div class="style-row">
             <button type="button" class="style-btn swatch" data-style="color" data-value="#232423" title="Ink" style="--c: #232423"></button>
             <button type="button" class="style-btn swatch" data-style="color" data-value="#D03A1C" title="Alert" style="--c: #D03A1C"></button>
-            <button type="button" class="style-btn swatch active" data-style="color" data-value="#C47D1C" title="Amber" style="--c: #C47D1C"></button>
-            <button type="button" class="style-btn swatch" data-style="color" data-value="#9A6A22" title="Brass" style="--c: #9A6A22"></button>
+            <button type="button" class="style-btn swatch active" data-style="color" data-value="#4F7DFF" title="Accent" style="--c: #4F7DFF"></button>
+            <button type="button" class="style-btn swatch" data-style="color" data-value="#12A594" title="Teal" style="--c: #12A594"></button>
             <button type="button" class="style-btn swatch swatch-light" data-style="color" data-value="#FFFFFF" title="White" style="--c: #FFFFFF"></button>
           </div>
         </div>
 
         <span class="style-divider text-only" data-group="font-divider" aria-hidden="true"></span>
+
+        <div class="style-group text-only" data-group="text-preset">
+          <span class="style-label">preset</span>
+          <div class="style-row">
+            <button type="button" class="style-btn text-preset active" data-style="text-preset" data-value="on-light" title="For light backgrounds">L</button>
+            <button type="button" class="style-btn text-preset" data-style="text-preset" data-value="on-dark" title="For dark backgrounds">D</button>
+            <button type="button" class="style-btn text-preset" data-style="text-preset" data-value="accent" title="Amber accent">A</button>
+            <button type="button" class="style-btn text-preset" data-style="text-preset" data-value="plain" title="Plain text">T</button>
+          </div>
+        </div>
+
+        <span class="style-divider text-only" aria-hidden="true"></span>
 
         <div class="style-group text-only" data-group="font-size">
           <span class="style-label">size</span>
@@ -103,6 +146,7 @@
           </div>
         </div>
       </div>
+      <button type="button" class="top-save-btn" data-action="save" title="Save markup (⌘S)">Save</button>
     </header>
 
     <main class="bay-body">
@@ -118,12 +162,9 @@
         <canvas id="canvas"></canvas>
 
         <!-- Floating canvas zoom cluster (Hudson pattern). Lives over the
-             canvas, not in the toolbar. Undo/redo ride along here so the
-             accessible bindings stay reachable without widening the top bar. -->
+             canvas and only owns viewport zoom controls. Global edit history
+             lives in the top toolbar. -->
         <div class="canvas-zoom-cluster" id="canvas-zoom-cluster">
-          <button type="button" class="zoom-btn" data-action="undo" title="Undo (⌘Z)">↶</button>
-          <button type="button" class="zoom-btn" data-action="redo" title="Redo (⌘⇧Z)">↷</button>
-          <span class="zoom-divider" aria-hidden="true"></span>
           <button type="button" class="zoom-btn" data-action="zoom-out" title="Zoom out">−</button>
           <span class="zoom-badge" id="zoom-display">100%</span>
           <button type="button" class="zoom-btn" data-action="zoom-in" title="Zoom in">+</button>
@@ -157,6 +198,7 @@
       </aside>
     </main>
     <div id="popover" class="popover hidden">
+      <button type="button" data-action="attach">Add to next message</button>
       <button type="button" data-action="delete">Delete layer</button>
       <button type="button" data-action="toggle">Hide / Show</button>
     </div>

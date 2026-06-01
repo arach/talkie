@@ -365,6 +365,7 @@ actor AudioDropService {
                         screenshots: prior.screenshots,
                         clips: prior.clips,
                         attachments: prior.attachments,
+                        visualContexts: prior.visualContexts,
                         textProvenance: prior.textProvenance
                     )
                     existing.assetsJSON = merged.toJSON()

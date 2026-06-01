@@ -22,13 +22,25 @@ import AppKit
 protocol CaptureMarkupPanelChromeDelegate: AnyObject {
     func captureMarkupPanelDidAccept()
     func captureMarkupPanelDidCancel()
-    func captureMarkupPanelDidRun(instruction: String)
+    func captureMarkupPanelDidRun(instruction: String, providerId: String?, modelId: String?)
     /// Explicit Save (⌘S / SAVE button) — persist the current document to
     /// the sidecar now. Distinct from Accept: does NOT close the panel.
     func captureMarkupPanelDidSave()
     func captureMarkupPanelDidClearSelection()
+    func captureMarkupPanelDidRemoveAttachment(id: String)
     func captureMarkupPanelTryExampleSelected(_ text: String)
     func captureMarkupPanelDidReportError(_ message: String)
+}
+
+private struct CaptureMarkupAgentChoice: Equatable {
+    let providerId: String
+    let providerName: String
+    let modelId: String
+    let modelDisplayName: String
+
+    var menuTitle: String {
+        "AGENT · \(providerName) · \(modelDisplayName)"
+    }
 }
 
 // MARK: - Mic (narrow circular tap-to-toggle control)
@@ -89,7 +101,7 @@ private final class CaptureMarkupMicButton: NSButton {
 // MARK: - Mag-tape waveform (recording state of the prompt lane)
 //
 // While the mic is hot the prompt lane becomes a magnetic-tape transport —
-// VU bars riding an amber centerline, newest sample at the right under a
+// VU bars riding an accent centerline, newest sample at the right under a
 // tape-head marker, an elapsed readout on the left. Bars are sampled from
 // EphemeralTranscriber.shared.audioLevel (live RMS) on a ~24fps timer.
 
@@ -98,10 +110,9 @@ private final class CaptureMarkupWaveformView: NSView {
     private var levels: [CGFloat] = []
     private var timer: Timer?
     private var startedAt: Date?
-    private let maxBars = 56
 
-    private static let amber = NSColor(red: 0.77, green: 0.49, blue: 0.11, alpha: 1)
-    private static let amberDeep = NSColor(red: 0.62, green: 0.38, blue: 0.08, alpha: 1)
+    private static let amber = NSColor(red: 0.31, green: 0.49, blue: 1.0, alpha: 1)
+    private static let amberDeep = NSColor(red: 0.14, green: 0.29, blue: 0.65, alpha: 1)
     private static let ink = NSColor(white: 0.14, alpha: 0.55)
     private static let alert = NSColor(red: 0.82, green: 0.23, blue: 0.11, alpha: 1)
 
@@ -139,6 +150,7 @@ private final class CaptureMarkupWaveformView: NSView {
         // so the tape always reads as "running," not flatlined.
         let norm = min(1, max(0.07, sqrt(max(0, raw)) * 1.9))
         levels.append(norm)
+        let maxBars = max(56, Int(bounds.width / 4))
         if levels.count > maxBars { levels.removeFirst(levels.count - maxBars) }
         needsDisplay = true
     }
@@ -159,7 +171,7 @@ private final class CaptureMarkupWaveformView: NSView {
         let track = NSRect(x: b.minX + leftInset, y: b.minY + 4, width: b.width - leftInset - rightInset, height: b.height - 8)
         guard track.width > 8 else { return }
 
-        // amber centerline
+        // accent centerline
         Self.amber.withAlphaComponent(0.5).setStroke()
         let center = NSBezierPath()
         center.move(to: NSPoint(x: track.minX, y: track.midY))
@@ -170,9 +182,10 @@ private final class CaptureMarkupWaveformView: NSView {
         // VU bars — newest sample nearest the tape head (right)
         let barW: CGFloat = 2
         let stride = barW + 2
+        let slotCount = max(1, Int(track.width / stride))
         let count = levels.count
-        for i in 0..<count {
-            let level = levels[count - 1 - i]
+        for i in 0..<slotCount {
+            let level = i < count ? levels[count - 1 - i] : 0.07
             let x = track.maxX - CGFloat(i + 1) * stride
             if x < track.minX { break }
             let h = max(2, level * (track.height - 2))
@@ -215,7 +228,7 @@ private final class CaptureMarkupExampleChip: NSView {
 
     private static let pane = NSColor(red: 0.945, green: 0.945, blue: 0.937, alpha: 1)
     private static let strokeColor = NSColor(white: 0.10, alpha: 0.22).cgColor
-    private static let hoverStrokeColor = NSColor(red: 0.62, green: 0.38, blue: 0.08, alpha: 0.55).cgColor
+    private static let hoverStrokeColor = NSColor(red: 0.14, green: 0.29, blue: 0.65, alpha: 0.55).cgColor
 
     init(text: String) {
         super.init(frame: .zero)
@@ -323,6 +336,39 @@ private final class CaptureMarkupPromptContainerView: NSView {
     }
 }
 
+@MainActor
+private final class CaptureMarkupPromptTextView: NSTextView {
+    var onCommandReturn: (() -> Void)?
+    var placeholderString = "" {
+        didSet { needsDisplay = true }
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.modifierFlags.contains(.command),
+           event.charactersIgnoringModifiers == "\r" {
+            onCommandReturn?()
+            return
+        }
+        super.keyDown(with: event)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard string.isEmpty, !placeholderString.isEmpty else { return }
+
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font ?? NSFont.systemFont(ofSize: 13),
+            .foregroundColor: NSColor.placeholderTextColor,
+        ]
+        let padding = textContainer?.lineFragmentPadding ?? 0
+        let point = NSPoint(
+            x: textContainerInset.width + padding,
+            y: textContainerInset.height
+        )
+        (placeholderString as NSString).draw(at: point, withAttributes: attrs)
+    }
+}
+
 // MARK: - Root layout
 
 @MainActor
@@ -342,10 +388,10 @@ private final class CaptureMarkupDragHandleView: NSView, NSDraggingSource {
     private var isHovering = false { didSet { needsDisplay = true } }
     private var isPressed = false { didSet { needsDisplay = true } }
 
-    private static let amber = NSColor(red: 0.77, green: 0.49, blue: 0.11, alpha: 1)
-    private static let amberDeep = NSColor(red: 0.62, green: 0.38, blue: 0.08, alpha: 1)
-    private static let amberFaint = NSColor(red: 0.98, green: 0.94, blue: 0.88, alpha: 0.98)
-    private static let amberSoft = NSColor(red: 0.90, green: 0.78, blue: 0.55, alpha: 1)
+    private static let amber = NSColor(red: 0.31, green: 0.49, blue: 1.0, alpha: 1)
+    private static let amberDeep = NSColor(red: 0.14, green: 0.29, blue: 0.65, alpha: 1)
+    private static let amberFaint = NSColor(red: 0.93, green: 0.95, blue: 1.0, alpha: 0.98)
+    private static let amberSoft = NSColor(red: 0.72, green: 0.80, blue: 1.0, alpha: 1)
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -537,10 +583,10 @@ private final class CaptureMarkupPillButton: NSView {
     private let keycapField = NSTextField(labelWithString: "")
     private var enabledForClick = true
 
-    private static let amber = NSColor(red: 0.77, green: 0.49, blue: 0.11, alpha: 1)
-    private static let amberDeep = NSColor(red: 0.62, green: 0.38, blue: 0.08, alpha: 1)
-    private static let amberFaint = NSColor(red: 0.98, green: 0.94, blue: 0.88, alpha: 1)
-    private static let amberSoft = NSColor(red: 0.90, green: 0.78, blue: 0.55, alpha: 1)
+    private static let amber = NSColor(red: 0.31, green: 0.49, blue: 1.0, alpha: 1)
+    private static let amberDeep = NSColor(red: 0.14, green: 0.29, blue: 0.65, alpha: 1)
+    private static let amberFaint = NSColor(red: 0.93, green: 0.95, blue: 1.0, alpha: 1)
+    private static let amberSoft = NSColor(red: 0.72, green: 0.80, blue: 1.0, alpha: 1)
 
     init(kind: Kind) {
         self.kind = kind
@@ -628,24 +674,23 @@ final class CaptureMarkupInputBarView: NSView {
 
     private static let chrome = NSColor(red: 0.945, green: 0.945, blue: 0.941, alpha: 1)
     private static let pane = NSColor(red: 0.945, green: 0.945, blue: 0.937, alpha: 1)
-    private static let amber = NSColor(red: 0.77, green: 0.49, blue: 0.11, alpha: 1)
-    private static let amberDeep = NSColor(red: 0.62, green: 0.38, blue: 0.08, alpha: 1)
-    private static let amberFaint = NSColor(red: 0.98, green: 0.94, blue: 0.88, alpha: 1)
-    private static let amberSoft = NSColor(red: 0.90, green: 0.78, blue: 0.55, alpha: 1)
+    private static let amber = NSColor(red: 0.31, green: 0.49, blue: 1.0, alpha: 1)
+    private static let amberDeep = NSColor(red: 0.14, green: 0.29, blue: 0.65, alpha: 1)
+    private static let amberFaint = NSColor(red: 0.93, green: 0.95, blue: 1.0, alpha: 1)
+    private static let amberSoft = NSColor(red: 0.72, green: 0.80, blue: 1.0, alpha: 1)
     private static let fieldBorder = NSColor(white: 0.10, alpha: 0.20)
     private static let fieldBorderActive = NSColor(red: 0.82, green: 0.23, blue: 0.11, alpha: 0.45)
 
     private let examplesStack = NSStackView()
     private let tryLabel = NSTextField(labelWithString: "· TRY")
     private let scopeBadge = NSTextField(labelWithString: "GLOBAL · WHOLE IMAGE")
+    private let agentPicker = NSPopUpButton(frame: .zero, pullsDown: false)
     private let voiceButton = CaptureMarkupMicButton()
-    private let selectionChip = CaptureMarkupSelectionChipView()
-    private let promptField = NSTextField()
+    private let attachmentChipsStack = NSStackView()
+    private let promptTextView = CaptureMarkupPromptTextView()
     private let waveform = CaptureMarkupWaveformView()
-    private let saveButton = CaptureMarkupPillButton(kind: .faint)
     private let runButton = CaptureMarkupPillButton(kind: .primary)
     private let promptContainer = CaptureMarkupPromptContainerView()
-    /// Resets the Save button out of its transient "SAVED ✓" state.
     private var saveFeedbackResetWork: DispatchWorkItem?
 
     // Attachments row. Hidden when empty; shows the selection chip(s)
@@ -659,7 +704,8 @@ final class CaptureMarkupInputBarView: NSView {
     private var isVoiceRecording = false
     private var isVoiceTranscribing = false
     private var isRunning = false
-    private var isSaveConfirming = false
+    private var agentChoices: [CaptureMarkupAgentChoice] = []
+    private var agentPreferencesObserver: NSObjectProtocol?
 
     private var askExamples = [
         "circle the error and label it",
@@ -687,6 +733,16 @@ final class CaptureMarkupInputBarView: NSView {
         scopeBadge.textColor = .tertiaryLabelColor
         scopeBadge.alignment = .right
 
+        agentPicker.font = NSFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
+        agentPicker.controlSize = .small
+        agentPicker.bezelStyle = .rounded
+        agentPicker.toolTip = "Choose markup agent"
+        agentPicker.target = self
+        agentPicker.action = #selector(agentPickerChanged)
+        agentPicker.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+        agentPicker.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+        setAgentPickerLoading()
+
         examplesStack.orientation = .horizontal
         examplesStack.spacing = 8
         examplesStack.alignment = .centerY
@@ -703,52 +759,52 @@ final class CaptureMarkupInputBarView: NSView {
         voiceButton.toolTip = "Tap to record · tap again to stop"
         voiceButton.onToggle = { [weak self] in self?.toggleVoiceCapture() }
 
-        promptField.placeholderString = "tell the agent what to mark up…"
-        promptField.font = NSFont.systemFont(ofSize: 13)
-        promptField.isBordered = false
-        promptField.isBezeled = false
-        promptField.drawsBackground = false
-        promptField.focusRingType = .none
-        promptField.target = self
-        promptField.action = #selector(runTapped)
+        promptTextView.font = NSFont.systemFont(ofSize: 13)
+        promptTextView.textColor = .labelColor
+        promptTextView.drawsBackground = false
+        promptTextView.isRichText = false
+        promptTextView.importsGraphics = false
+        promptTextView.allowsUndo = true
+        promptTextView.textContainerInset = NSSize(width: 0, height: 7)
+        promptTextView.textContainer?.lineFragmentPadding = 0
+        promptTextView.textContainer?.widthTracksTextView = true
+        promptTextView.textContainer?.heightTracksTextView = false
+        promptTextView.isHorizontallyResizable = false
+        promptTextView.isVerticallyResizable = false
+        promptTextView.insertionPointColor = .labelColor
+        promptTextView.placeholderString = "tell the agent what to mark up…"
+        promptTextView.delegate = self
+        promptTextView.onCommandReturn = { [weak self] in self?.runTapped() }
 
-        // Save / Run — custom pill buttons. Save is the quieter amber-faint
-        // pill; Run the filled amber primary. Keyboard shortcuts (⌘S / ⌘↵)
-        // are handled in performKeyEquivalent below; the pills carry the
-        // keycaps as visible hints.
-        saveButton.onClick = { [weak self] in self?.saveTapped() }
+        // Run — custom pill button. Keyboard shortcuts (⌘S / ⌘↵)
+        // are handled in performKeyEquivalent below; the pill carries the
+        // run keycap as a visible hint.
         runButton.onClick = { [weak self] in self?.runTapped() }
-
-        selectionChip.onDismiss = { [weak self] in
-            self?.delegate?.captureMarkupPanelDidClearSelection()
-        }
-        selectionChip.isHidden = false  // visibility is now driven by the row
 
         attachmentsLabel.font = NSFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
         attachmentsLabel.textColor = .tertiaryLabelColor
+
+        attachmentChipsStack.orientation = .horizontal
+        attachmentChipsStack.spacing = 6
+        attachmentChipsStack.alignment = .centerY
 
         attachmentsRow.orientation = .horizontal
         attachmentsRow.spacing = 8
         attachmentsRow.alignment = .centerY
         attachmentsRow.addArrangedSubview(attachmentsLabel)
-        attachmentsRow.addArrangedSubview(selectionChip)
+        attachmentsRow.addArrangedSubview(attachmentChipsStack)
         attachmentsRow.isHidden = true
 
         // Speak Strip composition:
         //   · TRY  [chips…]                     GLOBAL · WHOLE IMAGE
         //   · ATTACHED  ↳ LAYER chip          ← hidden when empty
-        //   [🎤]   [────── prompt ──────]   [ RUN ⌘↵ ]
-        //
-        // Mic and Run sit OUTSIDE the prompt container — three distinct
-        // elements with gaps, not one merged composer row. Attachments
-        // live in their own row; nothing is ever crammed inside the
-        // prompt's text area.
-        [tryLabel, examplesStack, scopeBadge, attachmentsRow, voiceButton, promptContainer, saveButton, runButton].forEach {
+        //   [──── multi-line prompt ────] [🎤] [ RUN ⌘↵ ]
+        [tryLabel, examplesStack, agentPicker, scopeBadge, attachmentsRow, promptContainer, voiceButton, runButton].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             addSubview($0)
         }
-        promptContainer.addSubview(promptField)
-        promptField.translatesAutoresizingMaskIntoConstraints = false
+        promptContainer.addSubview(promptTextView)
+        promptTextView.translatesAutoresizingMaskIntoConstraints = false
 
         // Waveform overlays the prompt lane and only shows while recording —
         // the lane is the prompt at rest, the tape transport when hot.
@@ -773,43 +829,56 @@ final class CaptureMarkupInputBarView: NSView {
             examplesStack.centerYAnchor.constraint(equalTo: tryLabel.centerYAnchor),
             examplesStack.leadingAnchor.constraint(equalTo: tryLabel.trailingAnchor, constant: 8),
 
+            agentPicker.centerYAnchor.constraint(equalTo: tryLabel.centerYAnchor),
+            agentPicker.leadingAnchor.constraint(greaterThanOrEqualTo: examplesStack.trailingAnchor, constant: 12),
+            agentPicker.trailingAnchor.constraint(equalTo: scopeBadge.leadingAnchor, constant: -8),
+            agentPicker.widthAnchor.constraint(greaterThanOrEqualToConstant: 190),
+            agentPicker.widthAnchor.constraint(lessThanOrEqualToConstant: 280),
+            agentPicker.heightAnchor.constraint(equalToConstant: 24),
+
             scopeBadge.centerYAnchor.constraint(equalTo: tryLabel.centerYAnchor),
             scopeBadge.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-            scopeBadge.leadingAnchor.constraint(greaterThanOrEqualTo: examplesStack.trailingAnchor, constant: 12),
 
             attachmentsTop,
             attachmentsRow.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
             attachmentsRow.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -14),
 
-            voiceButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
-            voiceButton.topAnchor.constraint(equalTo: attachmentsRow.bottomAnchor, constant: 7),
-            voiceButton.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10),
+            promptContainer.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            promptContainer.trailingAnchor.constraint(equalTo: voiceButton.leadingAnchor, constant: -8),
+            promptContainer.topAnchor.constraint(equalTo: attachmentsRow.bottomAnchor, constant: 7),
+            promptContainer.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10),
+            promptContainer.heightAnchor.constraint(greaterThanOrEqualToConstant: 58),
 
-            promptContainer.leadingAnchor.constraint(equalTo: voiceButton.trailingAnchor, constant: 10),
-            promptContainer.trailingAnchor.constraint(equalTo: saveButton.leadingAnchor, constant: -8),
-            promptContainer.centerYAnchor.constraint(equalTo: voiceButton.centerYAnchor),
-            promptContainer.heightAnchor.constraint(equalToConstant: 34),
-
-            promptField.leadingAnchor.constraint(equalTo: promptContainer.leadingAnchor, constant: 12),
-            promptField.trailingAnchor.constraint(equalTo: promptContainer.trailingAnchor, constant: -12),
-            promptField.centerYAnchor.constraint(equalTo: promptContainer.centerYAnchor),
+            promptTextView.leadingAnchor.constraint(equalTo: promptContainer.leadingAnchor, constant: 12),
+            promptTextView.trailingAnchor.constraint(equalTo: promptContainer.trailingAnchor, constant: -12),
+            promptTextView.topAnchor.constraint(equalTo: promptContainer.topAnchor, constant: 4),
+            promptTextView.bottomAnchor.constraint(equalTo: promptContainer.bottomAnchor, constant: -4),
 
             waveform.leadingAnchor.constraint(equalTo: promptContainer.leadingAnchor),
             waveform.trailingAnchor.constraint(equalTo: promptContainer.trailingAnchor),
             waveform.topAnchor.constraint(equalTo: promptContainer.topAnchor),
             waveform.bottomAnchor.constraint(equalTo: promptContainer.bottomAnchor),
 
-            saveButton.trailingAnchor.constraint(equalTo: runButton.leadingAnchor, constant: -8),
-            saveButton.centerYAnchor.constraint(equalTo: voiceButton.centerYAnchor),
+            voiceButton.trailingAnchor.constraint(equalTo: runButton.leadingAnchor, constant: -8),
+            voiceButton.centerYAnchor.constraint(equalTo: promptContainer.centerYAnchor),
 
             runButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-            runButton.centerYAnchor.constraint(equalTo: voiceButton.centerYAnchor),
+            runButton.centerYAnchor.constraint(equalTo: promptContainer.centerYAnchor),
         ])
 
         setAttachmentsRowVisible(false)
         setTouchUpMode(false)
         updateVoiceButtonAppearance()
-        updateSaveButtonAppearance()
+        agentPreferencesObserver = NotificationCenter.default.addObserver(
+            forName: LLMAgentModelPreferences.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshAgentChoices()
+            }
+        }
+        refreshAgentChoices()
     }
 
     @available(*, unavailable)
@@ -817,62 +886,107 @@ final class CaptureMarkupInputBarView: NSView {
         nil
     }
 
+    override func layout() {
+        super.layout()
+        syncPromptTextGeometry()
+    }
+
+    deinit {
+        if let agentPreferencesObserver {
+            NotificationCenter.default.removeObserver(agentPreferencesObserver)
+        }
+    }
+
     var promptText: String {
-        get { promptField.stringValue }
-        set { promptField.stringValue = newValue }
+        get { promptTextView.string }
+        set {
+            promptTextView.string = newValue
+            promptTextView.needsDisplay = true
+        }
+    }
+
+    private var selectedAgentSelection: (providerId: String, modelId: String)? {
+        let index = agentPicker.indexOfSelectedItem
+        guard agentChoices.indices.contains(index) else { return nil }
+        let choice = agentChoices[index]
+        return (choice.providerId, choice.modelId)
+    }
+
+    private func syncPromptTextGeometry() {
+        let width = max(1, promptTextView.bounds.width)
+        promptTextView.textContainer?.containerSize = NSSize(
+            width: width,
+            height: CGFloat.greatestFiniteMagnitude
+        )
+        promptTextView.textContainer?.widthTracksTextView = true
     }
 
     func clearPrompt() {
-        promptField.stringValue = ""
+        promptTextView.string = ""
+        promptTextView.needsDisplay = true
     }
 
     func setRunning(_ running: Bool) {
         isRunning = running
-        promptField.isEnabled = !running
+        promptTextView.isEditable = !running
+        promptTextView.isSelectable = !running
         voiceButton.isEnabled = !running
+        agentPicker.isEnabled = !running && !agentChoices.isEmpty
         updateRunButtonAppearance()
-        updateSaveButtonAppearance()
     }
 
-    /// Flash the Save button into a confirmed "SAVED ✓" state, then settle
-    /// back to the idle "⌘S SAVE" label after a short beat. Called by the
-    /// coordinator once the document is persisted to the sidecar.
+    /// Flash the composer outline after a top-toolbar or keyboard save.
     func flashSaved() {
         saveFeedbackResetWork?.cancel()
-        isSaveConfirming = true
-        updateSaveButtonAppearance()
+        promptContainer.layer?.borderColor = Self.amber.cgColor
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
-            self.isSaveConfirming = false
-            self.updateSaveButtonAppearance()
+            self.promptContainer.layer?.borderColor = self.isVoiceRecording
+                ? Self.fieldBorderActive.cgColor
+                : Self.fieldBorder.cgColor
         }
         saveFeedbackResetWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
     }
 
     func setTouchUpMode(_ touchUp: Bool) {
         isTouchUpMode = touchUp
         let examples = touchUp ? touchUpExamples : askExamples
-        promptField.placeholderString = touchUp
-            ? "speak or type another pass…"
-            : "tell the agent what to mark up…"
+        promptTextView.placeholderString = touchUp ? "speak or type another pass…" : "tell the agent what to mark up…"
         if !touchUp || attachmentsRow.isHidden {
             scopeBadge.stringValue = "GLOBAL · WHOLE IMAGE"
         }
         rebuildExampleChips(examples)
     }
 
-    func setSelection(id: String?, label: String?, kind: String?) {
-        if let id, let label, let kind {
-            selectionChip.configure(id: id, label: label, kind: kind)
-            setAttachmentsRowVisible(true)
-            scopeBadge.stringValue = "SCOPED · \(id.uppercased()) SELECTED"
-        } else {
-            setAttachmentsRowVisible(false)
-            if isTouchUpMode {
-                scopeBadge.stringValue = "GLOBAL · WHOLE IMAGE"
-            }
+    func setAttachments(_ selections: [CaptureMarkupLayerSelection]) {
+        attachmentChipsStack.arrangedSubviews.forEach { view in
+            attachmentChipsStack.removeArrangedSubview(view)
+            view.removeFromSuperview()
         }
+
+        for selection in selections.prefix(4) {
+            let chip = CaptureMarkupSelectionChipView()
+            chip.configure(id: selection.id, label: selection.label, kind: selection.kind)
+            let id = selection.id
+            chip.onDismiss = { [weak self] in
+                self?.delegate?.captureMarkupPanelDidRemoveAttachment(id: id)
+            }
+            attachmentChipsStack.addArrangedSubview(chip)
+        }
+
+        if selections.count > 4 {
+            let overflow = NSTextField(labelWithString: "+\(selections.count - 4)")
+            overflow.font = NSFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
+            overflow.textColor = Self.amberDeep
+            attachmentChipsStack.addArrangedSubview(overflow)
+        }
+
+        let hasAttachments = !selections.isEmpty
+        setAttachmentsRowVisible(hasAttachments)
+        scopeBadge.stringValue = hasAttachments
+            ? "TAGGED · \(selections.count) ITEM\(selections.count == 1 ? "" : "S")"
+            : "GLOBAL · WHOLE IMAGE"
     }
 
     private func setAttachmentsRowVisible(_ visible: Bool) {
@@ -888,11 +1002,104 @@ final class CaptureMarkupInputBarView: NSView {
         for text in examples {
             let chip = CaptureMarkupExampleChip(text: text)
             chip.onClick = { [weak self] in
-                self?.promptField.stringValue = text
+                self?.promptText = text
                 self?.delegate?.captureMarkupPanelTryExampleSelected(text)
             }
             examplesStack.addArrangedSubview(chip)
         }
+    }
+
+    private func setAgentPickerLoading() {
+        agentChoices = []
+        agentPicker.removeAllItems()
+        agentPicker.addItem(withTitle: "AGENT · loading")
+        agentPicker.isEnabled = false
+    }
+
+    private func refreshAgentChoices() {
+        setAgentPickerLoading()
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let registry = LLMProviderRegistry.shared
+            await registry.refreshModels()
+
+            var choices: [CaptureMarkupAgentChoice] = []
+            var providerIds: [String] = []
+            var seenProviderIds = Set<String>()
+            for providerId in LLMConfig.shared.preferredProviderOrder + registry.providers.map(\.id) {
+                guard LLMAgentModelPreferences.isCuratableProvider(providerId),
+                      seenProviderIds.insert(providerId).inserted else { continue }
+                providerIds.append(providerId)
+            }
+
+            for providerId in providerIds {
+                guard let provider = registry.provider(for: providerId) else { continue }
+                guard await provider.isAvailable else { continue }
+                let models = LLMAgentModelPreferences.curatedModels(
+                    for: provider.id,
+                    from: registry.allModels
+                )
+                for model in models {
+                    choices.append(
+                        CaptureMarkupAgentChoice(
+                            providerId: provider.id,
+                            providerName: provider.name,
+                            modelId: model.id,
+                            modelDisplayName: model.displayName
+                        )
+                    )
+                }
+            }
+
+            var selected = choices.first {
+                $0.providerId == registry.selectedProviderId && $0.modelId == registry.selectedModelId
+            }
+            if selected == nil {
+                selected = choices.first
+            }
+            if let selected {
+                registry.selectedProviderId = selected.providerId
+                registry.selectedModelId = selected.modelId
+            }
+
+            applyAgentChoices(choices, selected: selected)
+        }
+    }
+
+    private func applyAgentChoices(_ choices: [CaptureMarkupAgentChoice], selected: CaptureMarkupAgentChoice?) {
+        agentChoices = choices
+        agentPicker.removeAllItems()
+
+        guard !choices.isEmpty else {
+            agentPicker.addItem(withTitle: "AGENT · none enabled")
+            agentPicker.isEnabled = false
+            agentPicker.toolTip = "Enable a markup agent in Settings → Models → LLM"
+            updateRunButtonAppearance()
+            return
+        }
+
+        choices.forEach { agentPicker.addItem(withTitle: $0.menuTitle) }
+        let index = selected.flatMap { choices.firstIndex(of: $0) } ?? 0
+        agentPicker.selectItem(at: index)
+        agentPicker.isEnabled = !isRunning
+        updateAgentPickerToolTip()
+        updateRunButtonAppearance()
+    }
+
+    private func updateAgentPickerToolTip() {
+        guard let selection = selectedAgentSelection else {
+            agentPicker.toolTip = "Choose markup agent"
+            return
+        }
+        agentPicker.toolTip = "Agent: \(selection.providerId) / \(selection.modelId)"
+    }
+
+    @objc private func agentPickerChanged() {
+        guard let selection = selectedAgentSelection else { return }
+        let registry = LLMProviderRegistry.shared
+        registry.selectedProviderId = selection.providerId
+        registry.selectedModelId = selection.modelId
+        updateAgentPickerToolTip()
     }
 
     /// Mic is tap-to-toggle. First tap starts capture, second tap stops
@@ -939,14 +1146,15 @@ final class CaptureMarkupInputBarView: NSView {
     }
 
     private func appendTranscriptToPrompt(_ text: String) {
-        let existing = promptField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let existing = promptTextView.string.trimmingCharacters(in: .whitespacesAndNewlines)
         if existing.isEmpty {
-            promptField.stringValue = text
+            promptTextView.string = text
         } else {
             let needsSpace = !existing.hasSuffix(" ") && !existing.hasSuffix("\n")
-            promptField.stringValue = existing + (needsSpace ? " " : "") + text
+            promptTextView.string = existing + (needsSpace ? " " : "") + text
         }
-        promptField.becomeFirstResponder()
+        promptTextView.needsDisplay = true
+        window?.makeFirstResponder(promptTextView)
     }
 
     private func updateVoiceButtonAppearance() {
@@ -997,41 +1205,27 @@ final class CaptureMarkupInputBarView: NSView {
     private func updateComposerRecordingState() {
         let recording = isVoiceRecording
         waveform.isHidden = !recording
-        promptField.isHidden = recording
+        promptTextView.isHidden = recording
         if recording {
             waveform.start()
         } else {
             waveform.stop()
+            promptTextView.needsDisplay = true
         }
         let border = recording ? Self.fieldBorderActive : Self.fieldBorder
         promptContainer.layer?.borderColor = border.cgColor
     }
 
     private func updateRunButtonAppearance() {
-        let enabled = !isRunning && !isVoiceRecording && !isVoiceTranscribing
+        let enabled = !isRunning && !isVoiceRecording && !isVoiceTranscribing && !agentChoices.isEmpty
         if isRunning {
             runButton.configure(label: "RUNNING", keycap: nil)
+        } else if agentChoices.isEmpty {
+            runButton.configure(label: "NO AGENT", keycap: nil)
         } else {
             runButton.configure(label: "RUN", keycap: "⌘↵")
         }
         runButton.setEnabledForClick(enabled)
-    }
-
-    private func updateSaveButtonAppearance() {
-        // Quieter than Run: amber-faint pill. While a run is in flight it's
-        // disabled; when a save just landed it flashes a confirmed check.
-        if isSaveConfirming {
-            saveButton.configure(label: "SAVED", keycap: "✓")
-            saveButton.setColors(
-                background: Self.amberFaint,
-                border: Self.amber,
-                label: Self.amber,
-                keycap: Self.amber
-            )
-        } else {
-            saveButton.configure(label: "SAVE", keycap: "⌘S")
-        }
-        saveButton.setEnabledForClick(!isRunning)
     }
 
     /// ⌘↵ runs, ⌘S saves — works whether the prompt field or the bar has
@@ -1054,9 +1248,21 @@ final class CaptureMarkupInputBarView: NSView {
 
     @objc private func runTapped() {
         guard !isRunning else { return }
-        let instruction = promptField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let instruction = promptTextView.string.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !instruction.isEmpty else { return }
-        delegate?.captureMarkupPanelDidRun(instruction: instruction)
+        guard let agent = selectedAgentSelection else { return }
+        delegate?.captureMarkupPanelDidRun(
+            instruction: instruction,
+            providerId: agent.providerId,
+            modelId: agent.modelId
+        )
+    }
+}
+
+extension CaptureMarkupInputBarView: NSTextViewDelegate {
+    func textDidChange(_ notification: Notification) {
+        syncPromptTextGeometry()
+        promptTextView.needsDisplay = true
     }
 }
 
@@ -1073,15 +1279,15 @@ final class CaptureMarkupSelectionChipView: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        layer?.backgroundColor = NSColor(red: 0.98, green: 0.94, blue: 0.88, alpha: 1).cgColor
-        layer?.borderColor = NSColor(red: 0.90, green: 0.78, blue: 0.55, alpha: 1).cgColor
+        layer?.backgroundColor = NSColor(red: 0.93, green: 0.95, blue: 1.0, alpha: 1).cgColor
+        layer?.borderColor = NSColor(red: 0.72, green: 0.80, blue: 1.0, alpha: 1).cgColor
         layer?.borderWidth = 0.5
         layer?.cornerRadius = 3
 
         idLabel.font = NSFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
-        idLabel.textColor = NSColor(red: 0.62, green: 0.38, blue: 0.08, alpha: 1)
+        idLabel.textColor = NSColor(red: 0.14, green: 0.29, blue: 0.65, alpha: 1)
         nameLabel.font = NSFont.systemFont(ofSize: 11)
-        nameLabel.textColor = NSColor(red: 0.62, green: 0.38, blue: 0.08, alpha: 1)
+        nameLabel.textColor = NSColor(red: 0.14, green: 0.29, blue: 0.65, alpha: 1)
 
         dismissButton.isBordered = false
         dismissButton.bezelStyle = .inline

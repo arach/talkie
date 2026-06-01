@@ -93,6 +93,13 @@ final class CaptureHUDController: CaptureChordController {
                 let key = event.charactersIgnoringModifiers?.lowercased()
                 let currentMode = self.panel.state.mode
 
+                if event.keyCode == 123 || event.keyCode == 124 { // Left / Right Arrow
+                    self.panel.state.mode = event.keyCode == 123 ? .screenshot : .video
+                    self.syncArmedRegionOverlay(resume: resume)
+                    resetTimeout()
+                    return
+                }
+
                 switch key {
                 case "a":
                     timeout.cancel()
@@ -136,7 +143,7 @@ final class CaptureHUDController: CaptureChordController {
                         resetTimeout()
                     }
 
-                case "f":
+                case "v", "f":
                     if hasTrayItems {
                         timeout.cancel()
                         resume(.pasteLastTray)
@@ -144,7 +151,7 @@ final class CaptureHUDController: CaptureChordController {
                         resetTimeout()
                     }
 
-                case "w":
+                case "t", "w":
                     if hasTrayItems {
                         timeout.cancel()
                         resume(.viewTray)
@@ -230,7 +237,14 @@ final class CaptureHUDController: CaptureChordController {
         armedRegionOverlay = overlay
         armedRegionTask = Task { @MainActor [weak self] in
             guard !Task.isCancelled else { return }
-            let rect = await overlay.selectRegion(freezesDesktop: false)
+            let rect = await overlay.selectRegion(
+                freezesDesktop: false,
+                onModeSwitch: { [weak self] mode in
+                    guard let self else { return }
+                    self.panel.state.mode = mode
+                    self.syncArmedRegionOverlay(resume: resume)
+                }
+            )
             guard !Task.isCancelled else { return }
             if self?.armedRegionOverlay === overlay {
                 self?.armedRegionOverlay = nil

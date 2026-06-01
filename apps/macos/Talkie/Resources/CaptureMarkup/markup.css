@@ -5,7 +5,7 @@
   --ink: #232423;
   --ink-faint: rgba(35, 36, 35, 0.55);
   --edge: rgba(35, 36, 35, 0.12);
-  --amber: #c47d1c;
+  --amber: #4f7dff;
   --alert: #d03a1c;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
 }
@@ -57,6 +57,14 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   gap: 4px;
 }
 
+.history-tools {
+  gap: 2px;
+  padding: 2px;
+  border: 0.5px solid var(--edge);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
 /* Inline vertical rule between toolbar sections. Treated as chrome —
    never a content element. */
 .toolbar-divider,
@@ -83,9 +91,9 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
 }
 
 .tool-btn.active {
-  color: #9a6310;
-  background: rgba(196, 125, 28, 0.12);
-  border-color: rgba(196, 125, 28, 0.35);
+  color: #2449a6;
+  background: rgba(79, 125, 255, 0.12);
+  border-color: rgba(79, 125, 255, 0.35);
 }
 
 .tool-btn:disabled,
@@ -98,6 +106,43 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
 .tool-btn .glyph { font-size: 13px; line-height: 1; }
 .tool-btn .label { font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; }
 
+.history-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0.5px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  font: 13px/1 ui-monospace, monospace;
+}
+.history-btn:hover {
+  background: rgba(35, 36, 35, 0.04);
+  color: var(--ink);
+}
+
+.top-save-btn {
+  flex-shrink: 0;
+  height: 26px;
+  padding: 0 11px;
+  border: 0.5px solid rgba(79, 125, 255, 0.35);
+  border-radius: 5px;
+  background: rgba(79, 125, 255, 0.10);
+  color: #2449a6;
+  cursor: pointer;
+  font: 600 9px/1 ui-monospace, monospace;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.top-save-btn:hover {
+  background: rgba(79, 125, 255, 0.16);
+  border-color: rgba(79, 125, 255, 0.55);
+}
+
 /* "Editing selection" affordance — a small amber pill that appears in the
    toolbar while a layer is selected (and no create-tool is armed). Signals
    that the shape buttons + style stack restyle the SELECTED layer in place. */
@@ -107,10 +152,10 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   height: 18px;
   margin-left: 6px;
   padding: 0 8px;
-  border: 0.5px solid rgba(196, 125, 28, 0.45);
+  border: 0.5px solid rgba(79, 125, 255, 0.45);
   border-radius: 999px;
-  background: rgba(196, 125, 28, 0.12);
-  color: #9a6310;
+  background: rgba(79, 125, 255, 0.12);
+  color: #2449a6;
   font: 600 8.5px/1 ui-monospace, monospace;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -146,7 +191,8 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   gap: 6px;
 }
 
-.style-group.hidden {
+.style-group.hidden,
+.style-divider.hidden {
   display: none;
 }
 
@@ -177,8 +223,8 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
 }
 
 .style-btn.active {
-  border-color: rgba(196, 125, 28, 0.55);
-  background: rgba(196, 125, 28, 0.10);
+  border-color: rgba(79, 125, 255, 0.55);
+  background: rgba(79, 125, 255, 0.10);
 }
 
 /* Stroke-width pip — a horizontal rule of the given thickness. Visual
@@ -189,7 +235,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   background: var(--ink-faint);
   border-radius: 1px;
 }
-.style-btn.stroke-pick.active .stroke-pip { background: #9a6310; }
+.style-btn.stroke-pick.active .stroke-pip { background: #2449a6; }
 
 /* Color swatch — circular dot whose hue is set via `--c`. White is
    special-cased so it still reads on a cream substrate. */
@@ -203,9 +249,9 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   border: 0.5px solid var(--edge);
 }
 .style-btn.swatch.active {
-  outline: 1.5px solid #9a6310;
+  outline: 1.5px solid #2449a6;
   outline-offset: 2px;
-  box-shadow: 0 0 0 2px rgba(196, 125, 28, 0.18);
+  box-shadow: 0 0 0 2px rgba(79, 125, 255, 0.18);
 }
 
 /* Font-size picker — text labels (S / M / L). Mono cap glyphs so they
@@ -216,7 +262,31 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   text-transform: uppercase;
 }
 .style-btn.font-pick.active {
-  color: #9a6310;
+  color: #2449a6;
+}
+
+.style-btn.arrow-head,
+.style-btn.pointer-pick,
+.style-btn.text-preset {
+  width: 26px;
+  font: 600 9px/1 ui-monospace, monospace;
+  color: var(--ink-faint);
+}
+.style-btn.arrow-head.active,
+.style-btn.pointer-pick.active,
+.style-btn.text-preset.active {
+  color: #2449a6;
+}
+.style-btn.segment-action {
+  width: auto;
+  padding: 0 7px;
+  font: 600 8px/1 ui-monospace, monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.style-btn.segment-action:hover {
+  color: var(--ink);
 }
 
 /* Font-family picker — each button shows "Aa" in its own typeface. Slightly
@@ -226,7 +296,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   font-size: 11px;
   color: var(--ink-faint);
 }
-.style-btn.font-fam.active { color: #9a6310; }
+.style-btn.font-fam.active { color: #2449a6; }
 
 /* Decoration toggles (Bold / Italic). Independent — both can be active. */
 .style-btn.deco {
@@ -234,9 +304,9 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   color: var(--ink-faint);
 }
 .style-btn.deco.active {
-  color: #9a6310;
-  border-color: rgba(196, 125, 28, 0.55);
-  background: rgba(196, 125, 28, 0.10);
+  color: #2449a6;
+  border-color: rgba(79, 125, 255, 0.55);
+  background: rgba(79, 125, 255, 0.10);
 }
 
 /* Pill-vs-plain segmented pick. */
@@ -244,11 +314,11 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   font: 11px/1 ui-monospace, monospace;
   color: var(--ink-faint);
 }
-.style-btn.labelbg.active { color: #9a6310; }
+.style-btn.labelbg.active { color: #2449a6; }
 
 /* ─── Canvas Zoom Cluster (Hudson pattern) ────────────────────────────
    Floats over the canvas bottom-right. Holds viewport controls (zoom
-   in/out/fit + percent badge) and history (undo/redo). */
+   in/out/fit + percent badge). */
 
 .canvas-wrap { position: relative; }
 
@@ -350,7 +420,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
 .rail-resizer:hover::after,
 .rail-resizer.dragging::after {
   width: 2px;
-  background: rgba(196, 125, 28, 0.6);
+  background: rgba(79, 125, 255, 0.6);
 }
 
 .canvas-wrap {
@@ -458,7 +528,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
 }
 .wt-dot.live {
   background: var(--amber);
-  box-shadow: 0 0 5px rgba(196, 125, 28, 0.6);
+  box-shadow: 0 0 5px rgba(79, 125, 255, 0.6);
   animation: wtpulse 1.2s ease-in-out infinite;
 }
 .wt-state {
@@ -475,6 +545,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   display: flex;
   align-items: center;
   gap: 7px;
+  flex-wrap: wrap;
   margin: 2px 12px 8px 12px;
 }
 .wt-model-k {
@@ -507,13 +578,13 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   gap: 6px;
   margin: 0 12px 8px 12px;
   padding: 7px 9px;
-  background: rgba(196, 125, 28, 0.08);
-  border: 0.5px solid rgba(196, 125, 28, 0.30);
+  background: rgba(79, 125, 255, 0.08);
+  border: 0.5px solid rgba(79, 125, 255, 0.30);
   border-radius: 5px;
 }
 .wt-prompt-mark {
   font: 600 11px/1.3 ui-monospace, monospace;
-  color: #9a6310;
+  color: #2449a6;
   flex-shrink: 0;
 }
 .wt-prompt-text {
@@ -563,7 +634,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
 .wt-row.active .wt-node {
   background: var(--amber);
   border-color: var(--amber);
-  box-shadow: 0 0 0 3px rgba(196, 125, 28, 0.18);
+  box-shadow: 0 0 0 3px rgba(79, 125, 255, 0.18);
   animation: wtpulse 1.1s ease-in-out infinite;
 }
 .wt-row.pending .wt-node { border-color: var(--edge); }
@@ -574,7 +645,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   flex-shrink: 0;
 }
 .wt-row.mark .wt-verb { color: var(--ink); }
-.wt-row.active .wt-verb { color: #9a6310; }
+.wt-row.active .wt-verb { color: #2449a6; }
 .wt-detail {
   font: italic 10.5px/1.3 -apple-system, system-ui, sans-serif;
   color: var(--ink-faint);
@@ -618,7 +689,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   font: 600 8.5px/1 ui-monospace, monospace;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #9a6310;
+  color: #2449a6;
 }
 .wt-foot-summary {
   font: 9px/1 ui-monospace, monospace;
@@ -681,9 +752,9 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   border-radius: 999px;
 }
 .insp-chip-user {
-  color: #9a6310;
-  background: rgba(196, 125, 28, 0.12);
-  border: 0.5px solid rgba(196, 125, 28, 0.35);
+  color: #2449a6;
+  background: rgba(79, 125, 255, 0.12);
+  border: 0.5px solid rgba(79, 125, 255, 0.35);
 }
 .insp-chip-agent {
   color: var(--ink-faint);
@@ -723,6 +794,44 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   font-variant-numeric: tabular-nums;
 }
 .insp-cell .cu { font-size: 8px; color: var(--ink-faint); margin-left: 2px; }
+
+.insp-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
+  background: rgba(79, 125, 255, 0.07);
+  border: 0.5px solid rgba(79, 125, 255, 0.24);
+  border-radius: 5px;
+}
+.insp-turn-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.insp-turn-k {
+  font: 600 8px/1 ui-monospace, monospace;
+  letter-spacing: 0.14em;
+  color: rgba(35, 36, 35, 0.45);
+}
+.insp-turn-v {
+  min-width: 0;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 10px/1.2 ui-monospace, monospace;
+  color: var(--ink);
+  text-align: right;
+}
+.insp-turn-prompt {
+  margin-top: 3px;
+  padding-top: 7px;
+  border-top: 0.5px solid rgba(79, 125, 255, 0.20);
+  font: italic 11px/1.35 -apple-system, system-ui, sans-serif;
+  color: rgba(35, 36, 35, 0.72);
+}
 
 .insp-row {
   display: flex;
@@ -781,7 +890,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   font: 11px/1.3 ui-monospace, monospace;
   color: var(--ink);
 }
-.insp-text-input:focus { outline: none; border-color: rgba(196, 125, 28, 0.55); }
+.insp-text-input:focus { outline: none; border-color: rgba(79, 125, 255, 0.55); }
 
 .layer-rail-head {
   display: flex;
@@ -813,7 +922,12 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   font: 11px/1.2 ui-monospace, monospace;
   cursor: pointer;
 }
-.layer-row.selected { background: rgba(196, 125, 28, 0.12); }
+.layer-row.selected { background: rgba(79, 125, 255, 0.12); }
+.layer-row.attached {
+  background: rgba(79, 125, 255, 0.08);
+  box-shadow: inset 2px 0 0 rgba(79, 125, 255, 0.75);
+}
+.layer-row.selected.attached { background: rgba(79, 125, 255, 0.16); }
 .layer-row .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .layer-row .dot.agent { background: var(--amber); }
 .layer-row .dot.user { background: var(--ink-faint); }
@@ -825,6 +939,10 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   flex-shrink: 0;
 }
 .layer-row:hover .grip { opacity: 0.9; }
+.layer-row.attached .grip {
+  color: #2449a6;
+  opacity: 1;
+}
 .layer-row-label {
   flex: 1;
   overflow: hidden;
@@ -854,4 +972,40 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
   font-size: 12px;
   cursor: pointer;
   text-align: left;
+}
+
+@media (max-width: 1500px) {
+  .tool-btn {
+    gap: 0;
+    padding: 0 7px;
+  }
+  .tool-btn .label,
+  .style-label {
+    display: none;
+  }
+  .viewport-tools .tool-btn {
+    width: 24px;
+    padding: 0;
+    justify-content: center;
+  }
+  .style-stack {
+    gap: 6px;
+  }
+  .toolbar-divider,
+  .style-divider {
+    margin: 0 5px;
+  }
+  .style-group {
+    gap: 4px;
+  }
+  .style-btn {
+    width: 21px;
+    height: 21px;
+  }
+  .style-btn.arrow-head,
+  .style-btn.pointer-pick,
+  .style-btn.text-preset,
+  .style-btn.font-fam {
+    width: 23px;
+  }
 }

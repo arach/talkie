@@ -215,19 +215,18 @@ struct ConsoleScreen: View {
     }
 
     /// Build a fresh tab from a harness template and launch it. Called
-    /// from the starter cards — replaces the old seeded-tab approach
-    /// (tabs are now created on demand, numbered sequentially).
+    /// from the starter cards — replaces the old seeded-tab approach.
     private func createTabFromTemplate(_ template: TabDefinition) {
-        let nextNumber = registry.tabs.count + 1
         // UUID prefix instead of a second-resolution timestamp — two
         // quick clicks on the same card within one second were
         // colliding under the old `Int(timeIntervalSince1970)` scheme,
         // which silently overwrote the `.talkierc` file and tore down
         // the first tab's session on the second `pool.launch`.
         let newId = "\(template.harness.rawValue)-\(UUID().uuidString.prefix(8).lowercased())"
+        let label = nextContextualTabLabel(for: template)
         let newTab = TabDefinition(
             id: newId,
-            label: "\(nextNumber)",
+            label: label,
             icon: template.icon,
             order: (registry.tabs.map(\.order).max() ?? 0) + 10,
             harness: template.harness,
@@ -249,8 +248,8 @@ struct ConsoleScreen: View {
     }
 
     /// `+` action: clone the active tab's style (same harness/template)
-    /// with the next numeric label. Lets the user spin up "3x Claude"
-    /// fast.
+    /// with the next contextual label. Lets the user spin up "3x Claude"
+    /// fast without losing track of which chip is which.
     private func cloneActiveTabStyle() {
         guard let active = registry.activeTab else { return }
         createTabFromTemplate(active)
@@ -258,6 +257,106 @@ struct ConsoleScreen: View {
 
     private func launchIfNeeded(_ tab: TabDefinition) {
         pool.launch(tab: tab, registry: registry)
+    }
+
+    private func selectScopeTab(_ tab: TabDefinition) {
+        registry.activeTabId = tab.id
+        isPickingNewTab = false
+        if pool.session(for: tab.id) == nil {
+            pool.launch(tab: tab, registry: registry)
+        }
+    }
+
+    private func closeScopeTab(_ tab: TabDefinition) {
+        let wasActive = tab.id == registry.activeTabId
+        let fallbackTabId = wasActive ? neighboringTabId(afterClosing: tab.id) : nil
+
+        hoveredTabID = nil
+        pool.close(tabId: tab.id)
+        registry.delete(tab.id)
+
+        if wasActive {
+            registry.activeTabId = fallbackTabId ?? registry.activeTabId
+            isPickingNewTab = registry.tabs.isEmpty
+        }
+    }
+
+    private func neighboringTabId(afterClosing tabId: String) -> String? {
+        let tabs = registry.tabs
+        guard let index = tabs.firstIndex(where: { $0.id == tabId }) else {
+            return tabs.first?.id
+        }
+        if index < tabs.count - 1 {
+            return tabs[index + 1].id
+        }
+        if index > 0 {
+            return tabs[index - 1].id
+        }
+        return nil
+    }
+
+    private func nextContextualTabLabel(for template: TabDefinition) -> String {
+        let base = tabBaseLabel(for: template)
+        let matchingCount = registry.tabs.filter { existing in
+            tabBaseLabel(for: existing) == base && existingMatchesTemplate(existing, template)
+        }.count
+        return matchingCount == 0 ? base : "\(base) \(matchingCount + 1)"
+    }
+
+    private func existingMatchesTemplate(_ existing: TabDefinition, _ template: TabDefinition) -> Bool {
+        existing.harness == template.harness &&
+        existing.icon == template.icon &&
+        existing.shell?.program == template.shell?.program &&
+        existing.shell?.initScript == template.shell?.initScript
+    }
+
+    private func tabDisplayLabel(_ tab: TabDefinition, number: Int) -> String {
+        let trimmed = tab.label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "\(tabBaseLabel(for: tab)) \(number)" }
+        if Int(trimmed) != nil {
+            return "\(tabBaseLabel(for: tab)) \(number)"
+        }
+        return trimmed
+    }
+
+    private func tabBaseLabel(for tab: TabDefinition) -> String {
+        let trimmed = tab.label.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty, Int(trimmed) == nil {
+            let pieces = trimmed.split(separator: " ")
+            if pieces.count > 1, let last = pieces.last, Int(last) != nil {
+                return pieces.dropLast().joined(separator: " ")
+            }
+            return trimmed
+        }
+
+        if tab.shell?.initScript == TabPresets.bridgeLogsInitScriptPath {
+            return "Bridge Logs"
+        }
+        if tab.shell?.initScript?.contains("talkie-shell") == true {
+            return "Talkie Shell"
+        }
+
+        switch tab.harness {
+        case .claudeCode:
+            return "Claude"
+        case .pi:
+            return "Pi"
+        case .shell:
+            return "Shell"
+        case .opencode:
+            return "OpenCode"
+        }
+    }
+
+    private func tabDetailLabel(_ tab: TabDefinition) -> String {
+        var parts: [String] = [tab.harness.displayName]
+        if let model = tab.model, !model.isEmpty {
+            parts.append(model)
+        }
+        if !tab.cwd.isEmpty {
+            parts.append(tab.cwd)
+        }
+        return parts.joined(separator: " · ")
     }
 
     /// In Scope mode, the starter (cards + tab strip + `+` in title bar)
@@ -293,83 +392,83 @@ struct ConsoleScreen: View {
     @ViewBuilder
     private var scopeInlineTabs: some View {
         if !registry.tabs.isEmpty {
-            HStack(spacing: 4) {
-                Text("/")
-                    .font(.geistMono(size: 11, weight: .regular))
-                    .foregroundStyle(Theme.current.foregroundMuted)
-                ForEach(Array(registry.tabs.enumerated()), id: \.element.id) { idx, tab in
-                    scopeInlineTabChip(tab, number: idx + 1)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    Text("/")
+                        .font(.geistMono(size: 11, weight: .regular))
+                        .foregroundStyle(Theme.current.foregroundMuted)
+                    ForEach(Array(registry.tabs.enumerated()), id: \.element.id) { idx, tab in
+                        scopeInlineTabChip(tab, number: idx + 1)
+                    }
                 }
             }
+            .frame(maxWidth: 640, alignment: .leading)
+            .layoutPriority(1)
         }
     }
 
     private func scopeInlineTabChip(_ tab: TabDefinition, number: Int) -> some View {
         let isActive = tab.id == registry.activeTabId
         let isHovered = hoveredTabID == tab.id
-        return Button(action: {
-            registry.activeTabId = tab.id
-            isPickingNewTab = false
-            if pool.session(for: tab.id) == nil {
-                pool.launch(tab: tab, registry: registry)
+        let showsClose = !tab.readOnly && (isHovered || isActive)
+        let label = tabDisplayLabel(tab, number: number)
+
+        return HStack(spacing: 1) {
+            Button(action: { selectScopeTab(tab) }) {
+                HStack(spacing: 5) {
+                    Image(systemName: tab.symbolName)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(isActive ? ScopeAmber.solid : ScopeInk.faint)
+                    Text(label)
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundStyle(isActive ? ScopeInk.primary : ScopeInk.faint)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .frame(maxWidth: isActive ? 126 : 104, minHeight: 18, alignment: .leading)
             }
-        }) {
-            Text("\(number)")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .foregroundStyle(isActive ? ScopeInk.primary : ScopeInk.faint)
-                .frame(minWidth: 18, minHeight: 18)
-                .padding(.horizontal, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(isActive ? ScopeAmber.tint : Color.clear)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 3)
-                        .stroke(isActive ? ScopeAmber.solid.opacity(0.55) : ScopeEdge.faint, lineWidth: 0.5)
-                )
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+
+            if !tab.readOnly {
+                Button(action: { closeScopeTab(tab) }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundStyle(isActive ? ScopeInk.primary : ScopeInk.muted)
+                        .frame(width: 14, height: 18)
+                }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .opacity(showsClose ? 1 : 0)
+                .allowsHitTesting(showsClose)
+                .help("Close \(label)")
+            }
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 3)
+                .fill(isActive ? ScopeAmber.tint : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 3)
+                .stroke(isActive ? ScopeAmber.solid.opacity(0.55) : ScopeEdge.faint, lineWidth: 0.5)
+        )
+        .contextMenu {
+            if !tab.readOnly {
+                Button("Close Tab") { closeScopeTab(tab) }
+            }
+            Button("Restart Session") { pool.restart(tab: tab, registry: registry) }
+            Divider()
+            Button("Edit Tab") {
+                editingTab = tab
+                showTabEditor = true
+            }
+        }
+        .help("\(label) · \(tabDetailLabel(tab))")
         .onHover { hovering in
             hoveredTabID = hovering ? tab.id : (hoveredTabID == tab.id ? nil : hoveredTabID)
         }
-        .overlay(alignment: .top) {
-            if isHovered {
-                tabHoverPreview(tab)
-                    .fixedSize()
-                    .offset(y: -32)
-                    .allowsHitTesting(false)
-                    .transition(.opacity.combined(with: .offset(y: 4)))
-                    .zIndex(10)
-            }
-        }
         .animation(.easeOut(duration: 0.14), value: isHovered)
-    }
-
-    /// Floating chip that appears above an inline tab chip on hover.
-    /// Numbers are cheap real estate but not informative — the preview
-    /// shows the tab's icon + label so the user doesn't have to memorize
-    /// "tab 2 is the Claude one."
-    private func tabHoverPreview(_ tab: TabDefinition) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: tab.symbolName)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(Color.hex("E8ECEA"))
-            Text(tab.label)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Color.hex("E8ECEA"))
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 5)
-        .background(
-            RoundedRectangle(cornerRadius: 4)
-                .fill(Color.hex("15191E"))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(Color.hex("2A3138"), lineWidth: 0.5)
-                )
-                .shadow(color: .black.opacity(0.22), radius: 8, y: 3)
-        )
     }
 
     private func scopeTabChip(_ tab: TabDefinition, number: Int) -> some View {
@@ -456,9 +555,9 @@ private struct ConsoleEmptyState: View {
     }
 }
 
-// MARK: - Scope 3-card starter
+// MARK: - Scope starter
 
-/// Three hero-style cards (Claude / Pi / Shell) shown when the user
+/// Hero-style cards (Claude / Pi / Shell / Logs) shown when the user
 /// enters the Console without a running session. Each card calls
 /// `onLaunch` with the matching seeded preset; the parent switches the
 /// active tab and launches it.
@@ -475,6 +574,7 @@ private struct ScopeConsoleStarter: View {
             (TabPresets.claude,       "Persistent Claude Code runtime with shared workspace + tools.", "CH-01"),
             (TabPresets.pi,           "Persistent Pi session with mounted workspace and prompt context.", "CH-02"),
             (TabPresets.talkieShell,  "Interactive zsh session in this Console workspace.", "CH-03"),
+            (TabPresets.bridgeLogs,   "Live bridge, Talkie, and TalkieAgent logs in one terminal.", "CH-04"),
         ]
     }
 
@@ -510,7 +610,11 @@ private struct ScopeConsoleStarter: View {
                             .foregroundStyle(ScopeInk.primary)
                     }
 
-                    HStack(alignment: .top, spacing: 14) {
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 180, maximum: 210), spacing: 14)],
+                        alignment: .center,
+                        spacing: 14
+                    ) {
                         ForEach(presets, id: \.0.id) { tab, blurb, channel in
                             ScopeStarterCard(
                                 tab: tab,

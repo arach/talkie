@@ -9,13 +9,13 @@
 //
 //  Anatomy (one rounded surface, hardware feel):
 //    ┌─ TOP STRIP (stripTop gradient) ─────────────────────────────┐
-//    │  ● Screenshot              ⎋ dismiss                         │
+//    │  ● Screenshot      ● Video                  ← → Mode          │
 //    ├─ GRATICULE FIELD (3 primary cells) ─────────────────────────┤
 //    │   [crop]        [display]      [window]                     │
 //    │    A              S              D                          │
 //    │  Region        Screen         Window                        │
 //    ├─ BOTTOM STRIP (stripBottom gradient) ───────────────────────┤
-//    │  ⇥ Mode    optional contextual actions                     │
+//    │  Optional contextual actions: note, paste latest, tray       │
 //    └─────────────────────────────────────────────────────────────┘
 //
 
@@ -27,7 +27,7 @@ import SwiftUI
 @MainActor
 final class CaptureHUDPanel {
 
-    static let panelWidth: CGFloat = 360
+    static let panelWidth: CGFloat = 384
     static let panelHeight: CGFloat = 156
 
     private var panel: NSPanel?
@@ -264,14 +264,7 @@ private struct CaptureHUDView: View {
 
             Spacer(minLength: 0)
 
-            // Picker affordance: when the HUD opens REGION is preselected,
-            // ↵ commits it. Showing both cues is more honest than only
-            // showing dismiss.
-            Text("↵ capture · ⎋ dismiss")
-                .font(.system(size: 9, weight: .regular))
-                .tracking(1.6)
-                .foregroundColor(Color(hex: tokens.inkFaintHex))
-                .textCase(.uppercase)
+            modeSwitchHint
         }
         .padding(.horizontal, 10)
         .frame(height: 26)
@@ -293,7 +286,7 @@ private struct CaptureHUDView: View {
         let tabAccentGlow: Color = isVideoTab
             ? tokens.recGlow.color
             : tokens.accentGlow.color
-        let label = isVideoTab ? "Video · Record" : "Screenshot"
+        let label = isVideoTab ? "Video" : "Screenshot"
 
         return Button {
             // Set mode directly rather than toggling — clicking a tab
@@ -342,6 +335,20 @@ private struct CaptureHUDView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .help(isVideoTab ? "Video mode (Right Arrow)" : "Screenshot mode (Left Arrow)")
+    }
+
+    private var modeSwitchHint: some View {
+        HStack(spacing: 4) {
+            smallKeyCap("←")
+            smallKeyCap("→")
+            Text("Mode")
+                .font(.system(size: 8.5, weight: .semibold))
+                .tracking(1.3)
+                .foregroundColor(Color(hex: tokens.inkFaintHex))
+                .textCase(.uppercase)
+        }
+        .help("Left and Right Arrow switch between Screenshot and Video")
     }
 
     // MARK: - Primary cells
@@ -481,28 +488,33 @@ private struct CaptureHUDView: View {
     // MARK: - Bottom strip (extras)
 
     private var bottomStrip: some View {
-        HStack(spacing: 2) {
-            extraCell(key: "⇥", label: "Mode", tone: .ink) {
-                state.mode = state.mode == .screenshot ? .video : .screenshot
-                state.onAction?(nil)
-            }
+        HStack(spacing: 4) {
             if state.showCameraOption {
-                extraCell(key: "C", label: "Camera", tone: .accent) {
+                extraCell(key: "C", label: "Camera", systemImage: "video.fill", tone: .accent) {
                     state.onAction?(.toggleCamera)
                 }
             }
             if state.showSelectionOption {
-                extraCell(key: "N", label: "Save", tone: .ink) {
+                extraCell(key: "N", label: "Selection Note", systemImage: "note.text", tone: .ink) {
                     state.onAction?(.saveSelection)
                 }
             }
             if state.showTrayOption {
-                extraCell(key: "F", label: "Paste", tone: .ink) {
+                extraCell(key: "V", label: "Paste Last", systemImage: "clipboard", tone: .ink) {
                     state.onAction?(.pasteLastTray)
                 }
-                extraCell(key: "W", label: "Tray \(state.trayCount)", tone: .ink) {
+                extraCell(
+                    key: "T",
+                    label: "Tray",
+                    systemImage: "tray.full",
+                    badge: trayBadge,
+                    tone: .ink
+                ) {
                     state.onAction?(.viewTray)
                 }
+            }
+            if !hasSecondaryActions {
+                keyboardLegend
             }
         }
         .padding(.horizontal, 8)
@@ -518,9 +530,37 @@ private struct CaptureHUDView: View {
 
     private enum ExtraTone { case ink, accent }
 
+    private var hasSecondaryActions: Bool {
+        state.showCameraOption || state.showSelectionOption || state.showTrayOption
+    }
+
+    private var trayBadge: String {
+        state.trayCount > 99 ? "99+" : "\(state.trayCount)"
+    }
+
+    private var keyboardLegend: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 4) {
+                smallKeyCap("↵")
+                Text("Start")
+            }
+            HStack(spacing: 4) {
+                smallKeyCap("Esc")
+                Text("Cancel")
+            }
+        }
+        .font(.system(size: 9, weight: .medium))
+        .tracking(0.9)
+        .foregroundColor(Color(hex: tokens.inkFaintHex))
+        .textCase(.uppercase)
+        .frame(maxWidth: .infinity)
+    }
+
     private func extraCell(
         key: String,
         label: String,
+        systemImage: String,
+        badge: String? = nil,
         tone: ExtraTone,
         action: @escaping () -> Void
     ) -> some View {
@@ -530,26 +570,34 @@ private struct CaptureHUDView: View {
 
         return Button(action: action) {
             HStack(spacing: 4) {
-                Text(key)
-                    .font(.system(size: 9.5, weight: .bold, design: .monospaced))
-                    .foregroundColor(keyColor)
-                    .frame(minWidth: 14, minHeight: 14)
-                    .padding(.horizontal, key.count > 1 ? 3 : 0)
-                    .background(
-                        RoundedRectangle(cornerRadius: 3, style: .continuous)
-                            .fill(tokens.detailsBg.color)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 3, style: .continuous)
-                            .strokeBorder(tokens.edgeStrong.color, lineWidth: 0.5)
-                    )
+                smallKeyCap(key, color: keyColor)
+
+                Image(systemName: systemImage)
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .foregroundColor(keyColor.opacity(0.9))
 
                 Text(label)
-                    .font(.system(size: 9, weight: .medium))
-                    .tracking(0.9)
+                    .font(.system(size: 8.5, weight: .medium))
+                    .tracking(0.7)
                     .foregroundColor(Color(hex: tokens.inkFaintHex))
                     .textCase(.uppercase)
                     .lineLimit(1)
+
+                if let badge {
+                    Text(badge)
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .foregroundColor(Color(hex: tokens.inkFaintHex))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(tokens.detailsBg.color)
+                        )
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .strokeBorder(tokens.edge.color, lineWidth: 0.5)
+                        )
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 4)
@@ -564,6 +612,22 @@ private struct CaptureHUDView: View {
             hoveredKey = inside ? id : (hoveredKey == id ? nil : hoveredKey)
             if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
         }
+    }
+
+    private func smallKeyCap(_ key: String, color: Color? = nil) -> some View {
+        Text(key)
+            .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+            .foregroundColor(color ?? Color(hex: tokens.inkHex))
+            .frame(minWidth: key.count > 1 ? 24 : 14, minHeight: 14)
+            .padding(.horizontal, key.count > 1 ? 3 : 0)
+            .background(
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(tokens.detailsBg.color)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .strokeBorder(tokens.edgeStrong.color, lineWidth: 0.5)
+            )
     }
 
     // MARK: - Helpers
