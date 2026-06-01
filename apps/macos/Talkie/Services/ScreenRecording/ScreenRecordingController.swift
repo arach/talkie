@@ -31,6 +31,7 @@ final class ScreenRecordingController {
     enum ReusableRecordingResult: Equatable {
         case started
         case needsSelection
+        case needsSelectionInMode(CaptureBarMode)
         case cancelled
     }
 
@@ -109,6 +110,10 @@ final class ScreenRecordingController {
         case .selectTarget:
             state = .idle
             return .needsSelection
+
+        case .selectBarMode(let mode):
+            state = .idle
+            return .needsSelectionInMode(mode)
 
         case .cancel:
             state = .idle
@@ -365,6 +370,7 @@ private final class ScreenRecordingCountdownController {
     enum Result {
         case start(ScreenRecordingTarget)
         case selectMode(CaptureMode)
+        case selectBarMode(CaptureBarMode)
         case selectTarget
         case cancel
     }
@@ -410,6 +416,9 @@ private final class ScreenRecordingCountdownController {
         }
         view.onModeSelected = { [weak self] mode in
             self?.handleModeSelection(mode)
+        }
+        view.onBarModeSelected = { [weak self] mode in
+            self?.handleBarModeSelection(mode)
         }
         view.onCancel = { [weak self] in
             self?.finish(.cancel)
@@ -464,7 +473,11 @@ private final class ScreenRecordingCountdownController {
         )
         hudPanel.state.selectedCaptureMode = Self.captureMode(for: target)
         hudPanel.state.onAction = { [weak self] result in
-            guard let self, let result else { return }
+            guard let self else { return }
+            guard let result else {
+                handleBarModeSelection(hudPanel.state.mode)
+                return
+            }
             switch result {
             case .screenRecord(let mode):
                 handleModeSelection(mode)
@@ -478,6 +491,16 @@ private final class ScreenRecordingCountdownController {
             guard !Task.isCancelled else { return }
             self?.hudPanel.updatePalette(palette)
         }
+    }
+
+    private func handleBarModeSelection(_ mode: CaptureBarMode) {
+        guard !didFinish else { return }
+        hudPanel.state.mode = mode
+        guard mode != .video else {
+            overlayView?.focusSelection()
+            return
+        }
+        finish(.selectBarMode(mode))
     }
 
     private static func captureMode(for target: ScreenRecordingTarget) -> CaptureMode {
@@ -835,6 +858,7 @@ private final class ScreenRecordingCountdownView: NSView {
 
     var onConfirm: ((CGRect, Bool) -> Void)?
     var onModeSelected: ((CaptureMode) -> Void)?
+    var onBarModeSelected: ((CaptureBarMode) -> Void)?
     var onCancel: (() -> Void)?
 
     private var phase: Phase = .confirming
@@ -1206,6 +1230,11 @@ private final class ScreenRecordingCountdownView: NSView {
             return
         }
 
+        if event.isCaptureModeSwitchArrow {
+            onBarModeSelected?(event.keyCode == 123 ? .screenshot : .video)
+            return
+        }
+
         if event.keyCode == 36 || event.keyCode == 76 || event.isOpeningCaptureChordKey(initialMode: .video) {
             guard phase == .confirming else { return }
             onConfirm?(screenRect(for: selectionRect), didAdjust)
@@ -1304,6 +1333,18 @@ private final class ScreenRecordingCountdownView: NSView {
         if rect.minY < allowed.minY { rect.origin.y = allowed.minY }
         if rect.maxY > allowed.maxY { rect.origin.y = allowed.maxY - rect.height }
         return rect.standardized
+    }
+}
+
+private extension NSEvent {
+    var isCaptureModeSwitchArrow: Bool {
+        guard keyCode == 123 || keyCode == 124 else { return false }
+        let synthesizedArrowFlags: NSEvent.ModifierFlags = [.numericPad, .function]
+        let activeModifiers = modifierFlags
+            .intersection(.deviceIndependentFlagsMask)
+            .subtracting(synthesizedArrowFlags)
+        let hyperModifiers: NSEvent.ModifierFlags = [.command, .option, .control, .shift]
+        return activeModifiers.isEmpty || activeModifiers.isSuperset(of: hyperModifiers)
     }
 }
 

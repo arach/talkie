@@ -209,7 +209,16 @@ final class BridgeManager {
     private(set) var prerequisiteStatus: PrerequisiteStatus?
     private(set) var isInstallingDependencies = false
 
+    private enum RefreshSchedule {
+        static let statusRefreshInterval: TimeInterval = 15
+        static let backgroundPairingInterval: TimeInterval = 60
+        static let activePendingPairingInterval: TimeInterval = 15
+        static let pairableHealthFreshnessWindow: TimeInterval = 35
+    }
+
     private var refreshTimer: Timer?
+    private var isHandlingRefreshTimerTick = false
+    private var lastBackgroundPairingRefreshAt: Date?
     private var isStartingBridge = false  // Prevents concurrent start attempts
     private var resolvedBridgeHost: String?
     private var lastPairableHealthAt: Date?
@@ -775,7 +784,7 @@ final class BridgeManager {
         stopRefreshTimer()
     }
 
-    private func refreshDirectBridgeHealth() async -> Bool {
+    private func refreshDirectBridgeHealth(restartTimerOnSuccess: Bool = true) async -> Bool {
         do {
             let (data, response, _) = try await bridgeRequest(path: "/health")
             guard let httpResponse = response as? HTTPURLResponse,
@@ -797,7 +806,9 @@ final class BridgeManager {
             lastPairableHealthAt = Date()
             bridgeStatus = .running
             errorMessage = nil
-            startRefreshTimer()
+            if restartTimerOnSuccess {
+                startRefreshTimer()
+            }
             await ensureTalkieServerRunning()
             return true
         } catch {
@@ -857,7 +868,8 @@ final class BridgeManager {
 
     private var isPairableHealthFresh: Bool {
         guard let lastPairableHealthAt else { return false }
-        return Date().timeIntervalSince(lastPairableHealthAt) < 15
+        return Date().timeIntervalSince(lastPairableHealthAt)
+            < RefreshSchedule.pairableHealthFreshnessWindow
     }
 
     private func enableTalkieServerIfNeeded(reason: String) {
@@ -946,6 +958,7 @@ final class BridgeManager {
             let response = try JSONDecoder().decode(PendingResponse.self, from: data)
             let previousNotifiedIDs = notifiedPendingPairingIDs
             pendingPairings = response.pending
+            lastBackgroundPairingRefreshAt = Date()
             let pendingIDs = Set(response.pending.map(\.deviceId))
             notifiedPendingPairingIDs.formIntersection(pendingIDs)
 
@@ -1204,11 +1217,66 @@ final class BridgeManager {
 
     private func startRefreshTimer() {
         stopRefreshTimer()
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+        refreshTimer = Timer.scheduledTimer(
+            withTimeInterval: RefreshSchedule.statusRefreshInterval,
+            repeats: true
+        ) { [weak self] _ in
             Task { @MainActor in
-                self?.checkStatus()
+                await self?.refreshTimerTick()
             }
         }
+    }
+
+    private func refreshTimerTick() async {
+        guard bridgeStatus == .running || bridgeStatus == .starting else {
+            stopRefreshTimer()
+            return
+        }
+        guard !isHandlingRefreshTimerTick else { return }
+
+        isHandlingRefreshTimerTick = true
+        defer { isHandlingRefreshTimerTick = false }
+
+        if ServiceManager.shared.live.isXPCConnected {
+            await refreshStatusFromAgent()
+        } else {
+            guard await refreshDirectBridgeHealth(restartTimerOnSuccess: false) else {
+                guard bridgeStatus != .error else { return }
+                if !isPairableHealthFresh {
+                    bridgeStatus = .stopped
+                    resolvedBridgeHost = nil
+                    stopRefreshTimer()
+                }
+                return
+            }
+        }
+
+        await refreshBackgroundPairingsIfDue()
+    }
+
+    private func refreshBackgroundPairingsIfDue() async {
+        guard bridgeStatus == .running else {
+            if !isPairableHealthFresh, !ServiceManager.shared.live.isXPCConnected {
+                bridgeStatus = .stopped
+                resolvedBridgeHost = nil
+                stopRefreshTimer()
+            }
+            return
+        }
+        let interval: TimeInterval
+        if pendingPairings.isEmpty {
+            interval = RefreshSchedule.backgroundPairingInterval
+        } else {
+            interval = RefreshSchedule.activePendingPairingInterval
+        }
+        let now = Date()
+        if let lastBackgroundPairingRefreshAt,
+           now.timeIntervalSince(lastBackgroundPairingRefreshAt) < interval {
+            return
+        }
+
+        lastBackgroundPairingRefreshAt = now
+        await refreshPendingPairings()
     }
 
     private func stopRefreshTimer() {

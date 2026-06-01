@@ -2141,6 +2141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             CapturePerformanceMonitor.shared.mark("chord.panel.begin")
         }
 
+        var hudInitialMode = initialMode
         if initialMode == .video {
             switch await ScreenRecordingController.shared.startReusableRecordingWithCountdown() {
             case .started:
@@ -2149,10 +2150,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
                 return
             case .needsSelection:
                 break
+            case .needsSelectionInMode(let mode):
+                hudInitialMode = mode
             }
         }
 
-        guard let result = await chord.beginChord(initialMode: initialMode, options: chordOptions) else {
+        guard let result = await chord.beginChord(initialMode: hudInitialMode, options: chordOptions) else {
             if trackCapturePerf {
                 CapturePerformanceMonitor.shared.endSession(outcome: "cancelled")
             }

@@ -247,6 +247,19 @@ final class ManagedAgentConsoleSession: Identifiable {
         NSWorkspace.shared.activateFileViewerSelecting([workspace.rootURL])
     }
 
+    var clipboardTranscriptText: String {
+        TerminalTranscriptFormatter.plainText(from: transcriptData)
+    }
+
+    @discardableResult
+    func copyTranscriptToClipboard() -> Bool {
+        let text = clipboardTranscriptText
+        guard !text.isEmpty else { return false }
+
+        NSPasteboard.general.clearContents()
+        return NSPasteboard.general.setString(text, forType: .string)
+    }
+
     func attach(
         listener: (any Listener)?,
         replayTranscript: Bool = true
@@ -392,6 +405,42 @@ final class ManagedAgentConsoleSession: Identifiable {
         }
     }
 
+}
+
+private enum TerminalTranscriptFormatter {
+    static func plainText(from data: Data) -> String {
+        plainText(from: String(decoding: data, as: UTF8.self))
+    }
+
+    private static func plainText(from rawText: String) -> String {
+        var text = rawText
+            .replacing("\r\n", with: "\n")
+            .replacing("\r", with: "\n")
+
+        text = remove(pattern: "\u{001B}\\][^\u{0007}\u{001B}]*(?:\u{0007}|\u{001B}\\\\)", from: text)
+        text = remove(pattern: "\u{001B}\\[[0-?]*[ -/]*[@-~]", from: text)
+        text = remove(pattern: "\u{001B}[@-Z\\\\-_]", from: text)
+
+        return text
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map(trimTrailingWhitespace)
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func remove(pattern: String, from text: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        return regex.stringByReplacingMatches(in: text, range: range, withTemplate: "")
+    }
+
+    private static func trimTrailingWhitespace(_ line: Substring) -> String {
+        var text = String(line)
+        while let last = text.last, last.isWhitespace {
+            text.removeLast()
+        }
+        return text
+    }
 }
 
 private enum AgentConsoleCompanion {

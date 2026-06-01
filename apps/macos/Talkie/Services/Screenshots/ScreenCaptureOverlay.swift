@@ -20,8 +20,13 @@ enum OverlayMode {
 final class ScreenCaptureOverlay {
     private var overlayWindow: NSWindow?
     private var overlayView: OverlayView?
+    private var globalKeyMonitor: Any?
+    private var localKeyMonitor: Any?
 
-    func selectRegion(freezesDesktop: Bool = true) async -> CGRect? {
+    func selectRegion(
+        freezesDesktop: Bool = true,
+        onModeSwitch: ((CaptureBarMode) -> Void)? = nil
+    ) async -> CGRect? {
         OverlayView.cursor(for: .region).set()
 
         // Freeze-the-desktop: snapshot the screen BEFORE the overlay shows
@@ -47,6 +52,7 @@ final class ScreenCaptureOverlay {
             }
             view.onRegionSelected = { resume($0) }
             view.onCancelled = { resume(nil) }
+            view.onModeSwitch = onModeSwitch
             showOverlay(with: view)
         }
     }
@@ -139,6 +145,7 @@ final class ScreenCaptureOverlay {
 
         overlayWindow = window
         overlayView = view
+        installKeyMonitors()
         view.activateCursor()
         Task { @MainActor [weak view] in
             view?.activateCursor()
@@ -146,10 +153,41 @@ final class ScreenCaptureOverlay {
     }
 
     private func dismiss() {
+        removeKeyMonitors()
         overlayView?.deactivateCursor()
         overlayWindow?.orderOut(nil)
         overlayWindow = nil
         overlayView = nil
+    }
+
+    private func installKeyMonitors() {
+        removeKeyMonitors()
+        globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            Task { @MainActor in
+                _ = self?.handleKeyEvent(event)
+            }
+        }
+        localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            MainActor.assumeIsolated {
+                guard let self else { return event }
+                return self.handleKeyEvent(event) ? nil : event
+            }
+        }
+    }
+
+    private func removeKeyMonitors() {
+        if let globalKeyMonitor {
+            NSEvent.removeMonitor(globalKeyMonitor)
+            self.globalKeyMonitor = nil
+        }
+        if let localKeyMonitor {
+            NSEvent.removeMonitor(localKeyMonitor)
+            self.localKeyMonitor = nil
+        }
+    }
+
+    private func handleKeyEvent(_ event: NSEvent) -> Bool {
+        overlayView?.handleControlKey(event) ?? false
     }
 }
 
@@ -171,6 +209,7 @@ private final class OverlayView: NSView {
     var onWindowSelected: ((CGWindowID) -> Void)?
     var onCancelled: (() -> Void)?
     var onDismiss: (() -> Void)?
+    var onModeSwitch: ((CaptureBarMode) -> Void)?
 
     var screenOrigin: CGPoint = .zero
 
@@ -563,10 +602,25 @@ private final class OverlayView: NSView {
         return candidates
     }
 
-    override func keyDown(with event: NSEvent) {
+    func handleControlKey(_ event: NSEvent) -> Bool {
+        if let onModeSwitch, event.isCaptureModeSwitchArrow {
+            onModeSwitch(event.keyCode == 123 ? .screenshot : .video)
+            return true
+        }
+
         if event.keyCode == 53 {
             cancel()
+            return true
         }
+
+        return false
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if handleControlKey(event) {
+            return
+        }
+        super.keyDown(with: event)
     }
 
     func cancel() {
@@ -639,5 +693,17 @@ private final class OverlayView: NSView {
         guard !completed else { return }
         completed = true
         onDismiss?()
+    }
+}
+
+private extension NSEvent {
+    var isCaptureModeSwitchArrow: Bool {
+        guard keyCode == 123 || keyCode == 124 else { return false }
+        let synthesizedArrowFlags: NSEvent.ModifierFlags = [.numericPad, .function]
+        let activeModifiers = modifierFlags
+            .intersection(.deviceIndependentFlagsMask)
+            .subtracting(synthesizedArrowFlags)
+        let hyperModifiers: NSEvent.ModifierFlags = [.command, .option, .control, .shift]
+        return activeModifiers.isEmpty || activeModifiers.isSuperset(of: hyperModifiers)
     }
 }

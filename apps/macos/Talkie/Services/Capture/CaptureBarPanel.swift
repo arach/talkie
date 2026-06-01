@@ -209,7 +209,7 @@ enum CaptureBarResult {
     case screenRecord(CaptureMode)   // A/S/D in video mode
     case toggleCamera                // C key
     case saveSelection               // N key
-    case viewTray                    // W key
+    case viewTray                    // T key
     case pasteLastTray               // V key
 
     /// Whether the action should keep the previous app in focus.
@@ -482,7 +482,7 @@ private struct CaptureBarView: View {
         }
     }
 
-    // MARK: - Extras (C + N + V + W)
+    // MARK: - Extras (C + N + V + T)
 
     private var extras: some View {
         HStack(spacing: 12) {
@@ -524,7 +524,7 @@ private struct CaptureBarView: View {
             if state.showTrayOption {
                 // Paste last tray item
                 HStack(spacing: 3) {
-                    Text("F")
+                    Text("V")
                         .font(.system(size: 11, weight: .bold, design: .monospaced))
                         .foregroundColor(.green)
                         .padding(.horizontal, 5)
@@ -540,7 +540,7 @@ private struct CaptureBarView: View {
 
                 // Tray viewer
                 HStack(spacing: 3) {
-                    Text("W")
+                    Text("T")
                         .font(.system(size: 11, weight: .bold, design: .monospaced))
                         .foregroundColor(.cyan)
                         .padding(.horizontal, 5)

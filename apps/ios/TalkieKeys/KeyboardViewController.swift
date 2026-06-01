@@ -5970,7 +5970,21 @@ final class KeyboardViewController: UIInputViewController, KeyboardInputHost {
         return isAppleIntelligenceAvailable() ? "\(modeTitle) • AI ready" : "\(modeTitle) • AI unavailable"
     }
 
+    /// Parallel to FeatureFlags.aiKeyboardSmartTransformEnabled in the host app.
+    /// Keyboard extensions can't read the host app's launch arguments (separate
+    /// process), so this is a local hard-coded toggle. Off by default while we
+    /// focus on the recording sidecar use case and bound e5rt cache growth.
+    /// Flip to `true` to re-enable keyboard smart transforms in dev.
+    private static let aiKeyboardSmartTransformEnabled = false
+
     private func generateAppleSmartTransform(kind: SmartTransformKind, source: String) async throws -> String {
+        guard Self.aiKeyboardSmartTransformEnabled else {
+            throw NSError(
+                domain: "TalkieKeys",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "Keyboard smart-transform disabled by feature flag"]
+            )
+        }
         #if canImport(FoundationModels)
         let session = LanguageModelSession()
         let prompt: String

@@ -21,9 +21,58 @@ enum FeatureFlags {
         launchArguments.contains("--enableConnectionCenter")
     }
 
+    // MARK: - On-Device AI (Foundation Models)
+    //
+    // Each non-sidecar Foundation Models feature has its own flag. They default
+    // to OFF while we focus on the recording sidecar use case. Reasons:
+    //   - Each LanguageModelSession variant compiles into the per-app
+    //     com.apple.e5rt.e5bundlecache; on simulators that cache has no
+    //     disk-pressure eviction signal and accumulates unbounded.
+    //   - Bounding active features narrows the surface we exercise during dev.
+    //
+    // To opt-in for a build, pass the matching launch argument in the scheme.
+    // Sidecar is always on; it's the feature we're building around.
+
+    /// Recording sidecar (feedback + research modes). Always on.
+    static var aiRecordingSidecarEnabled: Bool { true }
+
+    /// Auto-titles for voice memos after transcription.
+    static var aiMemoTitlesEnabled: Bool {
+        launchArguments.contains("--enableAIMemoTitles")
+    }
+
+    /// Auto-titles for screenshots / captures (content-aware: detects social
+    /// media, email, code, etc.).
+    static var aiCaptureTitlesEnabled: Bool {
+        launchArguments.contains("--enableAICaptureTitles")
+    }
+
+    /// 2-3 sentence summary of a voice-memo transcript.
+    static var aiMemoSummariesEnabled: Bool {
+        launchArguments.contains("--enableAIMemoSummaries")
+    }
+
+    /// Task / action-item extraction from voice-memo transcripts.
+    static var aiTaskExtractionEnabled: Bool {
+        launchArguments.contains("--enableAITaskExtraction")
+    }
+
+    /// Apple Watch voice assistant (short conversational responses).
+    static var aiWatchAssistantEnabled: Bool {
+        launchArguments.contains("--enableAIWatchAssistant")
+    }
+
+    /// Claude Code session summaries (4-8 word session-list labels).
+    static var aiSessionSummariesEnabled: Bool {
+        launchArguments.contains("--enableAISessionSummaries")
+    }
+
+    /// Keyboard-extension smart transforms (summary / bullets / topics).
+    static var aiKeyboardSmartTransformEnabled: Bool {
+        launchArguments.contains("--enableAIKeyboardSmartTransform")
+    }
+
     // MARK: - Future Flags
 
     // Add new feature flags here as needed
-    // static let showExperimentalUI = false
-    // static let enableBetaFeatures = false
 }
