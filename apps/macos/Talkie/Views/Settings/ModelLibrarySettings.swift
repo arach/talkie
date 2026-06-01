@@ -16,6 +16,8 @@ struct ModelLibraryView: View {
     @Environment(SettingsManager.self) private var settingsManager
 
     @State private var expandedProvider: String?
+    @State private var enabledMarkupAgentModelKeys: Set<String> = []
+    @State private var isRefreshingAgentModels = false
 
     private let settings = SettingsManager.shared
 
@@ -134,6 +136,8 @@ struct ModelLibraryView: View {
                 }
                 .settingsSectionCard(padding: Spacing.md)
 
+                markupAgentsSection
+
                 // Quick configure hint
                 if !hasAnyProviderConfigured {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -192,6 +196,9 @@ struct ModelLibraryView: View {
             .padding(Spacing.xl)
         }
         .background(Theme.current.background)
+        .task {
+            await refreshMarkupAgentModels(force: false)
+        }
     }
 
     private var hasAnyProviderConfigured: Bool {
@@ -199,6 +206,208 @@ struct ModelLibraryView: View {
         settingsManager.anthropicApiKey != nil ||
         settingsManager.hasValidApiKey ||
         settingsManager.groqApiKey != nil
+    }
+
+    private var markupAgentsSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            HStack(spacing: Spacing.sm) {
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(Color.cyan)
+                    .frame(width: 3, height: 14)
+
+                Text("MARKUP AGENTS")
+                    .font(Theme.current.fontXSBold)
+                    .foregroundColor(Theme.current.foregroundSecondary)
+
+                Text("\(enabledMarkupAgentModelKeys.count) ENABLED")
+                    .font(.techLabelSmall)
+                    .foregroundColor(enabledMarkupAgentModelKeys.isEmpty ? .orange : .green)
+
+                Spacer()
+
+                Button {
+                    Task { await refreshMarkupAgentModels(force: true) }
+                } label: {
+                    Label(isRefreshingAgentModels ? "Refreshing" : "Refresh", systemImage: "arrow.clockwise")
+                        .font(Theme.current.fontXSMedium)
+                }
+                .buttonStyle(.plain)
+                .disabled(isRefreshingAgentModels)
+
+                Button {
+                    LLMAgentModelPreferences.resetToRecommended()
+                    reloadMarkupAgentSelection()
+                } label: {
+                    Text("Reset")
+                        .font(Theme.current.fontXSMedium)
+                }
+                .buttonStyle(.plain)
+            }
+
+            if availableMarkupModels.isEmpty {
+                HStack(spacing: Spacing.sm) {
+                    Image(systemName: "sparkles")
+                        .font(Theme.current.fontBody)
+                        .foregroundColor(Theme.current.foregroundMuted)
+
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        Text("No markup agent catalog loaded")
+                            .font(Theme.current.fontSMMedium)
+                            .foregroundColor(Theme.current.foregroundSecondary)
+                        Text("Refresh models after adding a provider key.")
+                            .font(Theme.current.fontSM)
+                            .foregroundColor(Theme.current.foregroundMuted)
+                    }
+
+                    Spacer()
+                }
+                .padding(Spacing.sm)
+                .background(Theme.current.surface1)
+                .cornerRadius(CornerRadius.sm)
+            } else {
+                VStack(spacing: Spacing.sm) {
+                    ForEach(markupProviderIds, id: \.self) { providerId in
+                        let models = providerModels(for: providerId)
+                        if !models.isEmpty {
+                            VStack(alignment: .leading, spacing: Spacing.xs) {
+                                HStack(spacing: Spacing.xs) {
+                                    Text(providerName(for: providerId).uppercased())
+                                        .font(Theme.current.fontXSMedium)
+                                        .foregroundColor(Theme.current.foregroundSecondary)
+
+                                    Text(providerConfiguredLabel(for: providerId))
+                                        .font(.techLabelSmall)
+                                        .foregroundColor(isProviderConfigured(providerId) ? .green : Theme.current.foregroundMuted)
+
+                                    Spacer()
+                                }
+
+                                VStack(spacing: 1) {
+                                    ForEach(models) { model in
+                                        MarkupAgentModelRow(
+                                            model: model,
+                                            isRecommended: LLMConfig.shared.recommendedModelIDs(for: providerId).contains(model.id),
+                                            isEnabled: markupAgentBinding(for: model)
+                                        )
+                                    }
+                                }
+                                .clipShape(.rect(cornerRadius: CornerRadius.sm))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .settingsSectionCard(padding: Spacing.md)
+    }
+
+    private var availableMarkupModels: [LLMModel] {
+        LLMAgentModelPreferences.sorted(
+            LLMProviderRegistry.shared.allModels.filter { LLMAgentModelPreferences.isCuratableProvider($0.provider) }
+        )
+    }
+
+    private var markupProviderIds: [String] {
+        var ids: [String] = []
+        var seen = Set<String>()
+        for providerId in LLMConfig.shared.preferredProviderOrder + availableMarkupModels.map(\.provider) {
+            guard LLMAgentModelPreferences.isCuratableProvider(providerId),
+                  seen.insert(providerId).inserted else { continue }
+            ids.append(providerId)
+        }
+        return ids
+    }
+
+    private func providerModels(for providerId: String) -> [LLMModel] {
+        availableMarkupModels.filter { $0.provider == providerId }
+    }
+
+    private func providerName(for providerId: String) -> String {
+        LLMProviderRegistry.shared.provider(for: providerId)?.name
+            ?? LLMConfig.shared.config(for: providerId)?.name
+            ?? providerId
+    }
+
+    private func isProviderConfigured(_ providerId: String) -> Bool {
+        switch providerId {
+        case "openai": return settingsManager.openaiApiKey != nil
+        case "anthropic": return settingsManager.anthropicApiKey != nil
+        case "gemini": return settingsManager.hasValidApiKey
+        case "groq": return settingsManager.groqApiKey != nil
+        default: return false
+        }
+    }
+
+    private func providerConfiguredLabel(for providerId: String) -> String {
+        isProviderConfigured(providerId) ? "CONFIGURED" : "NEEDS KEY"
+    }
+
+    private func markupAgentBinding(for model: LLMModel) -> Binding<Bool> {
+        Binding(
+            get: {
+                enabledMarkupAgentModelKeys.contains(LLMAgentModelPreferences.modelKey(for: model))
+            },
+            set: { isEnabled in
+                LLMAgentModelPreferences.setModel(
+                    model,
+                    enabled: isEnabled,
+                    availableModels: LLMProviderRegistry.shared.allModels
+                )
+                reloadMarkupAgentSelection()
+            }
+        )
+    }
+
+    private func refreshMarkupAgentModels(force: Bool) async {
+        isRefreshingAgentModels = true
+        await LLMProviderRegistry.shared.refreshModels(force: force)
+        reloadMarkupAgentSelection()
+        isRefreshingAgentModels = false
+    }
+
+    private func reloadMarkupAgentSelection() {
+        enabledMarkupAgentModelKeys = LLMAgentModelPreferences.enabledModelKeys(
+            availableModels: LLMProviderRegistry.shared.allModels
+        )
+    }
+}
+
+private struct MarkupAgentModelRow: View {
+    let model: LLMModel
+    let isRecommended: Bool
+    @Binding var isEnabled: Bool
+
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: Spacing.xs) {
+                    Text(model.displayName)
+                        .font(Theme.current.fontSMMedium)
+                        .foregroundColor(Theme.current.foreground)
+
+                    if isRecommended {
+                        Text("RECOMMENDED")
+                            .font(.techLabelSmall)
+                            .foregroundColor(Color.blue)
+                    }
+                }
+
+                Text(model.id)
+                    .font(.techLabelSmall)
+                    .foregroundColor(Theme.current.foregroundMuted)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            Spacer()
+
+            Toggle("", isOn: $isEnabled)
+                .toggleStyle(.switch)
+                .labelsHidden()
+        }
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.xs)
+        .background(Theme.current.surface1)
     }
 }
 
