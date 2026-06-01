@@ -1,6 +1,6 @@
 {
   "fill" : {
-    "automatic-gradient" : "extended-srgb:0.00000,0.53333,1.00000,1.00000"
+    "solid" : "extended-srgb:0.00000,0.00000,0.00000,1.00000"
   },
   "groups" : [
     {
@@ -9,22 +9,14 @@
           "image-name" : "icon_512x512@2x 2.png",
           "name" : "icon_512x512@2x 2",
           "position" : {
-            "scale" : 1.1,
+            "scale" : 1.0,
             "translation-in-points" : [
               0,
-              -34.9609375
+              0
             ]
           }
         }
-      ],
-      "shadow" : {
-        "kind" : "neutral",
-        "opacity" : 0.5
-      },
-      "translucency" : {
-        "enabled" : true,
-        "value" : 0.5
-      }
+      ]
     }
   ],
   "supported-platforms" : {
