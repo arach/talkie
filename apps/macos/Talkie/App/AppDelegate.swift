@@ -2140,6 +2140,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
             CapturePerformanceMonitor.shared.beginSession(trigger: "capture-chord", mode: "pending")
             CapturePerformanceMonitor.shared.mark("chord.panel.begin")
         }
+
+        if initialMode == .video {
+            switch await ScreenRecordingController.shared.startReusableRecordingWithCountdown() {
+            case .started:
+                return
+            case .cancelled:
+                return
+            case .needsSelection:
+                break
+            }
+        }
+
         guard let result = await chord.beginChord(initialMode: initialMode, options: chordOptions) else {
             if trackCapturePerf {
                 CapturePerformanceMonitor.shared.endSession(outcome: "cancelled")

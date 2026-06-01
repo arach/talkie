@@ -197,6 +197,13 @@ struct NotchComposerView: View {
         return false
     }
 
+    private var screenRecordingStartTime: Date? {
+        if case .screenRecording(let startTime) = composer.activeIntents[.screenRecording] {
+            return startTime
+        }
+        return nil
+    }
+
     // Only recording drives the "active" expansion. Pills don't expand wings.
     private var desiredExpansionState: ExpansionState {
         if recordingDismissedByGesture {
@@ -666,6 +673,19 @@ struct NotchComposerView: View {
                         // Unified: wings + optional tray, one continuous background
                         recordingUnit
                             .zIndex(2)
+
+                        if let screenRecordingStartTime {
+                            ScreenRecordingNotchPillView(
+                                startTime: screenRecordingStartTime,
+                                onStop: {
+                                    Task { @MainActor in
+                                        await ScreenRecordingController.shared.stopRecording()
+                                    }
+                                }
+                            )
+                            .padding(.top, 4)
+                            .zIndex(1)
+                        }
 
                         if shouldShowCommunicationFramework && recordingCommunicationPresentationVisible {
                             communicationPresentation

@@ -15,6 +15,7 @@ public struct TalkieObjectAssets: Codable, Sendable {
     public var screenshots: [RecordingScreenshot]?
     public var clips: [RecordingClip]?
     public var attachments: [RecordingAttachment]?
+    public var visualContexts: [RecordingVisualContext]?
     /// Receipts for text that was seen/offered from non-user sources (OCR, paste, dictation).
     /// Canonical `TalkieObject.text` is user-owned and never auto-filled from these.
     public var textProvenance: [ProvenanceSegment]?
@@ -24,6 +25,7 @@ public struct TalkieObjectAssets: Codable, Sendable {
         && (screenshots ?? []).isEmpty
         && (clips ?? []).isEmpty
         && (attachments ?? []).isEmpty
+        && (visualContexts ?? []).isEmpty
         && (textProvenance ?? []).isEmpty
     }
 
@@ -32,12 +34,14 @@ public struct TalkieObjectAssets: Codable, Sendable {
         screenshots: [RecordingScreenshot]? = nil,
         clips: [RecordingClip]? = nil,
         attachments: [RecordingAttachment]? = nil,
+        visualContexts: [RecordingVisualContext]? = nil,
         textProvenance: [ProvenanceSegment]? = nil
     ) {
         self.segments = segments
         self.screenshots = screenshots
         self.clips = clips
         self.attachments = attachments
+        self.visualContexts = visualContexts
         self.textProvenance = textProvenance
     }
 

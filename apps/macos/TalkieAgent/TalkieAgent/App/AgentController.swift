@@ -552,7 +552,8 @@ final class AgentController: ObservableObject {
             text: text,
             timedTranscription: timedTranscription,
             screenshots: screenshots,
-            screenshotDirectory: ScreenshotStorage.screenshotsDirectory
+            screenshotDirectory: ScreenshotStorage.screenshotsDirectory,
+            visualContexts: trayAssets?.visualContexts ?? []
         )
     }
 
@@ -2249,7 +2250,7 @@ final class AgentController: ObservableObject {
                         pasteTimestamp: Date()
                     )
 
-                    async let storedRecordingIdTask: UUID? = Self.persistDictationRecording(
+                    let storedRecordingId = await Self.persistDictationRecording(
                         utterance: utterance,
                         segmentsJSON: segmentsJSON,
                         screenshotsJSON: prepared.screenshotsJSON,
@@ -2259,11 +2260,25 @@ final class AgentController: ObservableObject {
                         attachTrayAssetsInBackground: false
                     )
 
+                    let trayAssets: TalkieObjectAssets?
+                    if let storedRecordingId {
+                        logTiming("Database stored (context rule: auto-refine)")
+                        trayAssets = await Self.attachTrayAssets(
+                            recordingId: storedRecordingId,
+                            captureSessionId: capturedRecordingId,
+                            recordingStartedAt: capturedRecordingStartedAt,
+                            recordingEndedAt: capturedRecordingEndedAt,
+                            includeScreenshots: prepared.screenshots.isEmpty
+                        )
+                    } else {
+                        trayAssets = nil
+                    }
+
                     let deliveryText = Self.renderDictationDeliveryText(
                         text: finalText,
                         timedTranscription: timedTranscription,
                         localScreenshots: prepared.screenshots,
-                        trayAssets: nil
+                        trayAssets: trayAssets
                     )
 
                     trace?.begin("paste")
@@ -2281,18 +2296,6 @@ final class AgentController: ObservableObject {
                     metadata.perfInAppMs = appMs
                     metadata.perfPreMs = preMs
                     metadata.perfPostMs = postMs
-
-                    let storedRecordingId = await storedRecordingIdTask
-                    if let storedRecordingId {
-                        logTiming("Database stored (context rule: auto-refine)")
-                        Self.scheduleTrayAssetAttachment(
-                            recordingId: storedRecordingId,
-                            captureSessionId: capturedRecordingId,
-                            recordingStartedAt: capturedRecordingStartedAt,
-                            recordingEndedAt: capturedRecordingEndedAt,
-                            includeScreenshots: prepared.screenshots.isEmpty
-                        )
-                    }
 
                     let capturedMetadata = metadata
 
@@ -2461,7 +2464,7 @@ final class AgentController: ObservableObject {
                         pasteTimestamp: Date()
                     )
 
-                    async let storedRecordingIdTask: UUID? = Self.persistDictationRecording(
+                    let storedRecordingId = await Self.persistDictationRecording(
                         utterance: utterance,
                         segmentsJSON: segmentsJSON,
                         screenshotsJSON: prepared.screenshotsJSON,
@@ -2471,11 +2474,25 @@ final class AgentController: ObservableObject {
                         attachTrayAssetsInBackground: false
                     )
 
+                    let trayAssets: TalkieObjectAssets?
+                    if let storedRecordingId {
+                        logTiming("Database stored (context rule: protocol-processor)")
+                        trayAssets = await Self.attachTrayAssets(
+                            recordingId: storedRecordingId,
+                            captureSessionId: capturedRecordingId,
+                            recordingStartedAt: capturedRecordingStartedAt,
+                            recordingEndedAt: capturedRecordingEndedAt,
+                            includeScreenshots: prepared.screenshots.isEmpty
+                        )
+                    } else {
+                        trayAssets = nil
+                    }
+
                     let deliveryText = Self.renderDictationDeliveryText(
                         text: processedText,
                         timedTranscription: timedTranscription,
                         localScreenshots: prepared.screenshots,
-                        trayAssets: nil
+                        trayAssets: trayAssets
                     )
 
                     trace?.begin("paste")
@@ -2493,18 +2510,6 @@ final class AgentController: ObservableObject {
                     metadata.perfInAppMs = appMs
                     metadata.perfPreMs = preMs
                     metadata.perfPostMs = postMs
-
-                    let storedRecordingId = await storedRecordingIdTask
-                    if let storedRecordingId {
-                        logTiming("Database stored (context rule: protocol-processor)")
-                        Self.scheduleTrayAssetAttachment(
-                            recordingId: storedRecordingId,
-                            captureSessionId: capturedRecordingId,
-                            recordingStartedAt: capturedRecordingStartedAt,
-                            recordingEndedAt: capturedRecordingEndedAt,
-                            includeScreenshots: prepared.screenshots.isEmpty
-                        )
-                    }
 
                     let capturedMetadata = metadata
 
@@ -2668,7 +2673,7 @@ final class AgentController: ObservableObject {
                     pasteTimestamp: Date()
                 )
 
-                async let storedRecordingIdTask: UUID? = Self.persistDictationRecording(
+                let storedRecordingId = await Self.persistDictationRecording(
                     utterance: utterance,
                     segmentsJSON: segmentsJSON,
                     screenshotsJSON: prepared.screenshotsJSON,
@@ -2678,11 +2683,25 @@ final class AgentController: ObservableObject {
                     attachTrayAssetsInBackground: false
                 )
 
+                let trayAssets: TalkieObjectAssets?
+                if let storedRecordingId {
+                    logTiming("Database stored")
+                    trayAssets = await Self.attachTrayAssets(
+                        recordingId: storedRecordingId,
+                        captureSessionId: capturedRecordingId,
+                        recordingStartedAt: capturedRecordingStartedAt,
+                        recordingEndedAt: capturedRecordingEndedAt,
+                        includeScreenshots: prepared.screenshots.isEmpty
+                    )
+                } else {
+                    trayAssets = nil
+                }
+
                 let deliveryText = Self.renderDictationDeliveryText(
                     text: textToPaste,
                     timedTranscription: timedTranscription,
                     localScreenshots: prepared.screenshots,
-                    trayAssets: nil
+                    trayAssets: trayAssets
                 )
 
                 // Trace ONLY the actual paste operation
@@ -2702,18 +2721,6 @@ final class AgentController: ObservableObject {
                 metadata.perfInAppMs = appMs
                 metadata.perfPreMs = preMs
                 metadata.perfPostMs = postMs
-
-                let storedRecordingId = await storedRecordingIdTask
-                if let storedRecordingId {
-                    logTiming("Database stored")
-                    Self.scheduleTrayAssetAttachment(
-                        recordingId: storedRecordingId,
-                        captureSessionId: capturedRecordingId,
-                        recordingStartedAt: capturedRecordingStartedAt,
-                        recordingEndedAt: capturedRecordingEndedAt,
-                        includeScreenshots: prepared.screenshots.isEmpty
-                    )
-                }
 
                 let capturedMetadata = metadata
 

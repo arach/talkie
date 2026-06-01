@@ -288,6 +288,11 @@ extension TalkieObject {
         assets?.clips ?? []
     }
 
+    /// Parsed visual context bundles
+    public var visualContexts: [RecordingVisualContext] {
+        assets?.visualContexts ?? []
+    }
+
     /// Parsed file attachments
     public var attachments: [RecordingAttachment] {
         assets?.attachments ?? []

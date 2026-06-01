@@ -56,7 +56,7 @@ enum ScreenshotCapturePreset: String, CaseIterable, Codable {
     }
 }
 
-enum CaptureMode: String {
+enum CaptureMode: String, Sendable {
     case region      // User drags to select rectangle
     case fullscreen  // Entire display under cursor
     case window      // User clicks a window
