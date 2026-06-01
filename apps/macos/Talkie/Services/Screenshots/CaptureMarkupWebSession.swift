@@ -86,14 +86,18 @@ final class CaptureMarkupWebSession: NSObject {
 
     private var threadInstruction = ""
     private var threadModel = ""
+    private var threadPass: Int?
+    private var threadAttachmentCount = 0
     private var threadRows: [(verb: String, detail: String, status: String)] = []
     private var threadMarks: [(verb: String, detail: String)] = []
 
     /// First frame of a run — the three meta steps pending, the instruction
     /// pinned at the head.
-    func beginThread(instruction: String) {
+    func beginThread(instruction: String, model: String? = nil, pass: Int? = nil, attachmentCount: Int = 0) {
         threadInstruction = instruction
-        threadModel = ""
+        threadModel = model ?? ""
+        threadPass = pass
+        threadAttachmentCount = attachmentCount
         threadRows = [
             ("read", "the capture", "pending"),
             ("describe", "the scene", "pending"),
@@ -101,6 +105,12 @@ final class CaptureMarkupWebSession: NSObject {
         ]
         threadMarks = []
         pushThread(live: true, statusText: "starting the pass…", elapsed: 0, summary: nil)
+    }
+
+    func updateThreadModel(_ model: String, elapsed: Double) {
+        guard !model.isEmpty else { return }
+        threadModel = model
+        pushThread(live: true, statusText: "starting the pass…", elapsed: elapsed, summary: nil)
     }
 
     /// Fold a phase event into the row state, filling in detail as it arrives.
@@ -164,6 +174,8 @@ final class CaptureMarkupWebSession: NSObject {
             "live": live,
             "elapsed": Self.elapsedLabel(elapsed),
         ]
+        if let threadPass { payload["pass"] = threadPass }
+        if threadAttachmentCount > 0 { payload["attachments"] = threadAttachmentCount }
         if !threadInstruction.isEmpty { payload["instruction"] = threadInstruction }
         if !threadModel.isEmpty { payload["model"] = threadModel }
         if let statusText { payload["statusText"] = statusText }
@@ -191,6 +203,11 @@ final class CaptureMarkupWebSession: NSObject {
         String(format: "%.1fs", max(0, seconds))
     }
 
+    private static func javaScriptStringLiteral(_ value: String) -> String? {
+        guard let data = try? JSONEncoder().encode(value) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
     func undo() {
         webView?.evaluateJavaScript("window.talkieMarkup && window.talkieMarkup.undo();")
     }
@@ -212,6 +229,30 @@ final class CaptureMarkupWebSession: NSObject {
                 continuation.resume(returning: document)
             }
         }
+    }
+
+    func fetchMessageLayers() async -> [CaptureMarkupLayer] {
+        guard let webView else { return [] }
+        return await withCheckedContinuation { continuation in
+            webView.evaluateJavaScript("window.talkieMarkup && window.talkieMarkup.exportMessageLayers()") { result, _ in
+                guard let array = result as? [[String: Any]],
+                      let data = try? JSONSerialization.data(withJSONObject: array),
+                      let layers = try? JSONDecoder().decode([CaptureMarkupLayer].self, from: data) else {
+                    continuation.resume(returning: [])
+                    return
+                }
+                continuation.resume(returning: layers)
+            }
+        }
+    }
+
+    func clearMessageLayers() {
+        webView?.evaluateJavaScript("window.talkieMarkup && window.talkieMarkup.clearMessageLayers();")
+    }
+
+    func removeMessageLayer(id: String) {
+        guard let idJSON = Self.javaScriptStringLiteral(id) else { return }
+        webView?.evaluateJavaScript("window.talkieMarkup && window.talkieMarkup.removeMessageLayer(\(idJSON));")
     }
 
     func teardown() {

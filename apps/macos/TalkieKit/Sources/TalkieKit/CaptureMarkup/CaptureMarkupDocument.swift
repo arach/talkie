@@ -169,6 +169,13 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
     public var label: String?
     public var orientation: String?
     public var interval: Double?
+    /// Agent turn provenance for layers produced by capture markup runs.
+    /// Optional so older sidecars and hand-drawn layers remain unchanged.
+    public var turnPass: Int?
+    public var turnInstruction: String?
+    public var turnModel: String?
+    public var turnSummary: String?
+    public var turnElapsed: Double?
     public var visible: Bool
     public var author: CaptureMarkupAuthor
 
@@ -199,6 +206,11 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         case label
         case orientation
         case interval
+        case turnPass
+        case turnInstruction
+        case turnModel
+        case turnSummary
+        case turnElapsed
         case visible
         case author
     }
@@ -230,6 +242,11 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         label: String? = nil,
         orientation: String? = nil,
         interval: Double? = nil,
+        turnPass: Int? = nil,
+        turnInstruction: String? = nil,
+        turnModel: String? = nil,
+        turnSummary: String? = nil,
+        turnElapsed: Double? = nil,
         visible: Bool = true,
         author: CaptureMarkupAuthor = .agent
     ) {
@@ -259,6 +276,11 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         self.label = label
         self.orientation = orientation
         self.interval = interval
+        self.turnPass = turnPass
+        self.turnInstruction = turnInstruction
+        self.turnModel = turnModel
+        self.turnSummary = turnSummary
+        self.turnElapsed = turnElapsed
         self.visible = visible
         self.author = author
     }
@@ -291,6 +313,11 @@ public struct CaptureMarkupLayer: Codable, Sendable, Equatable, Identifiable {
         label = try container.decodeIfPresent(String.self, forKey: .label)
         orientation = try container.decodeIfPresent(String.self, forKey: .orientation)
         interval = try container.decodeIfPresent(Double.self, forKey: .interval)
+        turnPass = try container.decodeIfPresent(Int.self, forKey: .turnPass)
+        turnInstruction = try container.decodeIfPresent(String.self, forKey: .turnInstruction)
+        turnModel = try container.decodeIfPresent(String.self, forKey: .turnModel)
+        turnSummary = try container.decodeIfPresent(String.self, forKey: .turnSummary)
+        turnElapsed = try container.decodeIfPresent(Double.self, forKey: .turnElapsed)
         visible = try container.decodeIfPresent(Bool.self, forKey: .visible) ?? true
         author = try container.decodeIfPresent(CaptureMarkupAuthor.self, forKey: .author) ?? .agent
     }

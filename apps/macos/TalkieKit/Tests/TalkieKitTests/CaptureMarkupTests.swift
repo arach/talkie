@@ -82,6 +82,29 @@ func captureMarkupLayerStyleRoundTrip() throws {
     #expect(decoded.layers[1].fontSize == 22)
 }
 
+@Test("Capture markup layer persists turn provenance")
+func captureMarkupLayerTurnProvenanceRoundTrip() throws {
+    let layer = CaptureMarkupLayer(
+        kind: .rect,
+        frame: CaptureMarkupRect(x: 0.1, y: 0.2, width: 0.3, height: 0.1),
+        turnPass: 2,
+        turnInstruction: "circle the error",
+        turnModel: "OpenAI · gpt-4.1",
+        turnSummary: "circled error row · 1 op",
+        turnElapsed: 1.4
+    )
+    let document = CaptureMarkupDocument(imageWidth: 800, imageHeight: 600, layers: [layer])
+
+    let data = try JSONEncoder().encode(document)
+    let decoded = try JSONDecoder().decode(CaptureMarkupDocument.self, from: data)
+    #expect(decoded == document)
+    #expect(decoded.layers[0].turnPass == 2)
+    #expect(decoded.layers[0].turnInstruction == "circle the error")
+    #expect(decoded.layers[0].turnModel == "OpenAI · gpt-4.1")
+    #expect(decoded.layers[0].turnSummary == "circled error row · 1 op")
+    #expect(decoded.layers[0].turnElapsed == 1.4)
+}
+
 @Test("Capture markup label persists font family / weight / style / plain")
 func captureMarkupLabelTypographyRoundTrip() throws {
     let label = CaptureMarkupLayer(

@@ -9,10 +9,14 @@
     imageURL: null,
     document: { version: 1, imageWidth: 1, imageHeight: 1, layers: [] },
     selectedLayerId: null,
+    /** Layer ids explicitly tagged into the next agent message. */
+    messageLayerIds: new Set(),
     activeTool: null,
     image: null,
     /** Existing-layer move drag (the original behaviour) — frame-based layers */
     drag: null,
+    /** Frame resize drag — a selected rect/label/highlight/patch handle. */
+    frameResize: null,
     /** Segment (arrow / line) edit drag — move an endpoint or the whole thing.
      *  `handle` is "from" | "to" (reshape one end) or "both" (move the segment). */
     segDrag: null,
@@ -127,6 +131,52 @@
     return layer
       ? { id: layer.id, label: layer.label || layer.text || layer.kind, kind: layer.kind }
       : null;
+  }
+
+  function layerSelectionPayload(layer) {
+    return {
+      id: layer.id,
+      kind: layer.kind,
+      label: layer.label || layer.text || layer.kind,
+    };
+  }
+
+  function messageLayerSelections() {
+    return state.document.layers
+      .filter((layer) => state.messageLayerIds.has(layer.id))
+      .map(layerSelectionPayload);
+  }
+
+  function postMessageLayers() {
+    post("markup.attachments", {
+      sessionId: state.sessionId,
+      selections: messageLayerSelections(),
+    });
+  }
+
+  function toggleMessageLayer(layer) {
+    if (!layer) return;
+    if (state.messageLayerIds.has(layer.id)) {
+      state.messageLayerIds.delete(layer.id);
+    } else {
+      state.messageLayerIds.add(layer.id);
+    }
+    postMessageLayers();
+    render();
+  }
+
+  function removeTaggedMessageLayer(id) {
+    if (!id || !state.messageLayerIds.has(id)) return;
+    state.messageLayerIds.delete(id);
+    postMessageLayers();
+    render();
+  }
+
+  function clearTaggedMessageLayers() {
+    if (!state.messageLayerIds.size) return;
+    state.messageLayerIds.clear();
+    postMessageLayers();
+    render();
   }
 
   function debouncedUpdate() {
@@ -426,6 +476,76 @@
     return { x, y, width, height };
   }
 
+  const FRAME_HANDLE_GRAB = 9;
+  const FRAME_MIN_SIZE_PX = 14;
+
+  function frameHandlePoints(layer) {
+    if (!layer || !layer.frame) return [];
+    const f = layer.frame;
+    const size = viewportSize();
+    const left = f.x * size.w;
+    const top = f.y * size.h;
+    const right = (f.x + f.width) * size.w;
+    const bottom = (f.y + f.height) * size.h;
+    const midX = (left + right) / 2;
+    const midY = (top + bottom) / 2;
+    return [
+      { name: "nw", x: left, y: top },
+      { name: "n", x: midX, y: top },
+      { name: "ne", x: right, y: top },
+      { name: "e", x: right, y: midY },
+      { name: "se", x: right, y: bottom },
+      { name: "s", x: midX, y: bottom },
+      { name: "sw", x: left, y: bottom },
+      { name: "w", x: left, y: midY },
+    ];
+  }
+
+  function frameHandleAt(norm, layer) {
+    const grab = FRAME_HANDLE_GRAB / Math.max(0.25, state.viewport.zoom || 1);
+    for (const handle of frameHandlePoints(layer)) {
+      if (Math.abs(norm.px - handle.x) <= grab && Math.abs(norm.py - handle.y) <= grab) {
+        return handle.name;
+      }
+    }
+    return null;
+  }
+
+  function frameBodyHit(norm, layer) {
+    if (!layer || !layer.frame) return false;
+    const f = layer.frame;
+    return norm.nx >= f.x && norm.nx <= f.x + f.width && norm.ny >= f.y && norm.ny <= f.y + f.height;
+  }
+
+  function cursorForFrameHandle(handle) {
+    if (handle === "n" || handle === "s") return "ns-resize";
+    if (handle === "e" || handle === "w") return "ew-resize";
+    if (handle === "nw" || handle === "se") return "nwse-resize";
+    if (handle === "ne" || handle === "sw") return "nesw-resize";
+    return "default";
+  }
+
+  function resizeFrameFromHandle(orig, handle, dx, dy, size) {
+    const minW = FRAME_MIN_SIZE_PX / Math.max(1, size.w);
+    const minH = FRAME_MIN_SIZE_PX / Math.max(1, size.h);
+    let left = orig.x;
+    let top = orig.y;
+    let right = orig.x + orig.width;
+    let bottom = orig.y + orig.height;
+
+    if (handle.includes("w")) left = Math.min(orig.x + dx, right - minW);
+    if (handle.includes("e")) right = Math.max(orig.x + orig.width + dx, left + minW);
+    if (handle.includes("n")) top = Math.min(orig.y + dy, bottom - minH);
+    if (handle.includes("s")) bottom = Math.max(orig.y + orig.height + dy, top + minH);
+
+    return {
+      x: left,
+      y: top,
+      width: right - left,
+      height: bottom - top,
+    };
+  }
+
   /**
    * Snap `current` so the segment from `start` is axis-aligned (0° or 90°).
    * Picks whichever axis the cursor is farther along — drag mostly horizontal
@@ -607,6 +727,15 @@
     }
 
     state.document = incoming;
+    const incomingIds = new Set((state.document.layers || []).map((layer) => layer.id));
+    let prunedMessageLayers = false;
+    state.messageLayerIds.forEach((id) => {
+      if (!incomingIds.has(id)) {
+        state.messageLayerIds.delete(id);
+        prunedMessageLayers = true;
+      }
+    });
+    if (prunedMessageLayers) postMessageLayers();
     if (viewport) {
       const oldZoom = state.viewport.zoom || 1;
       const oldPanX = state.viewport.panX || 0;
@@ -662,6 +791,8 @@
   function updateCursor() {
     if (state.panDrag) {
       canvas.style.cursor = "grabbing";
+    } else if (state.frameResize) {
+      canvas.style.cursor = cursorForFrameHandle(state.frameResize.handle);
     } else if (state.isSpaceDown || state.activeTool === "hand") {
       canvas.style.cursor = "grab";
     } else {
@@ -675,6 +806,18 @@
   function updateSelectionHoverCursor(e) {
     if (state.activeTool != null || state.isSpaceDown) return;
     const sel = selectedLayer();
+    if (sel && sel.frame) {
+      const norm = eventToNorm(e);
+      const handle = frameHandleAt(norm, sel);
+      if (handle) {
+        canvas.style.cursor = cursorForFrameHandle(handle);
+        return;
+      }
+      if (frameBodyHit(norm, sel)) {
+        canvas.style.cursor = "move";
+        return;
+      }
+    }
     if (sel && sel.from && sel.to) {
       const norm = eventToNorm(e);
       if (segmentEndpointAt(norm, sel)) {
@@ -1010,6 +1153,42 @@
     ctx.stroke();
   }
 
+  function messageTagAnchor(layer, w, h) {
+    const r = framePx(layer, w, h);
+    if (r) return { x: r.x + r.w, y: r.y };
+    if (layer.from && layer.to) {
+      return {
+        x: ((layer.from.x + layer.to.x) / 2) * w,
+        y: ((layer.from.y + layer.to.y) / 2) * h,
+      };
+    }
+    return null;
+  }
+
+  function drawMessageTag(layer, w, h) {
+    const anchor = messageTagAnchor(layer, w, h);
+    if (!anchor) return;
+    const zoom = Math.max(0.25, state.viewport.zoom || 1);
+    const label = "@";
+    const padX = 5 / zoom;
+    const tagH = 16 / zoom;
+    ctx.save();
+    ctx.font = `${10 / zoom}px ui-monospace, monospace`;
+    const tagW = ctx.measureText(label).width + padX * 2;
+    const x = Math.min(w - tagW - 2 / zoom, Math.max(2 / zoom, anchor.x - tagW / 2));
+    const y = Math.min(h - tagH - 2 / zoom, Math.max(2 / zoom, anchor.y - tagH - 4 / zoom));
+    roundRectPath(ctx, x, y, tagW, tagH, 4 / zoom);
+    ctx.fillStyle = "rgba(79,125,255,0.95)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.85)";
+    ctx.lineWidth = 1 / zoom;
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, x + padX, y + tagH / 2);
+    ctx.restore();
+  }
+
   function drawLayer(layer, w, h) {
     if (!layer.visible) return;
     ctx.save();
@@ -1154,6 +1333,17 @@
         ctx.strokeStyle = "#4F7DFF";
         ctx.strokeRect(r.x - 2, r.y - 2, r.w + 4, r.h + 4);
         ctx.setLineDash([]);
+        ctx.fillStyle = "#fff";
+        ctx.strokeStyle = "#4F7DFF";
+        const zoom = Math.max(0.25, state.viewport.zoom || 1);
+        ctx.lineWidth = 1.25 / zoom;
+        const handleSize = 7 / zoom;
+        frameHandlePoints(layer).forEach((handle) => {
+          ctx.beginPath();
+          ctx.rect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
+          ctx.fill();
+          ctx.stroke();
+        });
       } else if (layer.from && layer.to) {
         // Selection markers for line/arrow: filled round grab handles at each
         // endpoint. Drag a handle to reshape that end; drag the body to move
@@ -1171,6 +1361,9 @@
           ctx.stroke();
         });
       }
+    }
+    if (state.messageLayerIds.has(layer.id)) {
+      drawMessageTag(layer, w, h);
     }
     ctx.restore();
   }
@@ -1222,19 +1415,10 @@
     });
   }
 
-  /** Fire when the user clicks a layer-row's grip — Swift appends
-   *  the layer as an attachment chip in the composer's
-   *  attachments row. Explicit user gesture; selection alone
-   *  does NOT attach. */
+  /** Toggle a layer into the next agent message. Explicit user gesture;
+   *  selection alone does NOT attach. */
   function postAttach(layer) {
-    post("markup.attach", {
-      sessionId: state.sessionId,
-      selection: {
-        id: layer.id,
-        kind: layer.kind,
-        label: layer.label || layer.text || layer.kind,
-      },
-    });
+    toggleMessageLayer(layer);
   }
 
   function render() {
@@ -1281,14 +1465,20 @@
     layerCount.textContent = String(state.document.layers.length);
     state.document.layers.forEach((layer) => {
       const row = document.createElement("div");
-      row.className = "layer-row" + (layer.id === state.selectedLayerId ? " selected" : "");
+      const rowClasses = ["layer-row"];
+      if (layer.id === state.selectedLayerId) rowClasses.push("selected");
+      if (state.messageLayerIds.has(layer.id)) rowClasses.push("attached");
+      row.className = rowClasses.join(" ");
       // ⠿ grip is the explicit "attach this layer to the composer"
       // affordance. Click sends a `markup.attach` bridge message
       // (Swift inputBar appends it to the attachments row). The rest
       // of the row is a normal select click. File drag-out is owned by
       // the small native "DRAG PNG" handle over the canvas so it can
       // start an AppKit drag without stealing layer-move drags here.
-      row.innerHTML = `<span class="grip" aria-hidden="true" title="Attach to message">⠿</span><span class="dot ${layer.author || "agent"}"></span><span class="layer-row-label">${layer.kind}${layer.label ? " · " + layer.label : ""}</span>`;
+      const attachTitle = state.messageLayerIds.has(layer.id)
+        ? "Remove from next message"
+        : "Add to next message";
+      row.innerHTML = `<span class="grip" aria-hidden="true" title="${attachTitle}">⠿</span><span class="dot ${layer.author || "agent"}"></span><span class="layer-row-label">${layer.kind}${layer.label ? " · " + layer.label : ""}</span>`;
       const grip = row.querySelector(".grip");
       if (grip) {
         grip.onclick = (e) => {
@@ -1313,6 +1503,56 @@
     return String(value == null ? "" : value).replace(/[&<>"]/g, (c) => (
       { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]
     ));
+  }
+
+  function hasLayerTurn(layer) {
+    return !!layer && (
+      layer.turnPass != null ||
+      layer.turnInstruction ||
+      layer.turnModel ||
+      layer.turnSummary ||
+      layer.turnElapsed != null
+    );
+  }
+
+  function turnDetailsForInspector(layer) {
+    if (hasLayerTurn(layer)) {
+      const elapsed = Number(layer.turnElapsed);
+      return {
+        title: "turn",
+        pass: layer.turnPass,
+        model: layer.turnModel,
+        summary: layer.turnSummary,
+        elapsed: Number.isFinite(elapsed) ? `${elapsed.toFixed(1)}s` : "",
+        instruction: layer.turnInstruction,
+      };
+    }
+    const t = state.thread;
+    if (!t) return null;
+    return {
+      title: "latest turn",
+      pass: t.pass,
+      model: t.model,
+      summary: t.live ? (t.statusText || "running") : (t.summary || "done"),
+      elapsed: t.elapsed,
+      instruction: t.instruction,
+    };
+  }
+
+  function renderTurnDetails(turn) {
+    if (!turn) return "";
+    const rows = [];
+    if (turn.pass != null) rows.push(["PASS", turn.pass]);
+    if (turn.model) rows.push(["MODEL", turn.model]);
+    if (turn.summary) rows.push(["STATUS", turn.summary]);
+    if (turn.elapsed) rows.push(["TIME", turn.elapsed]);
+    const rowHTML = rows.map(([k, v]) =>
+      `<div class="insp-turn-row"><span class="insp-turn-k">${escHtml(k)}</span><span class="insp-turn-v">${escHtml(v)}</span></div>`
+    ).join("");
+    const prompt = turn.instruction
+      ? `<div class="insp-turn-prompt">${escHtml(turn.instruction)}</div>`
+      : "";
+    return `<div class="insp-section"><div class="insp-kicker">${escHtml(turn.title)}</div><div class="insp-turn">${rowHTML}${prompt}</div></div>`;
   }
 
   // Convert a layer's viewport-normalized geometry into SOURCE-IMAGE pixels —
@@ -1362,6 +1602,11 @@
         `<span class="insp-title">${escHtml(shape)}</span>` +
       `</div>`
     );
+
+    const turnDetails = turnDetailsForInspector(sel);
+    if (turnDetails) {
+      sections.push(renderTurnDetails(turnDetails));
+    }
 
     // Geometry — image pixels, in a small card grid. Frame layers get X/Y/W/H;
     // segment layers (arrow/line) get start/end points + length.
@@ -1788,7 +2033,7 @@
     const rail = document.getElementById("inspector-rail");
     const wt = document.getElementById("work-thread");
     if (!rail || !wt) return;
-    const showThread = !!state.thread && !state.selectedLayerId;
+    const showThread = !!state.thread && (state.thread.live || !state.selectedLayerId);
     rail.classList.toggle("thread-active", showThread);
     wt.classList.toggle("hidden", !showThread);
   }
@@ -1806,13 +2051,20 @@
 
     const entries = t.entries || [];
     body.innerHTML = "";
-    // Which model is doing this — pinned at the top of the thread.
-    if (t.model) {
+    // Which pass/model is doing this — pinned at the top of the thread.
+    if (t.model || t.pass != null || t.attachments) {
       const model = document.createElement("div");
       model.className = "wt-model";
-      model.innerHTML =
-        '<span class="wt-model-k">model</span>' +
-        '<span class="wt-model-v">' + escHtml(t.model) + "</span>";
+      const passHTML = t.pass != null
+        ? '<span class="wt-model-k">pass</span><span class="wt-model-v">' + escHtml(t.pass) + "</span>"
+        : "";
+      const modelHTML = t.model
+        ? '<span class="wt-model-k">model</span><span class="wt-model-v">' + escHtml(t.model) + "</span>"
+        : "";
+      const taggedHTML = t.attachments
+        ? '<span class="wt-model-k">tagged</span><span class="wt-model-v">' + escHtml(t.attachments) + "</span>"
+        : "";
+      model.innerHTML = passHTML + modelHTML + taggedHTML;
       body.appendChild(model);
     }
     if (t.instruction) {
@@ -1914,7 +2166,12 @@
       render();
     },
     exportDocument() { return attachViewportToDocument(state.document); },
+    exportMessageLayers() {
+      return state.document.layers.filter((layer) => state.messageLayerIds.has(layer.id));
+    },
     clearSelection() { state.selectedLayerId = null; render(); },
+    clearMessageLayers() { clearTaggedMessageLayers(); },
+    removeMessageLayer(id) { removeTaggedMessageLayer(id); },
     save() { requestSave(); },
     undo() { return undo(); },
     redo() { return redo(); },
@@ -1961,6 +2218,13 @@
   // Toolbar — global history + tool selection
   // ---------------------------------------------------------------------------
   toolToolbar.addEventListener("click", (e) => {
+    const saveButton = e.target.closest('[data-action="save"]');
+    if (saveButton) {
+      requestSave();
+      e.preventDefault();
+      return;
+    }
+
     const historyButton = e.target.closest(".history-btn");
     if (historyButton && !historyButton.disabled) {
       const action = historyButton.getAttribute("data-action");
@@ -2203,6 +2467,15 @@
     }
 
     const already = selectedLayer();
+    if (already && already.frame) {
+      const handle = frameHandleAt(norm, already);
+      if (handle) {
+        state.frameResize = makeFrameResize(already, handle, e, size);
+        canvas.style.cursor = cursorForFrameHandle(handle);
+        e.preventDefault();
+        return;
+      }
+    }
     if (already && already.from && already.to) {
       const handle = segmentEndpointAt(norm, already);
       if (handle) {
@@ -2237,6 +2510,22 @@
     }
     render();
   });
+
+  /** Build the frame-resize descriptor. Snapshot is lazy so clicking a handle
+   *  without moving does not add an undo step. */
+  function makeFrameResize(layer, handle, e, size) {
+    return {
+      layerId: layer.id,
+      handle,
+      startX: e.clientX,
+      startY: e.clientY,
+      zoom: state.viewport.zoom,
+      w: size.w,
+      h: size.h,
+      orig: Object.assign({}, layer.frame),
+      didSnapshot: false,
+    };
+  }
 
   /** Build the segment-edit drag descriptor. Snapshot is taken lazily on the
    *  first actual move (see mousemove) so a plain select-click on a segment
@@ -2301,6 +2590,28 @@
         norm = snapToAxis(state.creating.start, norm);
       }
       state.creating.current = norm;
+      render();
+      return;
+    }
+    if (state.frameResize) {
+      const resize = state.frameResize;
+      const layer = state.document.layers.find((l) => l.id === resize.layerId);
+      if (!layer || !layer.frame) return;
+      if (!resize.didSnapshot) {
+        snapshotForUndo();
+        resize.didSnapshot = true;
+      }
+      const dx = (e.clientX - resize.startX) / resize.zoom / resize.w;
+      const dy = (e.clientY - resize.startY) / resize.zoom / resize.h;
+      layer.frame = resizeFrameFromHandle(
+        resize.orig,
+        resize.handle,
+        dx,
+        dy,
+        { w: resize.w, h: resize.h }
+      );
+      layer.author = "user";
+      canvas.style.cursor = cursorForFrameHandle(resize.handle);
       render();
       return;
     }
@@ -2391,6 +2702,13 @@
       }
       return;
     }
+    if (state.frameResize) {
+      const moved = state.frameResize.didSnapshot;
+      state.frameResize = null;
+      if (moved) debouncedUpdate();
+      updateCursor();
+      return;
+    }
     if (state.segDrag) {
       const moved = state.segDrag.didSnapshot;
       state.segDrag = null;
@@ -2403,12 +2721,22 @@
     }
   });
 
-  // ---------------------------------------------------------------------------
-  // Context menu (existing — kept intact)
-  // ---------------------------------------------------------------------------
   canvas.addEventListener("contextmenu", (e) => {
     e.preventDefault();
+    const hit = hitTest(eventToNorm(e));
+    if (hit) {
+      state.selectedLayerId = hit.id;
+      setActiveTool(null);
+      render();
+    }
     if (!state.selectedLayerId) return;
+    const layer = selectedLayer();
+    const attachButton = popover.querySelector('[data-action="attach"]');
+    if (attachButton && layer) {
+      attachButton.textContent = state.messageLayerIds.has(layer.id)
+        ? "Remove from next message"
+        : "Add to next message";
+    }
     popover.classList.remove("hidden");
     popover.style.left = e.clientX + "px";
     popover.style.top = e.clientY + "px";
@@ -2419,10 +2747,17 @@
     if (!action || !state.selectedLayerId) return;
     const idx = state.document.layers.findIndex((l) => l.id === state.selectedLayerId);
     if (idx < 0) return;
+    if (action === "attach") {
+      toggleMessageLayer(state.document.layers[idx]);
+      popover.classList.add("hidden");
+      return;
+    }
     snapshotForUndo();
     if (action === "delete") {
+      const removedAttachment = state.messageLayerIds.delete(state.document.layers[idx].id);
       state.document.layers.splice(idx, 1);
       state.selectedLayerId = null;
+      if (removedAttachment) postMessageLayers();
     } else if (action === "toggle") {
       state.document.layers[idx].visible = !state.document.layers[idx].visible;
     }

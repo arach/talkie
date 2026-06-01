@@ -100,6 +100,119 @@ struct LLMModel: Identifiable, Codable {
     }
 }
 
+@MainActor
+enum LLMAgentModelPreferences {
+    static let didChangeNotification = Notification.Name("LLMAgentModelPreferences.didChange")
+
+    private static let enabledModelKeysKey = "LLMRegistry.enabledMarkupAgentModelKeys"
+    private static let curatableProviderIds = Set(["gemini", "anthropic", "openai", "groq"])
+
+    static func isCuratableProvider(_ providerId: String) -> Bool {
+        curatableProviderIds.contains(providerId)
+    }
+
+    static func modelKey(for model: LLMModel) -> String {
+        "\(model.provider)::\(model.id)"
+    }
+
+    static var hasStoredConfiguration: Bool {
+        UserDefaults.standard.object(forKey: enabledModelKeysKey) != nil
+    }
+
+    static func enabledModelKeys(availableModels: [LLMModel]) -> Set<String> {
+        if let stored = storedEnabledModelKeys() {
+            return stored
+        }
+        return defaultEnabledModelKeys(availableModels: availableModels)
+    }
+
+    static func isEnabled(_ model: LLMModel, availableModels: [LLMModel]) -> Bool {
+        enabledModelKeys(availableModels: availableModels).contains(modelKey(for: model))
+    }
+
+    static func setModel(_ model: LLMModel, enabled: Bool, availableModels: [LLMModel]) {
+        var keys = enabledModelKeys(availableModels: availableModels)
+        let key = modelKey(for: model)
+        if enabled {
+            keys.insert(key)
+        } else {
+            keys.remove(key)
+        }
+        UserDefaults.standard.set(Array(keys).sorted(), forKey: enabledModelKeysKey)
+        NotificationCenter.default.post(name: didChangeNotification, object: nil)
+    }
+
+    static func resetToRecommended() {
+        UserDefaults.standard.removeObject(forKey: enabledModelKeysKey)
+        NotificationCenter.default.post(name: didChangeNotification, object: nil)
+    }
+
+    static func curatedModels(for providerId: String, from allModels: [LLMModel]) -> [LLMModel] {
+        guard isCuratableProvider(providerId) else { return [] }
+        let enabled = enabledModelKeys(availableModels: allModels)
+        return sorted(
+            allModels.filter { $0.provider == providerId && enabled.contains(modelKey(for: $0)) }
+        )
+    }
+
+    static func curatedModels(from allModels: [LLMModel]) -> [LLMModel] {
+        let enabled = enabledModelKeys(availableModels: allModels)
+        return sorted(
+            allModels.filter { isCuratableProvider($0.provider) && enabled.contains(modelKey(for: $0)) }
+        )
+    }
+
+    static func sorted(_ models: [LLMModel]) -> [LLMModel] {
+        models.sorted {
+            if $0.provider != $1.provider {
+                let preferred = LLMConfig.shared.preferredProviderOrder
+                let lhs = preferred.firstIndex(of: $0.provider) ?? Int.max
+                let rhs = preferred.firstIndex(of: $1.provider) ?? Int.max
+                if lhs != rhs { return lhs < rhs }
+                return $0.provider.localizedStandardCompare($1.provider) == .orderedAscending
+            }
+            return $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
+        }
+    }
+
+    private static func storedEnabledModelKeys() -> Set<String>? {
+        guard UserDefaults.standard.object(forKey: enabledModelKeysKey) != nil else {
+            return nil
+        }
+        return Set(UserDefaults.standard.stringArray(forKey: enabledModelKeysKey) ?? [])
+    }
+
+    private static func defaultEnabledModelKeys(availableModels: [LLMModel]) -> Set<String> {
+        var keys = Set<String>()
+        for providerId in orderedCuratableProviderIds() {
+            let providerModels = availableModels.filter { $0.provider == providerId }
+            guard !providerModels.isEmpty else { continue }
+
+            let recommendedIds = LLMConfig.shared.recommendedModelIDs(for: providerId)
+            let recommendedModels = providerModels.filter { recommendedIds.contains($0.id) }
+            if recommendedModels.isEmpty {
+                if let defaultModel = providerModels.first(where: { $0.id == LLMConfig.shared.defaultModel(for: providerId) })
+                    ?? providerModels.first {
+                    keys.insert(modelKey(for: defaultModel))
+                }
+            } else {
+                keys.formUnion(recommendedModels.map { modelKey(for: $0) })
+            }
+        }
+        return keys
+    }
+
+    private static func orderedCuratableProviderIds() -> [String] {
+        var ids: [String] = []
+        var seen = Set<String>()
+        for providerId in LLMConfig.shared.preferredProviderOrder + Array(curatableProviderIds).sorted() {
+            guard curatableProviderIds.contains(providerId), seen.insert(providerId).inserted else { continue }
+            ids.append(providerId)
+        }
+        return ids
+    }
+}
+
 enum ModelType: String, Codable {
     case local
     case cloud

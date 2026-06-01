@@ -69,6 +69,13 @@ final class CaptureMarkupAgentService {
     static let shared = CaptureMarkupAgentService()
     private init() {}
 
+    func currentModelLabel(providerId: String? = nil, modelId: String? = nil) async -> String? {
+        guard let providerInfo = await resolveProviderAndModel(providerId: providerId, modelId: modelId) else {
+            return nil
+        }
+        return Self.modelLabel(provider: providerInfo.provider, modelId: providerInfo.modelId)
+    }
+
     func describe(imageURL: URL) async throws -> String {
         guard let jpeg = try jpegData(for: imageURL) else {
             throw CaptureMarkupAgentError.imageLoadFailed
@@ -83,7 +90,10 @@ final class CaptureMarkupAgentService {
     func plan(
         imageURL: URL,
         instruction: String,
+        includedLayers: [CaptureMarkupLayer] = [],
         existing: CaptureMarkupDocument? = nil,
+        providerId: String? = nil,
+        modelId: String? = nil,
         onPhase: ((CaptureMarkupRunPhase) -> Void)? = nil
     ) async throws -> CaptureMarkupPlan {
         onPhase?(.reading)
@@ -98,10 +108,10 @@ final class CaptureMarkupAgentService {
         let description = try? await describe(imageURL: imageURL)
         onPhase?(.described)
 
-        guard let providerInfo = await LLMProviderRegistry.shared.resolveProviderAndModel() else {
+        guard let providerInfo = await resolveProviderAndModel(providerId: providerId, modelId: modelId) else {
             throw CaptureMarkupAgentError.providerUnavailable
         }
-        onPhase?(.planning(model: "\(providerInfo.provider.name) · \(providerInfo.modelId)"))
+        onPhase?(.planning(model: Self.modelLabel(provider: providerInfo.provider, modelId: providerInfo.modelId)))
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -111,6 +121,15 @@ final class CaptureMarkupAgentService {
             existingJSON = String(data: data, encoding: .utf8) ?? "{}"
         } else {
             existingJSON = "{}"
+        }
+        let includedLayersJSON: String
+        if includedLayers.isEmpty {
+            includedLayersJSON = "[]"
+        } else if let data = try? encoder.encode(includedLayers),
+                  let json = String(data: data, encoding: .utf8) {
+            includedLayersJSON = json
+        } else {
+            includedLayersJSON = "[]"
         }
 
         let prompt = """
@@ -134,6 +153,13 @@ final class CaptureMarkupAgentService {
 
         Use OCR observations to anchor text matches. Instruction:
         \(instruction)
+
+        Tagged markup items for this message:
+        \(includedLayersJSON)
+
+        If tagged markup items are present, treat them as the explicit target
+        for the instruction. You may modify, label, move around, point at, or
+        add related marks near those tagged items.
 
         OCR geometry:
         \(geometryJSON)
@@ -275,8 +301,11 @@ final class CaptureMarkupAgentService {
     func runInstruction(
         imageURL: URL,
         instruction: String,
+        includedLayers: [CaptureMarkupLayer] = [],
         existing: CaptureMarkupDocument? = nil,
         openWebBay: Bool = true,
+        providerId: String? = nil,
+        modelId: String? = nil,
         onPhase: ((CaptureMarkupRunPhase) -> Void)? = nil
     ) async throws -> CaptureMarkupDocument {
         do {
@@ -284,7 +313,10 @@ final class CaptureMarkupAgentService {
             let plan = try await plan(
                 imageURL: imageURL,
                 instruction: instruction,
+                includedLayers: includedLayers,
                 existing: currentDocument,
+                providerId: providerId,
+                modelId: modelId,
                 onPhase: onPhase
             )
             onPhase?(.applying)
@@ -344,6 +376,41 @@ final class CaptureMarkupAgentService {
             return "\(trimmed) · \(ops)"
         }
         return ops
+    }
+
+    private static func modelLabel(provider: LLMProvider, modelId: String) -> String {
+        "\(provider.name) · \(modelId)"
+    }
+
+    private func resolveProviderAndModel(
+        providerId: String?,
+        modelId: String?
+    ) async -> (provider: LLMProvider, modelId: String)? {
+        let registry = LLMProviderRegistry.shared
+        let cleanProviderId = providerId?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanModelId = modelId?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let cleanProviderId,
+           !cleanProviderId.isEmpty,
+           let provider = registry.provider(for: cleanProviderId),
+           await provider.isAvailable {
+            let resolvedModelId = (cleanModelId?.isEmpty == false ? cleanModelId : nil) ?? provider.defaultModelId
+            if !resolvedModelId.isEmpty {
+                return (provider, resolvedModelId)
+            }
+        }
+
+        let curatedModels = LLMAgentModelPreferences.curatedModels(from: registry.allModels)
+        for model in curatedModels {
+            guard let provider = registry.provider(for: model.provider),
+                  await provider.isAvailable else { continue }
+            return (provider, model.id)
+        }
+
+        if LLMAgentModelPreferences.hasStoredConfiguration {
+            return nil
+        }
+
+        return await registry.resolveProviderAndModel()
     }
 
     private static func stripJSONFences(_ raw: String) -> String {
