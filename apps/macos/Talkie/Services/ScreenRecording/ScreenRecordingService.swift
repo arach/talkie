@@ -72,6 +72,91 @@ struct ScreenRecordingTarget {
     let displayName: String?
 }
 
+private struct ScreenRecordingPreset: Codable {
+    var mode: CaptureMode
+    var displayID: UInt32?
+    var rect: CGRect?
+    var windowID: UInt32?
+    var windowTitle: String?
+    var appName: String?
+    var displayName: String?
+    var capturedAt: Date
+}
+
+@MainActor
+private final class ScreenRecordingPresetStore {
+    static let shared = ScreenRecordingPresetStore()
+
+    private let key = "screenRecording.lastTargetPreset.v1"
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+
+    private init() {
+        encoder.dateEncodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = .iso8601
+    }
+
+    var hasPreset: Bool {
+        UserDefaults.standard.data(forKey: key) != nil
+    }
+
+    func save(target: ScreenRecordingTarget) {
+        let preset = preset(from: target)
+        save(preset: preset)
+        log.info("Saved screen recording preset (\(preset.mode.rawValue))")
+    }
+
+    func save(preset: ScreenRecordingPreset) {
+        guard let data = try? encoder.encode(preset) else { return }
+        UserDefaults.standard.set(data, forKey: key)
+    }
+
+    func load() -> ScreenRecordingPreset? {
+        guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
+        return try? decoder.decode(ScreenRecordingPreset.self, from: data)
+    }
+
+    private func preset(from target: ScreenRecordingTarget) -> ScreenRecordingPreset {
+        switch target.kind {
+        case .fullscreen(let display):
+            return ScreenRecordingPreset(
+                mode: .fullscreen,
+                displayID: display.displayID,
+                rect: display.frame,
+                windowID: nil,
+                windowTitle: nil,
+                appName: nil,
+                displayName: target.displayName,
+                capturedAt: Date()
+            )
+
+        case .region(let display, let rect):
+            return ScreenRecordingPreset(
+                mode: .region,
+                displayID: display.displayID,
+                rect: rect,
+                windowID: nil,
+                windowTitle: nil,
+                appName: nil,
+                displayName: target.displayName,
+                capturedAt: Date()
+            )
+
+        case .window(let window):
+            return ScreenRecordingPreset(
+                mode: .window,
+                displayID: nil,
+                rect: window.frame,
+                windowID: window.windowID,
+                windowTitle: target.windowTitle,
+                appName: target.appName,
+                displayName: target.displayName,
+                capturedAt: Date()
+            )
+        }
+    }
+}
+
 // MARK: - Screen Recording Service
 
 @MainActor
@@ -160,6 +245,162 @@ final class ScreenRecordingService: NSObject {
         case .window:
             return await selectWindow()
         }
+    }
+
+    var hasReusableTarget: Bool {
+        ScreenRecordingPresetStore.shared.hasPreset || inferredPresetFromTray() != nil
+    }
+
+    func reusableTarget() async -> ScreenRecordingTarget? {
+        guard await hasPermission() else {
+            showPermissionAlert()
+            return nil
+        }
+        guard let preset = reusablePreset() else {
+            return nil
+        }
+
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            switch preset.mode {
+            case .fullscreen:
+                guard let display = display(for: preset, from: content.displays) else { return nil }
+                return ScreenRecordingTarget(
+                    kind: .fullscreen(display),
+                    windowTitle: nil,
+                    appName: nil,
+                    displayName: screenNameForDisplay(display) ?? preset.displayName
+                )
+
+            case .region:
+                guard let rect = preset.rect, rect.width > 5, rect.height > 5,
+                      let display = display(for: preset, from: content.displays),
+                      displayFrame(display).intersects(rect) else {
+                    return nil
+                }
+                return ScreenRecordingTarget(
+                    kind: .region(display, rect),
+                    windowTitle: nil,
+                    appName: nil,
+                    displayName: screenNameForDisplay(display) ?? preset.displayName
+                )
+
+            case .window:
+                guard let window = window(for: preset, from: content.windows) else { return nil }
+                let meta = windowMetadata(for: window.windowID)
+                return ScreenRecordingTarget(
+                    kind: .window(window),
+                    windowTitle: meta.title ?? preset.windowTitle,
+                    appName: meta.appName ?? preset.appName,
+                    displayName: preset.displayName
+                )
+            }
+        } catch {
+            log.error("Failed to resolve screen recording preset: \(error)")
+            return nil
+        }
+    }
+
+    func regionTarget(
+        for rect: CGRect,
+        preferredTarget: ScreenRecordingTarget? = nil
+    ) async -> ScreenRecordingTarget? {
+        guard await hasPermission() else {
+            showPermissionAlert()
+            return nil
+        }
+
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            guard let display = display(for: rect, preferredTarget: preferredTarget, from: content.displays) else {
+                return nil
+            }
+            let displayFrame = displayFrame(display)
+            let constrainedRect = rect.intersection(displayFrame).standardized
+            guard !constrainedRect.isNull, constrainedRect.width > 5, constrainedRect.height > 5 else {
+                return nil
+            }
+            return ScreenRecordingTarget(
+                kind: .region(display, constrainedRect),
+                windowTitle: nil,
+                appName: nil,
+                displayName: screenNameForDisplay(display)
+            )
+        } catch {
+            log.error("Failed to resolve adjusted screen recording region: \(error)")
+            return nil
+        }
+    }
+
+    private func reusablePreset() -> ScreenRecordingPreset? {
+        if let preset = ScreenRecordingPresetStore.shared.load() {
+            return preset
+        }
+        guard let preset = inferredPresetFromTray() else {
+            return nil
+        }
+        ScreenRecordingPresetStore.shared.save(preset: preset)
+        log.info("Seeded screen recording preset from recent tray clip (\(preset.mode.rawValue))")
+        return preset
+    }
+
+    private func inferredPresetFromTray() -> ScreenRecordingPreset? {
+        for item in ClipTray.shared.items.sorted(by: { $0.capturedAt > $1.capturedAt }) {
+            guard let mode = CaptureMode(rawValue: item.captureMode) else { continue }
+            guard RecordingVisualContext.isScreenCaptureMode(item.captureMode) else { continue }
+
+            let targetEvent = item.metadataEvents.first { $0.type == .captureTarget }
+            let rect = targetEvent?.bounds.map { bounds in
+                CGRect(
+                    x: CGFloat(bounds.x),
+                    y: CGFloat(bounds.y),
+                    width: CGFloat(bounds.width),
+                    height: CGFloat(bounds.height)
+                )
+            }
+
+            switch mode {
+            case .region:
+                guard let rect else { continue }
+                return ScreenRecordingPreset(
+                    mode: mode,
+                    displayID: targetEvent?.displayID,
+                    rect: rect,
+                    windowID: nil,
+                    windowTitle: nil,
+                    appName: nil,
+                    displayName: item.displayName,
+                    capturedAt: item.capturedAt
+                )
+
+            case .fullscreen:
+                guard targetEvent?.displayID != nil || rect != nil else { continue }
+                return ScreenRecordingPreset(
+                    mode: mode,
+                    displayID: targetEvent?.displayID,
+                    rect: rect,
+                    windowID: nil,
+                    windowTitle: nil,
+                    appName: nil,
+                    displayName: item.displayName,
+                    capturedAt: item.capturedAt
+                )
+
+            case .window:
+                return ScreenRecordingPreset(
+                    mode: mode,
+                    displayID: targetEvent?.displayID,
+                    rect: rect,
+                    windowID: nil,
+                    windowTitle: item.windowTitle,
+                    appName: item.appName,
+                    displayName: item.displayName,
+                    capturedAt: item.capturedAt
+                )
+            }
+        }
+
+        return nil
     }
 
     private func selectFullscreen() async -> ScreenRecordingTarget? {
@@ -306,6 +547,7 @@ final class ScreenRecordingService: NSObject {
             self.target = target
             self.recordingStartTime = Date()
             state = .recording
+            ScreenRecordingPresetStore.shared.save(target: target)
 
             log.info("Screen recording started → \(url.lastPathComponent) (\(config.width)x\(config.height), \(recordingQualityPreset.rawValue), \(recordingQualityPreset.bitrateSummary), \(recordingQualityPreset.fpsSummary))")
 
@@ -437,21 +679,75 @@ final class ScreenRecordingService: NSObject {
     private func displayUnderCursor(from displays: [SCDisplay]) -> SCDisplay? {
         let mouseLocation = NSEvent.mouseLocation
         for display in displays {
-            let displayFrame = CGRect(
-                x: CGFloat(display.frame.origin.x),
-                y: CGFloat(display.frame.origin.y),
-                width: CGFloat(display.width),
-                height: CGFloat(display.height)
-            )
-            if displayFrame.contains(mouseLocation) { return display }
+            if displayFrame(display).contains(mouseLocation) { return display }
         }
         return displays.first
     }
 
+    private func display(for preset: ScreenRecordingPreset, from displays: [SCDisplay]) -> SCDisplay? {
+        if let displayID = preset.displayID,
+           let display = displays.first(where: { $0.displayID == displayID }) {
+            return display
+        }
+        if let rect = preset.rect,
+           let display = displays.first(where: { displayFrame($0).intersects(rect) }) {
+            return display
+        }
+        return displayUnderCursor(from: displays)
+    }
+
+    private func display(
+        for rect: CGRect,
+        preferredTarget: ScreenRecordingTarget?,
+        from displays: [SCDisplay]
+    ) -> SCDisplay? {
+        switch preferredTarget?.kind {
+        case .fullscreen(let display), .region(let display, _):
+            if displayFrame(display).intersects(rect) {
+                return display
+            }
+        case .window, .none:
+            break
+        }
+
+        return displays.max { lhs, rhs in
+            intersectionArea(displayFrame(lhs), rect) < intersectionArea(displayFrame(rhs), rect)
+        }
+    }
+
+    private func displayFrame(_ display: SCDisplay) -> CGRect {
+        CGRect(
+            x: CGFloat(display.frame.origin.x),
+            y: CGFloat(display.frame.origin.y),
+            width: CGFloat(display.width),
+            height: CGFloat(display.height)
+        )
+    }
+
+    private func intersectionArea(_ lhs: CGRect, _ rhs: CGRect) -> CGFloat {
+        let intersection = lhs.intersection(rhs)
+        guard !intersection.isNull else { return 0 }
+        return intersection.width * intersection.height
+    }
+
+    private func window(for preset: ScreenRecordingPreset, from windows: [SCWindow]) -> SCWindow? {
+        if let windowID = preset.windowID,
+           let window = windows.first(where: { $0.windowID == windowID }) {
+            return window
+        }
+
+        return windows.first { window in
+            let meta = windowMetadata(for: window.windowID)
+            let titleMatches = preset.windowTitle.map { $0 == meta.title } ?? true
+            let appMatches = preset.appName.map { $0 == meta.appName } ?? true
+            return titleMatches && appMatches
+        }
+    }
+
     private func scaleFactorForDisplay(_ display: SCDisplay) -> Int {
-        let mouseLocation = NSEvent.mouseLocation
+        let frame = displayFrame(display)
         for screen in NSScreen.screens {
-            if NSMouseInRect(mouseLocation, screen.frame, false) {
+            if screen.frame == frame || screen.frame.intersects(frame) {
                 return Int(screen.backingScaleFactor)
             }
         }
