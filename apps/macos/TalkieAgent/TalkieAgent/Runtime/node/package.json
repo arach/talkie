@@ -8,13 +8,11 @@
     "node": ">=20"
   },
   "scripts": {
+    "install:agent-runtime": "zsh ./install-agent-runtime.sh",
     "start": "node ./index.mjs",
     "smoke:ping": "printf '{\"op\":\"ping\"}\\n' | TALKIE_WALKIE_JOB_STORE=\"${TMPDIR:-/tmp}/talkie-walkie-smoke-jobs.json\" node ./index.mjs",
     "smoke:invoke": "rm -f \"${TMPDIR:-/tmp}/talkie-walkie-smoke-jobs.json\"; printf '{\"op\":\"invoke\",\"invocation\":{\"id\":\"00000000-0000-4000-8000-000000000001\",\"channel\":{\"code\":\"CH-01\",\"label\":\"NIGHTOPS\"},\"transcript\":\"check runtime\",\"instruction\":\"check runtime\",\"topLevelModel\":{\"providerId\":\"test\",\"providerName\":\"Test\",\"modelId\":\"test-model\"},\"requestedAt\":\"2026-01-01T00:00:00Z\"}}\\n' | TALKIE_WALKIE_JOB_STORE=\"${TMPDIR:-/tmp}/talkie-walkie-smoke-jobs.json\" node ./index.mjs",
     "smoke:activity-status": "printf '{\"op\":\"activityStatus\",\"sessionId\":\"walkie-00000000-0000-4000-8000-000000000001\"}\\n' | TALKIE_WALKIE_JOB_STORE=\"${TMPDIR:-/tmp}/talkie-walkie-smoke-jobs.json\" node ./index.mjs",
     "smoke:status": "printf '{\"op\":\"status\"}\\n' | TALKIE_WALKIE_JOB_STORE=\"${TMPDIR:-/tmp}/talkie-walkie-smoke-jobs.json\" node ./index.mjs"
-  },
-  "dependencies": {
-    "@openscout/agent-sessions": "0.2.64"
   }
 }
