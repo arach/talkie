@@ -60,6 +60,10 @@ struct ComposeNextView: View {
                 revisionPath: compose.revisionPath,
                 modelOptions: compose.configuredModelOptions,
                 activeProviderId: compose.activeDirectProviderId,
+                // Mac Bridge is a route, not a model — only offer it when the
+                // bridge is actually connected (a "known good state"). The
+                // picker is otherwise purely about the direct models you can run.
+                macBridgeConnected: BridgeManager.shared.status == .connected,
                 state: compose.state,
                 onBack: { AppShellRouter.shared.openHome() },
                 onSelectRevisionPath: { compose.selectRevisionPath($0) },
@@ -699,6 +703,7 @@ private struct ComposeHeader: View {
     let revisionPath: ComposeStore.RevisionPath
     let modelOptions: [ComposeStore.ModelOption]
     let activeProviderId: String
+    let macBridgeConnected: Bool
     let state: ComposeState
     let onBack: () -> Void
     let onSelectRevisionPath: (ComposeStore.RevisionPath) -> Void
@@ -740,41 +745,51 @@ private struct ComposeHeader: View {
                 if state != .diff {
                     Menu {
                         // Model picker — "what can I actually run." Each
-                        // configured API key becomes a pickable model; the
-                        // Mac bridge sits alongside as another route. A
-                        // checkmark marks the active model. When nothing is
-                        // set up the section collapses to the setup CTA.
-                        Section("Model") {
-                            ForEach(modelOptions) { option in
-                                Button {
-                                    onSelectModel(option)
-                                } label: {
-                                    Label(
-                                        option.menuLabel,
-                                        systemImage: isActiveModel(option) ? "checkmark" : "sparkles"
-                                    )
+                        // configured API key becomes a pickable model. The
+                        // Mac Bridge is a *route*, not a model, so it only
+                        // appears when the bridge is actually connected (a
+                        // known-good state). The picker stays independent of
+                        // bridge/encryption config — it lists the models that
+                        // should just work. With nothing configured it
+                        // collapses to a single get-started CTA.
+                        if modelOptions.isEmpty && !macBridgeConnected {
+                            Button {
+                                AppShellRouter.shared.openAICredentials()
+                            } label: {
+                                Label("Pick a provider to get started…", systemImage: "sparkles")
+                            }
+                        } else {
+                            Section("Model") {
+                                ForEach(modelOptions) { option in
+                                    Button {
+                                        onSelectModel(option)
+                                    } label: {
+                                        Label(
+                                            option.menuLabel,
+                                            systemImage: isActiveModel(option) ? "checkmark" : "sparkles"
+                                        )
+                                    }
+                                }
+
+                                if macBridgeConnected {
+                                    Button {
+                                        onSelectRevisionPath(.mac)
+                                    } label: {
+                                        Label(
+                                            "Mac Bridge",
+                                            systemImage: revisionPath == .mac ? "checkmark" : "desktopcomputer"
+                                        )
+                                    }
                                 }
                             }
 
+                            Divider()
+
                             Button {
-                                onSelectRevisionPath(.mac)
+                                AppShellRouter.shared.openAICredentials()
                             } label: {
-                                Label(
-                                    "Mac Bridge",
-                                    systemImage: revisionPath == .mac ? "checkmark" : "desktopcomputer"
-                                )
+                                Label("Manage AI keys…", systemImage: "key.fill")
                             }
-                        }
-
-                        Divider()
-
-                        Button {
-                            AppShellRouter.shared.openAICredentials()
-                        } label: {
-                            Label(
-                                modelOptions.isEmpty ? "Set up a model…" : "Manage AI keys…",
-                                systemImage: "key.fill"
-                            )
                         }
                     } label: {
                         HStack(spacing: 6) {
